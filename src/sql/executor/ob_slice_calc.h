@@ -232,7 +232,7 @@ public:
 
   int init_partition_cache_map();
 
-  virtual int init();
+  virtual int init(uint64_t tenant_id = OB_SERVER_TENANT_ID);
 
   virtual int destroy() {
     int ret = OB_SUCCESS;
@@ -242,7 +242,7 @@ public:
     return ret;
   }
 
-  int build_repart_ch_map(ObPxPartChMap &map);
+  int build_repart_ch_map(ObPxPartChMap &map, uint64_t tenant_id);
   int build_part2tablet_id_map();
 protected:
   // this is a trick!
@@ -320,7 +320,7 @@ protected:
   {}
   ~ObSlaveMapRepartIdxCalcBase() = default;
 protected:
-  virtual int init() override;
+  virtual int init(uint64_t tenant_id = OB_SERVER_TENANT_ID) override;
   virtual int destroy() override;
 protected:
   // 存储同一个partition所对应的所有task id
@@ -390,7 +390,7 @@ public:
   virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs,
                             ObEvalCtx &eval_ctx,
                             int64_t &slice_idx) override;
-  virtual int init() override;
+  virtual int init(uint64_t tenant_id) override;
   virtual int destroy() override;
 private:
   int get_task_idx_by_tablet_id(int64_t tablet_id , int64_t &task_idx);
@@ -810,7 +810,7 @@ public:
         sort_cmp_(sort_cmp_funs, sort_collations)
   {}
   virtual ~ObSlaveMapPkeyRangeIdxCalc();
-  virtual int init() override;
+  virtual int init(uint64_t tenant_id = OB_SERVER_TENANT_ID) override;
   virtual int destroy() override;
   virtual int get_slice_idx(
       const common::ObIArray<ObExpr*> &exprs,
@@ -932,7 +932,7 @@ public:
   }
   ~ObSlaveMapPkeyHashIdxCalc() = default;
 
-  int init() override;
+  int init(uint64_t tenant_id = OB_SERVER_TENANT_ID) override;
   int destroy() override;
 
   // for static engine
@@ -1091,7 +1091,7 @@ public:
   }
 
   ~ObNullAwareAffinitizedRepartSliceIdxCalc() = default;
-  virtual int init() override;
+  virtual int init(uint64_t tenant_id) override;
   virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx)
   {
     UNUSED(exprs);

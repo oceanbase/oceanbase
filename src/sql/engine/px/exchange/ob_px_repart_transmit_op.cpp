@@ -226,7 +226,7 @@ int ObPxRepartTransmitOp::do_repart_transmit(ObRepartSliceIdxCalc &repart_slice_
 {
   int ret = OB_SUCCESS;
   // init the ObRepartSliceIdxCalc cache map
-  if (OB_FAIL(repart_slice_calc.init())) {
+  if (OB_FAIL(repart_slice_calc.init(ctx_.get_my_session()->get_effective_tenant_id()))) {
     LOG_WARN("failed to init repart slice calc", K(ret));
   } else if (OB_FAIL(send_rows(repart_slice_calc))) {
     LOG_WARN("failed to send rows", K(ret));

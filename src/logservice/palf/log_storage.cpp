@@ -43,6 +43,7 @@ LogStorage::LogStorage() :
     accum_read_io_count_(0),
     accum_read_log_size_(0),
     accum_read_cost_ts_(0),
+    flashback_version_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {}
 
@@ -108,6 +109,7 @@ int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_i
 void LogStorage::destroy()
 {
   is_inited_ = false;
+  flashback_version_ = 0;
   logical_block_size_ = 0;
   palf_id_ = INVALID_PALF_ID;
   need_append_block_header_ = false;
@@ -441,6 +443,13 @@ int LogStorage::end_flashback(const LSN &start_lsn_of_block)
 {
   int ret = OB_SUCCESS;
   const block_id_t block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
+  // to ensure the integrity of each read data, before delete blocks,
+  // reset readable_log_tail_ and inc flashback_version_ firstly.
+  {
+    ObSpinLockGuard guard(tail_info_lock_);
+    readable_log_tail_ = log_tail_;
+    flashback_version_++;
+  }
   // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
   // we make sure that the content in each block_id which is greater than or equal to
   // 'expected_next_block_id' are not been used.
@@ -457,8 +466,6 @@ int LogStorage::end_flashback(const LSN &start_lsn_of_block)
     PALF_LOG(ERROR, "LogBlockMgr rename_tmp_block_handler_to_normal failed", K(ret), KPC(this),
         K(start_lsn_of_block));
   } else {
-		ObSpinLockGuard guard(tail_info_lock_);
-    readable_log_tail_ = log_tail_;
     PALF_EVENT("[END STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
   }
   return ret;
@@ -639,6 +646,7 @@ int LogStorage::do_init_(const char *base_dir,
     plugins_ = plugins;
     hot_cache_ = hot_cache;
     last_accum_read_statistic_time_ = ObTimeUtility::fast_current_time();
+    flashback_version_ = 0;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -647,25 +655,57 @@ int LogStorage::do_init_(const char *base_dir,
   return ret;
 }
 
-int LogStorage::check_read_out_of_bound_(const block_id_t &block_id) const
+// To ensure the integrity of each read data, we need check the 'block_id' whether is integrity
+// after read data successfully.
+//
+// To ensure the integrity of log blocks, we need check the 'block_id' which opened failed whether
+// is deleted by others.
+//
+// 1. For delete block, LogBlockMgr will inc 'min_block_id_' firstly, and then reuse the block,
+//    after reading, if 'block_id' is smaller than 'min_block_id_', means that the data is not integrity.
+//
+// 2. For flashback block, LogBlockMgr will dec 'max_block_id_' firstly, and then reuse the block.
+//    compare with 'min_block_id_', the 'max_block_id_' will be advanced after writing data, therefore,
+//    we can not check the data whether is integrity according to 'max_block_id_'. to solve this problem,
+//    double check 'flashback_version_' which will be advanced after flashback.
+//
+int LogStorage::check_read_out_of_bound_(const block_id_t &block_id,
+                                         const int64_t flashback_version,
+                                         const bool no_such_block) const
 {
   int ret = OB_SUCCESS;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
-  if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))
-      && OB_ENTRY_NOT_EXIST != ret) {
-    PALF_LOG(WARN, "get_block_id_range failed", K(ret), K(min_block_id), K(max_block_id));
-  } else if (max_block_id == block_id) {
+  LSN readable_log_tail;
+  int64_t curr_flashback_version = OB_INVALID_TIMESTAMP;
+  get_readable_log_tail_guarded_by_lock_(readable_log_tail, curr_flashback_version);
+  block_id_t readable_end_block_id = lsn_2_block(readable_log_tail, logical_block_size_);
+  // if read data is concurrently with flashback, return OB_NEED_RETRY.
+  // to avoid unnecessary failure, only check flashback_version when read block need to be overwriting.
+  // NB: update 'reabable_log_tail_' and 'flashback_version_' is atomic, and updating is performed before
+  //     overwriting.
+  if (block_id >= readable_end_block_id && flashback_version != curr_flashback_version) {
     ret = OB_NEED_RETRY;
-    PALF_LOG(WARN, "the block to be read is in flashback, need read retry", K(min_block_id), K(max_block_id), K(block_id));
-  } else if (max_block_id < block_id) {
-    ret = OB_ERR_OUT_OF_UPPER_BOUND;
-    PALF_LOG(WARN, "read something out of upper bound, the blocks may be deleted by flashback",
-        K(min_block_id), K(max_block_id), K(block_id));
+    PALF_LOG(WARN, "there is flashbacking during read data, need read retry",
+             KPC(this), K(flashback_version), K(curr_flashback_version),
+             K(min_block_id), K(max_block_id), K(block_id));
+  } else if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))
+             && OB_ENTRY_NOT_EXIST != ret) {
+   PALF_LOG(ERROR, "get_block_id_range failed", K(ret), K(min_block_id), K(max_block_id));
   } else if (min_block_id > block_id) {
     ret = OB_ERR_OUT_OF_LOWER_BOUND;
-    PALF_LOG(TRACE, "read something out of lower bound", K(min_block_id), K(max_block_id), K(block_id));
-  } else {
+    PALF_LOG(INFO, "read something out of lower bound, the block may be deleted by GC or rebuild",
+             K(min_block_id), K(max_block_id), K(block_id));
+    // there is no possibility read data out of upper bound because we have checked flashback_version.
+  } else if (block_id > max_block_id) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, the block to be read is greater than max_block_id",
+             K(min_block_id), K(max_block_id), K(block_id));
+  }
+  // if there is no block whose names with 'block_id' and 'block_id' is in range of [min_block_id, max_block_id]
+  // return OB_ERR_UNEXPECTED.
+  if (OB_SUCC(ret) && no_such_block
+      && min_block_id <= block_id && block_id <= max_block_id) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "unexpected error, the block may be deleted by human", K(min_block_id), K(max_block_id), K(block_id));
   }
@@ -764,13 +804,15 @@ void LogStorage::update_log_tail_guarded_by_lock_(const LSN &lsn)
 const LSN &LogStorage::get_log_tail_guarded_by_lock_() const
 {
   ObSpinLockGuard guard(tail_info_lock_);
-  return log_tail_;
+  return readable_log_tail_;
 }
 
-const LSN &LogStorage::get_readable_log_tail_guarded_by_lock_() const
+void LogStorage::get_readable_log_tail_guarded_by_lock_(LSN &readable_log_tail,
+                                                        int64_t &flashback_version) const
 {
   ObSpinLockGuard guard(tail_info_lock_);
-  return readable_log_tail_;
+  readable_log_tail = readable_log_tail_;
+  flashback_version = flashback_version_;
 }
 
 offset_t LogStorage::get_phy_offset_(const LSN &lsn) const
@@ -788,35 +830,46 @@ int LogStorage::read_block_header_(const block_id_t block_id,
   ReadBufGuard read_buf_guard("LogStorage", in_read_size);
   ReadBuf &read_buf = read_buf_guard.read_buf_;
 
-  // 'log_tail' and 'block_header' are snapshot, we can read valid data even if the block
-  // is deleted. NB: we need ensure that the lsn_2_block('log_tail') is smaller than or
+  // 'readable_log_tail' and 'block_header' are snapshot, we can read valid data even if the block
+  // is deleted. NB: we need ensure that the lsn_2_block('readable_log_tail') is smaller than or
   // equal to 'max_block_id'.
-  LSN log_tail = get_readable_log_tail_guarded_by_lock_();
-  block_id_t max_block_id = lsn_2_block(log_tail, logical_block_size_);
-  bool last_block_has_data = (0 == lsn_2_offset(log_tail, logical_block_size_) ? false : true);
+  LSN readable_log_tail;
+  int64_t flashback_version = -1;
+  get_readable_log_tail_guarded_by_lock_(readable_log_tail, flashback_version);
+  block_id_t max_block_id = lsn_2_block(readable_log_tail, logical_block_size_);
+  bool last_block_has_data = (0 == lsn_2_offset(readable_log_tail, logical_block_size_) ? false : true);
   if (!read_buf.is_valid()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "allocate memory failed");
   } else if (block_id > max_block_id || (block_id == max_block_id && false == last_block_has_data)) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
-             K(log_tail), K(max_block_id), K(log_block_header));
-  } else if (OB_FAIL(
-                 log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size))) {
-    PALF_LOG(WARN, "read info block failed", K(ret), K(read_buf));
-  } else if (OB_FAIL(log_block_header.deserialize(read_buf.buf_, out_read_size, pos))) {
-    PALF_LOG(WARN, "deserialize info block failed", K(ret), K(read_buf),
-             K(out_read_size));
-  } else if (false == log_block_header.check_integrity()) {
-    ret = OB_INVALID_DATA;
-    PALF_LOG(ERROR, "info block has been corrupted!!!", K(log_block_header), K(block_id));
+             K(readable_log_tail), K(max_block_id), K(log_block_header));
   } else {
-    PALF_LOG(TRACE, "read_block_header_ success", K(ret), K(block_id),
-             K(log_block_header));
-  }
-
-  if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
-    ret = check_read_out_of_bound_(block_id);
+    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size))) {
+      PALF_LOG(WARN, "read info block failed", K(ret), K(read_buf));
+    } else if (OB_FAIL(log_block_header.deserialize(read_buf.buf_, out_read_size, pos))) {
+      PALF_LOG(WARN, "deserialize info block failed", K(ret), K(read_buf),
+               K(out_read_size));
+    } else if (false == log_block_header.check_integrity()) {
+      ret = OB_INVALID_DATA;
+      PALF_LOG(ERROR, "info block has been corrupted!!!", K(log_block_header), K(block_id));
+    } else {
+      PALF_LOG(TRACE, "read_block_header_ success", K(ret), K(block_id),
+               K(log_block_header));
+    }
+    // to ensure the data integrity, we should check 'block_id' whether has integrity data.
+    int tmp_ret = check_read_out_of_bound_(block_id, flashback_version, OB_NO_SUCH_FILE_OR_DIRECTORY == ret);
+    // overwrite ret code:
+    // 1. if ret is OB_NO_SUCH_FILE_OR_DIRECTORY, the block may be recycled or overwriting(i.e. flashback).
+    // 2. if ret is OB_INVALID_DATA, the block may be being recycled or overwriting(i.e. flashback).
+    // 3. if ret is OB_SUCCESS, we should check the data has been read whether is integrity because the block
+    //    may be being recycled or overwriting(i.e. flashback).
+    if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+        || OB_INVALID_DATA == ret
+        || OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
   }
   return ret;
 }
@@ -849,55 +902,65 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
 {
   int ret = OB_SUCCESS;
   // NB: don't support read data from diffent file.
-  const LSN log_tail = get_readable_log_tail_guarded_by_lock_();
+  LSN readable_log_tail;
+  int64_t flashback_version = -1;
+  get_readable_log_tail_guarded_by_lock_(readable_log_tail, flashback_version);
   const block_id_t read_block_id = lsn_2_block(read_lsn, logical_block_size_);
   const LSN curr_block_end_lsn = LSN((read_block_id + 1) * logical_block_size_);
-  const LSN &max_readable_lsn = MIN(log_tail, curr_block_end_lsn);
+  const LSN &max_readable_lsn = MIN(readable_log_tail, curr_block_end_lsn);
   const int64_t real_in_read_size = MIN(max_readable_lsn - read_lsn, in_read_size);
   const offset_t read_offset = lsn_2_offset(read_lsn, logical_block_size_);
   const offset_t real_read_offset =
     read_offset == 0 && true ==  need_read_log_block_header ? 0 : get_phy_offset_(read_lsn);
   const int64_t start_ts = ObTimeUtility::fast_current_time();
 
-  if (read_lsn >= log_tail) {
+  if (read_lsn >= readable_log_tail) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "read something out of upper bound", K(ret), K(read_lsn), K(log_tail_));
-  } else if (OB_FAIL(log_reader_.pread(read_block_id,
-                                       real_read_offset,
-                                       real_in_read_size,
-                                       read_buf,
-                                       out_read_size))) {
-    PALF_LOG(
-        WARN, "LogReader pread failed", K(ret), K(read_lsn), K(log_tail_), K(real_in_read_size));
   } else {
-    PALF_LOG(TRACE,
-             "inner_pread success",
-             K(ret),
-             K(read_lsn),
-             K(in_read_size),
-             K(real_in_read_size),
-             K(read_lsn),
-             K(out_read_size),
-             K(log_tail));
-    const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
-    EVENT_TENANT_INC(ObStatEventIds::PALF_READ_IO_COUNT_FROM_DISK, MTL_ID());
-    EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_DISK, out_read_size);
-    EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_DISK, cost_ts);
-    ATOMIC_INC(&accum_read_io_count_);
-    ATOMIC_AAF(&accum_read_log_size_, out_read_size);
-    ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
-    if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
-      const int64_t avg_pread_cost = accum_read_cost_ts_ / accum_read_io_count_;
-      PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", KPC(this), K_(accum_read_io_count),
-          K_(accum_read_log_size), K(avg_pread_cost));
-      ATOMIC_STORE(&accum_read_io_count_, 0);
-      ATOMIC_STORE(&accum_read_log_size_, 0);
-      ATOMIC_STORE(&accum_read_cost_ts_, 0);
+    if (OB_FAIL(log_reader_.pread(read_block_id,
+                                  real_read_offset,
+                                  real_in_read_size,
+                                  read_buf,
+                                  out_read_size))) {
+      PALF_LOG(
+          WARN, "LogReader pread failed", K(ret), K(read_lsn), K(log_tail_), K(real_in_read_size));
+    } else {
+      PALF_LOG(TRACE,
+               "inner_pread success",
+               K(ret),
+               K(read_lsn),
+               K(in_read_size),
+               K(real_in_read_size),
+               K(read_lsn),
+               K(out_read_size),
+               K(readable_log_tail));
+      const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+      EVENT_TENANT_INC(ObStatEventIds::PALF_READ_IO_COUNT_FROM_DISK, MTL_ID());
+      EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_DISK, out_read_size);
+      EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_DISK, cost_ts);
+      ATOMIC_INC(&accum_read_io_count_);
+      ATOMIC_AAF(&accum_read_log_size_, out_read_size);
+      ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
+      if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
+        const int64_t avg_pread_cost = accum_read_cost_ts_ / accum_read_io_count_;
+        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", KPC(this), K_(accum_read_io_count),
+            K_(accum_read_log_size), K(avg_pread_cost));
+        ATOMIC_STORE(&accum_read_io_count_, 0);
+        ATOMIC_STORE(&accum_read_log_size_, 0);
+        ATOMIC_STORE(&accum_read_cost_ts_, 0);
+      }
     }
-  }
-
-  if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
-    ret = check_read_out_of_bound_(lsn_2_block(read_lsn, logical_block_size_));
+    // to ensure the data integrity, we should check 'read_block_id' whether has integrity data.
+    int tmp_ret = check_read_out_of_bound_(read_block_id, flashback_version, OB_NO_SUCH_FILE_OR_DIRECTORY == ret);
+    // overwrite ret code:
+    // 1. if ret is OB_NO_SUCH_FILE_OR_DIRECTORY, the block may be recycled or overwriting(i.e. flashback).
+    // 2. if ret is OB_SUCCESS, we should check the data has been read whether is integrity because the block
+    //    may be being recycled or overwriting(i.e. flashback).
+    if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+        || OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
   }
   return ret;
 }
@@ -928,5 +991,6 @@ int LogStorage::get_logical_block_size(int64_t &logical_block_size) const
   }
   return ret;
 }
+
 } // end namespace palf
 } // end namespace oceanbase

@@ -23,6 +23,7 @@
 #include "s2/s2polygon.h"
 #include "s2/s2region_coverer.h"
 #include "s2/s2latlng_rect.h"
+#include "s2/s2latlng_rect_bounder.h"
 
 #include <memory>
 
@@ -66,7 +67,7 @@ public:
            typename T_BIN_RING, typename T_BIN_INNER_RING>
   S2Polygon* MakeProjS2Polygon(T_IBIN *geo);
 
-  bool prepare(ObGeometry *geo) { UNUSED(geo); return true; }
+  bool prepare(ObGeometry *geo);
   // wkb
   int visit(ObIWkbGeometry *geo) { INIT_SUCC(ret); return ret; }
   int visit(ObIWkbGeogPoint *geo);

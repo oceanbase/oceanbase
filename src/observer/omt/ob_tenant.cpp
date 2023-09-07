@@ -1191,7 +1191,7 @@ int ObTenant::recv_request(ObRequest &req)
   int ret = OB_SUCCESS;
   int req_level = 0;
   if (ATOMIC_LOAD(&stopped_)) {
-    ret = OB_IN_STOP_STATE;
+    ret = OB_TENANT_NOT_IN_SERVER;
     LOG_WARN("receive request but tenant has already stopped", K(ret), K(id_));
   } else if (0 != req.get_group_id()) {
     if (OB_FAIL(recv_group_request(req, req.get_group_id()))) {
