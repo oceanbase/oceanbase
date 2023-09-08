@@ -4656,7 +4656,10 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
       if (locality_paxos_replica_number >= member_list_cnt_after) {
         new_paxos_replica_number = curr_paxos_replica_number;
         found = true;
-      } else {} // new member cnt greater than paxos_replica_number, not good
+      } else if (locality_paxos_replica_number + 1 == member_list_cnt_after) {
+        new_paxos_replica_number = curr_paxos_replica_number + 1;
+        found = true;
+      }
     } else if (curr_paxos_replica_number > locality_paxos_replica_number) {
       if (curr_paxos_replica_number >= member_list_cnt_after) {
         new_paxos_replica_number = curr_paxos_replica_number;
