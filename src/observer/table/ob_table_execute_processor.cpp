@@ -371,8 +371,6 @@ int ObTableApiExecuteP::process_get()
   ObNewRow *row = nullptr;
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
-  } else if (OB_FAIL(init_tb_ctx())) {
-    LOG_WARN("fail to init table ctx", K(ret));
   } else if (OB_FAIL(init_read_trans(arg_.consistency_level_,
                                      tb_ctx_.get_ls_id(),
                                      tb_ctx_.get_timeout_ts()))) {

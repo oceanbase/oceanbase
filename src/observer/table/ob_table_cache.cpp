@@ -142,9 +142,13 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
       || operation_type == ObTableOperationType::Type::INSERT_OR_UPDATE
       || operation_type == ObTableOperationType::Type::INCREMENT
       || operation_type == ObTableOperationType::Type::APPEND) {
-    const ObTableCtx::ObAssignIds &assign_ids = tb_ctx->get_assign_ids();
-    for (int64_t i = 0; OB_SUCC(ret) && i < assign_ids.count(); i++) {
-      if (OB_FAIL(cache_key_.op_column_ids_.push_back(assign_ids.at(i).column_id_))) {
+    const ObIArray<ObTableAssignment> &assigns = tb_ctx->get_assignments();
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      const ObTableAssignment &tmp_assign = assigns.at(i);
+      if (OB_ISNULL(tmp_assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is null", K(ret), K(tmp_assign));
+      } else if (OB_FAIL(cache_key_.op_column_ids_.push_back(tmp_assign.column_item_->column_id_))) {
         LOG_WARN("fail to add assign column id", K(ret), K(i));
       }
     }

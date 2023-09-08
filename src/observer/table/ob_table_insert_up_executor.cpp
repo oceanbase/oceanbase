@@ -87,13 +87,12 @@ int ObTableApiInsertUpExecutor::refresh_exprs_frame(const ObTableEntity *entity)
   const ObTableInsCtDef &ins_ctdef = insert_up_spec_.get_ctdef().ins_ctdef_;
   const ObTableUpdCtDef &upd_ctdef = insert_up_spec_.get_ctdef().upd_ctdef_;
 
-  clear_evaluated_flag();
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::refresh_insert_up_exprs_frame(tb_ctx_,
                                                                          ins_ctdef.new_row_,
-                                                                         upd_ctdef.delta_exprs_,
+                                                                         upd_ctdef.delta_row_,
                                                                          *entity))) {
     LOG_WARN("fail to refresh insert up exprs frame", K(ret), K(*entity));
   }
@@ -108,8 +107,11 @@ int ObTableApiInsertUpExecutor::get_next_row_from_child()
 
   if (cur_idx_ >= 1) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(refresh_exprs_frame(entity))) {
-    LOG_WARN("fail to refresh exprs frame", K(ret));
+  } else {
+    clear_evaluated_flag();
+    if (OB_FAIL(refresh_exprs_frame(entity))) {
+      LOG_WARN("fail to refresh exprs frame", K(ret));
+    }
   }
 
   return ret;
@@ -158,6 +160,21 @@ int ObTableApiInsertUpExecutor::try_update_row()
   return ret;
 }
 
+int ObTableApiInsertUpExecutor::cache_insert_row()
+{
+  int ret = OB_SUCCESS;
+  const ObExprPtrIArray &new_row_exprs = get_primary_table_new_row();
+
+  if (OB_FAIL(ObChunkDatumStore::StoredRow::build(insert_row_, new_row_exprs, eval_ctx_, allocator_))) {
+    LOG_WARN("fail to build stored row", K(ret), K(new_row_exprs));
+  } else if (OB_ISNULL(insert_row_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cache insert row is null", K(ret));
+  }
+
+  return ret;
+}
+
 // 通过主键在conflict_checker_中找到冲突旧行，执行更新
 // 注意，这里更新后还可能出现二级索引冲突，eg:
 // create table t (C1 int, C2 varchar(10), primary key(C1), UNIQUE KEY idx_c2 (C2));
@@ -170,45 +187,32 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObConflictValue, 1> constraint_values;
-  bool is_skipped = false;
-  ObChunkDatumStore::StoredRow *insert_row = NULL;
   ObTableUpdRtDef &upd_rtdef = insert_up_rtdef_.upd_rtdef_;
-  const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
-  const ObExprPtrIArray &new_row_exprs = get_primary_table_insert_row();
 
-  // new_row_exprs因为冲突已经被conflict_checker_刷为冲突行，因此需要重新刷一遍
-  if (OB_FAIL(refresh_exprs_frame(entity))) {
-    LOG_WARN("fail to refresh exprs frame", K(ret));
-  } else if (OB_FAIL(ObChunkDatumStore::StoredRow::build(insert_row, new_row_exprs, eval_ctx_, allocator_))) {
-    LOG_WARN("fail to build stored row", K(ret), K(new_row_exprs));
+  if (OB_ISNULL(insert_row_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert row is NULL", K(ret));
+  } else if (OB_FAIL(conflict_checker_.check_duplicate_rowkey(insert_row_, constraint_values, true))) {
+    LOG_WARN("fail to check duplicated key", K(ret), KPC_(insert_row));
   } else {
-    if (OB_ISNULL(insert_row)) {
+    upd_rtdef.found_rows_++;
+    const ObChunkDatumStore::StoredRow *upd_new_row = insert_row_;
+    const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
+    if (OB_ISNULL(upd_old_row)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("insert row is NULL", K(ret));
-    } else if (OB_FAIL(conflict_checker_.check_duplicate_rowkey(insert_row,
-                                                                constraint_values,
-                                                                true))) {
-      LOG_WARN("fail to check duplicated key", K(ret), KPC(insert_row));
-    } else {
-      upd_rtdef.found_rows_++;
-      const ObChunkDatumStore::StoredRow *upd_new_row = insert_row;
-      const ObChunkDatumStore::StoredRow *upd_old_row = constraint_values.at(0).current_datum_row_;
-      if (OB_ISNULL(upd_old_row)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("upd_old_row is NULL", K(ret));
-      } else if (OB_FAIL(check_whether_row_change(*upd_old_row,
-                                                  *upd_new_row,
-                                                  insert_up_spec_.get_ctdef().upd_ctdef_,
-                                                  is_row_changed_))) {
-        LOG_WARN("fail to check whether row change", K(ret));
-      } else if (is_row_changed_) {
-        // do update
-        clear_evaluated_flag();
-        if (OB_FAIL(conflict_checker_.update_row(upd_new_row, upd_old_row))) {
-          LOG_WARN("fail to update row in conflict_checker", K(ret), KPC(upd_new_row), KPC(upd_old_row));
-        } else {
-          upd_changed_rows_++;
-        }
+      LOG_WARN("upd_old_row is NULL", K(ret));
+    } else if (OB_FAIL(check_whether_row_change(*upd_old_row,
+                                                *upd_new_row,
+                                                insert_up_spec_.get_ctdef().upd_ctdef_,
+                                                is_row_changed_))) {
+      LOG_WARN("fail to check whether row change", K(ret));
+    } else if (is_row_changed_) {
+      // do update
+      clear_evaluated_flag();
+      if (OB_FAIL(conflict_checker_.update_row(upd_new_row, upd_old_row))) {
+        LOG_WARN("fail to update row in conflict_checker", K(ret), KPC(upd_new_row), KPC(upd_old_row));
+      } else {
+        upd_changed_rows_++;
       }
     }
   }
@@ -258,7 +262,6 @@ int ObTableApiInsertUpExecutor::do_update(const ObRowkey &constraint_rowkey,
                                    insert_up_rtdef_.upd_rtdef_,
                                    upd_rtctx_));
       OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                          constraint_rowkey,
                           insert_up_spec_.get_ctdef().upd_ctdef_));
       clear_evaluated_flag();
       OZ(insert_upd_new_row_to_das(insert_up_spec_.get_ctdef().upd_ctdef_,
@@ -267,7 +270,6 @@ int ObTableApiInsertUpExecutor::do_update(const ObRowkey &constraint_rowkey,
     } else if (NULL == constraint_value.baseline_datum_row_ &&
                NULL != constraint_value.current_datum_row_) { // 单单是唯一索引冲突的时候，会走这个分支
       OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                          constraint_rowkey,
                           insert_up_spec_.get_ctdef().upd_ctdef_));
       OZ(insert_upd_new_row_to_das(insert_up_spec_.get_ctdef().upd_ctdef_,
                                    insert_up_rtdef_.upd_rtdef_,
@@ -295,6 +297,8 @@ int ObTableApiInsertUpExecutor::get_next_row()
   } else if (!is_duplicated()) {
     insert_rows_ = 1;
     LOG_TRACE("try insert is not duplicated", K(ret), K(insert_rows_));
+  } else if (OB_FAIL(cache_insert_row())) {
+    LOG_WARN("fail to cache insert row", K(ret));
   } else if (OB_FAIL(fetch_conflict_rowkey(conflict_checker_))) {
     LOG_WARN("fail to fetch conflict row", K(ret));
   } else if (OB_FAIL(reset_das_env(insert_up_rtdef_.ins_rtdef_))) {

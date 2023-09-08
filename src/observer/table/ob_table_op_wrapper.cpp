@@ -81,47 +81,49 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
   } else if (OB_FAIL(op_result.get_entity(result_entity))) {
     LOG_WARN("fail to get result entity", K(ret), K(result_entity));
   } else {
-    ObIAllocator &allocator = tb_ctx.get_allocator();
-    const ObIArray<ObExpr *> *full_assign_exprs = nullptr;
     const ObIArray<ObExpr *> *ins_exprs = nullptr;
+    const ObIArray<ObExpr *> *upd_exprs = nullptr;
     bool use_insert_expr = false;
     if (TABLE_API_EXEC_INSERT_UP == spec.get_type()) {
       const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
-      full_assign_exprs = &ins_up_spec.get_ctdef().upd_ctdef_.full_assign_row_;
       ins_exprs = &ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
+      upd_exprs = &ins_up_spec.get_ctdef().upd_ctdef_.new_row_;
       use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
     } else {
       ObTableApiTTLExecutor &ttl_executor = static_cast<ObTableApiTTLExecutor&>(executor);
       const ObTableApiTTLSpec &ttl_spec = static_cast<const ObTableApiTTLSpec&>(spec);
-      full_assign_exprs = &ttl_spec.get_ctdef().upd_ctdef_.full_assign_row_;
       ins_exprs = &ttl_spec.get_ctdef().ins_ctdef_.new_row_;
+      upd_exprs = &ttl_spec.get_ctdef().upd_ctdef_.new_row_;
       use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
     }
-    const ObTableCtx::ObAssignIds &assign_ids = tb_ctx.get_assign_ids();
-    const int64_t N = assign_ids.count();
-    ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
+
+    ObIArray<ObTableAssignment> &assigns = tb_ctx.get_assignments();
+    ObIAllocator &allocator = tb_ctx.get_allocator();
+    ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * assigns.count()));
     if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("faild to alloc memory for objs", K(ret));
-    } else if (OB_ISNULL(full_assign_exprs)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("full assign exprs is null", K(ret));
+      LOG_WARN("faild to alloc memory for objs", K(ret), K(assigns.count()));
     } else if (OB_ISNULL(ins_exprs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert exprs is null", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      uint64_t idx = assign_ids.at(i).idx_;
-      uint64_t column_id = assign_ids.at(i).column_id_;
-      const ObColumnSchemaV2 *column_schema = nullptr;
-      if (OB_ISNULL(column_schema = tb_ctx.get_table_schema()->get_column_schema(column_id))) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("column not exist", K(ret), K(column_id));
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      ObTableAssignment &assign = assigns.at(i);
+      uint64_t project_idx = OB_INVALID_ID;
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is nullptr", K(ret), K(assign));
+      } else if (FALSE_IT(project_idx = assign.column_item_->col_idx_)) {
+      } else if (use_insert_expr && ins_exprs->count() <= project_idx) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected insert index", K(ret), K(ins_exprs), K(assign));
+      } else if (!use_insert_expr && upd_exprs->count() <= project_idx) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected assign index", K(ret), K(upd_exprs), K(assign));
       } else {
         ObObj &obj = obj_array[i];
-        ObExpr *rt_expr = use_insert_expr ? ins_exprs->at(idx) : full_assign_exprs->at(idx);
+        ObExpr *rt_expr = use_insert_expr ? ins_exprs->at(project_idx) : upd_exprs->at(project_idx);
         ObDatum *datum = nullptr;
-        const ObString &column_name = column_schema->get_column_name_str();
         if (OB_FAIL(rt_expr->eval(executor.get_eval_ctx(), datum))) {
           LOG_WARN("fail to eval datum", K(ret), K(*rt_expr));
         } else if (OB_FAIL(datum->to_obj(obj, rt_expr->obj_meta_))) {
@@ -129,8 +131,8 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         } else if (is_lob_storage(obj.get_type())
             && OB_FAIL(ObTableCtx::read_real_lob(allocator, obj))) {
           LOG_WARN("fail to read lob", K(ret), K(obj));
-        } else if (OB_FAIL(result_entity->set_property(column_name, obj))) {
-          LOG_WARN("fail to set property", K(ret), K(column_name), K(obj));
+        } else if (OB_FAIL(result_entity->set_property(assign.column_item_->column_name_, obj))) {
+          LOG_WARN("fail to set property", K(ret), K(assign), K(obj));
         }
       }
     }

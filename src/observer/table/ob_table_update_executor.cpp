@@ -21,8 +21,7 @@ namespace oceanbase
 {
 namespace table
 {
-int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *entity,
-                                                       const ObTableCtx::ObAssignIds &assign_ids)
+int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<ObNewRange> &key_ranges = tb_ctx_.get_key_ranges();
@@ -49,10 +48,7 @@ int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *enti
           LOG_WARN("fail to get next row", K(ret));
         }
       } else if (OB_FAIL(ObTableExprCgService::refresh_update_exprs_frame(tb_ctx_,
-                                                                          upd_ctdef->old_row_,
                                                                           upd_ctdef->new_row_,
-                                                                          upd_ctdef->full_assign_row_,
-                                                                          assign_ids,
                                                                           *entity))) {
         LOG_WARN("fail to refresh update exprs frame", K(ret), K(*entity), K(cur_idx_));
       }
@@ -69,7 +65,7 @@ int ObTableApiUpdateExecutor::get_next_row_from_child()
 
   if (cur_idx_ >= 1) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(process_single_operation(entity, tb_ctx_.get_assign_ids()))) {
+  } else if (OB_FAIL(process_single_operation(entity))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to process single update operation", K(ret));
     }
