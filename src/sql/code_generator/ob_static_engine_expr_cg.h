@@ -163,7 +163,7 @@ public:
                                     const RowDesc &row_desc,
                                     ObIAllocator &alloctor,
                                     ObSQLSessionInfo *session,
-                                    share::schema::ObSchemaGetterGuard *schema_gaurd,
+                                    share::schema::ObSchemaGetterGuard *schema_guard,
                                     ObTempExpr *&temp_expr);
 
   static int init_temp_expr_mem_size(ObTempExpr &temp_expr);

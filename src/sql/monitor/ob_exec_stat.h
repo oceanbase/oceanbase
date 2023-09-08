@@ -367,7 +367,7 @@ struct ObAuditRecordData {
   int64_t plan_id_;
   int64_t affected_rows_;//delete,update,insert影响的行数,及select选出的行数
   int64_t return_rows_;
-  int64_t partition_cnt_;//该请求涉及的所以parttion个数
+  int64_t partition_cnt_;//该请求涉及的所以partition个数
   int64_t expected_worker_cnt_; // px 预期分配线程数
   int64_t used_worker_cnt_; // px 实际分配线程数
   int64_t try_cnt_; //尝试执行次数

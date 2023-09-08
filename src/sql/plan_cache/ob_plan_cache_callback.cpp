@@ -57,7 +57,7 @@ from map                         |
 dec ref cnt => ref_cnt=0         |
                                  | ref plan id x. inc_ref=1
 deleting plan x                  |
-                                 | acess plan x --> cause core!
+                                 | access plan x --> cause core!
 */
 
 void ObCacheObjAtomicOp::operator()(ObjKV &entry)

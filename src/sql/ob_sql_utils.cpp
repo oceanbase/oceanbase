@@ -597,7 +597,7 @@ int ObSQLUtils::calc_calculable_expr(ObSQLSessionInfo *session,
     SQL_LOG(WARN, "Invalid arguments", K(expr), K(allocator));
   } else if (!expr->is_static_scalar_const_expr()) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_LOG(WARN, "expr should be calculabe expr", K(*expr), K(ret));
+    SQL_LOG(WARN, "expr should be calculable expr", K(*expr), K(ret));
   } else if (OB_FAIL(calc_const_expr(session,
                                      *expr,
                                      result,
@@ -4118,7 +4118,7 @@ int ObSQLUtils::create_encode_sortkey_expr(
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_ENCODE_SORTKEY, encode_expr))) {
     LOG_WARN("failed to create encode_expr", K(ret));
   } else {
-    // Assamble encode sortkey.
+    // Assemble encode sortkey.
     for (int64_t i = start_key; OB_SUCC(ret) && i < order_keys.count(); i++) {
       ObConstRawExpr *nulls_pos_expr = nullptr;
       ObConstRawExpr *order_expr = nullptr;
@@ -5047,7 +5047,7 @@ int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
     obj_type = ObObjectType::FUNCTION;
     schema_version = routine_info->get_schema_version();
   } else if (OB_FAIL(guard.get_standalone_procedure_info(tenant_id, database_id, object_name, routine_info))) {
-    LOG_WARN("failed to get procedore info", K(ret));
+    LOG_WARN("failed to get procedure info", K(ret));
   } else if (nullptr != routine_info) {
     exist = true;
     object_id = routine_info->get_object_id();
@@ -5102,7 +5102,7 @@ int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
   require = false;
   if (OB_ISNULL(info)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "arguemnt is invalid", K(ret));
+    OB_LOG(WARN, "argument is invalid", K(ret));
   } else if (ident.length() > 0 && ident[0] == '$') {
     require = true;
   }

@@ -368,7 +368,7 @@ struct ObOperatorStat
   //不再记录last的执行结果
   //int64_t last_input_rows_; //上次input rows
   //int64_t last_rescan_times_; //rescan的次数
-  //int64_t last_output_rows_; //output rows in last exectuion
+  //int64_t last_output_rows_; //output rows in last execution
   //暂时不支持以下和oracle兼容的统计项
   //int64_t last_cr_buffer_gets_; //上次执行逻辑读次数
   //int64_t cr_buffer_gets_; //累计逻辑读次数
@@ -539,7 +539,7 @@ struct ObPlanStat
   int64_t delayed_large_querys_;
   int64_t delayed_px_querys_;    // px query 被丢回队列重试的次数
   int64_t expected_worker_count_;  // px 预期分配线程数
-  int64_t minimal_worker_count_;  // minial threads required for query
+  int64_t minimal_worker_count_;  // minimal threads required for query
   int64_t outline_version_;
   int64_t outline_id_;
   bool is_last_exec_succ_;        // record whether last execute success
@@ -976,14 +976,14 @@ public:
  *
  * update cached configs
  * 1. @Funciton load_influence_plan_config() will load values
- * 2. @Function serialize_configs() will serialze config values to strings and plan cache will
+ * 2. @Function serialize_configs() will serialize config values to strings and plan cache will
  *    compare this string so as to figure out whether configs has changed.
  * 3. after generate string, @Function should do @Function update_version()
  *
  * add configs has influence in execution plan. @see load_influence_plan_config();
  *
  * NOTES:
- * to add configs that will influence exectuion plan, please add to following funcs:
+ * to add configs that will influence execution plan, please add to following funcs:
  *  1. load_influence_plan_config();
  *  2. serialize_configs();
  *  3. adds default values to ObBasicSessionInfo::load_default_configs_in_pc()
@@ -1011,7 +1011,7 @@ public:
   }
   // init tenant_id_
   void init(int t_id) {tenant_id_ = t_id;}
-  // load configs which will influence exectuion plan
+  // load configs which will influence execution plan
   int load_influence_plan_config();
   // generate config string
   int serialize_configs(char *buf, int buf_len, int64_t &pos);

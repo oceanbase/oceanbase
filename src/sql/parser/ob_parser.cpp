@@ -499,7 +499,7 @@ ObParser::State ObParser::transform_normal(
     } break;
     default: {
       is_not_pl = true;
-      LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "unexpecte state", K(state));
+      LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "unexpected state", K(state));
     } break;
   }
   return state;
@@ -837,14 +837,14 @@ int32_t ObParser::get_well_formed_errlen(const ObCharsetInfo *charset_info,
   }
   return res_len;
 }
-// avoid separeting sql by semicolons in quotes or comment.
+// avoid separating sql by semicolons in quotes or comment.
 void ObParser::get_single_sql(const common::ObString &stmt, int64_t offset, int64_t remain, int64_t &str_len) {
   /* following two flags are used to mark wether we are in comment, if in comment, ';' can't be used to split sql*/
   // in -- comment
   bool comment_flag = false;
   // in /*! comment */ or /* comment */
   bool c_comment_flag = false;
-  /* follwing three flags are used to mark wether we are in quotes.*/
+  /* following three flags are used to mark wether we are in quotes.*/
   // in '', single quotes
   bool sq_flag = false;
   // in "", double quotes
@@ -1240,7 +1240,7 @@ int ObParser::pre_parse(const common::ObString &stmt,
                         PreParseResult &res)
 {
   int ret = OB_SUCCESS;
-  // /*tracd_id=xxx*/
+  // /*trace_id=xxx*/
   int64_t len = stmt.length();
   if (len <= 13) {
     //do_nothing

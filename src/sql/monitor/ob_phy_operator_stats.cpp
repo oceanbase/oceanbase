@@ -69,7 +69,7 @@ int ObPhyOperatorStats::add_op_stat(ObPhyOperatorMonitorInfo &info)
   int64_t stat_start_index = copy_start_index + info.get_op_id() * StatId::MAX_STAT;
   if (stat_start_index < 0 || stat_start_index + StatId::MAX_STAT > array_size_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invaild array index", K(stat_start_index), K(array_size_));
+    LOG_WARN("invalid array index", K(stat_start_index), K(array_size_));
   } else {
     int64_t last_input_rows = 0;
     int64_t last_output_rows = 0;
