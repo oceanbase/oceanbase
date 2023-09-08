@@ -831,16 +831,12 @@ int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesRe
   } else if (OB_UNLIKELY(get_merge_table_result.scn_range_.end_scn_ > old_tablet->get_tablet_meta().clog_checkpoint_scn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can't have larger end_log_ts", K(ret), K(get_merge_table_result), K(old_tablet->get_tablet_meta()));
-  } else if (old_tablet->get_tablet_meta().snapshot_version_ >= get_merge_table_result.version_range_.snapshot_version_) {
-    // do nothing, no need to advance snapshot version on tablet meta.
   } else if (OB_FAIL(get_storage_schema_to_merge(get_merge_table_result.handle_))) {
     LOG_WARN("failed to get storage schema", K(ret), K(get_merge_table_result));
   } else if (OB_ISNULL(schema_ctx_.storage_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage schema is unexpected null", K(ret), KPC(this));
-  }
-
-  if (FAILEDx(update_tablet_directly(get_merge_table_result))) {
+  } else if (OB_FAIL(update_tablet_directly(get_merge_table_result))) {
     LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result));
   }
   return ret;
@@ -1052,6 +1048,8 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
 
   if (OB_FAIL(tablet_handle_.get_obj()->load_storage_schema(allocator_, schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
+  } else if (0 == merge_tables_handle.get_count()) {
+    // do nothing, only need to release memtable
   } else if (is_mini_merge(merge_type) && !param_.tablet_id_.is_ls_inner_tablet()) {
     if (OB_FAIL(schema_on_tablet->get_store_column_count(column_cnt_in_schema, true/*full_col*/))) {
       LOG_WARN("failed to get store column count", K(ret), K(column_cnt_in_schema));
