@@ -901,11 +901,11 @@ struct DupTableLogEntryHeader
 struct DupTableStatLog
 {
   int64_t lease_addr_cnt_;
-  int64_t readable_cnt_;
+  int64_t leader_readable_cnt_;
   int64_t all_tablet_set_cnt_;
   int64_t logging_readable_cnt_;
 
-  TO_STRING_KV(K(lease_addr_cnt_), K(readable_cnt_), K(all_tablet_set_cnt_),
+  TO_STRING_KV(K(lease_addr_cnt_), K(leader_readable_cnt_), K(all_tablet_set_cnt_),
                K(logging_readable_cnt_));
 
   DupTableStatLog() { reset(); }
@@ -913,7 +913,7 @@ struct DupTableStatLog
   void reset()
   {
     lease_addr_cnt_ = -1;
-    readable_cnt_ = -1;
+    leader_readable_cnt_ = -1;
     all_tablet_set_cnt_ = -1;
     logging_readable_cnt_ = -1;
   }
@@ -978,6 +978,7 @@ private:
 
 private:
   void after_submit_log(const bool submit_result, const bool for_replay);
+
 
 #define LOG_OPERATOR_INIT_CHECK                                                                  \
   if (OB_SUCC(ret)) {                                                                            \

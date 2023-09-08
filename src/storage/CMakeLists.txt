@@ -317,6 +317,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_dup_table_tablets.cpp
   tx/ob_dup_table_ts_sync.cpp
   tx/ob_dup_table_stat.cpp
+  tx/ob_dup_table_dump.cpp
   tx/ob_xa_ctx.cpp
   tx/ob_xa_ctx_mgr.cpp
   tx/ob_xa_dblink_service.cpp

@@ -513,7 +513,7 @@ int ObDupTableLSCheckpoint::online()
 
 // OB_SERIALIZE_MEMBER(ObDupTableLogBlockHeader, position_, remain_length_);
 OB_SERIALIZE_MEMBER(DupTableLogEntryHeader, entry_type_);
-OB_SERIALIZE_MEMBER(DupTableStatLog, lease_addr_cnt_, readable_cnt_, all_tablet_set_cnt_);
+OB_SERIALIZE_MEMBER(DupTableStatLog, lease_addr_cnt_, leader_readable_cnt_, all_tablet_set_cnt_);
 
 // OB_SERIALIZE_MEMBER(ObLSDupTabletsMgr, max_submitted_tablet_change_ts_);
 
@@ -754,8 +754,8 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
         }
       }
     }
-    if (stat_log_.readable_cnt_ > 0 && logging_readable_cnt > 0
-        && stat_log_.readable_cnt_ == logging_readable_cnt) {
+    if (stat_log_.leader_readable_cnt_ > 0 && logging_readable_cnt > 0
+        && stat_log_.leader_readable_cnt_ == logging_readable_cnt) {
       contain_all_readable = true;
     }
     if (!contain_all_readable) {
@@ -804,7 +804,7 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
 
   DupTableStatLog max_stat_log;
   max_stat_log.lease_addr_cnt_ = INT64_MAX;
-  max_stat_log.readable_cnt_ = INT64_MAX;
+  max_stat_log.leader_readable_cnt_ = INT64_MAX;
   max_stat_log.all_tablet_set_cnt_ = INT64_MAX;
 
   if (big_segment_buf_.is_active()) {
@@ -913,7 +913,7 @@ int ObDupTableLogOperator::serialize_log_entry_(const int64_t max_ser_size,
         case DupTableLogEntryType::DuptableStatLog: {
           DupTableStatLog stat_log;
           stat_log.lease_addr_cnt_ = logging_lease_addrs_.count();
-          stat_log.readable_cnt_ = tablet_mgr_ptr_->get_readable_tablet_set_count();
+          stat_log.leader_readable_cnt_ = tablet_mgr_ptr_->get_readable_tablet_set_count();
           stat_log.all_tablet_set_cnt_ = tablet_mgr_ptr_->get_all_tablet_set_count();
           if (OB_FAIL(stat_log.serialize(big_segment_buf_.get_serialize_buf(),
                                          big_segment_buf_.get_serialize_buf_len(), data_pos))) {
