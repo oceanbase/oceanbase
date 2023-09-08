@@ -45,7 +45,6 @@ public:
   int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
   int mark_removed_from_t3m(ObTabletPointer *pointer) const;
   int mark_switched_to_empty_shell() const;
-  int is_switched_to_empty_shell(bool &is_switched_to_empty_shell) const;
   template <int N>
   int forcely_reset_mds_table(const char (&reason)[N]);
   /******************************Single Key Unit Access Interface**********************************/

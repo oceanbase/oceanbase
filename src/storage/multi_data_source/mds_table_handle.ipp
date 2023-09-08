@@ -711,19 +711,6 @@ inline int MdsTableHandle::mark_switched_to_empty_shell() const
   return ret;
 }
 
-inline int MdsTableHandle::is_switched_to_empty_shell(bool &is_switched_to_empty_shell) const
-{
-  bool ret = OB_SUCCESS;
-  CHECK_MDS_TABLE_INIT();
-  if (!p_mds_table_base_.is_valid()) {
-    ret = OB_BAD_NULL_ERROR;
-    MDS_LOG(WARN, "p_mds_table_base_ is invalid", K(*this));
-  } else {
-    is_switched_to_empty_shell = p_mds_table_base_->is_switched_to_empty_shell();
-  }
-  return ret;
-}
-
 template <int N>
 inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
 {

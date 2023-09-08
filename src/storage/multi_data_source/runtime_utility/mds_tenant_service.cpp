@@ -89,6 +89,7 @@ int ObTenantMdsAllocator::init()
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
+  // TODO : @gengli new ctx id?
   mem_attr.tenant_id_ = MTL_ID();
   mem_attr.ctx_id_ = ObCtxIds::MDS_DATA_ID;
   mem_attr.label_ = "MdsTable";
@@ -102,34 +103,17 @@ int ObTenantMdsAllocator::init()
   return ret;
 }
 
-constexpr int64_t HEADER_SIZE = sizeof(const char *) + sizeof(uint16_t);
-
 void *ObTenantMdsAllocator::alloc(const int64_t size)
 {
-  const char **related_mds_type = nullptr;
-  uint16_t *alloc_size = 0;
-  char *obj = nullptr;// C++ standard: sizeof(char) == 1
-  if (size >= UINT16_MAX) {
-    MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
-                "too big mds data size, if you make sure you need so big data, do not use mds allocator", K(size));
-  } else {
-    obj = (char *)allocator_.alloc(HEADER_SIZE + size);
-    related_mds_type = (const char **)obj;
-    obj += sizeof(const char *);
-    alloc_size = (uint16_t *)obj;
-    obj += sizeof(uint16_t);
-    *related_mds_type = __thread_mds_alloc_type__;
-    *alloc_size = size;
-    alloc_info_map_.record_alloc_info(*related_mds_type, *alloc_size);
-    MDS_LOG(DEBUG, "mds alloc ", K(size), KP(obj));
-    if (OB_NOT_NULL(obj)) {
-      MTL(ObTenantMdsService*)->record_alloc_backtrace(obj,
-                                                      __thread_mds_tag__,
-                                                      __thread_mds_alloc_type__,
-                                                      __thread_mds_alloc_file__,
-                                                      __thread_mds_alloc_func__,
-                                                      __thread_mds_alloc_line__);// for debug mem leak
-    }
+  void *obj = allocator_.alloc(size);
+  MDS_LOG(DEBUG, "mds alloc ", K(size), KP(obj));
+  if (OB_NOT_NULL(obj)) {
+    MTL(ObTenantMdsService*)->record_alloc_backtrace(obj,
+                                                    __thread_mds_tag__,
+                                                    __thread_mds_alloc_type__,
+                                                    __thread_mds_alloc_file__,
+                                                    __thread_mds_alloc_func__,
+                                                    __thread_mds_alloc_line__);// for debug mem leak
   }
   return obj;
 }
@@ -144,14 +128,8 @@ void *ObTenantMdsAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 
 void ObTenantMdsAllocator::free(void *ptr)
 {
-  char *free_ptr = (char *)ptr;
-  if (OB_NOT_NULL(free_ptr)) {
-    alloc_info_map_.record_free_info(*(const char **)(free_ptr - sizeof(uint16_t) - sizeof(const char *)),
-                                     *(uint16_t*)(free_ptr - sizeof(uint16_t)));
-    free_ptr -= HEADER_SIZE;
-    allocator_.free(free_ptr);
-    MTL(ObTenantMdsService*)->erase_alloc_backtrace(ptr);
-  }
+  allocator_.free(ptr);
+  MTL(ObTenantMdsService*)->erase_alloc_backtrace(ptr);
 }
 
 void ObTenantMdsAllocator::set_attr(const ObMemAttr &attr)
@@ -223,6 +201,10 @@ int ObTenantMdsService::mtl_start(ObTenantMdsService *&mds_service)
     3_s,
     [mds_service]() -> bool {
       ObCurTraceId::init(GCONF.self_addr_);
+      if (REACH_TIME_INTERVAL(30_s)) {
+        observer::ObMdsEventBuffer::dump_statistics();
+        mds_service->dump_map_holding_item(5_min);
+      }
       mds_service->mds_timer_.try_recycle_mds_table_task();
       return false;// won't stop until tenant exit
     }
@@ -238,19 +220,6 @@ int ObTenantMdsService::mtl_start(ObTenantMdsService *&mds_service)
     }
   ))) {
     MDS_LOG(ERROR, "fail to register dump mds table status task to timer", KR(ret), KPC(mds_service));
-  } else if (MDS_FAIL(mds_service->mds_timer_.timer_.schedule_task_repeat(
-    mds_service->mds_timer_.dump_memory_statistics_task_handle_,
-    30_s,
-    [mds_service]() -> bool {
-      mds_service->mds_allocator_.dump();
-      mds_service->dump_map_holding_item(5_min);
-      if (REACH_TIME_INTERVAL(30_s)) {
-        observer::ObMdsEventBuffer::dump_statistics();
-      }
-      return false;// won't stop until tenant exit
-    }
-  ))) {
-    MDS_LOG(ERROR, "fail to register memory dump timer task", KR(ret), KPC(mds_service));
   }
   return ret;
 }
@@ -260,7 +229,6 @@ void ObTenantMdsService::mtl_stop(ObTenantMdsService *&mds_service)
   if (nullptr != mds_service) {
     mds_service->mds_timer_.recycle_task_handle_.stop();
     mds_service->mds_timer_.dump_special_mds_table_status_task_handle_.stop();
-    mds_service->mds_timer_.dump_memory_statistics_task_handle_.stop();
   }
 }
 
@@ -269,7 +237,6 @@ void ObTenantMdsService::mtl_wait(ObTenantMdsService *&mds_service)
   if (nullptr != mds_service) {
     mds_service->mds_timer_.recycle_task_handle_.wait();
     mds_service->mds_timer_.dump_special_mds_table_status_task_handle_.wait();
-    mds_service->mds_timer_.dump_memory_statistics_task_handle_.wait();
   }
 }
 
