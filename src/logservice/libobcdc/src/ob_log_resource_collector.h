@@ -135,7 +135,7 @@ private:
   int dec_ref_cnt_and_try_to_revert_task_(PartTransTask *part_trans_task);
   int del_trans_(const uint64_t tenant_id,
       const ObString &trans_id_str);
-
+  int push_lob_data_clean_task_(const uint64_t tenant_id, const int64_t commit_version);
   int dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLogBR &br);
   int revert_log_entry_task_(ObLogEntryTask *log_entry_task);
   int del_store_service_data_(const uint64_t tenant_id,

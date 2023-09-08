@@ -332,8 +332,9 @@ private:
     int64_t offline_tenant_count_;
     std::vector<uint64_t> tenant_ids_;
     std::vector<void *> cf_handles_;
+    std::vector<void *> lob_storage_cf_handles_;
 
-    TenantPrinter() : serving_tenant_count_(0), offline_tenant_count_(0), cf_handles_() {}
+    TenantPrinter() : serving_tenant_count_(0), offline_tenant_count_(0), cf_handles_(), lob_storage_cf_handles_() {}
     bool operator()(const TenantID &tid, ObLogTenant *tenant);
   };
 

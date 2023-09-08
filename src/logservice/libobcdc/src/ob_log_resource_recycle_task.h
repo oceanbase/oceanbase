@@ -26,11 +26,13 @@ public:
   {
     UNKNOWN_TASK = 0,
     PART_TRANS_TASK = 1,
-    BINLOG_RECORD_TASK = 2
+    BINLOG_RECORD_TASK = 2,
+    LOB_DATA_CLEAN_TASK = 3,
   };
   bool is_unknown_task() const { return UNKNOWN_TASK == task_type_; }
   bool is_part_trans_task() const { return PART_TRANS_TASK == task_type_; }
   bool is_binlog_record_task() const { return BINLOG_RECORD_TASK == task_type_; }
+  bool is_lob_data_clean_task() const { return LOB_DATA_CLEAN_TASK == task_type_; }
   TaskType get_task_type() const { return task_type_; }
 
   static const char *print_task_type(TaskType task)
@@ -44,6 +46,8 @@ public:
       case BINLOG_RECORD_TASK:
         str = "BinlogRecordTask";
         break;
+      case LOB_DATA_CLEAN_TASK:
+        str = "LobDataCleanTask";
       default:
         str = "UNKNOWN_TASK";
         break;

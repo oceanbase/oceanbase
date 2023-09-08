@@ -54,7 +54,9 @@ ObLogTenant::ObLogTenant() :
     committer_global_heartbeat_(OB_INVALID_VERSION),
     committer_cur_schema_version_(OB_INVALID_VERSION),
     committer_next_trans_schema_version_(OB_INVALID_VERSION),
-    cf_handle_(NULL)
+    cf_handle_(NULL),
+    lob_storage_cf_handle_(nullptr),
+    lob_storage_clean_task_()
 {
   tenant_name_[0] = '\0';
   global_seq_and_schema_version_.lo = 0;
@@ -73,6 +75,7 @@ int ObLogTenant::init(
     const int64_t start_seq,
     const int64_t start_schema_version,
     void *cf_handle,
+    void *lob_storage_cf_handle,
     ObLogTenantMgr &tenant_mgr)
 {
   int ret = OB_SUCCESS;
@@ -134,6 +137,8 @@ int ObLogTenant::init(
     committer_cur_schema_version_ = start_schema_version;
     committer_next_trans_schema_version_ = start_schema_version;
     cf_handle_ = cf_handle;
+    lob_storage_cf_handle_ = lob_storage_cf_handle;
+    lob_storage_clean_task_.tenant_id_ = tenant_id;
 
     inited_ = true;
 
@@ -191,6 +196,8 @@ void ObLogTenant::reset()
   committer_cur_schema_version_ = OB_INVALID_VERSION;
   committer_next_trans_schema_version_ = OB_INVALID_VERSION;
   cf_handle_ = NULL;
+  lob_storage_cf_handle_ = nullptr;
+  lob_storage_clean_task_.reset();
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
 }
 

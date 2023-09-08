@@ -787,6 +787,7 @@ int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
     } else if (OB_FAIL(stmt_task->get_cols(&rowkey_cols, &new_cols, &old_cols, nullptr/*new_lob_ctx_cols*/))) {
       LOG_ERROR("get_cols fail", KR(ret), K(stmt_task));
     } else {
+      const int64_t commit_version = part_trans_task.get_trans_commit_version();
       const uint64_t tenant_id = part_trans_task.get_tenant_id();
       const transaction::ObTransID &trans_id = part_trans_task.get_trans_id();
       ObLobId lob_id;
@@ -798,7 +799,7 @@ int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
       if (OB_FAIL(ObCDCLobAuxMetaParse::parse_aux_lob_meta_table_row(*new_cols, lob_id, lob_data, lob_data_len))) {
         LOG_ERROR("parse_aux_lob_meta_table_row failed", KR(ret));
       } else {
-        LobAuxMetaKey lob_aux_meta_key(tenant_id, trans_id, table_id, lob_id, row_seq_no);
+        LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, row_seq_no);
 
         if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "insert", lob_data, lob_data_len))) {
           LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));

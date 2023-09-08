@@ -2108,6 +2108,8 @@ int ObLogFormatter::parse_aux_lob_meta_table_insert_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("stmt_task is not INSERT operation", KR(ret));
   } else {
+    const PartTransTask &part_trans_task = stmt_task.get_host();
+    const int64_t commit_version = part_trans_task.get_trans_commit_version();
     const uint64_t tenant_id = log_entry_task.get_tenant_id();
     const transaction::ObTransID &trans_id = log_entry_task.get_trans_id();
     const uint64_t aux_lob_meta_table_id = stmt_task.get_table_id();
@@ -2120,7 +2122,7 @@ int ObLogFormatter::parse_aux_lob_meta_table_insert_(
     if (OB_FAIL(ObCDCLobAuxMetaParse::parse_aux_lob_meta_table_row(new_cols, lob_id, lob_data, lob_data_len))) {
       LOG_ERROR("parse_aux_lob_meta_table_row_ failed", KR(ret), K(tenant_id));
     } else {
-      LobAuxMetaKey lob_aux_meta_key(tenant_id, trans_id, aux_lob_meta_table_id, lob_id, row_seq_no);
+      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, aux_lob_meta_table_id, lob_id, row_seq_no);
 
       if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "insert", lob_data, lob_data_len))) {
         LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
@@ -2142,6 +2144,8 @@ int ObLogFormatter::parse_aux_lob_meta_table_delete_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("stmt_task is not DELETE operation", KR(ret));
   } else {
+    const PartTransTask &part_trans_task = stmt_task.get_host();
+    const int64_t commit_version = part_trans_task.get_trans_commit_version();
     const uint64_t tenant_id = log_entry_task.get_tenant_id();
     const transaction::ObTransID &trans_id = log_entry_task.get_trans_id();
     const uint64_t aux_lob_meta_table_id = stmt_task.get_table_id();
@@ -2154,7 +2158,7 @@ int ObLogFormatter::parse_aux_lob_meta_table_delete_(
     if (OB_FAIL(ObCDCLobAuxMetaParse::parse_aux_lob_meta_table_row(old_cols, lob_id, lob_data, lob_data_len))) {
       LOG_ERROR("parse_aux_lob_meta_table_row_ failed", KR(ret), K(tenant_id));
     } else {
-      LobAuxMetaKey lob_aux_meta_key(tenant_id, trans_id, aux_lob_meta_table_id, lob_id, row_seq_no);
+      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, aux_lob_meta_table_id, lob_id, row_seq_no);
 
       if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "delete", lob_data, lob_data_len))) {
         LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
