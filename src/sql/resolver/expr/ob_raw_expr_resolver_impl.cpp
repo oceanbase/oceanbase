@@ -2137,9 +2137,10 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
               std::pair<ObRawExpr*, int64_t> param(index_expr, 0);
               if (OB_FAIL(access_ident.params_.push_back(param))) {
                 LOG_WARN("push back error", K(ret));
+              } else if (OB_FAIL(ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX))) {
+                LOG_WARN("failed to del member", K(ret));
               }
             }
-            ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX);
             for (int64_t i = start_child; i < ctx_.columns_->count(); ++i) {
               ctx_.columns_->at(i).is_access_root_ = false;
             }
@@ -5933,7 +5934,7 @@ int ObRawExprResolverImpl::process_is_json_node(const ParseNode *node, ObRawExpr
     OZ(SMART_CALL(recursive_resolve(node->children_[i], para_expr)));
     CK(OB_NOT_NULL(para_expr));
     if (OB_SUCC(ret)) {
-      para_expr->clear_flag(IS_CONST_EXPR);
+      OZ(para_expr->clear_flag(IS_CONST_EXPR));
       OZ(func_expr->add_param_expr(para_expr));
     }
   } //end for

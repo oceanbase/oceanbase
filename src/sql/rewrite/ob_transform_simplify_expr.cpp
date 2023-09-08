@@ -774,14 +774,13 @@ int ObTransformSimplifyExpr::do_check_like_condition(ObRawExpr *&expr,
       }
       if (OB_SUCC(ret)) {
         if (text_expr->get_expr_type() == T_FUN_SYS_CAST &&
-            text_expr->has_flag(IS_INNER_ADDED_EXPR)) {//avoid reconstuct sql is wrong.
-          text_expr->clear_flag(IS_INNER_ADDED_EXPR);
-        }
-        if (OB_FAIL(ObRawExprUtils::create_equal_expr(*ctx_->expr_factory_,
-                                                      ctx_->session_info_,
-                                                      pattern_expr,
-                                                      text_expr,
-                                                      eq_expr))) {
+            OB_FAIL(text_expr->clear_flag(IS_INNER_ADDED_EXPR))) {  //avoid reconstuct sql is wrong.
+          LOG_WARN("failed to clear flag", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::create_equal_expr(*ctx_->expr_factory_,
+                                                              ctx_->session_info_,
+                                                              pattern_expr,
+                                                              text_expr,
+                                                              eq_expr))) {
           LOG_WARN("create equal expr failed", K(ret), K(pattern_expr));
         } else if (OB_ISNULL(eq_expr)) {
           ret = OB_ERR_UNEXPECTED;

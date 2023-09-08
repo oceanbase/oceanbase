@@ -13339,7 +13339,9 @@ ObPLMockSelfArg::~ObPLMockSelfArg()
   int ret = OB_SUCCESS;
   if (mocked_) {
     if (mark_only_) {
-      expr_params_.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM);
+      if (OB_FAIL(expr_params_.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
+        LOG_WARN("failed to clear flag", K(ret));
+      }
     } else {
       std::rotate(expr_params_.begin(), expr_params_.begin() + 1, expr_params_.end());
       if (!expr_params_.at(expr_params_.count() - 1)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
@@ -13479,12 +13481,16 @@ int ObPLResolver::check_routine_callable(const ObPLBlockNS &ns,
       if (expr_params.count() > 0
           && expr_params.at(0)->get_result_type().get_udt_id()
               == access_idxs.at(access_idxs.count() - 1).var_index_) {
-        expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM);
+        if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        }
       } else if (expr_params.count() > 0
                  && expr_params.at(0)->get_result_type().is_xml_sql_type()
                  && (T_OBJ_XML == access_idxs.at(access_idxs.count() - 1).var_index_)) {
         // select 'head' || xmlparse(document '<a>123</a>').getclobval() into a from dual;
-        expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM);
+        if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        }
       } /*else if (expr_params.count() > 0
                  && expr_params.at(0)->get_expr_type() == T_QUESTIONMARK) {
         // do nothing ...

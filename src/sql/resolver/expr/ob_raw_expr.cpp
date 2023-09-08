@@ -431,11 +431,11 @@ int ObRawExpr::pull_relation_id()
 int ObRawExpr::add_child_flags(const ObExprInfo &flags)
 {
   int ret = OB_SUCCESS;
-  ObExprInfo tmp = flags;
-  if (INHERIT_MASK_BEGIN < tmp.bit_count()) {
-    int64_t mask_end = INHERIT_MASK_END < tmp.bit_count() ?
-                       static_cast<int64_t>(INHERIT_MASK_END) : tmp.bit_count() - 1;
-    if (tmp.do_mask(INHERIT_MASK_BEGIN, mask_end)) {
+  if (INHERIT_MASK_BEGIN < flags.bit_count()) {
+    ObExprInfo tmp(flags);
+    int64_t mask_end = INHERIT_MASK_END < flags.bit_count() ?
+                       static_cast<int64_t>(INHERIT_MASK_END) : flags.bit_count() - 1;
+    if (OB_FAIL(tmp.do_mask(INHERIT_MASK_BEGIN, mask_end))) {
       LOG_WARN("failed to do mask", K(ret));
     } else if (OB_FAIL(info_.add_members(tmp))) {
       LOG_WARN("failed to add expr info", K(ret));

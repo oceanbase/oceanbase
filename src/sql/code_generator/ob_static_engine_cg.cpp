@@ -479,8 +479,8 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
     if (OB_ISNULL(exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(i), K(exprs));
-    } else {
-      exprs.at(i)->clear_flag(flag);
+    } else if (OB_FAIL(exprs.at(i)->clear_flag(flag))) {
+      LOG_WARN("failed to clear flag", K(ret));
     }
   }
 

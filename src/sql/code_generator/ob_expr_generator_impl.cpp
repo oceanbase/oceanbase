@@ -1851,8 +1851,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
               } // end for
 
               FOREACH(e, columnlized_exprs) {
-                if ((*e)->has_flag(IS_COLUMNLIZED)) {
-                  (*e)->clear_flag(IS_COLUMNLIZED);
+                if (OB_FAIL((*e)->clear_flag(IS_COLUMNLIZED))) {
+                  LOG_WARN("failed to clear flag", K(ret));
                 }
               }
             }
@@ -2107,9 +2107,10 @@ int ObExprGeneratorImpl::generate_expr_operator(ObRawExpr &raw_expr,
   fetcher.op_ = NULL;
   ObItemType type = raw_expr.get_expr_type();
   if (IS_EXPR_OP(type) && !IS_AGGR_FUN(type)) {
-    raw_expr.clear_flag(IS_COLUMNLIZED);
-    // no expr operator for set expr
-    if (!(type > T_OP_SET && type <= T_OP_EXCEPT)) {
+    if (OB_FAIL(raw_expr.clear_flag(IS_COLUMNLIZED))) {
+      LOG_WARN("failed to clear flag", K(ret));
+    } else if (!(type > T_OP_SET && type <= T_OP_EXCEPT)) {
+      // no expr operator for set expr
       OZ(raw_expr.do_visit(*this));
     }
   }

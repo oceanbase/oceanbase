@@ -12395,7 +12395,9 @@ int ObDMLResolver::convert_udf_to_agg_expr(ObRawExpr *&expr,
       }
     }
 
-    ctx.parents_expr_info_.del_member(IS_AGG);
+    if (OB_SUCC(ret) && OB_FAIL(ctx.parents_expr_info_.del_member(IS_AGG))) {
+      LOG_WARN("failed to del member", K(ret));
+    }
   }
   return ret;
 }
