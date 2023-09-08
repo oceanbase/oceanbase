@@ -139,6 +139,7 @@ public:
   static const int64_t LOB_WITH_OUTROW_CTX_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx);
   static const int64_t LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
+  static const uint64_t REMOTE_LOB_QUERY_RETRY_MAX = 10L; // 1M
 private:
   explicit ObLobManager(const uint64_t tenant_id)
     : tenant_id_(tenant_id),
@@ -181,6 +182,14 @@ public:
                                         const ObString &data,
                                         common::ObCollationType coll_type,
                                         ObLobLocatorV2 &out);
+  int lob_remote_query_with_retry(
+    ObLobAccessParam &param,
+    common::ObAddr& dst_addr,
+    ObLobQueryArg& arg,
+    int64_t timeout,
+    common::ObDataBuffer& rpc_buffer,
+    obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY>& handle);
+  bool is_remote_ret_can_retry(int ret);
   // Tmp Delta Lob locator interface
   int process_delta(ObLobAccessParam& param,
                     ObLobLocatorV2& lob_locator);
