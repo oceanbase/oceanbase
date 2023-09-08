@@ -584,7 +584,7 @@ ObTenant::ObTenant(const int64_t id,
       shrink_(0),
       total_worker_cnt_(0),
       gc_thread_(0),
-      stopped_(true),
+      stopped_(0),
       wait_mtl_finished_(false),
       req_queue_(),
       multi_level_queue_(nullptr),
@@ -697,7 +697,7 @@ int ObTenant::init(const ObTenantMeta &meta)
   if (OB_FAIL(ret)) {
     LOG_ERROR("fail to create tenant module", K(ret));
   } else {
-    ATOMIC_STORE(&stopped_, false);
+    start();
   }
 
   return ret;
@@ -858,6 +858,15 @@ int ObTenant::create_tenant_module()
   return ret;
 }
 
+void ObTenant::sleep_and_warn(ObTenant* tenant)
+{
+  ob_usleep(10_ms);
+  const int64_t ts = ObTimeUtility::current_time() - tenant->stopped_;
+  if (ts >= 3_min && TC_REACH_TIME_INTERVAL(3_min)) {
+    LOG_ERROR_RET(OB_SUCCESS, "tenant destructed for too long time.", K_(tenant->id), K(ts));
+  }
+}
+
 void* ObTenant::wait(void* t)
 {
   ObStackHeaderGuard stack_header_guard;
@@ -869,7 +878,7 @@ void* ObTenant::wait(void* t)
   tenant->handle_retry_req(true);
   while (tenant->req_queue_.size() > 0
     || (tenant->multi_level_queue_ != nullptr && tenant->multi_level_queue_->get_total_size() > 0)) {
-    ob_usleep(10L * 1000L);
+    sleep_and_warn(tenant);
   }
   while (tenant->workers_.get_size() > 0) {
     if (OB_SUCC(tenant->workers_lock_.trylock())) {
@@ -879,16 +888,16 @@ void* ObTenant::wait(void* t)
         destroy_worker(w);
       }
       IGNORE_RETURN tenant->workers_lock_.unlock();
-      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+      if (REACH_TIME_INTERVAL(10_s)) {
         LOG_INFO(
             "Tenant has some workers need stop", K_(tenant->id),
             "workers", tenant->workers_.get_size(),
             K_(tenant->req_queue));
       }
     }
-    ob_usleep(10L * 1000L);
+    sleep_and_warn(tenant);
   }
-  LOG_WARN_RET(OB_SUCCESS,"start remove nesting", K(tenant->nesting_workers_.get_size()), K_(tenant->id));
+  LOG_INFO("start remove nesting", K(tenant->nesting_workers_.get_size()), K_(tenant->id));
   while (tenant->nesting_workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
     if (OB_SUCC(tenant->workers_lock_.trylock())) {
@@ -898,7 +907,7 @@ void* ObTenant::wait(void* t)
         destroy_worker(w);
       }
       IGNORE_RETURN tenant->workers_lock_.unlock();
-      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+      if (REACH_TIME_INTERVAL(10_s)) {
         LOG_INFO(
             "Tenant has some nesting workers need stop",
             K_(tenant->id),
@@ -906,12 +915,12 @@ void* ObTenant::wait(void* t)
             K_(tenant->req_queue));
       }
     }
-    ob_usleep(10L * 1000L);
+    sleep_and_warn(tenant);
   }
-  LOG_WARN_RET(OB_SUCCESS, "finish remove nesting", K(tenant->nesting_workers_.get_size()), K_(tenant->id));
-  LOG_WARN_RET(OB_SUCCESS, "start remove group_map", K_(tenant->id));
+  LOG_INFO("finish remove nesting", K(tenant->nesting_workers_.get_size()), K_(tenant->id));
+  LOG_INFO("start remove group_map", K_(tenant->id));
   tenant->group_map_.wait_group();
-  LOG_WARN_RET(OB_SUCCESS, "finish remove group_map", K_(tenant->id));
+  LOG_INFO("finish remove group_map", K_(tenant->id));
   if (!is_virtual_tenant_id(tenant->id_) && !tenant->wait_mtl_finished_) {
     ObTenantSwitchGuard guard(tenant);
     tenant->stop_mtl_module();
@@ -920,6 +929,7 @@ void* ObTenant::wait(void* t)
     tenant->wait_mtl_module();
     tenant->wait_mtl_finished_ = true;
   }
+  LOG_INFO("finish waiting", K_(tenant->id));
   return nullptr;
 }
 
@@ -1190,7 +1200,7 @@ int ObTenant::recv_request(ObRequest &req)
 {
   int ret = OB_SUCCESS;
   int req_level = 0;
-  if (ATOMIC_LOAD(&stopped_)) {
+  if (has_stopped()) {
     ret = OB_TENANT_NOT_IN_SERVER;
     LOG_WARN("receive request but tenant has already stopped", K(ret), K(id_));
   } else if (0 != req.get_group_id()) {
@@ -1325,7 +1335,7 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 int ObTenant::push_retry_queue(rpc::ObRequest &req, const uint64_t timestamp)
 {
   int ret = OB_SUCCESS;
-  if (ATOMIC_LOAD(&stopped_)) {
+  if (has_stopped()) {
     ret = OB_IN_STOP_STATE;
     LOG_WARN("receive retry request but tenant has already stopped", K(ret), K(id_));
   } else if (OB_FAIL(retry_queue_.push(req, timestamp))) {
@@ -1338,9 +1348,9 @@ int ObTenant::timeup()
 {
   int ret = OB_SUCCESS;
   ObLDHandle handle;
-  if (!stopped_ && OB_SUCC(try_rdlock(handle))) {
+  if (!has_stopped() && OB_SUCC(try_rdlock(handle))) {
     // it may fail during drop tenant, try next time.
-    if (!stopped_) {
+    if (!has_stopped()) {
       check_group_worker_count();
       check_worker_count();
       update_token_usage();

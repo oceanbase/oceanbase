@@ -383,11 +383,11 @@ public:
   int init_ctx();
   int init_multi_level_queue();
   int init(const ObTenantMeta &meta);
-  void stop() { ATOMIC_STORE(&stopped_, true); }
-  void start() { ATOMIC_STORE(&stopped_, false); }
+  void stop() { ATOMIC_STORE(&stopped_, ObTimeUtility::current_time()); }
+  void start() { ATOMIC_STORE(&stopped_, 0); }
   int try_wait();
   void destroy();
-  bool has_stopped() const { return ATOMIC_LOAD(&stopped_); }
+  bool has_stopped() const { return ATOMIC_LOAD(&stopped_) != 0; }
 
   ObTenantMeta get_tenant_meta();
   bool is_hidden();
@@ -498,6 +498,7 @@ public:
   // OB_INLINE bool has_normal_request() const { return req_queue_.size() != 0; }
   // OB_INLINE bool has_level_request() const { return OB_NOT_NULL(multi_level_queue_) && multi_level_queue_->get_total_size() != 0; }
 private:
+  static void sleep_and_warn(ObTenant* tenant);
   static void* wait(void* tenant);
   // update CPU usage
   void update_token_usage();
@@ -528,7 +529,6 @@ private:
   int construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantModuleInitCtx *&ctx);
 
   int recv_group_request(rpc::ObRequest &req, int64_t group_id);
-
 protected:
 
   mutable common::TCRWLock meta_lock_;
@@ -540,7 +540,7 @@ protected:
   volatile bool shrink_ CACHE_ALIGNED;
   int64_t total_worker_cnt_;
   pthread_t gc_thread_;
-  bool stopped_;
+  int64_t stopped_;
   bool wait_mtl_finished_;
 
   /// tenant task queue,
