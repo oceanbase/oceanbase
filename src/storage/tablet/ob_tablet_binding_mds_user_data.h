@@ -50,6 +50,7 @@ public:
   void on_commit(const share::SCN &commit_version, const share::SCN &commit_scn);
 
   void reset();
+  void set_default_value();
 
   TO_STRING_KV(K_(redefined),
                 K_(snapshot_version),
