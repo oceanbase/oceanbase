@@ -46,35 +46,32 @@ ObTabletMediumInfoReader::~ObTabletMediumInfoReader()
 int ObTabletMediumInfoReader::init(common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet_.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet_.get_tablet_meta().tablet_id_;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K_(is_inited));
+    LOG_WARN("init twice", K(ret), K(ls_id), K(tablet_id), K_(is_inited));
   } else {
     mds::MdsTableHandle mds_table;
     const ObTabletDumpedMediumInfo *dumped_medium_info = nullptr;
     if (OB_FAIL(tablet_.inner_get_mds_table(mds_table, false/*not_exist_create*/))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get mds table", K(ret));
+        LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
       } else {
         mds_end_ = true; // no mds table, directly iter end
         ret = OB_SUCCESS;
-        LOG_DEBUG("no mds table", K(ret), K_(mds_end));
+        LOG_DEBUG("no mds table", K(ret), K(ls_id), K(tablet_id), K_(mds_end));
       }
     } else if (OB_FAIL(mds_iter_.init(mds_table))) {
-      LOG_WARN("failed to init mds iter", K(ret));
+      LOG_WARN("failed to init mds iter", K(ret), K(ls_id), K(tablet_id));
     }
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, tablet_.mds_data_.medium_info_list_, dumped_medium_info))) {
-      LOG_WARN("failed to load medium info list", K(ret),
-          "ls_id", tablet_.get_tablet_meta().ls_id_,
-          "tablet_id", tablet_.get_tablet_meta().tablet_id_);
-    } else if (OB_ISNULL(dumped_medium_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, medium info is null", K(ret), KP(dumped_medium_info));
-    } else if (OB_FAIL(dump_iter_.init(allocator, *dumped_medium_info))) {
-      LOG_WARN("failed to init dumped iter", K(ret));
+      LOG_WARN("failed to load medium info list", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(dump_iter_.init(allocator, dumped_medium_info))) {
+      LOG_WARN("failed to init dumped iter", K(ret), K(ls_id), K(tablet_id));
     } else {
       allocator_ = &allocator;
     }

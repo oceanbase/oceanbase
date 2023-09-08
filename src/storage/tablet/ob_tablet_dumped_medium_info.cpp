@@ -53,7 +53,7 @@ void ObTabletDumpedMediumInfo::reset()
   is_inited_ = false;
 }
 
-int ObTabletDumpedMediumInfo::init(common::ObIAllocator &allocator)
+int ObTabletDumpedMediumInfo::init_for_first_creation(common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -64,6 +64,139 @@ int ObTabletDumpedMediumInfo::init(common::ObIAllocator &allocator)
     allocator_ = &allocator;
     medium_info_list_.set_attr(lib::ObMemAttr(MTL_ID(), "mds_medium_info"));
     is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObTabletDumpedMediumInfo::init_for_evict_medium_info(
+    common::ObIAllocator &allocator,
+    const int64_t finish_medium_scn,
+    const ObTabletDumpedMediumInfo &other)
+{
+  int ret = OB_SUCCESS;
+  const common::ObIArray<compaction::ObMediumCompactionInfo*> &array = other.medium_info_list_;
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else {
+    allocator_ = &allocator;
+    for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
+      const compaction::ObMediumCompactionInfo *src_info = array.at(i);
+      if (OB_ISNULL(src_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, medium info is null", K(ret), K(i), KP(src_info));
+      } else if (src_info->medium_snapshot_ <= finish_medium_scn) {
+        // medium snapshot no bigger than finish medium scn(which is from last major sstable),
+        // no need to copy it
+      } else if (src_info->medium_snapshot_ <= get_max_medium_snapshot()) {
+        // medium info no bigger than current max medium snapshot,
+        // no need to copy it
+      } else if (OB_FAIL(do_append(*src_info))) {
+        LOG_WARN("failed to append medium info", K(ret), K(i), KPC(src_info));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      reset();
+    } else {
+      is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletDumpedMediumInfo::init_for_mds_table_dump(
+    common::ObIAllocator &allocator,
+    const int64_t finish_medium_scn,
+    const ObTabletDumpedMediumInfo &other1,
+    const ObTabletDumpedMediumInfo &other2)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else {
+    allocator_ = &allocator;
+    common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> array1;
+    common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> array2;
+
+    if (OB_FAIL(array1.assign(other1.medium_info_list_))) {
+      LOG_WARN("failed to assign", K(ret));
+    } else if (OB_FAIL(array2.assign(other2.medium_info_list_))) {
+      LOG_WARN("failed to assign", K(ret));
+    } else {
+      // sort first
+      std::sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
+      std::sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
+
+      // merge
+      bool contain = false;
+      int64_t i = 0;
+      int64_t j = 0;
+      while (OB_SUCC(ret) && i < array1.count() && j < array2.count()) {
+        const compaction::ObMediumCompactionInfo *info1 = array1.at(i);
+        const compaction::ObMediumCompactionInfo *info2 = array2.at(j);
+        const compaction::ObMediumCompactionInfo *chosen_info = nullptr;
+
+        if (OB_ISNULL(info1) || OB_ISNULL(info2)) {
+          LOG_WARN("medium info is null", K(ret), K(i), K(j), KP(info1), KP(info2));
+        } else if (info1->medium_snapshot_ < info2->medium_snapshot_) {
+          chosen_info = info1;
+          ++i;
+        } else if (info1->medium_snapshot_ > info2->medium_snapshot_) {
+          chosen_info = info2;
+          ++j;
+        } else {
+          chosen_info = info2;
+          ++i;
+          ++j;
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (chosen_info->medium_snapshot_ <= finish_medium_scn) {
+          // medium snapshot no bigger than finish medium scn(which is from last major sstable),
+          // no need to copy it
+        } else if (chosen_info->medium_snapshot_ <= get_max_medium_snapshot()) {
+          // do nothing
+        } else if (OB_FAIL(do_append(*chosen_info))) {
+          LOG_WARN("failed to append medium info", K(ret), K(i), K(j), KPC(chosen_info));
+        }
+      }
+
+      for (; OB_SUCC(ret) && i < array1.count(); ++i) {
+        const compaction::ObMediumCompactionInfo *info = array1.at(i);
+        if (info->medium_snapshot_ <= finish_medium_scn) {
+          // medium snapshot no bigger than finish medium scn(which is from last major sstable),
+          // no need to copy it
+        } else if (info->medium_snapshot_ <= get_max_medium_snapshot()) {
+          // do nothing
+        } else if (OB_FAIL(do_append(*info))) {
+          LOG_WARN("failed to append medium info", K(ret), K(i), KPC(info));
+        }
+      }
+
+      for (; OB_SUCC(ret) && j < array2.count(); ++j) {
+        const compaction::ObMediumCompactionInfo *info = array2.at(j);
+        if (info->medium_snapshot_ <= finish_medium_scn) {
+          // medium snapshot no bigger than finish medium scn(which is from last major sstable),
+          // no need to copy it
+        } else if (info->medium_snapshot_ <= get_max_medium_snapshot()) {
+          // do nothing
+        } else if (OB_FAIL(do_append(*info))) {
+          LOG_WARN("failed to append medium info", K(ret), K(j), KPC(info));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      reset();
+    } else {
+      is_inited_ = true;
+    }
   }
 
   return ret;
@@ -152,7 +285,19 @@ int ObTabletDumpedMediumInfo::append(const compaction::ObMediumCompactionInfo &m
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(*allocator_, info))) {
+  } else if (OB_FAIL(do_append(medium_info))) {
+    LOG_WARN("failed to do append", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTabletDumpedMediumInfo::do_append(const compaction::ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  compaction::ObMediumCompactionInfo *info = nullptr;
+
+  if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(*allocator_, info))) {
     LOG_WARN("failed to alloc and new", K(ret));
   } else if (OB_FAIL(info->assign(*allocator_, medium_info))) {
     LOG_WARN("failed to copy medium info", K(ret), K(medium_info));
@@ -202,7 +347,7 @@ int ObTabletDumpedMediumInfo::get_min_medium_info_key(compaction::ObMediumCompac
   } else {
     ObTabletDumpedMediumInfoIterator iter;
     ObArenaAllocator arena_allocator("iter");
-    if (OB_FAIL(iter.init(arena_allocator, *this))) {
+    if (OB_FAIL(iter.init(arena_allocator, this))) {
       LOG_WARN("failed to init", K(ret));
     } else {
       while (OB_SUCC(ret)) {
@@ -234,7 +379,7 @@ int ObTabletDumpedMediumInfo::get_max_medium_info_key(compaction::ObMediumCompac
   } else {
     ObTabletDumpedMediumInfoIterator iter;
     ObArenaAllocator arena_allocator("iter");
-    if (OB_FAIL(iter.init(arena_allocator, *this))) {
+    if (OB_FAIL(iter.init(arena_allocator, this))) {
       LOG_WARN("failed to init", K(ret));
     } else if (OB_FAIL(iter.get_next_key(key))) {
       LOG_WARN("failed to get next medium info", K(ret));
@@ -479,7 +624,7 @@ ObTabletDumpedMediumInfoIterator::~ObTabletDumpedMediumInfoIterator()
 
 int ObTabletDumpedMediumInfoIterator::init(
     common::ObIAllocator &allocator,
-    const ObTabletDumpedMediumInfo &dumped_medium_info)
+    const ObTabletDumpedMediumInfo *dumped_medium_info)
 {
   int ret = OB_SUCCESS;
 
@@ -487,25 +632,30 @@ int ObTabletDumpedMediumInfoIterator::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
   } else {
-    const common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> &array = dumped_medium_info.medium_info_list_;
-    compaction::ObMediumCompactionInfo* info = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
-      compaction::ObMediumCompactionInfo* src_medium_info = array.at(i);
-      info = nullptr;
-      if (OB_ISNULL(src_medium_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, src medium info is null", K(ret), K(i), KP(src_medium_info));
-      } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, info))) {
-        LOG_WARN("failed to alloc and new", K(ret));
-      } else if (OB_FAIL(info->assign(allocator, *src_medium_info))) {
-        LOG_WARN("failed to copy medium info", K(ret), KPC(src_medium_info));
-      } else if (OB_FAIL(medium_info_list_.push_back(info))) {
-        LOG_WARN("failed to push back to array", K(ret));
-      }
+    if (nullptr == dumped_medium_info) {
+      // no need to copy medium info
+    } else {
+      const common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> &array = dumped_medium_info->medium_info_list_;
+      compaction::ObMediumCompactionInfo *info = nullptr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
+        info = nullptr;
+        compaction::ObMediumCompactionInfo *src_medium_info = array.at(i);
+        if (OB_ISNULL(src_medium_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, src medium info is null", K(ret), K(i), KP(src_medium_info));
+        } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, info))) {
+          LOG_WARN("failed to alloc and new", K(ret));
+        } else if (OB_FAIL(info->assign(allocator, *src_medium_info))) {
+          LOG_WARN("failed to copy medium info", K(ret), KPC(src_medium_info));
+        } else if (OB_FAIL(medium_info_list_.push_back(info))) {
+          LOG_WARN("failed to push back to array", K(ret));
+        }
 
-      if (OB_FAIL(ret)) {
-        if (nullptr != info) {
-          allocator.free(info);
+        if (OB_FAIL(ret)) {
+          if (nullptr != info) {
+            info->compaction::ObMediumCompactionInfo::~ObMediumCompactionInfo();
+            allocator.free(info);
+          }
         }
       }
     }

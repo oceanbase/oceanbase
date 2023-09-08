@@ -91,12 +91,6 @@ public:
       char *buf,
       const int64_t len);
 private:
-  using FetchTableStore = std::function<int(ObTabletMemberWrapper<ObTabletTableStore> &)>;
-  using FetchAutoincSeq = std::function<int(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &)>;
-  using LoadStorageSchema = std::function<int(common::ObArenaAllocator &, const ObStorageSchema *&)>;
-  using LoadMediumInfoList = std::function<int(common::ObArenaAllocator &, const compaction::ObMediumCompactionInfoList *&)>;
-  using LoadMdsDumpKV = std::function<int(common::ObArenaAllocator &, const mds::MdsDumpKV *&)>;
-private:
   static int check_tablet_meta_ids(
       const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
       const ObTablet &tablet);
@@ -115,7 +109,6 @@ private:
       common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
       common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
       ObTabletPoolType &type,
-      ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
       ObTabletTransformArg &arg);
   static int convert_arg_to_tablet(
       const ObTabletTransformArg &arg,
@@ -142,32 +135,36 @@ private:
       ObTableStoreIterator &table_iter,
       ObTabletTableStore &new_table_store,
       common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
-  template <typename Fetch, typename T>
-  static int fetch_wrapper_and_write_info(
+  static int load_auto_inc_seq_and_write_info(
       common::ObArenaAllocator &allocator,
-      Fetch &fetch,
-      ObTabletMemberWrapper<T> &wrapper,
+      const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
+      const share::ObTabletAutoincSeq *&auto_inc_seq,
+      common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
+      ObMetaDiskAddr &addr);
+  static int fetch_table_store_and_write_info(
+      const ObTablet &tablet,
+      common::ObArenaAllocator &allocator,
+      ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
       common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
       common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
-  template <typename Load, typename T>
-  static int load_member_and_write_info(
+  static int load_storage_schema_and_fill_write_info(
+      const ObTablet &tablet,
       common::ObArenaAllocator &allocator,
-      Load &load,
-      T *&t,
       common::ObIArray<ObSharedBlockWriteInfo> &write_infos);
   static int load_dump_kv_and_fill_write_info(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-      common::ObIArray<ObSharedBlockWriteInfo> &write_infos);
+      common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
+      ObMetaDiskAddr &addr);
   static int load_medium_info_list_and_write(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-      ObMetaDiskAddr &addr,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
+      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+      ObMetaDiskAddr &addr);
   static int link_write_medium_info_list(
-      const ObTabletDumpedMediumInfo &medium_info_list,
-      ObMetaDiskAddr &addr,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
+      const ObTabletDumpedMediumInfo *medium_info_list,
+      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+      ObMetaDiskAddr &addr);
   template <typename T>
   static int fill_write_info(
       common::ObArenaAllocator &allocator,
@@ -191,78 +188,6 @@ private:
       ObTabletTableStore *&table_store);
 };
 
-template <typename Fetch, typename T>
-int ObTabletPersister::fetch_wrapper_and_write_info(
-    common::ObArenaAllocator &allocator,
-    Fetch &fetch,
-    ObTabletMemberWrapper<T> &wrapper,
-    common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
-    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs)
-{
-  UNUSED(meta_write_ctxs);
-  int ret = common::OB_SUCCESS;
-  const T *member = nullptr;
-  if (OB_FAIL(fetch(wrapper))) {
-    STORAGE_LOG(WARN, "fail to fetch tablet wrapper", K(ret));
-  } else if (OB_FAIL(wrapper.get_member(member))) {
-    STORAGE_LOG(WARN, "fail to get tablet member", K(ret), K(wrapper));
-  } else if (OB_ISNULL(member)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error, member is nullptr", K(ret), KP(member));
-  } else if (OB_FAIL(fill_write_info(allocator, member, write_infos))) {
-    STORAGE_LOG(WARN, "fail to fill write info", K(ret), KP(member));
-  }
-  return ret;
-};
-
-template <>
-inline int ObTabletPersister::fetch_wrapper_and_write_info<ObTabletPersister::FetchTableStore, ObTabletTableStore>(
-    common::ObArenaAllocator &allocator,
-    FetchTableStore &fetch,
-    ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
-    common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
-    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs)
-{
-  int ret = common::OB_SUCCESS;
-  ObTabletTableStore new_table_store;
-  const ObTabletTableStore *table_store = nullptr;
-  ObTableStoreIterator table_iter;
-  if (OB_FAIL(fetch(wrapper))) {
-    STORAGE_LOG(WARN, "fail to fetch table store", K(ret));
-  } else if (OB_FAIL(wrapper.get_member(table_store))) {
-    STORAGE_LOG(WARN, "fail to get table store from wrapper", K(ret), K(wrapper));
-  } else if (OB_ISNULL(table_store)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error, table store is nullptr", K(ret), KP(table_store));
-  } else if (OB_FAIL(table_store->get_all_sstable(table_iter))) {
-    STORAGE_LOG(WARN, "fail to get all sstable iterator", K(ret), KPC(table_store));
-  } else if (OB_FAIL(fetch_and_persist_sstable(allocator, table_iter, new_table_store, meta_write_ctxs))) {
-    STORAGE_LOG(WARN, "fail to fetch and persist sstable", K(ret), K(table_iter));
-  } else if (OB_FAIL(fill_write_info(allocator, &new_table_store, write_infos))) {
-    STORAGE_LOG(WARN, "fail to fill table store write info", K(ret), K(new_table_store));
-  }
-  return ret;
-}
-
-template <typename Load, typename T>
-int ObTabletPersister::load_member_and_write_info(
-    common::ObArenaAllocator &allocator,
-    Load &load,
-    T *&t,
-    common::ObIArray<ObSharedBlockWriteInfo> &write_infos)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_FAIL(load(allocator, t))) {
-    STORAGE_LOG(WARN, "fail to load tablet member", K(ret));
-  } else if (OB_ISNULL(t)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error, t is nullptr", K(ret), KP(t));
-  } else if (OB_FAIL(fill_write_info(allocator, t, write_infos))) {
-    STORAGE_LOG(WARN, "fail to fill write info", K(ret), KP(t));
-  }
-  return ret;
-}
-
 template <typename T>
 int ObTabletPersister::fill_write_info(
     common::ObArenaAllocator &allocator,
@@ -270,9 +195,10 @@ int ObTabletPersister::fill_write_info(
     common::ObIArray<ObSharedBlockWriteInfo> &write_infos)
 {
   int ret = common::OB_SUCCESS;
+
   if (OB_ISNULL(t)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error, tablet member is nullptr", K(ret), KP(t));
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), KP(t));
   } else {
     const int64_t size = t->get_serialize_size();
     char *buf = static_cast<char *>(allocator.alloc(size));

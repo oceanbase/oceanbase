@@ -71,7 +71,6 @@ protected:// implemented by ObTablet
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const = 0;
   virtual ObTabletPointer *get_tablet_ponter_() const = 0;
-  virtual int fetch_autoinc_seq(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper) const = 0;
   template <typename T>
   int get_mds_data_from_tablet(const common::ObFunction<int(const T&)> &read_op) const;
 

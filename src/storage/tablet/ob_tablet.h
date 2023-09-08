@@ -102,7 +102,6 @@ class ObDDLKVHandle;
 class ObStorageSchema;
 class ObTabletTableIterator;
 class ObMetaDiskAddr;
-class ObTabletMdsDumpStruct;
 class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
 class ObMemtableArray;

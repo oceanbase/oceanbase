@@ -20,6 +20,7 @@ storage_dml_unittest(test_multi_version_sstable_single_get)
 #storage_dml_unittest(test_multi_version_sstable_merge) TODO(dengzhi.ldz): fix it
 storage_dml_unittest(test_medium_info_reader test_medium_info_reader.cpp)
 storage_dml_unittest(test_tablet_mds_data test_tablet_mds_data.cpp)
+storage_dml_unittest(test_mds_data_read_write test_mds_data_read_write.cpp)
 storage_unittest(test_physical_copy_task test_physical_copy_task.cpp)
 storage_unittest(test_shared_block_reader_writer)
 storage_dml_unittest(test_macro_ref_cnt test_macro_ref_cnt.cpp)

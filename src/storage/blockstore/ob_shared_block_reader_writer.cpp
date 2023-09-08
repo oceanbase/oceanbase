@@ -17,6 +17,7 @@
 namespace oceanbase
 {
 using namespace blocksstable;
+using namespace common;
 namespace storage
 {
 

@@ -351,7 +351,13 @@ TEST_F(TestMediumInfoReader, pure_dump_data)
 
   // insert data into tablet
   {
-    ObTabletDumpedMediumInfo &medium_info_list = *tablet->mds_data_.medium_info_list_.ptr_;
+    common::ObIAllocator &allocator = *tablet_handle.get_allocator();
+    ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_complex_addr = tablet->mds_data_.medium_info_list_;
+    ret = ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info_list_complex_addr.ptr_);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = medium_info_list_complex_addr.ptr_->init_for_first_creation(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTabletDumpedMediumInfo &medium_info_list = *medium_info_list_complex_addr.ptr_;
 
     constexpr uint8_t table_id = mds::TupleTypeIdx<mds::MdsTableTypeTuple, mds::NormalMdsTable>::value;
     constexpr uint8_t unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
@@ -417,7 +423,13 @@ TEST_F(TestMediumInfoReader, mds_table_dump_data_overlap)
 
   // insert data into mds data
   {
-    ObTabletDumpedMediumInfo &medium_info_list = *tablet->mds_data_.medium_info_list_.ptr_;
+    common::ObIAllocator &allocator = *tablet_handle.get_allocator();
+    ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_complex_addr = tablet->mds_data_.medium_info_list_;
+    ret = ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info_list_complex_addr.ptr_);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = medium_info_list_complex_addr.ptr_->init_for_first_creation(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTabletDumpedMediumInfo &medium_info_list = *medium_info_list_complex_addr.ptr_;
 
     constexpr uint8_t table_id = mds::TupleTypeIdx<mds::MdsTableTypeTuple, mds::NormalMdsTable>::value;
     constexpr uint8_t unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
@@ -529,7 +541,13 @@ TEST_F(TestMediumInfoReader, mds_table_dump_data_no_overlap)
 
   // insert data into mds data
   {
-    ObTabletDumpedMediumInfo &medium_info_list = *tablet->mds_data_.medium_info_list_.ptr_;
+    common::ObIAllocator &allocator = *tablet_handle.get_allocator();
+    ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_complex_addr = tablet->mds_data_.medium_info_list_;
+    ret = ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info_list_complex_addr.ptr_);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = medium_info_list_complex_addr.ptr_->init_for_first_creation(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTabletDumpedMediumInfo &medium_info_list = *medium_info_list_complex_addr.ptr_;
 
     constexpr uint8_t table_id = mds::TupleTypeIdx<mds::MdsTableTypeTuple, mds::NormalMdsTable>::value;
     constexpr uint8_t unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;
@@ -631,7 +649,13 @@ TEST_F(TestMediumInfoReader, mds_table_dump_data_full_inclusion)
 
   // insert data into mds data
   {
-    ObTabletDumpedMediumInfo &medium_info_list = *tablet->mds_data_.medium_info_list_.ptr_;
+    common::ObIAllocator &allocator = *tablet_handle.get_allocator();
+    ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_complex_addr = tablet->mds_data_.medium_info_list_;
+    ret = ObTabletObjLoadHelper::alloc_and_new(allocator, medium_info_list_complex_addr.ptr_);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = medium_info_list_complex_addr.ptr_->init_for_first_creation(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ObTabletDumpedMediumInfo &medium_info_list = *medium_info_list_complex_addr.ptr_;
 
     constexpr uint8_t table_id = mds::TupleTypeIdx<mds::MdsTableTypeTuple, mds::NormalMdsTable>::value;
     constexpr uint8_t unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<compaction::ObMediumCompactionInfoKey, compaction::ObMediumCompactionInfo>>::value;

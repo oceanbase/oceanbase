@@ -101,7 +101,8 @@ public:
   int init(
       common::ObIAllocator &allocator,
       const ObExtraMediumInfo &extra_medium_info,
-      const ObTabletDumpedMediumInfo &medium_info_list);
+      const ObTabletDumpedMediumInfo *medium_info_list);
+
   void reset();
   OB_INLINE bool is_empty() const { return 0 == medium_info_list_.get_size(); }
   OB_INLINE int64_t size() const { return medium_info_list_.get_size(); }
