@@ -248,23 +248,27 @@ ObSelectResolver* ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(
      * For oracle mode, if it is in having scope, it will pull subquery up to compute
      * if it is in order scope (and subquery does not appear in where scope), it will pull subquery up to compute
      */
-    if (final_aggr_level >= 0 && cur_resolver->get_current_level() > final_aggr_level &&
-        NULL != cur_resolver->get_parent_namespace_resolver() &&
-        (share::is_mysql_mode() ||
-            T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope() ||
-            (T_ORDER_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope() &&
-                T_WHERE_SCOPE != cur_resolver->get_current_scope()))) {
-      if (cur_resolver->is_select_resolver() && static_cast<ObSelectResolver*>(cur_resolver)->is_in_set_query()) {
-        // The current resolver is located in the set query identified by keywords such as union,
-        // and the aggr function is no longer laid on the query for the upper layer of the union
-        // For example:
-        //   SELECT (SELECT MAX(t1.b) from t2 union select 1 from t2 where 12 <3) FROM t1 GROUP BY t1.a;
-        // MAX(t1.b) refers to the attributes of the first layer, but the entire
-        // expression of MAX(t1.b) remains in the left branch of the union
-      } else {
-        ObDMLResolver* next_resolver = cur_resolver->get_parent_namespace_resolver();
-        final_resolver = fetch_final_aggr_resolver(next_resolver, final_aggr_level);
-      }
+    if (final_aggr_level >= 0 && cur_resolver->get_current_level() > final_aggr_level
+        && NULL != cur_resolver->get_parent_namespace_resolver()
+        && (share::is_mysql_mode()
+            || T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope())) {
+      /*
+       * For mysql, aggr func belongs to the upper level, whether there is a "union" or not.
+       *
+       * For oracle, aggr func not in "HAVING" belongs to the subquery, does not need to
+       * push up.
+       *
+       * SELECT (SELECT COUNT(t1.a) FROM dual) FROM t1 GROUP BY t1.a;
+       *                  *
+       * SELECT (SELECT COUNT(t1.a) union select 1 where 1>2) FROM t1 GROUP BY t1.a;
+       *                  *
+       * SELECT 1 FROM t1 HAVING 1 in (SELECT MAX(t1.n1) FROM dual);
+       *                                       *
+       * Here, for oracle mode, COUNT belongs to the subquery, but MAX belongs to the
+       * upper query.
+       */
+      ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
+      final_resolver = fetch_final_aggr_resolver(next_resolver, final_aggr_level);
     }
     if (NULL == final_resolver && cur_resolver->is_select_resolver()) {
       ObSelectResolver* select_resolver = static_cast<ObSelectResolver*>(cur_resolver);
