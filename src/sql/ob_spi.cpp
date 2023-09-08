@@ -8544,10 +8544,13 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
   }
 
-  if (OB_NOT_NULL(dblink_conn)) {
+  if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
       LOG_WARN("failed to relese connection", K(tmp_ret));
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
     }
   }
   return ret;

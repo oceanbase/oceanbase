@@ -56,8 +56,7 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
   int64_t object_type;
   OZ (schema_guard.get_dblink_schema(tenant_id, dblink_name, dblink_schema), tenant_id, dblink_name);
   OV (OB_NOT_NULL(dblink_schema), OB_DBLINK_NOT_EXIST_TO_ACCESS, dblink_name);
-  OX (link_type = static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()));
-  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name));
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   OZ (ObPLDblinkUtil::print_full_name(alloc_, full_name, part1, part2, part3));
@@ -70,13 +69,24 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
                           sub_object_name,
                           object_type,
                           alloc_));
-  OZ (get_dblink_routine_infos(session_info,
+  OZ (get_dblink_routine_infos(dblink_proxy,
+                               dblink_conn,
+                               session_info,
                                schema_guard,
                                dblink_name,
                                schema_name,
                                object_name,
                                sub_object_name,
                                routine_infos));
+  if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
+      LOG_WARN("failed to relese connection", K(tmp_ret));
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
+  }
 #endif
   return ret;
 }
@@ -96,7 +106,8 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
 #else
   common::ObDbLinkProxy *dblink_proxy = NULL;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
-  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name));
+  common::sqlclient::DblinkDriverProto link_type = DBLINK_UNKNOWN;
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   if (OB_SUCC(ret)) {
@@ -119,7 +130,9 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
                             object_type,
                             alloc_));
     OV (static_cast<int64_t>(ObObjectType::PACKAGE) == object_type);
-    OZ (get_dblink_type_by_name(session_info,
+    OZ (get_dblink_type_by_name(dblink_proxy,
+                                dblink_conn,
+                                session_info,
                                 schema_guard,
                                 dblink_name,
                                 schema_name,
@@ -127,11 +140,22 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
                                 sub_object_name,
                                 udt));
   }
+  if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
+      LOG_WARN("failed to relese connection", K(tmp_ret));
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
+  }
 #endif
   return ret;
 }
 
-int ObPLDbLinkGuard::get_dblink_routine_infos(sql::ObSQLSessionInfo &session_info,
+int ObPLDbLinkGuard::get_dblink_routine_infos(common::ObDbLinkProxy *dblink_proxy,
+                                              common::sqlclient::ObISQLConnection *dblink_conn,
+                                              sql::ObSQLSessionInfo &session_info,
                                               share::schema::ObSchemaGetterGuard &schema_guard,
                                               const ObString &dblink_name,
                                               const ObString &db_name,
@@ -166,15 +190,17 @@ int ObPLDbLinkGuard::get_dblink_routine_infos(sql::ObSQLSessionInfo &session_inf
       OZ (dblink_infos_.push_back(dblink_info));
     }
   }
-  OZ ((const_cast<ObPLDbLinkInfo *>(dblink_info))->get_routine_infos(session_info,
-                                                                      schema_guard,
-                                                                      alloc_,
-                                                                      dblink_name,
-                                                                      db_name,
-                                                                      pkg_name,
-                                                                      routine_name,
-                                                                      routine_infos,
-                                                                      next_link_object_id_));
+  OZ ((const_cast<ObPLDbLinkInfo *>(dblink_info))->get_routine_infos(dblink_proxy,
+                                                                     dblink_conn,
+                                                                     session_info,
+                                                                     schema_guard,
+                                                                     alloc_,
+                                                                     dblink_name,
+                                                                     db_name,
+                                                                     pkg_name,
+                                                                     routine_name,
+                                                                     routine_infos,
+                                                                     next_link_object_id_));
   if (OB_SUCC(ret)) {
     bool is_all_func = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); i++) {
@@ -318,20 +344,13 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     }
 #undef BIND_BASIC_BY_POS
   }
-  if ((NULL != dblink_conn)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
-      LOG_WARN("failed to close oci result", K(tmp_ret));
-      if (OB_SUCC(ret)) {
-        ret = tmp_ret;
-      }
-    }
-  }
 #endif
   return ret;
 }
 
-int ObPLDbLinkGuard::get_dblink_type_by_name(sql::ObSQLSessionInfo &session_info,
+int ObPLDbLinkGuard::get_dblink_type_by_name(common::ObDbLinkProxy *dblink_proxy,
+                                             common::sqlclient::ObISQLConnection *dblink_conn,
+                                             sql::ObSQLSessionInfo &session_info,
                                              share::schema::ObSchemaGetterGuard &schema_guard,
                                              const common::ObString &dblink_name,
                                              const common::ObString &db_name,
@@ -365,7 +384,7 @@ int ObPLDbLinkGuard::get_dblink_type_by_name(sql::ObSQLSessionInfo &session_info
       OZ (dblink_infos_.push_back(dblink_info));
     }
   }
-  OZ ((const_cast<ObPLDbLinkInfo *>(dblink_info))->get_udt_by_name(session_info,
+  OZ ((const_cast<ObPLDbLinkInfo *>(dblink_info))->get_udt_by_name(dblink_proxy, dblink_conn, session_info,
        schema_guard, alloc_, dblink_name, db_name, pkg_name,
        udt_name, udt, next_link_object_id_));
 #endif
