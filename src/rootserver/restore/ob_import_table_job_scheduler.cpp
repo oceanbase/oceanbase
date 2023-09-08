@@ -350,7 +350,12 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
       } else if (!is_exist) {
       } else {
         LOG_INFO("[IMPORT_TABLE]cancel import table task", K(arg));
-        if (OB_FAIL(ObDDLServerClient::abort_redef_table(arg))) {
+        share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
+        ObImportResult result;
+        if (OB_FAIL(result.set_result(OB_CANCELED, trace_id, GCONF.self_addr_))) {
+          LOG_WARN("failed to set result", K(ret));
+        } else if (OB_FALSE_IT(task.set_result(result))) {
+        } else if (OB_FAIL(ObDDLServerClient::abort_redef_table(arg))) {
           LOG_WARN("failed to abort redef table", K(ret), K(arg));
         } else if (OB_FAIL(task_helper_.advance_status(*sql_proxy_, task, next_status))) {
           LOG_WARN("failed to cancel import task", K(ret), K(task));
@@ -536,8 +541,17 @@ int ObImportTableTaskScheduler::try_advance_status_(const int err_code)
   int ret = OB_SUCCESS;
   if (OB_FAIL(err_code) && ObImportTableUtil::can_retrieable_err(err_code)) { // do nothing
   } else {
+
     share::ObImportTableTaskStatus next_status = import_task_->get_status().get_next_status(err_code);
-    if (OB_FAIL(helper_.advance_status(*sql_proxy_, *import_task_, next_status))) {
+    if (import_task_->get_result().is_succeed()) { // avoid to cover comment
+      share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
+      ObImportResult result;
+      if (OB_FAIL(result.set_result(err_code, trace_id, GCONF.self_addr_))) {
+        LOG_WARN("failed to set result", K(ret));
+      } else if (OB_FALSE_IT(import_task_->set_result(result))) {
+      }
+    }
+    if (FAILEDx(helper_.advance_status(*sql_proxy_, *import_task_, next_status))) {
       LOG_WARN("failed to advance status", K(ret), KPC_(import_task), K(next_status));
     }
   }
@@ -667,6 +681,7 @@ int ObImportTableTaskScheduler::construct_import_table_schema_(
     target_table_schema.set_data_table_id(0);
     target_table_schema.clear_constraint();
     target_table_schema.clear_foreign_key_infos();
+    target_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
 
     uint64_t database_id = OB_INVALID_ID;
     if (OB_FAIL(target_tenant_guard.get_database_id(import_task_->get_tenant_id(),

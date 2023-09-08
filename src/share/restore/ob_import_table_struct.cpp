@@ -363,11 +363,6 @@ int ObImportTableTask::parse_from(common::sqlclient::ObMySQLResult &result)
     bool is_succeed = true;
     if (0 == STRCMP("FAILED", result_buf)) {
       is_succeed = false;
-    } else if (0 == STRCMP("SUCCEESS", result_buf)) {
-      is_succeed = true;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid result str", K(ret));
     }
     result_.set_result(is_succeed, comment);
   }

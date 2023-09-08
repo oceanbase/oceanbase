@@ -275,7 +275,7 @@ private:
       const ParseNode *node, share::ObImportRemapArg &remap_arg);
   int resolve_remap_tablespaces_(
       const ParseNode *node, share::ObImportRemapArg &remap_arg);
-#ifndef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_TDE_SECURITY
   int resolve_kms_info_(const common::ObString &restore_option, common::ObString &kms_info);
 #endif
   int resolve_backup_set_pwd_(common::ObString &pwd);

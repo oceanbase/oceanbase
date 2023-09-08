@@ -4990,7 +4990,7 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_NOT_NULL(parse_tree.children_[8])
         && OB_FAIL(Util::resolve_string(parse_tree.children_[8], stmt->get_rpc_arg().restore_tenant_arg_.description_))) {
       LOG_WARN("failed to resolve desc", K(ret));
-#ifndef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_TDE_SECURITY
     } else if (OB_FAIL(resolve_kms_info_(
         stmt->get_rpc_arg().restore_tenant_arg_.restore_option_, stmt->get_rpc_arg().restore_tenant_arg_.kms_info_))) {
       LOG_WARN("failed to resolve kms info", K(ret));
@@ -5322,7 +5322,7 @@ int ObRecoverTableResolver::resolve_backup_set_pwd_(common::ObString &pwd)
   return ret;
 }
 
-#ifndef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_TDE_SECURITY
 int ObRecoverTableResolver::resolve_kms_info_(const common::ObString &restore_option, common::ObString &kms_info)
 {
   int ret = OB_SUCCESS;
