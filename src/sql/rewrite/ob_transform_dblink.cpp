@@ -1614,6 +1614,9 @@ int ObTransformDBlink::formalize_bool_select_expr(ObDMLStmt *stmt)
       } else {
         case_when_expr->set_default_param_expr(null_expr);
         select_item.expr_ = case_when_expr;
+        if (OB_FAIL(case_when_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize expr", K(ret));
+        }
       }
     }
   }
