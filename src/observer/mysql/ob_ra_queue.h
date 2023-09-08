@@ -47,7 +47,9 @@ public:
   ~ObRaQueue() { destroy(); }
   int init(const char *label, uint64_t size) {
     int ret = OB_SUCCESS;
-    if (NULL == (array_ = (void**)ob_malloc(sizeof(void*) * size, label))) {
+    if (size <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (NULL == (array_ = (void**)ob_malloc(sizeof(void*) * size, label))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       memset(array_, 0, sizeof(void*) * size);
@@ -143,6 +145,7 @@ public:
     }
     return ret;
   }
+  // Note(fhkong): get操作会造成core？get到的数据正好被pop掉？
   void* get(uint64_t seq, Ref* ref) {
     void* ret = NULL;
     if (NULL != array_) {
@@ -176,12 +179,6 @@ private:
   int64_t xref(int64_t seq, int64_t x) {
     return ATOMIC_AAF(ref_ + seq % N_REF, x);
   }
-  void do_revert(uint64_t seq, void* p) {
-    if (NULL != array_ && NULL != p) {
-      void** addr = get_addr(seq);
-      ATOMIC_STORE(addr, p);
-    }
-  }
   static uint64_t faa_bounded(uint64_t* addr, uint64_t* limit_addr, uint64_t& limit) {
     uint64_t val = ATOMIC_LOAD(addr);
     uint64_t ov = 0;
@@ -201,7 +198,7 @@ private:
   int64_t ref_[N_REF] CACHE_ALIGNED;
   void** array_ CACHE_ALIGNED;
 };
-}; // end namespace container
+}; // end namespace common 
 }; // end namespace oceanbase
 
 #endif /* OCEANBASE_MYSQL_OB_RA_QUEUE_H_ */
