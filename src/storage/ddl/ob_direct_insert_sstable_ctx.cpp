@@ -882,6 +882,8 @@ ObSSTableInsertTableContext::ObSSTableInsertTableContext()
 
 ObSSTableInsertTableContext::~ObSSTableInsertTableContext()
 {
+  remove_all_tablets_context(); // ignore error code.
+  tablet_ctx_map_.destroy();
 }
 
 int ObSSTableInsertTableContext::init(
@@ -1073,24 +1075,30 @@ int ObSSTableInsertTableContext::get_tablet_context(
   return ret;
 }
 
-int ObSSTableInsertTableContext::remove_tablet_context(
-    const ObTabletID &tablet_id)
+int ObSSTableInsertTableContext::remove_all_tablets_context()
 {
   int ret = OB_SUCCESS;
-  ObSSTableInsertTabletContext *context = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableInsertSSTableContext has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_id));
-  } else if (OB_FAIL(tablet_ctx_map_.get_refactored(tablet_id, context))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
   } else {
-    context->~ObSSTableInsertTabletContext();
-    allocator_.free(context);
+    GetManageTabletIDs get_tablet_ids_fn;
+    if (OB_FAIL(tablet_ctx_map_.foreach_refactored(get_tablet_ids_fn))) {
+      LOG_WARN("get tablet ids failed", K(ret));
+    } else if (OB_FAIL(get_tablet_ids_fn.ret_code_)) {
+      LOG_WARN("get tablet ids failed", K(ret));
+    }
+    for (int64_t i = 0; i < get_tablet_ids_fn.tablet_ids_.count(); ++i) { // ignore error code.
+      ObSSTableInsertTabletContext *tablet_context = nullptr;
+      const ObTabletID &tablet_id = get_tablet_ids_fn.tablet_ids_.at(i);
+      if (OB_FAIL(tablet_ctx_map_.erase_refactored(tablet_id, &tablet_context))) {
+        LOG_WARN("erase failed", K(ret), K(tablet_id));
+      } else {
+        tablet_context->~ObSSTableInsertTabletContext();
+        allocator_.free(tablet_context);
+        tablet_context = nullptr;
+      }
+    }
   }
   return ret;
 }
@@ -1117,10 +1125,7 @@ int ObSSTableInsertTableContext::finish(const bool need_commit)
         LOG_WARN("create sstable failed", K(ret));
       }
     }
-    for (int64_t i = 0; i < get_tablet_ids_fn.tablet_ids_.count(); ++i) {
-      const ObTabletID &tablet_id = get_tablet_ids_fn.tablet_ids_.at(i);
-      remove_tablet_context(tablet_id); // ignore ret
-    }
+    remove_all_tablets_context(); // ignore error code.
   }
   return ret;
 }
@@ -1244,7 +1249,7 @@ ObSSTableInsertManager::ObSSTableInsertManager()
 
 ObSSTableInsertManager::~ObSSTableInsertManager()
 {
-
+  destroy();
 }
 
 ObSSTableInsertManager &ObSSTableInsertManager::get_instance()
@@ -1377,17 +1382,17 @@ int ObSSTableInsertManager::finish_table_context(const int64_t context_id, const
 {
   int ret = OB_SUCCESS;
   ObSSTableInsertTableContext *table_context = nullptr;
-  if (OB_FAIL(get_context(context_id, table_context))) {
+  ObBucketHashWLockGuard guard(bucket_lock_, get_context_id_hash(context_id));
+  if (OB_FAIL(get_context_no_lock(context_id, table_context))) {
     LOG_WARN("get context failed", K(ret));
   } else if (OB_FAIL(table_context->finish(need_commit))) {
     LOG_WARN("finish table context failed", K(ret));
-  } else if (OB_FAIL(table_ctx_map_.erase_refactored(context_id))) {
-    LOG_WARN("erase from map failed", K(ret), K(context_id));
   }
   if (nullptr != table_context) { // ignore ret
-    table_context->~ObSSTableInsertTableContext();
-    allocator_.free(table_context);
-    table_context = nullptr;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(remove_context_no_lock(context_id))) {
+      LOG_ERROR("erase factored failed", K(ret), K(tmp_ret), K(context_id));
+    }
   }
   return ret;
 }
@@ -1549,7 +1554,7 @@ int ObSSTableInsertManager::get_context_no_lock(
   return ret;
 }
 
-int ObSSTableInsertManager::remove_context(const int64_t context_id)
+int ObSSTableInsertManager::remove_context_no_lock(const int64_t context_id)
 {
   int ret = OB_SUCCESS;
   ObSSTableInsertTableContext *table_context = nullptr;
@@ -1571,11 +1576,18 @@ int ObSSTableInsertManager::remove_context(const int64_t context_id)
 
 void ObSSTableInsertManager::destroy()
 {
-  ObSSTableInsertTableContext *context = nullptr;
-  for(TABLE_CTX_MAP::iterator iter = table_ctx_map_.begin(); iter != table_ctx_map_.end(); ++iter) {
-    if (OB_NOT_NULL(context = iter->second)) {
-      context->~ObSSTableInsertTableContext();
-      allocator_.free(context);
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> context_id_arr;
+  common::ObBucketWLockAllGuard lock_guard(bucket_lock_);
+  for(TABLE_CTX_MAP::iterator iter = table_ctx_map_.begin(); iter != table_ctx_map_.end(); ++iter) { // ignore error code.
+    if (OB_FAIL(context_id_arr.push_back(iter->first))) {
+      LOG_ERROR("push back failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; i < context_id_arr.count(); i++) { // ignore error code.
+    const int64_t context_id = context_id_arr.at(i);
+    if (OB_FAIL(remove_context_no_lock(context_id))) {
+      LOG_ERROR("remove context failed", K(ret), K(context_id));
     }
   }
   table_ctx_map_.destroy();
