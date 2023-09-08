@@ -688,6 +688,10 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
       } else {
         schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
       }
+      uint64_t effective_tenant_id = session->get_effective_tenant_id();
+      if (session->get_ddl_info().is_ddl_check_default_value()) {
+        effective_tenant_id = OB_SERVER_TENANT_ID;
+      }
       SMART_VARS_2((ObExecContext, exec_ctx, tmp_allocator),
                    (ObStaticEngineExprCG, expr_cg, tmp_allocator,
                     session, schema_guard,
@@ -696,7 +700,7 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                     (NULL != out_ctx ? out_ctx->get_min_cluster_version() : GET_MIN_CLUSTER_VERSION()))) {
         LinkExecCtxGuard link_guard(*session, exec_ctx);
         exec_ctx.set_my_session(session);
-        exec_ctx.set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+        exec_ctx.set_mem_attr(ObMemAttr(effective_tenant_id,
                                         ObModIds::OB_SQL_EXEC_CONTEXT,
                                         ObCtxIds::EXECUTE_CTX_ID));
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
