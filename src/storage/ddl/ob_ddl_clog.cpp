@@ -143,6 +143,15 @@ ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
 
 }
 
+ObDDLMacroBlockClogCb::~ObDDLMacroBlockClogCb()
+{
+  int ret = OB_SUCCESS;
+  if (macro_block_id_.is_valid() && OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_block_id_))) {
+    LOG_ERROR("dec ref failed", K(ret), K(macro_block_id_), K(common::lbt()));
+  }
+  macro_block_id_.reset();
+}
+
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                 const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                                 const blocksstable::MacroBlockId &macro_block_id,
@@ -156,6 +165,8 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || !tablet_handle.is_valid() || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
+  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
+    LOG_WARN("inc reference count failed", K(ret), K(macro_block_id));
   } else {
     redo_info_.data_buffer_.assign(const_cast<char *>(redo_info.data_buffer_.ptr()), redo_info.data_buffer_.length());
     redo_info_.block_type_ = redo_info.block_type_;

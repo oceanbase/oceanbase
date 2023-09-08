@@ -103,7 +103,7 @@ class ObDDLMacroBlockClogCb : public logservice::AppendCb
 {
 public:
   ObDDLMacroBlockClogCb();
-  virtual ~ObDDLMacroBlockClogCb() = default;
+  virtual ~ObDDLMacroBlockClogCb();
   int init(const share::ObLSID &ls_id,
            const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
