@@ -6736,7 +6736,7 @@ int ObSelectLogPlan::convert_project_columns(ObSelectStmt *stmt,
         expr->set_table_name(project_table_item->get_table_name());
         if (expr->is_virtual_generated_column()) {
           if (item->is_geo_ == true && expr->get_srs_id() != SPATIAL_COLUMN_SRID_MASK) {
-            // spatial index generated column, cannot project from main table
+            // spatial index generated column, cannot projet from main table
             if (OB_FAIL(new_col_items.push_back(*item))) {
               LOG_WARN("failed to push back column item", K(ret));
             }
