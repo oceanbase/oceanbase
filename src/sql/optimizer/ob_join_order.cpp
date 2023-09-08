@@ -690,9 +690,8 @@ int ObJoinOrder::compute_access_path_parallel(ObIArray<AccessPath *> &access_pat
   parallel = ObGlobalHint::UNSET_PARALLEL;
   ObOptimizerContext *opt_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
-  int64_t parallel_limit = ObGlobalHint::UNSET_PARALLEL;
+  int64_t cur_min_parallel = ObGlobalHint::UNSET_PARALLEL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())
-      || OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > opt_ctx->get_parallel_degree_limit())
       || OB_ISNULL(session_info = opt_ctx->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(get_plan()), K(opt_ctx), K(session_info));
@@ -703,37 +702,29 @@ int ObJoinOrder::compute_access_path_parallel(ObIArray<AccessPath *> &access_pat
       parallel = ObGlobalHint::DEFAULT_PARALLEL;
     } else if (OB_FAIL(get_random_parallel(access_paths, parallel))) {
       LOG_WARN("failed to get random parallel", K(ret));
-    } else {
-      parallel = std::min(parallel, opt_ctx->get_parallel_degree_limit());
     }
-    LOG_TRACE("Auto DOP trace point", K(session_info->is_user_session()),
-                                      K(opt_ctx->get_parallel_degree_limit()), K(parallel));
-  } else if (OB_FAIL(get_parallel_from_available_access_paths(parallel_limit))) {
+    LOG_TRACE("Auto DOP trace point", K(session_info->is_user_session()), K(parallel));
+  } else if (OB_FAIL(get_parallel_from_available_access_paths(cur_min_parallel))) {
     LOG_WARN("failed to get parallel from available access paths", K(ret));
   } else {
-    parallel_limit = (ObGlobalHint::DEFAULT_PARALLEL > parallel_limit ||
-                      parallel_limit > opt_ctx->get_parallel_degree_limit())
-                      ? opt_ctx->get_parallel_degree_limit()
-                      : parallel_limit;
-    const int64_t cost_threshold = opt_ctx->get_parallel_min_scan_time_threshold();
-    int64_t calc_parallel = parallel_limit;
-    int64_t cur_parallel = ObGlobalHint::UNSET_PARALLEL;
+    int64_t calc_parallel = ObGlobalHint::UNSET_PARALLEL;
     int64_t das_path_cnt = 0;
     AccessPath *path = NULL;
+    bool finish = false;
     OPT_TRACE_TITLE("begin compute auto dop for table");
-    for (int64_t i = 0; calc_parallel > ObGlobalHint::DEFAULT_PARALLEL && OB_SUCC(ret) && i < access_paths.count(); i++) {
+    for (int64_t i = 0; !finish && OB_SUCC(ret) && i < access_paths.count(); i++) {
       if (OB_ISNULL(path = access_paths.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(path), K(ret));
       } else if (path->use_das_) {
         ++das_path_cnt;
-      } else if (OB_FAIL(path->compute_parallel_degree(parallel_limit, cost_threshold, cur_parallel))) {
+      } else if (OB_FAIL(path->compute_parallel_degree(cur_min_parallel, calc_parallel))) {
         LOG_WARN("failed to compute parallel degree", K(ret));
       } else {
-        LOG_TRACE("finish compute one path parallel degree", K(i), K(cur_parallel), K(calc_parallel),
-                      K(parallel_limit), K(path->table_id_), K(path->index_id_));
-        calc_parallel = std::min(cur_parallel, calc_parallel);
-        parallel_limit = calc_parallel;
+        LOG_TRACE("finish compute one path parallel degree", K(i), K(cur_min_parallel), K(calc_parallel),
+                                                            K(path->table_id_), K(path->index_id_));
+        cur_min_parallel = calc_parallel;
+        finish = ObGlobalHint::DEFAULT_PARALLEL == calc_parallel;
       }
     }
     OPT_TRACE_TITLE("end compute auto dop for table");
@@ -4855,8 +4846,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
 }
 
 // compute auto dop for access path
-int AccessPath::compute_parallel_degree(const int64_t parallel_degree_limit,
-                                        const int64_t cost_threshold,
+int AccessPath::compute_parallel_degree(const int64_t cur_min_parallel_degree,
                                         int64_t &parallel) const
 {
   int ret = OB_SUCCESS;
@@ -4866,12 +4856,10 @@ int AccessPath::compute_parallel_degree(const int64_t parallel_degree_limit,
   double cost_threshold_us = 0.0;
   int64_t cur_parallel_degree_limit = ObGlobalHint::UNSET_PARALLEL;
   int64_t server_cnt = 0;
-  if (use_das_ || parallel_degree_limit <= ObGlobalHint::DEFAULT_PARALLEL
-      || is_virtual_table(est_cost_info_.ref_table_id_)
+  if (use_das_ || is_virtual_table(est_cost_info_.ref_table_id_)
       || est_cost_info_.is_unique_) {
     parallel = ObGlobalHint::DEFAULT_PARALLEL;
-  } else if (OB_FAIL(check_and_prepare_estimate_parallel_params(parallel_degree_limit,
-                                                                cost_threshold,
+  } else if (OB_FAIL(check_and_prepare_estimate_parallel_params(cur_min_parallel_degree,
                                                                 px_part_gi_min_part_per_dop,
                                                                 cost_threshold_us,
                                                                 server_cnt,
@@ -4914,21 +4902,20 @@ int AccessPath::compute_parallel_degree(const int64_t parallel_degree_limit,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > parallel || parallel_degree_limit < parallel)) {
+    } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > parallel || cur_parallel_degree_limit < parallel)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected parallel result", K(ret), K(parallel_degree_limit), K(parallel));
+      LOG_WARN("get unexpected parallel result", K(ret), K(cur_parallel_degree_limit), K(parallel));
     } else {
       OPT_TRACE("finish compute one path parallel degree:", parallel);
       LOG_TRACE("finish compute parallel degree", K(phy_query_range_row_count_), K(query_range_row_count_),
-                                  K(parallel), K(parallel_degree_limit), K(cur_parallel_degree_limit),
+                                  K(parallel), K(cur_parallel_degree_limit),
                                   K(cost_threshold_us), K(px_cost), K(cost), K(pre_cost));
     }
   }
   return ret;
 }
 
-int AccessPath::check_and_prepare_estimate_parallel_params(const int64_t input_parallel_degree_limit,
-                                                           const double cost_threshold_ms,
+int AccessPath::check_and_prepare_estimate_parallel_params(const int64_t cur_min_parallel_degree,
                                                            int64_t &px_part_gi_min_part_per_dop,
                                                            double &cost_threshold_us,
                                                            int64_t &server_cnt,
@@ -4943,23 +4930,25 @@ int AccessPath::check_and_prepare_estimate_parallel_params(const int64_t input_p
   ObSQLSessionInfo *session_info = NULL;
   ObSEArray<ObAddr, 8> server_list;
   if (OB_ISNULL(table_partition_info_) ||
-      OB_UNLIKELY(cost_threshold_ms < 1) ||
       OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan()) ||
       OB_ISNULL(opt_ctx = &parent_->get_plan()->get_optimizer_context()) ||
       OB_ISNULL(session_info = opt_ctx->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected params", K(ret), K(table_partition_info_), K(cost_threshold_ms), K(parent_), K(session_info));
+    LOG_WARN("get unexpected params", K(ret), K(table_partition_info_), K(parent_), K(session_info));
   } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE, px_part_gi_min_part_per_dop))) {
     LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
   } else if (OB_FAIL(table_partition_info_->get_all_servers(server_list))) {
     LOG_WARN("failed to get all servers", K(ret));
   } else {
     px_part_gi_min_part_per_dop = std::max(1L, px_part_gi_min_part_per_dop);
-    cost_threshold_us = 1000.0 * cost_threshold_ms;
+    cost_threshold_us = 1000.0 * std::max(10L, opt_ctx->get_parallel_min_scan_time_threshold());
     server_cnt = server_list.count();
-    cur_parallel_degree_limit = input_parallel_degree_limit;
+    cur_parallel_degree_limit = opt_ctx->get_parallel_degree_limit(server_cnt);
     const int64_t row_parallel_limit = std::floor(phy_query_range_row_count_ / ROW_COUNT_THRESHOLD_PER_DOP);
     const int64_t ss_scan_parallel_limit = std::floor(est_cost_info_.ss_prefix_ndv_);
+    if (cur_min_parallel_degree > ObGlobalHint::DEFAULT_PARALLEL && cur_min_parallel_degree < cur_parallel_degree_limit) {
+      cur_parallel_degree_limit = cur_min_parallel_degree;
+    }
     if (row_parallel_limit > ObGlobalHint::DEFAULT_PARALLEL && row_parallel_limit < cur_parallel_degree_limit) {
       cur_parallel_degree_limit = row_parallel_limit;
     }
