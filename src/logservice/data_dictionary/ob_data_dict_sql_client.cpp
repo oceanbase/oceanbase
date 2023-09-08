@@ -14,12 +14,13 @@
 
 #include "ob_data_dict_sql_client.h"
 
-#include "lib/mysqlclient/ob_isql_client.h"     // ObISQLClient
+#include "lib/mysqlclient/ob_mysql_proxy.h"     // ObMySQLProxy
 #include "lib/string/ob_sql_string.h"           // ObSqlString
 #include "common/ob_smart_var.h"                // SMART_VAR
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_define.h"
 #include "share/ob_ls_id.h"
+#include "share/ls/ob_ls_operator.h"            // ObLSAttrOperator
 
 #define IF_CLIENT_VALID \
     if (IS_NOT_INIT) { \
@@ -39,8 +40,6 @@ namespace oceanbase
 namespace datadict
 {
 
-const char *ObDataDictSqlClient::query_ls_info_sql_format =
-    "SELECT LS_ID FROM %s AS OF SNAPSHOT %lu WHERE STATUS = \"NORMAL\"";
 const char *ObDataDictSqlClient::query_tenant_schema_version_sql_format =
     "SELECT MAX(SCHEMA_VERSION) AS SCHEMA_VERSION FROM %s AS OF SNAPSHOT %lu";
 const char *ObDataDictSqlClient::report_data_dict_persist_info_sql_format =
@@ -51,7 +50,7 @@ ObDataDictSqlClient::ObDataDictSqlClient()
     sql_proxy_(NULL)
 {}
 
-int ObDataDictSqlClient::init(ObISQLClient *mysql_client)
+int ObDataDictSqlClient::init(ObMySQLProxy *mysql_client)
 {
   int ret = OB_SUCCESS;
 
@@ -80,28 +79,22 @@ int ObDataDictSqlClient::get_ls_info(
   int ret = OB_SUCCESS;
 
   IF_CLIENT_VALID {
-    if (OB_UNLIKELY(! snapshot_scn.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      DDLOG(WARN, "invalid snapshot_scn to get_ls_info", KR(ret), K(snapshot_scn));
-    } else {
-      ObSqlString sql;
-      int64_t record_count;
-      uint64_t gts_ts = snapshot_scn.get_val_for_inner_table_field();
+    share::ObLSAttrOperator ls_attr_op(tenant_id, sql_proxy_);
+    share::ObLSAttrArray ls_attr_arr;
 
-      SMART_VAR(ObISQLClient::ReadResult, result) {
-        if (OB_FAIL(sql.assign_fmt(query_ls_info_sql_format,
-            OB_ALL_LS_TNAME, gts_ts))) {
-          DDLOG(WARN, "assign_fmt to sql_string failed", KR(ret),
-              K(tenant_id), K(snapshot_scn), K(gts_ts));
-        } else if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
-          DDLOG(WARN, "read from sql_proxy_ for ls_info failed", KR(ret),
-              K(tenant_id), "sql", sql.ptr());
-        } else if (OB_ISNULL(result.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          DDLOG(WARN, "get sql result failed", KR(ret), "sql", sql.ptr());
-        } else if (OB_FAIL(parse_record_from_row_(*result.get_result(), record_count, ls_array))) {
-          DDLOG(WARN, "parse_record_from_row_ for ls_array failed", KR(ret),
-              K(tenant_id), K(snapshot_scn), "sql", sql.ptr());
+    if (OB_FAIL(ls_attr_op.load_all_ls_and_snapshot(
+        snapshot_scn,
+        ls_attr_arr,
+        true/*only_existing_ls*/))) {
+      DDLOG(WARN, "load_all_ls_and_snapshot failed", KR(ret), K(tenant_id), K(snapshot_scn));
+    } else {
+      ARRAY_FOREACH(ls_attr_arr, ls_attr_idx) {
+        share::ObLSAttr &ls_attr = ls_attr_arr[ls_attr_idx];
+        if (ls_attr.is_valid()
+            && ! ls_attr.ls_is_creating() // load_all_ls_and_snapshot will filter abort and dropped ls
+            && OB_FAIL(ls_array.push_back(ls_attr.get_ls_id()))) {
+          DDLOG(WARN, "push_back normal ls into ls_array failed", KR(ret),
+              K(tenant_id), K(snapshot_scn), K(ls_attr), K(ls_attr_idx), K(ls_attr_arr));
         }
       }
     }
@@ -181,43 +174,6 @@ int ObDataDictSqlClient::report_data_dict_persist_info(
         ret = OB_ERR_UNEXPECTED;
         DDLOG(WARN, "write affected_rows should not be zero", KR(ret), K(tenant_id), "sql", sql.ptr(), K(snapshot_scn));
       }
-    }
-  }
-
-  return ret;
-}
-
-int ObDataDictSqlClient::parse_record_from_row_(
-    common::sqlclient::ObMySQLResult &result,
-    int64_t &record_count,
-    share::ObLSArray &ls_array)
-{
-  int ret = OB_SUCCESS;
-
-  IF_CLIENT_VALID {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(result.next())) {
-        if (OB_ITER_END != ret) {
-          DDLOG(WARN, "get next result failed", KR(ret), K(record_count));
-        }
-      } else {
-        int64_t ls_id = share::ObLSID::INVALID_LS_ID;
-
-        (void)GET_COL_IGNORE_NULL(result.get_int, "LS_ID", ls_id);
-
-        if (OB_UNLIKELY(share::ObLSID::INVALID_LS_ID == ls_id)) {
-          ret = OB_ERR_UNEXPECTED;
-          DDLOG(WARN, "invalid ls_id fetched from DBA_OB_LS", KR(ret), K(ls_id), K(record_count));
-        } else if (OB_FAIL(ls_array.push_back(ObLSID(ls_id)))) {
-          DDLOG(WARN, "push_back ls_id into ls_array failed", KR(ret), K(record_count));
-        } else {
-          record_count++;
-        }
-      }
-    } // while
-
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
     }
   }
 
