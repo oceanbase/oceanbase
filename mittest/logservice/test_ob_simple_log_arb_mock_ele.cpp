@@ -80,6 +80,7 @@ std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 
 TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
 {
+  oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_1_0_0;
   int ret = OB_SUCCESS;
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   const int64_t TIMEOUT_US = 10 * 1000 * 1000L;
