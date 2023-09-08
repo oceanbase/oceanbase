@@ -8322,22 +8322,7 @@ opt_lock_type:
 ;
 
 no_table_select:
-select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt %prec LOWER_PARENS
-{
-  ParseNode *project_list = NULL;
-  merge_nodes(project_list, result, T_PROJECT_LIST, $3);
-
-  ParseNode *select_node = NULL;
-  malloc_select_node(select_node, result->malloc_pool_);
-  select_node->children_[PARSE_SELECT_DISTINCT] = $2;
-  select_node->children_[PARSE_SELECT_SELECT] = project_list;
-  select_node->children_[PARSE_SELECT_HINTS] = $1;
-  select_node->children_[PARSE_SELECT_INTO] = $4;
-  $$ = select_node;
-
-  setup_token_pos_info(select_node, @1.first_column - 1, 6);
-}
-| select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt
+select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt
 FROM DUAL opt_where opt_groupby opt_having opt_named_windows
 {
   ParseNode *project_list = NULL;
@@ -8357,24 +8342,21 @@ FROM DUAL opt_where opt_groupby opt_having opt_named_windows
 
   setup_token_pos_info(select_node, @1.first_column - 1, 6);
 }
-| select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt
-WHERE opt_hint_value expr opt_groupby opt_having opt_named_windows
+| select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt opt_where opt_groupby opt_having opt_named_windows
 {
   ParseNode *project_list = NULL;
-  ParseNode *where_node = NULL;
   ParseNode *select_node = NULL;
   merge_nodes(project_list, result, T_PROJECT_LIST, $3);
-  malloc_non_terminal_node(where_node, result->malloc_pool_, T_WHERE_CLAUSE, 2, $7, $6);
   setup_token_pos_info($$, @1.first_column - 1, 5);
   malloc_select_node(select_node, result->malloc_pool_);
   select_node->children_[PARSE_SELECT_DISTINCT] = $2;
   select_node->children_[PARSE_SELECT_SELECT] = project_list;
-  select_node->children_[PARSE_SELECT_WHERE] = where_node;
+  select_node->children_[PARSE_SELECT_WHERE] = $5;
   select_node->children_[PARSE_SELECT_HINTS] = $1;
   select_node->children_[PARSE_SELECT_INTO] = $4;
-  select_node->children_[PARSE_SELECT_DYNAMIC_GROUP] = $8;
-  select_node->children_[PARSE_SELECT_DYNAMIC_HAVING] = $9;
-  select_node->children_[PARSE_SELECT_NAMED_WINDOWS] = $10;
+  select_node->children_[PARSE_SELECT_DYNAMIC_GROUP] = $6;
+  select_node->children_[PARSE_SELECT_DYNAMIC_HAVING] = $7;
+  select_node->children_[PARSE_SELECT_NAMED_WINDOWS] = $8;
   $$ = select_node;
   setup_token_pos_info(select_node, @1.first_column - 1, 6);
 }
