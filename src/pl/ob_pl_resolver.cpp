@@ -11608,6 +11608,7 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                                     expr_factory_,
                                     current_block_->get_namespace(),
                                     self_argument));
+      CK (OB_NOT_NULL(self_argument));
       OZ (self_argument->formalize(&resolve_ctx_.session_info_));
       OX (udf_info.set_is_udf_udt_cons());
       OZ (func.add_expr(self_argument));
