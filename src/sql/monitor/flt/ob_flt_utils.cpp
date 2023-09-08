@@ -307,14 +307,12 @@ namespace sql
           }
           case FLT_TYPE_QUERY_INFO: {
             // this extra info is written by server, and driver/proxy cannot send this to server;
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("invalid extra_type", K(extra_type), K(ret));
+            // skip
             break;
           }
           case FLT_TYPE_CONTROL_INFO: {
             // this extra info is written by server, and driver/proxy cannot send this to server;
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("invalid extra_type", K(extra_type), K(ret));
+            // skip
             break;
           }
           case FLT_TYPE_SPAN_INFO: {
@@ -347,8 +345,7 @@ namespace sql
             break;
           }
           default: {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("invalid extra_type", K(extra_type), K(ret));
+            // skip
             break;
           }
         } // switch ends

@@ -158,9 +158,7 @@ int FLTControlInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const i
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -267,9 +265,7 @@ int FLTSpanInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int6
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -301,9 +297,7 @@ int FLTDrvSpan::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int64
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -362,9 +356,7 @@ int FLTAppInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int64
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -434,9 +426,7 @@ int FLTQueryInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int
      break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -472,8 +462,7 @@ int FLTShowTrace::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
