@@ -391,7 +391,13 @@ int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
       int64_t endkey_cnt = 0;
       void *buf = nullptr;
       ObITable *table = nullptr;
-      if (is_micro_level_) {
+      if (OB_ISNULL(table = range_info.tables_->at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected null pointer to table", K(ret), KP(table));
+      } else if (OB_UNLIKELY(!table->is_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected table type", K(ret), KPC(table));
+      } else if (is_micro_level_ && !table->is_ddl_mem_sstable()) { // ddl kv not support endkey iterator of micro block
         if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroEndkeyIterator)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));
@@ -408,12 +414,6 @@ int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(table = range_info.tables_->at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null pointer to table", K(ret), KP(table));
-      } else if (OB_UNLIKELY(!table->is_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected table type", K(ret), KPC(table));
       } else if (OB_FAIL(endkey_iter->open(
           sample_cnt_, iter_idx, *(static_cast<ObSSTable *>(table)), range_info))) {
         STORAGE_LOG(WARN, "Failed to open endkey iter", K(ret), KP(table), K(sample_cnt_), K(iter_idx));
