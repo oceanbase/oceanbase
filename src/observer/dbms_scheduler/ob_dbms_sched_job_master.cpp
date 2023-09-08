@@ -615,7 +615,7 @@ int ObDBMSSchedJobMaster::load_and_register_all_jobs(ObDBMSSchedJobKey *job_key)
           uint64_t data_version = 0;
           if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_ids.at(i), data_version))) {
             LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-          } else if (DATA_VERSION_4_2_1_0 <= data_version) {
+          } else if (MOCK_DATA_VERSION <= data_version) {
             //add default job class
             OZ (table_operator_.register_default_job_class(tenant_ids.at(i)));
             //add purge run detail job

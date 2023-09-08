@@ -19,6 +19,9 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/container/ob_iarray.h"
 
+
+#define MOCK_DATA_VERSION (oceanbase::common::cal_version(9, 9, 9, 9))
+
 namespace oceanbase
 {
 namespace common

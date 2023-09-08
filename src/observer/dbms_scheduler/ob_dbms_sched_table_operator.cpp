@@ -128,14 +128,14 @@ int ObDBMSSchedTableOperator::update_for_end(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-    } else if (DATA_VERSION_4_2_1_0 <= data_version) {
+    } else if (MOCK_DATA_VERSION <= data_version) {
       CK (OB_LIKELY(!job_info.job_class_.empty()));
     }
   }
 
   ObDBMSSchedJobClassInfo job_class_info;
   ObArenaAllocator allocator;
-  if (DATA_VERSION_4_2_1_0 <= data_version) {
+  if (MOCK_DATA_VERSION <= data_version) {
     OZ (get_dbms_sched_job_class_info(tenant_id, job_info.is_oracle_tenant(), job_info.get_job_class(), allocator, job_class_info));
   }
   // when if failures > 16 then set broken flag.
@@ -177,7 +177,7 @@ int ObDBMSSchedTableOperator::update_for_end(
   //If a non-existent JOB CLASS is entered when creating a JOB,
   //job_run_detail still needs to be recorded.
   bool need_write_job_run_detail = true;
-  if (DATA_VERSION_4_2_1_0 <= data_version) {
+  if (MOCK_DATA_VERSION <= data_version) {
     ObString logging_level = job_class_info.get_logging_level();
     if (logging_level.empty()) {
       LOG_WARN("logging_level may not assigned");
@@ -199,7 +199,7 @@ int ObDBMSSchedTableOperator::update_for_end(
     OZ (dml2.add_column("code", err));
     OZ (dml2.add_column(
       "message", ObHexEscapeSqlStr(errmsg.empty() ? ObString("SUCCESS") : errmsg)));
-    if (DATA_VERSION_4_2_1_0 <= data_version) {
+    if (MOCK_DATA_VERSION <= data_version) {
       OZ (dml2.add_column("job_class", job_info.job_class_));
     }
     OZ (dml2.splice_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TNAME, sql2));
