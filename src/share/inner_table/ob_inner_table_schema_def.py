@@ -13363,6 +13363,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 
 # 15417: __all_virtual_column_group_mapping
 
+# 15418: __all_virtual_cgroup_config
 # 余留位置
 
 ################################################################################
@@ -29851,7 +29852,9 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-#
+#21479 GV$OB_CGROUP_CONFIG
+#21480 V$OB_CGROUP_CONFIG
+
 # 余留位置
 
 ################################################################################
@@ -54377,6 +54380,8 @@ def_table_schema(
 # 28197: V$OB_SESSION
 # 28198: GV$OB_PL_CACHE_OBJECT
 # 28199: V$OB_PL_CACHE_OBJECT
+# 28200: GV$OB_CGROUP_CONFIG
+# 28201: V$OB_CGROUP_CONFIG
 
 ################################################################################
 # Lob Table (50000, 70000)
