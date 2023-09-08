@@ -96,15 +96,17 @@ void ObStandbyTimestampService::wait()
 
 void ObStandbyTimestampService::destroy()
 {
-  inited_ = false;
-  tenant_id_ = OB_INVALID_ID;
-  //TODO(SCN):zhaoxing last_id should be uint64_t
-  last_id_ = OB_INVALID_VERSION;
-  epoch_ = OB_INVALID_TIMESTAMP;
-  switch_to_leader_ts_ = OB_INVALID_TIMESTAMP;
-  TG_DESTROY(tg_id_);
-  rpc_.destroy();
-  TRANS_LOG(INFO, "standby timestamp service destroy", K_(tenant_id));
+  if (inited_) {
+    inited_ = false;
+    tenant_id_ = OB_INVALID_ID;
+    //TODO(SCN):zhaoxing last_id should be uint64_t
+    last_id_ = OB_INVALID_VERSION;
+    epoch_ = OB_INVALID_TIMESTAMP;
+    switch_to_leader_ts_ = OB_INVALID_TIMESTAMP;
+    TG_DESTROY(tg_id_);
+    rpc_.destroy();
+    TRANS_LOG(INFO, "standby timestamp service destroy", K_(tenant_id));
+  }
 }
 
 int ObStandbyTimestampService::query_and_update_last_id()
