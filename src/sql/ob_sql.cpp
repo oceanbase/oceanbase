@@ -1031,7 +1031,9 @@ int ObSql::do_real_prepare(const ObString &sql,
   } else if (OB_FAIL(parser.parse(sql,
                                   parse_result,
                                   parse_mode,
-                                  false/*is_batched_multi_stmt_split_on*/))) {
+                                  false/*is_batched_multi_stmt_split_on*/,
+                                  false/*no_throw_parser_error*/,
+                                  is_from_pl))) {
     LOG_WARN("generate syntax tree failed", K(sql), K(ret));
   } else if (is_mysql_mode()
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
@@ -2210,7 +2212,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
                                 context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
                                 (context.session_info_->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
-        if (OB_FAIL(parser.parse(sql, parse_result, parse_mode))) {
+        if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, NULL != session.get_pl_context()))) {
           LOG_WARN("failed to parse sql", K(ret), K(sql), K(stmt_type));
         } else if (OB_FAIL(check_read_only_privilege(parse_result, ectx, *schema_guard, sql_traits))) {
           LOG_WARN("failed to check read only privilege", K(ret));
@@ -4080,7 +4082,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
     ObParser parser(allocator, session->get_sql_mode(), session->get_local_collation_connection(), pc_ctx.def_name_ctx_);
     if (OB_FAIL(parser.parse(outlined_stmt, parse_result,
                              pc_ctx.is_rewrite_sql_ ? UDR_SQL_MODE : STD_MODE,
-                             pc_ctx.sql_ctx_.handle_batched_multi_stmt()))) {
+                             pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
+                             false, NULL != session->get_pl_context()))) {
       LOG_WARN("Generate syntax tree failed", K(outlined_stmt), K(ret));
     } else if ((PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
       && OB_FAIL(construct_param_store_from_parameterized_params(
