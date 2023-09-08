@@ -226,7 +226,11 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, "log stream service is NULL", K(ret));
       } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD))) {
-        CLOG_LOG(WARN, "get log stream failed", K(id), K(tmp_ret));
+        if (OB_LS_NOT_EXIST == tmp_ret) {
+          CLOG_LOG(INFO, "ls does not exist anymore, maybe removed", K(tmp_ret), K(id));
+        } else {
+          CLOG_LOG(WARN, "get log stream failed", K(id), K(tmp_ret));
+        }
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, " log stream not exist", K(id), K(tmp_ret));
@@ -1609,7 +1613,11 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
       ret = OB_NOT_INIT;
       CLOG_LOG(ERROR, "ls service is NULL", K(ret));
     } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-      CLOG_LOG(ERROR, "get ls failed", K(tmp_ret), K(id));
+      if (OB_LS_NOT_EXIST == tmp_ret) {
+        CLOG_LOG(INFO, "ls does not exist anymore, maybe removed", K(tmp_ret), K(id));
+      } else {
+        CLOG_LOG(ERROR, "get ls failed", K(tmp_ret), K(id));
+      }
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "ls not exist", K(tmp_ret), K(id));
