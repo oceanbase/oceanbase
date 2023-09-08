@@ -39,6 +39,11 @@ using namespace oceanbase::lib;
 namespace oceanbase {
 namespace common {
 __thread char ObLogger::local_buf_[];
+
+void __attribute__((weak)) allow_next_syslog(int64_t)
+{
+  // do nothing
+}
 extern void update_easy_log_level();
 lib::ObRateLimiter* ObLogger::default_log_limiter_ = nullptr;
 RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);

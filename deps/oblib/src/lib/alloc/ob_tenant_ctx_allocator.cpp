@@ -22,7 +22,6 @@
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
-
 int ObTenantCtxAllocator::iter_label(VisitFunc func) const
 {
   int ret = OB_SUCCESS;
@@ -139,7 +138,7 @@ void ObTenantCtxAllocator::print_usage() const
       return OB_SUCCESS;
     });
   }
-
+  allow_next_syslog();
   _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld\n%s",
       tenant_id_,
       get_global_ctx_info().get_ctx_name(ctx_id_),

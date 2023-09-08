@@ -56,6 +56,7 @@ class ObFIFOAllocator;
 class ObPLogItem;
 class ObString;
 class ObLogCompressor;
+extern void allow_next_syslog(int64_t count = 1);
 
 #define OB_LOGGER ::oceanbase::common::ObLogger::get_logger()
 #define OB_LOG_NEED_TO_PRINT(level) (OB_UNLIKELY(OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)))

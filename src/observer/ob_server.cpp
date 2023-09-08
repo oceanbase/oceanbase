@@ -402,6 +402,8 @@ void ObServer::destroy()
     ObBGThreadMonitor::get_instance().destroy();
     TG_DESTROY(lib::TGDefIDs::ServerGTimer);
     LOG_WARN("timer destroyed");
+    TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
+    LOG_WARN("memory dump timer destroyed");
     TG_DESTROY(lib::TGDefIDs::FreezeTimer);
     LOG_WARN("freeze timer destroyed");
     TG_DESTROY(lib::TGDefIDs::SqlMemTimer);
@@ -646,6 +648,8 @@ int ObServer::stop()
   LOG_INFO("begin stop timer");
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   LOG_WARN("timer stopped");
+  TG_STOP(lib::TGDefIDs::MemDumpTimer);
+  LOG_WARN("memory dump timer stopped");
   TG_STOP(lib::TGDefIDs::FreezeTimer);
   LOG_WARN("freeze timer stopped");
   TG_STOP(lib::TGDefIDs::SqlMemTimer);
@@ -756,6 +760,7 @@ int ObServer::wait()
 
   // timer
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
+  TG_WAIT(lib::TGDefIDs::MemDumpTimer);
   TG_WAIT(lib::TGDefIDs::FreezeTimer);
   TG_WAIT(lib::TGDefIDs::SqlMemTimer);
   TG_WAIT(lib::TGDefIDs::ServerTracerTimer);
@@ -931,6 +936,8 @@ int ObServer::init_config()
       LOG_ERROR("local address isn't valid", K(self_addr_), K(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
       LOG_ERROR("init timer fail", K(ret));
+    } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
+      LOG_ERROR("init memory dump timer fail", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
       LOG_ERROR("init freeze timer fail", K(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::SqlMemTimer))) {
@@ -1295,7 +1302,7 @@ int ObServer::init_multi_tenant()
       LOG_ERROR("Fail to add server tenant to tenant manager, ", K(ret));
     } else if (OB_FAIL(omti.set_tenant_mem_limit(OB_SERVER_TENANT_ID, 0, INT64_MAX))) {
       LOG_ERROR("Fail to set tenant mem limit, ", K(ret));
-    } else if (OB_FAIL(omti.register_timer_task(lib::TGDefIDs::ServerGTimer))) {
+    } else if (OB_FAIL(omti.register_timer_task(lib::TGDefIDs::MemDumpTimer))) {
       LOG_ERROR("Fail to register timer task", K(ret));
     }
   }
