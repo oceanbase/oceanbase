@@ -756,14 +756,14 @@ int ObMemtable::get(
         char *trans_info_ptr = nullptr;
         if (param.need_trans_info()) {
           int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
-          if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.allocator_->alloc(length)))) {
+          if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
           }
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(row.init(*context.allocator_, request_cnt, trans_info_ptr))) {
+        } else if (OB_FAIL(row.init(*context.stmt_allocator_, request_cnt, trans_info_ptr))) {
           STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(param.need_trans_info()));
         }
       }
