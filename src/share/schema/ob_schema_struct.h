@@ -4638,14 +4638,14 @@ struct ObNeedPriv
              const common::ObString &table,
              ObPrivLevel priv_level,
              ObPrivSet priv_set,
-             const bool is_sys_table)
-      : db_(db), table_(table), priv_level_(priv_level),
-        priv_set_(priv_set), is_sys_table_(is_sys_table)
+             const bool is_sys_table,
+             const bool is_for_update = false)
+      : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+        is_sys_table_(is_sys_table), is_for_update_(is_for_update)
   { }
   ObNeedPriv()
-      : db_(), table_(),
-        priv_level_(OB_PRIV_INVALID_LEVEL),
-        priv_set_(0), is_sys_table_(false)
+      : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
+        is_for_update_(false)
   { }
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
@@ -4653,7 +4653,8 @@ struct ObNeedPriv
   ObPrivLevel priv_level_;
   ObPrivSet priv_set_;
   bool is_sys_table_; // May be used to represent the table of schema metadata
-  TO_STRING_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table));
+  bool is_for_update_;
+  TO_STRING_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update));
 };
 
 struct ObStmtNeedPrivs

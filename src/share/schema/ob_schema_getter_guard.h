@@ -1153,6 +1153,9 @@ private:
   int get_table_schemas_in_tenant_(const uint64_t tenant_id,
                                    const bool only_view_schema,
                                    common::ObIArray<const ObTableSchema *> &table_schemas);
+  int check_single_table_priv_for_update_(const ObSessionPrivInfo &session_priv,
+                                          const ObNeedPriv &table_need_priv,
+                                          const ObPrivMgr &priv_mgr);
 private:
   common::ObArenaAllocator local_allocator_;
   ObMultiVersionSchemaService *schema_service_;

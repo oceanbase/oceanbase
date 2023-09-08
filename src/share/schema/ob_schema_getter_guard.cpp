@@ -3439,7 +3439,46 @@ int ObSchemaGetterGuard::check_single_table_priv(const ObSessionPrivInfo &sessio
         }
       }
     }
+    if (OB_SUCC(ret) && table_need_priv.is_for_update_) {
+      if (OB_FAIL(check_single_table_priv_for_update_(session_priv, table_need_priv, priv_mgr))) {
+        LOG_WARN("failed to check select table for update priv", K(ret));
+      }
+    }
   }
+  return ret;
+}
+
+/* select ... from table for update, need select privilege and one of (delete, update lock tables).
+ * ob donesn't have lock tables yet, then it checks select first and one of (delete、update on table level).
+ */
+int ObSchemaGetterGuard::check_single_table_priv_for_update_(const ObSessionPrivInfo &session_priv,
+                                                             const ObNeedPriv &table_need_priv,
+                                                             const ObPrivMgr &priv_mgr)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session_priv.tenant_id_;
+  const uint64_t user_id = session_priv.user_id_;
+  bool pass = false;
+  const ObNeedPriv need_priv(table_need_priv.db_, table_need_priv.table_, table_need_priv.priv_level_,
+                             OB_PRIV_UPDATE | OB_PRIV_DELETE, table_need_priv.is_sys_table_,
+                             table_need_priv.is_for_update_);
+  if (OB_UNLIKELY(!table_need_priv.is_for_update_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not run this function without for update", K(ret), K(table_need_priv));
+  } else if (OB_PRIV_HAS_ANY(session_priv.user_priv_set_, need_priv.priv_set_)) {
+    /* check ok */
+  } else if (OB_FAIL(check_priv_db_or_(session_priv, need_priv, priv_mgr, tenant_id, user_id, pass))) {
+    LOG_WARN("failed to check priv db or", K(ret));
+  } else if (!pass && OB_FAIL(check_priv_table_or_(need_priv, priv_mgr, tenant_id, user_id, pass))) {
+    LOG_WARN("fail to check priv table or", K(ret));
+  } else if (!pass) {
+    ret = OB_ERR_NO_TABLE_PRIVILEGE;
+    const char *priv_name = "SELECT with locking clause";
+    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen(priv_name), priv_name,
+                                    session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                                    session_priv.host_name_.length(), session_priv.host_name_.ptr(),
+                                    table_need_priv.table_.length(), table_need_priv.table_.ptr());
+  } else { /* check ok */ }
   return ret;
 }
 

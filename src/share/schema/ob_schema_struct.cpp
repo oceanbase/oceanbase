@@ -8962,6 +8962,7 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   priv_level_ = other.priv_level_;
   priv_set_ = other.priv_set_;
   is_sys_table_ = other.is_sys_table_;
+  is_for_update_ = other.is_for_update_;
   if (OB_FAIL(ob_write_string(allocator, other.db_, db_))) {
     LOG_WARN("Fail to deep copy db", K_(db), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.table_, table_))) {
