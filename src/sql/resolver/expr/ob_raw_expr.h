@@ -159,7 +159,7 @@ extern ObRawExpr *USELESS_POINTER;
 #define IS_SPATIAL_EXPR(op) \
   ((op) >= T_FUN_SYS_ST_LONGITUDE && (op) <= T_FUN_SYS_ST_LATITUDE)
 
-// ObSqlBitSet is a simple bitset, in order to avoid memory explosure
+// ObSqlBitSet is a simple bitset, in order to avoid memory exposure
 // ObBitSet is too large just for a simple bitset
 const static int64_t DEFAULT_SQL_BITSET_SIZE = 32;
 template<int64_t N = DEFAULT_SQL_BITSET_SIZE,
@@ -202,7 +202,7 @@ public:
     int ret = OB_SUCCESS;
     if (!other.is_valid()) {
       desc_.init_errcode_ = other.desc_.init_errcode_;
-      SQL_RESV_LOG(WARN, "other not intied", K(other.desc_.init_errcode_));
+      SQL_RESV_LOG(WARN, "other not initied", K(other.desc_.init_errcode_));
     } else if (OB_FAIL(init_block_allocator())) {
       desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "failed to init block allocator", K(ret));
@@ -1608,7 +1608,7 @@ struct ObResolveContext
   bool is_for_pivot_;
   bool is_for_dynamic_sql_;
   bool is_for_dbms_sql_;
-  TgTimingEvent tg_timing_event_; // for msyql trigger
+  TgTimingEvent tg_timing_event_; // for mysql trigger
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
 };
@@ -3331,7 +3331,7 @@ private:
   //use for udf function info
   share::schema::ObUDFMeta udf_meta_;
   bool is_nested_aggr_;
-  bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computaion
+  bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computation
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
 
@@ -4674,7 +4674,7 @@ public:
         SQL_RESV_LOG(WARN, "failed to check stack overflow", K(ret));
       } else if (is_overflow) {
         ret = OB_SIZE_OVERFLOW;
-        SQL_RESV_LOG(WARN, "too deep recusive", K(ret));
+        SQL_RESV_LOG(WARN, "too deep recursive", K(ret));
       } else if (OB_FAIL(proxy_->create_raw_expr(expr_type, raw_expr))) {
         SQL_RESV_LOG(WARN, "failed to create raw expr by pl factory", K(ret));
       } else {

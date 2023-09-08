@@ -95,7 +95,7 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
       SQL_RESV_LOG(WARN, "user_list_node is null", K(ret));
     } else {
       uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
-      // resovle user_list_node
+      // resolved user_list_node
       for (int i = 0; i < user_list_node->num_child_ && OB_SUCCESS == ret; ++i) {
         if (OB_ISNULL(user_list_node->children_[i])) {
           ret = OB_ERR_PARSE_SQL;

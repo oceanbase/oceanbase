@@ -37,7 +37,7 @@ public:
 
   int modifyColumnName(ObRawExpr &expr);
 
-  // interface of ObRawExprVistor
+  // interface of ObRawExprVisitor
   virtual int visit(ObConstRawExpr &expr);
   virtual int visit(ObExecParamRawExpr &expr);
   virtual int visit(ObVarRawExpr &expr);

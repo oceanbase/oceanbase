@@ -40,7 +40,7 @@ int ObDeallocateResolver::resolve(const ParseNode &parse_tree)
         ObString name(parse_tree.children_[0]->str_len_, parse_tree.children_[0]->str_value_);
         ObPsStmtId ps_id = OB_INVALID_ID;
         if (OB_FAIL(ob_simple_low_to_up(*params_.allocator_, name, stmt_name))) {
-          LOG_WARN("failed to write stirng", K(ret));
+          LOG_WARN("failed to write string", K(ret));
         } else if(OB_FAIL(session_info_->get_prepare_id(stmt_name, ps_id))) {
           LOG_WARN("failed to get prepare id", K(ret));
         } else {

@@ -957,7 +957,7 @@ int ObLogJoin::allocate_granule_post(AllocGIContext &ctx)
     // 并且 nlj 向左支 request 一个 part id
     // 通知 GI 在迭代 partition granule 时进入 partition pruning 模式
     if (OB_FAIL(build_gi_partition_pruning())) {
-      LOG_WARN("fail deterimine right child partition id", K(ret));
+      LOG_WARN("fail determine right child partition id", K(ret));
     }
   }
 	return ret;

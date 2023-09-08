@@ -895,7 +895,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
   // 通过名字指定参数统一记录在param_names_和param_exprs里面, 所以这里一定相等
   if (udf_info.param_names_.count() != udf_info.param_exprs_.count()) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_LOG(WARN, "names array not equle to exprs array count",
+    SQL_LOG(WARN, "names array not equal to exprs array count",
              K(ret), K(udf_info.param_names_.count()), K(udf_info.param_exprs_.count()));
   } else if ((udf_info.udf_param_num_ + udf_info.param_names_.count()) > func_info->get_param_count()) {
     ret = OB_ERR_SP_WRONG_ARG_NUM;
@@ -1701,7 +1701,7 @@ int ObRawExprUtils::build_seq_nextval_expr(ObRawExpr *&expr,
     } else if (OB_FAIL(func_expr->add_flag(IS_SEQ_EXPR))) {
       LOG_WARN("failed to add flag", K(ret));
     } else if (OB_FAIL(func_expr->add_param_expr(col_id_expr))) {
-      LOG_WARN("set funcation param expr failed", K(ret));
+      LOG_WARN("set function param expr failed", K(ret));
     } else if (OB_FAIL(func_expr->formalize(session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else if (NULL != stmt && OB_FAIL(stmt->get_pseudo_column_like_exprs().push_back(func_expr))) {
@@ -7123,7 +7123,7 @@ int ObRawExprUtils::build_dup_data_expr(ObRawExprFactory &factory,
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(name = (char *)factory.get_allocator().alloc(pos + 2))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("falied to allocate memory", K(ret));
+      LOG_WARN("failed to allocate memory", K(ret));
     } else {
       memcpy(name, name_buf, pos);
       name[pos] = ')';

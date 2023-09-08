@@ -120,7 +120,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           if (lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "create user with hostname");
-            LOG_WARN("create user shoud not use hostname in oracle mode", K(ret));
+            LOG_WARN("create user should not use hostname in oracle mode", K(ret));
           }
           ObString password;
           ObString need_enc_str = ObString::make_string("NO");

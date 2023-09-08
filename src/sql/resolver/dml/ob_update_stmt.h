@@ -21,7 +21,7 @@ namespace oceanbase
 namespace sql
 {
 /**
- * UPDATE syntac from MySQL 5.7
+ * UPDATE syntax from MySQL 5.7
  *
  * Single-table syntax:
  UPDATE [LOW_PRIORITY] [IGNORE] table_reference

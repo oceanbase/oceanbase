@@ -524,7 +524,7 @@ bool ObMergeLogPlan::match_same_partition(const ObShardingInfo &l_sharding_info,
 }
 
 // When insert_sharding and update_sharding match same partition,
-// need add euqal constraints for const params in sharding conditions which equal to part key.
+// need add equal constraints for const params in sharding conditions which equal to part key.
 int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
                                               ObShardingInfo &insert_sharding,
                                               bool &can_gen_cons,
@@ -552,7 +552,7 @@ int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
     LOG_WARN("get unexpected null", K(ret), K(target_table_scan));
   } else if (OB_FAIL(append(right_conds, target_table_scan->get_range_conditions()))
               ||OB_FAIL(append(right_conds, target_table_scan->get_filter_exprs()))) {
-    LOG_WARN("failed to append epxrs", K(ret));
+    LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(insert_sharding.get_all_partition_keys(left_part_keys))) {
     LOG_WARN("failed to get partition keys", K(ret));
   } else if (OB_FAIL(target_table_scan->get_sharding()->get_all_partition_keys(right_part_keys))) {
@@ -864,7 +864,7 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
     LOG_WARN("failed to get table schema", K(merge_info), K(ret));
   } else if (!merge_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
-    LOG_WARN("faield to check update part key", K(ret));
+    LOG_WARN("failed to check update part key", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_dml_info->ck_cst_exprs_.count(); ++i) {
       if (OB_FAIL(ObDMLResolver::copy_schema_expr(optimizer_context_.get_expr_factory(),
@@ -1027,7 +1027,7 @@ int ObMergeLogPlan::check_merge_stmt_need_multi_partition_dml(bool &is_multi_par
   } else if (OB_FAIL(merge_stmt->part_key_has_subquery(has_subquery_part_key))) {
     LOG_WARN("failed to check part key has subquery", K(ret));
   } else if (OB_FAIL(merge_stmt->part_key_has_auto_inc(has_auto_inc_part_key))) {
-    LOG_WARN("check to check whether part key containts auto inc column", K(ret));
+    LOG_WARN("check to check whether part key contains auto inc column", K(ret));
   } else if (has_rand_part_key || has_subquery_part_key || has_auto_inc_part_key) {
     is_multi_part_dml = true;
   } else { /*do nothing*/ }

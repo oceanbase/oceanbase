@@ -32,7 +32,7 @@ int ObRawExprWrapEnumSet::wrap_enum_set(ObDMLStmt &stmt)
   int ret = OB_SUCCESS;
   cur_stmt_ = &stmt;
   if (stmt.is_select_stmt()) {
-    //handle the targest list of first level
+    //handle the target list of first level
     ObSelectStmt &select_stmt = static_cast<ObSelectStmt &>(stmt);
     if (OB_FAIL(wrap_target_list(select_stmt))) {
       LOG_WARN("failed to wrap target list", K(ret));

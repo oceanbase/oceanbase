@@ -548,7 +548,7 @@ int ObQueryHint::reset_duplicate_qb_name()
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("get stmt id from hash map failed", K(ret));
       } else if (OB_FAIL(qb_name_map_.set_refactored(qb_names.qb_names_.at(0), i))) {
-        LOG_WARN("faield to add name map", K(ret));
+        LOG_WARN("failed to add name map", K(ret));
       }
     } else if (OB_UNLIKELY(idx < 0 || idx >= i)) {
       ret = OB_ERR_UNEXPECTED;
@@ -704,7 +704,7 @@ int ObQueryHint::print_outline_data(PlanText &plan_text) const
   bool is_oneline = plan_text.is_oneline_;
   if (OB_UNLIKELY(1 < stmt_id_hints_.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected stmt id hitns for outline data", K(ret), K(stmt_id_hints_));
+    LOG_WARN("unexpected stmt id hints for outline data", K(ret), K(stmt_id_hints_));
   } else if (OB_FAIL(BUF_PRINTF("%sBEGIN_OUTLINE_DATA", ObQueryHint::get_outline_indent(is_oneline)))) {
   } else if (1 == stmt_id_hints_.count() &&
              OB_FAIL(stmt_id_hints_.at(0).print_hints(plan_text, true))) {
