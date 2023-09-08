@@ -2476,7 +2476,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
                                        TypeInfo *type_info,
                                        ObObjParam &param,
                                        const char *bitmap,
-                                       int16_t param_id)
+                                       int64_t param_id)
 {
   int ret = OB_SUCCESS;
   uint64_t length = 0;

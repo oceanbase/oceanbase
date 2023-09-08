@@ -74,7 +74,7 @@ private:
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
   int32_t stmt_id_;
-  int16_t param_id_;
+  uint16_t param_id_;
   int64_t buffer_len_;
   common::ObString buffer_;
   int8_t  piece_mode_;
@@ -188,8 +188,8 @@ public:
   }
   void set_stmt_id(int32_t stmt_id) { stmt_id_ = stmt_id; }
   int32_t get_stmt_id() { return stmt_id_; }
-  void set_param_id(int16_t param_id) { param_id_ = param_id; }
-  int16_t get_param_id() { return param_id_; }
+  void set_param_id(uint16_t param_id) { param_id_ = param_id; }
+  uint16_t get_param_id() { return param_id_; }
   void set_position(uint64_t pos) { pos_ = pos; }
   uint64_t get_position() { return pos_; }
   void add_position() { pos_++; }
@@ -205,12 +205,12 @@ public:
   }
   ObPieceBufferArray *get_buffer_array() { return buffer_array_; }
   void set_buffer_array(ObPieceBufferArray *array) { buffer_array_ = array; }
-  int piece_init(sql::ObSQLSessionInfo &session, int32_t stmt_id, int16_t param_id);
+  int piece_init(sql::ObSQLSessionInfo &session, int32_t stmt_id, uint16_t param_id);
   void set_error_ret(int err_ret) { err_ret_ = err_ret; }
   int get_error_ret() { return err_ret_; }
 private:
   int32_t stmt_id_;
-  int16_t param_id_;
+  uint16_t param_id_;
   uint64_t pos_;
   ObPieceBufferArray *buffer_array_;
   ObIAllocator *allocator_;
@@ -250,36 +250,36 @@ class ObPieceCache {
     }
     // piece
     int make_piece(int32_t stmt_id, 
-                   int16_t param_id, 
+                   uint16_t param_id,
                    ObPiece *&piece,
                    sql::ObSQLSessionInfo &session);
     int remove_piece(int64_t key, sql::ObSQLSessionInfo &session);
     int add_piece(ObPiece *piece);
-    int get_piece(int32_t stmt_id, int16_t param_id, ObPiece *&piece);
+    int get_piece(int32_t stmt_id, uint16_t param_id, ObPiece *&piece);
     int get_piece_buffer(int32_t stmt_id, 
-                          int16_t param_id,
+                          uint16_t param_id,
                           int32_t offset, 
                           uint64_t piece_size, 
                           ObPieceBuffer &piece_buf,
                           sql::ObSQLSessionInfo &session);
     //merge
     int get_buffer(int32_t stmt_id, 
-                    int16_t param_id, 
+                    uint16_t param_id,
                     uint64_t count,
                     uint64_t &length, 
                     common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
                     char *is_null_map);
     int get_oracle_buffer(int32_t stmt_id, 
-                    int16_t param_id, 
+                    uint16_t param_id,
                     uint64_t count,
                     uint64_t &length, 
                     common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
                     char *is_null_map);
     int get_mysql_buffer(int32_t stmt_id, 
-                    int16_t param_id, 
+                    uint16_t param_id,
                     uint64_t &length, 
                     ObSqlString &str_buf);
-    inline int64_t get_piece_key(int32_t stmt_id, int16_t param_id)
+    inline int64_t get_piece_key(int32_t stmt_id, uint16_t param_id)
     {
       return (((static_cast<int64_t>(stmt_id)) << 32) | param_id);
     }
