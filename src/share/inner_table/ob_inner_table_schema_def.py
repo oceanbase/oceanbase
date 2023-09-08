@@ -24572,7 +24572,16 @@ def_table_schema(
                           END
                         END AS CHAR(5)) AS PARAMETER_MODE,
                         CAST(rp.param_name AS CHAR(64)) AS PARAMETER_NAME,
-                        CAST(lower(v.data_type_str) AS CHAR(64)) AS DATA_TYPE,
+                        CAST(lower(case v.data_type_str
+                                   when 'TINYINT UNSIGNED' then 'TINYINT'
+                                   when 'SMALLINT UNSIGNED' then 'SMALLINT'
+                                   when 'MEDIUMINT UNSIGNED' then 'MEDIUMINT'
+                                   when 'INT UNSIGNED' then 'INT'
+                                   when 'BIGINT UNSIGNED' then 'BIGINT'
+                                   when 'FLOAT UNSIGNED' then 'FLOAT'
+                                   when 'DOUBLE UNSIGNED' then 'DOUBLE'
+                                   when 'DECIMAL UNSIGNED' then 'DECIMAL'
+                                   else v.data_type_str end) AS CHAR(64)) AS DATA_TYPE,
                         CASE WHEN rp.param_type IN (22, 23, 27, 28, 29, 30) THEN CAST(rp.param_length AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
                         END AS CHARACTER_MAXIMUM_LENGTH,
