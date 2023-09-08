@@ -2436,6 +2436,8 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
     use_skip_scan = OptSkipScanState::SS_HINT_ENABLE;
   } else if (hint_force_no_skip_scan) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
+  } else if (true/* TODO yuanzhe read parameter, just for hotfix */) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else {
