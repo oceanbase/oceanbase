@@ -1450,28 +1450,33 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       trans_ctx.raw_anonymous_off_ = block->str_off_;
       trans_ctx.params_ = &params;
       trans_ctx.buf_ = (char *)trans_ctx.allocator_->alloc(sql.length());
-      trans_ctx.buf_size_ = sql.length();
-      trans_ctx.p_list_ = parse_result.param_nodes_;
-      CK (T_STMT_LIST == parse_result.result_tree_->type_ && 1 == parse_result.result_tree_->num_child_);
-      CK (OB_NOT_NULL(block_node = parse_result.result_tree_->children_[0]));
-      CK (T_SP_ANONYMOUS_BLOCK == block_node->type_);
-      CK (OB_NOT_NULL(block_node = block_node->children_[0]));
-      CK (T_SP_BLOCK_CONTENT == block_node->type_ || T_SP_LABELED_BLOCK == block_node->type_);
-      OZ (transform_tree(trans_ctx, const_cast<ParseNode *>(block), block_node, ctx, parse_result));
-      if (OB_SUCC(ret)) {
-        if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_ ||
-            trans_ctx.raw_sql_.length() < trans_ctx.copied_idx_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error about trans_ctx.buf", K(ret));
-        } else {
-          MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_,
-                  trans_ctx.raw_sql_.ptr() + trans_ctx.copied_idx_,
-                  trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_);
-          trans_ctx.buf_len_ += trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_;
+      if (OB_ISNULL(trans_ctx.buf_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate failed", K(sql), K(ret));
+      } else {
+        trans_ctx.buf_size_ = sql.length();
+        trans_ctx.p_list_ = parse_result.param_nodes_;
+        CK (T_STMT_LIST == parse_result.result_tree_->type_ && 1 == parse_result.result_tree_->num_child_);
+        CK (OB_NOT_NULL(block_node = parse_result.result_tree_->children_[0]));
+        CK (T_SP_ANONYMOUS_BLOCK == block_node->type_);
+        CK (OB_NOT_NULL(block_node = block_node->children_[0]));
+        CK (T_SP_BLOCK_CONTENT == block_node->type_ || T_SP_LABELED_BLOCK == block_node->type_);
+        OZ (transform_tree(trans_ctx, const_cast<ParseNode *>(block), block_node, ctx, parse_result));
+        if (OB_SUCC(ret)) {
+          if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_ ||
+              trans_ctx.raw_sql_.length() < trans_ctx.copied_idx_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error about trans_ctx.buf", K(ret));
+          } else {
+            MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_,
+                    trans_ctx.raw_sql_.ptr() + trans_ctx.copied_idx_,
+                    trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_);
+            trans_ctx.buf_len_ += trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_;
+          }
         }
+        pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
+        OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
       }
-      pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
-      OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
     }
   }
   return ret;
