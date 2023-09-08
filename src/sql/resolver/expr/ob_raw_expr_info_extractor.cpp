@@ -574,19 +574,19 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
            || (T_FUN_SYS_JSON_MERGE_PATCH == expr.get_expr_type() && lib::is_oracle_mode())
            || T_FUN_SYS_JSON_OBJECT == expr.get_expr_type()
            || IS_LABEL_SE_POLICY_FUNC(expr.get_expr_type()))
-        && expr.has_flag(IS_CONST_EXPR)) {
-      expr.clear_flag(IS_CONST_EXPR);
+        && OB_FAIL(expr.clear_flag(IS_CONST_EXPR))) {
+      LOG_WARN("failed to clear flag", K(ret));
     }
 
     if (OB_SUCC(ret) && T_FUN_SYS_JSON_VALUE == expr.get_expr_type()) {
       if (expr.get_param_count() >= 12) {
         ObRawExpr * sub_expr = expr.get_param_expr(7);
-        if (OB_NOT_NULL(sub_expr)) {
-          sub_expr->clear_flag(IS_CONST_EXPR);
-        }
-        sub_expr = expr.get_param_expr(4);
-        if (OB_NOT_NULL(sub_expr)) {
-          sub_expr->clear_flag(IS_CONST_EXPR);
+        if (OB_NOT_NULL(sub_expr)
+            && OB_FAIL(sub_expr->clear_flag(IS_CONST_EXPR))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        } else if (OB_NOT_NULL(sub_expr = expr.get_param_expr(4))
+                   && OB_FAIL(sub_expr->clear_flag(IS_CONST_EXPR))) {
+          LOG_WARN("failed to clear flag", K(ret));
         }
       }
     }

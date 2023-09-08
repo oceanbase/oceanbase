@@ -2115,9 +2115,10 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
                   std::pair<ObRawExpr*, int64_t> param(index_expr, 0);
                   if (OB_FAIL(access_ident.params_.push_back(param))) {
                     LOG_WARN("push back error", K(ret));
+                  } else if (OB_FAIL(ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX))) {
+                    LOG_WARN("failed to del member", K(ret));
                   }
                 }
-                ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX);
               }
             }
               break;
@@ -4147,7 +4148,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
       // add invalid table bit index, avoid aggregate function expressions are used as filters
       if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
         LOG_WARN("failed to add member", K(ret));
-      } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+      } else if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
@@ -4263,7 +4264,7 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
       }
     }
     if (OB_SUCC(ret)) {
-      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+      if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
@@ -4352,7 +4353,7 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode *node, ObRawEx
       }
     }
     if (OB_SUCC(ret)) {
-      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+      if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
@@ -5703,7 +5704,7 @@ int ObRawExprResolverImpl::process_is_json_node(const ParseNode *node, ObRawExpr
     OZ(SMART_CALL(recursive_resolve(node->children_[i], para_expr)));
     CK(OB_NOT_NULL(para_expr));
     if (OB_SUCC(ret)) {
-      para_expr->clear_flag(IS_CONST_EXPR);
+      OZ(para_expr->clear_flag(IS_CONST_EXPR));
       OZ(func_expr->add_param_expr(para_expr));
     }
   } //end for
@@ -7330,7 +7331,7 @@ int ObRawExprResolverImpl::process_agg_udf_node(const ParseNode *node,
     // add invalid table bit index, avoid aggregate function expressions are used as filters
     if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
       LOG_WARN("failed to add member", K(ret));
-    } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+    } else if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
     } else {
       expr = agg_expr;
