@@ -503,25 +503,10 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
   ObSEArray<const ObDmlTableInfo*, 2> table_infos;
-  bool enable_all_pdml_feature = false; // 默认非注入错误情况下，关闭PDML不稳定feature
-  // 目前通过注入错误的方式来打开PDML不稳定功能，用于PDML全部功能的case回归
-  // 对应的event注入任何类型的错误，都会打开PDML非稳定功能
-  ret = OB_E(EventTable::EN_ENABLE_PDML_ALL_FEATURE) OB_SUCCESS;
-  LOG_TRACE("event: check pdml all feature", K(ret));
-  if (OB_FAIL(ret)) {
-    enable_all_pdml_feature = true;
-    ret = OB_SUCCESS;
-    ctx_.add_plan_note(PDML_ENABLE_BY_TRACE_EVENT);
-  }
-  LOG_TRACE("event: check pdml all feature result", K(ret), K(enable_all_pdml_feature));
-  // 检查是否开启全部pdml feature：
-  // 1. 如果开启，is open = true
-  // 2. 如果没有开启，需要依次检查被禁止的不稳定的功能，如果存在被禁止的不稳定功能 is open = false
+  // 依次检查被禁止的不稳定的功能，如果存在被禁止的不稳定功能 is open = false
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the schema guard is null", K(ret));
-  } else if (enable_all_pdml_feature) {
-    is_use_pdml = true;
   } else if (pdml_stmt.is_ignore()) {
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_IGNORE);
