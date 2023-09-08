@@ -1069,7 +1069,9 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   OZ( resolve_with_clause(parse_tree.children_[PARSE_SELECT_WITH]) );
 
   /* normal select */
-  select_stmt->assign_set_op(ObSelectStmt::NONE);
+  if (OB_SUCC(ret)) {
+    select_stmt->assign_set_op(ObSelectStmt::NONE);
+  }
   OZ( resolve_query_options(parse_tree.children_[PARSE_SELECT_DISTINCT]) );
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
     OZ( standard_group_checker_.init() );

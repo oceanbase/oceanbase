@@ -623,6 +623,8 @@ public:
         stmt = NULL;
       } else if (OB_FAIL(stmt->init_stmt(table_hash_allocator_, wrapper_allocator_))) {
         SQL_RESV_LOG(WARN, "failed to init tables hash", K(ret));
+        stmt->~StmtType();
+        stmt = NULL;
       }
     }
     return ret;
