@@ -17593,7 +17593,7 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
         LOG_WARN("fail to get frozen status for create tablet", KR(ret), K(tenant_id));
       } else {
         ObTableCreator table_creator(tenant_id, frozen_scn, trans);
-        if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
+        if (OB_FAIL(table_creator.init(true/*need_check_tablet_cnt*/))) {
           LOG_WARN("table_creator init failed", KR(ret), K(tenant_id));
         } else if (1 == create_table_count && create_table_schema_ptrs.at(0)->is_global_index_table()) {
           if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(*create_table_schema_ptrs.at(0), orig_ls_id_array))) {
