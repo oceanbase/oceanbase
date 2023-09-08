@@ -169,7 +169,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           }
           create_user_stmt->set_profile_id(profile_id);  //只有oracle模式profile id是有效的
           if (OB_SUCC(ret)) {
-            if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
+            if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
               LOG_WARN("password don't satisfied current policy", K(ret));
             } else if (lib::is_oracle_mode() && OB_FAIL(check_oracle_password_strength(
               params_.session_info_->get_effective_tenant_id(),

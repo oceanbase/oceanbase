@@ -1337,7 +1337,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   if (OB_ISNULL(user_node->children_[2])) {
                     ret = OB_ERR_PARSE_SQL;
                     LOG_WARN("The child 2 of user_node should not be NULL", K(ret));
-                  } else if (OB_FAIL(check_password_strength(pwd, user_name))) {
+                  } else if (OB_FAIL(check_password_strength(pwd))) {
                     LOG_WARN("fail to check password strength", K(ret));
                   } else if (0 == user_node->children_[2]->value_) {
                     if (!ObSetPasswordResolver::is_valid_mysql41_passwd(pwd)) {

@@ -44,7 +44,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_password_strength(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
-private:
   static int calc_password_strength(const common::ObString &password,
                                     const ObBasicSessionInfo &session,
                                     int &strength);
@@ -64,6 +63,7 @@ private:
                                       const int64_t password_char_length,
                                       const ObBasicSessionInfo &session,
                                       bool &passed);
+private:
   static const int64_t VALID_PASSWORD_LENGTH_MIN = 4;
   static const int64_t PASSWORD_STRENGTH_MULTIPLIER = 25;
   static const ObValidatePasswordFunc validate_funcs_[STRENGTH_MAX];
