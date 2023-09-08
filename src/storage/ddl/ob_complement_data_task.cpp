@@ -2156,7 +2156,7 @@ int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, common::ObCommonSq
 {
   int ret = OB_SUCCESS;
   ObSessionParam session_param;
-  ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
+  ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES;
   session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
   session_param.tz_info_wrap_ = nullptr;
   session_param.ddl_info_.set_is_ddl(true);
