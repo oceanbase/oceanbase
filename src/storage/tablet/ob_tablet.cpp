@@ -1749,8 +1749,8 @@ int ObTablet::inner_inc_macro_ref_cnt()
   } else {
     hold_ref_cnt_ = true;
   }
-  LOG_DEBUG("the tablet that inner increases ref cnt is",
-      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_.is_valid()),
+  FLOG_INFO("the tablet that inner increases ref cnt is",
+      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
       K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
       K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
       K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
@@ -1801,12 +1801,6 @@ void ObTablet::dec_macro_ref_cnt()
   const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_addr = mds_data_.medium_info_list_;
   const ObTabletComplexAddr<share::ObTabletAutoincSeq> &auto_inc_seq_addr = mds_data_.auto_inc_seq_;
   // We don't need to recursively decrease macro ref cnt, since we will push both them to gc queue
-  LOG_DEBUG("the tablet that decreases ref cnt is",
-      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_.is_valid()),
-      K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
-      K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
-      K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(lbt()));
   if (OB_UNLIKELY(!hold_ref_cnt_)) {
     FLOG_INFO("tablet doesn't hold ref cnt, no need to dec ref cnt",
       K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_.is_valid()),
@@ -1817,6 +1811,12 @@ void ObTablet::dec_macro_ref_cnt()
   } else if (OB_FAIL(check_meta_addr())) {
     LOG_WARN("fail to check meta addrs", K(ret));
   } else {
+    FLOG_INFO("the tablet that decreases ref cnt is",
+        K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
+        K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
+        K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
+        K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
+        K(tablet_addr_), KP(this), K(lbt()));
     // the order can't be changed, must be sstable blocks' ref cnt -> tablet meta blocks' ref cnt
     dec_linked_block_ref_cnt(medium_info_list_addr.addr_);
     dec_table_store_ref_cnt();
