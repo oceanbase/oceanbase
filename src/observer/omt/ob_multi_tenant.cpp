@@ -853,7 +853,11 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       tenant_allocator_created = true;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(update_tenant_memory(tenant_id, meta.unit_.config_.memory_size(), allowed_mem_limit))) {
+      int64_t memory_size = meta.unit_.config_.memory_size();
+      if (is_sys_tenant(tenant_id) && !meta.super_block_.is_hidden_) {
+        memory_size += GMEMCONF.get_extra_memory();
+      }
+      if (OB_FAIL(update_tenant_memory(tenant_id, memory_size, allowed_mem_limit))) {
         LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
       }
     }
