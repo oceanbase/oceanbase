@@ -59,6 +59,11 @@ public:
     return pos_;
   }
 
+  inline int64_t upper_align_length() const
+  {
+    return upper_align(pos_, DIO_ALIGN_SIZE);
+  }
+
   inline int64_t remain() const
   {
     return capacity_ - pos_;

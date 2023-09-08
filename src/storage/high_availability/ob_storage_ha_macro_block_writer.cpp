@@ -152,7 +152,7 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
         LOG_WARN("header is reuse macro block", K(ret));
       } else {
         write_info.buffer_ = data.data();
-        write_info.size_ = data.capacity();
+        write_info.size_ = data.upper_align_length();
         write_handle.reset();
         if (OB_FAIL(ObBlockManager::async_write_block(write_info, write_handle))) {
           STORAGE_LOG(WARN, "fail to async write block", K(ret), K(write_info), K(write_handle));

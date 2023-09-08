@@ -1525,6 +1525,7 @@ int ObDDLRedoLogWriterCallback::init(const ObDDLMacroBlockType block_type,
 int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
                                       const ObLogicMacroBlockId &logic_id,
                                       char *buf,
+                                      const int64_t buf_len,
                                       const int64_t data_seq)
 {
   int ret = OB_SUCCESS;
@@ -1536,7 +1537,7 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
-    redo_info_.data_buffer_.assign(buf, OB_SERVER_BLOCK_MGR.get_macro_block_size());
+    redo_info_.data_buffer_.assign(buf, buf_len);
     redo_info_.block_type_ = block_type_;
     redo_info_.logic_id_ = logic_id;
     redo_info_.start_scn_ = ddl_writer_->get_start_scn();
