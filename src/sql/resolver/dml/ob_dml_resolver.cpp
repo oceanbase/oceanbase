@@ -12613,11 +12613,12 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
       cur_hints.reuse();
       if (OB_ISNULL(hint_node = node.children_[i])) {
         /* do nothing */
-      } else if (T_QB_NAME == hint_node->type_ && !qb_name_conflict) {
+      } else if (T_QB_NAME == hint_node->type_) {
         ObString tmp_qb_name;
         if (OB_FAIL(resolve_qb_name_node(hint_node, tmp_qb_name))) {
           LOG_WARN("failed to resolve qb name node", K(ret));
-        } else if (OB_UNLIKELY(!qb_name.empty() && !tmp_qb_name.empty())) {
+        } else if (OB_UNLIKELY(qb_name_conflict || (!qb_name.empty() && !tmp_qb_name.empty()))) {
+          LOG_TRACE("conflict qb_name hint.", K(tmp_qb_name), K(qb_name));
           qb_name_conflict = true;
           qb_name.reset();
         } else if (!tmp_qb_name.empty()) {
