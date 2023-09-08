@@ -4437,6 +4437,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           param.autoinc_offset_ = session.get_local_auto_increment_offset();
           if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
             param.total_value_count_ = pc_ctx.sql_ctx_.get_insert_batch_row_cnt();
+          } else if (phy_plan->is_plain_insert() && pctx->get_array_param_groups().count() == 1) {
+            param.total_value_count_ = pctx->get_array_param_groups().at(0).row_count_;
           }
         }  // end for
       }

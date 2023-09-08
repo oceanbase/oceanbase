@@ -8101,7 +8101,12 @@ int ObResolverUtils::handle_varchar_charset(ObCharsetType charset_type,
   if ((T_HEX_STRING == node->type_ || T_VARCHAR == node->type_)
       && CHARSET_INVALID != charset_type) {
     ParseNode *charset_node = new_node(&allocator, T_CHARSET, 0);
-    ParseNode *varchar_node = new_non_terminal_node(&allocator, T_VARCHAR, 2, charset_node, node);
+    ParseNode *varchar_node = NULL;
+    if (T_HEX_STRING == node->type_) {
+      varchar_node = new_non_terminal_node(&allocator, T_VARCHAR, 1, charset_node);
+    } else if (T_VARCHAR == node->type_) {
+      varchar_node = new_non_terminal_node(&allocator, T_VARCHAR, 2, charset_node, node);
+    }
 
     if (OB_ISNULL(charset_node) || OB_ISNULL(varchar_node)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
