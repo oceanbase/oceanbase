@@ -5332,6 +5332,9 @@ int ObDDLResolver::init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_compat_mode))) {
     LOG_WARN("failed to get table compatibility mode", K(ret));
   } else {
+    ObSessionDDLInfo ddl_info;
+    ddl_info.set_ddl_check_default_value(true);
+    empty_session.set_ddl_info(ddl_info);
     empty_session.set_nls_formats(nls_formats);
     empty_session.set_compatibility_mode(
       is_oracle_compat_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
@@ -5634,6 +5637,8 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
       uint64_t tenant_id = column.get_tenant_id();
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard guard;
+      ObSessionDDLInfo ddl_info;
+      ddl_info.set_ddl_check_default_value(true);
       ParamStore empty_param_list( (ObWrapperAllocator(allocator)) );
       params.expr_factory_ = &expr_factory;
       params.allocator_ = &allocator;
@@ -5658,6 +5663,8 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
           lib::is_oracle_mode() ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE))) {
       } else if (FALSE_IT(empty_session.set_sql_mode(
           lib::is_oracle_mode() ? DEFAULT_ORACLE_MODE : DEFAULT_MYSQL_MODE))) {
+      } else if (FALSE_IT(empty_session.set_ddl_info(ddl_info))) {
+        LOG_WARN("fail to set ddl_info", K(ret));
       } else if (OB_FAIL(default_value.get_string(expr_str))) {
         LOG_WARN("get expr string from default value failed", K(ret), K(default_value));
       } else if (OB_FAIL(ObResolverUtils::resolve_default_expr_v2_column_expr(params, expr_str,

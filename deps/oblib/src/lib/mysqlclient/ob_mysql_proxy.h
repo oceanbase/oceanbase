@@ -47,13 +47,16 @@ public:
   bool is_dest_table_hidden() const { return is_dest_table_hidden_; }
   void set_heap_table_ddl(const bool flag) { is_heap_table_ddl_ = flag; }
   bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
+  void set_ddl_check_default_value(const bool flag) { is_ddl_check_default_value_bit_ = flag; }
+  bool is_ddl_check_default_value() const { return is_ddl_check_default_value_bit_; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
 public:
   static const int64_t IS_DDL_BIT = 1;
   static const int64_t IS_TABLE_HIDDEN_BIT = 1;
   static const int64_t IS_HEAP_TABLE_DDL_BIT = 1;
-  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT;
+  static const int64_t IS_DDL_CHECK_DEFAULT_VALUE_BIT = 1;
+  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -61,6 +64,7 @@ public:
       uint64_t is_source_table_hidden_: IS_TABLE_HIDDEN_BIT;
       uint64_t is_dest_table_hidden_: IS_TABLE_HIDDEN_BIT;
       uint64_t is_heap_table_ddl_: IS_HEAP_TABLE_DDL_BIT;
+      uint64_t is_ddl_check_default_value_bit_ : IS_DDL_CHECK_DEFAULT_VALUE_BIT;
       uint64_t reserved_bit : RESERVED_BIT;
     };
   };
