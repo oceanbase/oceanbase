@@ -172,7 +172,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to resolve error logging", K(ret));
     } else if (is_mysql_mode() && !update_stmt->is_ignore() &&
                OB_FAIL(check_join_update_conflict())) {
-      LOG_WARN("failed to check join update confilct", K(ret));
+      LOG_WARN("failed to check join update conflict", K(ret));
     } else if (OB_FAIL(update_stmt->formalize_stmt(session_info_))) {
       LOG_WARN("pull update stmt all expr relation ids failed", K(ret));
     } else { /*do nothing*/ }
@@ -184,7 +184,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_FAIL(update_stmt->check_dml_need_filter_null())) {
       LOG_WARN("failed to check dml need filter null", K(ret));
     } else if (lib::is_mysql_mode() && OB_FAIL(check_safe_update_mode(update_stmt))) {
-      LOG_WARN("failed to check fullfill safe update mode", K(ret));
+      LOG_WARN("failed to check fulfill safe update mode", K(ret));
     } else { /*do nothing*/ }
   }
   return ret;
@@ -195,7 +195,7 @@ int ObUpdateResolver::try_expand_returning_exprs()
   int ret = OB_SUCCESS;
   ObUpdateStmt *update_stmt = NULL;
   // we do not need expand returing expr in prepare stage because we resolve
-  // it twice, first in prepare stage, second in actural execution. We can only
+  // it twice, first in prepare stage, second in actual execution. We can only
   // do it in second stage
   // Otherwise if we expand in prepare stage, which will pollute our spell SQL
   // then got a wrong result
@@ -227,7 +227,7 @@ int ObUpdateResolver::try_expand_returning_exprs()
           LOG_WARN("failed to add uncopy exprs", K(ret));
         } else if (OB_FAIL(copier.copy_on_replace(update_stmt->get_returning_exprs(),
                                                   update_stmt->get_returning_exprs()))) {
-          LOG_WARN("failed to copy on repalce returning exprs", K(ret));
+          LOG_WARN("failed to copy on replace returning exprs", K(ret));
         }
       }
     }

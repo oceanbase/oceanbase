@@ -269,7 +269,7 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       } else {
         load_args.combined_name_.assign_ptr(buf, pos);
       }
-      LOG_DEBUG("resovle table info result", K(tenant_id), K(database_name), K(table_name));
+      LOG_DEBUG("resolve table info result", K(tenant_id), K(database_name), K(table_name));
     }
   }
 
@@ -907,7 +907,7 @@ int ObLoadDataResolver::resolve_column_ref_expr(ObIArray<ObQualifiedName> &colum
  * This function examines subqueries in set clause recursively,
  * and ensures that no subquery read data from the loaded table.
  *
- * Call deepth has already examined in subquery resolving phase,
+ * Call depth has already examined in subquery resolving phase,
  * don't need to do it again
 */
 int recursively_check_subquery_tables(ObSelectStmt *subquery_stmt, uint64_t loaded_table_id)
@@ -1180,7 +1180,7 @@ int ObLoadDataResolver::check_if_table_exists(uint64_t tenant_id,
     LOG_WARN("fail to check table or index exist", K(tenant_id), K(database_id),
                  K(table_name), K(ret));
   } else if (!is_table_exist) {
-    //a alias table is impossiable
+    //a alias table is impossible
     //TODO wjh: support synonym tables, return not exist for now
     //see ObDMLResolver::resolve_table_relation_recursively
     ret = OB_TABLE_NOT_EXIST;
@@ -1192,7 +1192,7 @@ int ObLoadDataResolver::check_if_table_exists(uint64_t tenant_id,
                                                        cte_table_fisrt,
                                                        is_hidden,
                                                        tschema))) {
-    //it's possiable to get "table not exist" ret here
+    //it's possible to get "table not exist" ret here
     LOG_WARN("get table schema failed", K(ret));
   } else {
     table_id = tschema->get_table_id();

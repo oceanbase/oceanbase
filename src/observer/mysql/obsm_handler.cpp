@@ -240,7 +240,7 @@ int ObSMHandler::on_close(easy_connection_t *c)
       }
     } else {
       if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(conn, is_need_clear)))) {
-        LOG_ERROR("fail to jugde need clear", K(ret));
+        LOG_ERROR("fail to judge need clear", K(ret));
       } else if (is_need_clear) {
         if (OB_UNLIKELY(OB_FAIL(gctx_.session_mgr_->mark_sessid_unused(conn->sessid_)))) {
           LOG_ERROR("fail to mark sessid unused", K(ret), K(conn->sessid_),

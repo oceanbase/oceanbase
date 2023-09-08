@@ -1101,7 +1101,7 @@ int ObOptimizer::update_column_usage_infos()
         LOG_WARN("get unexpected null", K(ret), K(optstat_monitor_mgr));
       } else if (OB_FAIL(optstat_monitor_mgr->update_local_cache(ctx_.get_column_usage_infos()))) {
         LOG_WARN("failed to update local cache", K(ret));
-      } else {/*do nothiing*/}
+      } else {/*do nothing*/}
     }
   }
   return ret;

@@ -357,10 +357,10 @@ public:
 
   void reset();
 
-  //  preliminary_extract_query_range will prelininary extract query range
+  //  preliminary_extract_query_range will preliminary extract query range
   //  from query conditions, which is only occurred in generating the physical plan.
   //  During this stage, some consts are not really known, for example,
-  //  prepared params, session variables, global variables, now(), curret_timestamp(),
+  //  prepared params, session variables, global variables, now(), current_timestamp(),
   //  utc_timestamp, etc..
 
   //  final extraction may be need in physical plan open.
@@ -399,14 +399,14 @@ public:
                                       const bool use_in_optimization = false);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
-  //  It will get the real-time value of some const which are unknow during physical plan generating.
+  //  It will get the real-time value of some const which are unknown during physical plan generating.
   //  Query range can not be used until this function is called.
 
   int final_extract_query_range(ObExecContext &exec_ctx,
                                 const common::ObDataTypeCastParams &dtc_params);
 
   // get_tablet_ranges gets range of a index.
-  // This function can not be used untill physical plan is opened.
+  // This function can not be used until physical plan is opened.
 
   virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
                                 bool &all_single_value_ranges,

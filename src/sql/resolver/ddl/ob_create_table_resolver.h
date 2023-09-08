@@ -107,7 +107,7 @@ private:
       const ParseNode* node, ObArray<int> &constraint_position_list);
   int build_partition_key_info(share::schema::ObTableSchema &table_schema,
                                const bool is_subpart);
-  //resolve partitoin option only used in ObCreateTableResolver now.
+  //resolve partition option only used in ObCreateTableResolver now.
   int resolve_partition_option(ParseNode *node,
                                share::schema::ObTableSchema &table_schema,
                                const bool is_partition_option_node_with_opt);
@@ -122,7 +122,7 @@ private:
   int add_new_indexkey_for_oracle_temp_table(const int32_t org_key_len);
   int add_pk_key_for_oracle_temp_table(ObArray<ObColumnResolveStat> &stats, int64_t &pk_data_length);
   int set_partition_info_for_oracle_temp_table(share::schema::ObTableSchema &table_schema);
-  // following four functions should be used only in oralce mode
+  // following four functions should be used only in oracle mode
   int generate_primary_key_name_array(const share::schema::ObTableSchema &table_schema, ObIArray<ObString> &pk_columns_name);
   int generate_uk_idx_array(const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, ObIArray<int64_t> &uk_idx_in_index_arg_list);
   bool is_pk_uk_duplicate(const ObIArray<ObString> &pk_columns_name, const ObIArray<obrpc::ObCreateIndexArg> &index_arg_list, const ObIArray<int64_t> &uk_idx);

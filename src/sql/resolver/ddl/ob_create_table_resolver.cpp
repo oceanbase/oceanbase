@@ -95,7 +95,7 @@ int ObCreateTableResolver::add_primary_key_part(const ObString &column_name,
   } else if (static_cast<int64_t>(table_id_) > 0
              && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
              session_info_->get_effective_tenant_id(), table_id_, is_oracle_mode))) {
-    LOG_WARN("fail to check oralce mode", KR(ret), K_(table_id));
+    LOG_WARN("fail to check oracle mode", KR(ret), K_(table_id));
   } else {
     ObColumnSchemaV2 *col = NULL;
     ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
@@ -767,7 +767,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             // Oracle 官方文档关于 references 权限的描述非常少。
             // 文档中比较重要的一条是“references 权限不能被授予给角色”，
             // 再加上测试的结果，所以我们推测references权限进行检查时，
-            // 检查的不是当前用户是否具有refernces权限，而是去检查子表所在的schema有没有references的权限。
+            // 检查的不是当前用户是否具有references权限，而是去检查子表所在的schema有没有references的权限。
             // 所以现在的逻辑是
             //   1. 当子表和父表相同时，无需检查
             //   2. 当子表和父表同属一个schema时，也无需检查，这一点已经在oracle上验证了。
@@ -963,7 +963,7 @@ int ObCreateTableResolver::resolve_partition_option(
     }
     if (OB_SUCC(ret) && (OB_NOT_NULL(node) || is_oracle_temp_table_)) {
       if (OB_FAIL(check_generated_partition_column(table_schema))) {
-        LOG_WARN("Failed to check generate partiton column", K(ret));
+        LOG_WARN("Failed to check generate partition column", K(ret));
       } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
         SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", K(ret));
       } else if (OB_FAIL(table_schema.check_auto_partition_valid())) {
@@ -1202,7 +1202,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
   } else if (static_cast<int64_t>(table_id_) > 0
              && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
              session_info_->get_effective_tenant_id(), table_id_, is_oracle_mode))) {
-    LOG_WARN("fail to check oralce mode", KR(ret), K_(table_id));
+    LOG_WARN("fail to check oracle mode", KR(ret), K_(table_id));
   } else {
     ObSEArray<ObString, 4> gen_col_expr_arr;
     ParseNode *primary_node = NULL;
@@ -1215,7 +1215,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
     table_schema.set_tenant_id(tenant_id);
     bool has_visible_col = false;
     // 将经过 resolve_column_definition 后的 column schema 存放在 resolved_cols 中
-    // 为了支持生成列按照任意顺序定义，在生成全部 column_schema 之后，再按照统一存放到 table_schma 中
+    // 为了支持生成列按照任意顺序定义，在生成全部 column_schema 之后，再按照统一存放到 table_schema 中
     ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> resolved_cols;
     //列需要根据租户id区分大小写,这里先把租户id设置进table_schema
     if (RESOLVE_NON_COL != resolve_rule) {
@@ -1674,7 +1674,7 @@ int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt
         column.set_nullable(!is_not_null);
       }
     } else { //mysql mode
-      if (expr->is_win_func_expr()) {//compatiable with mysql
+      if (expr->is_win_func_expr()) {//compatible with mysql
         const ObWinFunRawExpr *win_expr = reinterpret_cast<const ObWinFunRawExpr*>(expr);
         if (T_WIN_FUN_RANK == win_expr->get_func_type() ||
             T_WIN_FUN_DENSE_RANK == win_expr->get_func_type() ||
@@ -2510,7 +2510,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
   } else if (static_cast<int64_t>(table_id_) > 0
              && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
              session_info_->get_effective_tenant_id(), table_id_, is_oracle_mode))) {
-    LOG_WARN("fail to check oralce mode", KR(ret), K_(table_id));
+    LOG_WARN("fail to check oracle mode", KR(ret), K_(table_id));
   } else {
     index_arg_.reset();
     ObColumnSortItem sort_item;

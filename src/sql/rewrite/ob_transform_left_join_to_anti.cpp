@@ -315,7 +315,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
       }
     }
     // do in-place modification
-    // a shared expr in semi_condition may be modified by the above replacemenet,
+    // a shared expr in semi_condition may be modified by the above replacement,
     // we revert the replacement in the following.
     if (OB_SUCC(ret)) {
       ObRawExprCopier copier(*ctx_->expr_factory_);
@@ -337,7 +337,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item rel id", K(ret));
     } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-      LOG_WARN("failed to formlize stmt", K(ret));
+      LOG_WARN("failed to formalize stmt", K(ret));
     }
   }
   return ret;
@@ -353,9 +353,9 @@ int ObTransformLeftJoinToAnti::clear_for_update(TableItem *table) {
       table->for_update_ = false;
     } else if (table->is_joined_table()) {
       if (OB_FAIL(clear_for_update(static_cast<JoinedTable*>(table)->left_table_))) {
-        LOG_WARN("fail to cleanr for update", K(ret));
+        LOG_WARN("fail to clear for update", K(ret));
       } else if (OB_FAIL(clear_for_update(static_cast<JoinedTable*>(table)->right_table_))) {
-        LOG_WARN("fail to cleanr for update", K(ret));
+        LOG_WARN("fail to clear for update", K(ret));
       }
     }
   }
@@ -523,7 +523,7 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
         JoinedTable *right_joined_table = static_cast<JoinedTable *>(right_table);
         if (is_contain(right_joined_table->single_table_ids_, table_info->table_id_)) {
           is_table_valid = false;
-          OPT_TRACE("right table is dml targe table");
+          OPT_TRACE("right table is dml target table");
         }
       } else if (table_info->table_id_ == right_table->table_id_) {
         is_table_valid = false;

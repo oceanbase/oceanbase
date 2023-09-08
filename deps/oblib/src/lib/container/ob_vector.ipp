@@ -145,7 +145,7 @@ int ObVector<T, Allocator>::expand(int64_t size)
         copy(new_mem, mem_begin_, mem_end_);
       }
 
-      // deallocate old memeory
+      // deallocate old memory
       destroy();
 
       mem_begin_ = new_mem;

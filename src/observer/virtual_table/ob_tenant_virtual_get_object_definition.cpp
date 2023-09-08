@@ -319,7 +319,7 @@ int ObGetObjectDefinition::get_constraint_definition(ObString &ddl_str,
     LOG_WARN("get constraint info failed", K(ret), K(tenant_id),
               K(database_id), K(constraint_name));
   } else if (OB_INVALID_ID == (constraint_id = constraint_info.constraint_id_)) {
-    // The unique constrant is mocked by a unique index.
+    // The unique constraint is mocked by a unique index.
     // If other types of constraint is not exist, we will try to find if the uk exists.
     // bool is_unique_constraint_exist = false;
     if (OB_FAIL(schema_guard_->get_idx_schema_by_origin_idx_name(

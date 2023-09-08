@@ -200,7 +200,7 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
                                                                     insert_stmt->get_insert_table_info().ref_table_id_,
                                                                     insert_stmt->get_insert_table_info().table_id_,
                                                                     insert_stmt))) {
-    LOG_WARN("failed to add new column for oralce label security table", K(ret));
+    LOG_WARN("failed to add new column for oracle label security table", K(ret));
   } else if (!has_tg && OB_FAIL(generate_autoinc_params(insert_stmt->get_insert_table_info()))) {
     LOG_WARN("failed to save autoinc params", K(ret));
   } else if (OB_FAIL(generate_column_conv_function(insert_stmt->get_insert_table_info()))) {
@@ -491,7 +491,7 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
         //add column_item
         if (OB_ISNULL(assign.column_expr_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid assginment variable", K(i), K(j), K(assign));
+          LOG_WARN("invalid assignment variable", K(i), K(j), K(assign));
         } else if (assign.is_duplicated_) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
           LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign.column_expr_->get_column_name()));
@@ -1075,7 +1075,7 @@ int ObInsertResolver::try_expand_returning_exprs()
   int ret = OB_SUCCESS;
   ObInsertStmt *insert_stmt = NULL;
   // we do not need expand returning expr in prepare stage because we resolve
-  // it twice, first in prepare stage, second in actural execution. We can only
+  // it twice, first in prepare stage, second in actual execution. We can only
   // do it in second stage
   // Otherwise if we expand in prepare stage, which will pollute our spell SQL
   // then got a wrong result
@@ -1090,7 +1090,7 @@ int ObInsertResolver::try_expand_returning_exprs()
     for (int64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_returning_exprs().count(); i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < table_columns.count(); j++) {
         if (table_columns.at(j)->is_xml_column()) {
-          // do nothing and will rewrite in trnsform stage
+          // do nothing and will rewrite in transform stage
         } else {
           OZ(ObRawExprUtils::replace_ref_column(insert_stmt->get_returning_exprs().at(i),
                                               table_columns.at(j),
