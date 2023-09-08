@@ -32,10 +32,17 @@ public:
       :req_(req),
        result_(result),
        exec_ret_code_(exec_ret_code),
+       pcode_(ObRpcPacketCode::OB_INVALID_RPC_CODE),
        using_buffer_(NULL)
-  {}
+  {
+    if (OB_NOT_NULL(req_)) {
+      const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
+      pcode_ = rpc_pkt->get_pcode();
+    }
+  }
   virtual ~ObTableRpcResponseSender() = default;
   int response(const int cb_param);
+  OB_INLINE void set_pcode(ObRpcPacketCode pcode) { pcode_ = pcode; }
 private:
   int serialize();
   int do_response(ObRpcPacket *response_pkt, bool require_rerouting);
@@ -46,6 +53,7 @@ private:
   rpc::ObRequest *req_;
   T &result_;
   const int exec_ret_code_; // processor执行的返回码
+  ObRpcPacketCode pcode_;
   common::ObDataBuffer *using_buffer_;
 };
 
@@ -85,6 +93,9 @@ int ObTableRpcResponseSender<T>::do_response(ObRpcPacket *response_pkt, bool req
   if (OB_ISNULL(req_)) {
     ret = common::OB_ERR_NULL_VALUE;
     RPC_OBRPC_LOG(WARN, "req is NULL", K(ret));
+  } else if (ObRpcPacketCode::OB_INVALID_RPC_CODE == pcode_) {
+    ret = common::OB_ERR_UNEXPECTED;
+    RPC_OBRPC_LOG(WARN, "pcode is invalid", K(ret), K_(pcode), KPC_(req));
   } else {
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
     // TODO: fufeng, make force_destroy_second as a configure item
@@ -96,15 +107,11 @@ int ObTableRpcResponseSender<T>::do_response(ObRpcPacket *response_pkt, bool req
     //   _OB_LOG(ERROR, "pkt process too long time: pkt_receive_ts=%ld, pkt_code=%d", rts, pcode);
     // }
     //copy packet into req buffer
-    ObRpcPacketCode pcode = rpc_pkt->get_pcode();
-    if (observer::is_require_rerouting_err(exec_ret_code_) && rpc_pkt->require_rerouting()) {
-      pcode = obrpc::OB_TABLE_API_MOVE;
-    }
     ObRpcPacket *packet = NULL;
     req_->set_trace_point(rpc::ObRequest::OB_EASY_REQUEST_RPC_ASYNC_RSP);
     if (OB_SUCC(ret)) {
       packet = response_pkt;
-      packet->set_pcode(pcode);
+      packet->set_pcode(pcode_);
       packet->set_chid(rpc_pkt->get_chid());
       packet->set_session_id(0);  // not stream
       packet->set_trace_id(rpc_pkt->get_trace_id());

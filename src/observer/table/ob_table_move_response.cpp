@@ -71,6 +71,10 @@ int ObTableMoveResponseSender::init(const uint64_t table_id,
       replica.set_table_id(table_id);
       replica.set_schema_version(table_schema->get_schema_version());
       replica.set_tablet_id(tablet_id);
+
+      // set move pcode
+      response_sender_.set_pcode(obrpc::OB_TABLE_API_MOVE);
+      LOG_DEBUG("move response init successfully", K(replica));
     }
   }
 
