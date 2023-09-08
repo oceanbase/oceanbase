@@ -2301,6 +2301,24 @@ int ObLS::set_restore_status(
   return ret;
 }
 
+int ObLS::set_gc_state(const logservice::LSGCState &gc_state)
+{
+  SCN invalid_scn;
+  return set_gc_state(gc_state, invalid_scn);
+}
+
+int ObLS::set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &offline_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
+  } else {
+    ret = ls_meta_.set_gc_state(gc_state, offline_scn);
+  }
+  return ret;
+}
+
 int ObLS::set_ls_rebuild()
 {
   int ret = OB_SUCCESS;

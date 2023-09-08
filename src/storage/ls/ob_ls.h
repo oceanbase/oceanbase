@@ -380,7 +380,8 @@ public:
   int set_ls_rebuild();
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
-  DELEGATE_WITH_RET(ls_meta_, set_gc_state, int);
+  int set_gc_state(const logservice::LSGCState &gc_state);
+  int set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &offline_scn);
   // int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
   //                         const share::SCN &clog_checkpoint_scn,
   //                         const bool write_slog = true);
@@ -414,10 +415,6 @@ public:
   // @param [in] gc state.
   // int get_gc_state(LSGCState &status);
   DELEGATE_WITH_RET(ls_meta_, get_gc_state, int);
-  // set offline ts
-  // @param [in] offline ts.
-  // int set_offline_scn(const int64_t offline_scn);
-  DELEGATE_WITH_RET(ls_meta_, set_offline_scn, int);
   // get offline ts
   // @param [in] offline ts.
   // int get_offline_scn(const share::SCN &offline_scn);

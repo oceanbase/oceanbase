@@ -633,14 +633,14 @@ bool ObGCHandler::is_valid_ls_gc_state(const LSGCState &state)
          && LSGCState::INVALID_LS_GC_STATE < state;
 }
 
+bool ObGCHandler::is_ls_offline_gc_state(const LSGCState &state)
+{
+  return LSGCState::LS_OFFLINE == state;
+}
+
 bool ObGCHandler::is_ls_blocked_state_(const LSGCState &state)
 {
   return LSGCState::LS_BLOCKED == state;
-}
-
-bool ObGCHandler::is_ls_offline_state_(const LSGCState &state)
-{
-  return LSGCState::LS_OFFLINE == state;
 }
 
 bool ObGCHandler::is_ls_wait_gc_state_(const LSGCState &state)
@@ -987,7 +987,6 @@ void ObGCHandler::block_ls_transfer_in_(const SCN &block_scn)
     CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
   } else if (is_ls_blocked_finished_(gc_state)) {
     CLOG_LOG(INFO, "ls already blocked, ignore", K(ls_id), K(gc_state), K(block_scn));
-  //TODO: @keqing.llt transfer功能完成之前,先用杀事务代替transfer out
   } else if (OB_FAIL(ls_->block_tx_start())) {
     CLOG_LOG(WARN, "block_tx_start failed", K(ls_id), K(ret));
   } else if (FALSE_IT(block_tx_ts_ = ObClockGenerator::getClock())) {
@@ -1015,12 +1014,8 @@ void ObGCHandler::offline_ls_(const SCN &offline_scn)
     } else {
       CLOG_LOG(INFO, "ls already offline, ignore", K(ls_id), K(offline_scn), K(gc_state), K(pre_offline_scn));
     }
-  } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE))) {
-    //TODO: @yanyuan 需要调用ObLS的offline_ls_接口
-    //offline_scn依赖gc_state写slog, 顺序必须为先设置offline_scn再设置gc状态
-    CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(ret));
-  } else if (OB_FAIL(ls_->set_offline_scn(offline_scn))) {
-    CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(ret));
+  } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE, offline_scn))) {
+    CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(offline_scn));
   } else {
     CLOG_LOG(INFO, "offline_ls success",  K(ls_->get_ls_id()), K(offline_scn)); }
 }
@@ -1119,7 +1114,7 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     } else if (is_ls_wait_gc_state_(gc_state)) {
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "handle_gc_ls_offline need delete entry", K(ls_id), K(gc_state));
-    } else if (is_ls_offline_state_(gc_state)) {
+    } else if (is_ls_offline_gc_state(gc_state)) {
       (void)try_check_and_set_wait_gc_(ls_status);
     } else {
       if (OB_FAIL(submit_log_(ObGCLSLOGType::OFFLINE_LS, is_success))) {

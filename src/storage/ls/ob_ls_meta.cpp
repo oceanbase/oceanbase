@@ -304,22 +304,26 @@ int ObLSMeta::get_migration_status(ObMigrationStatus &migration_status) const
   return ret;
 }
 
-int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state)
+int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObSpinLockTimeGuard guard(lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
-  } else if (!ObGCHandler::is_valid_ls_gc_state(gc_state)) {
+  } else if (!ObGCHandler::is_valid_ls_gc_state(gc_state)
+             || (ObGCHandler::is_ls_offline_gc_state(gc_state) && !scn.is_valid())
+             || (!ObGCHandler::is_ls_offline_gc_state(gc_state) && scn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("gc_state invalid", K(ret), K(gc_state));
   } else {
     ObLSMeta tmp(*this);
     tmp.gc_state_ = gc_state;
+    tmp.offline_scn_ = scn;
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("gc_state write slog failed", K(ret));
     } else {
       gc_state_ = gc_state;
+      offline_scn_ = scn;
     }
   }
   return ret;
@@ -334,19 +338,6 @@ int ObLSMeta::get_gc_state(logservice::LSGCState &gc_state)
     LOG_WARN("log stream meta is not valid, cannot get_gc_state", K(ret), K(*this));
   } else {
     gc_state = gc_state_;
-  }
-  return ret;
-}
-
-int ObLSMeta::set_offline_scn(const SCN &offline_scn)
-{
-  // 不主动写slog
-  int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
-  if (OB_FAIL(check_can_update_())) {
-    LOG_WARN("ls meta cannot update", K(ret), K(*this));
-  } else {
-    offline_scn_ = offline_scn;
   }
   return ret;
 }

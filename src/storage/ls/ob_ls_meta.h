@@ -60,9 +60,8 @@ public:
   int set_migration_status(const ObMigrationStatus &migration_status,
                            const bool write_slog = true);
   int get_migration_status (ObMigrationStatus &migration_status) const;
-  int set_gc_state(const logservice::LSGCState &gc_state);
+  int set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &offline_scn);
   int get_gc_state(logservice::LSGCState &gc_state);
-  int set_offline_scn(const share::SCN &offline_scn);
   int get_offline_scn(share::SCN &offline_scn);
 
   int set_restore_status(const share::ObLSRestoreStatus &restore_status);
