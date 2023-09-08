@@ -114,6 +114,9 @@ int ObSignalHandle::deal_signals(int signum)
       break;
     }
     case SIGTERM: {
+#ifdef OB_BUILD_RPM
+      raise(SIGKILL);
+#endif
       ObServer::get_instance().prepare_stop();
       ObServer::get_instance().set_stop();
       break;
