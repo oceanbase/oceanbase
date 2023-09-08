@@ -160,9 +160,14 @@ private:
   const blocksstable::ObColDescIArray *col_descs_;
   int64_t snapshot_version_;
   ObDDLSSTableRedoWriter sstable_redo_writer_;
-  ObDDLRedoLogWriterCallback redo_log_writer_callback_;
   blocksstable::ObDataStoreDesc data_desc_;
+  /**
+   * ATTENTION!
+   * The deconstruction order of the `redo_log_writer_callback_` should be in front of the `macro_block_writer_`
+   * to ensure the safety-used of the ddl macro block.
+  */
   blocksstable::ObMacroBlockWriter macro_block_writer_;
+  ObDDLRedoLogWriterCallback redo_log_writer_callback_;
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator lob_allocator_;
   int64_t lob_cnt_;
