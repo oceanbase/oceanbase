@@ -59,6 +59,8 @@ namespace transaction
       ASK_STATE_RESP           = 64,
       COLLECT_STATE            = 65,
       COLLECT_STATE_RESP       = 66,
+      // rollback savepoint resp
+      ROLLBACK_SAVEPOINT_RESP  = 67,
       /* for txn free route  */
       TX_FREE_ROUTE_PUSH_STATE       = 80,
       TX_FREE_ROUTE_CHECK_ALIVE      = 81,
@@ -240,7 +242,8 @@ namespace transaction
           op_sn_(-1),
           //todo:后续branch_id使用方式确定后，需要相应修改
           branch_id_(-1),
-          tx_ptr_(NULL)
+          tx_ptr_(NULL),
+          flag_(USE_ASYNC_RESP)
       {}
       ~ObTxRollbackSPMsg() {
         if (OB_NOT_NULL(tx_ptr_)) {
@@ -254,10 +257,29 @@ namespace transaction
       //todo:后期设计中操作编号是否等于branch_id
       int64_t branch_id_;
       const ObTxDesc *tx_ptr_;
+      uint8_t flag_;
+      bool use_async_resp() const { return (flag_ & USE_ASYNC_RESP) !=0; }
+      const static uint8_t USE_ASYNC_RESP = 0x01;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg,
-                           K_(savepoint), K_(op_sn), K_(branch_id),
+                           K_(savepoint), K_(op_sn), K_(branch_id), K_(flag),
                            KP_(tx_ptr));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObTxRollbackSPRespMsg : public ObTxMsg {
+      ObTxRollbackSPRespMsg() :
+      ObTxMsg(ROLLBACK_SAVEPOINT_RESP),
+      ret_(-1),
+      orig_epoch_(0)
+      {}
+      ~ObTxRollbackSPRespMsg() {
+        ret_ = -1;
+        orig_epoch_ = 0;
+      }
+      int ret_;
+      int64_t orig_epoch_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(orig_epoch));
       OB_UNIS_VERSION(1);
     };
 

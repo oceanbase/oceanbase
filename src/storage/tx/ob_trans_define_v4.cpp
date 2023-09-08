@@ -1430,7 +1430,7 @@ int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
     if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
     if (OB_SUCC(ret) && tx_desc.flags_.SHADOW_) { tx_desc.flags_.SHADOW_ = false; }
   }
-  TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id),
+  TRANS_LOG(TRACE, "txDescMgr.register trans with txid", K(ret), K(tx_id),
       K(map_.alloc_cnt()));
   return ret;
 }

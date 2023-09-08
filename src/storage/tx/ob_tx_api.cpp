@@ -1118,6 +1118,8 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
     if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "rollback savepoint fail, abort tx",
                 K(ret), K(savepoint), KP(extra_touched_ls), K(parts), K(tx));
+      // advance op_sequence to reject further rollback resp messsages
+      tx.inc_op_sn();
       abort_tx_(tx, ObTxAbortCause::SAVEPOINT_ROLLBACK_FAIL);
     } else {
       /*
@@ -1495,14 +1497,13 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(ctx)) {
+    ctx_born_epoch = ctx->epoch_;
     if (verify_epoch > 0 && ctx->epoch_ != verify_epoch) {
       ret = OB_TRANS_CTX_NOT_EXIST;
       TRANS_LOG(WARN, "current ctx illegal, born epoch not match", K(ret), K(ls), K(tx_id),
                 K(verify_epoch), KPC(ctx));
     } else if(OB_FAIL(ls_sync_rollback_savepoint__(ctx, savepoint, op_sn, expire_ts))){
       TRANS_LOG(WARN, "LS rollback to savepoint fail", K(ret), K(tx_id), K(ls), K(op_sn), K(savepoint), KPC(ctx));
-    } else if (verify_epoch <= 0) {
-      ctx_born_epoch = ctx->epoch_;
     }
   }
   if (OB_NOT_NULL(ctx)) {

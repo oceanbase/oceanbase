@@ -30,7 +30,7 @@ using namespace share;
 namespace obrpc
 {
 OB_SERIALIZE_MEMBER(ObTransRpcResult, status_, send_timestamp_, private_data_);
-OB_SERIALIZE_MEMBER(ObTxRpcRollbackSPResult, status_, send_timestamp_, addr_, born_epoch_);
+OB_SERIALIZE_MEMBER(ObTxRpcRollbackSPResult, status_, send_timestamp_, addr_, born_epoch_, ignore_);
 
 bool need_refresh_location_cache_(const int ret)
 {
@@ -72,12 +72,14 @@ int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
                             const int64_t epoch,
                             const transaction::ObTransID &tx_id,
                             const int status,
-                            const ObAddr &addr,
                             const int64_t request_id,
                             const ObTxRpcRollbackSPResult &result)
 {
+  if (result.ignore_) {
+    return OB_SUCCESS;
+  }
   return MTL(ObTransService *)->handle_sp_rollback_resp(receiver_ls_id,
-                  epoch, tx_id, status, addr, request_id, result);
+                  epoch, tx_id, status, request_id, result.born_epoch_, result.addr_);
 }
 
 void ObTransRpcResult::reset()
@@ -140,6 +142,7 @@ TX_Process(Commit, handle_trans_commit_request);
 TX_Process(CommitResp, handle_trans_commit_response);
 TX_Process(Abort, handle_trans_abort_request);
 TX_Process(RollbackSP, handle_sp_rollback_request);
+TX_Process(RollbackSPResp, handle_sp_rollback_response);
 TX_Process(Keepalive, handle_trans_keepalive);
 TX_Process(KeepaliveResp, handle_trans_keepalive_response);
 TX_Process(AskState, handle_trans_ask_state);
@@ -179,6 +182,8 @@ int ObTransRpc::init(ObTransService *trans_service,
   } else if (OB_SUCCESS != (ret = tx_abort_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_rollback_sp_cb_.init())) {
+    TRANS_LOG(WARN, "transaction callback init error", KR(ret));
+  } else if (OB_SUCCESS != (ret = tx_rollback_sp_resp_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_keepalive_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
@@ -314,6 +319,12 @@ int ObTransRpc::post_(const ObAddr &server, ObTxMsg &msg)
     {
       ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
               post_rollback_sp_msg(static_cast<ObTxRollbackSPMsg &>(msg), &tx_rollback_sp_cb_);
+      break;
+    }
+    case ROLLBACK_SAVEPOINT_RESP:
+    {
+      ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
+        post_rollback_sp_resp_msg(static_cast<ObTxRollbackSPRespMsg &>(msg), &tx_rollback_sp_resp_cb_);
       break;
     }
     case KEEPALIVE:

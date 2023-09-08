@@ -126,6 +126,7 @@ OB_TX_MSG_SERDE(ObAskStateMsg, ObTxMsg, snapshot_);
 OB_TX_MSG_SERDE(ObAskStateRespMsg, ObTxMsg, state_info_array_);
 OB_TX_MSG_SERDE(ObCollectStateMsg, ObTxMsg, snapshot_);
 OB_TX_MSG_SERDE(ObCollectStateRespMsg, ObTxMsg, state_info_);
+OB_SERIALIZE_MEMBER((ObTxRollbackSPRespMsg, ObTxMsg), ret_, orig_epoch_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
 {
@@ -138,6 +139,7 @@ OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
   } else {
     OB_UNIS_ADD_LEN(false);
   }
+  OB_UNIS_ADD_LEN(flag_);
   return len;
 }
 
@@ -152,6 +154,7 @@ OB_DEF_SERIALIZE(ObTxRollbackSPMsg)
     } else {
       OB_UNIS_ENCODE(false);
     }
+    OB_UNIS_ENCODE(flag_);
   }
   return ret;
 }
@@ -173,6 +176,7 @@ OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
         tx_ptr_ = tmp;
       }
     }
+    OB_UNIS_DECODE(flag_);
   }
   return ret;
 }
