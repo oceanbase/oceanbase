@@ -1079,7 +1079,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = store_ctx.ls_id_;
   ObPartTransCtx *tx_ctx = NULL;
-  const ObTxSEQ data_scn = spec_seq_no.is_valid() ? spec_seq_no : tx.inc_and_get_tx_seq(0);
+  ObTxSEQ data_scn = spec_seq_no; // for LOB aux table, spec_seq_no is valid
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
   bool access_started = false;
