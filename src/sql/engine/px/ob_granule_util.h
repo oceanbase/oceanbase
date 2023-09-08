@@ -171,7 +171,8 @@ public:
    * range_independent          IN  the random type witch affects the granule_idx
    *
    */
-  static int split_block_ranges(common::ObIAllocator &allocator,
+  static int split_block_ranges(ObExecContext &exec_ctx,
+                                common::ObIAllocator &allocator,
                                 const ObTableScanSpec *tsc,
                                 const common::ObIArray<common::ObNewRange> &ranges,
                                 const common::ObIArray<ObDASTabletLoc*> &tablets,
@@ -259,7 +260,8 @@ public:
    * range_independent           IN  the random type witch affects the granule_idx
    *
    */
-  static int split_block_granule(common::ObIAllocator &allocator,
+  static int split_block_granule(ObExecContext &exec_ctx,
+                                common::ObIAllocator &allocator,
                                 const ObTableScanSpec *tsc,
                                 const common::ObIArray<common::ObNewRange> &input_ranges,
                                 const common::ObIArray<ObDASTabletLoc*> &tablet_array,
@@ -319,7 +321,8 @@ private:
    * pkey_idx                    OUT the idx in granule ranges
    * range_independent           IN  the random type witch affects the granule_idx
    */
-  static int get_tasks_for_partition(common::ObIAllocator &allocator,
+  static int get_tasks_for_partition(ObExecContext &exec_ctx,
+                                     common::ObIAllocator &allocator,
                                      int64_t expected_task_cnt,
                                      ObDASTabletLoc &tablet,
                                      common::ObIArray<common::ObStoreRange> &input_storage_ranges,

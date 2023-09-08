@@ -18,6 +18,7 @@
 #include "sql/das/ob_das_delete_op.h"
 #include "sql/das/ob_das_update_op.h"
 #include "sql/das/ob_das_lock_op.h"
+#include "sql/das/ob_das_simple_op.h"
 #include "sql/das/ob_das_extra_data.h"
 #include "sql/das/ob_das_def_reg.h"
 #include "sql/das/ob_das_rpc_processor.h"

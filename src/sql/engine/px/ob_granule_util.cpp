@@ -27,6 +27,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/das/ob_das_simple_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -132,7 +133,8 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
   return ret;
 }
 
-int ObGranuleUtil::split_block_ranges(ObIAllocator &allocator,
+int ObGranuleUtil::split_block_ranges(ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
                                       const ObTableScanSpec *tsc,//may be is null, attention use
                                       const ObIArray<common::ObNewRange> &in_ranges,
                                       const ObIArray<ObDASTabletLoc*> &tablets,
@@ -184,7 +186,8 @@ int ObGranuleUtil::split_block_ranges(ObIAllocator &allocator,
       }
     }
     LOG_TRACE("gi partition granule");
-  } else if (OB_FAIL(split_block_granule(allocator,
+  } else if (OB_FAIL(split_block_granule(exec_ctx,
+                                         allocator,
                                          tsc,
                                          ranges,
                                          tablets,
@@ -227,7 +230,8 @@ int ObGranuleUtil::remove_empty_range(const common::ObIArray<common::ObNewRange>
   return ret;
 }
 
-int ObGranuleUtil::split_block_granule(ObIAllocator &allocator,
+int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
                                       const ObTableScanSpec *tsc,//may be is null, attention use!
                                       const ObIArray<ObNewRange> &input_ranges,
                                       const ObIArray<ObDASTabletLoc*> &tablets,
@@ -273,10 +277,9 @@ int ObGranuleUtil::split_block_granule(ObIAllocator &allocator,
                                                    input_store_ranges,
                                                    need_convert_new_range))) {
         LOG_WARN("failed to convert new range to store range", K(ret));
-      } else if (OB_FAIL(access_service->get_multi_ranges_cost(tablet.ls_id_,
-                                                               tablet.tablet_id_,
-                                                               input_store_ranges,
-                                                               partition_size))) {
+      } else if (OB_FAIL(ObDASSimpleUtils::get_multi_ranges_cost(exec_ctx, tablets.at(i),
+                                                                 input_store_ranges,
+                                                                 partition_size))) {
         LOG_WARN("failed to get multi ranges cost", K(ret), K(tablet));
       } else {
         // B to MB
@@ -339,7 +342,8 @@ int ObGranuleUtil::split_block_granule(ObIAllocator &allocator,
                                                    input_store_ranges,
                                                    need_convert_new_range))) {
         LOG_WARN("failed to convert new range to store range", K(ret));
-      } else if (OB_FAIL(get_tasks_for_partition(allocator,
+      } else if (OB_FAIL(get_tasks_for_partition(exec_ctx,
+                                                 allocator,
                                                  expected_task_cnt,
                                                  *tablet,
                                                  input_store_ranges,
@@ -470,7 +474,8 @@ int ObGranuleUtil::compute_task_count_each_partition(int64_t total_size,
   return ret;
 }
 
-int ObGranuleUtil::get_tasks_for_partition(ObIAllocator &allocator,
+int ObGranuleUtil::get_tasks_for_partition(ObExecContext &exec_ctx,
+                                           ObIAllocator &allocator,
                                            int64_t expected_task_cnt,
                                            ObDASTabletLoc &tablet,
                                            ObIArray<ObStoreRange> &input_storage_ranges,
@@ -504,12 +509,11 @@ int ObGranuleUtil::get_tasks_for_partition(ObIAllocator &allocator,
     if (!range_independent) {
       tablet_idx++;
     }
-  } else if (OB_FAIL(access_service->split_multi_ranges(tablet.ls_id_,
-                                                        tablet.tablet_id_,
-                                                        input_storage_ranges,
-                                                        expected_task_cnt,
-                                                        allocator,
-                                                        multi_range_split_array))) {
+  } else if (OB_FAIL(ObDASSimpleUtils::split_multi_ranges(exec_ctx,
+                                                          &tablet,
+                                                          input_storage_ranges,
+                                                          expected_task_cnt,
+                                                          multi_range_split_array))) {
     LOG_WARN("failed to split multi ranges", K(ret), K(tablet), K(expected_task_cnt));
   } else {
     LOG_TRACE("split multi ranges",
