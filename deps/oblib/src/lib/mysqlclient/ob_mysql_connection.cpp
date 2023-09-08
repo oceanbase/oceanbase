@@ -560,8 +560,8 @@ int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
     LOG_WARN("create statement failed", KCSTRING(sql), K(ret));
   } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query(res.is_enable_use_result()))) {
     ret = get_last_error();
-    const int ER_LOCK_WAIT_TIMEOUT = -1205;
-    if (ER_LOCK_WAIT_TIMEOUT == ret) {
+    //const int ER_LOCK_WAIT_TIMEOUT = -1205;
+    if (-1205 == ret) {
       LOG_INFO("query failed", K(get_server()), KCSTRING(sql), K(ret));
     } else {
       LOG_WARN("query failed", K(get_server()), KCSTRING(sql), K(ret));
