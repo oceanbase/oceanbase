@@ -774,6 +774,7 @@ void ObMultipleMerge::reset()
   out_project_cols_.reset();
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
+  unprojected_row_.trans_info_ = nullptr;
 }
 
 void ObMultipleMerge::reuse()
@@ -782,6 +783,7 @@ void ObMultipleMerge::reuse()
   row_stat_.reset();
   range_idx_delta_ = 0;
   unprojected_row_.row_flag_.reset();
+  unprojected_row_.trans_info_ = nullptr;
   if (nullptr != block_row_store_) {
     block_row_store_->reuse();
   }
