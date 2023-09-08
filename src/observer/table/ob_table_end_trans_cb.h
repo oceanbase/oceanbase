@@ -68,7 +68,8 @@ class ObTableBatchExecuteEndTransCb: public ObTableAPITransCb
 {
 public:
   ObTableBatchExecuteEndTransCb(rpc::ObRequest *req, ObTableOperationType::Type table_operation_type)
-      :response_sender_(req, result_),
+      : entity_factory_("TableBatchCbEntFac", MTL_ID()),
+      response_sender_(req, result_),
       table_operation_type_(table_operation_type)
   {
   }

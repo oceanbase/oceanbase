@@ -74,7 +74,6 @@ public:
                          int64_t &affected_rows,
                          transaction::ObTxDesc *trans_desc,
                          transaction::ObTxReadSnapshot &snapshot);
-  table::ObTableEntityFactory<table::ObTableEntity> &get_entity_factory() { return default_entity_factory_; }
   common::ObIAllocator &get_allocator() { return allocator_; }
   int init_credential(const table::ObTTLTaskParam &ttl_param);
 
@@ -108,8 +107,9 @@ private:
   common::ObRowkey rowkey_;
   table::ObTenantTabletTTLMgr *ttl_tablet_mgr_;
   share::ObLSID ls_id_;
-  table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
+  ObTableEntity delete_entity_;
   table::ObTableApiCredential credential_;
+  common::ObArenaAllocator rowkey_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTableTTLDeleteTask);
 };
 

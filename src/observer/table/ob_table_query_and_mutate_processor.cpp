@@ -35,6 +35,7 @@ ObTableQueryAndMutateP::ObTableQueryAndMutateP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
+     default_entity_factory_("QueryAndMutateEntFac", MTL_ID()),
      end_in_advance_(false)
 {
 }

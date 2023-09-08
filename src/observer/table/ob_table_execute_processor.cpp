@@ -55,6 +55,7 @@ ObTableApiExecuteP::ObTableApiExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
+     default_entity_factory_("TableExecuteEncFac", MTL_ID()),
      need_rollback_trans_(false),
      query_timeout_ts_(0)
 {

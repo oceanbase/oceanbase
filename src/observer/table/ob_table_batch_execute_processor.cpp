@@ -30,6 +30,7 @@ using namespace oceanbase::sql;
 
 ObTableBatchExecuteP::ObTableBatchExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
+     default_entity_factory_("TableBatchEntFac", MTL_ID()),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
      need_rollback_trans_(false),

@@ -144,8 +144,8 @@ template <typename T>
 class ObTableEntityFactory: public ObITableEntityFactory
 {
 public:
-  ObTableEntityFactory(const char *label = common::ObModIds::TABLE_PROC)
-      :alloc_(label)
+  ObTableEntityFactory(const char *label = common::ObModIds::TABLE_PROC, uint64_t tenant_id = OB_SERVER_TENANT_ID)
+      :alloc_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id)
   {}
   virtual ~ObTableEntityFactory();
   virtual ObITableEntity *alloc() override;

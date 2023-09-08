@@ -406,6 +406,7 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
         task_para = ctx->ttl_para_;
         is_stop = false;
       } else {
+        ctx->task_status_ = OB_TTL_TASK_PENDING;
         LOG_INFO("pending current task", K(local_tenant_task_.state_), K(local_tenant_task_.ttl_continue_));
       }
     } else if (OB_ITER_END == task_info.err_code_) {
@@ -426,9 +427,12 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
     }
   }
 
-  //schedule task
-  if (is_stop && OB_FAIL(try_schedule_remaining_tasks(ctx))) {
-    LOG_WARN("fail to try schedule task", KR(ret));
+  // schedule remaining tasks
+  if (is_stop) {
+    LOG_INFO("stop current task", K(ret), KPC(ctx), K_(local_tenant_task));
+    if (OB_FAIL(try_schedule_remaining_tasks(ctx))) {
+      LOG_WARN("fail to try schedule task", KR(ret));
+    }
   }
   return ret;
 }
