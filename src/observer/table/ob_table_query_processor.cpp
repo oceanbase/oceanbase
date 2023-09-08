@@ -269,6 +269,8 @@ int ObTableQueryP::try_process()
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
+  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
+  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else if (OB_FAIL(start_trans(true, /* is_readonly */
                                  sql::stmt::T_SELECT,
                                  arg_.consistency_level_,
