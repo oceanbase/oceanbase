@@ -2243,6 +2243,9 @@ private:
 
   virtual int publish_schema(const uint64_t tenant_id,
                              const common::ObAddrIArray &addrs);
+
+  int check_tenant_has_been_dropped_(const uint64_t tenant_id, bool &is_dropped);
+
   int get_zone_region(
       const common::ObZone &zone,
       const common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,

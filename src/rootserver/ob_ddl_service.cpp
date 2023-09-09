@@ -26292,7 +26292,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid tenant_id", K(ret));
     } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
-      LOG_WARN("fail to push back tenant_id", K(ret), K(tenant_id));
+      LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
     }
     while (!stopped_) {
       common::ObTimeoutCtx ctx;
@@ -26308,7 +26308,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       } else {
         int tmp_ret = OB_SUCCESS;
         bool is_dropped = false;
-        if (OB_TMP_FAIL(schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+        if (OB_TMP_FAIL(check_tenant_has_been_dropped_(tenant_id, is_dropped))) {
           LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tmp_ret), K(tenant_id));
         } else if (is_dropped) {
           LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id));
@@ -26328,7 +26328,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       int64_t schema_version = OB_INVALID_VERSION;
       if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
                          tenant_id, schema_version))) {
-        LOG_WARN("fail to get tenant refreshed schema version", K(ret), K(tenant_id));
+        LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K(tenant_id));
       } else {
         ObSchemaService *schema_service = schema_service_->get_schema_service();
         ObRefreshSchemaInfo schema_info;
@@ -26340,7 +26340,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         } else if (OB_FAIL(schema_service->inc_sequence_id())) {
           LOG_WARN("increase sequence_id failed", K(ret));
         } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-          LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
+          LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
         } else if (OB_NOT_NULL(publish_schema_version)) {
           *publish_schema_version = schema_version;
         }
@@ -26348,11 +26348,51 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
     }
     if (OB_FAIL(ret) && stopped_) {
       ret = OB_CANCELED;
-      LOG_WARN("rs is stopped");
+      LOG_WARN("rs is stopped", KR(ret), K(tenant_id));
     }
     THIS_WORKER.set_timeout_ts(original_timeout_us);
   }
 
+  return ret;
+}
+
+int ObDDLService::check_tenant_has_been_dropped_(
+    const uint64_t tenant_id,
+    bool &is_dropped)
+{
+  int ret = OB_SUCCESS;
+  is_dropped = false;
+  ObSchemaGetterGuard guard;
+  const ObSimpleTenantSchema *tenant = NULL;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("ddl_service is not init", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+  } else if (is_dropped) {
+    LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant)) {
+    LOG_WARN("tenant not exist, maybe schema is fall behind", KR(ret), K(tenant_id));
+  } else if (tenant->is_dropping()) {
+    ObLSStatusOperator ls_status;
+    ObLSStatusInfo sys_ls_info;
+    if (OB_FAIL(ls_status.get_ls_status_info(tenant_id, SYS_LS, sys_ls_info, *sql_proxy_))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_WARN("sys ls not exist, consider that tenant has been dropped", KR(ret), K(tenant_id));
+        ret = OB_SUCCESS;
+        is_dropped = true;
+      } else {
+        LOG_WARN("fail to get ls status info", KR(ret), K(tenant_id));
+      }
+    } else if (sys_ls_info.ls_is_tenant_dropping()
+               || sys_ls_info.ls_is_wait_offline()) {
+      is_dropped = true;
+      LOG_INFO("sys ls is not readable, consider that tenant has been dropped", KR(ret), K(tenant_id));
+    }
+  }
   return ret;
 }
 
