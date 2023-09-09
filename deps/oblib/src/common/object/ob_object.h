@@ -2038,21 +2038,25 @@ inline ObObj::ObObj()
 inline ObObj::ObObj(bool val)
 {
   set_bool(val);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(int32_t val)
 {
   set_int32(val);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(int64_t val)
 {
   set_int(val);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(ObObjType type)
 {
   meta_.set_type(type);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(const ObObj &other)

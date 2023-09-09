@@ -430,7 +430,15 @@ sql_stmt:
   | SET /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
-      do_parse_sql_stmt($$, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      if (T_SET_PASSWORD == sql_stmt->type_ ||
+          T_SET_NAMES == sql_stmt->type_ ||
+          T_SET_CHARSET == sql_stmt->type_) {
+        malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+      } else {
+        $$ = sql_stmt;
+      }
       if(T_VARIABLE_SET == $$->type_) {
         for(int64_t i = 0; i < $$->num_child_; ++i) {
           if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
