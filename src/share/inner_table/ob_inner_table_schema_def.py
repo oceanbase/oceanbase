@@ -12961,6 +12961,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12429: __all_virtual_data_activity_metrics
 
 # 12430: __all_virtual_column_group_mapping
+# 12431: __all_virtual_column_group_history
+# 12432: __all_virtual_column_gorup_mapping_history
 #
 # 余留位置
 #
@@ -13364,6 +13366,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15417: __all_virtual_column_group_mapping
 
 # 15418: __all_virtual_cgroup_config
+# 15419: __all_virutal_column_group_history
+# 15420: __all_virutal_column_group_maping_history
 # 余留位置
 
 ################################################################################
