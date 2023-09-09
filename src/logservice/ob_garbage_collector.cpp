@@ -419,8 +419,8 @@ int ObGCHandler::execute_pre_remove()
     if (OB_SUCC(ret) && need_check_readonly_tx) {
       //follower or not in member list replica need block_tx here
       if (OB_INVALID_TIMESTAMP == block_tx_ts_) {
-        if (OB_FAIL(ls_->block_tx_start())) {
-          CLOG_LOG(WARN, "failed to block_tx_start", K(ls_id), KPC(this));
+        if (OB_FAIL(ls_->block_all())) {
+          CLOG_LOG(WARN, "failed to block_all", K(ls_id), KPC(this));
         } else {
           block_tx_ts_ = ObClockGenerator::getClock();
         }
@@ -987,8 +987,8 @@ void ObGCHandler::block_ls_transfer_in_(const SCN &block_scn)
     CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
   } else if (is_ls_blocked_finished_(gc_state)) {
     CLOG_LOG(INFO, "ls already blocked, ignore", K(ls_id), K(gc_state), K(block_scn));
-  } else if (OB_FAIL(ls_->block_tx_start())) {
-    CLOG_LOG(WARN, "block_tx_start failed", K(ls_id), K(ret));
+  } else if (OB_FAIL(ls_->block_all())) {
+    CLOG_LOG(WARN, "block_all failed", K(ls_id), K(ret));
   } else if (FALSE_IT(block_tx_ts_ = ObClockGenerator::getClock())) {
   } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_BLOCKED))) {
     CLOG_LOG(WARN, "set_gc_state block failed", K(ls_id), K(ret));

@@ -322,6 +322,7 @@ public:
   // for ls gc
   int block_tablet_transfer_in();
   int block_tx_start();
+  int block_all();
   // for tablet transfer
   // this function is used for tablet transfer in
   // it will check if it is allowed to transfer in and then

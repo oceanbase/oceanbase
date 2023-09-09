@@ -1394,6 +1394,25 @@ int ObLS::block_tx_start()
   return ret;
 }
 
+int ObLS::block_all()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else {
+    int64_t read_lock = 0;
+    int64_t write_lock = LSLOCKSTORAGE | LSLOCKTX;
+    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
+    // protect with lock_ to make sure there is no tablet transfer in process doing.
+    // transfer in must use this lock too.
+    if (OB_FAIL(ls_tx_svr_.block_all())) {
+      LOG_WARN("block_all failed", K(get_ls_id()));
+    }
+  }
+  return ret;
+}
+
 int ObLS::tablet_transfer_in(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
