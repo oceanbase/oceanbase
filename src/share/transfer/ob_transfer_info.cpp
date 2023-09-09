@@ -313,6 +313,7 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Task completed as no valid partition",
   "Task canceled",
   "Unable to process task due to transaction timeout",
+  "Unable to process task due to inactive server in member list",
   "Unknow"/*MAX_COMMENT*/
 };
 

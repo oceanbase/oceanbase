@@ -16,6 +16,7 @@
 #include "share/config/ob_server_config.h"            // for KR(), common::ob_error_name(x)
 #include "share/ls/ob_ls_replica_filter.h" // ObLSReplicaFilter
 #include "share/ob_share_util.h"           // ObShareUtils
+#include "share/ob_all_server_tracer.h"    // SVR_TRACER
 #include "lib/string/ob_sql_string.h"      // ObSqlString
 #include "lib/utility/utility.h" // split_on()
 
@@ -324,6 +325,7 @@ bool ObLSReplica::learner_list_is_equal(const common::GlobalLearnerList &a, cons
   return is_equal;
 }
 
+// both server and timestamp of member need to be equal
 bool ObLSReplica::member_list_is_equal(const MemberList &a, const MemberList &b)
 {
   bool is_equal = true;
@@ -375,6 +377,24 @@ bool ObLSReplica::servers_in_member_list_are_same(const MemberList &a, const Mem
     }
   }
   return is_same;
+}
+
+int ObLSReplica::check_all_servers_in_member_list_are_active(
+    const MemberList &member_list,
+    bool &all_active)
+{
+  int ret = OB_SUCCESS;
+  all_active = true;
+  ARRAY_FOREACH_X(member_list, idx, cnt, OB_SUCC(ret) && all_active) {
+    const ObAddr &server = member_list.at(idx).get_server();
+    if (OB_FAIL(SVR_TRACER.check_server_alive(server, all_active))) {
+      all_active = false;
+      LOG_WARN("check server alive failed", KR(ret), K(server), K(all_active), K(member_list));
+    } else if (!all_active) {
+      LOG_WARN("server in member_list is inactive", KR(ret), K(server), K(member_list));
+    }
+  }
+  return ret;
 }
 
 int64_t ObLSReplica::to_string(char *buf, const int64_t buf_len) const
