@@ -53,7 +53,7 @@ public:
   ObDBMSSchedJobKey(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
     uint64_t execute_at, uint64_t delay,
-    bool check_job, bool check_new, bool check_new_tenant)
+    bool check_job, bool check_new, bool check_new_tenant, bool purge_run_detail = false)
   : tenant_id_(tenant_id),
     is_oracle_tenant_(is_oracle_tenant),
     job_id_(job_id),
@@ -61,7 +61,8 @@ public:
     delay_(delay),
     check_job_(check_job),
     check_new_(check_new),
-    check_new_tenant_(check_new_tenant) {}
+    check_new_tenant_(check_new_tenant),
+    purge_run_detail_(purge_run_detail) {}
 
   virtual ~ObDBMSSchedJobKey() {}
 

@@ -672,6 +672,7 @@ int ObDBMSSchedJobMaster::register_jobs(uint64_t tenant_id,
       } else if (OB_HASH_NOT_EXIST) {
         OZ (register_job(job_info));
         OZ (alive_jobs_.set_refactored(job_info.get_job_id_with_tenant()));
+        LOG_INFO("register new dbms sched job", K(ret), K(tenant_id), K(job_info), KPC(job_key));
       } else {
         LOG_ERROR("dbms sched job master check job exist failed", K(ret), K(job_info));
       }
@@ -756,7 +757,7 @@ int ObDBMSSchedJobMaster::register_job(
   if (OB_FAIL(ret) && OB_NOT_NULL(job_key)) {
     allocator_.free(job_key);
   }
-  LOG_INFO("register new dbms sched job", K(ret), K(job_info), KPC(job_key), K(ignore_nextdate));
+  LOG_INFO("register dbms sched job", K(ret), K(job_info), KPC(job_key), K(ignore_nextdate));
 
   return ret;
 }
