@@ -614,6 +614,9 @@ int ObTenantIOManager::mtl_init(ObTenantIOManager *&io_service)
       io_service = holder.get_ptr();
     }
   }
+  if (OB_SUCC(ret)) {
+    FLOG_INFO("mtl init tenant io manager success", K(tenant_id), KPC(io_service));
+  }
   return ret;
 }
 
@@ -645,6 +648,7 @@ void ObTenantIOManager::mtl_destroy(ObTenantIOManager *&io_service)
       io_service->~ObTenantIOManager();
       OB_IO_MANAGER.allocator_.free(io_service);
       io_service = nullptr;
+      FLOG_INFO("mtl destroy tenant io manager success", K(tenant_id));
     } else if (OB_NOT_NULL(io_service) && io_service->get_ref_cnt() != 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ERROR: tenant io manager ref_cnt is not zero", K(ret));
