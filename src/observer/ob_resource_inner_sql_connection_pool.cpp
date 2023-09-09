@@ -118,7 +118,13 @@ int ObResourceInnerSQLConnectionPool::acquire(
     }
   } else { // get conn with conn_id from id_conn_map_ directly
     if (OB_FAIL(id_conn_map_.get_refactored(conn_id, conn))) {
-      LOG_WARN("fail to get from id_conn_map_", K(ret));
+      // Failed to get the connection by conn_id. the connection may not have received
+      // any requests from the source observer for more than ten minutes, and was then
+      // released by the connection leak check mechanism. Please check first.
+      ret = OB_SESSION_NOT_FOUND;
+      LOG_WARN("failed to get the connection by conn_id. the connection may not have received "
+               "any requests from the source observer for more than ten minutes, and was then "
+               "released by the connection leak check mechanism.", K(ret));
     } else if (FALSE_IT(inner_conn = static_cast<ObInnerSQLConnection *>(conn))) {
     } else if (OB_ISNULL(inner_conn)) {
       ret = OB_ERR_UNEXPECTED;
