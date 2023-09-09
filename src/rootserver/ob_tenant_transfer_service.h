@@ -16,6 +16,7 @@
 #include "rootserver/ob_tenant_thread_helper.h" // ObTenantThreadHelper
 #include "share/transfer/ob_transfer_info.h" // ObTransferTask
 #include "share/ob_balance_define.h" // share::ObBalanceTaskID, share::ObTransferTaskID
+#include "share/ls/ob_ls_info.h" // MemberList
 
 namespace oceanbase
 {
@@ -122,11 +123,11 @@ private:
       common::ObISQLClient &sql_proxy,
       const share::ObLSID &src_ls,
       const share::ObLSID &dest_ls,
-      ObTransferTaskComment &result_comment);
+      share::ObTransferTaskComment &result_comment);
   int get_member_lists_by_inner_sql_(
       common::ObISQLClient &sql_proxy,
-      const ObLSID &src_ls,
-      const ObLSID &dest_ls,
+      const share::ObLSID &src_ls,
+      const share::ObLSID &dest_ls,
       share::ObLSReplica::MemberList &src_ls_member_list,
       share::ObLSReplica::MemberList &dest_ls_member_list);
   int lock_table_and_part_(
@@ -224,8 +225,8 @@ private:
   int set_transaction_timeout_(common::ObTimeoutCtx &ctx);
   int update_comment_for_expected_errors_(
       const int err,
-      const ObTransferTaskID &task_id,
-      const ObTransferTaskComment &result_comment);
+      const share::ObTransferTaskID &task_id,
+      const share::ObTransferTaskComment &result_comment);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms
