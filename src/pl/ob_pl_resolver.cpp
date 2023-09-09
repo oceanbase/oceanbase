@@ -13600,7 +13600,6 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   const ObUserDefinedType *user_type = NULL;
   ObObjAccessIdx access_idx;
   OV (access_ident.is_pl_udf(), OB_ERR_UNEXPECTED, K(access_ident));
-  OZ (q_name.access_idents_.push_back(access_ident));
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));
   OZ (get_names_by_access_ident(access_ident,
@@ -13608,6 +13607,16 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
                                 access_ident.udf_info_.udf_database_,
                                 access_ident.udf_info_.udf_package_,
                                 access_ident.udf_info_.udf_name_));
+
+  if (OB_SUCC(ret) &&
+      !access_ident.udf_info_.udf_database_.empty() &&
+      access_ident.udf_info_.udf_database_.case_compare(OB_SYS_DATABASE_NAME) != 0) {
+    OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_database_));
+  }
+  if (OB_SUCC(ret) && !access_ident.udf_info_.udf_package_.empty()) {
+    OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_package_));
+  }
+  OZ (q_name.access_idents_.push_back(access_ident));
   OZ (resolve_construct(q_name, access_ident.udf_info_, *user_type, expr));
   CK (OB_NOT_NULL(expr));
   OZ (func.add_expr(expr));
