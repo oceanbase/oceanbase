@@ -369,6 +369,9 @@ public:
                                    const bool ret_error = false);
   static void set_insert_update_scope(common::ObCastMode &cast_mode);
   static bool is_insert_update_scope(common::ObCastMode &cast_mode);
+  static int get_cast_mode_for_replace(const ObRawExpr *expr,
+                                       const ObSQLSessionInfo *session,
+                                       ObCastMode &cast_mode);
   static common::ObCollationLevel transform_cs_level(const common::ObCollationLevel cs_level);
   static int set_cs_level_cast_mode(const common::ObCollationLevel cs_level,
                                     common::ObCastMode &cast_mode);

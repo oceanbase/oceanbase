@@ -4325,12 +4325,8 @@ int ObTransformUtils::add_cast_for_replace(ObRawExprFactory &expr_factory,
   } else {
     ObSysFunRawExpr *cast_expr = NULL;
     ObCastMode cm;
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
-                                                  0,    /* result_flag */
-                                                  session_info, cm))) {
-      LOG_WARN("failed to get default cast mode", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(from_expr->get_collation_level(), cm))) {
-      LOG_WARN("failed to set cs level cast mode", K(ret));
+    if (OB_FAIL(ObSQLUtils::get_cast_mode_for_replace(from_expr, session_info, cm))) {
+      LOG_WARN("failed to get cast mode for replace", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(expr_factory,
                                                         to_expr,
                                                         from_expr->get_result_type(),
@@ -4359,7 +4355,8 @@ int ObTransformUtils::add_cast_for_replace_if_need(ObRawExprFactory &expr_factor
     bool need_cast = (src_type.get_type() != dst_type.get_type()) ||
                      (src_type.get_length() != dst_type.get_length()) ||
                      (src_type.get_precision() != dst_type.get_precision()) ||
-                     (src_type.get_scale() != dst_type.get_scale());
+                     (src_type.get_scale() != dst_type.get_scale()) ||
+                     from_expr->get_result_type().has_result_flag(ZEROFILL_FLAG);
     if (ob_is_string_or_lob_type(src_type.get_type())) {
       need_cast |= (src_type.get_collation_type() != dst_type.get_collation_type()) ||
                    (src_type.get_collation_level() != dst_type.get_collation_level());

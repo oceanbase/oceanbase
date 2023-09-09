@@ -1689,6 +1689,26 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
   return ret;
 }
 
+int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
+                                          const ObSQLSessionInfo *session,
+                                          ObCastMode &cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(expr), KP(session), K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
+                                                       0,    /* result_flag */
+                                                       session, cast_mode))) {
+    LOG_WARN("failed to get default cast mode", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(expr->get_collation_level(), cast_mode))) {
+    LOG_WARN("failed to set cs level cast mode", K(ret));
+  } else if (expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
+    cast_mode |= CM_ADD_ZEROFILL;
+  }
+  return ret;
+}
+
 ObCollationLevel ObSQLUtils::transform_cs_level(const ObCollationLevel cs_level)
 {
   // CS_LEVEL_INVALID is not defined as 0, transform the input cs level to make the default 0
