@@ -356,7 +356,7 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   // remember tx_id because tx maybe cleanout and reused
   // in this function's following steps.
   tx.lock_.lock();
-  auto tx_id = tx.tx_id_;
+  ObTransID tx_id = tx.tx_id_;
   int64_t now = ObClockGenerator::getClock();
   bool cb_executed = false;
   if (!tx.commit_task_.is_registered()){
@@ -613,7 +613,7 @@ void ObTransService::invalid_registered_snapshot_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.savepoints_, i) {
-    auto &it = tx.savepoints_[i];
+    ObTxSavePoint &it = tx.savepoints_[i];
     if (it.is_snapshot()) {
       it.rollback();
     }
@@ -624,7 +624,7 @@ void ObTransService::registered_snapshot_clear_part_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.savepoints_, i) {
-    auto &p = tx.savepoints_[i];
+    ObTxSavePoint &p = tx.savepoints_[i];
     if (p.is_snapshot() && p.snapshot_->valid_) {
       p.snapshot_->parts_.reset();
     }
@@ -956,7 +956,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                        ObStoreCtx &store_ctx)
 {
   int ret = OB_SUCCESS;
-  auto ls_id = store_ctx.ls_id_;
+  ObLSID ls_id = store_ctx.ls_id_;
   if (!ls_id.is_valid() || !snapshot.valid_) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid ls_id or invalid snapshot store_ctx", K(ret), K(snapshot), K(store_ctx), K(lbt()));
@@ -974,7 +974,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   }
 
   bool check_readable_ok = false;
-  auto snap_tx_id = snapshot.core_.tx_id_;
+  ObTransID snap_tx_id = snapshot.core_.tx_id_;
   ObPartTransCtx *tx_ctx = NULL;
   if (OB_SUCC(ret) && snap_tx_id.is_valid()) {
     // inner tx read, we verify txCtx's status
@@ -1281,8 +1281,8 @@ void ObTransService::fetch_cflict_tx_ids_from_mem_ctx_to_desc_(ObMvccAccessCtx &
 int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
 {
   int ret = OB_SUCCESS;
-  auto &acc_ctx = store_ctx.mvcc_acc_ctx_;
-  auto *tx_ctx = acc_ctx.tx_ctx_;
+  ObMvccAccessCtx &acc_ctx = store_ctx.mvcc_acc_ctx_;
+  ObPartTransCtx *tx_ctx = acc_ctx.tx_ctx_;
   if (acc_ctx.is_read()) {
     if (OB_NOT_NULL(tx_ctx)) {
       acc_ctx.tx_ctx_ = NULL;
@@ -1675,7 +1675,7 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
                                                   int64_t &uncertain_bound)
 {
   int ret = OB_SUCCESS;
-  auto op_sn = tx.op_sn_;
+  uint64_t op_sn = tx.op_sn_;
   tx.flags_.BLOCK_ = true;
   tx.lock_.unlock();
   ret = acquire_global_snapshot__(expire_ts,
@@ -1766,7 +1766,7 @@ int ObTransService::batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
   post_succ_num = 0;
   const ObTxDesc *msg_tx_ptr = msg.tx_ptr_;
   ARRAY_FOREACH_NORET(list, idx) {
-    auto &p = list.at(idx);
+    const ObTxLSEpochPair &p = list.at(idx);
     msg.receiver_ = p.left_;
     msg.epoch_ = p.right_;
     if (msg.epoch_ > 0) {
@@ -2241,7 +2241,7 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                                               const int64_t request_id,
                                               const SCN &private_data)
 {
-  auto start_ts = ObClockGenerator::getClock();
+  int64_t start_ts = ObClockGenerator::getClock();
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_running_)) {
     ret = OB_NOT_RUNNING;
@@ -2260,7 +2260,7 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
     case OB_NOT_MASTER:
     case OB_SUCCESS: break;
     default:
-      auto commit_version = private_data;
+      share::SCN commit_version = private_data;
       if (OB_FAIL(handle_tx_commit_result(tx_id, status, commit_version))) {
         TRANS_LOG(WARN, "handle tx commit fail", K(ret), K(tx_id));
       }
@@ -2293,7 +2293,7 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
       }
     }
   }
-  auto elapsed_ts = ObClockGenerator::getClock() - start_ts;
+  int64_t elapsed_ts = ObClockGenerator::getClock() - start_ts;
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle trans msg callback", K(ret), K(elapsed_ts),
             K(tx_id), K(sender_ls_id), K(receiver_ls_id),
@@ -2769,7 +2769,7 @@ int ObTransService::handle_timeout_for_xa(ObTxDesc &tx, const int64_t delay)
   int ret = OB_SUCCESS;
   int64_t now = ObClockGenerator::getClock();
   bool cb_executed = false;
-  auto tx_id = tx.tx_id_;
+  ObTransID tx_id = tx.tx_id_;
   if (OB_FAIL(tx.lock_.lock(5000000))) {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K(tx));
     // FIXME: how to handle it without lock protection

@@ -100,7 +100,6 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
   int ret = OB_TRY_LOCK_ROW_CONFLICT;
   ObLockWaitMgr *lock_wait_mgr = NULL;
   ObTransID conflict_tx_id = lock_state.lock_trans_id_;
-  // auto mem_ctx = acc_ctx.get_mem_ctx();
   ObTxDesc *tx_desc = acc_ctx.get_tx_desc();
   int64_t current_ts = common::ObClockGenerator::getClock();
   int64_t lock_wait_start_ts = acc_ctx.get_lock_wait_start_ts() > 0
@@ -134,8 +133,8 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
       int ret = OB_SUCCESS;
       lock_state.is_locked_ = false;
       if (lock_state.is_delayed_cleanout_) {
-        auto lock_data_sequence = lock_state.lock_data_sequence_;
-        auto &tx_table_guards = acc_ctx.get_tx_table_guards();
+        ObTxSEQ lock_data_sequence = lock_state.lock_data_sequence_;
+        ObTxTableGuards &tx_table_guards = acc_ctx.get_tx_table_guards();
         if (OB_FAIL(tx_table_guards.check_row_locked(
                 tx_id, conflict_tx_id, lock_data_sequence, trans_scn, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));

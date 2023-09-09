@@ -39,7 +39,7 @@ int ObTxFreeRouteCheckAliveP::process()
       session->get_query_lock().unlock();
     }
   }
-  auto txs = MTL(transaction::ObTransService*);
+  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
   if (OB_ISNULL(txs)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "can not get trans service", KR(ret));
@@ -100,8 +100,8 @@ int ObTxFreeRouteCheckAliveRespP::release_session_tx_()
   } else if (OB_FAIL(session->try_lock_thread_data())) {
     session->unlock_query();
   } else {
-    auto &ctx = session->get_txn_free_route_ctx();
-    auto &tx_desc = session->get_tx_desc();
+    transaction::ObTxnFreeRouteCtx &ctx = session->get_txn_free_route_ctx();
+    transaction::ObTxDesc *&tx_desc = session->get_tx_desc();
     if (ctx.get_local_version() != arg_.request_id_) {
       TRANS_LOG(INFO, "skip handle checkAliveResp, staled", K(arg_), K(ctx.get_local_version()));
     } else if (OB_NOT_NULL(tx_desc) && tx_desc->get_tx_id() == arg_.tx_id_) {
@@ -137,7 +137,7 @@ int ObTxFreeRoutePushStateP::process()
   int ret = OB_SUCCESS;
   transaction::ObTxFreeRoutePushState &tx_state = arg_;
   transaction::ObTxFreeRoutePushStateResp &resp = result_;
-  auto txs = MTL(transaction::ObTransService*);
+  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
   if (OB_ISNULL(txs)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "fail to get trans service", K(ret));

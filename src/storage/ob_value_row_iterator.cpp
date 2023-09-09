@@ -292,7 +292,7 @@ int ObSingleRowGetter::get_next_row(ObNewRow *&row)
   }
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
     // check txn status not aborted, which cause readout incorrect result
-    auto &acc_ctx = store_ctx_->mvcc_acc_ctx_;
+    memtable::ObMvccAccessCtx &acc_ctx = store_ctx_->mvcc_acc_ctx_;
     if (acc_ctx.snapshot_.tx_id_.is_valid() &&
         acc_ctx.mem_ctx_ &&
         acc_ctx.mem_ctx_->is_tx_rollbacked()) {
