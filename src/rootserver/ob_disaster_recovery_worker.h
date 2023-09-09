@@ -579,10 +579,21 @@ private:
         ReplicaStatDesc &replica_stat_desc,
         share::ObLSReplica &replica,
         const int64_t index);
+
+    int try_generate_type_transform_task_for_readonly_replica_(
+        ReplicaDescArray &zone_replica_desc_in_locality,
+        ReplicaStatDesc &replica_stat_desc,
+        const int64_t index,
+        bool &task_generated);
+    int try_generate_remove_readonly_task_for_duplicate_log_stream_(
+        ReplicaStatDesc &replica_stat_desc,
+        share::ObLSReplica &replica,
+        const int64_t index);
     int do_generate_locality_task_from_readonly_replica(
         ReplicaStatDesc &replica_stat_desc,
         share::ObLSReplica &replica,
         const int64_t index);
+
     int try_generate_locality_task_from_locality_map();
     int try_generate_locality_task_from_paxos_replica_number();
     void print_locality_information();
