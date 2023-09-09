@@ -97,7 +97,7 @@ OB_DEF_DESERIALIZE(ObDynamicSamplePieceMsg)
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
         } else {
-          ObChunkDatumStore *tmp_store = new (tmp_buf) ObChunkDatumStore;
+          ObChunkDatumStore *tmp_store = new (tmp_buf) ObChunkDatumStore("DYN_SAMPLE_CTX");
           if (OB_FAIL(tmp_store->deserialize(buf, data_len, pos))) {
             LOG_WARN("deserialize datum store failed", K(ret), K(i));
           } else if (OB_FAIL(row_stores_.push_back(tmp_store))) {
@@ -306,7 +306,7 @@ int ObDynamicSamplePieceMsgCtx::init(const ObIArray<uint64_t> &tablet_ids)
       LOG_WARN("allocate memory failed", K(ret), K(tablet_ids.count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-      ObChunkDatumStore *sample_store = new (buf + i * sizeof(ObChunkDatumStore)) ObChunkDatumStore;
+      ObChunkDatumStore *sample_store = new (buf + i * sizeof(ObChunkDatumStore)) ObChunkDatumStore("DYN_SAMPLE_CTX");
       if (OB_FAIL(sample_store->init(0, tenant_id_, ObCtxIds::DEFAULT_CTX_ID,
           "DYN_SAMPLE_CTX", false/*enable dump*/))) {
         LOG_WARN("init sample chunk store failed", K(ret), K(i));

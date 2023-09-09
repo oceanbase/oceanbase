@@ -29,7 +29,7 @@ ObMaterialOpImpl::ObMaterialOpImpl(ObMonitorNode &op_monitor_info, ObSqlWorkArea
   tenant_id_(OB_INVALID_ID),
   exec_ctx_(nullptr),
   mem_context_(nullptr),
-  datum_store_(),
+  datum_store_(ObModIds::OB_HASH_NODE_GROUP_ROWS),
   datum_store_it_(),
   eval_ctx_(nullptr),
   profile_(profile),

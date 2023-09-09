@@ -26,7 +26,7 @@ namespace sql
 
 struct ObSortOpChunk : public common::ObDLinkBase<ObSortOpChunk>
 {
-  explicit ObSortOpChunk(const int64_t level): level_(level), row_(NULL) {}
+  explicit ObSortOpChunk(const int64_t level): level_(level), datum_store_(ObModIds::OB_SQL_SORT_ROW), row_(NULL) {}
 
   int64_t level_;
   ObChunkDatumStore datum_store_;

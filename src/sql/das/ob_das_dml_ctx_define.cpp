@@ -519,7 +519,7 @@ OB_NOINLINE int ObDASWriteBuffer::create_datum_store()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate chunk datum store failed", K(ret));
   } else {
-    datum_store_ = new(buf) ObChunkDatumStore();
+    datum_store_ = new(buf) ObChunkDatumStore(mem_attr_.label_);
     if (OB_FAIL(datum_store_->init(UINT64_MAX,
                                    mem_attr_.tenant_id_,
                                    mem_attr_.ctx_id_,
@@ -734,7 +734,7 @@ OB_DEF_DESERIALIZE(ObDASWriteBuffer)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate chunk row store failed", K(ret));
     } else {
-      datum_store_ = new(buffer) ObChunkDatumStore();
+      datum_store_ = new(buffer) ObChunkDatumStore(mem_attr_.label_);
       OB_UNIS_DECODE(*datum_store_);
     }
   }

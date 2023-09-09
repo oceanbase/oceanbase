@@ -514,7 +514,7 @@ int ObPxDistTransmitOp::build_row_sample_piece_msg(int64_t expected_range_count,
 
   int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
 
-  ObChunkDatumStore *sample_store = OB_NEWx(ObChunkDatumStore, (&ctx_.get_allocator()));
+  ObChunkDatumStore *sample_store = OB_NEWx(ObChunkDatumStore, &ctx_.get_allocator(), "DYN_SAMPLE_CTX");
   OV(NULL != sample_store, OB_ALLOCATE_MEMORY_FAILED);
 
   bool sample_store_dump = false;
@@ -577,7 +577,7 @@ int ObPxDistTransmitSpec::register_to_datahub(ObExecContext &ctx) const
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
-            ObChunkDatumStore *sample_store = new (chunk_buf) ObChunkDatumStore;
+            ObChunkDatumStore *sample_store = new (chunk_buf) ObChunkDatumStore("DYN_SAMPLE_CTX");
             if (OB_FAIL(sample_store->init(0,
               ctx.get_my_session()->get_effective_tenant_id(),
                   ObCtxIds::DEFAULT_CTX_ID, "DYN_SAMPLE_CTX", false/*enable dump*/))) {

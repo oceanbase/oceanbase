@@ -138,7 +138,7 @@ int ObPDMLOpBatchRowCache::init_row_store(ObChunkDatumStore *&chunk_row_store)
     // 进行一个优化：
     // 1. 如果没有barrier，就不进行的dump
     // 2. 如果有barrier，就需要进行dump
-    chunk_row_store = new(buf) ObChunkDatumStore(&allocator);
+    chunk_row_store = new(buf) ObChunkDatumStore("PDML_ROW_CACHE", &allocator);
     if (OB_FAIL(chunk_row_store->init(INT64_MAX, // let auto mem mgr take care of mem limit
                                       tenant_id_,
                                       ObCtxIds::WORK_AREA,

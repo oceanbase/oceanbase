@@ -36,6 +36,7 @@ ObMergeJoinOp::ObMergeJoinOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
   : ObJoinOp(exec_ctx, spec, input),
     state_(JS_JOIN_BEGIN),
     mem_context_(NULL),
+    right_cache_(ObModIds::OB_SQL_MERGE_JOIN),
     stored_row_(NULL),
     stored_row_idx_(-1),
     empty_cache_iter_side_(ITER_BOTH),

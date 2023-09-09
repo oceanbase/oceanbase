@@ -281,7 +281,7 @@ int ObSortOp::process_sort_batch()
 int ObSortOp::scan_all_then_sort()
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObChunkDatumStore, cache_store) {
+  SMART_VAR(ObChunkDatumStore, cache_store, "SORT_CACHE_CTX") {
     if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/))) {
@@ -338,7 +338,7 @@ int ObSortOp::scan_all_then_sort()
 int ObSortOp::scan_all_then_sort_batch()
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObChunkDatumStore, cache_store) {
+  SMART_VAR(ObChunkDatumStore, cache_store, "SORT_CACHE_CTX") {
     if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/))) {

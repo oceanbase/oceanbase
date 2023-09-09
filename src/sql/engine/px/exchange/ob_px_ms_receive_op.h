@@ -187,7 +187,7 @@ private:
   public:
     explicit LocalOrderInput()
       : MergeSortInput(nullptr, nullptr, false),
-        datum_store_()
+        datum_store_("PxMSRecvLocal")
       {
         get_row_store_ = &datum_store_;
         add_row_store_ = &datum_store_;

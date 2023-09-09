@@ -512,7 +512,7 @@ int ObPxMSReceiveOp::GlobalOrderInput::create_chunk_datum_store(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("create ra row store fail", K(ret));
   } else {
-    row_store = new (buf) ObChunkDatumStore();
+    row_store = new (buf) ObChunkDatumStore("PxMSRecvGlobal");
     // TODO: llongzhong.wlz 这里应该使用一个参数来控制row_store存储的数据量，或者SQL内存管理自动控制
     int64_t mem_limit = 0;
     row_store->set_allocator(*alloc_);

@@ -76,7 +76,7 @@ public:
   using WholeMsgProvider = ObWholeMsgProvider<ObWinbufWholeMsg>;
 public:
   ObWinbufWholeMsg() : ready_state_(0), is_empty_(true), is_datum_(false),
-      row_store_(), datum_store_(), assign_allocator_()
+      row_store_(), datum_store_("PXDhWinbuf"), assign_allocator_()
   {}
   ~ObWinbufWholeMsg() = default;
   int assign(const ObWinbufWholeMsg &other, common::ObIAllocator *allocator = NULL);

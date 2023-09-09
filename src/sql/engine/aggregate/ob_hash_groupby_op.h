@@ -199,7 +199,7 @@ public:
   {
   public:
     DatumStoreLinkPartition(common::ObIAllocator *alloc = nullptr)
-      : datum_store_(alloc), part_id_(0), part_shift_(0)
+      : datum_store_(ObModIds::OB_HASH_NODE_GROUP_ROWS, alloc), part_id_(0), part_shift_(0)
     {}
     ObChunkDatumStore datum_store_;
     int64_t part_id_;
@@ -227,6 +227,7 @@ public:
       cur_group_item_idx_(0),
       cur_group_item_buf_(nullptr),
       mem_context_(NULL),
+      group_store_(ObModIds::OB_HASH_NODE_GROUP_ROWS),
       agged_group_cnt_(0),
       agged_row_cnt_(0),
       agged_dumped_cnt_(0),

@@ -260,7 +260,7 @@ public:
       : ObConnectByOpPumpBase(),
 //      prior_exprs_result_row_(),
       pump_stack_() ,
-      datum_store_(),
+      datum_store_(ObModIds::OB_CONNECT_BY_PUMP),
       cur_output_exprs_(NULL),
       hash_filter_rows_(),
       connect_by_(NULL),

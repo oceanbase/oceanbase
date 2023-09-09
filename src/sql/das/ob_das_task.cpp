@@ -534,7 +534,7 @@ OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     tenant_id_, task_id_, has_more_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
-        : datum_store_(),
+        : datum_store_("DASDataFetch"),
           tenant_id_(0),
           task_id_(0),
           has_more_(false)

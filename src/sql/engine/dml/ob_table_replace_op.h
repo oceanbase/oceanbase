@@ -67,7 +67,8 @@ public:
       delete_rows_(0),
       conflict_checker_(ctx.get_allocator(),
                         eval_ctx_,
-                        MY_SPEC.conflict_checker_ctdef_)
+                        MY_SPEC.conflict_checker_ctdef_),
+      replace_row_store_("ReplaceRow")
   {}
   virtual ~ObTableReplaceOp() {}
 
