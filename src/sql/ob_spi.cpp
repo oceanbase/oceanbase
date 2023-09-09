@@ -7768,7 +7768,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                 } else {
                   OZ (deep_copy_obj(*table->get_allocator(), current_obj, tmp));
                 }
-                OZ (store_datum(current_datum, tmp));
+                OZ (store_datum(current_datum, tmp, ctx->exec_ctx_->get_my_session()));
               }
             }
           }
@@ -7865,7 +7865,7 @@ int ObSPIService::store_datums(ObObj &dest_addr,
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && !is_opaque && i < obj_array.count(); ++i) {
-      if (OB_FAIL(store_datum(current_datum, obj_array.at(i)))) {
+      if (OB_FAIL(store_datum(current_datum, obj_array.at(i), session_info))) {
         LOG_WARN("failed to arrange store", K(dest_addr), K(i), K(obj_array.at(i)), K(obj_array), K(ret));
       }
     }
@@ -7873,15 +7873,20 @@ int ObSPIService::store_datums(ObObj &dest_addr,
   return ret;
 }
 
-int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj)
+int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 == current_addr) || obj.is_invalid_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(current_addr), K(obj), K(ret));
   } else {
-    new (reinterpret_cast<ObObj*>(current_addr))ObObj(obj);
-    current_addr += sizeof(ObObj);
+    ObObj *cur_obj = reinterpret_cast<ObObj*>(current_addr);
+    if (OB_FAIL(ObUserDefinedType::destruct_obj(*cur_obj, session_info))) {
+      LOG_WARN("fail to destruct obj", KPC(cur_obj), K(obj), K(ret));
+    } else {
+      new (cur_obj)ObObj(obj);
+      current_addr += sizeof(ObObj);
+    }
   }
   return ret;
 }

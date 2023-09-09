@@ -976,7 +976,7 @@ private:
   static int store_datums(ObObj &dest_addr, ObIArray<ObObj> &result,
                           ObIAllocator *alloc, ObSQLSessionInfo *session_info, bool is_schema_object);
 
-  static int store_datum(int64_t &current_addr, const ObObj &obj);
+  static int store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSessionInfo *session_info);
 
   static const ObPostExprItem &get_last_expr_item(const ObSqlExpression &expr);
 
