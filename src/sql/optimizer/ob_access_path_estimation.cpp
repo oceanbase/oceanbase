@@ -574,7 +574,7 @@ int ObAccessPathEstimation::add_index_info(ObOptimizerContext &ctx,
   } else if (OB_FAIL(task->paths_.push_back(ap))) {
     LOG_WARN("failed to push back access path", K(ret));
   } else if (OB_ISNULL(index_est_arg = task->arg_.index_params_.alloc_place_holder())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate index argument", K(ret));
   } else if (OB_FAIL(get_key_ranges(ctx, allocator, part.tablet_id_, ap, tmp_ranges))) {
     LOG_WARN("failed to get key ranges", K(ret));
