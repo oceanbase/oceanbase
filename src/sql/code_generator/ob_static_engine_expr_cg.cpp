@@ -1271,9 +1271,12 @@ int ObStaticEngineExprCG::alloc_so_check_exprs(const ObIArray<ObRawExpr *> &raw_
           // stack overflow check expr can not added above T_OP_ROW
           if (T_OP_ROW == e->type_ && e->parent_cnt_ > 0) {
             e = e->parents_[0];
-            if (T_OP_ROW == e->type_) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("T_OP_ROW can not be nested", K(ret));
+            if (T_OP_ROW == e->type_ && e->parent_cnt_ > 0) {
+              e = e->parents_[0];
+              if (T_OP_ROW == e->type_) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("T_OP_ROW can not be nested twice", K(ret));
+              }
             }
           }
           if (OB_SUCC(ret) && e->parent_cnt_ > 0) {
