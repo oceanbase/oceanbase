@@ -157,7 +157,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       force_remote_execute_(false),
       force_no_reuse_(false),
       use_external_session_(false),
-      group_id_(0)
+      group_id_(0),
+      user_timeout_(0)
 {
 }
 
@@ -251,6 +252,7 @@ int ObInnerSQLConnection::destroy()
     config_ = NULL;
     associated_client_ = NULL;
     ref_ctx_ = NULL;
+    user_timeout_ = 0;
   }
   return ret;
 }
@@ -1897,7 +1899,7 @@ int ObInnerSQLConnection::set_timeout(int64_t &abs_timeout_us)
 
   if (OB_SUCC(ret)) {
     if (0 == abs_timeout_us) {
-      timeout = GCONF.internal_sql_execute_timeout;
+      timeout = (user_timeout_ > 0) ? user_timeout_ : GCONF.internal_sql_execute_timeout;
       trx_timeout = timeout;
       abs_timeout_us = now + timeout;
     }

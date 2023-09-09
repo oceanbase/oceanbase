@@ -204,6 +204,8 @@ public:
   virtual void set_use_external_session(bool v) { UNUSED(v); }
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
   void set_session_init_status(bool status) { is_inited_ = status;}
+  virtual void set_user_timeout(int64_t user_timeout) { UNUSED(user_timeout); }
+  virtual int64_t get_user_timeout() const { return 0; }
   int is_session_inited(const sqlclient::dblink_param_ctx &param_ctx, bool &is_inited)
   {
     int ret = OB_SUCCESS;

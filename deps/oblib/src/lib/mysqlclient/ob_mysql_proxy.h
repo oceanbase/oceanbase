@@ -108,7 +108,7 @@ public:
       char *to, const int64_t to_size, int64_t &out_size) override;
   // execute query and return data result
   virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override { return this->read(res, tenant_id, sql, 0/*group_id*/); }
-  int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param);
+  int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param, int64_t user_set_timeout = 0);
   int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr);
   virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id) override;
   //only for across cluster
