@@ -94,11 +94,14 @@ public:
                K(powner_),
                K(cowner_),
                K(last_modify_),
+               K(start_date_),
                K(last_date_),
                K(this_date_),
                K(next_date_),
+               K(end_date_),
                K(total_),
                K(interval_),
+               K(repeat_interval_),
                K(failures_),
                K(flag_),
                K(what_),
@@ -107,6 +110,7 @@ public:
                K(field1_),
                K(scheduler_flags_),
                K(enabled_),
+               K(auto_drop_),
                K(max_run_duration_),
                K(interval_ts_));
 
