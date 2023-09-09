@@ -115,8 +115,6 @@ int LogIOWorkerWrapper::notify_need_writing_throttling(const bool &need_throttli
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!is_user_tenant_) {
-    //need no nothing
   } else {
     throttle_.notify_need_writing_throttling(need_throttling);
     if (need_throttling) {
@@ -156,8 +154,8 @@ int LogIOWorkerWrapper::create_and_init_log_io_workers_(const LogIOWorkerConfig 
   for (int64_t i = 0; i < log_writer_parallelism && OB_SUCC(ret); i++) {
     LogIOWorker *iow = log_io_workers_ + i;
     iow = new(iow)LogIOWorker();
-    // NB: the first LogIOWorker need ignoring throttling
-    bool need_ignoring_throttling = (i == SYS_LOG_IO_WORKER_INDEX);
+    // NB:only sys log streams of user tenants need to ignore throtting
+    bool need_ignoring_throttling = (i == SYS_LOG_IO_WORKER_INDEX && is_user_tenant(tenant_id));
     if (OB_FAIL(iow->init(config, tenant_id, cb_thread_pool_tg_id, allocator,
                           &throttle_, need_ignoring_throttling, palf_env_impl))) {
       PALF_LOG(WARN, "init LogIOWorker failed", K(i), K(config), K(tenant_id),
