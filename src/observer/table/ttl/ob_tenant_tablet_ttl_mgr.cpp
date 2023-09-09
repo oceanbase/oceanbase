@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
 #include "observer/table/ob_table_service.h"
+#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {
@@ -395,6 +396,10 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the tablet task ctx is null", KR(ret));
   } else {
+    if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+      local_tenant_task_.ttl_continue_ = false;
+      LOG_DEBUG("local_tenant_task mark continue is false");
+    }
     // lock task ctx for update
     common::ObSpinLockGuard ctx_guard(ctx->lock_);
     ctx->last_modify_time_ = ObTimeUtility::current_time();
@@ -603,7 +608,10 @@ void OBTTLTimerPeriodicTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
-  if (common::ObTTLUtil::check_can_do_work()) {
+  if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+    // do nothing
+    LOG_DEBUG("ttl is disable");
+  } else if (common::ObTTLUtil::check_can_do_work()) {
     if (OB_FAIL(tablet_ttl_mgr_.check_tenant_memory())) {
       LOG_WARN("fail to check all tenant memory", KR(ret));
     }

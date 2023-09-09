@@ -30,6 +30,7 @@
 #include "ob_table_session_pool.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_table_move_response.h"
+#include "share/table/ob_table_config_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -997,13 +998,15 @@ bool oceanbase::observer::is_require_rerouting_err(const int err)
 {
   // rerouting: whether client should refresh location cache and retry
   // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
-  return (is_master_changed_error(err)
-          || is_server_down_error(err)
-          || is_partition_change_error(err)
-          || is_server_status_error(err)
-          || is_unit_migrate(err)
-          || is_transaction_rpc_timeout_err(err)
-          || is_has_no_readable_replica_err(err)
-          || is_select_dup_follow_replic_err(err)
-          || is_trans_stmt_need_retry_error(err));
+  bool is_err = is_master_changed_error(err)
+                || is_server_down_error(err)
+                || is_partition_change_error(err)
+                || is_server_status_error(err)
+                || is_unit_migrate(err)
+                || is_transaction_rpc_timeout_err(err)
+                || is_has_no_readable_replica_err(err)
+                || is_select_dup_follow_replic_err(err)
+                || is_trans_stmt_need_retry_error(err);
+
+  return is_err && ObKVFeatureModeUitl::is_rerouting_enable();
 }

@@ -1110,6 +1110,43 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t sr
   }
   return ret;
 }
+ObConfigModeItem::ObConfigModeItem(ObConfigContainer *container,
+                                  Scope::ScopeInfo scope_info,
+                                  const char *name,
+                                  const char *def,
+                                  ObConfigParser* parser,
+                                  const char *info,
+                                  const ObParameterAttr attr)
+:parser_(parser)
+{
+  MEMSET(value_, 0, MAX_MODE_BYTES);
+  if (OB_LIKELY(NULL != container)) {
+    container->set_refactored(ObConfigStringKey(name), this, 1);
+  }
+  init(scope_info, name, def, info, attr);
+}
+
+ObConfigModeItem::~ObConfigModeItem()
+{
+  if (parser_ != NULL) {
+    delete parser_;
+  }
+}
+
+bool ObConfigModeItem::set(const char *str)
+{
+  bool valid = false;
+  if (str == NULL || parser_ == NULL) {
+    valid = false;
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "str or parser_ is NULL", K(str), K(parser_));
+  } else {
+    valid = parser_->parse(str, value_, MAX_MODE_BYTES);
+    if (!valid) {
+      OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "parse config item fail", K(str), K(parser_));
+    }
+  }
+  return valid;
+}
 
 ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
                                          Scope::ScopeInfo scope_info,

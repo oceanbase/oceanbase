@@ -635,6 +635,40 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSQLTlsVersionChecker);
 };
+
+class ObModeConfigParserUitl
+{
+public:
+  // parse config item like: "xxx=yyy"
+  static int parse_item_to_kv(char *item, ObString &key, ObString &value);
+  static int get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list);
+  // format str for split config item
+  static int format_mode_str(const char *src, int64_t src_len, char *dst, int64_t dst_len);
+};
+
+class ObConfigParser
+{
+public:
+  ObConfigParser() {}
+  virtual ~ObConfigParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigParser);
+};
+
+class ObKvFeatureModeParser : public ObConfigParser
+{
+public:
+  ObKvFeatureModeParser() {}
+  virtual ~ObKvFeatureModeParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
+public:
+  static const int8_t MODE_DEFAULT = 0b00;
+  static const int8_t MODE_ON = 0b01;
+  static const int8_t MODE_OFF = 0b10;
+  DISALLOW_COPY_AND_ASSIGN(ObKvFeatureModeParser);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common

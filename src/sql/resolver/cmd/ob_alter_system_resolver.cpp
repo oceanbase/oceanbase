@@ -44,6 +44,7 @@
 #include "observer/mysql/ob_query_response_time.h"
 #include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
 #include "sql/resolver/cmd/ob_kill_stmt.h"
+#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {
@@ -4327,6 +4328,10 @@ int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("TTL command is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "TTL command is not supported in data version less than 4.2.1");
+  } else if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ttl is disable", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl is disable, set by config item _obkv_feature_mode");
   } else if (OB_UNLIKELY(T_TABLE_TTL != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_TABLE_TTL", "type", get_type_name(parse_tree.type_));

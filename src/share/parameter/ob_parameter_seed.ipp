@@ -1628,3 +1628,7 @@ DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      "SQL SSL control options, used to specify the minimum SSL/TLS version number. "
                      "values: none, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// obkv
+DEF_MODE_WITH_PARSER(_obkv_feature_mode, OB_CLUSTER_PARAMETER, "", common::ObKvFeatureModeParser,
+    "_obkv_feature_mode is a option list to control specified OBKV features on/off.",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
