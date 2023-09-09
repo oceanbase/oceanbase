@@ -396,6 +396,7 @@ public:
   virtual void destroy();
   //called before put session to freelist: unlock/set invalid
   virtual void reset(bool skip_sys_var = false);
+  void reset_user_var();
   void set_tenant_session_mgr(ObTenantSQLSessionMgr *tenant_session_mgr)
   {
     tenant_session_mgr_ = tenant_session_mgr;
