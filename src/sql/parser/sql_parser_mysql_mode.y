@@ -373,7 +373,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt create_standby_tenant_stmt log_restore_source_option
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
-%type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func utc_time_func utc_date_func sys_interval_func sysdate_func
+%type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func utc_time_func utc_date_func sys_interval_func sysdate_func cur_user_func
 %type <node> create_dblink_stmt drop_dblink_stmt dblink tenant opt_cluster opt_dblink
 %type <node> opt_create_resource_pool_option_list create_resource_pool_option alter_resource_pool_option_list alter_resource_pool_option
 %type <node> opt_shrink_unit_option id_list opt_shrink_tenant_unit_option
@@ -2434,6 +2434,10 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
+| cur_user_func
+{
+  $$ = $1;
+}
 | cur_date_func
 {
   $$ = $1;
@@ -3074,6 +3078,17 @@ CURTIME  '(' ')'
   {
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_CUR_TIME, 1, NULL);
   }
+}
+;
+
+cur_user_func:
+CURRENT_USER
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_CURRENT_USER, 1, NULL);
+}
+| CURRENT_USER '(' ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_CURRENT_USER, 1, NULL);
 }
 ;
 
@@ -17534,10 +17549,6 @@ NAME_OB
 | RIGHT
 {
   make_name_node($$, result->malloc_pool_, "right");
-}
-| CURRENT_USER
-{
-  make_name_node($$, result->malloc_pool_, "current_user");
 }
 | SYSTEM_USER
 {
