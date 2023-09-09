@@ -116,6 +116,7 @@ public:
   // @param[in]  old_ls_id			old LS ID
   // @param[in]  new_transfer_seq	new Transfer Sequence
   // @param[in]  new_ls_id			new LS ID
+  // @param[in]  group_id       rpc queue id
   //
   // @ret OB_SUCCESS 			    the updation is successful
   // @ret OB_ENTRY_NOT_EXIST	    affected rows = 0,
@@ -130,7 +131,8 @@ public:
       const int64_t old_transfer_seq,
       const ObLSID &old_ls_id,
       const int64_t new_transfer_seq,
-      const ObLSID &new_ls_id);
+      const ObLSID &new_ls_id,
+      const int32_t group_id);
   // Get rows from __all_tablet_to_ls according to ObTableIDs
   //
   // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction

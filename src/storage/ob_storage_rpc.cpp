@@ -3288,6 +3288,7 @@ int ObStorageRpc::check_start_transfer_tablets(
     } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
+                                  .group_id(share::OBCG_STORAGE_HA_LEVEL2)
                                   .check_start_transfer_tablets(arg))) {
       LOG_WARN("failed to check src transfer tablets", K(ret), K(src_info), K(arg));
     }
@@ -3317,6 +3318,7 @@ int ObStorageRpc::get_ls_active_trans_count(
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
                            .dst_cluster_id(src_info.cluster_id_)
+                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
                            .get_ls_active_trans_count(arg, res))) {
       LOG_WARN("failed to get ls active trans count", K(ret), K(src_info), K(arg));
     } else {
@@ -3358,6 +3360,7 @@ int ObStorageRpc::get_transfer_start_scn(
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
                                   .timeout(get_transfer_start_scn_timeout)
+                                  .group_id(share::OBCG_STORAGE_HA_LEVEL1)
                                   .get_transfer_start_scn(arg, res))) {
       LOG_WARN("failed to get transfer start scn", K(ret), K(src_info), K(arg));
     } else {
@@ -3389,6 +3392,7 @@ int ObStorageRpc::fetch_ls_replay_scn(
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
                            .dst_cluster_id(src_info.cluster_id_)
+                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
                            .fetch_ls_replay_scn(arg, res))) {
       LOG_WARN("failed to fetch ls replay scn", K(ret), K(src_info), K(arg));
     } else {
@@ -3422,6 +3426,7 @@ int ObStorageRpc::check_tablets_logical_table_replaced(
     } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
+                                  .group_id(share::OBCG_STORAGE_HA_LEVEL2)
                                   .check_transfer_tablet_backfill_completed(arg, res))) {
       LOG_WARN("failed to check tablets backfill completed", K(ret), K(src_info), K(arg));
     } else {
@@ -3475,15 +3480,16 @@ int ObStorageRpc::lock_config_change(
     const ObStorageHASrcInfo &src_info,
     const share::ObLSID &ls_id,
     const int64_t lock_owner,
-    const int64_t lock_timeout)
+    const int64_t lock_timeout,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid() || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id), K(group_id));
   } else {
     ObStorageConfigChangeOpArg arg;
     ObStorageConfigChangeOpRes res;
@@ -3497,6 +3503,7 @@ int ObStorageRpc::lock_config_change(
                            .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
+                           .group_id(group_id)
                            .lock_config_change(arg, res))) {
       LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
     }
@@ -3509,15 +3516,16 @@ int ObStorageRpc::unlock_config_change(
     const ObStorageHASrcInfo &src_info,
     const share::ObLSID &ls_id,
     const int64_t lock_owner,
-    const int64_t lock_timeout)
+    const int64_t lock_timeout,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid() || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id), K(group_id));
   } else {
     ObStorageConfigChangeOpArg arg;
     ObStorageConfigChangeOpRes res;
@@ -3531,6 +3539,7 @@ int ObStorageRpc::unlock_config_change(
                            .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
+                           .group_id(group_id)
                            .unlock_config_change(arg, res))) {
       LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
     }
@@ -3542,6 +3551,7 @@ int ObStorageRpc::get_config_change_lock_stat(
     const uint64_t tenant_id,
     const ObStorageHASrcInfo &src_info,
     const share::ObLSID &ls_id,
+    const int32_t group_id,
     int64_t &palf_lock_owner,
     bool &is_locked)
 {
@@ -3549,9 +3559,9 @@ int ObStorageRpc::get_config_change_lock_stat(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
+  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid() || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id), K(group_id));
   } else {
     ObStorageConfigChangeOpArg arg;
     ObStorageConfigChangeOpRes res;
@@ -3563,6 +3573,7 @@ int ObStorageRpc::get_config_change_lock_stat(
                            .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
+                           .group_id(group_id)
                            .get_config_change_lock_stat(arg, res))) {
       LOG_WARN("failed to replace member", K(ret), K(src_info), K(arg));
     } else {
@@ -3591,6 +3602,7 @@ int ObStorageRpc::wakeup_transfer_service(
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
                            .dst_cluster_id(src_info.cluster_id_)
+                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
                            .wakeup_transfer_service(arg))) {
       LOG_WARN("failed to wakeup transfer service", K(ret), K(src_info), K(arg));
     }

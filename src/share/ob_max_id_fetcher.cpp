@@ -87,7 +87,14 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
 lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
 
 ObMaxIdFetcher::ObMaxIdFetcher(ObMySQLProxy &proxy)
-  : proxy_(proxy)
+  : proxy_(proxy),
+    group_id_(0)
+{
+}
+
+ObMaxIdFetcher::ObMaxIdFetcher(ObMySQLProxy &proxy, const int32_t group_id)
+  : proxy_(proxy),
+    group_id_(group_id)
 {
 }
 
@@ -432,7 +439,7 @@ int ObMaxIdFetcher::update_max_id(ObISQLClient &sql_client, const uint64_t tenan
       zone.ptr(), id_name,
       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))) {
     LOG_WARN("sql_string append format string failed", K(ret));
-  } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
     LOG_WARN("sql client write fail", K(sql), K(affected_rows), K(ret));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_INNER_STAT_ERROR;
@@ -535,7 +542,7 @@ int ObMaxIdFetcher::insert_initial_value(common::ObISQLClient &sql_client, uint6
       zone.ptr(), name, obj.get_type(),
       static_cast<int64_t>(value), info))) {
     LOG_WARN("sql string assign failed", K(ret));
-  } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
     LOG_WARN("execute sql failed", K(ret));
   }
   return ret;

@@ -60,6 +60,7 @@ public:
   // @param [out] id          generated monotonically increasing ID
   static int gen_monotonic_id(const uint64_t tenant_id,
       const share::ObMaxIdType id_type,
+      const int32_t group_id,
       common::ObMySQLProxy &proxy,
       share::ObCommonID &id);
 };

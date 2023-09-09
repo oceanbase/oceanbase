@@ -56,6 +56,7 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
   int64_t new_transfer_seq = 1;
   int64_t ls_id = ObLSID::INVALID_LS_ID;
   int64_t transfer_seq = -1;
+  const int32_t group_id = 0;
   info.reset();
   info.init(t1, ls1, table_id, old_transfer_seq);
   ls_infos.push_back(info);
@@ -80,7 +81,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid old_transfer_seq
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -90,7 +92,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       -1,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid new_transfer_seq
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -100,7 +103,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       -1,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: old_transfer_seq == new_transfer_seq
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -110,7 +114,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       old_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid tablet_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -120,7 +125,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid old_ls_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -130,7 +136,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ObLSID(),
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: invalid new_ls_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -140,7 +147,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ObLSID());
+      ObLSID(),
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   // test OB_INVALID_ARGUMENT: old_ls_id == new_ls_id
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -150,7 +158,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls1);
+      ls1,
+      group_id);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // test OB_ENTRY_NOT_EXIST: t1 is not in ls3
@@ -161,7 +170,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls3,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
   // test OB_ENTRY_NOT_EXIST:  t1's transfer_seq should be 0, but here it's 3
   old_transfer_seq = 3;
@@ -172,7 +182,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 
   // test OB_SUCCESS: transfer t1 from ls1 to ls2
@@ -184,7 +195,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_ENTRY_NOT_EXIST: t1 is not in ls1
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -194,7 +206,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
   // test OB_SUCCESS: transfer t1 from ls2 to ls3
   old_transfer_seq = new_transfer_seq;
@@ -206,7 +219,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls2,
       new_transfer_seq,
-      ls3);
+      ls3,
+      group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_SUCCESS: transfer t2 from ls2 to ls1
   old_transfer_seq = 0;
@@ -218,7 +232,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls2,
       new_transfer_seq,
-      ls1);
+      ls1,
+      group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_ENTRY_NOT_EXIST: t2 is not in ls2
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -228,7 +243,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls2,
       new_transfer_seq,
-      ls1);
+      ls1,
+      group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
   // test OB_SUCCESS: transfer t2 from ls1 to ls2
   old_transfer_seq = new_transfer_seq;
@@ -240,7 +256,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls1,
       new_transfer_seq,
-      ls2);
+      ls2,
+      group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_SUCCESS: transfer t3 from ls3 to ls1
   old_transfer_seq = 0;
@@ -252,7 +269,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls3,
       new_transfer_seq,
-      ls1);
+      ls1,
+      group_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // test OB_ENTRY_NOT_EXIST: t3 is not in ls3
   ret = ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
@@ -262,7 +280,8 @@ TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
       old_transfer_seq,
       ls3,
       new_transfer_seq,
-      ls1);
+      ls1,
+      group_id);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 
   // test final result in table __all_tablet_to_ls

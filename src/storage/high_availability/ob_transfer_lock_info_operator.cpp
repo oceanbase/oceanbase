@@ -27,13 +27,14 @@ namespace storage {
 
 /* ObTransferLockInfoOperator */
 
-int ObTransferLockInfoOperator::insert(const ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy)
+int ObTransferLockInfoOperator::insert(const ObTransferTaskLockInfo &lock_info,
+    const int32_t group_id, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = lock_info.tenant_id_;
-  if (!lock_info.is_valid()) {
+  if (!lock_info.is_valid() || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(lock_info));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(lock_info), K(group_id));
   } else {
     ObSqlString sql;
     ObDMLSqlSplicer dml_splicer;
@@ -44,7 +45,7 @@ int ObTransferLockInfoOperator::insert(const ObTransferTaskLockInfo &lock_info, 
       LOG_WARN("failed to finish row", K(ret), K(tenant_id), K(lock_info));
     } else if (OB_FAIL(dml_splicer.splice_insert_sql(OB_ALL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TNAME, sql))) {
       LOG_WARN("failed to splice insert sql", K(ret), K(tenant_id), K(sql));
-    } else if (OB_FAIL(sql_proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), group_id, affected_rows))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
         ret = OB_ENTRY_EXIST;
       } else {
@@ -67,14 +68,14 @@ int ObTransferLockInfoOperator::insert(const ObTransferTaskLockInfo &lock_info, 
 }
 
 int ObTransferLockInfoOperator::remove(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-    const ObTransferLockStatus &status, common::ObISQLClient &sql_proxy)
+    const ObTransferLockStatus &status, const int32_t group_id, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid() || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), K(group_id));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu and ls_id = %ld"
                                     " and task_id = %ld and status = '%s'",
                  OB_ALL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TNAME,
@@ -83,7 +84,7 @@ int ObTransferLockInfoOperator::remove(const uint64_t tenant_id, const share::Ob
                  task_id,
                  status.str()))) {
     LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(ls_id), K(task_id), K(status));
-  } else if (OB_FAIL(sql_proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(sql_proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), group_id, affected_rows))) {
     LOG_WARN("failed to write sql", K(ret), K(tenant_id), K(sql), K(affected_rows));
   } else if (OB_UNLIKELY(0 == affected_rows)) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -106,14 +107,14 @@ int ObTransferLockInfoOperator::remove(const uint64_t tenant_id, const share::Ob
 }
 
 int ObTransferLockInfoOperator::get(const ObTransferLockInfoRowKey &row_key, const int64_t task_id,
-    const ObTransferLockStatus &status, const bool for_update, ObTransferTaskLockInfo &lock_info,
+    const ObTransferLockStatus &status, const bool for_update, const int32_t group_id, ObTransferTaskLockInfo &lock_info,
     common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = row_key.tenant_id_;
-  if (OB_UNLIKELY(!row_key.is_valid())) {
+  if (OB_UNLIKELY(!row_key.is_valid() || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), K(for_update));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), K(for_update), K(group_id));
   } else {
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result)
@@ -127,7 +128,7 @@ int ObTransferLockInfoOperator::get(const ObTransferLockInfoRowKey &row_key, con
               status.str(),
               for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("fail to assign sql", K(ret), K(tenant_id), K(row_key), K(task_id), K(status), K(for_update));
-      } else if (OB_FAIL(sql_proxy.read(result, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      } else if (OB_FAIL(sql_proxy.read(result, gen_meta_tenant_id(tenant_id), sql.ptr(), group_id))) {
         LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -143,12 +144,12 @@ int ObTransferLockInfoOperator::get(const ObTransferLockInfoRowKey &row_key, con
 }
 
 int ObTransferLockInfoOperator::fetch_all(common::ObISQLClient &sql_proxy, const uint64_t tenant_id,
-    common::ObArray<ObTransferTaskLockInfo> &lock_infos)
+    const int32_t group_id, common::ObArray<ObTransferTaskLockInfo> &lock_infos)
 {
   int ret = OB_SUCCESS;
-  if (OB_INVALID_ID == tenant_id) {
+  if (OB_INVALID_ID == tenant_id || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(group_id));
   } else {
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result)
@@ -157,7 +158,7 @@ int ObTransferLockInfoOperator::fetch_all(common::ObISQLClient &sql_proxy, const
               OB_ALL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TNAME,
               tenant_id))) {
         LOG_WARN("fail to assign sql", K(ret), K(tenant_id));
-      } else if (OB_FAIL(sql_proxy.read(result, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      } else if (OB_FAIL(sql_proxy.read(result, gen_meta_tenant_id(tenant_id), sql.ptr(), group_id))) {
         LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;

@@ -1138,17 +1138,20 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const int64_t lock_owner,
-      const int64_t lock_timeout) = 0;
+      const int64_t lock_timeout,
+      const int32_t group_id) = 0;
   virtual int unlock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const int64_t lock_owner,
-      const int64_t lock_timeout) = 0;
+      const int64_t lock_timeout,
+      const int32_t group_id) = 0;
   virtual int get_config_change_lock_stat(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
+      const int32_t group_id,
       int64_t &palf_lock_owner,
       bool &is_locked) = 0;
   virtual int wakeup_transfer_service(
@@ -1249,17 +1252,20 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const int64_t lock_owner,
-      const int64_t lock_timeout);
+      const int64_t lock_timeout,
+      const int32_t group_id);
   virtual int unlock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const int64_t lock_owner,
-      const int64_t lock_timeout);
+      const int64_t lock_timeout,
+      const int32_t group_id);
   virtual int get_config_change_lock_stat(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
+      const int32_t group_id,
       int64_t &palf_lock_owner,
       bool &is_locked);
   virtual int wakeup_transfer_service(

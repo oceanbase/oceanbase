@@ -32974,10 +32974,11 @@ int ObDDLSQLTransaction::start(ObISQLClient *proxy,
 int ObDDLSQLTransaction::start(
     ObISQLClient *proxy,
     const uint64_t tenant_id,
-    bool with_snapshot /*= false*/)
+    bool with_snapshot /*= false*/,
+    const int32_t group_id /* = 0*/)
 {
   int ret = OB_NOT_SUPPORTED;
-  UNUSEDx(proxy, with_snapshot, tenant_id);
+  UNUSEDx(proxy, with_snapshot, tenant_id, group_id);
   return ret;
 }
 

@@ -205,7 +205,8 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
       tenant_id_,
       task_id,
       true/*for_update*/,
-      task))) {
+      task,
+      0/*group_id*/))) {
     LOG_WARN("fail to get task", KR(ret), K_(tenant_id), K(task_id), K(task));
   } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1104,7 +1105,8 @@ int ObTenantTransferService::try_cancel_transfer_task(const ObTransferTaskID tas
       tenant_id_,
       task_id,
       true/*for_update*/,
-      task))) {
+      task,
+      0/*group_id*/))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get task", KR(ret), K_(tenant_id), K(task_id), K(task));
     } else {

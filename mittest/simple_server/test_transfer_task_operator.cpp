@@ -237,16 +237,16 @@ TEST_F(TestTransferTaskOperator, test_operator)
 
   // get
   ObTransferTask task;
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_task_id() == task_id_);
   ASSERT_TRUE(task.get_tablet_list().empty());
   ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(task.get_comment()), "Task canceled"));
   LOG_INFO("get from table", K(task));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, true, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, true, task, 0/*group_id*/));
   LOG_INFO("get from table", K(task));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get(sql_proxy, tenant_id_,
-      ObTransferTaskID(555), false, task));
+      ObTransferTaskID(555), false, task, 0/*group_id*/));
 
   // get_task_with_time
   int64_t create_time = OB_INVALID_TIMESTAMP;
@@ -266,66 +266,66 @@ TEST_F(TestTransferTaskOperator, test_operator)
 
   // get by dest_ls
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, dest_ls_, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, dest_ls_, task, 0/*group_id*/));
   ASSERT_TRUE(task_id_ == task.get_task_id());
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, ObLSID(555), task));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, ObLSID(555), task, 0/*group_id*/));
   ObTransferTask dup_dest_ls_task;
   ASSERT_EQ(OB_SUCCESS, dup_dest_ls_task.init(ObTransferTaskID(2223), ObLSID(1003), ObLSID(1004),
       part_list_, ObTransferStatus(ObTransferStatus::INIT), trace_id_, ObBalanceTaskID(2)));
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(sql_proxy, tenant_id_, dup_dest_ls_task));
   task.reset();
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, ObLSID(1004), task));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, ObLSID(1004), task, 0/*group_id*/));
 
   // update_to_start_status
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::update_to_start_status(sql_proxy, tenant_id_,task_id_,
       ObTransferStatus(ObTransferStatus::INIT), part_list_, not_exist_part_list_, lock_conflict_part_list_, table_lock_tablet_list_, tablet_list_, ObTransferStatus(ObTransferStatus::START), lock_owner_id_));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task, 0/*group_id*/));
   ASSERT_TRUE(!task.get_tablet_list().empty());
   LOG_INFO("update to start status", K(task));
   ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::update_to_start_status(sql_proxy, tenant_id_,task_id_,
       ObTransferStatus(ObTransferStatus::ABORTED), part_list_, not_exist_part_list_, lock_conflict_part_list_, table_lock_tablet_list_, tablet_list_, ObTransferStatus(ObTransferStatus::START), lock_owner_id_));
 
   // update start_scn
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::update_start_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::START), start_scn_));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::update_start_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::START), start_scn_, 0/*group_id*/));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_start_scn() == start_scn_);
   //ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::update_start_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::ABORTED), start_scn_));
 
   // update status
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::update_status_and_result(sql_proxy, tenant_id_, task_id_,
-      ObTransferStatus(ObTransferStatus::START), ObTransferStatus(ObTransferStatus::DOING), OB_SUCCESS));
+      ObTransferStatus(ObTransferStatus::START), ObTransferStatus(ObTransferStatus::DOING), OB_SUCCESS, 0/*group_id*/));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_status().status() == ObTransferStatus::DOING);
   //ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::update_status(sql_proxy, tenant_id_, task_id_,
   //    ObTransferStatus(ObTransferStatus::ABORTED), ObTransferStatus(ObTransferStatus::ABORTED)));
 
   // finish task
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::finish_task(sql_proxy, tenant_id_, other_task_id,
-      ObTransferStatus(ObTransferStatus::INIT), ObTransferStatus(ObTransferStatus::COMPLETED), OB_SUCCESS, ObTransferTaskComment::EMPTY_COMMENT));
+      ObTransferStatus(ObTransferStatus::INIT), ObTransferStatus(ObTransferStatus::COMPLETED), OB_SUCCESS, ObTransferTaskComment::EMPTY_COMMENT, 0/*group_id*/));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, other_task_id, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, other_task_id, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_status().status() == ObTransferStatus::COMPLETED);
   ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::finish_task(sql_proxy, tenant_id_, other_task_id,
-      ObTransferStatus(ObTransferStatus::ABORTED), ObTransferStatus(ObTransferStatus::ABORTED), OB_SUCCESS, ObTransferTaskComment::EMPTY_COMMENT));
+      ObTransferStatus(ObTransferStatus::ABORTED), ObTransferStatus(ObTransferStatus::ABORTED), OB_SUCCESS, ObTransferTaskComment::EMPTY_COMMENT, 0/*group_id*/));
 
   // finish task from init
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::finish_task_from_init(sql_proxy, tenant_id_, dup_dest_ls_task.get_task_id(),
       ObTransferStatus(ObTransferStatus::INIT), part_list_, not_exist_part_list_, lock_conflict_part_list_, ObTransferStatus(ObTransferStatus::COMPLETED), OB_SUCCESS, ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, other_task_id, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, other_task_id, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_status().status() == ObTransferStatus::COMPLETED);
   ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::finish_task_from_init(sql_proxy, tenant_id_, dup_dest_ls_task.get_task_id(),
       ObTransferStatus(ObTransferStatus::ABORTED), part_list_, not_exist_part_list_, lock_conflict_part_list_, ObTransferStatus(ObTransferStatus::COMPLETED), OB_SUCCESS, ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION));
 
   // update finish_scn
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::update_finish_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::DOING), finish_scn_));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::update_finish_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::DOING), finish_scn_, 0/*group_id*/));
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_finish_scn() == finish_scn_);
-  ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::update_finish_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::ABORTED), finish_scn_));
+  ASSERT_EQ(OB_STATE_NOT_MATCH, ObTransferTaskOperator::update_finish_scn(sql_proxy, tenant_id_, task_id_, ObTransferStatus(ObTransferStatus::ABORTED), finish_scn_, 0/*group_id*/));
 
   // get_all_task_status
   task_status.reset();

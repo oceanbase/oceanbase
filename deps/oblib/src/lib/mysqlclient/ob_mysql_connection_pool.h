@@ -140,7 +140,7 @@ public:
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size);
 
-  virtual int acquire(const uint64_t tenant_id, ObISQLConnection *&conn, ObISQLClient *client_addr) override;
+  virtual int acquire(const uint64_t tenant_id, ObISQLConnection *&conn, ObISQLClient *client_addr, const int32_t group_id) override;
   virtual int release(ObISQLConnection *conn, const bool success) override;
 
   virtual int on_client_inactive(ObISQLClient *client_addr) override

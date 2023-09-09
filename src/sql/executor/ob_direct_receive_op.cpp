@@ -145,12 +145,14 @@ int ObDirectReceiveOp::inner_close()
           LOG_WARN("session or plan ctx or rpc is NULL", K(ret));
         } else {
           ObQueryRetryInfo retry_info;
+          const int32_t group_id = OB_INVALID_ID == session->get_expect_group_id() ? 0 : session->get_expect_group_id();
           ObExecutorRpcCtx rpc_ctx(session->get_effective_tenant_id(),
               plan_ctx->get_timeout_timestamp(),
               ctx_.get_task_exec_ctx().get_min_cluster_version(),
               &retry_info,
               session,
-              plan_ctx->is_plain_select_stmt());
+              plan_ctx->is_plain_select_stmt(),
+              group_id);
           int tmp_ret = rpc->task_kill(rpc_ctx, resp_handler->get_task_id(), resp_handler->get_dst_addr());
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("kill task failed", K(tmp_ret),

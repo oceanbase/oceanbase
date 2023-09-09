@@ -156,7 +156,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       last_query_timestamp_(0),
       force_remote_execute_(false),
       force_no_reuse_(false),
-      use_external_session_(false)
+      use_external_session_(false),
+      group_id_(0)
 {
 }
 
@@ -187,7 +188,8 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
                                ObISQLClient *client_addr, /* = NULL */
                                ObRestoreSQLModifier *sql_modifier /* = NULL */,
                                const bool use_static_engine /* = false */,
-                               const bool is_oracle_mode /* = false */)
+                               const bool is_oracle_mode /* = false */,
+                               const int32_t group_id /* = 0*/)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -222,6 +224,7 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
     if (OB_FAIL(init_session(extern_session, use_static_engine))) {
       LOG_WARN("init session failed", K(ret));
     } else {
+      group_id_ = group_id;
       inited_ = true;
     }
   }
@@ -679,6 +682,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
       LOG_WARN("executor execute failed", K(ret));
     } else {
       ObSQLSessionInfo &session = res.result_set().get_session();
+      session.set_expect_group_id(group_id_);
       if (OB_ISNULL(res.sql_ctx().schema_guard_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null");
@@ -1044,7 +1048,7 @@ int ObInnerSQLConnection::start_transaction_inner(
             LOG_WARN("fail to set tz info wrap", K(ret));
           } else if (FALSE_IT(handler->get_result()->set_conn_id(OB_INVALID_ID))) {
           } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(resource_server_addr).by(tenant_id).
-                             timeout(query_timeout).
+                             timeout(query_timeout).group_id(group_id_).
                              inner_sql_sync_transmit(
                                  arg, *(handler->get_result()), handler->get_handle()))) {
             LOG_WARN("inner_sql_sync_transmit process failed", K(ret), K(tenant_id));
@@ -1224,6 +1228,7 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
     } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(get_resource_svr())
                        .by(tenant_id)
                        .timeout(query_timeout)
+                       .group_id(group_id_)
                        .inner_sql_sync_transmit(arg,
                                                 *(handler->get_result()),
                                                 handler->get_handle()))) {
@@ -1294,6 +1299,7 @@ int ObInnerSQLConnection::rollback()
             LOG_WARN("fail to set tz info wrap", K(ret));
           } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(get_resource_svr()).by(OB_SYS_TENANT_ID).
                              timeout(query_timeout).
+                             group_id(group_id_).
                              inner_sql_sync_transmit(
                                  arg, *(handler->get_result()), handler->get_handle()))) {
             LOG_WARN("inner_sql_sync_transmit process failed",
@@ -1364,7 +1370,7 @@ int ObInnerSQLConnection::commit()
           } else if (OB_FAIL(arg.set_tz_info_wrap(get_session().get_tz_info_wrap()))) {
             LOG_WARN("fail to set tz info wrap", K(ret));
           } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(get_resource_svr()).by(OB_SYS_TENANT_ID).
-                     timeout(query_timeout).
+                     timeout(query_timeout).group_id(group_id_).
                      inner_sql_sync_transmit(
                          arg, *(handler->get_result()), handler->get_handle()))) {
             LOG_WARN("inner_sql_sync_transmit process failed",
@@ -1503,13 +1509,14 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
                             get_session().get_local_nls_timestamp_format(),
                             get_session().get_local_nls_timestamp_tz_format());
         ObInnerSqlRpcStreamHandle *handler = res.remote_result_set().get_stream_handler();
+
         if (OB_ISNULL(handler)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("handler is null ptr", K(ret));
         } else if (OB_FAIL(arg.set_tz_info_wrap(get_session().get_tz_info_wrap()))) {
           LOG_WARN("fail to set tz info wrap", K(ret));
         } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(get_resource_svr()).by(tenant_id).
-                           timeout(query_timeout).inner_sql_sync_transmit(
+                           timeout(query_timeout).group_id(group_id_).inner_sql_sync_transmit(
                                arg, *(handler->get_result()), handler->get_handle()))) {
           // complement data for offline ddl may exceed rpc default timeout, thus need to set it to a bigger value for this proxy.
           LOG_WARN("inner_sql_sync_transmit process failed", K(ret), K(tenant_id));
@@ -1618,6 +1625,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
   static_assert(ctx_size <= ObISQLClient::ReadResult::BUF_SIZE, "buffer not enough");
   ObSqlQueryExecutor executor(sql);
   const bool local_execute = is_local_execute(cluster_id, tenant_id);
+
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection not inited", K(ret));
@@ -1704,7 +1712,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
       } else if (OB_FAIL(arg.set_tz_info_wrap(get_session().get_tz_info_wrap()))) {
         LOG_WARN("fail to set tz info wrap", K(ret));
       } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(get_resource_svr()).
-            dst_cluster_id(cluster_id).by(tenant_id).timeout(query_timeout).
+            dst_cluster_id(cluster_id).by(tenant_id).timeout(query_timeout).group_id(group_id_).
                          inner_sql_sync_transmit(
                              arg, *(handler->get_result()), handler->get_handle()))) {
         LOG_WARN("inner_sql_sync_transmit process failed", K(ret), K(tenant_id), K(cluster_id));

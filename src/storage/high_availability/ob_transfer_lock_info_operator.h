@@ -28,12 +28,12 @@ public:
   ObTransferLockInfoOperator() = default;
   ~ObTransferLockInfoOperator() = default;
 
-  static int insert(const ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy);
+  static int insert(const ObTransferTaskLockInfo &lock_info, const int32_t group_id, common::ObISQLClient &sql_proxy);
   static int remove(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-      const ObTransferLockStatus &status, common::ObISQLClient &sql_proxy);
+      const ObTransferLockStatus &status, const int32_t group_id, common::ObISQLClient &sql_proxy);
   static int get(const ObTransferLockInfoRowKey &row_key, const int64_t task_id, const ObTransferLockStatus &status,
-      const bool for_update, ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy);
-  static int fetch_all(common::ObISQLClient &sql_proxy, const uint64_t tenant_id,
+      const bool for_update, const int32_t group_id, ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy);
+  static int fetch_all(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, const int32_t group_id,
       common::ObArray<ObTransferTaskLockInfo> &lock_infos);
 
 private:

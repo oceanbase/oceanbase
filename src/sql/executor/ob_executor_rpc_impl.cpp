@@ -54,6 +54,7 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
   RemoteStreamHandle &real_handler = handler.get_remote_stream_handle();
   RemoteStreamHandle::MyHandle &h = real_handler.get_handle();
   int64_t timeout_timestamp = rpc_ctx.get_timeout_timestamp();
+  const int32_t group_id = rpc_ctx.get_group_id();
   if (OB_ISNULL(proxy_) || OB_ISNULL(real_handler.get_result())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("not init", K(ret), K_(proxy), "result", real_handler.get_result());
@@ -71,6 +72,7 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx &rpc_ctx,
     } else if (OB_FAIL(to_proxy
                        .by(tenant_id)
                        .timeout(timeout)
+                       .group_id(group_id)
                        .task_execute(task, *real_handler.get_result(), h))) {
       LOG_WARN("rpc task_execute fail",
                K(ret),
@@ -121,6 +123,7 @@ int ObExecutorRpcImpl::task_execute_v2(ObExecutorRpcCtx &rpc_ctx,
   RemoteStreamHandleV2 &real_handler = handler.get_remote_stream_handle_v2();
   RemoteStreamHandleV2::MyHandle &h = real_handler.get_handle();
   int64_t timeout_timestamp = rpc_ctx.get_timeout_timestamp();
+  const int32_t group_id = rpc_ctx.get_group_id();
   if (OB_ISNULL(proxy_) || OB_ISNULL(real_handler.get_result())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("not init", K(ret), K_(proxy), "result", real_handler.get_result());
@@ -135,6 +138,7 @@ int ObExecutorRpcImpl::task_execute_v2(ObExecutorRpcCtx &rpc_ctx,
     } else if (OB_FAIL(to_proxy
                        .by(tenant_id)
                        .timeout(timeout)
+                       .group_id(group_id)
                        .remote_task_execute(task, *real_handler.get_result(), h))) {
       LOG_WARN("rpc task_execute fail",
                K(ret), K(tenant_id), K(svr), K(timeout), K(timeout_timestamp));

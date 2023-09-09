@@ -447,6 +447,7 @@ int ObPrimaryStandbyService::switch_to_standby(
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
+  const int32_t group_id = 0;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
@@ -505,7 +506,7 @@ int ObPrimaryStandbyService::switch_to_standby(
           } else if (compat_version < DATA_VERSION_4_2_0_0) {
             //Regardless of the data_version change and switchover concurrency scenario,
             //if there is concurrency, the member_list lock that has not been released by the operation and maintenance process
-          } else if (OB_FAIL(ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(tenant_id, *sql_proxy_))) {
+          } else if (OB_FAIL(ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(tenant_id, group_id, *sql_proxy_))) {
             LOG_WARN("failed to unlock member list when switch to standby", K(ret), K(tenant_id));
           }
           if (FAILEDx(role_transition_service.switchover_update_tenant_status(tenant_id,

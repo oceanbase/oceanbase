@@ -2614,7 +2614,8 @@ public:
                     bool with_snapshot = false) override;
   virtual int start(ObISQLClient *proxy,
                     const uint64_t tenant_id,
-                    bool with_snapshot = false) override;
+                    bool with_snapshot = false,
+                    const int32_t group_id = 0) override;
   static int lock_all_ddl_operation(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id);

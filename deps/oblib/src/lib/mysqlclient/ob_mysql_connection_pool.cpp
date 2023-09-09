@@ -698,10 +698,11 @@ void ObMySQLConnectionPool::runTimerTask()
   }
 }
 
-int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObISQLConnection *&conn, ObISQLClient *client_addr)
+int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObISQLConnection *&conn, ObISQLClient *client_addr, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   UNUSED(client_addr);
+  UNUSED(group_id);
   ObMySQLConnection *mysql_conn = NULL;
   conn = NULL;
   if (OB_FAIL(acquire(tenant_id, mysql_conn))) {

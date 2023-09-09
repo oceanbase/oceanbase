@@ -74,7 +74,7 @@ public:
       char *to, const int64_t to_size, int64_t &out_size);
 
   // acquired connection must be released
-  virtual int acquire(const uint64_t tenant_id, common::sqlclient::ObISQLConnection *&conn, ObISQLClient *client_addr) override;
+  virtual int acquire(const uint64_t tenant_id, common::sqlclient::ObISQLConnection *&conn, ObISQLClient *client_addr, const int32_t group_id) override;
   virtual int release(common::sqlclient::ObISQLConnection *conn, const bool success);
   int acquire_spi_conn(sql::ObSQLSessionInfo *session_info, observer::ObInnerSQLConnection *&conn);
   int acquire(sql::ObSQLSessionInfo *session_info,

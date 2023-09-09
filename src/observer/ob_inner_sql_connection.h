@@ -141,7 +141,8 @@ public:
            ObISQLClient *client_addr = NULL,
            ObRestoreSQLModifier *sql_modifer = NULL,
            const bool use_static_engine = false,
-           const bool is_oracle_mode = false);
+           const bool is_oracle_mode = false,
+           const int32_t group_id = 0);
   int destroy(void);
   inline void reset() { destroy(); }
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
@@ -414,6 +415,7 @@ private:
   // ask the inner sql connection to use external session instead of internal one
   // this enables show session / kill session using sql query command
   bool use_external_session_;
+  int32_t group_id_;
 
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };

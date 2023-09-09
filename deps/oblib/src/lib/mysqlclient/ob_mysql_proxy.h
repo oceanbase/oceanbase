@@ -107,9 +107,10 @@ public:
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size) override;
   // execute query and return data result
-  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override;
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override { return this->read(res, tenant_id, sql, 0/*group_id*/); }
   int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param);
   int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr);
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id) override;
   //only for across cluster
   //cluster_id can not GCONF.cluster_id
   virtual int read(ReadResult &res,
@@ -118,7 +119,8 @@ public:
                    const char *sql) override;
   using ObISQLClient::read;
   // execute update sql
-  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
+  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override { return this->write(tenant_id, sql, 0/**/, affected_rows); }
+  virtual int write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows) override;
   int write(const uint64_t tenant_id, const ObString sql, int64_t &affected_rows, int64_t compatibility_mode,
         const ObSessionParam *session_param = nullptr,
         const common::ObAddr *sql_exec_addr = nullptr);
@@ -137,8 +139,8 @@ public:
   int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor);
 
 protected:
-  int acquire(sqlclient::ObISQLConnection *&conn) { return this->acquire(OB_INVALID_TENANT_ID, conn); }
-  int acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn);
+  int acquire(sqlclient::ObISQLConnection *&conn) { return this->acquire(OB_INVALID_TENANT_ID, conn, 0); }
+  int acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn, const int32_t group_id);
   int read(sqlclient::ObISQLConnection *conn, ReadResult &result,
            const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr = nullptr);
 

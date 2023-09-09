@@ -66,11 +66,12 @@ int ObMySQLTransaction::start_transaction(
 int ObMySQLTransaction::start(
     ObISQLClient *sql_client,
     const uint64_t tenant_id,
-    bool with_snapshot/* = false*/)
+    bool with_snapshot/* = false*/,
+    const int32_t group_id /* = 0*/)
 {
   int ret = OB_SUCCESS;
   start_time_ = ::oceanbase::common::ObTimeUtility::current_time();
-  if (OB_FAIL(connect(tenant_id, sql_client))) {
+  if (OB_FAIL(connect(tenant_id, group_id, sql_client))) {
     LOG_WARN("failed to init", K(ret), K(tenant_id));
   } else if (enable_query_stash_ && OB_FAIL(query_stash_desc_.create(1024, "BucketQueryS", "NodeQueryS"))) {
     LOG_WARN("failed to init map", K(ret), K(tenant_id));

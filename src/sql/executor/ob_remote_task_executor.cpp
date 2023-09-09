@@ -63,12 +63,14 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
     } else {
       // 将task_info设成OB_TASK_STATE_RUNNING状态，后面如果重试可能会用到该状态
       task_info->set_state(OB_TASK_STATE_RUNNING);
+      const int32_t group_id = OB_INVALID_ID == session->get_expect_group_id() ? 0 : session->get_expect_group_id();
       ObExecutorRpcCtx rpc_ctx(session->get_rpc_tenant_id(),
                                plan_ctx->get_timeout_timestamp(),
                                query_ctx.get_task_exec_ctx().get_min_cluster_version(),
                                retry_info,
                                query_ctx.get_my_session(),
-                               plan_ctx->is_plain_select_stmt());
+                               plan_ctx->is_plain_select_stmt(),
+                               group_id);
       if (OB_FAIL(rpc->task_execute(rpc_ctx,
                                     task,
                                     task_info->get_task_location().get_server(),

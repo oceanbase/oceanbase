@@ -233,12 +233,14 @@ int ObRemoteScheduler::execute_with_sql(ObExecContext &ctx, ObPhysicalPlan *phy_
   }
   if (OB_SUCC(ret)) {
     ObScanner *scanner = NULL;
+    const int32_t group_id = OB_INVALID_ID == session->get_expect_group_id() ? 0 : session->get_expect_group_id();
     ObExecutorRpcCtx rpc_ctx(session->get_rpc_tenant_id(),
                              plan_ctx->get_timeout_timestamp(),
                              ctx.get_task_exec_ctx().get_min_cluster_version(),
                              retry_info,
                              ctx.get_my_session(),
-                             plan_ctx->is_plain_select_stmt());
+                             plan_ctx->is_plain_select_stmt(),
+                             group_id);
     if (OB_FAIL(rpc->task_execute_v2(rpc_ctx,
                                      task,
                                      task.get_runner_svr(),

@@ -30,19 +30,20 @@ int ObTransferTaskOperator::get(
     const uint64_t tenant_id,
     const ObTransferTaskID task_id,
     const bool for_update,
-    ObTransferTask &task)
+    ObTransferTask &task,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !task_id.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !task_id.is_valid() || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id), K(for_update));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id), K(for_update), K(group_id));
   } else {
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE task_id = %ld%s",
           OB_ALL_TRANSFER_TASK_TNAME, task_id.id(), for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id), K(for_update));
-      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr(), group_id))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -171,14 +172,15 @@ int ObTransferTaskOperator::get_by_src_ls(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
     const ObLSID &src_ls,
-    ObTransferTask &task)
+    ObTransferTask &task,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   const bool is_src_ls = true;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !src_ls.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls));
-  } else if (OB_FAIL(get_by_ls_id_(sql_proxy, tenant_id, src_ls, is_src_ls, task))) {
+  } else if (OB_FAIL(get_by_ls_id_(sql_proxy, tenant_id, src_ls, is_src_ls, group_id, task))) {
     LOG_WARN("failed to get by ls id", K(ret), K(tenant_id), K(src_ls));
   }
   return ret;
@@ -188,14 +190,15 @@ int ObTransferTaskOperator::get_by_dest_ls(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
     const ObLSID &dest_ls,
-    ObTransferTask &task)
+    ObTransferTask &task,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   const bool is_src_ls = false;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !dest_ls.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(dest_ls));
-  } else if (OB_FAIL(get_by_ls_id_(sql_proxy, tenant_id, dest_ls, is_src_ls, task))) {
+  } else if (OB_FAIL(get_by_ls_id_(sql_proxy, tenant_id, dest_ls, is_src_ls, group_id, task))) {
     LOG_WARN("failed to get by ls id", K(ret), K(tenant_id), K(dest_ls));
   }
   return ret;
@@ -395,7 +398,8 @@ int ObTransferTaskOperator::finish_task(
     const ObTransferStatus &old_status,
     const ObTransferStatus &new_status,
     const int result,
-    const ObTransferTaskComment &comment)
+    const ObTransferTaskComment &comment,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   bool can_change = false;
@@ -432,7 +436,7 @@ int ObTransferTaskOperator::finish_task(
       LOG_WARN("fail to splice update sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(sql.append_fmt(" AND status='%s'", old_status.str()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tenant_id), K(sql), K(old_status));
-    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), group_id, affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(tenant_id), K(sql), K(affected_rows));
     } else if (OB_UNLIKELY(1 != affected_rows)) {
       ret = OB_STATE_NOT_MATCH;
@@ -552,14 +556,16 @@ int ObTransferTaskOperator::update_status_and_result(
     const ObTransferTaskID task_id,
     const ObTransferStatus &old_status,
     const ObTransferStatus &new_status,
-    const int result)
+    const int result,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   bool can_change = false;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-      || !task_id.is_valid())) {
+      || !task_id.is_valid()
+      || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id), K(group_id));
   } else if (OB_FAIL(ObTransferStatusHelper::check_can_change_status(
       old_status,
       new_status,
@@ -584,7 +590,7 @@ int ObTransferTaskOperator::update_status_and_result(
       LOG_WARN("fail to splice update sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(sql.append_fmt(" AND status='%s'", old_status.str()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tenant_id), K(sql), K(old_status));
-    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), group_id, affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(tenant_id), K(sql), K(affected_rows));
     } else if (OB_UNLIKELY(1 != affected_rows && 0 != affected_rows)) {
       ret = OB_STATE_NOT_MATCH;
@@ -603,16 +609,18 @@ int ObTransferTaskOperator::update_start_scn(
     const uint64_t tenant_id,
     const ObTransferTaskID task_id,
     const ObTransferStatus &old_status,
-    const share::SCN &start_scn)
+    const share::SCN &start_scn,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || !task_id.is_valid()
       || !old_status.is_valid()
-      || !start_scn.is_valid())) {
+      || !start_scn.is_valid()
+      || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret),
-        K(tenant_id), K(task_id), K(old_status), K(start_scn));
+        K(tenant_id), K(task_id), K(old_status), K(start_scn), K(group_id));
   } else {
     ObSqlString sql;
     ObDMLSqlSplicer dml_splicer;
@@ -627,7 +635,7 @@ int ObTransferTaskOperator::update_start_scn(
       LOG_WARN("fail to splice update sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(sql.append_fmt(" AND status='%s'", old_status.str()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tenant_id), K(sql), K(old_status));
-    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), group_id, affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(tenant_id), K(sql), K(affected_rows));
     } else if (OB_UNLIKELY(1 != affected_rows && 0 != affected_rows)) {
       ret = OB_STATE_NOT_MATCH;
@@ -645,16 +653,18 @@ int ObTransferTaskOperator::update_finish_scn(
     const uint64_t tenant_id,
     const ObTransferTaskID task_id,
     const ObTransferStatus &old_status,
-    const share::SCN &finish_scn)
+    const share::SCN &finish_scn,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || !task_id.is_valid()
       || !old_status.is_valid()
-      || !finish_scn.is_valid())) {
+      || !finish_scn.is_valid()
+      || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret),
-        K(tenant_id), K(task_id), K(old_status), K(finish_scn));
+        K(tenant_id), K(task_id), K(old_status), K(finish_scn), K(group_id));
   } else {
     ObSqlString sql;
     ObDMLSqlSplicer dml_splicer;
@@ -669,7 +679,7 @@ int ObTransferTaskOperator::update_finish_scn(
       LOG_WARN("fail to splice update sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(sql.append_fmt(" AND status='%s'", old_status.str()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tenant_id), K(sql), K(old_status));
-    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), group_id, affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(tenant_id), K(sql), K(affected_rows));
     } else if (OB_UNLIKELY(1 != affected_rows)) {
       ret = OB_STATE_NOT_MATCH;
@@ -687,12 +697,13 @@ int ObTransferTaskOperator::get_by_ls_id_(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     const bool is_src_ls,
+    const int32_t group_id,
     ObTransferTask &task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid())) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid() || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(group_id));
   } else {
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result) {
@@ -708,7 +719,7 @@ int ObTransferTaskOperator::get_by_ls_id_(
         }
       }
 
-      if (FAILEDx(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+      if (FAILEDx(sql_proxy.read(result, tenant_id, sql.ptr(), group_id))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;

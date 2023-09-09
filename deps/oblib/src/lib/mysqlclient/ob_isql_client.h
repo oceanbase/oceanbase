@@ -53,10 +53,12 @@ public:
   virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) = 0;
   virtual int read(ReadResult &res, const int64_t cluster_id, const uint64_t tenant_id, const char *sql) = 0;
   virtual int read(ReadResult &res, const char *sql) { return this->read(res, OB_SYS_TENANT_ID, sql); }
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id) = 0;
 
   // execute update sql
   virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) = 0;
   virtual int write(const char *sql, int64_t &affected_rows) { return this->write(OB_SYS_TENANT_ID, sql, affected_rows); }
+  virtual int write(const uint64_t tenant_id, const char *sql,  const int32_t group_id, int64_t &affected_rows) = 0;
 
   // executor execute
   int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor)

@@ -91,7 +91,7 @@ int ObInnerSQLConnectionPool::init(ObMultiVersionSchemaService *schema_service,
   return ret;
 }
 
-int ObInnerSQLConnectionPool::acquire(const uint64_t tenant_id, common::sqlclient::ObISQLConnection *&conn, ObISQLClient *client_addr)
+int ObInnerSQLConnectionPool::acquire(const uint64_t tenant_id, common::sqlclient::ObISQLConnection *&conn, ObISQLClient *client_addr, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   UNUSED(tenant_id);
@@ -102,7 +102,8 @@ int ObInnerSQLConnectionPool::acquire(const uint64_t tenant_id, common::sqlclien
   } else if (OB_FAIL(alloc_conn(inner_sql_conn))) {
     LOG_WARN("alloc connection from pool failed", K(ret));
   } else if (OB_FAIL(inner_sql_conn->init(this, schema_service_, ob_sql_, vt_iter_creator_,
-                                          config_, nullptr /* session_info */, client_addr, nullptr/*sql modifer*/, is_ddl_))) {
+                                          config_, nullptr /* session_info */, client_addr, nullptr/*sql modifer*/, is_ddl_,
+                                          false /*is_oracle_mode*/, group_id))) {
     LOG_WARN("init connection failed", K(ret));
   } else if (OB_FAIL(add_to_used_conn_list(inner_sql_conn))) {
     LOG_WARN("add_to_used_conn_list failed", K(ret));
