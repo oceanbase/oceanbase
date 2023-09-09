@@ -1303,7 +1303,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             LOG_WARN("failed to init result set", K(ret));
           } else if (OB_FAIL(ob_write_string(allocator, sess.get_current_query_string(), cur_query))) {
             LOG_WARN("failed to write string", K(ret));
-          } else if (OB_FAIL(sess.store_query_string(trimed_stmt))) {
+          } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
             LOG_WARN("generate syntax tree failed", K(sql), K(ret));
@@ -1616,7 +1616,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
                 K(ret), K(pctx), K(ps_cache));
     } else if (OB_FAIL(ob_write_string(allocator, session.get_current_query_string(), cur_query))) {
       LOG_WARN("failed to write string", K(ret));
-    } else if (OB_FAIL(session.store_query_string(trimed_stmt))) {
+    } else if (OB_FAIL(session.store_query_string(stmt))) {
       LOG_WARN("store query string fail", K(ret));
     } else {
       bool need_do_real_prepare = false;
