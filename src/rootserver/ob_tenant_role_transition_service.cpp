@@ -745,6 +745,7 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(
       int64_t rpc_count = 0;
       ObArray<int> return_code_array;
       int tmp_ret = OB_SUCCESS;
+      const uint64_t group_id = share::OBCG_DBA_COMMAND;
       for (int64_t i = 0; OB_SUCC(ret) && i < status_info_array.count(); ++i) {
         return_code_array.reset();
         const ObLSStatusInfo &info = status_info_array.at(i);
@@ -755,9 +756,10 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(
         } else if (OB_FAIL(arg.init(tenant_id_, info.ls_id_))) {
           LOG_WARN("failed to init arg", KR(ret), K(tenant_id_), K(info));
         // use meta rpc process thread
-        } else if (OB_FAIL(proxy.call(leader, timeout, GCONF.cluster_id, gen_meta_tenant_id(tenant_id_), arg))) {
+        } else if (OB_FAIL(proxy.call(leader, timeout, GCONF.cluster_id, tenant_id_, group_id, arg))) {
           //can not ignore error of each ls
-          LOG_WARN("failed to send rpc", KR(ret), K(leader), K(timeout), K(tenant_id_), K(arg));
+          LOG_WARN("failed to send rpc", KR(ret), K(leader), K(timeout),
+              K(tenant_id_), K(arg), K(group_id));
         } else {
           rpc_count++;
         }
@@ -841,6 +843,7 @@ int ObTenantRoleTransitionService::do_change_ls_access_mode_(
     ObChangeLSAccessModeProxy proxy(*rpc_proxy_, &obrpc::ObSrvRpcProxy::change_ls_access_mode);
     ObAddr leader;
     obrpc::ObLSAccessModeInfo arg;
+    const uint64_t group_id = share::OBCG_DBA_COMMAND;
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_access_info.count(); ++i) {
       const obrpc::ObLSAccessModeInfo &info = ls_access_info.at(i);
       const int64_t timeout = ctx.get_timeout();
@@ -851,9 +854,10 @@ int ObTenantRoleTransitionService::do_change_ls_access_mode_(
       } else if (OB_FAIL(arg.init(tenant_id_, info.get_ls_id(), info.get_mode_version(),
               target_access_mode, ref_scn, sys_ls_sync_scn))) {
         LOG_WARN("failed to init arg", KR(ret), K(info), K(target_access_mode), K(ref_scn), K(sys_ls_sync_scn));
-      } else if (OB_FAIL(proxy.call(leader, timeout, GCONF.cluster_id, gen_meta_tenant_id(tenant_id_), arg))) {
+      } else if (OB_FAIL(proxy.call(leader, timeout, GCONF.cluster_id, tenant_id_, group_id, arg))) {
         //can not ignore of each ls
-        LOG_WARN("failed to send rpc", KR(ret), K(arg), K(timeout), K(tenant_id_), K(info));
+        LOG_WARN("failed to send rpc", KR(ret), K(arg), K(timeout),
+            K(tenant_id_), K(info), K(group_id));
       }
     }//end for
     //result
@@ -1244,6 +1248,7 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc(const uint64_t tenant_
         *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_sync_scn);
     obrpc::ObGetLSSyncScnArg arg;
     int64_t rpc_count = 0;
+    const uint64_t group_id = share::OBCG_DBA_COMMAND;
     for (int64_t i = 0; OB_SUCC(ret) && i < status_info_array.count(); ++i) {
       const ObLSStatusInfo &info = status_info_array.at(i);
       const int64_t timeout_us = !THIS_WORKER.is_timeout_ts_valid() ?
@@ -1254,8 +1259,9 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc(const uint64_t tenant_
       } else if (OB_FAIL(arg.init(tenant_id, info.ls_id_, check_sync_to_latest))) {
         LOG_WARN("failed to init arg", KR(ret), K(tenant_id), K(info));
       // use meta rpc process thread
-      } else if (OB_FAIL(proxy.call(leader, timeout_us, gen_meta_tenant_id(tenant_id), arg))) {
-        LOG_WARN("failed to send rpc", KR(ret), K(leader), K(timeout_us), K(tenant_id), K(arg));
+      } else if (OB_FAIL(proxy.call(leader, timeout_us, GCONF.cluster_id, tenant_id, group_id, arg))) {
+        LOG_WARN("failed to send rpc", KR(ret), K(leader), K(timeout_us),
+            K(tenant_id), K(arg), K(group_id));
       } else {
         rpc_count++;
       }
@@ -1418,6 +1424,7 @@ void ObTenantRoleTransitionService::broadcast_tenant_info(const char* const log_
   } else if (OB_FAIL(unit_operator.get_units_by_tenant(tenant_id_, units))) {
     LOG_WARN("failed to get tenant unit", KR(ret), K_(tenant_id));
   } else {
+    //no need user special group OBCG_DBA_COMMAND
     ObRefreshTenantInfoProxy proxy(
         *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::refresh_tenant_info);
     int64_t rpc_count = 0;
@@ -1433,7 +1440,7 @@ void ObTenantRoleTransitionService::broadcast_tenant_info(const char* const log_
       } else if (OB_FAIL(arg.init(tenant_id_))) {
         LOG_WARN("failed to init arg", KR(ret), K_(tenant_id));
       // use meta rpc process thread
-      } else if (OB_FAIL(proxy.call(unit.server_, timeout_us, gen_meta_tenant_id(tenant_id_), arg))) {
+      } else if (OB_FAIL(proxy.call(unit.server_, timeout_us, GCONF.cluster_id, gen_meta_tenant_id(tenant_id_), arg))) {
         LOG_WARN("failed to send rpc", KR(ret), K(unit), K(timeout_us), K_(tenant_id), K(arg));
       } else {
         rpc_count++;

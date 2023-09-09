@@ -609,6 +609,8 @@ OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const
     cnt =  std::max(cnt, 8L);
   } else if (share::OBCG_WR == group_id_) {
     cnt = 2;  // one for take snapshot, one for purge
+  } else if (share::OBCG_DBA_COMMAND == group_id_) {
+    cnt = 1;
   }
   return cnt;
 }
@@ -623,6 +625,8 @@ OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
     cnt = std::max(cnt, tenant_->max_worker_cnt());
   } else if (share::OBCG_WR == group_id_) {
     cnt = 2;  // one for take snapshot, one for purge
+  } else if (share::OBCG_DBA_COMMAND == group_id_) {
+    cnt = 1;
   }
   return cnt;
 }

@@ -422,11 +422,13 @@ int ObPrimaryLSService::check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo
     const int64_t timeout = GCONF.rpc_timeout;
     obrpc::ObCheckLSCanOfflineArg arg;
     can_offline = false;
+    const uint64_t group_id = info.ls_is_tenant_dropping() ? OBCG_DBA_COMMAND : OBCG_DEFAULT;
     if (OB_FAIL(arg.init(info.tenant_id_, info.ls_id_, info.status_))) {
       LOG_WARN("failed to init arg", KR(ret), K(arg));
     } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader)
                            .by(info.tenant_id_)
                            .timeout(timeout)
+                           .group_id(group_id)
                            .check_ls_can_offline(arg))) {
       can_offline = false;
       LOG_WARN("failed to check ls can offline", KR(ret), K(arg), K(info),
