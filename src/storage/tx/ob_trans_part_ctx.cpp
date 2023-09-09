@@ -7949,7 +7949,9 @@ int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot)
 {
   int ret = OB_SUCCESS;
   if (is_root()) {
-    handle_trans_ask_state_(snapshot);
+    if (!exec_info_.participants_.empty()) {
+      handle_trans_ask_state_(snapshot);
+    }
   } else {
     ObAskStateMsg msg;
     msg.snapshot_ = snapshot;
@@ -8012,11 +8014,30 @@ int ObPartTransCtx::handle_trans_ask_state(const SCN &snapshot, ObAskStateRespMs
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
+  } else if (exec_info_.participants_.empty()) {
+    // if coord not know any participants(before replay commit info log),
+    // fill self state to resp
+    ObStateInfo state_info;
+    state_info.ls_id_ = ls_id_;
+    state_info.state_ = exec_info_.state_;
+    state_info.snapshot_version_ = snapshot;
+    if (ObTxState::INIT == state_info.state_) {
+      if (OB_FAIL(get_ls_replica_readable_scn_(state_info.ls_id_, state_info.version_))) {
+        TRANS_LOG(WARN, "get replica readable scn failed", K(ret), K(state_info), K(snapshot));
+      } else if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
+        TRANS_LOG(WARN, "push back state info to resp msg failed", K(ret), K(snapshot), KPC(this));
+      }
+    } else {
+      ret = OB_STATE_NOT_MATCH;
+      TRANS_LOG(ERROR, "coord should not in other state befroe replay commit info log", K(ret),
+                KPC(this));
+    }
+    TRANS_LOG(INFO, "coord not know any participants", K(ret), K(state_info), KPC(this));
   } else {
     handle_trans_ask_state_(snapshot);
-  }
-  if (OB_SUCC(ret) && OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
-    TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
+    if (OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
+      TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
+    }
   }
   TRANS_LOG(INFO, "handle ask state msg", K(ret), K(snapshot), KPC(this));
   return ret;
@@ -8140,7 +8161,7 @@ int ObPartTransCtx::handle_trans_collect_state(ObStateInfo &state_info, const SC
             // The state is still init or redo complete at the second check, do nothing
             need_loop = false;
           } else if (OB_FAIL(get_ls_replica_readable_scn_(state_info.ls_id_, state_info.version_))) {
-            TRANS_LOG(WARN, "double check fail", K(ret), K(state_info), K(snapshot));
+            TRANS_LOG(WARN, "get replica readable scn failed", K(ret), K(state_info), K(snapshot));
           } else if (snapshot <= state_info.version_) {
             need_loop = true;
           } else {
@@ -8170,7 +8191,7 @@ int ObPartTransCtx::handle_trans_collect_state(ObStateInfo &state_info, const SC
       }
     } while(need_loop);
   }
-  TRANS_LOG(INFO, "handle trans collect state", K(ret), K(state_info), KPC(this));
+  TRANS_LOG(INFO, "handle trans collect state", K(ret), K(state_info), K(snapshot), KPC(this));
   return ret;
 }
 
