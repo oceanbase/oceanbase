@@ -2162,10 +2162,11 @@ int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, common::ObCommonSq
   session_param.ddl_info_.set_is_ddl(true);
   session_param.ddl_info_.set_source_table_hidden(false);
   session_param.ddl_info_.set_dest_table_hidden(false);
+  const int64_t sql_total_timeout = max(7 * 24 * 60 * 60 * 1000 * 1000L, GCONF._ob_ddl_timeout);
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret));
-  } else if (OB_FAIL(sql_proxy->read(res_, tenant_id_, sql_string.ptr(), &session_param))) {
+  } else if (OB_FAIL(sql_proxy->read(res_, tenant_id_, sql_string.ptr(), &session_param, sql_total_timeout))) {
     LOG_WARN("fail to execute sql", K(ret), K_(tenant_id), K(sql_string));
   } else if (OB_ISNULL(result_ = res_.get_result())) {
     ret = OB_ERR_UNEXPECTED;
