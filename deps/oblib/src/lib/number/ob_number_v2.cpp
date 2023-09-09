@@ -3255,13 +3255,12 @@ int ObNumber::format_v2(
   bool is_finish = false;
   const int64_t orig_pos = pos;
   const int64_t max_need_size = get_max_format_length() + ((!is_oracle_mode() && scale > 0) ? scale : 0);
-  if (OB_ISNULL(buf)
-      || OB_UNLIKELY((buf_len - pos) < 0)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(max_need_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("argument is invalid", KP(buf),  K(buf_len), K(pos), K(ret));
+    LOG_WARN("argument is invalid", KP(buf), K(max_need_size), K(ret));
   } else if (OB_UNLIKELY((buf_len - pos) < max_need_size)) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_TRACE("size is overflow", K(buf_len), K(pos), K(max_need_size),
+    ret = OB_SIZE_OVERFLOW;
+    LOG_TRACE("size is overflow", K(buf_len), K(pos), K(max_need_size),
                  KPC(this), K(scale), K(ret));
   } else if (OB_FAIL(format_int64(buf, pos, scale, is_finish))) {
     LOG_ERROR("format_int64 failed", KPC(this), K(ret));
