@@ -492,15 +492,20 @@ int ObSchemaUtils::construct_inner_table_schemas(
   }
   return ret;
 }
+
 int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
     const ObTimeoutCtx &ctx,
     const uint64_t tenant_id,
-    const int64_t schema_version,
-    const int64_t consensus_timeout)
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
   ObMultiVersionSchemaService *schema_service = NULL;
+  int64_t consensus_timeout = 30 * 1000 * 1000L; // 30s
+  omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+  if (tenant_config.is_valid()) {
+    consensus_timeout = tenant_config->_wait_interval_after_parallel_ddl;
+  }
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
       || schema_version <= 0
       || consensus_timeout < 0)) {
@@ -525,7 +530,7 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
       break;
     } else {
       if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
-        LOG_WARN("schema version not sync", K(tenant_id),
+        LOG_WARN("schema version not sync", K(tenant_id), K(consensus_timeout),
                  K(refreshed_schema_version), K(consensus_schema_version), K(schema_version));
       }
       ob_usleep(10 * 1000L); // 10ms

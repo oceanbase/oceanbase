@@ -378,7 +378,7 @@ _transfer_start_rpc_timeout
 _transfer_start_trans_timeout
 _tx_result_retention
 _upgrade_stage
-_wait_interval_after_truncate
+_wait_interval_after_parallel_ddl
 _with_subquery
 _xa_gc_interval
 _xa_gc_timeout
