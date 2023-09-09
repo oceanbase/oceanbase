@@ -57,7 +57,7 @@ public:
                             const common::ObString &table_name, bool cte_table_fisrt, uint64_t& table_id);
   int validate_stmt(ObLoadDataStmt* stmt);
   int resolve_hints(const ParseNode &node);
-
+  int check_trigger_constraint(const ObTableSchema *table_schema);
 private:
   enum ParameterEnum {
     ENUM_OPT_LOCAL = 0,
