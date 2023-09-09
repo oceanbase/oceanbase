@@ -944,6 +944,8 @@ int ObTenant::try_wait()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant gc thread create failed", K(tmp), K(errno), K(id_));
     } else {
+      // it may takes too much time for killing session after remove_tenant, we should recalculate.
+      ATOMIC_STORE(&stopped_, ObTimeUtility::current_time());
       ret = OB_EAGAIN;
       LOG_INFO("tenant pthread_create gc thread successfully", K(id_), K(gc_thread_));
     }
@@ -958,6 +960,11 @@ int ObTenant::try_wait()
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("pthread_tryjoin_np failed", K(tmp), K(errno), K(id_));
+    }
+    const int64_t ts = ObTimeUtility::current_time() - stopped_;
+    // only warn for one time in all tenant.
+    if (ts >= 3_min && REACH_TIME_INTERVAL(3_min)) {
+      LOG_ERROR_RET(OB_SUCCESS, "tenant destructed for too long time.", K_(id), K(ts));
     }
   }
   return ret;
