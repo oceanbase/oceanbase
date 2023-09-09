@@ -226,7 +226,6 @@ int ObTabletFullMemoryMdsData::deserialize(common::ObIAllocator &allocator, cons
     LOG_WARN("failed to deserialize", K(ret));
   } else {
     is_inited_ = true;
-    LOG_INFO("succeeded to deserialize full memory mds data", K(ret), KPC(this));
   }
 
   return ret;
