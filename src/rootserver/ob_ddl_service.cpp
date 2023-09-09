@@ -22325,14 +22325,15 @@ int ObDDLService::standby_create_root_key(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(arg));
   } else {
     obrpc::RootKeyType key_type = obrpc::RootKeyType::INVALID;
-    RootKeyValue root_key;
-    if (OB_FAIL(get_root_key_from_primary(arg, tenant_id, key_type, root_key))) {
+    common::ObString root_key;
+    ObArenaAllocator allocator("root_key");
+
+    if (OB_FAIL(get_root_key_from_primary(arg, tenant_id, key_type, root_key, allocator))) {
       LOG_WARN("failed to get root key", KR(ret), K(arg), K(tenant_id));
     } else {
       obrpc::ObRootKeyArg root_key_arg;
       obrpc::ObRootKeyResult dummy_result;
-      ObString key_value_str(root_key.ptr());
-      if (OB_FAIL(root_key_arg.init(tenant_id, key_type, key_value_str))) {
+      if (OB_FAIL(root_key_arg.init(tenant_id, key_type, root_key))) {
         LOG_WARN("failed to init root key arg", KR(ret), K(tenant_id), K(key_type), K(root_key));
       } else if (OB_FAIL(notify_root_key(*rpc_proxy_, root_key_arg, addrs, dummy_result))) {
         LOG_WARN("fail to notify root key", K(ret), K(root_key_arg));
@@ -22344,7 +22345,8 @@ int ObDDLService::standby_create_root_key(
 
 int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
     const uint64_t tenant_id, obrpc::RootKeyType &key_type,
-    RootKeyValue &key_value)
+    common::ObString &key_value,
+    common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -22368,7 +22370,7 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
     if (FAILEDx(get_root_key_from_obs(cluster_id, *rpc_proxy_, root_key_arg,
-            addr_list, key_type, key_value))) {
+            addr_list, key_type, key_value, allocator))) {
       LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
           K(root_key_arg), K(addr_list));
     }
@@ -22413,7 +22415,8 @@ int ObDDLService::get_root_key_from_obs(
              const obrpc::ObRootKeyArg &arg,
              const common::ObIArray<common::ObAddr> &addrs,
              obrpc::RootKeyType &key_type,
-             RootKeyValue &key_value)
+             common::ObString &key_value,
+             common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   key_type = obrpc::RootKeyType::INVALID;
@@ -22465,12 +22468,13 @@ int ObDDLService::get_root_key_from_obs(
           if (OB_UNLIKELY(obrpc::RootKeyType::INVALID != key_type)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("root key type is conflict", KR(ret), K(key_type), KPC(rpc_result));
-          } else if (OB_FAIL(key_value.assign(rpc_result->root_key_))) {
+          } else if (OB_FAIL(deep_copy_ob_string(allocator, rpc_result->root_key_, key_value))) {
             LOG_WARN("failed to assign result", KR(ret), KPC(rpc_result));
-          } else {
+          }
+          if (OB_SUCC(ret)) {
             key_type = rpc_result->key_type_;
           }
-        } else if (OB_UNLIKELY(0 != key_value.str().compare(rpc_result->root_key_))) {
+        } else if (OB_UNLIKELY(0 != key_value.compare(rpc_result->root_key_))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("root key is conflict", KR(ret), K(key_value), KPC(rpc_result));
         }
