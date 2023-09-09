@@ -52,7 +52,7 @@ public:
   ObDirectLoadTableStoreBucket();
   ~ObDirectLoadTableStoreBucket();
   int init(const ObDirectLoadTableStoreParam &param, const common::ObTabletID &tablet_id);
-  int append_row(const common::ObTabletID &tablet_id, const blocksstable::ObDatumRow &datum_row);
+  int append_row(const common::ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const blocksstable::ObDatumRow &datum_row);
   int close();
   int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
                  common::ObIAllocator &allocator);
@@ -72,7 +72,7 @@ public:
   ObDirectLoadTableStore() : allocator_("TLD_TSBucket"), is_inited_(false) {}
   ~ObDirectLoadTableStore();
   int init(const ObDirectLoadTableStoreParam &param);
-  int append_row(const common::ObTabletID &tablet_id, const blocksstable::ObDatumRow &datum_row);
+  int append_row(const common::ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const blocksstable::ObDatumRow &datum_row);
   int close();
   void clean_up();
   int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,

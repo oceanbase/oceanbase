@@ -12,6 +12,7 @@
 #include "../unittest/storage/blocksstable/ob_row_generate.h"
 #include "observer/table_load/ob_table_load_partition_location.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "share/table/ob_table_load_define.h"
 #include "storage/blocksstable/ob_tmp_file.h"
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
 #include "storage/direct_load/ob_direct_load_sstable_compactor.h"
@@ -24,6 +25,7 @@ using namespace blocksstable;
 using namespace storage;
 using namespace share::schema;
 using namespace share;
+using namespace table;
 
 static ObSimpleMemLimitGetter getter;
 
@@ -266,6 +268,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan)
   ret = file_mgr->init(table_schema_.get_tenant_id());
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -280,7 +283,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan)
     ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
     array.push_back(row);
-    ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+    ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   ret = sstable_builder.close();
@@ -406,6 +409,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_range)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -421,7 +425,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_range)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
     array.push_back(row);
     if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
       ASSERT_EQ(OB_SUCCESS, ret);
     }
   }
@@ -518,6 +522,7 @@ TEST_F(TestDataBlockWriter, test_scan_less_range)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -533,7 +538,7 @@ TEST_F(TestDataBlockWriter, test_scan_less_range)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
     array.push_back(row);
     if (i >= 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
       ASSERT_EQ(OB_SUCCESS, ret);
     }
   }
@@ -634,6 +639,7 @@ TEST_F(TestDataBlockWriter, test_scan_range)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -649,7 +655,7 @@ TEST_F(TestDataBlockWriter, test_scan_range)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
     array.push_back(row);
     if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
       ASSERT_EQ(OB_SUCCESS, ret);
     }
   }
@@ -770,6 +776,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_large_low)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -791,7 +798,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_large_low)
       row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
     }
     array.push_back(row);
-    ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+    ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   ret = sstable_builder.close();
@@ -914,6 +921,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_range_large_low)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -936,7 +944,7 @@ TEST_F(TestDataBlockWriter, test_write_and_scan_range_large_low)
     }
     array.push_back(row);
     if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
       ASSERT_EQ(OB_SUCCESS, ret);
     }
   }
@@ -1012,6 +1020,7 @@ TEST_F(TestDataBlockWriter, test_scan_range_large_low)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -1034,7 +1043,7 @@ TEST_F(TestDataBlockWriter, test_scan_range_large_low)
     }
     array.push_back(row);
     if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), *row);
+      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
       ASSERT_EQ(OB_SUCCESS, ret);
     }
   }
@@ -1114,6 +1123,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -1132,7 +1142,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact)
     ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
     array1.push_back(row);
-    ret = sstable_builder1.append_row(table_schema_.get_tablet_id(), *row);
+    ret = sstable_builder1.append_row(table_schema_.get_tablet_id(), seq_no, *row);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   for (int64_t i = 0; i < test_row_num; ++i) {
@@ -1140,7 +1150,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact)
     ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
     array2.push_back(row);
-    ret = sstable_builder2.append_row(table_schema_.get_tablet_id(), *row);
+    ret = sstable_builder2.append_row(table_schema_.get_tablet_id(), seq_no, *row);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
@@ -1312,6 +1322,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact_large_row)
   ObDirectLoadSSTableBuildParam param;
   ObArray<ObColDesc> col_descs;
   ObStorageDatumUtils datum_utils;
+  ObTableLoadSequenceNo seq_no(0);
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
   ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
   param.tablet_id_ = table_schema_.get_tablet_id();
@@ -1337,7 +1348,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact_large_row)
       row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
     }
     array1.push_back(row);
-    ret = sstable_builder1.append_row(table_schema_.get_tablet_id(), *row);
+    ret = sstable_builder1.append_row(table_schema_.get_tablet_id(), seq_no, *row);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   for (int64_t i = 0; i < test_row_num; ++i) {
@@ -1352,7 +1363,7 @@ TEST_F(TestDataBlockWriter, test_write_and_compact_large_row)
       row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
     }
     array2.push_back(row);
-    ret = sstable_builder2.append_row(table_schema_.get_tablet_id(), *row);
+    ret = sstable_builder2.append_row(table_schema_.get_tablet_id(), seq_no, *row);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 

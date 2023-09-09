@@ -158,6 +158,7 @@ protected:
 private:
   static int decode_payload(const common::ObString &payload,
                             table::ObTableLoadObjRowArray &obj_row_array);
+  int set_batch_seq_no(int64_t batch_id, table::ObTableLoadObjRowArray &obj_row_array);
 };
 
 } // namespace observer

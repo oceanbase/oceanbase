@@ -46,6 +46,7 @@ public:
   virtual ~ObDirectLoadMultipleHeapTableBuilder();
   int init(const ObDirectLoadMultipleHeapTableBuildParam &param);
   int append_row(const common::ObTabletID &tablet_id,
+                 const table::ObTableLoadSequenceNo &seq_no,
                  const blocksstable::ObDatumRow &datum_row) override;
   int append_row(const RowType &row);
   int close() override;

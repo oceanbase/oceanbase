@@ -94,6 +94,95 @@ int ObTableLoadErrorRowHandler::handle_update_row(const ObDatumRow &row)
   return ret;
 }
 
+int ObTableLoadErrorRowHandler::handle_update_row(
+  common::ObArray<const ObDirectLoadExternalRow *> &rows, const ObDirectLoadExternalRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(rows.count() < 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret));
+  } else {
+    int64_t duplicate_row_count = rows.count() - 1;
+    std::sort(rows.begin(), rows.end(),
+              [](const ObDirectLoadExternalRow *lhs, const ObDirectLoadExternalRow *rhs) {
+                return lhs->seq_no_ < rhs->seq_no_;
+              });
+    if (ObLoadDupActionType::LOAD_STOP_ON_DUP == dup_action_) {
+      if (0 == max_error_row_count_) {
+        ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+      } else {
+        ObMutexGuard guard(mutex_);
+        error_row_count_ += duplicate_row_count;
+        if (error_row_count_ >= max_error_row_count_) {
+          ret = OB_ERR_TOO_MANY_ROWS;
+          LOG_WARN("error row count reaches its maximum value", KR(ret), K_(max_error_row_count),
+                   K_(error_row_count));
+        }
+      }
+      ATOMIC_AAF(&job_stat_->detected_error_rows_, duplicate_row_count);
+    } else if (ObLoadDupActionType::LOAD_REPLACE == dup_action_) {
+      ATOMIC_AAF(&result_info_->rows_affected_, 2 * duplicate_row_count);
+      ATOMIC_AAF(&result_info_->deleted_, duplicate_row_count);
+      row = rows.at(duplicate_row_count);
+    } else if (ObLoadDupActionType::LOAD_IGNORE == dup_action_) {
+      ATOMIC_AAF(&result_info_->skipped_, duplicate_row_count);
+      row = rows.at(0);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected dup action", KR(ret), K_(dup_action));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadErrorRowHandler::handle_update_row(
+  common::ObArray<const ObDirectLoadMultipleDatumRow *> &rows,
+  const ObDirectLoadMultipleDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(rows.count() < 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret));
+  } else {
+    int64_t duplicate_row_count = rows.count() - 1;
+    std::sort(rows.begin(), rows.end(),
+              [](const ObDirectLoadMultipleDatumRow *lhs, const ObDirectLoadMultipleDatumRow *rhs) {
+                return lhs->seq_no_ < rhs->seq_no_;
+              });
+    if (ObLoadDupActionType::LOAD_STOP_ON_DUP == dup_action_) {
+      if (0 == max_error_row_count_) {
+        ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+      } else {
+        error_row_count_ += duplicate_row_count;
+        ObMutexGuard guard(mutex_);
+        if (error_row_count_ >= max_error_row_count_) {
+          ret = OB_ERR_TOO_MANY_ROWS;
+          LOG_WARN("error row count reaches its maximum value", KR(ret), K_(max_error_row_count),
+                   K_(error_row_count));
+        }
+      }
+      ATOMIC_AAF(&job_stat_->detected_error_rows_, duplicate_row_count);
+    } else if (ObLoadDupActionType::LOAD_REPLACE == dup_action_) {
+      ATOMIC_AAF(&result_info_->rows_affected_, 2 * duplicate_row_count);
+      ATOMIC_AAF(&result_info_->deleted_, duplicate_row_count);
+      row = rows.at(duplicate_row_count);
+    } else if (ObLoadDupActionType::LOAD_IGNORE == dup_action_) {
+      ATOMIC_AAF(&result_info_->skipped_, duplicate_row_count);
+      row = rows.at(0);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected dup action", KR(ret), K_(dup_action));
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadErrorRowHandler::handle_update_row(const ObDatumRow &old_row,
                                                   const ObDatumRow &new_row,
                                                   const ObDatumRow *&result_row)

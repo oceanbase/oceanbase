@@ -208,17 +208,17 @@ int ObDirectLoadMultipleSSTableScanMerge::inner_get_next_row(
   } else {
     const LoserTreeItem *top_item = nullptr;
     datum_row = nullptr;
+    rows_.reuse();
     while (OB_SUCC(ret) && !rows_merger_->empty() && nullptr == datum_row) {
       if (OB_FAIL(rows_merger_->top(top_item))) {
         LOG_WARN("fail to get top item", KR(ret));
+      } else if (OB_FAIL(rows_.push_back(top_item->row_))) {
+        LOG_WARN("fail to push back", KR(ret));
       } else if (OB_LIKELY(rows_merger_->is_unique_champion())) {
-        datum_row = top_item->row_;
-      } else {
-        // handle same rowkey row
-        if (OB_FAIL(top_item->row_->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
-          LOG_WARN("fail to transfer external row to datums", KR(ret));
-        } else if (OB_FAIL(dml_row_handler_->handle_update_row(datum_row_))) {
-          LOG_WARN("fail to handle update row", KR(ret), K(datum_row_));
+        if (OB_LIKELY(rows_.count() == 1)) {
+          datum_row = rows_.at(0);
+        } else if (OB_FAIL(dml_row_handler_->handle_update_row(rows_, datum_row))) {
+          LOG_WARN("fail to handle update row", KR(ret), K(rows_));
         }
       }
       if (OB_SUCC(ret)) {

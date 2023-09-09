@@ -144,6 +144,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLoadSqlStatistics)
   }
   return len;
 }
+OB_SERIALIZE_MEMBER_SIMPLE(ObTableLoadSequenceNo, sequence_no_);
 
 }  // namespace table
 }  // namespace oceanbase
