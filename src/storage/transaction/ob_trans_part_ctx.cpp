@@ -6540,26 +6540,8 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
       } else {
         uint64_t cur_log_id = OB_INVALID_ID;
         int64_t cur_log_timestamp = OB_INVALID_TIMESTAMP;
-        // 1. For redo / prepare log, `with_need_update_version` is true, and we need to
-        //    update prepare version after the success of `clog_adapter_->submit_log`.
-        //    What's more, we also need to pass a base timestamp to clog, and the base timestamp
-        //    is simply `local_trans_version_`.
-        // 2. For commit / clear log, `with_base_ts` is true, and we only need to pass the base
-        //    timestamp to clog. For commit log, the `base_ts` should be `global_trans_version`,
-        //    which is the commit version. And for clear log, the `base_ts` should be
-        //    `clear_log_base_ts_`, which is the maximum of all participants' commit_log_timestamp.
         const bool with_need_update_version = need_update_trans_version(real_log_type);
         const bool with_base_ts = (OB_SUCCESS == get_status_()) && need_carry_base_ts(real_log_type);
-        int64_t base_ts = global_trans_version_;
-        // When the `with_base_ts` is false(e.g. when the tx aborts), there is no need to set
-        // `base_ts` to `clear_log_base_ts_`.
-        if (with_base_ts && OB_LOG_TRANS_CLEAR == real_log_type) {
-          if (base_ts > clear_log_base_ts_) {
-            TRANS_LOG(ERROR, "unexpected clear log base ts", K(base_ts), K(clear_log_base_ts_), K(*this));
-          } else {
-            base_ts = clear_log_base_ts_;
-          }
-        }
         if (!pending) {
           if (with_need_update_version) {
             if (OB_FAIL(clog_adapter_->submit_log(self_,
@@ -6584,16 +6566,23 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
               }
             }
           } else if (with_base_ts) {
-            // commit log / clear(after commit) log
-            if (OB_FAIL(clog_adapter_->submit_log(
-                    self_, ObVersion(2), buf, pos, base_ts, &submit_log_cb_, pg_, cur_log_id, cur_log_timestamp))) {
+            // commit log / clear log
+            if (OB_FAIL(clog_adapter_->submit_log(self_,
+                    ObVersion(2),
+                    buf,
+                    pos,
+                    global_trans_version_,
+                    &submit_log_cb_,
+                    pg_,
+                    cur_log_id,
+                    cur_log_timestamp))) {
               TRANS_LOG(WARN, "submit log error", KR(ret), "context", *this);
               need_print_trace_log_ = true;
             } else {
               update_max_submitted_log_timestamp_(cur_log_timestamp);
             }
           } else {
-            // abort log / clear(after abort) log
+            // abort log
             if (OB_FAIL(clog_adapter_->submit_log(
                     self_, ObVersion(2), buf, pos, &submit_log_cb_, pg_, cur_log_id, cur_log_timestamp))) {
               TRANS_LOG(WARN, "submit log error", KR(ret), "context", *this);
@@ -6627,7 +6616,7 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
                   with_need_update_version,
                   local_trans_version_,
                   with_base_ts,
-                  base_ts,
+                  global_trans_version_,
                   &submit_log_cb_))) {
           } else {
             inc_submit_log_pending_count_();
