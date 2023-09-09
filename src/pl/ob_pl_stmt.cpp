@@ -1882,6 +1882,14 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
   }
     break;
   }
+  if (OB_FAIL(ret) && !resolve_ctx_.is_sql_scope_) {
+    // only reset in pl
+    // udf in sql do not reset this error
+    ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
+    if (NULL != buf) {
+      buf->reset();
+    }
+  }
   CANCLE_LOG_CHECK_MODE();
   return ret;
 }
