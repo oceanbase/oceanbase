@@ -50,7 +50,7 @@ public:
     {
       mbr_ = S2LatLngRect::Empty();
     }
-  ~ObWkbToS2Visitor() {}
+  ~ObWkbToS2Visitor() { reset(); }
   template<typename T_IBIN>
   S2Cell* MakeS2Point(T_IBIN *geo);
   template<typename T_IBIN, typename T_BIN>
