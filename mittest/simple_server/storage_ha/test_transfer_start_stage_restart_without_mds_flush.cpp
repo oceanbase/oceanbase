@@ -29,7 +29,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
-using namespace unittest;
+using namespace oceanbase::unittest;
 
 namespace oceanbase
 {
@@ -209,6 +209,7 @@ TEST_F(TestTransferHandler, prepare_valid_data)
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select object_id from oceanbase.DBA_OBJECTS where OBJECT_NAME='ttt2'"));
   ASSERT_EQ(OB_SUCCESS, read_sql(sql_proxy2, sql, g_batch_part_list));
+
 }
 
 TEST_F(TestTransferHandler, test_transfer_1001_to_1_with_transfer_start_without_mds_flush)
@@ -276,13 +277,13 @@ TEST_F(TestTransferRestart, observer_restart_when_transfer_start_without_flush)
 } // namespace oceanbase
 int main(int argc, char **argv)
 {
-  unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   int ret = 0;
   int time_sec = 0;
-  ObSimpleServerRestartHelper restart_helper(argc, argv, TEST_FILE_NAME, BORN_CASE_NAME,
-                                             RESTART_CASE_NAME);
+  ObSimpleServerRestartHelper restart_helper(argc, argv, oceanbase::storage::TEST_FILE_NAME, oceanbase::storage::BORN_CASE_NAME,
+      oceanbase::storage::RESTART_CASE_NAME);
   restart_helper.set_sleep_sec(time_sec);
   restart_helper.run();
   return ret;
