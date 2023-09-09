@@ -274,7 +274,9 @@ int ObNLConnectByOp::inner_open()
              K(MY_SPEC.hash_probe_exprs_));
   } else {
     tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
-    param.set_mem_attr(tenant_id, ObModIds::OB_CONNECT_BY_PUMP, ObCtxIds::WORK_AREA).set_properties(lib::USE_TL_PAGE_OPTIONAL);
+    param.set_mem_attr(tenant_id, ObModIds::OB_CONNECT_BY_PUMP, ObCtxIds::WORK_AREA)
+         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       LOG_WARN("create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
