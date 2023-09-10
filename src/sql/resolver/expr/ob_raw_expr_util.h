@@ -1083,6 +1083,8 @@ public:
                               ObConstRawExpr *&type_expr,
                               const ObExprResType &dst_type,
                               bool avoid_zero_len = false);
+  static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+
 
 private :
 

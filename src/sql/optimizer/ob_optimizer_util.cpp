@@ -5940,7 +5940,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
       SelectItem &select_item = child_stmt->get_select_item(i);
       new_select_item.alias_name_ = select_item.alias_name_;
       new_select_item.expr_name_ = select_item.expr_name_;
-      new_select_item.is_real_alias_ = true;
+      new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
+                  ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
       new_select_item.questions_pos_ = select_item.questions_pos_;
       new_select_item.params_idx_ = select_item.params_idx_;
       new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
@@ -5997,7 +5998,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
         SelectItem &select_item = child_stmt->get_select_item(i);
         new_select_item.alias_name_ = select_item.alias_name_;
         new_select_item.expr_name_ = select_item.expr_name_;
-        new_select_item.is_real_alias_ = true;
+        new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
+                    ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
         new_select_item.questions_pos_ = select_item.questions_pos_;
         new_select_item.params_idx_ = select_item.params_idx_;
         new_select_item.neg_param_idx_ = select_item.neg_param_idx_;

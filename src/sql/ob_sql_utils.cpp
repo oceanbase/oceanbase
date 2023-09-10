@@ -1186,8 +1186,7 @@ int ObSQLUtils::check_index_name(const ObCollationType cs_type, ObString &name)
   }
   return ret;
 }
-
-int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString &name)
+int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString &name, bool is_from_view)
 {
   /*如果table name的字节数大于128则报错OB_ERR_TOO_LONG_IDENT;
    *如果table name的最后一个字符是空格，则报错OB_WRONG_COLUMN_NAME */
@@ -1224,7 +1223,7 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString &name)
   }
 
   if (OB_SUCC(ret)) {
-    if (last_char_is_space) {
+    if (last_char_is_space && !is_from_view) {
       ret = OB_WRONG_COLUMN_NAME;
       LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, name.length(), name.ptr());
       LOG_WARN("incorrect column name", K(name), K(ret));

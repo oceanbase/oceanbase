@@ -327,7 +327,9 @@ public:
                                           const stmt::StmtType stmt_type = stmt::T_NONE,
                                           const bool is_index_table = false);
   static int check_index_name(const common::ObCollationType cs_type, common::ObString &name);
-  static int check_column_name(const common::ObCollationType cs_type, common::ObString &name);
+  static int check_column_name(const common::ObCollationType cs_type,
+                               common::ObString &name,
+                               bool is_from_view = false);
   static int check_and_copy_column_alias_name(const common::ObCollationType cs_type, const bool is_auto_gen,
                                               common::ObIAllocator *allocator, common::ObString &name);
   static int check_and_convert_context_namespace(const common::ObCollationType cs_type,
