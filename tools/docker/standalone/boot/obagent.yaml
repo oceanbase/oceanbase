@@ -10,9 +10,9 @@ obagent:
     # The working directory for obagent. obagent is started under this directory. This is a required field.
     home_path: /root/obagent
     # The port that pulls and manages the metrics. The default port number is 8088.
-    server_port: 8088
+    monagent_http_port: 8088
     # Debug port for pprof. The default port number is 8089.
-    pprof_port: 8089
+    mgragent_http_port: 8089
     # Log level. The default value is INFO.
     log_level: INFO
     # Log path. The default value is log/monagent.log.
