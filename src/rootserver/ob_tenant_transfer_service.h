@@ -137,7 +137,7 @@ private:
       share::ObTransferPartList &not_exist_part_list,
       share::ObTransferPartList &lock_failed_part_list,
       share::ObDisplayTabletList &table_lock_tablet_list,
-      common::ObIArray<ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObTabletID> &tablet_ids,
       transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
   int unlock_table_and_part_(
       ObMySQLTransaction &trans,
@@ -151,19 +151,19 @@ private:
   int get_tablet_and_partition_idx_by_object_id_(
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const ObObjectID &part_object_id,
-      ObTabletID &tablet_id,
+      common::ObTabletID &tablet_id,
       int64_t &part_idx);
   int get_tablet_and_partition_idx_by_object_id_(
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const ObObjectID &part_object_id,
-      ObTabletID &tablet_id,
+      common::ObTabletID &tablet_id,
       int64_t &part_idx,
       int64_t &subpart_idx);
   int get_tablet_by_partition_idx_(
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const int64_t part_idx,
       const int64_t subpart_idx,
-      ObTabletID &tablet_id);
+      common::ObTabletID &tablet_id);
   int check_tenant_schema_is_ready_(bool &is_ready);
   int unlock_and_clear_task_(
       const share::ObTransferTaskID task_id,
@@ -177,7 +177,7 @@ private:
       const share::ObTransferPartInfo &part_info,
       common::ObIAllocator &allocator,
       share::schema::ObSimpleTableSchemaV2 *&table_schema,
-      ObTabletID &tablet_id,
+      common::ObTabletID &tablet_id,
       int64_t &part_idx,
       int64_t &subpart_idx);
   int add_table_lock_(
@@ -191,14 +191,14 @@ private:
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const share::ObTransferPartInfo &part_info,
-      const ObTabletID &tablet_id);
+      const common::ObTabletID &tablet_id);
   int generate_related_tablet_ids_(
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const int64_t part_idx,
       const int64_t subpart_idx,
-      common::ObIArray<ObTabletID> &tablet_ids);
+      common::ObIArray<common::ObTabletID> &tablet_ids);
   int generate_tablet_list_(
-      const ObIArray<ObTabletID> &tablet_ids,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
       share::ObTransferTabletList &tablet_list);
   int unlock_table_lock_(
       ObMySQLTransaction &trans,
@@ -220,7 +220,7 @@ private:
       share::schema::ObSimpleTableSchemaV2 *&table_schema);
   int record_need_move_table_lock_tablet_(
       share::schema::ObSimpleTableSchemaV2 &table_schema,
-      const ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id,
       share::ObDisplayTabletList &table_lock_tablet_list);
   int set_transaction_timeout_(common::ObTimeoutCtx &ctx);
   int update_comment_for_expected_errors_(

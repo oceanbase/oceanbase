@@ -15,7 +15,6 @@
 
 #include "lib/container/ob_fixed_array.h"
 #include "share/schema/ob_table_schema.h"
-#include "storage/memtable/ob_multi_source_data.h"
 
 namespace oceanbase
 {
@@ -93,7 +92,7 @@ public:
   ObObj orig_default_value_;
 };
 
-class ObStorageSchema : public share::schema::ObMergeSchema, public memtable::ObIMultiSourceDataUnit
+class ObStorageSchema : public share::schema::ObMergeSchema
 {
 public:
   ObStorageSchema();
@@ -113,17 +112,9 @@ public:
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
       const int64_t copy_array_cnt);
+  void reset();
+  bool is_valid() const;
 
-  // ObIMultiSourceDataUnit section
-  virtual int deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator) override;
-  virtual void reset() override;
-  virtual bool is_valid() const override;
-  virtual inline int64_t get_data_size() const override { return sizeof(ObStorageSchema); }
-  virtual inline memtable::MultiSourceDataUnitType type() const override
-  {
-    return memtable::MultiSourceDataUnitType::STORAGE_SCHEMA;
-  }
-  virtual int64_t get_version() const override { return get_schema_version(); }
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -195,7 +186,7 @@ public:
     return store_column_cnt_ < input_schema.store_column_cnt_;
   }
 
-  INHERIT_TO_STRING_KV("ObIMultiSourceDataUnit", ObIMultiSourceDataUnit, KP(this), K_(storage_schema_version), K_(version),
+  VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
       K_(index_status), K_(row_store_type), K_(schema_version),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),

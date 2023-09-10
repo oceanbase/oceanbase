@@ -204,7 +204,6 @@ int ObStorageSchemaRecorder::try_update_storage_schema(
 
 void ObStorageSchemaRecorder::sync_clog_failed_for_leader()
 {
-  dec_ref_on_memtable(false/*sync_finish*/);
 }
 
 int ObStorageSchemaRecorder::sync_clog_succ_for_leader(const int64_t update_version)
@@ -216,30 +215,9 @@ int ObStorageSchemaRecorder::sync_clog_succ_for_leader(const int64_t update_vers
   } else if (OB_UNLIKELY(storage_schema_->get_schema_version() != update_version)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("schema version not match", K(storage_schema_), K(update_version));
-  } else if (OB_FAIL(dec_ref_on_memtable(true/*sync_finish*/))) {
-    LOG_WARN("failed to save storage schema", K_(tablet_id), K(storage_schema_));
   } else {
     LOG_INFO("success to update storage schema", K(ret), K_(ls_id), K_(tablet_id), K(storage_schema_),
         K(update_version), K_(clog_scn));
-  }
-  return ret;
-}
-
-int ObStorageSchemaRecorder::dec_ref_on_memtable(const bool sync_finish)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == storage_schema_
-      || nullptr == tablet_handle_ptr_
-      || !tablet_handle_ptr_->is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage schema or tablet handle is unexpected null", K(ret), K_(ls_id), K_(tablet_id),
-        KP_(storage_schema), K_(tablet_handle_ptr));
-  } else {
-    storage_schema_->set_sync_finish(sync_finish);
-    // if (OB_FAIL(tablet_handle_ptr_->get_obj()->save_multi_source_data_unit(storage_schema_, clog_scn_,
-    //     false/*for_replay*/, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
-    //   LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(storage_schema_));
-    // }
   }
   return ret;
 }
@@ -366,18 +344,8 @@ int ObStorageSchemaRecorder::submit_log(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler or storage_schema is null", K(ret), KP(storage_schema_),
         KP(clog_buf), K(clog_len), K(tablet_handle_ptr_));
-  } else if (FALSE_IT(storage_schema_->set_sync_finish(false))) {
-  //} else if (OB_FAIL(tablet_handle_ptr_->get_obj()->save_multi_source_data_unit(storage_schema_,
-  //    SCN::max_scn(), false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
-  //  if (OB_BLOCK_FROZEN != ret) {
-  //    LOG_WARN("failed to inc ref for storage schema", K(ret), K_(tablet_id), K(storage_schema_));
-  //  }
   } else if (OB_FAIL(write_clog(clog_buf, clog_len))) {
-    LOG_WARN("fail to submit log", K(ret), K_(tablet_id));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(dec_ref_on_memtable(false))) {
-      LOG_ERROR("failed to dec ref on memtable", K(tmp_ret), K_(ls_id), K_(tablet_id));
-    }
+    LOG_WARN("fail to submit log", K(ret), K_(ls_id), K_(tablet_id));
   } else {
     LOG_INFO("submit schema log succeed", K(ret), K_(ls_id), K_(tablet_id), K(clog_scn_),
         "schema_version", storage_schema_->get_schema_version());

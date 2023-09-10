@@ -99,7 +99,6 @@ private:
   int64_t calc_schema_log_size() const;
   void free_allocated_info();
   int try_update_with_lock(const int64_t table_id, const int64_t table_version, const int64_t expire_ts);
-  OB_INLINE int dec_ref_on_memtable(const bool sync_finish);
 
   bool is_inited_;
   bool ignore_storage_schema_;

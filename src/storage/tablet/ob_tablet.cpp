@@ -4711,8 +4711,8 @@ int ObTablet::get_storage_schema_for_transfer_in(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(storage_schema.deep_copy(tablet_storage_schema, &allocator))) {
-    LOG_WARN("failed to get tx data from tablet", K(ret), K(ls_id), K(tablet_id), KPC(tablet_storage_schema));
+  } else if (OB_FAIL(storage_schema.init(allocator, *tablet_storage_schema))) {
+    LOG_WARN("failed to init storage schema", K(ret), K(ls_id), K(tablet_id), KPC(tablet_storage_schema));
   } else {
     int64_t old_column_cnt = storage_schema.get_column_count();
     int64_t old_schema_version = storage_schema.get_schema_version();
