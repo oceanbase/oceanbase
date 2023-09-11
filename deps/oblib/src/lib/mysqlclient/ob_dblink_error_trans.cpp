@@ -67,8 +67,12 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
       if (1 != match_count) {
         // default ob_errno, if external_errno can not map to any valid ob_errno
         ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
-        int msg_len = STRLEN(external_errmsg);
-        LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, external_errno, msg_len, external_errmsg);
+	const char *errmsg = external_errmsg;
+	if (NULL == errmsg) {
+		errmsg = "empty error message";
+	}
+        int msg_len = STRLEN(errmsg);
+        LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, external_errno, msg_len, errmsg);
       }
     }
   }
