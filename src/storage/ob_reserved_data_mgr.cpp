@@ -1617,6 +1617,8 @@ ObRecoveryDataMgr::~ObRecoveryDataMgr()
 void ObRecoveryDataMgr::destroy()
 {
   if (is_inited_) {
+    restore_point_data_.destroy();
+    backup_point_data_.destroy();
     pg_key_.reset();
     file_handle_.reset();
     enable_write_slog_ = false;

@@ -95,6 +95,10 @@ int ObPGMemoryGarbageCollector::recycle()
         if (OB_FAIL(pg_node_pool_.push_back(curr))) {
           LOG_WARN("fail to push back pg node pool", K(ret));
         }
+      } else {
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // 1 minute
+          FLOG_INFO("can't recycle pg", "pg_key", pg->get_partition_key(), K(pg_list_.get_size()));
+        }
       }
     }
   }

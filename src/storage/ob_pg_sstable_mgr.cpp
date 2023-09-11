@@ -87,7 +87,7 @@ int ObPGSSTableMgr::CheckAllTableUnusedFunctor::operator()(ObITable& table, bool
   if (is_all_unused_) {
     is_all_unused_ = 0 == table.get_ref();
   }
-  is_full = is_all_unused_;
+  is_full = !is_all_unused_;
   return ret;
 }
 
