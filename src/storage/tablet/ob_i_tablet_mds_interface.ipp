@@ -75,13 +75,13 @@ inline int ObITabletMdsInterface::get_ddl_data(const share::SCN &snapshot,
     ret = OB_NOT_SUPPORTED;
     MDS_LOG_GET(WARN, "only support read latest data currently");
   } else if (CLICK_FAIL(get_snapshot<ObTabletBindingMdsUserData>(
-    [&data](const ObTabletBindingMdsUserData &user_data) -> int { return data.assign(user_data); },
-    snapshot, 0, timeout))) {
+      [&data](const ObTabletBindingMdsUserData &user_data) -> int { return data.assign(user_data); },
+      snapshot, 0, timeout))) {
     if (OB_EMPTY_RESULT == ret) {
-      data.reset(); // use default value
+      data.set_default_value(); // use default value
       ret = OB_SUCCESS;
     } else {
-      MDS_LOG_GET(WARN, "fail to get_ddl_data");
+      MDS_LOG_GET(WARN, "fail to get ddl data");
     }
   }
   return ret;
@@ -183,9 +183,8 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletCreateDeleteM
   } else {
     if (CLICK_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, tablet_status_addr, kv))) {
       MDS_LOG_GET(WARN, "failed to load mds dump kv");
-    } else if (OB_ISNULL(kv)) {
-      ret = OB_ERR_UNEXPECTED;
-      MDS_LOG_GET(WARN, "unexpected error, mds dump kv is null");
+    } else if (nullptr == kv) {
+      ret = OB_EMPTY_RESULT;
     } else {
       const common::ObString &user_data = kv->v_.user_data_;
       int64_t pos = 0;
@@ -220,34 +219,44 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletBindingMdsUse
   const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_addr = get_mds_data_().aux_tablet_info_.committed_kv_;
   const ObTabletBindingMdsUserData& aux_tablet_info_cache = get_mds_data_().aux_tablet_info_cache_;
 
-  // TODO(@chenqingxiang.cqx): remove read from IO after cache ready
-  if (aux_tablet_info_addr.is_disk_object() && !aux_tablet_info_cache.is_valid()) {
-    if (CLICK_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, aux_tablet_info_addr, kv))) {
-      MDS_LOG_GET(WARN, "failed to load mds dump kv");
-    } else if (OB_ISNULL(kv)) {
-      ret = OB_ERR_UNEXPECTED;
-      MDS_LOG_GET(WARN, "unexpected error, mds dump kv is null");
-    } else {
-      const common::ObString &user_data = kv->v_.user_data_;
-      int64_t pos = 0;
-      if (user_data.empty()) {
-        ret = OB_EMPTY_RESULT;
-      } else if (CLICK_FAIL(data.deserialize(user_data.ptr(), user_data.length(), pos))) {
-        MDS_LOG_GET(WARN, "failed to deserialize", K(user_data),
-                    "user_data_length", user_data.length(),
-                    "user_hash:%x", user_data.hash(),
-                    "crc_check_number", kv->v_.crc_check_number_);
-      } else if (CLICK_FAIL(read_op(data))) {
+  if (aux_tablet_info_addr.is_memory_object()) {
+    if (CLICK_FAIL(read_op(aux_tablet_info_cache))) {
+      MDS_LOG_GET(WARN, "failed to read_op");
+    }
+  } else if (aux_tablet_info_addr.is_none_object()) {
+    ret = OB_EMPTY_RESULT;
+  } else if (aux_tablet_info_addr.is_disk_object()) {
+    if (aux_tablet_info_cache.is_valid()) {
+      if (CLICK_FAIL(read_op(aux_tablet_info_cache))) {
         MDS_LOG_GET(WARN, "failed to read_op");
       }
-    }
+    } else {
+      if (CLICK_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, aux_tablet_info_addr, kv))) {
+        MDS_LOG_GET(WARN, "failed to load mds dump kv");
+      } else if (nullptr == kv) {
+        ret = OB_EMPTY_RESULT;
+      } else {
+        const common::ObString &user_data = kv->v_.user_data_;
+        int64_t pos = 0;
+        if (user_data.empty()) {
+          ret = OB_EMPTY_RESULT;
+        } else if (CLICK_FAIL(data.deserialize(user_data.ptr(), user_data.length(), pos))) {
+          MDS_LOG_GET(WARN, "failed to deserialize", K(user_data),
+                      "user_data_length", user_data.length(),
+                      "user_hash:%x", user_data.hash(),
+                      "crc_check_number", kv->v_.crc_check_number_);
+        } else if (CLICK_FAIL(read_op(data))) {
+          MDS_LOG_GET(WARN, "failed to read_op");
+        }
+      }
 
-    ObTabletMdsData::free_mds_dump_kv(allocator, kv);
-  } else {
-    if (CLICK_FAIL(read_op(aux_tablet_info_cache))) {
-      MDS_LOG_GET(WARN, "failed to read_op aux_tablet_info_cache", K(aux_tablet_info_cache));
+      ObTabletMdsData::free_mds_dump_kv(allocator, kv);
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "unexpected addr", K(aux_tablet_info_addr));
   }
+
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -261,15 +270,17 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<share::ObTabletAutoin
   int ret = OB_SUCCESS;
   const ObTabletComplexAddr<share::ObTabletAutoincSeq> &auto_inc_seq_addr = get_mds_data_().auto_inc_seq_;
   const share::ObTabletAutoincSeq *auto_inc_seq = nullptr;
-  ObTabletMemberWrapper<share::ObTabletAutoincSeq> wrapper;
+  ObArenaAllocator allocator("mds_reader");
 
-  if (CLICK_FAIL(ObTabletMdsData::fetch_auto_inc_seq(auto_inc_seq_addr, wrapper))) {
-    MDS_LOG_GET(WARN, "failed to fetch auto inc seq");
-  } else if (CLICK_FAIL(wrapper.get_member(auto_inc_seq))) {
-    MDS_LOG_GET(WARN, "failed to get member");
+  if (CLICK_FAIL(ObTabletMdsData::load_auto_inc_seq(allocator, auto_inc_seq_addr, auto_inc_seq))) {
+    MDS_LOG_GET(WARN, "failed to load auto inc seq");
+  } else if (nullptr == auto_inc_seq) {
+    ret = OB_EMPTY_RESULT;
   } else if (CLICK_FAIL(read_op(*auto_inc_seq))) {
     MDS_LOG_GET(WARN, "failed to read_op");
   }
+
+  ObTabletMdsData::free_auto_inc_seq(allocator, auto_inc_seq);
 
   return ret;
   #undef PRINT_WRAPPER
@@ -680,17 +691,14 @@ int ObITabletMdsInterface::fill_virtual_info_by_complex_addr_(const ObTabletComp
   const mds::MdsDumpKV *dump_kv = nullptr;
 
   if (CLICK_FAIL(mds_node_info_array.push_back(mds::MdsNodeInfoForVirtualTable()))) {
-    MDS_LOG_GET(WARN, "fatil to push_back");
+    MDS_LOG_GET(WARN, "fail to push_back");
   } else if (FALSE_IT(cur_virtual_info = &mds_node_info_array.at(mds_node_info_array.count() - 1))) {
   } else {
     if (CLICK_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, addr, dump_kv))) {
       MDS_LOG_GET(WARN, "fatil to read tablet_status_addr");
-    } else if (!dump_kv->is_valid()) {
+    } else if (nullptr == dump_kv || (nullptr != dump_kv && !dump_kv->is_valid())) {
       ret = OB_ENTRY_NOT_EXIST;
       MDS_LOG_GET(INFO, "dump kv not exist");
-      if (OB_NOT_NULL(dump_kv)) {
-        MDS_LOG_GET(INFO, "xuwang.txw debug", K(dump_kv->k_), K(dump_kv->v_));
-      }
     } else if (CLICK_FAIL(obj_to_string_holder_(dump_kv->k_, cur_virtual_info->user_key_))) {
       MDS_LOG_GET(WARN, "fatil to fill string holder");
     } else if (CLICK_FAIL(dump_kv->v_.convert_to_user_mds_node(user_mds_node, get_tablet_meta_().ls_id_, get_tablet_meta_().tablet_id_))) {

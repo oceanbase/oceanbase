@@ -311,13 +311,7 @@ int ObTxNode::recv_msg_callback_(TxMsgCallbackMsg &msg)
   int ret = OB_SUCCESS;
   switch(msg.type_) {
   case TxMsgCallbackMsg::SAVEPOINT_ROLLBACK:
-    OZ(txs_.handle_sp_rollback_resp(msg.receiver_ls_id_,
-                                    msg.epoch_,
-                                    msg.tx_id_,
-                                    msg.sp_rollback_result_.status_,
-                                    msg.receiver_addr_,
-                                    msg.request_id_,
-                                    msg.sp_rollback_result_));
+    // ignore, has changed to use async resp msg
     break;
   case TxMsgCallbackMsg::NORMAL:
     OZ(txs_.handle_trans_msg_callback(msg.sender_ls_id_,
@@ -402,6 +396,7 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
   TX_MSG_HANDLER__(TX_ABORT, ObTxAbortMsg, handle_trans_abort_request);
   TX_MSG_HANDLER__(KEEPALIVE, ObTxKeepaliveMsg, handle_trans_keepalive);
   TX_MSG_HANDLER__(KEEPALIVE_RESP, ObTxKeepaliveRespMsg, handle_trans_keepalive_response);
+  TX_MSG_HANDLER__(ROLLBACK_SAVEPOINT_RESP, ObTxRollbackSPRespMsg, handle_sp_rollback_response);
 #undef TX_MSG_HANDLER__
   case TX_FREE_ROUTE_CHECK_ALIVE:
     {
@@ -444,7 +439,6 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
       OZ(msg.deserialize(buf, size, pos));
       TRANS_LOG(TRACE, "handle_msg", K(msg), KPC(this));
       OZ(txs_.handle_sp_rollback_request(msg, rslt), msg);
-      OZ(fake_rpc_.send_msg_callback(sender, msg, rslt), msg);
       break;
     }
   case TX_2PC_PREPARE_REQ:

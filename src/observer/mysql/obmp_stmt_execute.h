@@ -307,7 +307,7 @@ private:
                         sql::TypeInfo *type_info,
                         ObObjParam &param,
                         const char *bitmap,
-                        int16_t param_id = OB_INVALID_INDEX);
+                        int64_t param_id);
   int parse_complex_param_value(ObIAllocator &allocator,
                         const ObCharsetType charset,
                         const ObCollationType cs_type,

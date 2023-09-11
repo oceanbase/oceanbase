@@ -166,7 +166,8 @@ void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchem
   g_sess_node_val.is_inited_ = true;
   g_sess_node_val.sess_info_.test_init(0, 0, 0, NULL);
   g_sess_node_val.sess_info_.load_all_sys_vars(schema_guard_);
-  fake_ctx.init_phy_plan_ctx();
+  fake_ctx.init_physical_plan_ctx(0, 1);
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.construct_column_items());
 }
 
 TEST_F(TestCreateExecutor, scan)
@@ -296,7 +297,7 @@ TEST_F(TestCreateExecutor, update)
 
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
-  ASSERT_EQ(6, fake_ctx.get_all_exprs().get_expr_array().count());
+  ASSERT_EQ(4, fake_ctx.get_all_exprs().get_expr_array().count());
   ObTableApiSpec *root_spec = nullptr;
   ObTableApiExecutor *executor = nullptr;
   // generate update spec tree
@@ -343,7 +344,7 @@ TEST_F(TestCreateExecutor, insertup)
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert_up());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
-  ASSERT_EQ(6, fake_ctx.get_all_exprs().get_expr_array().count());
+  ASSERT_EQ(4, fake_ctx.get_all_exprs().get_expr_array().count());
   ObTableApiSpec *root_spec = nullptr;
   ObTableApiExecutor *executor = nullptr;
 

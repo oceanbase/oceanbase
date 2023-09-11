@@ -250,7 +250,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
     LOG_DEBUG("resolve item", "item_type", get_type_name(node->type_));
     if (IS_DATATYPE_OR_QUESTIONMARK_OP(node->type_)) {
       if (OB_FAIL(process_datatype_or_questionmark(*node, expr))) {
-        LOG_WARN("fail to process datetype or questionmark", K(ret), K(node));
+        LOG_WARN("fail to process datatype or questionmark", K(ret), K(node));
       }
     } else {
       switch (node->type_) {
@@ -599,7 +599,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_OP_REGEXP:
       case T_OP_NOT_REGEXP: {
         if (OB_FAIL(process_regexp_or_not_regexp_node(node, expr))) {
-          LOG_WARN("fail to process prgexp_or_not_pegexp node", K(ret), K(node));
+          LOG_WARN("fail to process prgexp_or_not_regexp node", K(ret), K(node));
         }
         break;
       }
@@ -882,6 +882,16 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_FUN_SYS_CURRENT_USER: {
+        ObSysFunRawExpr *f_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_CURRENT_USER, f_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else {
+          f_expr->set_func_name(ObString::make_string(N_CURRENT_USER));
+          expr = f_expr;
+        }
+        break;
+      }
       case T_COLLATION: {
         // used in internal function `set_collation' to implement COLLATE clause
         if (OB_FAIL(process_collation_node(node, expr))) {
@@ -1012,7 +1022,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_UDF: {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("A BUG, Nerver Be Here!!!", K(ret));
+        LOG_ERROR("A BUG, Never Be Here!!!", K(ret));
         break;
       }
       case T_WINDOW_FUNCTION: {
@@ -1546,7 +1556,7 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
           }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invlid node type", K(node.children_[0]->type_));
+            LOG_WARN("invalid node type", K(node.children_[0]->type_));
           }
         }
       }
@@ -1560,7 +1570,7 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
   }
   if (OB_SUCC(ret)) {
     if (T_FUN_PL_GET_CURSOR_ATTR == c_expr->get_expr_type()) {
-      // 注意: 替换为ColumnRef的目的是为了在DML语句中把CURSOR%ROWID替换为QuenstionMark
+      // 注意: 替换为ColumnRef的目的是为了在DML语句中把CURSOR%ROWID替换为QuestionMark
       // 参见: ObDMLResolver::resolve_qualified_identifier
       ObQualifiedName column_ref;
       ObObjAccessIdent access_ident;
@@ -1611,7 +1621,7 @@ int ObRawExprResolverImpl::process_obj_access_node(const ParseNode &node, ObRawE
     ObQualifiedName column_ref;
     int64_t child_start = ctx_.columns_->count();
     if (OB_FAIL(resolve_obj_access_idents(node, column_ref))) {
-      LOG_WARN("resolve obj acess idents failed", K(ret));
+      LOG_WARN("resolve obj access idents failed", K(ret));
     } else {
       column_ref.format_qualified_name(ctx_.case_mode_);
       column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
@@ -1733,7 +1743,7 @@ int ObRawExprResolverImpl::process_sys_connect_by_path_node(const ParseNode *nod
 
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpeced parameter", K(node), K(ret));
+    LOG_WARN("unexpected parameter", K(node), K(ret));
   } else if (OB_UNLIKELY(node->type_ != T_FUN_SYS_CONNECT_BY_PATH)
              || OB_UNLIKELY(node->num_child_ != 2)
              || OB_ISNULL(node->children_)
@@ -2137,9 +2147,10 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
               std::pair<ObRawExpr*, int64_t> param(index_expr, 0);
               if (OB_FAIL(access_ident.params_.push_back(param))) {
                 LOG_WARN("push back error", K(ret));
+              } else if (OB_FAIL(ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX))) {
+                LOG_WARN("failed to del member", K(ret));
               }
             }
-            ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX);
             for (int64_t i = start_child; i < ctx_.columns_->count(); ++i) {
               ctx_.columns_->at(i).is_access_root_ = false;
             }
@@ -2373,7 +2384,7 @@ int ObRawExprResolverImpl::process_connect_by_root_node(const ParseNode &node, O
       || OB_ISNULL(node.children_)
       || OB_UNLIKELY(node.type_ != T_OP_CONNECT_BY_ROOT)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parametor", K(node.num_child_), K(node.type_), K(ret));
+    LOG_WARN("invalid parameter", K(node.num_child_), K(node.type_), K(ret));
   } else if (OB_ISNULL(ctx_.stmt_)
              || OB_UNLIKELY(false == ctx_.stmt_->is_select_stmt())) {
     ret = OB_ERR_CBY_CONNECT_BY_REQUIRED;
@@ -2539,7 +2550,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           } else if (ctx_.is_for_dbms_sql_
                      || (ctx_.is_for_dynamic_sql_ && OB_NOT_NULL(session_info->get_pl_context()))){
             //NOTICE: only need to process PL dynamic sql and dbms sql
-            /*dynmaic and dbms sql already prepare question mark in parse stage.*/
+            /*dynamic and dbms sql already prepare question mark in parse stage.*/
             bool need_save = true;
             for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.external_param_info_->count(); ++i) {
               CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).first));
@@ -3014,7 +3025,7 @@ int ObRawExprResolverImpl::process_any_or_all_node(const ParseNode *node, ObRawE
     LOG_WARN("resolve sub-query failed", K(ret));
   } else if (OB_ISNULL(sub_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inavalid sub_expr", K(sub_expr));
+    LOG_WARN("invalid sub_expr", K(sub_expr));
   } else if (T_REF_QUERY == sub_expr->get_expr_type()) {
     ObQueryRefRawExpr *sub_ref = static_cast<ObQueryRefRawExpr*>(sub_expr);
     sub_ref->set_is_set(true);
@@ -3375,7 +3386,7 @@ int ObRawExprResolverImpl::process_regexp_or_not_regexp_node(const ParseNode *no
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(node));
   } else if (OB_FAIL(process_node_with_children(node, num_child, t_expr))) {
-    LOG_WARN("fail to preocess node with children", K(ret));
+    LOG_WARN("fail to process node with children", K(ret));
   } else if (OB_ISNULL(t_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("process node fail with invalid expr", K(ret), K(t_expr));
@@ -3676,7 +3687,7 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
         IS_NO_BACKSLASH_ESCAPES(ctx_.session_info_->get_sql_mode(), no_escapes);
       }
       if (OB_FAIL(process_datatype_or_questionmark(escape_node, escape_expr))) {
-        LOG_WARN("fail to resolver defalut excape node", K(ret));
+        LOG_WARN("fail to resolver default excape node", K(ret));
       } else if (OB_FAIL(t_expr->add_param_expr(escape_expr))) {
         LOG_WARN("fail to set param expr");
       } else if (lib::is_oracle_mode() || no_escapes) {
@@ -3843,7 +3854,7 @@ int ObRawExprResolverImpl::process_case_node(const ParseNode *node, ObRawExpr *&
   if (OB_ISNULL(node) || OB_UNLIKELY(3 != node->num_child_) ||
       OB_UNLIKELY(T_CASE != node->type_) || OB_ISNULL(ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid PraseNode or session_info_", K(node), KP(ctx_.session_info_));
+    LOG_WARN("invalid ParseNode or session_info_", K(node), KP(ctx_.session_info_));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_INVALID, case_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_ISNULL(case_expr)) {
@@ -4147,7 +4158,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           order_item.order_type_ = NULLS_FIRST_ASC;
           if (OB_FAIL(agg_expr->add_order_item(order_item))) {
             LOG_WARN("fail to add median order item", K(ret));
-          } else {/* do nothong */}
+          } else {/* do nothing */}
         }
       }
     } else if (T_FUN_GROUPING_ID == node->type_) {
@@ -4334,7 +4345,7 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode *node, ObRawE
     LOG_WARN("store aggr expr failed", K(ret));
   } else if (OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inalid group concat node", K(ret), K(node->children_));
+    LOG_WARN("invalid group concat node", K(ret), K(node->children_));
   } else {
     bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     ParseNode *expr_list_node = node->children_[1];
@@ -4975,7 +4986,7 @@ int ObRawExprResolverImpl::process_isnull_node(const ParseNode *node, ObRawExpr 
   } else {
     ObRawExpr *obj_expr = NULL;
     if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1]->children_[0], obj_expr)))) {
-      LOG_WARN("resolve child faield", K(ret));
+      LOG_WARN("resolve child failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(ctx_.expr_factory_,
                                                               obj_expr,
                                                               false/*is_not_null*/,
@@ -5051,7 +5062,7 @@ int ObRawExprResolverImpl::process_sqlerrm_node(const ParseNode *node, ObRawExpr
     if (OB_ISNULL(node->children_[1])
         || node->children_[1]->num_child_ != 1) {
       ret = OB_INVALID_ARGUMENT_NUM;
-      LOG_WARN("invlaid argument number for SQLERRM", K(node->children_[1]->num_child_));
+      LOG_WARN("invalid argument number for SQLERRM", K(node->children_[1]->num_child_));
     }
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(node->children_[1]->children_[0])) {
@@ -5933,7 +5944,7 @@ int ObRawExprResolverImpl::process_is_json_node(const ParseNode *node, ObRawExpr
     OZ(SMART_CALL(recursive_resolve(node->children_[i], para_expr)));
     CK(OB_NOT_NULL(para_expr));
     if (OB_SUCC(ret)) {
-      para_expr->clear_flag(IS_CONST_EXPR);
+      OZ(para_expr->clear_flag(IS_CONST_EXPR));
       OZ(func_expr->add_param_expr(para_expr));
     }
   } //end for
@@ -7441,7 +7452,7 @@ int ObRawExprResolverImpl::process_dll_udf_node(const ParseNode *node, ObRawExpr
       LOG_WARN("the udf info is null", K(ret));
     } else if (!(udf_info->is_normal_udf() || udf_info->is_agg_udf())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the udf schame is error", K(ret), K(udf_info->get_type()));
+      LOG_WARN("the udf schema is error", K(ret), K(udf_info->get_type()));
     } else if (udf_info->is_normal_udf()) {
       ObSysFunRawExpr *func_expr = NULL;
       ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, udf_name);
@@ -7823,4 +7834,4 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
 
 
 } //namespace sql
-} //namespace oceabase
+} //namespace oceanbase

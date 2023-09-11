@@ -1511,8 +1511,10 @@ BEGIN(in_c_comment);
       node->children_[1] = target_node;
       return REMAP_TABLE_VAL;
     }
+
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for remap\n");
+    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
+    return PARSER_SYNTAX_ERROR;
   }
 }
 
@@ -1547,7 +1549,8 @@ BEGIN(in_c_comment);
       return REMAP_TABLE_VAL;
     }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for remap\n");
+    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
+    return PARSER_SYNTAX_ERROR;
   }
 }
 
@@ -1589,7 +1592,8 @@ BEGIN(in_c_comment);
       return REMAP_TABLE_VAL;
     }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for remap\n");
+    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
+    return PARSER_SYNTAX_ERROR;
   }
 }
 
@@ -1621,7 +1625,8 @@ BEGIN(in_c_comment);
       return REMAP_TABLE_VAL;
     }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for remap\n");
+    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
+    return PARSER_SYNTAX_ERROR;
   }
 }
 
@@ -1671,7 +1676,8 @@ BEGIN(in_c_comment);
       return REMAP_TABLE_VAL;
     }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for remap\n");
+    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
+    return PARSER_SYNTAX_ERROR;
   }
 }
 
@@ -1714,7 +1720,8 @@ BEGIN(in_c_comment);
       return REMAP_TABLE_VAL;
     }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for remap\n");
+    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
+    return PARSER_SYNTAX_ERROR;
   }
 }
 

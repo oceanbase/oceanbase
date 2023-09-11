@@ -34,7 +34,7 @@ public:
 public:
   ObRpcProcessorBase()
       : rpc_pkt_(NULL), sh_(NULL), sc_(NULL), is_stream_(false), is_stream_end_(false),
-        bad_routing_(false), preserve_recv_data_(false), preserved_buf_(NULL),
+        require_rerouting_(false), preserve_recv_data_(false), preserved_buf_(NULL),
         uncompressed_buf_(NULL), using_buffer_(NULL), send_timestamp_(0), pkt_size_(0), tenant_id_(0),
         result_compress_type_(common::INVALID_COMPRESSOR)
   {}
@@ -82,12 +82,12 @@ protected:
     Response(int64_t sessid,
              bool is_stream,
              bool is_stream_last,
-             bool bad_routing,
+             bool require_rerouting,
              ObRpcPacket *pkt)
         : sessid_(sessid),
           is_stream_(is_stream),
           is_stream_last_(is_stream_last),
-          bad_routing_(bad_routing),
+          require_rerouting_(require_rerouting),
           pkt_(pkt)
     { }
 
@@ -97,11 +97,11 @@ protected:
     bool is_stream_last_;
 
     // for routing check
-    bool bad_routing_;
+    bool require_rerouting_;
 
     ObRpcPacket *pkt_;
 
-    TO_STRING_KV(K(sessid_), K(is_stream_), K(is_stream_last_), K_(bad_routing));
+    TO_STRING_KV(K_(sessid), K_(is_stream), K_(is_stream_last), K_(require_rerouting));
   };
 
   void reuse();
@@ -152,9 +152,8 @@ protected:
   // invalid, so the stream is end.
   bool is_stream_end_;
 
-  // If this request accidently should not been handled by this server,
-  // mark the flag so that the client can refresh location cache.
-  bool bad_routing_;
+  // For rerouting in obkv
+  bool require_rerouting_;
 
   // The flag marks received data must copy out from `easy buffer'
   // before we response packet back. Typical case is when we use

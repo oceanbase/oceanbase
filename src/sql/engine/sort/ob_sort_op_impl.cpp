@@ -567,7 +567,7 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
   : inited_(false), local_merge_sort_(false), need_rewind_(false),
     got_first_row_(false), sorted_(false), enable_encode_sortkey_(false), mem_context_(NULL),
     mem_entify_guard_(mem_context_), tenant_id_(OB_INVALID_ID), sort_collations_(nullptr),
-    sort_cmp_funs_(nullptr), eval_ctx_(nullptr), inmem_row_size_(0), mem_check_interval_mask_(1),
+    sort_cmp_funs_(nullptr), eval_ctx_(nullptr), datum_store_(ObModIds::OB_SQL_SORT_ROW), inmem_row_size_(0), mem_check_interval_mask_(1),
     row_idx_(0), heap_iter_begin_(false), imms_heap_(NULL), ems_heap_(NULL),
     next_stored_row_func_(&ObSortOpImpl::array_next_stored_row),
     input_rows_(OB_INVALID_ID), input_width_(OB_INVALID_ID),
@@ -2338,7 +2338,7 @@ ObPrefixSortImpl::ObPrefixSortImpl(ObMonitorNode &op_monitor_info) : ObSortOpImp
     base_sort_collations_(), base_sort_cmp_funs_(),
     prev_row_(nullptr), next_prefix_row_store_(), next_prefix_row_(nullptr),
     child_(nullptr), self_op_(nullptr), sort_row_count_(nullptr),
-    selector_(nullptr), selector_size_(0), sort_prefix_rows_(0),
+    selector_(nullptr), selector_size_(0), sort_prefix_rows_(0), immediate_prefix_store_(ObModIds::OB_SQL_SORT_ROW),
     immediate_prefix_rows_(nullptr), immediate_prefix_pos_(0), brs_(NULL)
 {
 }

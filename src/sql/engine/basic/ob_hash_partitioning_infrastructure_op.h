@@ -314,7 +314,7 @@ public:
   {
   public:
     ObIntraPartition() :
-      part_key_(), store_()
+      part_key_(), store_(ObModIds::OB_SQL_HASH_SET)
     {}
     ~ObIntraPartition()
     {

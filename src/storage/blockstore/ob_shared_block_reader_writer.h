@@ -239,7 +239,7 @@ public:
       const ObSharedBlockWriteInfo &write_info,
       ObSharedBlockWriteHandle &block_handle);
   int async_batch_write(
-      const ObIArray<ObSharedBlockWriteInfo> &write_infos,
+      const common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
       ObSharedBlockBatchHandle &block_handle);
   int async_link_write(
       const ObSharedBlockWriteInfo &write_infos,

@@ -363,7 +363,7 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
   int64_t min_buf_size = ObChunkDatumStore::Block::min_buf_size(0);
   ObDtlLinkedBuffer *buffer = NULL;
   MTL_SWITCH(tenant_id_) {
-    ObChunkDatumStore row_store;
+    ObChunkDatumStore row_store("MockDtlStore");
     ObChunkDatumStore::Block* block = NULL;
     if (OB_ISNULL(buffer = alloc_buf(min_buf_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

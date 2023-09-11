@@ -1936,7 +1936,7 @@ int ObUnitManager::get_to_be_deleted_unit_group(
           }
         } else {
           ret = OB_OP_NOT_ALLOW;
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "delete unit group which is not belong to this tenant");
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "delete unit group which does not belong to this tenant");
         }
       }
     } else {

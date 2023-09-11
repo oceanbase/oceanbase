@@ -27,7 +27,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
-using namespace unittest;
+using namespace oceanbase::unittest;
 
 namespace oceanbase
 {
@@ -208,7 +208,8 @@ int TestTransferHandler::wait_transfer_out_deleted_tablet_gc(
       while (OB_SUCC(ret) && index < task.tablet_list_.count()) {
         ObTabletHandle tablet_handle;
         const ObTransferTabletInfo &transfer_info = task.tablet_list_.at(index);
-        if (OB_FAIL(ls->get_tablet(transfer_info.tablet_id_, tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        if (OB_FAIL(ls->get_tablet(transfer_info.tablet_id_, tablet_handle,
+            ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
           if (OB_TABLET_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
             index++;
@@ -263,9 +264,32 @@ TEST_F(TestTransferHandler, prepare_valid_data)
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select object_id from oceanbase.DBA_OBJECTS where OBJECT_NAME='ttt2'"));
   ASSERT_EQ(OB_SUCCESS, read_sql(sql_proxy, sql, g_batch_part_list));
+
+  //create other ls by cluster table
+  sql.reset();
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("create table part_table_with_dup(c1 int) duplicate_scope = 'CLUSTER' partition by hash(c1) partitions 4"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  sql.reset();
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select object_id from oceanbase.DBA_OBJECTS where OBJECT_NAME='ttt2'"));
+  ASSERT_EQ(OB_SUCCESS, read_sql(sql_proxy, sql, g_batch_part_list));
+
+
+  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _enable_balance_kill_transaction = true tenant = 'tt1';"));
+  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+  usleep(100000); // wait for debug_sync_timeout to take effect
+  sql.reset();
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _balance_wait_killing_transaction_end_threshold = '10s' tenant = 'tt1';"));
+  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _enable_balance_kill_transaction = true tenant = 'tt1';"));
+  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+  usleep(100000); // wait for debug_sync_timeout to take effect
+  sql.reset();
+
 }
 
-TEST_F(TestTransferHandler, test_transfer_1001_to_1)
+TEST_F(TestTransferHandler, test_transfer_1001_to_1002)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
@@ -286,12 +310,12 @@ TEST_F(TestTransferHandler, test_transfer_1001_to_1)
   ObTenantTransferService *tenant_transfer = MTL(ObTenantTransferService*);
   ASSERT_TRUE(OB_NOT_NULL(tenant_transfer));
 
-  //title: 1001 ls transfer to 1 ls
+  //title: 1001 ls transfer to 1002 ls
   // generate transfer task
   ObTransferTaskID task_id;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1),
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1002),
       g_part_list, ObBalanceTaskID(123), task_id));
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -311,7 +335,7 @@ TEST_F(TestTransferHandler, test_transfer_1001_to_1)
   ASSERT_EQ(OB_SUCCESS, wait_transfer_out_deleted_tablet_gc(task));
 }
 
-TEST_F(TestTransferHandler, test_transfer_1_to_1001)
+TEST_F(TestTransferHandler, test_transfer_1002_to_1001)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
@@ -325,12 +349,12 @@ TEST_F(TestTransferHandler, test_transfer_1_to_1001)
   ObTenantTransferService *tenant_transfer = MTL(ObTenantTransferService*);
   ASSERT_TRUE(OB_NOT_NULL(tenant_transfer));
 
-  //title: 1001 ls transfer to 1 ls
+  //title: 1002 ls transfer to 1001 ls
   // generate transfer task
   ObTransferTaskID task_id;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1), ObLSID(1001),
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1002), ObLSID(1001),
       g_part_list, ObBalanceTaskID(123), task_id));
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -353,7 +377,7 @@ TEST_F(TestTransferHandler, test_transfer_1_to_1001)
 } // namespace oceanbase
 int main(int argc, char **argv)
 {
-  unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

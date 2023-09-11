@@ -47,7 +47,7 @@ int ObTabletFullMemoryMdsData::init(common::ObArenaAllocator &allocator)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_FAIL(medium_info_list_.medium_info_list_.init(allocator))) {
+  } else if (OB_FAIL(medium_info_list_.medium_info_list_.init_for_first_creation(allocator))) {
     LOG_WARN("failed to init medium info list", K(ret));
   } else {
     is_inited_ = true;
@@ -136,9 +136,9 @@ int ObTabletFullMemoryMdsData::read_mds_dump_kv(
     LOG_WARN("invalid args", K(ret), K(mds_dump_kv_addr));
   } else if (OB_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, mds_dump_kv_addr, ptr))) {
     LOG_WARN("failed to load mds dump kv", K(ret));
-  } else if (OB_ISNULL(ptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, ptr is null", K(ret), KP(ptr));
+  } else if (nullptr == ptr) {
+    // do nothing
+    dump_kv.reset();
   } else if (OB_FAIL(dump_kv.assign(*ptr, allocator))) {
     LOG_WARN("failed to copy mds dump kv", K(ret));
   }
@@ -161,11 +161,10 @@ int ObTabletFullMemoryMdsData::read_medium_info_list(
     LOG_WARN("invalid args", K(ret), K(medium_info_list_addr));
   } else if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, medium_info_list_addr, ptr))) {
     LOG_WARN("failed to load medium info list", K(ret));
-  } else if (OB_ISNULL(ptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, ptr is null", K(ret), KP(ptr));
-  } else if (OB_FAIL(medium_info_list.assign(*ptr, allocator))) {
-    LOG_WARN("failed to medium info list", K(ret));
+  } else if (nullptr == ptr && OB_FAIL(medium_info_list.init_for_first_creation(allocator))) {
+    LOG_WARN("failed to init medium info list", K(ret));
+  } else if (nullptr != ptr && OB_FAIL(medium_info_list.assign(*ptr, allocator))) {
+    LOG_WARN("failed to copy medium info list", K(ret));
   }
 
   ObTabletMdsData::free_medium_info_list(allocator, ptr);
@@ -180,15 +179,11 @@ int ObTabletFullMemoryMdsData::read_auto_inc_seq(
 {
   int ret = OB_SUCCESS;
   const share::ObTabletAutoincSeq *ptr = nullptr;
-  ObTabletMemberWrapper<share::ObTabletAutoincSeq> auto_inc_seq_wrapper;
 
-  if (OB_FAIL(ObTabletMdsData::fetch_auto_inc_seq(auto_inc_seq_addr, auto_inc_seq_wrapper))) {
-    LOG_WARN("failed to fetch auto inc seq", K(ret));
-  } else if (OB_FAIL(auto_inc_seq_wrapper.get_member(ptr))) {
-    LOG_WARN("ObTabletMemberWrapper get member failed", K(ret));
-  } else if (OB_ISNULL(ptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, ptr is null", K(ret), KP(ptr));
+  if (OB_FAIL(ObTabletMdsData::load_auto_inc_seq(allocator, auto_inc_seq_addr, ptr))) {
+    LOG_WARN("failed to load auto inc seq", K(ret), K(auto_inc_seq_addr));
+  } else if (nullptr == ptr) {
+    // do nothing
   } else if (OB_FAIL(auto_inc_seq.assign(allocator, *ptr))) {
     LOG_WARN("failed to copy auto inc seq", K(ret));
   }
@@ -231,7 +226,6 @@ int ObTabletFullMemoryMdsData::deserialize(common::ObIAllocator &allocator, cons
     LOG_WARN("failed to deserialize", K(ret));
   } else {
     is_inited_ = true;
-    LOG_INFO("succeeded to deserialize full memory mds data", K(ret), KPC(this));
   }
 
   return ret;

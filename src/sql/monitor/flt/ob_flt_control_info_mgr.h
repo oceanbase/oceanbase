@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace sql
 {
-  // for client identfier
+  // for client identifier
   static const char TYPE_I[] = "type_i";
   // for mod_act
   static const char TYPE_MOD_ACT[] = "type_m";
@@ -147,7 +147,7 @@ namespace sql
     common::ObSEArray<ObModActConInfo, 1, common::ModulePageAllocator, true> mod_infos_;
     // tenant trace
     FLTControlInfo tenant_info_;
-    // allcator
+    // allocator
     ObArenaAllocator alloc_;
   };
 

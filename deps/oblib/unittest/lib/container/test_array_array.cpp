@@ -47,6 +47,7 @@ private:
 protected:
   // function members
   void setup(int64_t N, ObIArray<TestObj> &arr);
+  void setup(int64_t N, ObIArray<TestObj> &arr, ObArrayArray<TestObj> &arr_arr);
   void verify(int64_t N, const ObIArray<TestObj> &arr);
   void verify(const ObIArray<TestObj> &arr1, const ObIArray<TestObj> &arr2);
   void extend_to(const int64_t N, ObIArray<TestObj> &arr);
@@ -77,6 +78,16 @@ void TestArrayArray::setup(int64_t N, ObIArray<TestObj> &arr)
   for (int64_t i = 0;i < N; ++i) {
     TestObj obj(i);
     OK(arr.push_back(obj));
+  } // end for
+}
+
+void TestArrayArray::setup(int64_t N, ObIArray<TestObj> &arr, ObArrayArray<TestObj> &arr_arr)
+{
+  arr.reset();
+  arr_arr.reset();
+  for (int64_t i = 0; i < N; ++i) {
+    setup(i, arr);
+    OK(arr_arr.push_back(arr));
   } // end for
 }
 
@@ -153,6 +164,36 @@ TEST_F(TestArrayArray, array_push)
   }
   COMMON_LOG(INFO, "print array array",  K(arr_arr));
 
+}
+
+TEST_F(TestArrayArray, assign)
+{
+  int N = 10;
+  ObArrayArray<TestObj> src_arr_arr;
+  ObSEArray<TestObj, 10> arr;
+  ObArrayArray<TestObj> dst_arr_arr;
+  for (int64_t i = 1; i < N; i++) {
+    setup(i, arr, src_arr_arr);
+    OK(dst_arr_arr.assign(src_arr_arr));
+    ASSERT_EQ(dst_arr_arr.count(), src_arr_arr.count());
+    for (int64_t j = 0; j < src_arr_arr.count(); j++) {
+      ASSERT_EQ(dst_arr_arr.count(j), src_arr_arr.count(j));
+      verify(dst_arr_arr.at(j), src_arr_arr.at(j));
+    }
+  }
+  COMMON_LOG(INFO, "print array array",  K(dst_arr_arr));
+
+  N = 20;
+  for (int64_t i = 1; i < N; i++) {
+    setup(i, arr, src_arr_arr);
+    OK(dst_arr_arr.assign(src_arr_arr));
+    ASSERT_EQ(dst_arr_arr.count(), src_arr_arr.count());
+    for (int64_t j = 0; j < src_arr_arr.count(); j++) {
+      ASSERT_EQ(dst_arr_arr.count(j), src_arr_arr.count(j));
+      verify(dst_arr_arr.at(j), src_arr_arr.at(j));
+    }
+  }
+  COMMON_LOG(INFO, "print array array",  K(dst_arr_arr));
 }
 
 int main(int argc, char **argv)

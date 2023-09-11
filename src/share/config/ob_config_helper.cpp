@@ -29,7 +29,8 @@
 #include "share/ob_resource_limit.h"
 #include "share/table/ob_ttl_util.h"
 #include "src/observer/ob_server.h"
-
+#include "share/table/ob_table_config_util.h"
+#include "share/config/ob_config_mode_name_def.h"
 namespace oceanbase
 {
 using namespace share;
@@ -873,6 +874,148 @@ bool ObConfigSQLTlsVersionChecker::check(const ObConfigItem &t) const
          0 == tmp_str.case_compare("TLSV1.1") ||
          0 == tmp_str.case_compare("TLSV1.2") ||
          0 == tmp_str.case_compare("TLSV1.3");
+}
+
+int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(item)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "item is NULL", K(ret));
+  } else {
+    // key
+    char *save_ptr = NULL;
+    char *key_ptr = STRTOK_R(item, "=", &save_ptr);
+    ObString tmp_key(key_ptr);
+    key = tmp_key.trim();
+    // value
+    ObString tmp_value(save_ptr);
+    value = tmp_value.trim();
+    if (value.case_compare("on") != 0 && value.case_compare("off") != 0) {
+      ret = OB_INVALID_CONFIG;
+      OB_LOG(WARN, "item value is invalid", K(ret), K(value));
+    }
+  }
+  return ret;
+}
+
+int ObModeConfigParserUitl::format_mode_str(const char *src, int64_t src_len, char *dst, int64_t dst_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src) || OB_UNLIKELY(src_len <=0)
+      || OB_ISNULL(dst) || dst_len < (3 * src_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", KR(ret), KP(src), KP(dst), K(src_len), K(dst_len));
+  } else {
+    const char *source_str = src;
+    const char *locate_str = NULL;
+    int64_t source_left_len = src_len;
+    int32_t locate = -1;
+    int64_t pos = 0;
+    while (OB_SUCC(ret) && (source_left_len > 0)
+           && (NULL != (locate_str = STRCHR(source_str, ',')))) {
+      locate = static_cast<int32_t>(locate_str - source_str);
+      if (OB_FAIL(databuff_printf(dst, dst_len, pos, "%.*s , ", locate, source_str))) {
+        OB_LOG(WARN, "failed to databuff_print", K(ret), K(dst), K(locate), K(source_str));
+      } else {
+        source_str = locate_str + 1;
+        source_left_len -= (locate + 1);
+      }
+    }
+
+    if (OB_SUCC(ret) && source_left_len > 0) {
+      if (OB_FAIL(databuff_printf(dst, dst_len, pos, "%s", source_str))) {
+        OB_LOG(WARN, "failed to databuff_print", KR(ret), K(dst), K(pos));
+      }
+    }
+    OB_LOG(DEBUG, "format_option_str", K(ret), K(src), K(dst));
+  }
+  return ret;
+}
+
+int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(str)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "item is NULL", K(ret));
+  } else {
+    ObString key;
+    ObString value;
+    char *save_ptr = NULL;
+    char *token = STRTOK_R(str, ",", &save_ptr);
+    while (OB_SUCC(ret) && OB_NOT_NULL(token)) {
+      // trim left space
+      while (*token == ' ') token++;
+      // trim right space
+      uint64_t len = strlen(token);
+      while (len > 0 && token[len - 1] == ' ') token[--len] = '\0';
+      // check and set mode
+      if (OB_FAIL(parse_item_to_kv(token, key, value))) {
+        OB_LOG(WARN, "fail to check config item", K(ret));
+      } else if (OB_FAIL(kv_list.push_back(std::make_pair(key, value)))) {
+        OB_LOG(WARN, "fail to push back key and value pair", K(ret), K(key), K(value));
+      } else {
+        token = STRTOK_R(NULL, ",", &save_ptr);
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
+{
+  bool bret = true;
+  if (str ==  NULL || arr == NULL) {
+    bret = false;
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get mode config item fail, str or value arr is NULL!");
+  } else if (strlen(str) == 0) {
+    bret = true;
+    OB_LOG_RET(DEBUG, OB_SUCCESS, "strlen is 0");
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObSEArray<std::pair<ObString, ObString>, 8> kv_list;
+    int64_t str_len = strlen(str);
+    const int64_t buf_len = 3 * str_len; // need replace ',' to ' , '
+    char buf[buf_len];
+    MEMSET(buf, 0, sizeof(buf));
+    MEMCPY(buf, str, str_len);
+    if (OB_SUCCESS != (tmp_ret = ObModeConfigParserUitl::format_mode_str(str, str_len, buf, buf_len))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to format mode str", K(str));
+    } else if (OB_SUCCESS != (tmp_ret = ObModeConfigParserUitl::get_kv_list(buf, kv_list))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
+    } else {
+      ObKVFeatureMode kv_mode;
+      for (int64_t i = 0; i < kv_list.count() && bret; i++) {
+        uint8_t mode = MODE_DEFAULT;
+        if (kv_list.at(i).second.case_compare(MODE_VAL_ON) == 0) {
+          mode = MODE_ON;
+        } else if (kv_list.at(i).second.case_compare(MODE_VAL_OFF) == 0) {
+          mode = MODE_OFF;
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode type", K(kv_list.at(i).second));
+        }
+        if (!bret) {
+        } else if (kv_list.at(i).first.case_compare(MODE_NAME_TTL) == 0) {
+          kv_mode.set_ttl_mode(mode);
+        } else if (kv_list.at(i).first.case_compare(MODE_NAME_REROUTING) == 0) {
+          kv_mode.set_rerouting_mode(mode);
+        } else if (kv_list.at(i).first.case_compare(MODE_NAME_HOTKEY) == 0) {
+          kv_mode.set_hotkey_mode(mode);
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode name", K(kv_list.at(i).first));
+        }
+      } // end for
+      if (bret) {
+        arr[0] = kv_mode.get_value();
+      }
+    }
+  }
+  return bret;
 }
 
 } // end of namepace common

@@ -17,274 +17,87 @@
 #include "share/system_variable/ob_system_variable.h" // for ObBinlogRowImage::FULL
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h" // for ObAutoincNextvalExtra
 
+using namespace oceanbase::common;
+using namespace oceanbase::share;
+using namespace oceanbase::sql;
+
 namespace oceanbase
 {
 namespace table
 {
-
-ObRawExpr* ObTableExprCgService::get_ref_raw_expr(const ObIArray<ObRawExpr *> &all_exprs,
-                                                  const ObString &col_name)
-{
-  bool found = false;
-  ObColumnRefRawExpr *expr = nullptr;
-  for (int64_t i = 0; i < all_exprs.count() && !found; i++) {
-    if (all_exprs.at(i)->is_column_ref_expr()) {
-      expr = static_cast<ObColumnRefRawExpr*>(all_exprs.at(i));
-      if (0 == col_name.case_compare(expr->get_column_name())) {
-        found = true;
-      }
-    }
-  }
-
-  return expr;
-}
-
-int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
-                                                      ObColumnRefRawExpr &col_expr,
-                                                      const ObString &expr_str,
-                                                      const ObIArray<ObRawExpr *> &exprs)
+/*
+  generate column ref exprs.
+  1. generate column reference expr which order is same as schema.
+  2. generate stored generated column assign item expr
+    when update stored generated column directly or update its reference exprs. such as:
+      create table t(`c1` int primary key, `c2` varchar(10), `c3` varchar(10) generated always as (substring(`c2`, 1, 4) stored)));
+      - update t set `c3`='abc' where `c1`=1;
+      - update t set `c2`='abc' where `c1`=1;
+      both need assign `c3`
+*/
+int ObTableExprCgService::generate_all_column_exprs(ObTableCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
   const ObTableSchema *table_schema = ctx.get_table_schema();
+  const uint64_t column_cnt = table_schema->get_column_count();
 
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(ctx));
-  } else {
-    ObArray<ObQualifiedName> columns;
-    ObSchemaChecker schema_checker;
-    ObSchemaGetterGuard &schema_guard = ctx.get_schema_guard();
-    ObRawExprFactory &expr_factory = ctx.get_expr_factory();
-    ObSQLSessionInfo &sess_info = ctx.get_session_info();
-    ObRawExpr *gen_expr = nullptr;
-    if (OB_FAIL(schema_checker.init(schema_guard))) {
-      LOG_WARN("fail to init schema checker", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(expr_str,
-                                                                   expr_factory,
-                                                                   sess_info,
-                                                                   gen_expr,
-                                                                   columns,
-                                                                   table_schema,
-                                                                   false, /* allow_sequence */
-                                                                   nullptr,
-                                                                   &schema_checker))) {
-      LOG_WARN("fail to build generated expr", K(ret), K(expr_str), K(ctx));
-    } else if (OB_ISNULL(gen_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("generated expr is null", K(ret));
-    } else {
-      ObRawExpr *real_ref_expr = nullptr;
-      bool is_inc_or_append_replace = !ctx.get_delta_exprs().empty();
-      if (is_inc_or_append_replace && 2 != columns.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column for increment or append", K(ret), K(columns.count()));
-      }
-      ObIArray<ObTableCtx::ObGenDenpendantsPair> &gen_dependants_pairs = ctx.get_gen_dependants_pairs();
-      ObTableCtx::ObGenDenpendantsPair pair;
-      pair.first = &col_expr; // 记录生成列
-      const ObIArray<ObRawExpr *> *src_exprs = &exprs;
-      for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
-        if (1 == i && is_inc_or_append_replace) {
-          src_exprs = &ctx.get_delta_exprs();
-        }
-        if (OB_ISNULL(real_ref_expr = get_ref_raw_expr(*src_exprs,
-                                                       columns.at(i).col_name_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to get ref expr", K(ret), K(columns.at(i).ref_expr_->get_column_id()));
-        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(gen_expr,
-                                                              columns.at(i).ref_expr_,
-                                                              real_ref_expr))) {
-          LOG_WARN("fail to replace column reference expr", K(ret));
-        } else if (OB_FAIL(add_var_to_array_no_dup(pair.second, real_ref_expr))) { // 记录依赖的列
-          LOG_WARN("fail to add expr to array", K(ret));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(gen_expr->formalize(&sess_info))) {
-          LOG_WARN("fail to formailize column reference expr", K(ret));
-        } else if (ObRawExprUtils::need_column_conv(col_expr.get_result_type(), *gen_expr)) {
-          if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory,
-                                                             ctx.get_allocator(),
-                                                             col_expr,
-                                                             gen_expr,
-                                                             &sess_info))) {
-            LOG_WARN("fail to build column convert expr", K(ret));
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        gen_expr->set_for_generated_column();
-        col_expr.set_dependant_expr(gen_expr);
-        if (OB_FAIL(gen_dependants_pairs.push_back(pair))) {
-          LOG_WARN("fail to push back generate ref expr pair", K(ret), K(gen_dependants_pairs));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::resolve_generated_column_expr(ObTableCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr *> &exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
-      ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
-    if (exprs.at(i)->is_column_ref_expr()) {
-      ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr *>(exprs.at(i));
-      if (ref_expr->is_generated_column()) {
-        const ObColumnSchemaV2 *gen_col_schema = nullptr;
-        if (OB_ISNULL(gen_col_schema = ctx.get_table_schema()->get_column_schema(ref_expr->get_column_id()))) {
-          ret = OB_SCHEMA_ERROR;
-          LOG_WARN("fail to get generated column schema", K(ret), K(ref_expr->get_column_id()));
-        } else if (OB_FAIL(build_generated_column_expr(ctx,
-                                                       *ref_expr,
-                                                       gen_col_schema->get_cur_default_value().get_string(),
-                                                       exprs))) {
-          LOG_WARN("fail to build generated raw expr", K(ret), K(*ref_expr));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::generate_column_ref_raw_expr(ObTableCtx &ctx,
-                                                       const ObColumnSchemaV2 &col_schema,
-                                                       ObRawExpr *&expr)
-{
-  int ret = OB_SUCCESS;
-
-  ObColumnRefRawExpr *col_ref_expr = NULL;
-  // 存储最开始生成的列原生表达式, 用于后续生成主键冲突
-  ObIArray<ObColumnRefRawExpr*> &all_column_exprs = ctx.get_all_column_ref_exprs();
-  // 在update场景下, 会多次调用该函数，我们只需要存最开始生成的列引用表达式，记录下是否存储满
-  bool is_full = (ctx.get_table_schema()->get_column_count() == all_column_exprs.count());
-
-  if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(),
-                                                col_schema,
-                                                col_ref_expr))) {
-    LOG_WARN("fail to build column expr", K(ret), K(col_schema));
-  } else if (OB_ISNULL(col_ref_expr)) {
+    LOG_WARN("table schema is null", K(ret));
+  } else if (items.count() != column_cnt) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
+    LOG_WARN("column item count not equal to column count", K(ret), K(items), K(column_cnt));
   } else {
-    expr = col_ref_expr;
-    if (!is_full && OB_FAIL(all_column_exprs.push_back(col_ref_expr))) {
-      LOG_WARN("fail to push back column ref expr to all column exprs", K(ret));
-    } else {
-      // delete/update/get/scan操作只需要生成列引用表达式
-      // 自增表达式结构为: con_conv_expr - auto_inc_expr - con_conv_expr
-      if (col_schema.is_autoincrement() && ctx.need_auto_inc_expr()) {
-        if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
-                                                           ctx.get_allocator(),
-                                                           *col_ref_expr,
-                                                           expr,
-                                                           &ctx.get_session_info()))) {
-          LOG_WARN("fail to build column conv expr", K(ret), K(*col_ref_expr));
-        } else if (OB_FAIL(generate_autoinc_nextval_expr(ctx, expr, col_schema))) {
-          LOG_WARN("fail to generate auto inc next val expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
-                                                                  ctx.get_allocator(),
-                                                                  *col_ref_expr,
-                                                                  expr,
-                                                                  &ctx.get_session_info()))) {
-          LOG_WARN("fail to build column conv expr", K(ret));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::genreate_filter_exprs(ObTableCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-
-  // won't put filter exprs into all exprs here
-  if (ctx.is_ttl_table()) {
-    ObIArray<sql::ObRawExpr *> &filter_exprs = ctx.get_filter_exprs();
-    ObRawExpr *expire_expr = nullptr;
-    if (OB_FAIL(build_expire_expr(ctx, expire_expr))) {
-      LOG_WARN("fail to build expire expr", K(ret), K(ctx));
-    } else if(OB_FAIL(filter_exprs.push_back(expire_expr))) {
-      LOG_WARN("fail to push back expire expr", K(ret), K(filter_exprs));
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::generate_exprs(ObTableCtx &ctx,
-                                         oceanbase::common::ObIAllocator &allocator,
-                                         oceanbase::sql::ObExprFrameInfo &expr_frame_info)
-{
-  int ret = OB_SUCCESS;
-  if (ctx.is_for_update() || ctx.is_for_insertup()) {
-    if (OB_FAIL(generate_update_raw_exprs(ctx))) {
-      LOG_WARN("fail to generate update raw exprs", K(ret), K(ctx));
-    }
-  } else if (OB_FAIL(generate_column_raw_exprs(ctx))) {
-    LOG_WARN("fail to generate column raw exprs", K(ret), K(ctx));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(genreate_filter_exprs(ctx))) {
-      LOG_WARN("fail to generate filter exprs", K(ret), K(ctx));
-    } else if (OB_FAIL(generate_expr_frame_info(ctx, allocator, expr_frame_info))) {
-      LOG_WARN("fail to generate expr frame info", K(ret), K(ctx));
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::generate_column_raw_exprs(ObTableCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = ctx.get_table_schema();
-  ObIArray<ObRawExpr *> *exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
-      &ctx.get_old_row_exprs() : const_cast<ObIArray<ObRawExpr *> *>(&ctx.get_all_exprs().get_expr_array());
-
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(ctx));
-  } else {
-    ObRawExpr *col_ref_expr = nullptr;
-    const ObColumnSchemaV2 *column_schema = nullptr;
-    const uint64_t column_cnt = table_schema->get_column_count();
+    const ObColumnSchemaV2 *col_schema = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
-      if (OB_ISNULL(column_schema = table_schema->get_column_schema_by_idx(i))) {
+      ObTableColumnItem &item = items.at(i);
+      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get column schema", K(ret));
-      } else if (OB_FAIL(generate_column_ref_raw_expr(ctx, *column_schema, col_ref_expr))) {
-        LOG_WARN("fail to generate column ref raw expr", K(ret), K(*column_schema));
-      } else if (OB_FAIL(exprs->push_back(col_ref_expr))) {
-        LOG_WARN("fail to push back column ref raw expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(),
+                                                           *col_schema,
+                                                           item.expr_))) {
+        LOG_WARN("fail to build column expr", K(ret), K(*col_schema));
       }
     }
   }
 
-  if (OB_SUCC(ret) && table_schema->has_generated_column()) {
-    if (OB_FAIL(resolve_generated_column_expr(ctx))) {
-      LOG_WARN("fail to resolver generated column expr", K(ret));
+  // generate stored generated column assign item expr
+  if (OB_SUCC(ret)) {
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      ObTableAssignment &assign = assigns.at(i);
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is null", K(ret), K(assign));
+      } else if (!assign.column_item_->is_stored_generated_column_)  {
+        // do nothing
+      } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(assign.column_item_->column_id_))) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("fail to get column schema", K(ret), K(assign));
+      } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(),
+                                                           *col_schema,
+                                                           assign.column_item_->expr_))) {
+        LOG_WARN("fail to build column expr", K(ret), K(*col_schema));
+      }
     }
   }
 
   return ret;
 }
 
-int ObTableExprCgService::build_expire_expr(ObTableCtx &ctx, ObRawExpr *&expire_expr)
+/*
+  expr tree:
+                T_OP_LE
+                /    \
+    ttl_gen_expr     T_FUN_SYS_CUR_TIMESTAMP
+*/
+int ObTableExprCgService::generate_expire_expr(ObTableCtx &ctx,
+                                               ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr *> &exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
-      ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
   const ObTableSchema *table_schema = ctx.get_table_schema();
   ObRawExprFactory &expr_factory = ctx.get_expr_factory();
   ObSysFunRawExpr *now_func_expr = nullptr;
@@ -318,15 +131,18 @@ int ObTableExprCgService::build_expire_expr(ObTableCtx &ctx, ObRawExpr *&expire_
       LOG_WARN("fail to build expire expr", K(ret), K(ttl_definition));
     } else {
       // 找到生成列引用的列并替换为真正的列
-      ObRawExpr *real_ref_expr = nullptr;
-      const ObIArray<ObRawExpr *> *src_exprs = &exprs;
       for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
-        if (OB_ISNULL(real_ref_expr = get_ref_raw_expr(*src_exprs, columns.at(i).col_name_))) {
+        const ObQualifiedName &tmp_column = columns.at(i);
+        const ObString &col_name = tmp_column.col_name_;
+        ObRawExpr *tmp_expr = nullptr;
+        if (OB_FAIL(ctx.get_expr_from_column_items(col_name, tmp_expr))) {
+          LOG_WARN("fail to get expr from column items", K(ret), K(col_name));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(tmp_expr)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to get ref expr", K(ret), K(columns.at(i).ref_expr_->get_column_id()));
-        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(ttl_gen_expr,
-                                                              columns.at(i).ref_expr_,
-                                                              real_ref_expr))) {
+          LOG_WARN("expr to replace is null", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(ttl_gen_expr, tmp_column.ref_expr_, tmp_expr))) {
           LOG_WARN("fail to replace column reference expr", K(ret));
         }
       }
@@ -337,7 +153,7 @@ int ObTableExprCgService::build_expire_expr(ObTableCtx &ctx, ObRawExpr *&expire_
         } else if (OB_FAIL(expire_expr_tmp->formalize(&sess_info))) {
           LOG_WARN("fail to formailize expire expr", K(ret));
         } else {
-          expire_expr = expire_expr_tmp;
+          expr = expire_expr_tmp;
         }
       }
     }
@@ -346,114 +162,198 @@ int ObTableExprCgService::build_expire_expr(ObTableCtx &ctx, ObRawExpr *&expire_
   return ret;
 }
 
+/*
+  expr tree:
+      autoinc_nextval expr
+            |
+      column_conv expr
+*/
+int ObTableExprCgService::generate_autoinc_nextval_expr(ObTableCtx &ctx,
+                                                        const ObTableColumnItem &item,
+                                                        ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *column_cnv_expr = item.expr_;
 
-int ObTableExprCgService::generate_full_assign_raw_exprs(ObTableCtx &ctx)
+  if (!item.is_auto_increment_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column item", K(ret), K(item));
+  } else if (OB_ISNULL(item.expr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("column item expr is null", K(ret), K(item));
+  } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
+                                                            ctx.get_allocator(),
+                                                            *item.expr_,
+                                                            column_cnv_expr,
+                                                            &ctx.get_session_info()))) {
+    LOG_WARN("fail to build column conv expr", K(ret), K(item));
+  } else {
+    ObSysFunRawExpr *autoinc_nextval_expr = NULL;
+    if (OB_FAIL(ctx.get_expr_factory().create_raw_expr(T_FUN_SYS_AUTOINC_NEXTVAL, autoinc_nextval_expr))) {
+      LOG_WARN("fail to create nextval expr", K(ret));
+    } else {
+      autoinc_nextval_expr->set_func_name(ObString::make_string(N_AUTOINC_NEXTVAL));
+      if (OB_FAIL(autoinc_nextval_expr->add_param_expr(column_cnv_expr))) {
+        LOG_WARN("fail to add collumn conv expr to function param", K(ret));
+      } else if (OB_FAIL(autoinc_nextval_expr->formalize(&ctx.get_session_info()))) {
+        LOG_WARN("fail to extract info", K(ret));
+      } else if (OB_FAIL(ObAutoincNextvalExtra::init_autoinc_nextval_extra(&ctx.get_allocator(),
+                                                                           reinterpret_cast<ObRawExpr *&>(autoinc_nextval_expr),
+                                                                           item.table_id_,
+                                                                           item.column_id_,
+                                                                           ctx.get_table_name(),
+                                                                           item.column_name_))) {
+        LOG_WARN("fail to init autoinc_nextval_extra", K(ret), K(ctx.get_table_name()), K(item));
+      } else {
+        expr = autoinc_nextval_expr;
+      }
+    }
+  }
+
+  return ret;
+}
+
+/*
+  expr tree:
+      column conv expr
+            |
+      cur timestamp expr
+*/
+int ObTableExprCgService::generate_current_timestamp_expr(ObTableCtx &ctx,
+                                                          const ObTableColumnItem &item,
+                                                          ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *tmp_expr = NULL;
+
+  if (!IS_DEFAULT_NOW_OBJ(item.default_value_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column item", K(ret), K(item));
+  } else if (OB_ISNULL(item.expr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("column item expr is null", K(ret), K(item));
+  } else if (OB_FAIL(ctx.get_expr_factory().create_raw_expr(T_FUN_SYS_CUR_TIMESTAMP, tmp_expr))) {
+    LOG_WARN("fail to create cur timestamp expr", K(ret));
+  } else {
+    tmp_expr->set_data_type(ObTimestampType);
+    tmp_expr->set_accuracy(item.expr_->get_accuracy());
+    tmp_expr->set_func_name(ObString::make_string(N_CUR_TIMESTAMP));
+    if (OB_FAIL(tmp_expr->formalize(&ctx.get_session_info()))) {
+      LOG_WARN("fail to formalize cur_timestamp_expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(ctx.get_expr_factory(),
+                                                              ctx.get_allocator(),
+                                                              *item.expr_,
+                                                              reinterpret_cast<ObRawExpr *&>(tmp_expr),
+                                                              &ctx.get_session_info()))) {
+      LOG_WARN("fail to build column conv expr", K(ret), K(item));
+    } else {
+      // need clear IS_CONST_EXPR flag, cause StoredRow.to_expr will skip const expr in insertUp/replace executor
+      tmp_expr->clear_flag(IS_CONST_EXPR);
+      expr = tmp_expr;
+    }
+  }
+
+  return ret;
+}
+
+/*
+  build generate column expr
+  - delta_expr is for increment or append operation
+  - item.expr_ is column ref expr, gen_expr is real calculate expr.
+*/
+int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
+                                                      ObTableColumnItem &item,
+                                                      const ObString &expr_str,
+                                                      ObRawExpr *&expr,
+                                                      sql::ObRawExpr *delta_expr/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = ctx.get_table_schema();
-  ObIArray<sql::ObRawExpr *> &full_assign_exprs = ctx.get_full_assign_exprs();
-  bool is_inc_or_append = ctx.is_inc_or_append();
-  bool has_stored_gen_col = false;
 
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(ctx));
-  } else {
-    ObRawExpr *col_ref_expr = nullptr;
-    const ObColumnSchemaV2 *column_schema = nullptr;
-    const uint64_t column_cnt = table_schema->get_column_count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
-      bool is_virtual_col = false;
-      if (OB_ISNULL(column_schema = table_schema->get_column_schema_by_idx(i))) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get column schema", K(ret), K(i));
-      } else if (column_schema->is_virtual_generated_column()) {
-        is_virtual_col = true;
-      } else if (column_schema->is_stored_generated_column()) {
-        has_stored_gen_col = true;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(!is_virtual_col && generate_column_ref_raw_expr(ctx, *column_schema, col_ref_expr))) {
-        LOG_WARN("fail to generate column ref raw expr", K(ret), K(*column_schema));
-      } else if (OB_FAIL(!is_virtual_col && full_assign_exprs.push_back(col_ref_expr))) {
-        LOG_WARN("fail to push back column ref raw expr", K(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) && has_stored_gen_col) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < full_assign_exprs.count(); i++) {
-      if (full_assign_exprs.at(i)->is_column_ref_expr()) {
-        ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr *>(full_assign_exprs.at(i));
-        if (ref_expr->is_stored_generated_column()) {
-          const ObColumnSchemaV2 *gen_col_schema = nullptr;
-          if (OB_ISNULL(gen_col_schema = ctx.get_table_schema()->get_column_schema(ref_expr->get_column_id()))) {
-            ret = OB_SCHEMA_ERROR;
-            LOG_WARN("fail to get generated column schema", K(ret), K(ref_expr->get_column_id()));
-          } else if (OB_FAIL(build_generated_column_expr(ctx,
-                                                         *ref_expr,
-                                                         gen_col_schema->get_cur_default_value().get_string(),
-                                                         full_assign_exprs))) {
-            LOG_WARN("fail to build generated column expr", K(ret), K(*ref_expr));
-          }
-        }
-      }
-    }
-  }
-
-  // 构造delta expr，作为生成列表达式的参数表达式
-  // 针对increment和append场景，将对应的列表达式设置为stored生成列表达式，并且构造生成列
-  if (OB_SUCC(ret) && is_inc_or_append) {
-    const ObColumnSchemaV2 *column_schema = nullptr;
-    ObRawExpr *col_ref_expr = nullptr;
-    ObIArray<sql::ObRawExpr *> &delta_exprs = ctx.get_delta_exprs();
-    const ObIArray<ObString> &expr_strs = ctx.get_expr_strs();
-    const ObTableCtx::ObAssignIds &assign_ids = ctx.get_assign_ids();
-    const int64_t N = assign_ids.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      uint64_t idx = assign_ids.at(i).idx_;
-      uint64_t column_id = assign_ids.at(i).column_id_;
-      if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_id))) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get column schema", K(ret), K(column_id));
-      } else if (column_schema->is_autoincrement()) { // do not support delta on auto increment column currently
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("auto increment column do not support delta", K(ret), K(*column_schema));
-      } else if (OB_FAIL(generate_column_ref_raw_expr(ctx, *column_schema, col_ref_expr))) {
-        LOG_WARN("fail to generate column ref raw expr", K(ret), K(*column_schema));
-      } else if (OB_FAIL(delta_exprs.push_back(col_ref_expr))) {
-        LOG_WARN("fail to push back column ref raw expr", K(ret));
-      } else {
-        ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr *>(full_assign_exprs.at(idx));
-        ref_expr->set_column_flags(ref_expr->get_column_flags() | STORED_GENERATED_COLUMN_FLAG);
-        if (OB_FAIL(build_generated_column_expr(ctx,
-                                                *ref_expr,
-                                                expr_strs.at(i),
-                                                ctx.get_old_row_exprs()))) {
-          LOG_WARN("fail to build generated column expr", K(ret), K(*ref_expr), K(expr_strs.at(i)));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::generate_assign_exprs(ObTableCtx &ctx,
-                                                const ObTableCtx::ObAssignIds &assign_ids,
-                                                common::ObIArray<sql::ObRawExpr *> &assign_exprs)
-{
-  int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr *> &full_exprs = ctx.get_full_assign_exprs();
-
-  if (assign_ids.count() > full_exprs.count()) {
+    LOG_WARN("table schema is null", K(ret));
+  } else if (ctx.is_inc_or_append() && OB_ISNULL(delta_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid assign ids count", K(ret), K(assign_ids.count()), K(full_exprs.count()));
+    LOG_WARN("delta expr should not be null when do append or increment", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < assign_ids.count(); i++) {
-      const ObTableCtx::ObAssignId &assign_id = assign_ids.at(i);
-      if (OB_FAIL(assign_exprs.push_back(full_exprs.at(assign_id.idx_)))) {
-        LOG_WARN("fail to push back assign expr", K(ret), K(i), K(assign_id));
+    ObArray<ObQualifiedName> columns;
+    ObSchemaChecker schema_checker;
+    ObSchemaGetterGuard &schema_guard = ctx.get_schema_guard();
+    ObRawExprFactory &expr_factory = ctx.get_expr_factory();
+    ObSQLSessionInfo &sess_info = ctx.get_session_info();
+    ObRawExpr *gen_expr = nullptr;
+
+    if (OB_FAIL(schema_checker.init(schema_guard))) {
+      LOG_WARN("fail to init schema checker", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(expr_str,
+                                                                   expr_factory,
+                                                                   sess_info,
+                                                                   gen_expr,
+                                                                   columns,
+                                                                   table_schema,
+                                                                   false, /* allow_sequence */
+                                                                   nullptr,
+                                                                   &schema_checker))) {
+      LOG_WARN("fail to build generated expr", K(ret), K(expr_str), K(ctx));
+    } else {
+      /*
+        1 replace ref columns and add exprs to dependant_exprs.
+          such as:
+            `K` varbinary(1024),
+            `G` varbinary(1024) generated always as (substring(`K`, 1, 4))
+          1.1. gen_expr is substring(`K`, 1, 4) which is reference to `K`
+          1.2. `G` is depend on `K`, so we record it.
+        2. replace second expr with delta expr when do increment or append.
+          2.1 increment expr: (IFNULL(`%s`, 0) + `%s`) - %s is column name
+          2.2 append expr:(concat_ws('', `%s`, `%s`)) -  %s is column name
+        3. get replace expr from assignments firstly.
+          such as:
+            `c2` varchar(20),
+            `c3` varchar(20),
+            `g` varchar(30) generated always as (concat(`c2`,`c3`)) stored
+          3.1 when only update `c2`, 'g' should update as well.
+          3.2 `g` expr should be concat(`c2_assign`,`c3`)
+      */
+      for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
+        const ObQualifiedName &tmp_column = columns.at(i);
+        const ObString &col_name = tmp_column.col_name_;
+        ObRawExpr *tmp_expr = nullptr;
+        if (1 == i && ctx.is_inc_or_append()) {
+          tmp_expr = delta_expr;
+        } else if (OB_FAIL(ctx.get_expr_from_assignments(col_name, tmp_expr))) {
+          LOG_WARN("fail to get expr from assignments", K(ret), K(col_name));
+        } else if (OB_ISNULL(tmp_expr) && OB_FAIL(ctx.get_expr_from_column_items(col_name, tmp_expr))) {
+          LOG_WARN("fail to get expr from column items", K(ret), K(col_name));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(tmp_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr to replace is null", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(gen_expr, tmp_column.ref_expr_, tmp_expr))) {
+          LOG_WARN("fail to replace column reference expr", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(item.dependant_exprs_, tmp_expr))) {
+          LOG_WARN("fail to add expr to array", K(ret), K(item), K(*tmp_expr));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(gen_expr->formalize(&sess_info))) {
+          LOG_WARN("fail to formailize column reference expr", K(ret));
+        } else if (ObRawExprUtils::need_column_conv(item.expr_->get_result_type(), *gen_expr)
+            && OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory,
+                                                              ctx.get_allocator(),
+                                                              *item.expr_,
+                                                              gen_expr,
+                                                              &sess_info))) {
+          LOG_WARN("fail to build column conv expr", K(ret));
+        } else if (ctx.is_inc_or_append()) {
+          expr = gen_expr; // expr should be a calculate expr in increment or append operation
+        } else {
+          gen_expr->set_for_generated_column();
+          item.expr_->set_dependant_expr(gen_expr);
+          expr = item.expr_;
+        }
       }
     }
   }
@@ -461,45 +361,271 @@ int ObTableExprCgService::generate_assign_exprs(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableExprCgService::generate_update_raw_exprs(ObTableCtx &ctx)
+/*
+  construct exprs, include column ref expr and calculate expr.
+  calculate expr:
+  - auto increment expr
+  - current timestamp expr
+  - generate expr
+*/
+int ObTableExprCgService::resolve_exprs(ObTableCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = ctx.get_table_schema();
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
+  bool is_dml = ctx.is_dml();
+
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (items.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column items is empty", K(ret));
+  } else {
+    ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
+    ObRawExpr *expr = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); i++) {
+      ObTableColumnItem &item = items.at(i);
+      if (is_dml) {
+        if (item.is_auto_increment_ && ctx.need_auto_inc_expr()) {
+          if (OB_FAIL(generate_autoinc_nextval_expr(ctx, item, expr))) {
+            LOG_WARN("fail to generate autoinc nextval expr", K(ret));
+          }
+        } else if (IS_DEFAULT_NOW_OBJ(item.default_value_)) { // defualt current time
+          if (OB_FAIL(generate_current_timestamp_expr(ctx, item, expr))) {
+            LOG_WARN("fail to generate autoinc nextval expr", K(ret));
+          }
+        } else if (item.is_generated_column_) {
+          const ObString &expr_str = item.default_value_.get_string();
+          if (OB_FAIL(build_generated_column_expr(ctx, item, expr_str, expr))) {
+            LOG_WARN("fail to build generated column expr", K(ret), K(item), K(expr_str));
+          }
+        } else {
+          expr = item.expr_;
+        }
+      } else {
+        if (item.is_generated_column_) {
+          const ObString &expr_str = item.default_value_.get_string();
+          if (OB_FAIL(build_generated_column_expr(ctx, item, expr_str, expr))) {
+            LOG_WARN("fail to build generated column expr", K(ret), K(item), K(expr_str));
+          }
+        } else {
+          expr = item.expr_;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        item.raw_expr_ = expr;
+        if (OB_FAIL(all_exprs.push_back(expr))) {
+          LOG_WARN("fail to push back expr to all exprs", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+
+//  generate assign expr(column ref expr or calculate expr) for assignment.
+int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignment &assign)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *tmp_expr = nullptr;
+  ObTableColumnItem *item = assign.column_item_;
+
+  if (OB_ISNULL(item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column item is null", K(ret));
+  } else if (FALSE_IT(assign.column_expr_ = item->expr_)) {
+  } else if (item->is_auto_increment_ && ctx.need_auto_inc_expr()) {
+    if (OB_FAIL(generate_autoinc_nextval_expr(ctx, *item, tmp_expr))) {
+      LOG_WARN("fail to generate autoinc nextval expr", K(ret));
+    }
+  } else if (IS_DEFAULT_NOW_OBJ(item->default_value_)) { // defualt current time
+    if (OB_FAIL(generate_current_timestamp_expr(ctx, *item, tmp_expr))) {
+      LOG_WARN("fail to generate autoinc nextval expr", K(ret));
+    }
+  } else if (item->is_generated_column_) {
+    if (!item->is_stored_generated_column_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("assign virtual generated column is not supported", K(ret));
+    } else {
+      if (OB_FAIL(build_generated_column_expr(ctx, *item, item->generated_expr_str_, tmp_expr))) {
+        LOG_WARN("fail to build generated column expr", K(ret), K(*item));
+      }
+    }
+  } else if (assign.is_inc_or_append_) {
+    if (OB_FAIL(build_generated_column_expr(ctx, *item, item->generated_expr_str_, tmp_expr, assign.delta_expr_))) {
+      LOG_WARN("fail to build generated column expr", K(ret), K(*item));
+    }
+  } else {
+    // generate column ref expr
+    const ObTableSchema *table_schema = ctx.get_table_schema();
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    ObColumnRefRawExpr *tmp_ref_expr = nullptr;
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(item->column_id_))) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("fail to get column schema", K(ret), K(*item));
+    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(), *col_schema, tmp_ref_expr))) {
+      LOG_WARN("fail to build column expr", K(ret));
+    }
+    tmp_expr = tmp_ref_expr;
+  }
+
+  if (OB_SUCC(ret)) {
+    assign.expr_ = tmp_expr;
+  }
+
+  return ret;
+}
+
+/*
+  generate delta expr for increment or append operation.
+  increment expr: IFNULL(`c1`, 0) + `c1_delta`
+  append expr: concat_ws('', `c1`, `c1_delta`)
+*/
+int ObTableExprCgService::generate_delta_expr(ObTableCtx &ctx, ObTableAssignment &assign)
+{
+  int ret = OB_SUCCESS;
+  ObTableColumnItem *item = assign.column_item_;
+
+  if (OB_ISNULL(item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column item is null", K(ret));
+  } else if (!assign.is_inc_or_append_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid assignment", K(ret), K(assign));
+  } else {
+    // generate column ref expr
+    const ObTableSchema *table_schema = ctx.get_table_schema();
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    ObColumnRefRawExpr *tmp_ref_expr = nullptr;
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(item->column_id_))) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("fail to get column schema", K(ret), K(*item));
+    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(ctx.get_expr_factory(), *col_schema, tmp_ref_expr))) {
+      LOG_WARN("fail to build column expr", K(ret));
+    }
+    assign.delta_expr_ = tmp_ref_expr;
+    assign.column_expr_ = item->expr_; // column_expr_ ref to old expr
+  }
+
+  return ret;
+}
+
+/*
+  generate assign exprs for update or insertup operation.
+  - increment and append operations use insertup executor.
+  - generate delta expr for increment and append operations.
+  - generate assign expr.
+  - push back assign expr to all exprs, assign expr need alloc frame as well.
+*/
+int ObTableExprCgService::generate_assignments(ObTableCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
+  ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
+
+  if (!ctx.is_for_update() && !ctx.is_for_insertup()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected operation", K(ret), K(ctx));
+  } else if (assigns.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("assigns is empty", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      ObTableAssignment &assign = assigns.at(i);
+      if (assign.is_inc_or_append_ && OB_FAIL(generate_delta_expr(ctx, assign))) {
+        LOG_WARN("fail to generate delta expr", K(ret), K(assign));
+      } else if (OB_FAIL(generate_assign_expr(ctx, assign))) {
+        LOG_WARN("fail to generate assign expr", K(ret), K(assign));
+      } else if (OB_FAIL(all_exprs.push_back(assign.expr_))) {
+        LOG_WARN("fail to push back expr to all exprs", K(ret));
+      } else if (assign.is_inc_or_append_ && OB_FAIL(all_exprs.push_back(assign.expr_))) {
+        LOG_WARN("fail to push back delta expr to all exprs", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+// generate filter exprs and push back to all exprs.
+// currently there is only expire expr in filter exprs.
+int ObTableExprCgService::generate_filter_exprs(ObTableCtx &ctx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(generate_column_raw_exprs(ctx))) {
-    LOG_WARN("fail to generate column raw exprs", K(ret), K(ctx));
-  } else if (OB_FAIL(generate_full_assign_raw_exprs(ctx))) {
-    LOG_WARN("fail to generate assign raw exprs", K(ret), K(ctx));
-  } else {
-    ObRawExprUniqueSet &all_exprs = ctx.get_all_exprs();
-    ObIArray<sql::ObRawExpr *> &old_row_exprs = ctx.get_old_row_exprs();
-    ObIArray<sql::ObRawExpr *> &assign_exprs = ctx.get_full_assign_exprs();
-    ObIArray<sql::ObRawExpr *> &delta_exprs = ctx.get_delta_exprs();
-
-    // 将 old row exprs加到all exprs里面
-    for (int64_t i = 0; OB_SUCC(ret) && i < old_row_exprs.count(); i++) {
-      if (OB_FAIL(all_exprs.append(old_row_exprs.at(i)))) {
-        LOG_WARN("fail to append old row expr to all exprs", K(ret), K(i));
-      }
-    }
-
-    // 将 assign row exprs加到all exprs里面
-    for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
-      if (OB_FAIL(all_exprs.append(assign_exprs.at(i)))) {
-        LOG_WARN("fail to append assign expr to all exprs", K(ret), K(i));
-      }
-    }
-
-    // 将 delta exprs加到all exprs里面
-    for (int64_t i = 0; OB_SUCC(ret) && i < delta_exprs.count(); i++) {
-      if (OB_FAIL(all_exprs.append(delta_exprs.at(i)))) {
-        LOG_WARN("fail to append delta expr to all exprs", K(ret), K(i));
-      }
+  if (ctx.is_ttl_table()) {
+    ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
+    ObIArray<sql::ObRawExpr *> &filter_exprs = ctx.get_filter_exprs();
+    ObRawExpr *expire_expr = nullptr;
+    if (OB_FAIL(generate_expire_expr(ctx, expire_expr))) {
+      LOG_WARN("fail to generate expire expr", K(ret), K(ctx));
+    } else if(OB_FAIL(filter_exprs.push_back(expire_expr))) {
+      LOG_WARN("fail to push back expire expr", K(ret), K(filter_exprs));
+    } else if (OB_FAIL(all_exprs.push_back(expire_expr))) {
+      LOG_WARN("fail to push back expire expr to all exprs", K(ret));
     }
   }
 
   return ret;
 }
 
+/*
+  generate all expressions.
+  - generate all column exprs firstly.
+  - resolve_exprs is for generate calculate expr if need, and push back expr to all_exprs.
+  - generate assign expr when update.
+  - generate expr frame info finally.
+*/
+int ObTableExprCgService::generate_exprs(ObTableCtx &ctx,
+                                         oceanbase::common::ObIAllocator &allocator,
+                                         oceanbase::sql::ObExprFrameInfo &expr_frame_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(generate_all_column_exprs(ctx))) { // 1. generate all column exprs and add to column item array
+    LOG_WARN("fail to generate all column exprs", K(ret), K(ctx));
+  } else if (OB_FAIL(resolve_exprs(ctx))) { // 2. resolve exprs, such as generate expr.
+    LOG_WARN("fail to resolve exprs", K(ret), K(ctx));
+  } else if ((ctx.is_for_update() || ctx.is_for_insertup()) && OB_FAIL(generate_assignments(ctx))) {
+    LOG_WARN("fail to generate assign infos", K(ret), K(ctx));
+  } else if (OB_FAIL(generate_filter_exprs(ctx))) {
+    LOG_WARN("fail to generate filer exprs", K(ret), K(ctx));
+  } else if (OB_FAIL(generate_expr_frame_info(ctx, allocator, expr_frame_info))) {
+    LOG_WARN("fail to generate expr frame info", K(ret), K(ctx));
+  }
+
+  return ret;
+}
+
+// we need to make sure all column ref exprs have beed added, cause scan need column ref exprs.
+int ObTableExprCgService::add_extra_column_exprs(ObTableCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
+  for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); i++) {
+    const ObTableColumnItem &item = items.at(i);
+    if (item.is_auto_increment_) {
+      // do nothing, auto_increment column ref expr has been add in column conv expr param
+    } else if (OB_FAIL(add_var_to_array_no_dup(all_exprs, static_cast<ObRawExpr*>(item.expr_)))) {
+      LOG_WARN("fail to add column expr", K(ret), K(all_exprs), K(item));
+    }
+  }
+
+  return ret;
+}
+
+// generate expr frame info, expr frame info represents the memory layout of the expr.
 int ObTableExprCgService::generate_expr_frame_info(ObTableCtx &ctx,
                                                    common::ObIAllocator &allocator,
                                                    ObExprFrameInfo &expr_frame_info)
@@ -511,25 +637,16 @@ int ObTableExprCgService::generate_expr_frame_info(ObTableCtx &ctx,
                                0,
                                0,
                                ctx.get_cur_cluster_version());
-
-  if (ctx.get_filter_exprs().empty()) {
-    if (OB_FAIL(expr_cg.generate(ctx.get_all_exprs(), expr_frame_info))) {
-      LOG_WARN("fail to generate expr frame info by expr cg", K(ret), K(ctx));
-    }
-  } else {
-    ObRawExprUniqueSet exprs(false/* need_unique */);
-    if (OB_FAIL(exprs.append(ctx.get_all_exprs().get_expr_array()))) {
-      LOG_WARN("fail to append all exprs", K(ret), K(ctx.get_all_exprs().get_expr_array()));
-    } else if (OB_FAIL(exprs.append(ctx.get_filter_exprs()))) {
-      LOG_WARN("fail to append filter exprs", K(ret), K(ctx.get_filter_exprs()));
-    } else if (OB_FAIL(expr_cg.generate(exprs, expr_frame_info))) {
-      LOG_WARN("fail to generate expr frame info by expr cg", K(ret), K(ctx));
-    }
+  if (OB_FAIL(add_extra_column_exprs(ctx))) {
+    LOG_WARN("fail to add extra column exprs", K(ret), K(ctx));
+  } else if (OB_FAIL(expr_cg.generate(ctx.get_all_exprs(), expr_frame_info))) {
+    LOG_WARN("fail to generate expr frame info by expr cg", K(ret), K(ctx));
   }
 
   return ret;
 }
 
+// alloc expr's memory according to expr_frame_info.
 int ObTableExprCgService::alloc_exprs_memory(ObTableCtx &ctx, ObExprFrameInfo &expr_frame_info)
 {
   int ret = OB_SUCCESS;
@@ -622,24 +739,10 @@ int ObTableLocCgService::generate_table_loc_meta(const ObTableCtx &ctx,
 }
 
 int ObTableExprCgService::refresh_update_exprs_frame(ObTableCtx &ctx,
-                                                     const ObIArray<ObExpr *> &old_row,
                                                      const ObIArray<ObExpr *> &new_row,
-                                                     const ObIArray<ObExpr *> &full_assign_row,
-                                                     const ObTableCtx::ObAssignIds &assign_ids,
                                                      const ObTableEntity &entity)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(refresh_assign_exprs_frame(ctx,
-                                         old_row,
-                                         new_row,
-                                         full_assign_row,
-                                         assign_ids,
-                                         entity))) {
-    LOG_WARN("fail to refresh assign exprs frame", K(ret), K(assign_ids));
-  }
-
-  return ret;
+  return refresh_assign_exprs_frame(ctx, new_row, entity);
 }
 
 int ObTableExprCgService::refresh_ttl_exprs_frame(ObTableCtx &ctx,
@@ -652,7 +755,7 @@ int ObTableExprCgService::refresh_ttl_exprs_frame(ObTableCtx &ctx,
 
 int ObTableExprCgService::refresh_insert_up_exprs_frame(ObTableCtx &ctx,
                                                         const ObIArray<ObExpr *> &ins_new_row,
-                                                        const ObIArray<ObExpr *> &delta_exprs,
+                                                        const ObIArray<ObExpr *> &delta_row,
                                                         const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
@@ -661,9 +764,9 @@ int ObTableExprCgService::refresh_insert_up_exprs_frame(ObTableCtx &ctx,
   if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, ins_new_row, rowkey))) {
     LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
   } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, ins_new_row, entity))) {
-    LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx));
-  } else if (ctx.is_inc_or_append() && OB_FAIL(refresh_delta_exprs_frame(ctx, delta_exprs, entity))) {
-    LOG_WARN("fail to init delta exprs frame", K(ret), K(ctx));
+    LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx), K(ins_new_row), K(entity));
+  } else if (ctx.is_inc_or_append() && OB_FAIL(refresh_delta_exprs_frame(ctx, delta_row, entity))) {
+    LOG_WARN("fail to init delta exprs frame", K(ret), K(ctx), K(delta_row), K(entity));
   }
 
   return ret;
@@ -721,6 +824,48 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
   return ret;
 }
 
+/*
+  write auto increment expr datum.
+  - auto increment expr tree:
+      auto increment expr
+              |
+      column conv expr
+  - specific value from user should fill to column conv expr.
+*/
+int ObTableExprCgService::write_autoinc_datum(ObTableCtx &ctx,
+                                              const ObExpr &expr,
+                                              ObEvalCtx &eval_ctx,
+                                              const ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+
+  if (T_FUN_SYS_AUTOINC_NEXTVAL != expr.type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expr type", K(ret), K(expr));
+  } else if (expr.arg_cnt_ != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arg count for auto inc expr", K(ret), K(expr));
+  } else if (expr.get_eval_info(eval_ctx).evaluated_ == true) {
+    // do nothing
+  } else {
+    const ObExpr *conlumn_conv_expr = expr.args_[0];
+    if (OB_ISNULL(conlumn_conv_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column conv expr below auto inc expr is null", K(ret));
+    } else {
+      ObDatum &datum = conlumn_conv_expr->locate_datum_for_write(eval_ctx);
+      if (OB_FAIL(datum.from_obj(obj))) {
+        LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+      } else {
+        conlumn_conv_expr->get_eval_info(eval_ctx).evaluated_ = true;
+        conlumn_conv_expr->get_eval_info(eval_ctx).projected_ = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTableExprCgService::write_datum(ObTableCtx &ctx,
                                       ObIAllocator &allocator,
                                       const ObExpr &expr,
@@ -728,57 +873,17 @@ int ObTableExprCgService::write_datum(ObTableCtx &ctx,
                                       const ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  const ObExpr *write_expr = &expr;
 
   if (is_lob_storage(obj.get_type()) && (obj.has_lob_header() != expr.obj_meta_.has_lob_header())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to check lob header", K(ret), K(expr), K(obj));
-  } else if (expr.type_ == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 为列转换表达式, 且为自增场景下
-    if (expr.arg_cnt_ != 6) {
-      ret = OB_ERR_UNDEFINED;
-      LOG_WARN("invalid arg count for auto inc expr", K(ret), K(expr));
-    } else {
-      const ObExpr *auto_inc_expr = expr.args_[4]; // 取出中间的列自增表达式
-      if (OB_ISNULL(auto_inc_expr)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("auto inc expr is null", K(ret));
-      } else if (auto_inc_expr->get_eval_info(eval_ctx).evaluated_ == true) {
-        // do nothing
-      } else if (auto_inc_expr->arg_cnt_ != 1) {
-        ret = OB_ERR_UNDEFINED;
-        LOG_WARN("invalid arg count for auto inc expr", K(ret), K(*auto_inc_expr));
-      } else {
-        write_expr = auto_inc_expr->args_[0];  // 取出底部的列转换表达式
-        if (OB_ISNULL(write_expr)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("column conv expr below auto inc expr is null", K(ret));
-        } else {
-          // 用于生成自增主键冲突的列引用表达式，在write_datum时刷值
-          ObExpr *auto_inc_ref_col_expr = write_expr->args_[4];
-          if (OB_ISNULL(auto_inc_ref_col_expr)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("auto_inc_ref_col_expr is null", K(ret));
-          } else {
-            ObDatum &datum = auto_inc_ref_col_expr->locate_datum_for_write(eval_ctx);
-            if (OB_FAIL(datum.from_obj(obj))) {
-              LOG_WARN("fail to convert object from datum", K(ret), K(obj));
-            } else {
-              auto_inc_ref_col_expr->get_eval_info(eval_ctx).evaluated_ = true;
-              auto_inc_ref_col_expr->get_eval_info(eval_ctx).projected_ = true;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObDatum &datum = write_expr->locate_datum_for_write(eval_ctx);
+  } else {
+    ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
     if (OB_FAIL(datum.from_obj(obj))) {
       LOG_WARN("fail to convert object from datum", K(ret), K(obj));
     } else {
-      write_expr->get_eval_info(eval_ctx).evaluated_ = true;
-      write_expr->get_eval_info(eval_ctx).projected_ = true;
+      expr.get_eval_info(eval_ctx).evaluated_ = true;
+      expr.get_eval_info(eval_ctx).projected_ = true;
     }
   }
 
@@ -801,217 +906,130 @@ int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
   return ret;
 }
 
-// exprs必须是按照schema序的完整行
+/*
+  refresh rowkey frame
+  1. The number of entity's rowkey may not equal the number of schema's rowkey
+    when there is auto_increment column in primary keys.
+  2. auto_increment expr tree is autoinc_nextval_expr - column_conv_expr,
+    we need to fill value to column_conv_expr when user had set value.
+  3. "IS_DEFAULT_NOW_OBJ(item.default_value_)" means default current_timestamp in column,
+    we need to fill eval current timestamp when user not fill value.
+*/
 int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObExpr *> &exprs,
                                                      const ObIArray<ObObj> &rowkey)
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
   const int64_t schema_rowkey_cnt = ctx.get_table_schema()->get_rowkey_column_num();
   const int64_t entity_rowkey_cnt = rowkey.count();
+  bool is_full_filled = (schema_rowkey_cnt == entity_rowkey_cnt); // did user fill all rowkey columns or not
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
-  bool is_full_filled = schema_rowkey_cnt == entity_rowkey_cnt;
 
-  // 不存在自增列的情况下，按照用户的值填datum
-  // 存在自增列，用户填了值的情况下，使用用户的值刷datum
-  // 存在自增列，用户没有填值的情况下，使用null obj刷datum
-  // idx 是为了在主键中存在自增列是为了解决使用i访问obj_ptr会出现访问越界的问题，因为在主键存在自增列场景下，用户可以
-  // 不填自增列值，这时rowkey中的obj数量少于schema上的rowkey数量
-  for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+  if (exprs.count() < schema_rowkey_cnt) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("invalid expr count", K(ret), K(exprs), K(schema_rowkey_cnt));
+  } else if (items.count() < schema_rowkey_cnt) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("invalid column item count", K(ret), K(items), K(schema_rowkey_cnt));
+  }
+
+  for (int64_t i = 0, rowkey_idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+    const ObTableColumnItem &item = items.at(i);
     const ObExpr *expr = exprs.at(i);
-    if (OB_ISNULL(expr)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("expr is null", K(ret));
-    } else if (ctx.has_auto_inc() && !is_full_filled && expr->type_ == T_FUN_COLUMN_CONV) { // 自增列，用户未填值
+    if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
       ObObj null_obj;
       null_obj.set_null();
-      if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, null_obj))) {
-        LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
+      const ObObj *tmp_obj = is_full_filled ? &rowkey.at(rowkey_idx) : &null_obj;
+      if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *tmp_obj))) {
+        LOG_WARN("fail to write auto increment datum", K(ret), K(is_full_filled), K(*expr), K(*tmp_obj));
       }
-    } else if (idx >= entity_rowkey_cnt) {
-      ret = OB_INDEX_OUT_OF_RANGE;
-      LOG_WARN("idx out of range", K(ret), K(idx), K(entity_rowkey_cnt));
-    } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(idx)))) {
-      LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
+      if (is_full_filled) {
+        rowkey_idx++;
+      }
+    } else if (!is_full_filled && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
+      ObDatum *tmp_datum = nullptr;
+      if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
+        LOG_WARN("fail to eval current timestamp expr", K(ret));
+      }
     } else {
-      idx++;
+      if (rowkey_idx >= entity_rowkey_cnt) {
+        ret = OB_INDEX_OUT_OF_RANGE;
+        LOG_WARN("idx out of range", K(ret), K(i), K(entity_rowkey_cnt));
+      } else if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(rowkey_idx)))) {
+        LOG_WARN("fail to write datum", K(ret), K(rowkey_idx), K(rowkey.at(rowkey_idx)), K(*expr));
+      } else {
+        rowkey_idx++;
+      }
     }
   }
 
   return ret;
 }
 
-// exprs必须是按照schema序的完整行
+/*
+  refresh properties's exprs frame.
+  - generate column expr eval.
+  - auto increment expr fill user value or null obj to child expr(column conv expr).
+  - current timestamp expr eval if user not fill value.
+  - column ref expr fill user value or default value.
+*/
 int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
                                                          const ObIArray<ObExpr *> &exprs,
                                                          const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
   const ObTableSchema *table_schema = ctx.get_table_schema();
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
 
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
+  } else if (items.count() < table_schema->get_column_count()) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("invalid column item count", K(ret), K(items), K(table_schema->get_column_count()));
+  } else if (exprs.count() < table_schema->get_column_count()) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("invalid expr count", K(ret), K(exprs), K(table_schema->get_column_count()));
   } else {
     ObObj prop_value;
-    ObObj *obj = nullptr;
+    const ObObj *obj = nullptr;
     const int64_t rowkey_column_cnt = table_schema->get_rowkey_column_num();
-    for (int64_t i = rowkey_column_cnt; OB_SUCC(ret) && i < exprs.count(); i++) {
+    for (int64_t i = rowkey_column_cnt; OB_SUCC(ret) && i < items.count(); i++) {
+      const ObTableColumnItem &item = items.at(i);
       const ObExpr *expr = exprs.at(i);
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get column schema", K(ret), K(i), K(*table_schema));
-      } else if (col_schema->is_generated_column()) { // 生成列需要eval一次
+      if (item.is_generated_column_) { // generate column need eval first
         ObDatum *tmp_datum = nullptr;
         if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
           LOG_WARN("fail to eval generate expr", K(ret));
         }
       } else {
-        const ObString &col_name = col_schema->get_column_name_str();
         // 这里使用schema的列名在entity中查找property，有可能出现本身entity中的prop_name是不对的，导致找不到
-        bool use_default = (OB_SEARCH_NOT_FOUND == entity.get_property(col_name, prop_value));
-        if (use_default) {
-          obj = const_cast<ObObj *>(&col_schema->get_cur_default_value());
+        bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(item.column_name_, prop_value));
+        if (not_found) {
+          obj = &item.default_value_;
         } else {
           obj = &prop_value;
         }
-        if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
-          LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-// 将生成列引用的，并且entity没有填充的列刷成旧值
-// eg: create table t(c1 int primary key,
-//                    c2 varchar(10),
-//                    c3 varchar(10),
-//                    gen varchar(30) generated always as (concat(c2,c3)) stored);
-// update t set c3 = ? where c1 = ?;
-// full row: c1(old) | c2(old) | c3(old) | gen(old) concat(c1(old), c2(old))
-//           c1(new) | c2(new) | c3(new) | gen(new) concat(c1(new), c2(new))
-// 这个时候，只是更新了c3的值，gen引用的是c2,c3的值，这里将c2(old)填到c2(new)中
-int ObTableExprCgService::refresh_generated_column_related_frame(ObTableCtx &ctx,
-                                                                 const ObIArray<ObExpr *> &old_row,
-                                                                 const ObIArray<ObExpr *> &full_assign_row,
-                                                                 const ObTableCtx::ObAssignIds &assign_ids,
-                                                                 const ObColumnSchemaV2 &col_schema)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = ctx.get_table_schema();
-  ObEvalCtx eval_ctx(ctx.get_exec_ctx());
-  ObArray<uint64_t> schema_column_ids;
-  ObArray<uint64_t> ref_column_ids;
-
-  if (!col_schema.is_stored_generated_column()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid expr", K(ret), K(col_schema));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table schema is null", K(ret));
-  } else if (OB_FAIL(table_schema->get_column_ids(schema_column_ids))) {
-    LOG_WARN("fail to get schema column ids", K(ret));
-  } else if (OB_FAIL(col_schema.get_cascaded_column_ids(ref_column_ids))) {
-    LOG_WARN("fail to get cascade column ids", K(ret));
-  } else {
-    ObArray<uint64_t> not_upd_col_ids;
-    // 查询生成列依赖的列是否都被更新，记下未被更新的列到not_upd_col_ids
-    for (int64_t i = 0; OB_SUCC(ret) && i < ref_column_ids.count(); i++) {
-      bool found = false;
-      uint64_t col_id = ref_column_ids.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < assign_ids.count() && !found; j++) {
-        if (col_id == assign_ids.at(j).column_id_) {
-          found = true;
-        }
-      }
-      if (!found && OB_FAIL(not_upd_col_ids.push_back(col_id))) {
-        LOG_WARN("fail to push back not update column id", K(ret), K(col_id));
-      }
-    }
-
-    // 通过column id找到old row对应的列
-    for (int64_t i = 0; OB_SUCC(ret) && i < not_upd_col_ids.count(); i++) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < schema_column_ids.count(); j++) {
-        if (schema_column_ids.at(j) == not_upd_col_ids.at(i)) {
-          if (j >= old_row.count()) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid column id", K(ret), K(j), K(old_row.count()));
-          } else if (j >= full_assign_row.count()) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid column id", K(ret), K(j), K(full_assign_row.count()));
-          } else {
-            ObExpr *old_expr = old_row.at(j);
-            ObExpr *new_expr = full_assign_row.at(j);
-            new_expr->locate_expr_datum(eval_ctx) = old_expr->locate_expr_datum(eval_ctx);
-            new_expr->get_eval_info(eval_ctx).evaluated_ = true;
-            new_expr->get_eval_info(eval_ctx).projected_ = true;
+        if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
+          ObObj null_obj;
+          null_obj.set_null();
+          obj = not_found ? &null_obj : &prop_value;
+          if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *obj))) {
+            LOG_WARN("fail to write auto increment datum", K(ret), K(not_found), K(*expr), K(*obj));
           }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
-                                                     const ObIArray<ObExpr *> &old_row,
-                                                     const ObIArray<ObExpr *> &new_row,
-                                                     const ObIArray<ObExpr *> &full_assign_row,
-                                                     const ObTableCtx::ObAssignIds &assign_ids,
-                                                     const ObTableEntity &entity)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = ctx.get_table_schema();
-  ObEvalCtx eval_ctx(ctx.get_exec_ctx());
-
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret));
-  } else {
-    ObObj prop_value;
-    const int64_t N = assign_ids.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      uint64_t assign_id = assign_ids.at(i).idx_;
-      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(assign_id))) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get column schema", K(ret), K(assign_id), K(*table_schema));
-      } else if (col_schema->is_virtual_generated_column()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not have virtual generated expr", K(ret));
-      } else if (col_schema->is_stored_generated_column()) {
-        if (OB_FAIL(refresh_generated_column_related_frame(ctx,
-                                                           old_row,
-                                                           full_assign_row,
-                                                           assign_ids,
-                                                           *col_schema))) {
-          LOG_WARN("fail to refresh generated column related frame", K(ret));
-        } else { // 计算一次
-          ObExpr *expr = full_assign_row.at(assign_id);
+        } else if (not_found && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
           ObDatum *tmp_datum = nullptr;
           if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
-            LOG_WARN("fail to eval datum", K(ret), K(*expr));
+            LOG_WARN("fail to eval current timestamp expr", K(ret));
           }
-        }
-      } else if (OB_FAIL(entity.get_property(col_schema->get_column_name_str(), prop_value))) {
-        LOG_WARN("fail to get assign propertity value", K(ret), K(col_schema->get_column_name_str()));
-      } else {
-        if (assign_id >= new_row.count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid assign idx", K(ret), K(assign_id), K(new_row.count()));
         } else {
-          const ObExpr *expr = new_row.at(assign_id);
-          if (OB_ISNULL(expr)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("expr is null", K(ret));
-          } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
-            LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
+          if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
+            LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
           }
         }
       }
@@ -1021,34 +1039,101 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
   return ret;
 }
 
+
+// refresh delta expr's frame with user specific value.
 int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
-                                                    const ObIArray<ObExpr *> &delta_exprs,
+                                                    const ObIArray<ObExpr *> &delta_row,
                                                     const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = ctx.get_table_schema();
+  const ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
+  ObObj prop_value;
 
   if (!ctx.is_inc_or_append()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K(ctx));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret));
+  } else if (delta_row.count() > assigns.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid delta row length", K(ret), K(delta_row), K(assigns));
   } else {
-    ObObj prop_value;
-    const ObTableCtx::ObAssignIds &assign_ids = ctx.get_assign_ids();
-    const int64_t N = assign_ids.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      uint64_t column_id = assign_ids.at(i).column_id_;
-      if (OB_ISNULL(col_schema = table_schema->get_column_schema(column_id))) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get column schema", K(ret), K(column_id), K(*table_schema));
-      } else if (OB_FAIL(entity.get_property(col_schema->get_column_name_str(), prop_value))) {
-        LOG_WARN("fail to get assign propertity value", K(ret), K(col_schema->get_column_name_str()));
+    for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      const ObTableAssignment &assign = assigns.at(i);
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is null", K(ret), K(assign));
+      } else if (assign.column_item_->auto_filled_timestamp_) {
+        // do nothing
+      } else if (idx >= delta_row.count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("index out of range", K(ret), K(assign), K(delta_row));
       } else {
-        const ObExpr *expr = delta_exprs.at(i);
+        bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(assign.column_item_->column_name_, prop_value));
+        const ObExpr *expr = delta_row.at(idx);
+        if (OB_ISNULL(expr)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("expr is null", K(ret));
+        } else if (not_found) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("not found delta value", K(ret), K(assign));
+        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
+          LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
+        } else {
+          idx++;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+/*
+  refresh assign expr's frame when do update.
+  - assign virtual generated column is not support.
+  - eval current timestamp expr if user not assign specific value.
+  - fill other expr's datum with user value.
+*/
+int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
+                                                     const ObIArray<ObExpr *> &new_row,
+                                                     const ObTableEntity &entity)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
+  ObEvalCtx eval_ctx(ctx.get_exec_ctx());
+  ObObj prop_value;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+    const ObTableAssignment &assign = assigns.at(i);
+    if (OB_ISNULL(assign.column_item_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("assign column item is null", K(ret), K(assign));
+    } else if (new_row.count() < assign.column_item_->col_idx_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
+    } else if (assign.column_item_->is_virtual_generated_column_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
+    } else {
+      // on update current timestamp will not find value
+      bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(assign.column_item_->column_name_, prop_value));
+      const ObExpr *expr = new_row.at(assign.column_item_->col_idx_);
+      if (OB_ISNULL(expr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("expr is null", K(ret));
+      } else if (not_found) {
+        if (!assign.column_item_->auto_filled_timestamp_ && !assign.column_item_->is_stored_generated_column_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get assign propertity value", K(ret), K(assign));
+        } else if (assign.column_item_->is_stored_generated_column_) {
+          // do nothing, stored generated column not need to fill
+        } else { // on update current timestamp
+          ObDatum *tmp_datum = nullptr;
+          if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
+            LOG_WARN("fail to eval current timestamp expr", K(ret));
+          }
+        }
+      } else { // found
         if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, prop_value))) {
           LOG_WARN("fail to write datum", K(ret), K(prop_value), K(*expr));
         }
@@ -1059,35 +1144,53 @@ int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableDmlCgService::replace_exprs_with_dependant(const ObIArray<ObRawExpr *> &src_exprs,
+/*
+  create table t(c1 int primary key,
+                 c2 varchar(10),
+                 c3 varchar(10),
+                 c4 varchar(30) generated always as (concat(c2, c3)));
+  generated expr: c4
+  dependant_expr: concat(`c2`, `c3`)
+  DAS need dependant_expr to calculate result, so we use dependant_expr.
+*/
+int ObTableDmlCgService::replace_exprs_with_dependant(ObTableCtx &ctx,
                                                       ObIArray<ObRawExpr *> &dst_exprs)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < src_exprs.count() && OB_SUCC(ret); i++) {
-    ObRawExpr *expr = src_exprs.at(i);
-    if (OB_ISNULL(expr)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("expr is null", K(ret));
-    } else if (expr->is_column_ref_expr()) {
-      ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr);
-      if (col_ref_expr->is_generated_column()) {
-        expr = col_ref_expr->get_dependant_expr();
-      }
-      if (OB_FAIL(dst_exprs.push_back(expr))) {
-        LOG_WARN("fail to push back expr", K(ret), K(dst_exprs));
-      }
-    } else if (expr->get_expr_type() == T_FUN_COLUMN_CONV) { // 兼容自增场景下的列转换表达式
-      if (OB_FAIL(dst_exprs.push_back(expr))) {
-        LOG_WARN("fail to push back expr", K(ret), K(dst_exprs));
-      }
+  const ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
+
+  if (all_exprs.count() < items.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expr count", K(ret), K(all_exprs), K(items));
+  }
+
+  for (int64_t i = 0; i < items.count() && OB_SUCC(ret); i++) {
+    const ObTableColumnItem &item = items.at(i);
+    ObRawExpr *tmp_expr = nullptr;
+    if (item.is_generated_column_) {
+      ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(all_exprs.at(i));
+      tmp_expr = col_ref_expr->get_dependant_expr();
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid expr type", K(ret), K(*expr));
+      tmp_expr = all_exprs.at(i);
+    }
+    if (OB_FAIL(dst_exprs.push_back(tmp_expr))) {
+      LOG_WARN("fail to push back expr", K(ret));
     }
   }
+
   return ret;
 }
 
+/*
+  genreate insert ctdef
+  - replace exprs with depenedant expr if there are generated column.
+  - construct new row.
+  - old row is empty in insert ctdef
+  - generate base ctdef which include column_ids, old_row and new_row.
+  - generate das insert ctdef which include projector, table_id and so on.
+  - generate related(index) insert ctdef.
+*/
 int ObTableDmlCgService::generate_insert_ctdef(ObTableCtx &ctx,
                                                ObIAllocator &allocator,
                                                ObTableInsCtDef &ins_ctdef)
@@ -1095,17 +1198,13 @@ int ObTableDmlCgService::generate_insert_ctdef(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
-  const ObIArray<ObRawExpr *> &exprs = ctx.is_for_insertup() ?
-      ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
   ObSEArray<ObRawExpr*, 64> tmp_exprs;
-  if (OB_FAIL(replace_exprs_with_dependant(exprs, tmp_exprs))) {
-    LOG_WARN("fail to replace exprs with dependant", K(ret), K(exprs));
+
+  if (OB_FAIL(replace_exprs_with_dependant(ctx, tmp_exprs))) {
+    LOG_WARN("fail to replace exprs with dependant", K(ret), K(ctx));
   } else if (OB_FAIL(new_row.assign(tmp_exprs))) {
     LOG_WARN("fail to assign new row", K(ret));
-  } else if (OB_FAIL(generate_base_ctdef(ctx,
-                                         ins_ctdef,
-                                         old_row,
-                                         new_row))) {
+  } else if (OB_FAIL(generate_base_ctdef(ctx, ins_ctdef, old_row, new_row))) {
     LOG_WARN("fail to generate dml base ctdef", K(ret));
   } else if (OB_FAIL(generate_das_ins_ctdef(ctx,
                                             ctx.get_ref_table_id(),
@@ -1122,76 +1221,59 @@ int ObTableDmlCgService::generate_insert_ctdef(ObTableCtx &ctx,
   return ret;
 }
 
+/*
+  create table t(c1 int primary key, c2 int default null, c3 int default null);
+  insert into t values(1,1,1);
+  update t set c3=2 where c1=1;
+
+  assign expr: c3'
+  old row: c1, c2, c3
+  new row: c1, c2, c3'
+  full row: c1, c2, c3, c3'
+*/
 int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
                                                ObIAllocator &allocator,
-                                               const ObTableCtx::ObAssignIds &assign_ids,
                                                ObTableUpdCtDef &upd_ctdef)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
   ObSEArray<ObRawExpr*, 64> full_row;
-  ObSEArray<ObRawExpr*, 8> assign_exprs;
+  ObSEArray<ObRawExpr*, 64> delta_row;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
-  ObIArray<sql::ObRawExpr *> &old_exprs = ctx.get_old_row_exprs();
   ObSEArray<ObRawExpr*, 64> tmp_old_exprs;
   ObSEArray<ObRawExpr*, 64> tmp_full_assign_exprs;
 
-  if (OB_FAIL(replace_exprs_with_dependant(old_exprs, tmp_old_exprs))) {
-    LOG_WARN("fail to replace exprs with dependant", K(ret), K(old_exprs));
+  if (OB_FAIL(replace_exprs_with_dependant(ctx, tmp_old_exprs))) {
+    LOG_WARN("fail to replace exprs with dependant", K(ret));
   } else if (OB_FAIL(old_row.assign(tmp_old_exprs))) {
     LOG_WARN("fail to assign old row expr", K(ret));
   } else if (OB_FAIL(new_row.assign(old_row))) {
     LOG_WARN("fail to assign new row", K(ret));
   } else if (OB_FAIL(append(full_row, old_row))) {
     LOG_WARN("fail to append old row expr to full row", K(ret), K(old_row));
-  } else if (OB_FAIL(ObTableExprCgService::generate_assign_exprs(ctx, assign_ids, assign_exprs))) {
-    LOG_WARN("fail to generate assign exprs", K(ret), K(ctx), K(assign_ids));
   } else {
-    ObColumnRefRawExpr *col_ref_expr = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
-      ObRawExpr *expr = assign_exprs.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("expr is null", K(ret));
-      } else if (expr->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
-        if (OB_FAIL(full_row.push_back(expr))) {
-          LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < old_exprs.count(); j++) {
-          if (old_exprs.at(j)->get_expr_type() == T_FUN_COLUMN_CONV) {
-            new_row.at(j) = expr;
-          }
-        }
+    ObRawExpr *tmp_expr = nullptr;
+    ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      const ObTableAssignment &assign = assigns.at(i);
+      if (assign.column_expr_->is_generated_column()) {
+        tmp_expr = assign.column_expr_->get_dependant_expr();
       } else {
-        if (!expr->is_column_ref_expr()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr type", K(ret), K(*expr));
-        } else if (FALSE_IT(col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
-        } else if (col_ref_expr->is_generated_column()) {
-          expr = col_ref_expr->get_dependant_expr();
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(full_row.push_back(expr))) {
-          LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
-        } else {
-          ObColumnRefRawExpr *old_col_expr = nullptr;
-          for (int64_t j = 0; OB_SUCC(ret) && j < old_exprs.count(); j++) {
-            ObRawExpr *old_expr = old_exprs.at(j);
-            if (OB_ISNULL(old_expr)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("old_expr is null", K(ret));
-            } else if (!old_expr->is_column_ref_expr() && (old_expr->get_expr_type() != T_FUN_COLUMN_CONV)) { // 兼容自增场景下的列转换表达式
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected expr type", K(ret), K(*old_exprs.at(i)));
-            } else if (old_expr->get_expr_type() == T_FUN_COLUMN_CONV) {
-              // do nothing
-            } else if (FALSE_IT(old_col_expr = static_cast<ObColumnRefRawExpr*>(old_expr))) {
-            } else if (old_col_expr->get_column_id() == col_ref_expr->get_column_id()) {
-              new_row.at(j) = expr;
-            }
-          }
-        }
+        tmp_expr = assign.expr_;
+      }
+      if (OB_FAIL(full_row.push_back(tmp_expr))) {
+        LOG_WARN("fail to add assign expr to full row", K(ret), K(i));
+      } else if (assign.is_inc_or_append_ && OB_FAIL(delta_row.push_back(assign.delta_expr_))) {
+        LOG_WARN("fail to add delta expr to delta row", K(ret), K(assign));
+      } else if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is null", K(ret), K(assign));
+      } else if (assign.column_item_->col_idx_ >= new_row.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column index", K(ret), K(assign), K(new_row));
+      } else {
+        new_row.at(assign.column_item_->col_idx_) = tmp_expr;
       }
     }
   }
@@ -1205,15 +1287,10 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to generate dml base ctdef", K(ret));
   } else if (OB_FAIL(cg.generate_rt_exprs(full_row, upd_ctdef.full_row_))) {
     LOG_WARN("fail to generate dml update full row exprs", K(ret), K(full_row));
-  } else if (OB_FAIL(replace_exprs_with_dependant(ctx.get_full_assign_exprs(), tmp_full_assign_exprs))) {
-    LOG_WARN("fail to replace exprs with dependant", K(ret));
-  } else if (OB_FAIL(cg.generate_rt_exprs(tmp_full_assign_exprs, upd_ctdef.full_assign_row_))) {
-    LOG_WARN("fail to generate full assign row exprs", K(ret));
-  } else if (ctx.is_inc_or_append() && OB_FAIL(cg.generate_rt_exprs(ctx.get_delta_exprs(), upd_ctdef.delta_exprs_))) {
-    LOG_WARN("fail to generate delta exprs", K(ret));
+  } else if (!delta_row.empty() && OB_FAIL(cg.generate_rt_exprs(delta_row, upd_ctdef.delta_row_))) {
+    LOG_WARN("fail to generate dml update delta row exprs", K(ret), K(delta_row));
   } else if (OB_FAIL(generate_das_upd_ctdef(ctx,
                                             ctx.get_ref_table_id(),
-                                            assign_exprs,
                                             upd_ctdef.das_ctdef_,
                                             old_row,
                                             new_row,
@@ -1221,19 +1298,16 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to generate das upd ctdef", K(ret));
   } else if (OB_FAIL(generate_related_upd_ctdef(ctx,
                                                 allocator,
-                                                assign_exprs,
                                                 old_row,
                                                 new_row,
                                                 full_row,
                                                 upd_ctdef.related_ctdefs_))) {
     LOG_WARN("fail to generate related upd ctdef", K(ret));
-  } else if (OB_FAIL(generate_upd_assign_infos(ctx, allocator, assign_exprs, upd_ctdef))) {
+  } else if (OB_FAIL(generate_upd_assign_infos(ctx, allocator, upd_ctdef))) {
     LOG_WARN("fail to generate related upd assign info", K(ret));
   }
 
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (ctx.is_for_insertup()) {
+  if (OB_SUCC(ret) && ctx.is_for_insertup()) {
     ObDMLCtDefAllocator<ObDASDelCtDef> ddel_allocator(allocator);
     ObDMLCtDefAllocator<ObDASInsCtDef> dins_allocator(allocator);
     if (OB_ISNULL(upd_ctdef.ddel_ctdef_ = ddel_allocator.alloc())) {
@@ -1270,7 +1344,6 @@ int ObTableDmlCgService::generate_update_ctdef(ObTableCtx &ctx,
 
 int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
                                                 uint64_t index_tid,
-                                                const ObIArray<ObRawExpr *> &assign_exprs,
                                                 ObDASUpdCtDef &das_upd_ctdef,
                                                 const ObIArray<ObRawExpr*> &old_row,
                                                 const ObIArray<ObRawExpr*> &new_row,
@@ -1281,14 +1354,9 @@ int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_upd_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_updated_column_ids(ctx,
-                                                 assign_exprs,
-                                                 das_upd_ctdef.column_ids_,
-                                                 das_upd_ctdef.updated_column_ids_))) {
+  } else if (OB_FAIL(generate_updated_column_ids(ctx, das_upd_ctdef.updated_column_ids_))) {
     LOG_WARN("fail to add updated column ids", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx,
-                                         ctx.get_old_row_exprs(),
-                                         dml_column_ids))) {
+  } else if (OB_FAIL(generate_column_ids(ctx, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids, // new row and old row's columns id
                                         das_upd_ctdef.column_ids_, // schmea column ids for given index_tid
@@ -1303,34 +1371,22 @@ int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
 }
 
 int ObTableDmlCgService::generate_updated_column_ids(ObTableCtx &ctx,
-                                                     const ObIArray<ObRawExpr *> &assign_exprs,
-                                                     const ObIArray<uint64_t> &column_ids,
                                                      ObIArray<uint64_t> &updated_column_ids)
 {
   int ret = OB_SUCCESS;
+  ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
   updated_column_ids.reset();
 
-  if (!assign_exprs.empty()) {
-    if (OB_FAIL(updated_column_ids.reserve(assign_exprs.count()))) {
-      LOG_WARN("fail to init updated column ids array", K(ret), K(assign_exprs.count()));
-    } else {
-      ObColumnRefRawExpr *col_expr = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); i++) {
-        if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
-          if (OB_FAIL(updated_column_ids.push_back(ctx.get_auto_inc_column_id()))) {
-            LOG_WARN("fail to add updated column id", K(ret), K(ctx.get_auto_inc_column_id()));
-          }
-        } else {
-          if (!assign_exprs.at(i)->is_column_ref_expr()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected expr type", K(ret), K(assign_exprs.at(i)->get_expr_type()));
-          } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(assign_exprs.at(i)))) {
-          } else if (!has_exist_in_array(column_ids, col_expr->get_column_id())) {
-            //not found in column ids, ignore it
-          } else if (OB_FAIL(updated_column_ids.push_back(col_expr->get_column_id()))) {
-            LOG_WARN("fail to add updated column id", K(ret), K(col_expr->get_column_id()));
-          }
-        }
+  if (OB_FAIL(updated_column_ids.reserve(assigns.count()))) {
+    LOG_WARN("fail to init updated column ids array", K(ret), K(assigns.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      const ObTableAssignment &assign = assigns.at(i);
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is null", K(ret), K(assign));
+      } else if (OB_FAIL(updated_column_ids.push_back(assign.column_item_->column_id_))) {
+        LOG_WARN("fail to add updated column id", K(ret), K(assign));
       }
     }
   }
@@ -1340,56 +1396,38 @@ int ObTableDmlCgService::generate_updated_column_ids(ObTableCtx &ctx,
 
 int ObTableDmlCgService::generate_upd_assign_infos(ObTableCtx &ctx,
                                                    ObIAllocator &allocator,
-                                                   const ObIArray<ObRawExpr *> &assign_exprs,
                                                    ObTableUpdCtDef &udp_ctdef)
 {
   int ret = OB_SUCCESS;
-  int64_t assign_cnt = assign_exprs.count();
+  ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
+  int64_t assign_cnt = assigns.count();
   ColContentFixedArray &assign_infos = udp_ctdef.assign_columns_;
 
   if (OB_FAIL(assign_infos.init(assign_cnt))) {
     LOG_WARN("fail to init assign info array", K(ret), K(assign_cnt));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < assign_cnt; ++i) {
+    const ObTableAssignment &assign = assigns.at(i);
     ColumnContent column_content;
     int64_t idx = 0;
-    if (assign_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
-      column_content.auto_filled_timestamp_ = false;
-      column_content.is_nullable_ = false;
-      column_content.is_predicate_column_ = false;
-      column_content.is_implicit_ = false;
-      if (OB_FAIL(ob_write_string(allocator,
-                                  ctx.get_auto_inc_column_name(),
-                                  column_content.column_name_))) {
-        LOG_WARN("fail to copy column name", K(ret), K(ctx.get_auto_inc_column_name()));
-      } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, ctx.get_auto_inc_column_id(), &idx)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("assign column not exists in old column", K(ret), K(ctx.get_auto_inc_column_name()));
-      } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
-        //do nothing
-      } else if (OB_FAIL(assign_infos.push_back(column_content))) {
-        LOG_WARN("fail to store colum content to assign infos", K(ret), K(column_content));
-      }
-    } else {
-      ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr*>(assign_exprs.at(i));
-      column_content.auto_filled_timestamp_ = col->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
-      column_content.is_nullable_ = !col->get_result_type().is_not_null_for_write();
-      column_content.is_predicate_column_ = false;
-      column_content.is_implicit_ = false;
-      if (OB_FAIL(ob_write_string(allocator,
-                                  col->get_column_name(),
-                                  column_content.column_name_))) {
-        LOG_WARN("fail to copy column name", K(ret), K(col->get_column_name()));
-      } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, col->get_column_id(), &idx)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("assign column not exists in old column", K(ret), KPC(col));
-      } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
-        //do nothing
-      } else if (OB_FAIL(assign_infos.push_back(column_content))) {
-        LOG_WARN("fail to store colum content to assign infos", K(ret), K(column_content));
-      }
+    column_content.auto_filled_timestamp_ = assign.column_expr_->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
+    column_content.is_nullable_ = !assign.column_expr_->get_result_type().is_not_null_for_write();
+    column_content.is_predicate_column_ = false;
+    column_content.is_implicit_ = false;
+    if (OB_FAIL(ob_write_string(allocator,
+                                assign.column_expr_->get_column_name(),
+                                column_content.column_name_))) {
+      LOG_WARN("fail to copy column name", K(ret), K(assign.column_expr_->get_column_name()));
+    } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, assign.column_expr_->get_column_id(), &idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("assign column not exists in old column", K(ret), KPC(assign.column_expr_));
+    } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
+      //do nothing
+    } else if (OB_FAIL(assign_infos.push_back(column_content))) {
+      LOG_WARN("fail to store colum content to assign infos", K(ret), K(column_content));
     }
   }
+
   return ret;
 }
 
@@ -1400,17 +1438,13 @@ int ObTableDmlCgService::generate_delete_ctdef(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
-  ObSEArray<ObRawExpr*, 64> tmp_exprs;
-  const ObIArray<ObRawExpr *> &exprs = ctx.get_all_exprs().get_expr_array();
+  ObSEArray<ObRawExpr*, 64> table_column_exprs;
 
-  if (OB_FAIL(replace_exprs_with_dependant(exprs, tmp_exprs))) {
+  if (OB_FAIL(replace_exprs_with_dependant(ctx, table_column_exprs))) {
     LOG_WARN("fail to replace exprs with dependant", K(ret));
-  } else if (OB_FAIL(old_row.assign(tmp_exprs))) {
+  } else if (OB_FAIL(old_row.assign(table_column_exprs))) {
     LOG_WARN("fail to assign old row expr", K(ret));
-  } else if (OB_FAIL(generate_base_ctdef(ctx,
-                                         del_ctdef,
-                                         old_row,
-                                         new_row))) {
+  } else if (OB_FAIL(generate_base_ctdef(ctx, del_ctdef, old_row, new_row))) {
     LOG_WARN("fail to generate dml base ctdef", K(ret));
   } else if (OB_FAIL(generate_das_del_ctdef(ctx,
                                             ctx.get_ref_table_id(),
@@ -1438,9 +1472,7 @@ int ObTableDmlCgService::generate_das_del_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_del_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx,
-                                         ctx.get_all_exprs().get_expr_array(),
-                                         dml_column_ids))) {
+  } else if (OB_FAIL(generate_column_ids(ctx, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids,
                                         das_del_ctdef.column_ids_,
@@ -1482,6 +1514,12 @@ int ObTableDmlCgService::generate_related_del_ctdef(ObTableCtx &ctx,
   return ret;
 }
 
+/*
+  generate replace ctdef which consists of insert ctdef and delete ctdef.
+  - generate insert ctdef.
+  - generate rowkey info which use for fetch duplicated rowkey.
+  - generate delete ctdef.
+*/
 int ObTableDmlCgService::generate_replace_ctdef(ObTableCtx &ctx,
                                                 ObIAllocator &allocator,
                                                 ObTableReplaceCtDef &replace_ctdef)
@@ -1503,6 +1541,7 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
                                                     ObTableInsCtDef &ins_ctdef)
 {
   int ret = OB_SUCCESS;
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
   ObDASInsCtDef &das_ins_ctdef = ins_ctdef.das_ctdef_;
   ObSEArray<uint64_t, 8> rowkey_column_ids;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
@@ -1510,32 +1549,23 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
 
   if (OB_FAIL(get_rowkey_exprs(ctx, rowkey_exprs))) {
     LOG_WARN("fail to get rowkey exprs", K(ret), K(ctx));
+  } else if (items.count() < rowkey_exprs.count()) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("invalid column item count", K(ret), K(items), K(rowkey_exprs));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
+    const ObTableColumnItem &item = items.at(i);
     ObRawExpr *expr = rowkey_exprs.at(i);
-    if (expr->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
-        if (OB_FAIL(rowkey_column_ids.push_back(ctx.get_auto_inc_column_id()))) {
-          LOG_WARN("fail to push base column id", K(ret), K(ctx.get_auto_inc_column_id()));
-        } else if (OB_FAIL(rowkey_column_types.push_back(expr->get_result_type()))) {
-          LOG_WARN("fail to push column type", K(ret), KPC(expr));
-        }
-    } else {
-      if (!expr->is_column_ref_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr type is not column_ref expr", K(ret), KPC(expr));
-      } else {
-        ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
-        if (OB_FAIL(rowkey_column_ids.push_back(col_expr->get_column_id()))) {
-          LOG_WARN("fail to push base column id", K(ret), K(col_expr->get_column_id()));
-        } else if (OB_FAIL(rowkey_column_types.push_back(col_expr->get_result_type()))) {
-          LOG_WARN("fail to push column type", K(ret), KPC(col_expr));
-        }
-      }
+    if (OB_FAIL(rowkey_column_ids.push_back(item.column_id_))) {
+      LOG_WARN("fail to push base column id", K(ret), K(item));
+    } else if (OB_FAIL(rowkey_column_types.push_back(item.expr_->get_result_type()))) {
+      LOG_WARN("fail to push column type", K(ret), K(item));
     }
   }
 
-  if (FAILEDx(das_ins_ctdef.table_rowkey_cids_.init(rowkey_column_ids.count()))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(das_ins_ctdef.table_rowkey_cids_.init(rowkey_column_ids.count()))) {
     LOG_WARN("fail to init table rowkey column ids", K(ret), K(rowkey_column_ids.count()));
   } else if (OB_FAIL(append(das_ins_ctdef.table_rowkey_cids_, rowkey_column_ids))) {
     LOG_WARN("fail to append table rowkey column id", K(ret), K(rowkey_column_ids));
@@ -1548,8 +1578,7 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableDmlCgService::get_rowkey_exprs(ObTableCtx &ctx,
-                                          ObIArray<ObRawExpr*> &rowkey_exprs)
+int ObTableDmlCgService::get_rowkey_exprs(ObTableCtx &ctx, ObIArray<ObRawExpr*> &rowkey_exprs)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = ctx.get_table_schema();
@@ -1559,8 +1588,7 @@ int ObTableDmlCgService::get_rowkey_exprs(ObTableCtx &ctx,
     LOG_WARN("table schema is null", K(ret));
   } else {
     const int rowkey_cnt = table_schema->get_rowkey_column_num();
-    const ObIArray<ObRawExpr *> &all_exprs = ctx.is_for_insertup() ?
-        ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
+    const ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
       if (OB_FAIL(rowkey_exprs.push_back(all_exprs.at(i)))) {
         LOG_WARN("fail to push back rowkey expr", K(ret), K(i));
@@ -1572,53 +1600,36 @@ int ObTableDmlCgService::get_rowkey_exprs(ObTableCtx &ctx,
 }
 
 int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
+                                            ObIArray<ObRawExpr *> &access_exprs,
                                             ObDASScanCtDef &tsc_ctdef)
 {
   int ret = OB_SUCCESS;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
-  const ObIArray<ObRawExpr *> &all_exprs = ctx.is_for_insertup() ?
-        ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
-  ObSEArray<ObRawExpr*, 16> access_exprs;
-  ObIArray<ObRawExpr *> &filter_exprs = ctx.get_filter_exprs();
-  const ObTableSchema *table_schema = ctx.get_table_schema();
   tsc_ctdef.ref_table_id_ = ctx.get_index_table_id();
-  const uint64_t tenant_id = MTL_ID();
+  const uint64_t tenant_id = ctx.get_tenant_id();
+  ObSEArray<uint64_t, 64> column_ids;
 
   if (OB_FAIL(ctx.get_schema_guard().get_schema_version(TABLE_SCHEMA,
                                                         tenant_id,
                                                         tsc_ctdef.ref_table_id_,
                                                         tsc_ctdef.schema_version_))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(tsc_ctdef.ref_table_id_));
-  } else if (OB_FAIL(access_exprs.assign(all_exprs))) {
-    LOG_WARN("fail to assign access exprs", K(ret));
-  } else if (OB_FAIL(cg.generate_rt_exprs(access_exprs,
-                                          tsc_ctdef.pd_expr_spec_.access_exprs_))) {
-    LOG_WARN("fail to generate rt exprs ", K(ret));
+  } else if (OB_FAIL(cg.generate_rt_exprs(access_exprs, tsc_ctdef.pd_expr_spec_.access_exprs_))) {
+    LOG_WARN("fail to generate rt exprs ", K(ret), K(access_exprs));
   } else if (OB_FAIL(tsc_ctdef.access_column_ids_.init(access_exprs.count()))) {
     LOG_WARN("fail to init access_column_ids_ ", K(ret));
-  } else {
-    ARRAY_FOREACH(access_exprs, i) {
-      if (access_exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && ctx.has_auto_inc()) { // 兼容自增场景下的列转换表达式
-        if (OB_FAIL(tsc_ctdef.access_column_ids_.push_back(ctx.get_auto_inc_column_id()))) {
-          LOG_WARN("fail to add column id", K(ret), K(ctx.get_auto_inc_column_id()));
-        }
-      } else {
-        ObColumnRefRawExpr *ref_col_expr = static_cast<ObColumnRefRawExpr*>(access_exprs.at(i));
-        if (OB_ISNULL(ref_col_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null column ref expr", K(ret), K(i));
-        } else if (OB_FAIL(tsc_ctdef.access_column_ids_.push_back(ref_col_expr->get_column_id()))) {
-          LOG_WARN("fail to add column id", K(ret), K(ref_col_expr->get_column_id()));
-        }
-      }
-    }
+  } else if (OB_FAIL(ctx.get_table_schema()->get_column_ids(column_ids))) {
+    LOG_WARN("fail to get column ids", K(ret));
+  } else if (OB_FAIL(tsc_ctdef.access_column_ids_.assign(column_ids))) {
+    LOG_WARN("fail to assign column ids", K(ret), K(column_ids));
   }
+
   if (OB_SUCC(ret)) {
+    const ObTableSchema *table_schema = ctx.get_table_schema();
     tsc_ctdef.table_param_.get_enable_lob_locator_v2() = (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
     if (OB_FAIL(tsc_ctdef.table_param_.convert(*table_schema, tsc_ctdef.access_column_ids_))) {
       LOG_WARN("fail to convert table param", K(ret));
-    } else if (OB_FAIL(ObTableTscCgService::generate_das_result_output(tsc_ctdef,
-                                                                       tsc_ctdef.access_column_ids_))) {
+    } else if (OB_FAIL(ObTableTscCgService::generate_das_result_output(tsc_ctdef, tsc_ctdef.access_column_ids_))) {
       LOG_WARN("generate das result output failed", K(ret));
     }
   }
@@ -1632,7 +1643,6 @@ int ObTableDmlCgService::generate_single_constraint_info(ObTableCtx &ctx,
                                                          ObUniqueConstraintInfo &constraint_info)
 {
   int ret = OB_SUCCESS;
-
   constraint_info.table_id_ = table_id;
   constraint_info.index_tid_ = index_schema.get_table_id();
   if (!index_schema.is_index_table()) {
@@ -1643,25 +1653,18 @@ int ObTableDmlCgService::generate_single_constraint_info(ObTableCtx &ctx,
 
   if (OB_SUCC(ret)) {
     uint64_t rowkey_column_id = OB_INVALID_ID;
-    const ObIArray<ObRawExpr *> &all_exprs = ctx.is_for_insertup() ?
-        ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
     ObIArray<ObColumnRefRawExpr*> &column_exprs = constraint_info.constraint_columns_;
     const ObRowkeyInfo &rowkey_info = index_schema.get_rowkey_info();
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+      const ObTableColumnItem *item = nullptr;
       if (OB_FAIL(rowkey_info.get_column_id(i, rowkey_column_id))) {
         LOG_WARN("fail to get rowkey column id", K(ret));
-      } else {
-        const ObIArray<ObColumnRefRawExpr *> &all_column_exprs = ctx.get_all_column_ref_exprs();
-        for (int64_t j = 0; OB_SUCC(ret) && j < all_column_exprs.count(); j++) {
-          ObColumnRefRawExpr *ref_expr = all_column_exprs.at(j);
-          if (OB_ISNULL(ref_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ref_expr is null", K(ret), K(j));
-          } else if (ref_expr->get_column_id() == rowkey_column_id
-              && OB_FAIL(column_exprs.push_back(ref_expr))) {
-            LOG_WARN("fail to push back column ref expr to constraint columns", K(ret), K(j));
-          }
-        }
+      } else if (OB_FAIL(ctx.get_column_item_by_column_id(rowkey_column_id, item))) {
+        LOG_WARN("fail to get column item", K(ret), K(ctx), K(rowkey_column_id));
+      } else if (OB_ISNULL(item)) {
+        // do nothing, not found
+      } else if (OB_FAIL(column_exprs.push_back(item->expr_))) {
+        LOG_WARN("fail to push back column expr", K(ret), K(item));
       }
     }
   }
@@ -1731,6 +1734,7 @@ int ObTableDmlCgService::generate_constraint_ctdefs(ObTableCtx &ctx,
   ObSEArray<ObUniqueConstraintInfo, 2> cst_infos;
   ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
+  ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
 
   if (OB_FAIL(generate_constraint_infos(ctx, cst_infos))) {
     LOG_WARN("fail to generate constraint infos", K(ret), K(ctx));
@@ -1751,8 +1755,15 @@ int ObTableDmlCgService::generate_constraint_ctdefs(ObTableCtx &ctx,
       LOG_WARN("fail to init rowkey", K(ret), K(cst_columns.count()));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < cst_columns.count(); ++j) {
+        const ObTableColumnItem *item = nullptr;
+        ObColumnRefRawExpr *ref_expr = cst_columns.at(j);
         ObExpr *expr = nullptr;
-        if (OB_FAIL(cg.generate_rt_expr(*cst_columns.at(j), expr))) {
+        if (OB_FAIL(ctx.get_column_item_by_expr(ref_expr, item))) {
+          LOG_WARN("fail to column item by expr", K(ret), K(*ref_expr));
+        } else if (OB_ISNULL(item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column item is null", K(ret), K(ctx));
+        } else if (OB_FAIL(cg.generate_rt_expr(*item->raw_expr_, expr))) {
           LOG_WARN("fail to generate rt expr", K(ret));
         } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.push_back(expr))) {
           LOG_WARN("fail to push back rt expr", K(ret));
@@ -1773,25 +1784,22 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
                                                          ObConflictCheckerCtdef &conflict_checker_ctdef)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr *> &exprs = ctx.is_for_insertup() ?
-      ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
-  ObSEArray<ObRawExpr*, 16> table_column_exprs;
   ObSEArray<ObRawExpr*, 8> rowkey_exprs;
+  ObSEArray<ObRawExpr*, 64> table_column_exprs;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
 
   if (OB_FAIL(get_rowkey_exprs(ctx, rowkey_exprs))) {
     LOG_WARN("fail to get table rowkey exprs", K(ret), K(ctx));
-  } else if (OB_FAIL(generate_tsc_ctdef(ctx, conflict_checker_ctdef.das_scan_ctdef_))) {
-    LOG_WARN("fail to generate das_scan_ctdef", K(ret));
-  } else if (OB_FAIL(generate_constraint_ctdefs(ctx,
-                                                allocator,
-                                                conflict_checker_ctdef.cst_ctdefs_))) {
+  } else if (OB_FAIL(replace_exprs_with_dependant(ctx, table_column_exprs))) {
+    LOG_WARN("fail to replace exprs with dependant", K(ret));
+  } else if (OB_FAIL(generate_tsc_ctdef(ctx, table_column_exprs, conflict_checker_ctdef.das_scan_ctdef_))) {
+    LOG_WARN("fail to generate das_scan_ctdef", K(ret), K(table_column_exprs));
+  } else if (OB_FAIL(generate_constraint_ctdefs(ctx, allocator, conflict_checker_ctdef.cst_ctdefs_))) {
     LOG_WARN("fail to generate constraint infos", K(ret), K(ctx));
-  } else if (OB_FAIL(cg.generate_rt_exprs(rowkey_exprs,
-                                          conflict_checker_ctdef.data_table_rowkey_expr_))) {
+  } else if (OB_FAIL(cg.generate_rt_exprs(rowkey_exprs, conflict_checker_ctdef.data_table_rowkey_expr_))) {
     LOG_WARN("fail to generate data table rowkey expr", K(ret), K(rowkey_exprs));
-  } else if (OB_FAIL(cg.generate_rt_exprs(exprs, conflict_checker_ctdef.table_column_exprs_))) {
-    LOG_WARN("fail to generate table columns rt exprs ", K(ret));
+  } else if (OB_FAIL(cg.generate_rt_exprs(table_column_exprs, conflict_checker_ctdef.table_column_exprs_))) {
+    LOG_WARN("fail to generate table columns rt exprs ", K(ret), K(table_column_exprs));
   } else {
     conflict_checker_ctdef.rowkey_count_ = ctx.get_table_schema()->get_rowkey_column_num();
   }
@@ -1801,7 +1809,6 @@ int ObTableDmlCgService::generate_conflict_checker_ctdef(ObTableCtx &ctx,
 
 int ObTableDmlCgService::generate_insert_up_ctdef(ObTableCtx &ctx,
                                                   ObIAllocator &allocator,
-                                                  const ObTableCtx::ObAssignIds &assign_ids,
                                                   ObTableInsUpdCtDef &ins_up_ctdef)
 {
   int ret = OB_SUCCESS;
@@ -1810,10 +1817,7 @@ int ObTableDmlCgService::generate_insert_up_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to generate insert ctdef", K(ret), K(ctx));
   } else if (OB_FAIL(generate_table_rowkey_info(ctx, ins_up_ctdef.ins_ctdef_))) {
     LOG_WARN("fail to generate table rowkey info", K(ret), K(ctx));
-  } else if (OB_FAIL(generate_update_ctdef(ctx,
-                                           allocator,
-                                           assign_ids,
-                                           ins_up_ctdef.upd_ctdef_))) {
+  } else if (OB_FAIL(generate_update_ctdef(ctx, allocator, ins_up_ctdef.upd_ctdef_))) {
     LOG_WARN("fail to generate update ctdef", K(ret), K(ctx));
   }
 
@@ -1834,7 +1838,7 @@ int ObTableDmlCgService::generate_ttl_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to generate table rowkey info", K(ret), K(ctx));
   } else if (OB_FAIL(generate_delete_ctdef(ctx, allocator, ttl_ctdef.del_ctdef_))) {
     LOG_WARN("fail to generate delete ctdef", K(ret), K(ctx));
-  } else if (OB_FAIL(generate_update_ctdef(ctx, allocator, ctx.get_assign_ids(), ttl_ctdef.upd_ctdef_))) {
+  } else if (OB_FAIL(generate_update_ctdef(ctx, allocator, ttl_ctdef.upd_ctdef_))) {
     LOG_WARN("fail to generate update ctdef", K(ret), K(ctx));
   } else if (filter_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -1852,15 +1856,13 @@ int ObTableDmlCgService::generate_lock_ctdef(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
   ObArray<ObRawExpr*> old_row;
-  const ObIArray<ObRawExpr *> &exprs = ctx.get_all_exprs().get_expr_array();
   ObSEArray<ObRawExpr*, 64> tmp_exprs;
 
-  if (OB_FAIL(replace_exprs_with_dependant(exprs, tmp_exprs))) {
+  if (OB_FAIL(replace_exprs_with_dependant(ctx, tmp_exprs))) {
     LOG_WARN("fail to replace exprs with dependant", K(ret));
   } else if (OB_FAIL(old_row.assign(tmp_exprs))) {
     LOG_WARN("fail to assign old row expr", K(ret));
-  } else if (OB_FAIL(cg.generate_rt_exprs(old_row,
-                                          lock_ctdef.old_row_))) {
+  } else if (OB_FAIL(cg.generate_rt_exprs(old_row, lock_ctdef.old_row_))) {
     LOG_WARN("fail to generate lock rt exprs", K(ret), K(old_row));
   } else if (OB_FAIL(generate_das_lock_ctdef(ctx,
                                              ctx.get_ref_table_id(),
@@ -1883,9 +1885,7 @@ int ObTableDmlCgService::generate_das_lock_ctdef(ObTableCtx &ctx,
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_lock_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx,
-                                         ctx.get_all_exprs().get_expr_array(),
-                                         dml_column_ids))) {
+  } else if (OB_FAIL(generate_column_ids(ctx, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids,
                                         das_lock_ctdef.column_ids_,
@@ -1906,15 +1906,13 @@ int ObTableDmlCgService::generate_base_ctdef(ObTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
-  const ObIArray<ObRawExpr *> &exprs = (ctx.is_for_update() || ctx.is_for_insertup()) ?
-      ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
 
-  if (OB_FAIL(generate_column_ids(ctx, exprs, base_ctdef.column_ids_))) {
+  if (OB_FAIL(generate_column_ids(ctx, base_ctdef.column_ids_))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(cg.generate_rt_exprs(old_row, base_ctdef.old_row_))) {
-    LOG_WARN("fail to generate old row exprs", K(ret));
+    LOG_WARN("fail to generate old row exprs", K(ret), K(old_row));
   } else if (OB_FAIL(cg.generate_rt_exprs(new_row, base_ctdef.new_row_))) {
-    LOG_WARN("fail to generate new row exprs", K(ret));
+    LOG_WARN("fail to generate new row exprs", K(ret), K(new_row));
   }
 
   return ret;
@@ -1928,14 +1926,10 @@ int ObTableDmlCgService::generate_das_ins_ctdef(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObArray<uint64_t> dml_column_ids;
   ObArray<ObRawExpr*> empty_old_row;
-  const ObIArray<ObRawExpr *> &exprs = ctx.is_for_insertup() ?
-      ctx.get_old_row_exprs() : ctx.get_all_exprs().get_expr_array();
 
   if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_ins_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_column_ids(ctx,
-                                         exprs,
-                                         dml_column_ids))) {
+  } else if (OB_FAIL(generate_column_ids(ctx, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
   } else if (OB_FAIL(generate_projector(dml_column_ids, // new row and old row's columns id
                                         das_ins_ctdef.column_ids_, // schmea column ids for given index_tid
@@ -2083,32 +2077,20 @@ int ObTableDmlCgService::convert_table_param(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableDmlCgService::generate_column_ids(ObTableCtx &ctx,
-                                             const ObIArray<ObRawExpr*> &exprs,
-                                             ObIArray<uint64_t> &column_ids)
+int ObTableDmlCgService::generate_column_ids(ObTableCtx &ctx, ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
   column_ids.reset();
 
-  if (!exprs.empty()) {
-    if (OB_FAIL(column_ids.reserve(exprs.count()))) {
-      LOG_WARN("fail to reserve column ids capacity", K(ret), K(exprs.count()));
-    } else {
-      ARRAY_FOREACH(exprs, i) {
-        if (exprs.at(i)->get_expr_type() == T_FUN_COLUMN_CONV && (ctx.get_opertion_type() != ObTableOperationType::DEL)    // 特判下，若为delete/update/get/scan操作
-                                                              && (ctx.get_opertion_type() != ObTableOperationType::UPDATE) // 则走原有的列引用表达式
-                                                              && (ctx.get_opertion_type() != ObTableOperationType::GET)
-                                                              && (ctx.get_opertion_type() != ObTableOperationType::SCAN)) {
-          if (OB_FAIL(column_ids.push_back(ctx.get_auto_inc_column_id()))) {
-            LOG_WARN("fail to push back column id", K(ret), K(ctx.get_auto_inc_column_id()));
-          }
-        } else {
-          ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(exprs.at(i));
-          if (OB_FAIL(column_ids.push_back(col_expr->get_column_id()))) {
-            LOG_WARN("fail to push back column id", K(ret), K(col_expr->get_column_id()));
-          }
-        }
-      }
+  if (OB_FAIL(column_ids.reserve(items.count()))) {
+    LOG_WARN("fail to reserve column ids capacity", K(ret), K(items.count()));
+  }
+
+  for (int64_t i= 0; OB_SUCC(ret) && i < items.count(); i++) {
+    const ObTableColumnItem &item = items.at(i);
+    if (OB_FAIL(column_ids.push_back(item.column_id_))) {
+      LOG_WARN("fail to push back column id", K(ret));
     }
   }
 
@@ -2216,7 +2198,6 @@ int ObTableDmlCgService::generate_related_ins_ctdef(ObTableCtx &ctx,
 
 int ObTableDmlCgService::generate_related_upd_ctdef(ObTableCtx &ctx,
                                                     ObIAllocator &allocator,
-                                                    const ObIArray<ObRawExpr *> &assign_exprs,
                                                     const ObIArray<ObRawExpr*> &old_row,
                                                     const ObIArray<ObRawExpr*> &new_row,
                                                     const ObIArray<ObRawExpr*> &full_row,
@@ -2234,7 +2215,6 @@ int ObTableDmlCgService::generate_related_upd_ctdef(ObTableCtx &ctx,
       LOG_WARN("fail to allocate update related das ctdef", K(ret));
     } else if (OB_FAIL(generate_das_upd_ctdef(ctx,
                                               related_index_tids.at(i),
-                                              assign_exprs,
                                               *related_das_ctdef,
                                               old_row,
                                               new_row,
@@ -2294,12 +2274,11 @@ int ObTableTscCgService::replace_gen_col_exprs(const ObTableCtx &ctx,
   if (!ctx.get_table_schema()->has_generated_column()) {
     // do nothing
   } else {
-    ObArray<ObRawExpr*> res_access_expr;
-    const ObIArray<ObTableCtx::ObGenDenpendantsPair> &pairs = ctx.get_gen_dependants_pairs();
+    ObSEArray<ObRawExpr*, 64> res_access_expr;
+    const ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
     ObColumnRefRawExpr *ref_expr = nullptr;
-    const int64_t N = access_exprs.count();
 
-    for (int64_t i = 0; i < N && OB_SUCC(ret); i++) {
+    for (int64_t i = 0; i < access_exprs.count() && OB_SUCC(ret); i++) {
       ObRawExpr *expr = access_exprs.at(i);
       if (!expr->is_column_ref_expr()) {
         ret = OB_ERR_UNEXPECTED;
@@ -2310,11 +2289,11 @@ int ObTableTscCgService::replace_gen_col_exprs(const ObTableCtx &ctx,
           LOG_WARN("fail to push back expr", K(ret));
         }
       } else {
-        for (int j = 0; j < pairs.count() && OB_SUCC(ret); j++) {
-          if (ref_expr == pairs.at(j).first) {
-            const ObIArray<ObRawExpr*> &ref_exprs = pairs.at(j).second;
-            if (OB_FAIL(append_array_no_dup(res_access_expr, ref_exprs))) {
-              LOG_WARN("fail to append array no dup", K(ret), K(res_access_expr), K(ref_exprs));
+        for (int j = 0; j < items.count() && OB_SUCC(ret); j++) {
+          const ObTableColumnItem &item = items.at(j);
+          if (item.expr_ == expr) {
+            if (OB_FAIL(append_array_no_dup(res_access_expr, item.dependant_exprs_))) {
+              LOG_WARN("fail to append array no dup", K(ret), K(res_access_expr), K(item));
             }
           }
         }
@@ -2340,7 +2319,7 @@ int ObTableTscCgService::generate_access_ctdef(const ObTableCtx &ctx,
                                                ObDASScanCtDef &das_tsc_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObRawExpr*> access_exprs;
+  ObSEArray<ObRawExpr*, 64> access_exprs;
   const ObIArray<oceanbase::sql::ObRawExpr *> &select_exprs = ctx.get_select_exprs();
   const ObIArray<oceanbase::sql::ObRawExpr *> &rowkey_exprs = ctx.get_rowkey_exprs();
   const ObIArray<oceanbase::sql::ObRawExpr *> &index_exprs = ctx.get_index_exprs();
@@ -2378,18 +2357,30 @@ int ObTableTscCgService::generate_access_ctdef(const ObTableCtx &ctx,
     if (!is_index_table && OB_FAIL(replace_gen_col_exprs(ctx, access_exprs))) {
       LOG_WARN("fail to replace generate exprs", K(ret));
     } else if (OB_FAIL(generate_rt_exprs(ctx, allocator, access_exprs, das_tsc_ctdef.pd_expr_spec_.access_exprs_))) {
-      LOG_WARN("fail to generate access rt exprs", K(ret));
+      LOG_WARN("fail to generate access rt exprs", K(ret), K(access_exprs));
     } else if (OB_FAIL(das_tsc_ctdef.access_column_ids_.init(access_exprs.count()))) {
       LOG_WARN("fail to init access column ids", K(ret), K(access_exprs.count()));
     } else {
-      ObColumnRefRawExpr *col_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs.count(); i++) {
-        if (!access_exprs.at(i)->is_column_ref_expr()) {
+        ObRawExpr *raw_expr = access_exprs.at(i);
+        if (OB_ISNULL(raw_expr)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr type", K(ret), K(access_exprs.at(i)->get_expr_type()));
-        } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(access_exprs.at(i)))) {
-        } else if (OB_FAIL(das_tsc_ctdef.access_column_ids_.push_back(col_expr->get_column_id()))) {
-          LOG_WARN("fail to push back column id", K(ret));
+          LOG_WARN("expr is null", K(ret), K(access_exprs));
+        } else if (raw_expr->is_column_ref_expr()) {
+          ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(raw_expr);
+          if (OB_FAIL(das_tsc_ctdef.access_column_ids_.push_back(col_ref_expr->get_column_id()))) {
+            LOG_WARN("fail to push back column id", K(ret));
+          }
+        } else { // calculate expr, find in column items
+          const ObTableColumnItem *item = nullptr;
+          if (OB_FAIL(ctx.get_column_item_by_expr(raw_expr, item))) {
+            LOG_WARN("fail to get column item", K(ret), K(*raw_expr));
+          } else if (OB_ISNULL(item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column item not found", K(ret), K(ctx));
+          } else if (OB_FAIL(das_tsc_ctdef.access_column_ids_.push_back(item->column_id_))) {
+            LOG_WARN("fail to push back column id", K(ret), K(*item));
+          }
         }
       }
     }
@@ -2433,40 +2424,39 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
                                               ObDASScanCtDef &das_tsc_ctdef)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tsc_out_cols;
+  ObSEArray<uint64_t, 64> tsc_out_cols;
   const ObTableSchema *table_schema = nullptr;
   const ObIArray<ObRawExpr *> &select_exprs = ctx.get_select_exprs();
 
   if (!ctx.is_index_scan() // 非索引扫描
       || (ctx.is_index_scan() && das_tsc_ctdef.ref_table_id_ == ctx.get_ref_table_id()) // 索引扫描回表
       || (ctx.is_index_scan() && !ctx.is_index_back())) { //索引扫描不需要回表
-    ObColumnRefRawExpr *col_expr = NULL;
     if (ctx.is_index_scan() && !ctx.is_index_back()) {
       table_schema = ctx.get_index_schema();
     } else {
       table_schema = ctx.get_table_schema();
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
-      ObRawExpr *expr = select_exprs.at(i);
-      if (!expr->is_column_ref_expr()) {
+      ObRawExpr *raw_expr = select_exprs.at(i);
+      if (OB_ISNULL(raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expr type", K(ret), K(*expr));
-      } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
-      } else if (!col_expr->is_virtual_generated_column()) {
-        if (OB_FAIL(tsc_out_cols.push_back(col_expr->get_column_id()))) {
-          LOG_WARN("fail to push back column id", K(ret));
-        }
+        LOG_WARN("expr is null", K(ret));
       } else {
-        // output虚拟生成列转换为ouput其依赖的列
-        const ObIArray<ObTableCtx::ObGenDenpendantsPair> &pairs = ctx.get_gen_dependants_pairs();
-        for (int64_t j = 0; j < pairs.count() && OB_SUCC(ret); j++) {
-          if (col_expr == pairs.at(j).first) {
-            const ObIArray<ObRawExpr*> &dependant_exprs = pairs.at(j).second;
-            for (int64_t k = 0; k < dependant_exprs.count() && OB_SUCC(ret); k++) {
-              ObColumnRefRawExpr *dep_col_expr = static_cast<ObColumnRefRawExpr*>(dependant_exprs.at(k));
-              if (OB_FAIL(add_var_to_array_no_dup(tsc_out_cols, dep_col_expr->get_column_id()))) {
-                LOG_WARN("fail to add column id", K(ret), K(tsc_out_cols), K(*dep_col_expr));
-              }
+        const ObTableColumnItem *item = nullptr;
+        if (OB_FAIL(ctx.get_column_item_by_expr(raw_expr, item))) {
+          LOG_WARN("fail to get column item", K(ret), K(*raw_expr));
+        } else if (OB_ISNULL(item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column item not found", K(ret), K(ctx));
+        } else if (!item->is_generated_column_) {
+          if (OB_FAIL(tsc_out_cols.push_back(item->column_id_))) {
+            LOG_WARN("fail to push back column id", K(ret), K(tsc_out_cols), K(*item));
+          }
+        } else { // generate column. push dependent column ids
+          for (int64_t j = 0; j < item->dependant_exprs_.count() && OB_SUCC(ret); j++) {
+            ObColumnRefRawExpr *dep_col_expr = static_cast<ObColumnRefRawExpr*>(item->dependant_exprs_.at(j));
+            if (OB_FAIL(add_var_to_array_no_dup(tsc_out_cols, dep_col_expr->get_column_id()))) {
+              LOG_WARN("fail to add column id", K(ret), K(tsc_out_cols), K(*dep_col_expr));
             }
           }
         }
@@ -2517,16 +2507,24 @@ int ObTableTscCgService::generate_output_exprs(const ObTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
+  const ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
   const ObIArray<ObRawExpr *> &select_exprs = ctx.get_select_exprs();
-  const int64_t N = select_exprs.count();
-  for (int64_t i = 0; i < N && OB_SUCC(ret); i++) {
+
+  for (int64_t i = 0; i < select_exprs.count() && OB_SUCC(ret); i++) {
     ObExpr *rt_expr = nullptr;
-    ObRawExpr *expr = select_exprs.at(i);
-    ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr);
-    if (col_ref_expr->is_virtual_generated_column()) {
-      expr = col_ref_expr->get_dependant_expr();
+    ObRawExpr *raw_expr = select_exprs.at(i);
+    const ObTableColumnItem *item = nullptr;
+    if (OB_FAIL(ctx.get_column_item_by_expr(raw_expr, item))) {
+      LOG_WARN("fail to get column item", K(ret), K(*raw_expr));
+    } else if (OB_ISNULL(item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column item not found", K(ret), K(ctx));
+    } else if (item->is_virtual_generated_column_) { // output dependant expr when virtual expr
+      raw_expr = item->expr_->get_dependant_expr();
     }
-    if (OB_FAIL(cg.generate_rt_expr(*expr, rt_expr))) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(cg.generate_rt_expr(*raw_expr, rt_expr))) {
       LOG_WARN("fail to generate rt expr", K(ret));
     } else if (OB_FAIL(output_exprs.push_back(rt_expr))) {
       LOG_WARN("fail to push back rt expr", K(ret), K(output_exprs));
@@ -2595,29 +2593,14 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
                                         ObTableCtx &ctx,
                                         ObTableApiUpdateSpec &spec)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(ObTableDmlCgService::generate_update_ctdef(ctx,
-                                                         alloc,
-                                                         ctx.get_assign_ids(),
-                                                         spec.get_ctdef()))) {
-    LOG_WARN("fail to generate update ctdef", K(ret));
-  }
-
-  return ret;
+  return ObTableDmlCgService::generate_update_ctdef(ctx, alloc, spec.get_ctdef());
 }
 
 int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
                                         ObTableCtx &ctx,
                                         ObTableApiDelSpec &spec)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(ObTableDmlCgService::generate_delete_ctdef(ctx, alloc, spec.get_ctdef()))) {
-    LOG_WARN("fail to generate delete ctdef", K(ret));
-  }
-
-  return ret;
+  return ObTableDmlCgService::generate_delete_ctdef(ctx, alloc, spec.get_ctdef());
 }
 
 int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
@@ -2625,9 +2608,8 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
                                         ObTableApiReplaceSpec &spec)
 {
   int ret = OB_SUCCESS;
-  ObTableReplaceCtDef &ctdef = spec.get_ctdef();
 
-  if (OB_FAIL(ObTableDmlCgService::generate_replace_ctdef(ctx, alloc, ctdef))) {
+  if (OB_FAIL(ObTableDmlCgService::generate_replace_ctdef(ctx, alloc, spec.get_ctdef()))) {
     LOG_WARN("fail to generate replace ctdef", K(ret));
   } else if (OB_FAIL(ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
                                                                           alloc,
@@ -2643,23 +2625,13 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
                                         ObTableApiInsertUpSpec &spec)
 {
   int ret = OB_SUCCESS;
-  ObTableInsUpdCtDef &ctdef = spec.get_ctdef();
 
-  if (OB_FAIL(ObTableDmlCgService::generate_insert_up_ctdef(ctx,
-                                                            alloc,
-                                                            ctx.get_assign_ids(),
-                                                            ctdef))) {
+  if (OB_FAIL(ObTableDmlCgService::generate_insert_up_ctdef(ctx, alloc, spec.get_ctdef()))) {
     LOG_WARN("fail to generate insert up ctdef", K(ret));
-  } else {
-    const ObIArray<ObRawExpr *> &exprs = ctx.get_old_row_exprs();
-    ObStaticEngineCG cg(ctx.get_cur_cluster_version());
-    if (OB_FAIL(ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
-                                                                     alloc,
-                                                                     spec.get_conflict_checker_ctdef()))) {
-      LOG_WARN("fail to generate conflict checker ctdef", K(ret));
-    } else if (OB_FAIL(cg.generate_rt_exprs(exprs, spec.get_all_saved_exprs()))) {
-      LOG_WARN("fail to generate rt exprs ", K(ret));
-    }
+  } else if (OB_FAIL(ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
+                                                                          alloc,
+                                                                          spec.get_conflict_checker_ctdef()))) {
+    LOG_WARN("fail to generate conflict checker ctdef", K(ret));
   }
 
   return ret;
@@ -2669,42 +2641,7 @@ int ObTableSpecCgService::generate_spec(common::ObIAllocator &alloc,
                                         ObTableCtx &ctx,
                                         ObTableApiLockSpec &spec)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(ObTableDmlCgService::generate_lock_ctdef(ctx, spec.get_ctdef()))) {
-    LOG_WARN("fail to generate lock ctdef", K(ret));
-  }
-
-  return ret;
-}
-
-int ObTableExprCgService::generate_autoinc_nextval_expr(ObTableCtx &ctx,
-                                                        ObRawExpr *&expr,
-                                                        const ObColumnSchemaV2 &col_schema)
-{
-  int ret = OB_SUCCESS;
-
-  ObSysFunRawExpr *func_expr = NULL;
-  if (OB_FAIL(ctx.get_expr_factory().create_raw_expr(T_FUN_SYS_AUTOINC_NEXTVAL, func_expr))) {
-    LOG_WARN("fail to create nextval expr", K(ret));
-  } else {
-    func_expr->set_func_name(ObString::make_string(N_AUTOINC_NEXTVAL));
-    if (OB_NOT_NULL(expr) && OB_FAIL(func_expr->add_param_expr(expr))) { // 将最底部的列转换表达式挂到自增列表达式之下
-      LOG_WARN("fail to add collumn conv expr to function param", K(ret));
-    } else if (OB_FAIL(func_expr->formalize(&ctx.get_session_info()))) {
-      LOG_WARN("fail to extract info", K(ret));
-    } else if (OB_FAIL(ObAutoincNextvalExtra::init_autoinc_nextval_extra(&ctx.get_allocator(),
-                                                                         reinterpret_cast<ObRawExpr *&>(func_expr),
-                                                                         ctx.get_table_id(),
-                                                                         col_schema.get_column_id(),
-                                                                         ctx.get_table_name(),
-                                                                         col_schema.get_column_name()))) {
-      LOG_WARN("fail to init autoinc_nextval_extra", K(ret), K(ctx.get_table_name()), K(col_schema));
-    } else {
-      expr = func_expr;
-    }
-  }
-  return ret;
+  return ObTableDmlCgService::generate_lock_ctdef(ctx, spec.get_ctdef());
 }
 
 int ObTableSpecCgService::generate_spec(common::ObIAllocator &alloc,

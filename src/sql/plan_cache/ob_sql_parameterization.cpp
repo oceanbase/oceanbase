@@ -133,7 +133,7 @@ TransformTreeCtx::TransformTreeCtx() :
 }
 
 // replace const expr with ? in syntax tree
-// seprate params from syntax tree
+// separate params from syntax tree
 int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
                                                  const ObSQLSessionInfo &session,
                                                  const ObIArray<ObPCParam *> *raw_params,
@@ -644,7 +644,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                 p_info.raw_text_pos_ = ctx.tree_->sql_str_off_;
                 if (ctx.tree_->sql_str_off_ == -1) {
                   ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("invlid str off", K(lbt()), K(ctx.tree_),
+                  LOG_WARN("invalid str off", K(lbt()), K(ctx.tree_),
                       K(ctx.tree_->raw_param_idx_), K(get_type_name(node_type)),
                       K(session_info.get_current_query_string()),
                       "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
@@ -709,12 +709,12 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
 
     // transform `operand - const_num_val` to `operand + (-const_num_val)`
     if (OB_SUCC(ret) && OB_FAIL(transform_minus_op(*(ctx.allocator_), ctx.tree_, ctx.is_from_pl_))) {
-      LOG_WARN("failed to transform minums operation", K(ret));
+      LOG_WARN("failed to transform minus operation", K(ret));
     } else if (lib::is_oracle_mode()) {
       // in oracle mode, select +-1 from dual is prohibited, but with following orders, it can be executed successfully:
-      // 1. select +1 from dual; (genereted plan with key: select +? from dual)
+      // 1. select +1 from dual; (generated plan with key: select +? from dual)
       // 2. select +-1 from dual; (hit plan before, executed successfully)
-      // Thus, add a constraint in plan cache: the numeric value following `-` or `+` operators must be posbitive number
+      // Thus, add a constraint in plan cache: the numeric value following `-` or `+` operators must be positive number
       if (T_OP_POS == ctx.tree_->type_ || T_OP_NEG == ctx.tree_->type_ ) {
         if (OB_ISNULL(ctx.tree_->children_)
             || ctx.tree_->num_child_ != 1
@@ -731,7 +731,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
       }
     }
     if (T_LIMIT_CLAUSE == ctx.tree_->type_) {
-      // limit a offset b, a and b must be postive
+      // limit a offset b, a and b must be positive
       // 0 is counted as positive, -0 is counted as negative
       if (OB_ISNULL(ctx.tree_->children_) || 2 != ctx.tree_->num_child_) {
         ret = OB_INVALID_ARGUMENT;
@@ -745,7 +745,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                  && FALSE_IT(ctx.tree_->children_[1]->is_num_must_be_pos_ = 1)) {
       }
     } else if (T_COMMA_LIMIT_CLAUSE == ctx.tree_->type_) {
-      // limit a, b, a and b must be postive
+      // limit a, b, a and b must be positive
       if (OB_ISNULL(ctx.tree_->children_)
           || 2 != ctx.tree_->num_child_
           || OB_ISNULL(ctx.tree_->children_[0])
@@ -890,13 +890,13 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                     p_info.raw_text_pos_ = root->sql_str_off_;
                     if (root->sql_str_off_ == -1) {
                       ret = OB_NOT_SUPPORTED;
-                      LOG_WARN("invlid str off", K(lbt()), K(ctx.tree_),
+                      LOG_WARN("invalid str off", K(lbt()), K(ctx.tree_),
                           K(root->raw_param_idx_), K(get_type_name(root->type_)),
                           K(session_info.get_current_query_string()),
                           "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
                     }
                     if (OB_FAIL(ret)) {
-                      // do nithing
+                      // do nothing
                     } else if (OB_FAIL(ctx.sql_info_->parse_infos_.push_back(p_info))) {
                       SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
                     }
@@ -1679,7 +1679,7 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
         p_info.raw_text_pos_ = node->sql_str_off_;
         if (node->sql_str_off_ == -1) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("invlid str off", K(lbt()), K(node),
+          LOG_WARN("invalid str off", K(lbt()), K(node),
               K(node->raw_param_idx_), K(get_type_name(node->type_)));
         }
         if (OB_FAIL(ret)) {
@@ -1702,7 +1702,7 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
       p_info.raw_text_pos_ = node->sql_str_off_;
       if (node->sql_str_off_ == -1) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("invlid str off", K(lbt()), K(node),
+        LOG_WARN("invalid str off", K(lbt()), K(node),
             K(node->raw_param_idx_), K(get_type_name(node->type_)));
       }
       if (OB_FAIL(ret)) {
@@ -2111,7 +2111,7 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
             if (OB_ISNULL(frame.cur_node_->children_[i])) {
               stack_frames.at(frame_idx).next_child_idx_ = i + 1;
             } else if (OB_FAIL(stack_frames.push_back(TraverseStackFrame{frame.cur_node_->children_[i], 0}))) {
-              LOG_WARN("failed to push back eleemnt", K(ret));
+              LOG_WARN("failed to push back element", K(ret));
             } else {
               stack_frames.at(frame_idx).next_child_idx_ = i + 1;
               LOG_DEBUG("after pushing frame", K(stack_frames));
@@ -2162,7 +2162,7 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx &ctx)
     SQL_PC_LOG(WARN, "invalid argument", K(ret), K(idx), K(ctx.raw_params_.count()));
   } else if (OB_ISNULL(ctx.raw_params_.at(idx)) || OB_ISNULL(ctx.raw_params_.at(idx)->node_)) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_PC_LOG(WARN, "invalid arguemnt", K(ret));
+    SQL_PC_LOG(WARN, "invalid argument", K(ret));
   } else {
     const ParseNode *param_node = ctx.raw_params_.at(idx)->node_;
     int64_t tmp_len = std::min(ctx.buf_len_ - ctx.param_info_.name_len_, param_node->raw_sql_offset_ - ctx.expr_pos_);

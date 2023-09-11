@@ -36,10 +36,6 @@ public:
   static int generate_exprs(ObTableCtx &ctx,
                              common::ObIAllocator &allocator,
                              ObExprFrameInfo &expr_frame_info);
-  // 基于table schema构造全表列原生列引用表达式和生成列表达式
-  static int generate_column_raw_exprs(ObTableCtx &ctx);
-  // 构造更新需要的表达式
-  static int generate_update_raw_exprs(ObTableCtx &ctx);
   // 基于原生表达式生成表达式内存布局
   static int generate_expr_frame_info(ObTableCtx &ctx,
                                         common::ObIAllocator &allocator,
@@ -60,26 +56,13 @@ public:
                                      const common::ObIArray<sql::ObExpr *> &delta_exprs,
                                      const ObTableEntity &entity);
   static int refresh_update_exprs_frame(ObTableCtx &ctx,
-                                        const common::ObIArray<sql::ObExpr *> &old_row,
                                         const common::ObIArray<sql::ObExpr *> &new_row,
-                                        const common::ObIArray<sql::ObExpr *> &full_assign_row,
-                                        const ObTableCtx::ObAssignIds &assign_ids,
                                         const ObTableEntity &entity);
   static int refresh_insert_up_exprs_frame(ObTableCtx &ctx,
                                            const common::ObIArray<sql::ObExpr *> &ins_new_row,
-                                           const common::ObIArray<sql::ObExpr *> &delta_exprs,
+                                           const common::ObIArray<sql::ObExpr *> &delta_row,
                                            const ObTableEntity &entity);
-  static int refresh_generated_column_related_frame(ObTableCtx &ctx,
-                                                    const common::ObIArray<sql::ObExpr *> &old_row,
-                                                    const common::ObIArray<sql::ObExpr *> &full_assign_row,
-                                                    const ObTableCtx::ObAssignIds &assign_ids,
-                                                    const ObColumnSchemaV2 &col_schema);
-  static int generate_assign_exprs(ObTableCtx &ctx,
-                                   const ObTableCtx::ObAssignIds &assign_ids,
-                                   common::ObIArray<sql::ObRawExpr *> &assign_exprs);
 private:
-  static int init_datum_param_store(ObTableCtx &ctx,
-                                    int64_t capacity);
   static int refresh_exprs_frame(ObTableCtx &ctx,
                                  const common::ObIArray<sql::ObExpr *> &exprs,
                                  const ObTableEntity &entity);
@@ -90,42 +73,52 @@ private:
                                             const common::ObIArray<sql::ObExpr *> &exprs,
                                             const ObTableEntity &entity);
   static int refresh_assign_exprs_frame(ObTableCtx &ctx,
-                                        const common::ObIArray<sql::ObExpr *> &old_rows,
-                                        const common::ObIArray<sql::ObExpr *> &new_rows,
-                                        const common::ObIArray<sql::ObExpr *> &full_assign_rows,
-                                        const ObTableCtx::ObAssignIds &assign_ids,
+                                        const common::ObIArray<sql::ObExpr *> &new_row,
                                         const ObTableEntity &entity);
   static int refresh_delta_exprs_frame(ObTableCtx &ctx,
-                                       const common::ObIArray<sql::ObExpr *> &delta_exprs,
+                                       const common::ObIArray<sql::ObExpr *> &delta_row,
                                        const ObTableEntity &entity);
-  static int generate_full_assign_raw_exprs(ObTableCtx &ctx);
-  static int genreate_filter_exprs(ObTableCtx &ctx);
-private:
-  // 通过column_name在表达式数组获取列引用表达式
-  static ObRawExpr* get_ref_raw_expr(const common::ObIArray<sql::ObRawExpr *> &all_exprs,
-                                     const common::ObString &col_name);
-  // 构造生成列表达式
-  static int build_generated_column_expr(ObTableCtx &ctx,
-                                         sql::ObColumnRefRawExpr &col_expr,
-                                         const common::ObString &expr_str,
-                                         const common::ObIArray<sql::ObRawExpr *> &exprs);
-  // 处理生成列表达式
-  static int resolve_generated_column_expr(ObTableCtx &ctx);
-  // 构造列引用原生表达式
-  static int generate_column_ref_raw_expr(ObTableCtx &ctx,
-                                          const ObColumnSchemaV2 &col_schema,
-                                          sql::ObRawExpr *&expr);
-  // 构建列自增表达式
-  static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
-                                           ObRawExpr *&expr,
-                                           const ObColumnSchemaV2 &col_schema);
 
-  static int build_expire_expr(ObTableCtx &ctx, sql::ObRawExpr *&expire_expr);
+  static int generate_assignments(ObTableCtx &ctx);
+
+  static int generate_filter_exprs(ObTableCtx &ctx);
+
+  static int generate_delta_expr(ObTableCtx &ctx, ObTableAssignment &assign);
+
+  static int generate_assign_expr(ObTableCtx &ctx, ObTableAssignment &assign);
+
+  static int build_generated_column_expr(ObTableCtx &ctx,
+                                         ObTableColumnItem &item,
+                                         const ObString &expr_str,
+                                         sql::ObRawExpr *&expr,
+                                         sql::ObRawExpr *delta_expr = nullptr);
+
+  static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
+                                           const ObTableColumnItem &item,
+                                           sql::ObRawExpr *&expr);
+
+  static int generate_expire_expr(ObTableCtx &ctx, sql::ObRawExpr *&expr);
+
+  static int generate_current_timestamp_expr(ObTableCtx &ctx,
+                                             const ObTableColumnItem &item,
+                                             sql::ObRawExpr *&expr);
+
+  static int generate_all_column_exprs(ObTableCtx &ctx);
+
+  static int resolve_exprs(ObTableCtx &ctx);
+
+  static int add_extra_column_exprs(ObTableCtx &ctx);
+
   static int write_datum(ObTableCtx &ctx,
                          common::ObIAllocator &allocator,
                          const sql::ObExpr &expr,
                          sql::ObEvalCtx &eval_ctx,
                          const ObObj &obj);
+
+  static int write_autoinc_datum(ObTableCtx &ctx,
+                                 const sql::ObExpr &expr,
+                                 sql::ObEvalCtx &eval_ctx,
+                                 const ObObj &obj);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableExprCgService);
 };
@@ -148,7 +141,6 @@ public:
                                    ObTableInsCtDef &ins_ctdef);
   static int generate_update_ctdef(ObTableCtx &ctx,
                                    ObIAllocator &allocator,
-                                   const ObTableCtx::ObAssignIds &assign_ids,
                                    ObTableUpdCtDef &upd_ctdef);
   static int generate_delete_ctdef(ObTableCtx &ctx,
                                    ObIAllocator &allocator,
@@ -158,7 +150,6 @@ public:
                                     ObTableReplaceCtDef &replace_ctdef);
   static int generate_insert_up_ctdef(ObTableCtx &ctx,
                                       ObIAllocator &allocator,
-                                      const ObTableCtx::ObAssignIds &assign_ids,
                                       ObTableInsUpdCtDef &ins_up_ctdef);
   static int generate_lock_ctdef(ObTableCtx &ctx,
                                  ObTableLockCtDef &lock_ctdef);
@@ -173,16 +164,13 @@ private:
                                  ObTableDmlBaseCtDef &base_ctdef,
                                  common::ObIArray<sql::ObRawExpr*> &old_row,
                                  common::ObIArray<sql::ObRawExpr*> &new_row);
-  static int generate_column_ids(ObTableCtx &ctx,
-                                 const common::ObIArray<sql::ObRawExpr*> &exprs,
-                                 common::ObIArray<uint64_t> &column_ids);
+  static int generate_column_ids(ObTableCtx &ctx, common::ObIArray<uint64_t> &column_ids);
   static int generate_das_ins_ctdef(ObTableCtx &ctx,
                                     uint64_t index_tid,
                                     sql::ObDASInsCtDef &das_ins_ctdef,
                                     const common::ObIArray<sql::ObRawExpr*> &new_row);
   static int generate_das_upd_ctdef(ObTableCtx &ctx,
                                     uint64_t index_tid,
-                                    const common::ObIArray<sql::ObRawExpr *> &assign_exprs,
                                     sql::ObDASUpdCtDef &das_upd_ctdef,
                                     const common::ObIArray<sql::ObRawExpr*> &old_row,
                                     const common::ObIArray<sql::ObRawExpr*> &new_row,
@@ -196,12 +184,9 @@ private:
                                      sql::ObDASLockCtDef &das_lock_ctdef,
                                      const common::ObIArray<sql::ObRawExpr*> &old_row);
   static int generate_updated_column_ids(ObTableCtx &ctx,
-                                         const common::ObIArray<sql::ObRawExpr *> &assign_exprs,
-                                         const common::ObIArray<uint64_t> &column_ids,
                                          common::ObIArray<uint64_t> &updated_column_ids);
   static int generate_upd_assign_infos(ObTableCtx &ctx,
                                        ObIAllocator &allocator,
-                                       const common::ObIArray<sql::ObRawExpr *> &assign_exprs,
                                        ObTableUpdCtDef &udp_ctdef);
   static int generate_das_base_ctdef(uint64_t index_tid,
                                      ObTableCtx &ctx,
@@ -223,7 +208,6 @@ private:
                                         sql::DASInsCtDefArray &ins_ctdefs);
   static int generate_related_upd_ctdef(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
-                                        const common::ObIArray<sql::ObRawExpr *> &assign_exprs,
                                         const common::ObIArray<sql::ObRawExpr*> &old_row,
                                         const common::ObIArray<sql::ObRawExpr*> &new_row,
                                         const common::ObIArray<sql::ObRawExpr*> &full_row,
@@ -232,11 +216,13 @@ private:
                                         ObIAllocator &allocator,
                                         const common::ObIArray<sql::ObRawExpr*> &old_row,
                                         sql::DASDelCtDefArray &del_ctdefs);
-  static int get_rowkey_exprs(ObTableCtx &ctx,
-                              common::ObIArray<sql::ObRawExpr*> &rowkey_exprs);
+
+  static int get_rowkey_exprs(ObTableCtx &ctx, common::ObIArray<sql::ObRawExpr*> &rowkey_exprs);
+
   static int generate_table_rowkey_info(ObTableCtx &ctx,
                                         ObTableInsCtDef &ins_ctdef);
   static int generate_tsc_ctdef(ObTableCtx &ctx,
+                                common::ObIArray<sql::ObRawExpr *> &access_exprs,
                                 sql::ObDASScanCtDef &tsc_ctdef);
   static int generate_single_constraint_info(ObTableCtx &ctx,
                                              const share::schema::ObTableSchema &index_schema,
@@ -247,7 +233,7 @@ private:
   static int generate_constraint_ctdefs(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
-  static int replace_exprs_with_dependant(const common::ObIArray<sql::ObRawExpr *> &src_exprs,
+  static int replace_exprs_with_dependant(ObTableCtx &ctx,
                                           common::ObIArray<sql::ObRawExpr *> &dst_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);

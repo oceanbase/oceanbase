@@ -26,7 +26,8 @@
   SCOPE(_DEF_PARAMETER_RANGE_EASY(access_specifier, param, _ ## SCOPE, name, args))
 #define _DEF_PARAMETER_SCOPE_CHECKER_EASY(access_specifier, param, name, SCOPE, args...)                \
   SCOPE(_DEF_PARAMETER_CHECKER_EASY(access_specifier, param, _ ## SCOPE, name, args))
-
+#define _DEF_PARAMETER_SCOPE_PARSER_EASY(access_specifier, param, name, SCOPE, args...)                 \
+  SCOPE(_DEF_PARAMETER_PARSER_EASY(access_specifier, param, _ ## SCOPE, name, args))
 #define _DEF_PARAMETER_SCOPE_IP_EASY(access_specifier, param, name, SCOPE, def, args...)                \
   SCOPE(_DEF_PARAMETER_CHECKER_EASY(access_specifier, param, _ ## SCOPE, name, def,                     \
                                     common::ObConfigIpChecker, args))
@@ -94,6 +95,18 @@ access_specifier:                                                               
     }                                                                          \
   } name;
 
+#define _DEF_PARAMETER_PARSER_EASY(access_specifier, param, scope, name, def, parser, args...)   \
+access_specifier:                                                                          \
+  class ObConfig ## param ## Item ## _ ## name                                 \
+      : public common::ObConfig ## param ## Item                               \
+  {                                                                            \
+   public:                                                                     \
+    ObConfig ## param ## Item ## _ ## name()                                   \
+        : common::ObConfig ## param ## Item(                                   \
+            local_container(), scope, #name, def, 							               \
+			new (std::nothrow) parser(), args) {}                                    \
+  } name;
+
 ////////////////////////////////////////////////////////////////////////////////
 #define DEF_INT(args...)                                                       \
   _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Int, args)
@@ -139,6 +152,9 @@ access_specifier:                                                               
 
 #define DEF_STR_LIST(args...)                                                  \
   _DEF_PARAMETER_SCOPE_EASY(public, StrList, args)
+
+#define DEF_MODE_WITH_PARSER(args...)                                          \
+  _DEF_PARAMETER_SCOPE_PARSER_EASY(public, Mode, args)
 
 #define DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(args...)                          \
   _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, LogArchiveOptions, args)

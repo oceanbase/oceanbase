@@ -756,14 +756,14 @@ int ObMemtable::get(
         char *trans_info_ptr = nullptr;
         if (param.need_trans_info()) {
           int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
-          if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.allocator_->alloc(length)))) {
+          if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
           }
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(row.init(*context.allocator_, request_cnt, trans_info_ptr))) {
+        } else if (OB_FAIL(row.init(*context.stmt_allocator_, request_cnt, trans_info_ptr))) {
           STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(param.need_trans_info()));
         }
       }
@@ -1121,7 +1121,7 @@ int ObMemtable::lock_row_on_frozen_stores_(
   int ret = OB_SUCCESS;
   ObStoreRowLockState &lock_state = res.lock_state_;
   ObStoreCtx &ctx = *(context.store_ctx_);
-  const auto reader_seq_no = ctx.mvcc_acc_ctx_.snapshot_.scn_;
+  const ObTxSEQ reader_seq_no = ctx.mvcc_acc_ctx_.snapshot_.scn_;
   if (OB_ISNULL(value) || !ctx.mvcc_acc_ctx_.is_write() || NULL == key) {
     TRANS_LOG(WARN, "invalid param", KP(value), K(ctx), KP(key));
     ret = OB_INVALID_ARGUMENT;
@@ -2636,7 +2636,7 @@ int ObMemtable::set_(
   ObStoreRowkey tmp_key;
   ObMemtableKey mtk;
   ObStoreCtx &ctx = *(context.store_ctx_);
-  auto *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
+  ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
 
   //set_begin(ctx.mvcc_acc_ctx_);
 
@@ -2938,7 +2938,7 @@ int ObMemtable::mvcc_write_(
 
   // cannot be serializable when transaction set violation
   if (OB_TRANSACTION_SET_VIOLATION == ret) {
-    auto iso = ctx.mvcc_acc_ctx_.tx_desc_->get_isolation_level();
+    ObTxIsolationLevel iso = ctx.mvcc_acc_ctx_.tx_desc_->get_isolation_level();
     if (ObTxIsolationLevel::SERIAL == iso || ObTxIsolationLevel::RR == iso) {
       ret = OB_TRANS_CANNOT_SERIALIZE;
     }
@@ -2957,8 +2957,8 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
 {
   int ret = OB_TRY_LOCK_ROW_CONFLICT;
   ObLockWaitMgr *lock_wait_mgr = NULL;
-  auto conflict_tx_id = lock_state.lock_trans_id_;
-  auto mem_ctx = acc_ctx.get_mem_ctx();
+  ObTransID conflict_tx_id = lock_state.lock_trans_id_;
+  ObMemtableCtx *mem_ctx = acc_ctx.get_mem_ctx();
   int64_t current_ts = common::ObClockGenerator::getClock();
   int64_t lock_wait_start_ts = mem_ctx->get_lock_wait_start_ts() > 0
     ? mem_ctx->get_lock_wait_start_ts()
@@ -2975,15 +2975,15 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
     mem_ctx->add_conflict_trans_id(conflict_tx_id);
     mem_ctx->on_wlock_retry(row_key, conflict_tx_id);
     int tmp_ret = OB_SUCCESS;
-    auto tx_ctx = acc_ctx.tx_ctx_;
-    auto tx_id = acc_ctx.get_tx_id();
+    transaction::ObPartTransCtx *tx_ctx = acc_ctx.tx_ctx_;
+    transaction::ObTransID tx_id = acc_ctx.get_tx_id();
     bool remote_tx = tx_ctx->get_scheduler() != tx_ctx->get_addr();
     ObFunction<int(bool&, bool&)> recheck_func([&](bool &locked, bool &wait_on_row) -> int {
       int ret = OB_SUCCESS;
       lock_state.is_locked_ = false;
       if (lock_state.is_delayed_cleanout_) {
-        auto lock_data_sequence = lock_state.lock_data_sequence_;
-        auto &tx_table_guards = acc_ctx.get_tx_table_guards();
+        transaction::ObTxSEQ lock_data_sequence = lock_state.lock_data_sequence_;
+        storage::ObTxTableGuards &tx_table_guards = acc_ctx.get_tx_table_guards();
         if (OB_FAIL(tx_table_guards.check_row_locked(
                 tx_id, conflict_tx_id, lock_data_sequence, lock_state.trans_scn_, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));

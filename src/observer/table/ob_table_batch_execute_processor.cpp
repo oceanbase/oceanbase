@@ -21,6 +21,7 @@
 #include "ob_htable_utils.h"
 #include "ob_table_cg_service.h"
 #include "observer/ob_req_time_service.h"
+#include "ob_table_move_response.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -30,6 +31,7 @@ using namespace oceanbase::sql;
 
 ObTableBatchExecuteP::ObTableBatchExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
+     default_entity_factory_("TableBatchEntFac", MTL_ID()),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
      need_rollback_trans_(false),
@@ -118,9 +120,9 @@ uint64_t ObTableBatchExecuteP::get_request_checksum()
 int ObTableBatchExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
-  if (!need_retry_in_queue_ && !did_async_end_trans()) {
+  if (!need_retry_in_queue_ && !had_do_response()) {
     // For HKV table, modify the value of timetamp to be positive
-    if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+    if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
       const int64_t N = result_.count();
       for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
       {
@@ -132,7 +134,21 @@ int ObTableBatchExecuteP::response(const int retcode)
         }
       } // end for
     }
-    if (OB_SUCC(ret)) {
+
+    // return the package even if negate_htable_timestamp fails
+    const obrpc::ObRpcPacket *rpc_pkt = &reinterpret_cast<const obrpc::ObRpcPacket&>(req_->get_packet());
+    if (is_require_rerouting_err(retcode) && rpc_pkt->require_rerouting()) {
+      // response rerouting packet
+      ObTableMoveResponseSender sender(req_, retcode);
+      if (OB_FAIL(sender.init(arg_.table_id_, arg_.tablet_id_, *gctx_.schema_service_))) {
+        LOG_WARN("fail to init move response sender", K(ret), K_(arg));
+      } else if (OB_FAIL(sender.response())) {
+        LOG_WARN("fail to do move response", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        ret = ObRpcProcessor::response(retcode); // do common response when do move response failed
+      }
+    } else {
       ret = ObRpcProcessor::response(retcode);
     }
   }
@@ -160,8 +176,10 @@ int ObTableBatchExecuteP::try_process()
     LOG_WARN("no operation in the batch", K(ret));
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
-    LOG_WARN("fail to check index supported", K(ret), K(table_id));
+  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
+  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
+  } else if (OB_FAIL(check_table_index_supported(table_id_, is_index_supported))) {
+    LOG_WARN("fail to check index supported", K(ret), K(table_id_));
   } else if (OB_UNLIKELY(!is_index_supported)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index type is not supported by table api", K(ret));

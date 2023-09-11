@@ -364,7 +364,7 @@ inline void ObTxDesc::FLAG::switch_to_idle_()
 
 ObTxDesc::FLAG ObTxDesc::FLAG::update_with(const ObTxDesc::FLAG &flag)
 {
-  auto n = flag;
+  ObTxDesc::FLAG n = flag;
 #define KEEP_(x) n.x = x
 LST_DO(KEEP_, (;), SHADOW_, REPLICA_, TRACING_, INTERRUPTED_, RELEASED_, BLOCK_);
 #undef KEEP_
@@ -550,7 +550,7 @@ bool ObTxDesc::contain_savepoint(const ObString &sp)
 {
   bool hit = false;
   ARRAY_FOREACH_X(savepoints_, i, cnt, !hit) {
-    auto &it = savepoints_[cnt - 1 - i];
+    ObTxSavePoint &it = savepoints_[cnt - 1 - i];
     if (it.is_savepoint() && it.name_ == sp) {
       hit = true;
     }
@@ -564,7 +564,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
   int ret = OB_SUCCESS;
   bool hit = false;
   ARRAY_FOREACH_NORET(parts_, i) {
-    auto &p = parts_[i];
+    ObTxPart &p = parts_[i];
     if (p.id_ == a.id_) {
       hit = true;
       if (p.epoch_ == ObTxPart::EPOCH_DEAD) {
@@ -639,7 +639,7 @@ int ObTxDesc::update_parts(const share::ObLSArray &list)
 {
   int ret = OB_SUCCESS, tmp_ret = ret;
   ARRAY_FOREACH_NORET(list, i) {
-    auto &it = list[i];
+    const ObLSID &it = list[i];
     ObTxPart n;
     n.id_ = it;
     n.epoch_ = ObTxPart::EPOCH_UNKNOWN;
@@ -679,7 +679,7 @@ int ObTxDesc::update_parts_(const ObTxPartList &list)
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(list, i) {
     bool hit = false;
-    auto &a = list[i];
+    const ObTxPart &a = list[i];
     ret = update_part_(const_cast<ObTxPart&>(a));
   }
   return ret;
@@ -705,7 +705,7 @@ int ObTxDesc::get_inc_exec_info(ObTxExecResult &exec_info)
   ObSpinLockGuard guard(lock_);
   if (exec_info_reap_ts_ >= 0) {
     ARRAY_FOREACH(parts_, i) {
-      auto &p = parts_[i];
+      ObTxPart &p = parts_[i];
       if (p.last_touch_ts_ > exec_info_reap_ts_ &&
           OB_FAIL(exec_info.parts_.push_back(p))) {
         TRANS_LOG(WARN, "push fail", K(ret), K(p), KPC(this), K(exec_info));
@@ -809,8 +809,8 @@ bool ObTxDesc::execute_commit_cb()
    */
   ATOMIC_LOAD_ACQ((int*)&state_);
   if (is_tx_end() || is_xa_terminate_state_()) {
-    auto tx_id = tx_id_;
-    auto cb = commit_cb_;
+    ObTransID tx_id = tx_id_;
+    ObITxCallback *cb = commit_cb_;
     int ret = OB_SUCCESS;
      if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
       if (OB_NOT_NULL(commit_cb_)) {
@@ -1406,7 +1406,7 @@ int ObTxDescMgr::add(ObTxDesc &tx_desc)
 int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
 {
   int ret = OB_SUCCESS;
-  auto desc_tx_id = tx_desc.get_tx_id();
+  ObTransID desc_tx_id = tx_desc.get_tx_id();
   if (!inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTxDescMgr not inited", K(ret));
@@ -1430,7 +1430,7 @@ int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
     if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
     if (OB_SUCC(ret) && tx_desc.flags_.SHADOW_) { tx_desc.flags_.SHADOW_ = false; }
   }
-  TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id),
+  TRANS_LOG(TRACE, "txDescMgr.register trans with txid", K(ret), K(tx_id),
       K(map_.alloc_cnt()));
   return ret;
 }
@@ -1449,7 +1449,7 @@ int ObTxDescMgr::get(const ObTransID &tx_id, ObTxDesc *&tx_desc)
 void ObTxDescMgr::revert(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
-  auto tx_id = tx.get_tx_id();
+  ObTransID tx_id = tx.get_tx_id();
   OV(inited_, OB_NOT_INIT);
   if (OB_SUCC(ret)) {
     map_.revert(&tx);
@@ -1564,13 +1564,13 @@ ObTxSEQ ObTxDesc::get_tx_seq(int64_t seq_abs) const
 ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
 {
   UNUSED(branch);
-  auto seq = ObSequence::get_and_inc_max_seq_no(N);
+  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
   return ObTxSEQ::mk_v0(seq);
 }
 ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
 {
   UNUSED(branch);
-  auto seq = ObSequence::inc_and_get_max_seq_no();
+  int64_t seq = ObSequence::inc_and_get_max_seq_no();
   return ObTxSEQ::mk_v0(seq);
 }
 } // transaction

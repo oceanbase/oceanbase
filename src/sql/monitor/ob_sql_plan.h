@@ -188,6 +188,8 @@ private:
 
   static int get_plan_tree_outline(PlanText &plan_text,
                             ObLogicalOperator* op);
+  static int get_global_hint_outline(PlanText &plan_text, ObLogPlan &plan);
+  static int construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outline_global_hint);
 
   int get_plan_other_info(PlanText &plan_text,
                           ObLogPlan* plan,

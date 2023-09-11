@@ -80,7 +80,7 @@ int ObMemtableGetIterator::init(
   const ObITableReadInfo *read_info = param.get_read_info(context.use_fuse_row_cache_);
   if (param.need_trans_info()) {
     int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
-    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.allocator_->alloc(length)))) {
+    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "fail to alloc memory", K(ret));
     }
@@ -90,7 +90,7 @@ int ObMemtableGetIterator::init(
   } else if (OB_UNLIKELY(nullptr == read_info || !read_info->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected read info", K(ret), KPC(read_info));
-  } else if (OB_FAIL(cur_row_.init(*context.allocator_, read_info->get_request_count(), trans_info_ptr))) {
+  } else if (OB_FAIL(cur_row_.init(*context.stmt_allocator_, read_info->get_request_count(), trans_info_ptr))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else {
     param_ = &param;
@@ -206,7 +206,7 @@ int ObMemtableScanIterator::init(
 
   if (param.need_trans_info()) {
     int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
-    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.allocator_->alloc(length)))) {
+    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "fail to alloc memory", K(ret));
     }
@@ -216,7 +216,7 @@ int ObMemtableScanIterator::init(
   } else if (OB_ISNULL(read_info_ = param.get_read_info(false))) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "Unexpected null read info", K(ret), K(param));
-  } else if (OB_FAIL(row_.init(*context.allocator_,
+  } else if (OB_FAIL(row_.init(*context.stmt_allocator_,
                                read_info_->get_request_count(),
                                trans_info_ptr))) {
     TRANS_LOG(WARN, "Failed to init datum row", K(ret), K(param.need_trans_info()));
@@ -476,7 +476,7 @@ int ObMemtableMGetIterator::init(
   const ObITableReadInfo *read_info = param.get_read_info();
   if (param.need_trans_info()) {
     int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
-    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.allocator_->alloc(length)))) {
+    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "fail to alloc memory", K(ret));
     }
@@ -489,7 +489,7 @@ int ObMemtableMGetIterator::init(
   } else if (OB_UNLIKELY(nullptr == read_info || !read_info->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected read info", K(ret), KPC(read_info));
-  } else if (OB_FAIL(cur_row_.init(*context.allocator_, read_info->get_request_count(), trans_info_ptr))) {
+  } else if (OB_FAIL(cur_row_.init(*context.stmt_allocator_, read_info->get_request_count(), trans_info_ptr))) {
     TRANS_LOG(WARN, "Failed to init datum row", K(ret));
   } else {
     const ObColDescIArray &out_cols = read_info->get_columns_desc();
@@ -812,7 +812,7 @@ int ObMemtableMultiVersionScanIterator::init(
       TRANS_LOG(WARN, "mvcc engine scan fail", K(ret), K(mvcc_scan_range));
     } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_rowkey_count()))) {
       TRANS_LOG(WARN, "init nop bitmap fail, ", K(ret));
-    } else if (OB_FAIL(row_.init(*context.allocator_, read_info_->get_request_count()))) {
+    } else if (OB_FAIL(row_.init(*context.stmt_allocator_, read_info_->get_request_count()))) {
       TRANS_LOG(WARN, "Failed to init datum row", K(ret));
     } else {
       TRANS_LOG(INFO, "multi version scan iterator init succ", K(param.table_id_), K(range), KPC(read_info_), K(row_));

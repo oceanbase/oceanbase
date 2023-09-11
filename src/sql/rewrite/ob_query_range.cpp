@@ -196,7 +196,7 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
         LOG_WARN("expr result type is null", K(ret));
       } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObKeyPartPos)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memeory for ObKeyPartPos", K(ret));
+        LOG_WARN("failed to allocate memory for ObKeyPartPos", K(ret));
       } else {
         ObExprResType tmp_expr_type = *expr_res_type;
         if (tmp_expr_type.is_lob_locator()) {
@@ -972,7 +972,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part, bool use_in_opt
       } else {
         new_key->id_ = key_part->id_;
         key_part = new_key;
-        LOG_TRACE("refine lagre query range with full key", K(cur_range_size));
+        LOG_TRACE("refine large query range with full key", K(cur_range_size));
       }
     } else if (OB_ISNULL(first_keypart = pre_key_parts.at(0))) {
       ret = OB_ERR_UNEXPECTED;
@@ -985,7 +985,7 @@ int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part, bool use_in_opt
         LOG_WARN("remove precise range expr failed", K(ret));
       } else {
         // remove key part after pre key parts
-        LOG_TRACE("refine lagre query range remove some key parts",
+        LOG_TRACE("refine large query range remove some key parts",
                   K(cur_range_size), K(redundant_offset));
         ObKeyPart *cur = NULL;;
         ObKeyPart *and_next = NULL;
@@ -1800,7 +1800,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
               } else if(OB_FAIL(ObQueryRange::is_precise_like_range(val,
                                               escape_ch,
                                               query_range_ctx_->cur_expr_is_precise_))) {
-                LOG_WARN("failed to jugde whether is precise", K(ret));
+                LOG_WARN("failed to judge whether is precise", K(ret));
               } else if (OB_FAIL(add_precise_constraint(const_expr,
                                                         query_range_ctx_->cur_expr_is_precise_))) {
                 LOG_WARN("failed to add precise constraint", K(ret));
@@ -2261,7 +2261,7 @@ int ObQueryRange::get_like_const_range(const ObRawExpr *text_expr,
 //          Under this kind of case, in fact we can ignore the second item and do next
 //      2) not real true, row(k1, k2, k2)>=(1, k1, 4), "k2>=k1" is run-time defined,
 //          we can not know during parser, so true is returned.
-//          under this case, we can not ignore it. (k1=1 and k2=3) satisfied this condtion,
+//          under this case, we can not ignore it. (k1=1 and k2=3) satisfied this condition,
 //          but not satisfied row(k1, k2)>=(1, 4)
 //      we can not distinguish them, so do not do next.
 //  2. if item is always false, no need to do next
@@ -2967,7 +2967,7 @@ int ObQueryRange::prepare_multi_in_info(const ObOpRawExpr *l_expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(l_expr), K(r_expr));
   } else if (OB_UNLIKELY(l_expr->get_param_count() > MAX_EXTRACT_IN_COLUMN_NUMBER)) {
-    // do nothiing
+    // do nothing
   } else if (OB_FAIL(idx_pos_map.create(l_expr->get_param_count(), "IdxKeyMap", "IdxKeyMap"))) {
     LOG_WARN("fail to init hashmap", K(ret));
   } else if (OB_FAIL(idx_param_map.create(l_expr->get_param_count(), "IdxParamMap", "IdxParamMap"))) {
@@ -3553,7 +3553,7 @@ int ObQueryRange::set_geo_keypart_whole_range(ObKeyPart &out_key_part)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("normal keypart is null", K(ret));
   } else {
-    // set whole range when cosnt expr calculate failed in constant fold
+    // set whole range when const expr calculate failed in constant fold
     out_key_part.normal_keypart_->start_.set_min_value();
     out_key_part.normal_keypart_->end_.set_max_value();
     out_key_part.normal_keypart_->always_false_ = false;
@@ -4248,7 +4248,7 @@ int ObQueryRange::intersect_border_from(const ObKeyPart *l_key_part,
             end_border_type = OB_FROM_RIGHT;
           } else if (cmp < 0) {
             end_border_type = OB_FROM_LEFT;
-          } else { // euqal
+          } else { // equal
             if (NULL == l_key_part->and_next_) {
               end_border_type = OB_FROM_LEFT; // lucky left
             }
@@ -4414,7 +4414,7 @@ int ObQueryRange::set_partial_row_border(
 //
 //  ROW(k1(s1, e1), k2(s2, e2)) and ROW(k1(s3, e4), k2(s3, e4))
 //         k1(s1, e1): means the first key part in row between s1 and e1.
-//  because the and operands is row, we can not AND each key part separtely.
+//  because the and operands is row, we can not AND each key part separately.
 //  so the result is:
 //  ROW(k1(ns1, ne1), k2(ns2, ne2)), if two row values has intersection.
 //         if s1>s3, ns1 = s1 and ns2 = s2 else ns1 = s3 and ns2 = s4;
@@ -4519,7 +4519,9 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           }
         }
 
-        if (OB_SUCC(ret) && !is_reach_mem_limit_) {
+        if (OB_SUCC(ret) && !is_reach_mem_limit_ &&
+            !result->is_always_false() &&
+            !result->is_always_true()) {
           result->link_gt(rest);
           // link to the or_next_ list
           if (NULL != tail) {
@@ -4545,7 +4547,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
 
 
 //  AND single key part (itself) and items in item_next_ list
-//  Each item in item_next_ list must be unkown item untill physical plan open
+//  Each item in item_next_ list must be unkown item until physical plan open
 //
 //  E.g.
 //       (A1 and ?1 and ?2 and ... and ?m) and (A2 and ?I and ?II and ... and ?n)
@@ -4897,7 +4899,7 @@ int ObQueryRange::and_single_gt_head_graphs(
               l_and_next = l_cur_gt;
             } else { // l_cur_gt and r_cur_gt belongs to same key
               if (OB_FAIL(do_gt_and(l_cur_gt, r_cur_gt, tmp_result))) {
-                LOG_WARN("Do AND of gerneral term failed", K(ret));
+                LOG_WARN("Do AND of general term failed", K(ret));
               }
             }
             if (OB_FAIL(ret)) {
@@ -5358,7 +5360,8 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                 query_range_ctx_->cur_expr_is_precise_ = false;
               }
             }
-            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark() &&
+                cur1->item_next_ == NULL && cur2->item_next_ == NULL) {
               if (OB_FAIL(union_in_with_in(or_list,
                                            cur1, cur2,
                                            exec_ctx,
@@ -5381,7 +5384,8 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
               }
             }
             bool need_remove_normal = false;
-            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark() &&
+                cur1->item_next_ == NULL && cur2->item_next_ == NULL) {
               if (OB_FAIL(union_in_with_normal(cur1, cur2,
                                                exec_ctx,
                                                dtc_params,
@@ -5407,7 +5411,8 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                 query_range_ctx_->cur_expr_is_precise_ = false;
               }
             }
-            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark() &&
+                cur1->item_next_ == NULL && cur2->item_next_ == NULL) {
               if (OB_FAIL(union_in_with_normal(cur2, cur1,
                                                exec_ctx,
                                                dtc_params,
@@ -6188,7 +6193,7 @@ int ObQueryRange::generate_single_range(ObSearchState &search_state,
     LOG_ERROR("alloc memory for end_obj failed", K(ret));
   } else {
     int64_t max_pred_index = search_state.max_exist_index_;
-    column_num = search_state.is_phy_rowid_range_ ? 1 : column_num;//physcial rowid range just use only one column
+    column_num = search_state.is_phy_rowid_range_ ? 1 : column_num;//physical rowid range just use only one column
     for (int i = 0; OB_SUCC(ret) && i < column_num; i++) {
       new(start + i) ObObj();
       new(end + i) ObObj();
@@ -6372,7 +6377,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
     }
 
     // 3. to check if need to  output
-    //copy_produec_range的作用是控制range能不能够输出，不是所有递归到最后都能输出
+    //copy_produce_range的作用是控制range能不能够输出，不是所有递归到最后都能输出
     //例如：a>1 and a<=2 and ((b>1 and b < 2) or (b > 4, and b < 5))
     //这个例子不能抽成两段range，只能抽成一段range
     //因为如果抽成两段range->(1, max;2, 2) or (1, max;2, 5)这两段区间是有重叠的
@@ -7475,7 +7480,7 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
   return ret;
 }
 
-// Generaal term: if one or more same key parts with OR realtion have same and_next_,
+// General term: if one or more same key parts with OR relation have same and_next_,
 //                        we call them general term(GT)
 // E.g.
 //       A and B, A is GT
@@ -8271,7 +8276,7 @@ int ObQueryRange::is_strict_equal_graph(
       } else { // check align
         if (-1 == max_pos) {
           max_pos = next_pos - 1;
-        } else if (cur_pos != max_pos) {
+        } else if (next_pos - 1 != max_pos) {
           is_strict_equal = false;
         }
       }
@@ -8493,7 +8498,7 @@ bool ObQueryRange::check_like_range_precise(const ObString &pattern_str,
     if ((end_with_percent || match_without_wildcard) &&
         (-1 == last_equal_idx || pattern_str_buf[last_equal_idx] != ' ')) {
       if (!is_oracle_mode() && match_without_wildcard) {
-        // in mysql, all operater will ignore trailing spaces except like.
+        // in mysql, all operator will ignore trailing spaces except like.
         // for example, 'abc  ' = 'abc' is true, but 'abc  ' like 'abc' is false
       } else {
         is_precise = true;

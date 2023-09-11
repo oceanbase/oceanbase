@@ -12,7 +12,7 @@
 
 #ifndef _OB_TABLE_END_TRANS_CB_H
 #define _OB_TABLE_END_TRANS_CB_H 1
-#include "ob_rpc_async_response.h"
+#include "ob_table_rpc_response_sender.h"
 #include "sql/ob_end_trans_callback.h"
 #include "share/table/ob_table.h"
 #include "ob_htable_lock_mgr.h"
@@ -61,14 +61,15 @@ private:
   ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
   ObTableOperationResult result_;
-  obrpc::ObRpcAsyncResponse<ObTableOperationResult> response_sender_;
+  obrpc::ObTableRpcResponseSender<ObTableOperationResult> response_sender_;
 };
 
 class ObTableBatchExecuteEndTransCb: public ObTableAPITransCb
 {
 public:
   ObTableBatchExecuteEndTransCb(rpc::ObRequest *req, ObTableOperationType::Type table_operation_type)
-      :response_sender_(req, result_),
+      : entity_factory_("TableBatchCbEntFac", MTL_ID()),
+      response_sender_(req, result_),
       table_operation_type_(table_operation_type)
   {
   }
@@ -87,7 +88,7 @@ private:
   common::ObArenaAllocator allocator_;
   table::ObTableEntityFactory<table::ObTableEntity> entity_factory_;
   ObTableBatchOperationResult result_;
-  obrpc::ObRpcAsyncResponse<ObTableBatchOperationResult> response_sender_;
+  obrpc::ObTableRpcResponseSender<ObTableBatchOperationResult> response_sender_;
   ObTableOperationType::Type table_operation_type_;
 };
 

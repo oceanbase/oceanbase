@@ -267,7 +267,10 @@ void ObMaintainDepInfoTaskQueue::run2()
           if (task->get_retry_times() > 0) {
             task->set_retry_times(task->get_retry_times() - 1);
             task->set_last_execute_time(ObTimeUtility::current_time());
-            if (OB_FAIL(queue_.push(task))) {
+            if (is_queue_almost_full()) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("push task to queue failed", K(ret));
+            } else if (OB_FAIL(queue_.push(task))) {
               LOG_WARN("push task to queue failed", K(ret));
             } else {
               rescheduled = true;

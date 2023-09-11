@@ -40,9 +40,10 @@ public:
   ~ObTenantTabletToLSMap() {}
 
   int init(const int64_t bucket_num = 4096,
-      const lib::ObLabel label = lib::ObLabel("TenantTabletToLSMap"))
+      const lib::ObLabel label = lib::ObLabel("TenantTabletToLSMap"),
+      const uint64_t tenant_id = OB_SERVER_TENANT_ID)
   {
-    return map_.create(bucket_num, label);
+    return map_.create(bucket_num, label, ObModIds::OB_HASH_NODE, tenant_id);
   }
   void destroy() { map_.destroy(); }
 

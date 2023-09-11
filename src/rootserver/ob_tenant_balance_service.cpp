@@ -303,9 +303,10 @@ int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bo
     }
   } else {
     // standby & restore
-    if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
-      LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
-    }
+    is_finished = true;
+    // if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
+    //   LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+    // }
   }
   LOG_TRACE("check whether the tenant has balanced ls", K(ret), K(tenant_id), K(is_primary), K(is_finished));
   return ret;

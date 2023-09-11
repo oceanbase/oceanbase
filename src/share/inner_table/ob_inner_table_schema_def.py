@@ -12961,6 +12961,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12429: __all_virtual_data_activity_metrics
 
 # 12430: __all_virtual_column_group_mapping
+# 12431: __all_virtual_column_group_history
+# 12432: __all_virtual_column_gorup_mapping_history
 #
 # 余留位置
 #
@@ -13363,6 +13365,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 
 # 15417: __all_virtual_column_group_mapping
 
+# 15418: __all_virtual_cgroup_config
+# 15419: __all_virutal_column_group_history
+# 15420: __all_virutal_column_group_maping_history
 # 余留位置
 
 ################################################################################
@@ -29851,7 +29856,9 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-#
+#21479 GV$OB_CGROUP_CONFIG
+#21480 V$OB_CGROUP_CONFIG
+
 # 余留位置
 
 ################################################################################
@@ -36243,7 +36250,9 @@ def_table_schema(
             43, 'NVARCHAR2',
             44, 'NCHAR',
             45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
-            46, '',
+            46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            47, 'JSON',
+            48, 'SDO_GEOMETRY',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       C.LENGTH AS LENGTH,
@@ -54377,6 +54386,8 @@ def_table_schema(
 # 28197: V$OB_SESSION
 # 28198: GV$OB_PL_CACHE_OBJECT
 # 28199: V$OB_PL_CACHE_OBJECT
+# 28200: GV$OB_CGROUP_CONFIG
+# 28201: V$OB_CGROUP_CONFIG
 
 ################################################################################
 # Lob Table (50000, 70000)

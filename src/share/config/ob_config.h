@@ -47,6 +47,7 @@ enum ObConfigItemType{
   OB_CONF_ITEM_TYPE_CAPACITY = 9,
   OB_CONF_ITEM_TYPE_LOGARCHIVEOPT = 10,
   OB_CONF_ITEM_TYPE_VERSION = 11,
+  OB_CONF_ITEM_TYPE_MODE = 12,
 };
 
 enum class ObConfigRangeOpts {
@@ -1222,6 +1223,57 @@ private:
   uint64_t tenant_id_;
   ObArenaAllocator allocator_;
   common::ObSArray<ObConfigPair> config_array_;
+};
+
+class ObConfigModeItem: public ObConfigItem
+{
+public:
+  ObConfigModeItem(ObConfigContainer *container,
+          Scope::ScopeInfo scope_info,
+          const char *name,
+          const char *def,
+          ObConfigParser* parser,
+          const char *info,
+          const ObParameterAttr attr = ObParameterAttr());
+  virtual ~ObConfigModeItem();
+  // get_value() return the real-time value
+  const uint8_t* get_value() const { return value_; }
+  // get() return the real-time value if it does not need reboot, otherwise it return initial_value
+  const uint8_t* get() const { return value_; }
+  operator const uint8_t* () const { return value_; }
+
+  virtual ObConfigItemType get_config_item_type() const {
+    return ObConfigItemType::OB_CONF_ITEM_TYPE_MODE;
+  }
+protected:
+  //use current value to do input operation
+  bool set(const char *str);
+  const char *value_ptr() const override
+  {
+    return value_str_;
+  }
+  const char *value_reboot_ptr() const override
+  {
+    return value_reboot_str_;
+  }
+  uint64_t value_len() const override
+  {
+    return sizeof(value_str_);
+  }
+  uint64_t value_reboot_len() const override
+  {
+    return sizeof(value_reboot_str_);
+  }
+protected:
+  static const uint64_t VALUE_BUF_SIZE = 65536UL;
+  static const int64_t MAX_MODE_BYTES = 32;
+  ObConfigParser *parser_;
+  char value_str_[VALUE_BUF_SIZE];
+  char value_reboot_str_[VALUE_BUF_SIZE];
+  // max bits size: 8 * 32 = 256
+  uint8_t value_[MAX_MODE_BYTES];
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigModeItem);
 };
 
 } // namespace common

@@ -226,7 +226,11 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, "log stream service is NULL", K(ret));
       } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD))) {
-        CLOG_LOG(WARN, "get log stream failed", K(id), K(tmp_ret));
+        if (OB_LS_NOT_EXIST == tmp_ret) {
+          CLOG_LOG(INFO, "ls does not exist anymore, maybe removed", K(tmp_ret), K(id));
+        } else {
+          CLOG_LOG(WARN, "get log stream failed", K(id), K(tmp_ret));
+        }
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, " log stream not exist", K(id), K(tmp_ret));
@@ -415,8 +419,8 @@ int ObGCHandler::execute_pre_remove()
     if (OB_SUCC(ret) && need_check_readonly_tx) {
       //follower or not in member list replica need block_tx here
       if (OB_INVALID_TIMESTAMP == block_tx_ts_) {
-        if (OB_FAIL(ls_->block_tx_start())) {
-          CLOG_LOG(WARN, "failed to block_tx_start", K(ls_id), KPC(this));
+        if (OB_FAIL(ls_->block_all())) {
+          CLOG_LOG(WARN, "failed to block_all", K(ls_id), KPC(this));
         } else {
           block_tx_ts_ = ObClockGenerator::getClock();
         }
@@ -629,14 +633,14 @@ bool ObGCHandler::is_valid_ls_gc_state(const LSGCState &state)
          && LSGCState::INVALID_LS_GC_STATE < state;
 }
 
+bool ObGCHandler::is_ls_offline_gc_state(const LSGCState &state)
+{
+  return LSGCState::LS_OFFLINE == state;
+}
+
 bool ObGCHandler::is_ls_blocked_state_(const LSGCState &state)
 {
   return LSGCState::LS_BLOCKED == state;
-}
-
-bool ObGCHandler::is_ls_offline_state_(const LSGCState &state)
-{
-  return LSGCState::LS_OFFLINE == state;
 }
 
 bool ObGCHandler::is_ls_wait_gc_state_(const LSGCState &state)
@@ -983,9 +987,8 @@ void ObGCHandler::block_ls_transfer_in_(const SCN &block_scn)
     CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
   } else if (is_ls_blocked_finished_(gc_state)) {
     CLOG_LOG(INFO, "ls already blocked, ignore", K(ls_id), K(gc_state), K(block_scn));
-  //TODO: @keqing.llt transfer功能完成之前,先用杀事务代替transfer out
-  } else if (OB_FAIL(ls_->block_tx_start())) {
-    CLOG_LOG(WARN, "block_tx_start failed", K(ls_id), K(ret));
+  } else if (OB_FAIL(ls_->block_all())) {
+    CLOG_LOG(WARN, "block_all failed", K(ls_id), K(ret));
   } else if (FALSE_IT(block_tx_ts_ = ObClockGenerator::getClock())) {
   } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_BLOCKED))) {
     CLOG_LOG(WARN, "set_gc_state block failed", K(ls_id), K(ret));
@@ -1011,12 +1014,8 @@ void ObGCHandler::offline_ls_(const SCN &offline_scn)
     } else {
       CLOG_LOG(INFO, "ls already offline, ignore", K(ls_id), K(offline_scn), K(gc_state), K(pre_offline_scn));
     }
-  } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE))) {
-    //TODO: @yanyuan 需要调用ObLS的offline_ls_接口
-    //offline_scn依赖gc_state写slog, 顺序必须为先设置offline_scn再设置gc状态
-    CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(ret));
-  } else if (OB_FAIL(ls_->set_offline_scn(offline_scn))) {
-    CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(ret));
+  } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE, offline_scn))) {
+    CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(offline_scn));
   } else {
     CLOG_LOG(INFO, "offline_ls success",  K(ls_->get_ls_id()), K(offline_scn)); }
 }
@@ -1115,7 +1114,7 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     } else if (is_ls_wait_gc_state_(gc_state)) {
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "handle_gc_ls_offline need delete entry", K(ls_id), K(gc_state));
-    } else if (is_ls_offline_state_(gc_state)) {
+    } else if (is_ls_offline_gc_state(gc_state)) {
       (void)try_check_and_set_wait_gc_(ls_status);
     } else {
       if (OB_FAIL(submit_log_(ObGCLSLOGType::OFFLINE_LS, is_success))) {
@@ -1609,7 +1608,11 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
       ret = OB_NOT_INIT;
       CLOG_LOG(ERROR, "ls service is NULL", K(ret));
     } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-      CLOG_LOG(ERROR, "get ls failed", K(tmp_ret), K(id));
+      if (OB_LS_NOT_EXIST == tmp_ret) {
+        CLOG_LOG(INFO, "ls does not exist anymore, maybe removed", K(tmp_ret), K(id));
+      } else {
+        CLOG_LOG(ERROR, "get ls failed", K(tmp_ret), K(id));
+      }
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "ls not exist", K(tmp_ret), K(id));

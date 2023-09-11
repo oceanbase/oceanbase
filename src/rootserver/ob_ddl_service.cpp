@@ -17593,7 +17593,7 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
         LOG_WARN("fail to get frozen status for create tablet", KR(ret), K(tenant_id));
       } else {
         ObTableCreator table_creator(tenant_id, frozen_scn, trans);
-        if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
+        if (OB_FAIL(table_creator.init(true/*need_check_tablet_cnt*/))) {
           LOG_WARN("table_creator init failed", KR(ret), K(tenant_id));
         } else if (1 == create_table_count && create_table_schema_ptrs.at(0)->is_global_index_table()) {
           if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(*create_table_schema_ptrs.at(0), orig_ls_id_array))) {
@@ -22325,14 +22325,15 @@ int ObDDLService::standby_create_root_key(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(arg));
   } else {
     obrpc::RootKeyType key_type = obrpc::RootKeyType::INVALID;
-    RootKeyValue root_key;
-    if (OB_FAIL(get_root_key_from_primary(arg, tenant_id, key_type, root_key))) {
+    common::ObString root_key;
+    ObArenaAllocator allocator("root_key");
+
+    if (OB_FAIL(get_root_key_from_primary(arg, tenant_id, key_type, root_key, allocator))) {
       LOG_WARN("failed to get root key", KR(ret), K(arg), K(tenant_id));
     } else {
       obrpc::ObRootKeyArg root_key_arg;
       obrpc::ObRootKeyResult dummy_result;
-      ObString key_value_str(root_key.ptr());
-      if (OB_FAIL(root_key_arg.init(tenant_id, key_type, key_value_str))) {
+      if (OB_FAIL(root_key_arg.init(tenant_id, key_type, root_key))) {
         LOG_WARN("failed to init root key arg", KR(ret), K(tenant_id), K(key_type), K(root_key));
       } else if (OB_FAIL(notify_root_key(*rpc_proxy_, root_key_arg, addrs, dummy_result))) {
         LOG_WARN("fail to notify root key", K(ret), K(root_key_arg));
@@ -22344,7 +22345,8 @@ int ObDDLService::standby_create_root_key(
 
 int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
     const uint64_t tenant_id, obrpc::RootKeyType &key_type,
-    RootKeyValue &key_value)
+    common::ObString &key_value,
+    common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -22368,7 +22370,7 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
     if (FAILEDx(get_root_key_from_obs(cluster_id, *rpc_proxy_, root_key_arg,
-            addr_list, key_type, key_value))) {
+            addr_list, key_type, key_value, allocator))) {
       LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
           K(root_key_arg), K(addr_list));
     }
@@ -22413,7 +22415,8 @@ int ObDDLService::get_root_key_from_obs(
              const obrpc::ObRootKeyArg &arg,
              const common::ObIArray<common::ObAddr> &addrs,
              obrpc::RootKeyType &key_type,
-             RootKeyValue &key_value)
+             common::ObString &key_value,
+             common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   key_type = obrpc::RootKeyType::INVALID;
@@ -22465,12 +22468,13 @@ int ObDDLService::get_root_key_from_obs(
           if (OB_UNLIKELY(obrpc::RootKeyType::INVALID != key_type)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("root key type is conflict", KR(ret), K(key_type), KPC(rpc_result));
-          } else if (OB_FAIL(key_value.assign(rpc_result->root_key_))) {
+          } else if (OB_FAIL(deep_copy_ob_string(allocator, rpc_result->root_key_, key_value))) {
             LOG_WARN("failed to assign result", KR(ret), KPC(rpc_result));
-          } else {
+          }
+          if (OB_SUCC(ret)) {
             key_type = rpc_result->key_type_;
           }
-        } else if (OB_UNLIKELY(0 != key_value.str().compare(rpc_result->root_key_))) {
+        } else if (OB_UNLIKELY(0 != key_value.compare(rpc_result->root_key_))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("root key is conflict", KR(ret), K(key_value), KPC(rpc_result));
         }
@@ -26288,7 +26292,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid tenant_id", K(ret));
     } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
-      LOG_WARN("fail to push back tenant_id", K(ret), K(tenant_id));
+      LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
     }
     while (!stopped_) {
       common::ObTimeoutCtx ctx;
@@ -26304,7 +26308,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       } else {
         int tmp_ret = OB_SUCCESS;
         bool is_dropped = false;
-        if (OB_TMP_FAIL(schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+        if (OB_TMP_FAIL(check_tenant_has_been_dropped_(tenant_id, is_dropped))) {
           LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tmp_ret), K(tenant_id));
         } else if (is_dropped) {
           LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id));
@@ -26324,7 +26328,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       int64_t schema_version = OB_INVALID_VERSION;
       if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
                          tenant_id, schema_version))) {
-        LOG_WARN("fail to get tenant refreshed schema version", K(ret), K(tenant_id));
+        LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K(tenant_id));
       } else {
         ObSchemaService *schema_service = schema_service_->get_schema_service();
         ObRefreshSchemaInfo schema_info;
@@ -26336,7 +26340,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         } else if (OB_FAIL(schema_service->inc_sequence_id())) {
           LOG_WARN("increase sequence_id failed", K(ret));
         } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-          LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
+          LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
         } else if (OB_NOT_NULL(publish_schema_version)) {
           *publish_schema_version = schema_version;
         }
@@ -26344,11 +26348,51 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
     }
     if (OB_FAIL(ret) && stopped_) {
       ret = OB_CANCELED;
-      LOG_WARN("rs is stopped");
+      LOG_WARN("rs is stopped", KR(ret), K(tenant_id));
     }
     THIS_WORKER.set_timeout_ts(original_timeout_us);
   }
 
+  return ret;
+}
+
+int ObDDLService::check_tenant_has_been_dropped_(
+    const uint64_t tenant_id,
+    bool &is_dropped)
+{
+  int ret = OB_SUCCESS;
+  is_dropped = false;
+  ObSchemaGetterGuard guard;
+  const ObSimpleTenantSchema *tenant = NULL;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("ddl_service is not init", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+  } else if (is_dropped) {
+    LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant)) {
+    LOG_WARN("tenant not exist, maybe schema is fall behind", KR(ret), K(tenant_id));
+  } else if (tenant->is_dropping()) {
+    ObLSStatusOperator ls_status;
+    ObLSStatusInfo sys_ls_info;
+    if (OB_FAIL(ls_status.get_ls_status_info(tenant_id, SYS_LS, sys_ls_info, *sql_proxy_))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_WARN("sys ls not exist, consider that tenant has been dropped", KR(ret), K(tenant_id));
+        ret = OB_SUCCESS;
+        is_dropped = true;
+      } else {
+        LOG_WARN("fail to get ls status info", KR(ret), K(tenant_id));
+      }
+    } else if (sys_ls_info.ls_is_tenant_dropping()
+               || sys_ls_info.ls_is_wait_offline()) {
+      is_dropped = true;
+      LOG_INFO("sys ls is not readable, consider that tenant has been dropped", KR(ret), K(tenant_id));
+    }
+  }
   return ret;
 }
 
@@ -32970,10 +33014,11 @@ int ObDDLSQLTransaction::start(ObISQLClient *proxy,
 int ObDDLSQLTransaction::start(
     ObISQLClient *proxy,
     const uint64_t tenant_id,
-    bool with_snapshot /*= false*/)
+    bool with_snapshot /*= false*/,
+    const int32_t group_id /* = 0*/)
 {
   int ret = OB_NOT_SUPPORTED;
-  UNUSEDx(proxy, with_snapshot, tenant_id);
+  UNUSEDx(proxy, with_snapshot, tenant_id, group_id);
   return ret;
 }
 

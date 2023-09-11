@@ -90,6 +90,7 @@ class TestChunkDatumStore : public blocksstable::TestDataFilePrepare
 public:
   TestChunkDatumStore() : blocksstable::TestDataFilePrepare(&getter,
                                                             "TestDisk_chunk_datum_store", 2<<20, 5000),
+  rs_("TEST"),
 	plan_ctx_(alloc_),
     exec_ctx_(alloc_),
     eval_ctx_(exec_ctx_)
@@ -340,7 +341,7 @@ public:
   void test_time(int64_t block_size, int64_t rows)
   {
     ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
-    ObChunkDatumStore rs(&alloc);
+    ObChunkDatumStore rs("TEST", &alloc);
     int64_t v = 0;
     int64_t i;
     int64_t begin = ObTimeUtil::current_time();
@@ -572,7 +573,7 @@ TEST_F(TestChunkDatumStore, multi_iter)
   int total = 100;
   int64_t i = 0;
   int64_t j = 0;
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
 
   ret = rs.init(1 << 20, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -614,7 +615,7 @@ TEST_F(TestChunkDatumStore, multi_iter)
 TEST_F(TestChunkDatumStore, basic2)
 {
   int ret = OB_SUCCESS;
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Iterator it;
   //mem limit 5M
   ret = rs.init(5L << 20, tenant_id_, ctx_id_, label_);
@@ -636,7 +637,7 @@ TEST_F(TestChunkDatumStore, test_copy_row)
 {
   int ret = OB_SUCCESS;
   int64_t rows = 1000;
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Iterator it;
   const ObChunkDatumStore::StoredRow *sr;
   LOG_WARN("starting mem_perf test: append rows", K(rows));
@@ -652,7 +653,7 @@ TEST_F(TestChunkDatumStore, mem_perf)
 {
   int ret = OB_SUCCESS;
   int64_t rows = 2000000;
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Iterator it;
   LOG_WARN("starting mem_perf test: append rows", K(rows));
   int64_t begin = ObTimeUtil::current_time();
@@ -677,7 +678,7 @@ TEST_F(TestChunkDatumStore, disk)
   int64_t round = 500;
   int64_t rows = round * 10000;
   LOG_INFO("starting write disk test: append rows", K(rows));
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
@@ -715,7 +716,7 @@ TEST_F(TestChunkDatumStore, disk_with_chunk)
   int64_t cnt = 10000;
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
@@ -783,7 +784,7 @@ TEST_F(TestChunkDatumStore, test_add_block)
 {
   int ret = OB_SUCCESS;
   //send
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Block *block;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
 
@@ -815,7 +816,7 @@ TEST_F(TestChunkDatumStore, test_add_block)
   memcpy(mem2, mem, block->get_buffer()->data_size());
 
   //recv
-  ObChunkDatumStore rs2;
+  ObChunkDatumStore rs2("TEST");
   ObChunkDatumStore::Block *block2 = reinterpret_cast<ObChunkDatumStore::Block *>(mem2);
   ret = rs2.init(0, tenant_id_, ctx_id_, label_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -841,7 +842,7 @@ TEST_F(TestChunkDatumStore, row_with_extend_size)
   int64_t round = 500;
   int64_t rows = round * 10000;
   LOG_INFO("starting write disk test: append rows", K(rows));
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_, true, 8));
   LOG_INFO("starting basic test: append 3000 rows");
@@ -889,7 +890,7 @@ TEST_F(TestChunkDatumStore, test_only_disk_data)
   int64_t cnt = 10000;
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
@@ -916,7 +917,7 @@ TEST_F(TestChunkDatumStore, test_only_disk_data1)
   int64_t cnt = 10000;
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
@@ -945,7 +946,7 @@ TEST_F(TestChunkDatumStore, test_append_block)
 {
   int ret = OB_SUCCESS;
   //send
-  ObChunkDatumStore rs;
+  ObChunkDatumStore rs("TEST");
   ObChunkDatumStore::Block *block;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR, 2 << 20);
 
@@ -977,7 +978,7 @@ TEST_F(TestChunkDatumStore, test_append_block)
   memcpy(mem2, mem, block->get_buffer()->data_size());
 
   //recv
-  ObChunkDatumStore rs2;
+  ObChunkDatumStore rs2("TEST");
   rs2.alloc_dir_id();
   ObChunkDatumStore::Block *block2 = reinterpret_cast<ObChunkDatumStore::Block *>(mem2);
   ret = rs2.init(0, tenant_id_, ctx_id_, label_);

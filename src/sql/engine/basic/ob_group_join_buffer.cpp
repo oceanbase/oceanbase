@@ -109,7 +109,7 @@ ObGroupJoinBufffer::ObGroupJoinBufffer()
   : op_(NULL), spec_(NULL), ctx_(NULL), eval_ctx_(NULL),
     left_(NULL), right_(NULL), rescan_params_(NULL),
     left_rescan_params_(NULL), right_rescan_params_(NULL), mem_context_(NULL),
-    left_store_(), left_store_iter_(), left_store_group_idx_(),
+    left_store_("JoinBufStore"), left_store_iter_(), left_store_group_idx_(),
     above_left_group_params_(), above_right_group_params_(),
     group_params_(), above_group_params_(),
     last_row_(), last_batch_(),

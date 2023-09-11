@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#### owner: yuchen.wyc
+#### owner: xiaoyi.xy
 #### owner group: sql3
 #### description: 测试地板函数（向下取整函数，高斯函数）
 #/--disableabortonerror/

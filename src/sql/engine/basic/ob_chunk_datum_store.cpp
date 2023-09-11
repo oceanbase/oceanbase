@@ -477,8 +477,8 @@ int ObChunkDatumStore::Block::swizzling(int64_t *col_cnt)
   return ret;
 }
 
-ObChunkDatumStore::ObChunkDatumStore(common::ObIAllocator *alloc /* = NULL */)
-  : inited_(false), tenant_id_(0), label_(common::ObModIds::OB_SQL_CHUNK_ROW_STORE),
+ObChunkDatumStore::ObChunkDatumStore(const ObLabel &label, common::ObIAllocator *alloc /* = NULL */)
+  : inited_(false), tenant_id_(0), label_(label),
     ctx_id_(0), mem_limit_(0), cur_blk_(NULL), cur_blk_buffer_(nullptr),
     max_blk_size_(0), min_blk_size_(INT64_MAX),
     default_block_size_(BLOCK_SIZE),
@@ -507,7 +507,7 @@ int ObChunkDatumStore::init(int64_t mem_limit,
   enable_dump_ = enable_dump;
   tenant_id_ = tenant_id;
   ctx_id_ = mem_ctx_id;
-  label_ = label;
+  UNUSED(label_);
   if (0 == GCONF._chunk_row_store_mem_limit) {
     mem_limit_ = mem_limit;
   } else {
@@ -2242,7 +2242,7 @@ OB_DEF_DESERIALIZE(ObChunkDatumStore)
   }
   if (!is_inited()) {
     if (OB_FAIL(init(mem_limit_, tenant_id_,
-                     ctx_id_, "ObChunkRowDE", false/*enable_dump*/))) {
+                     ctx_id_, label_, false/*enable_dump*/))) {
       LOG_WARN("fail to init chunk row store", K(ret));
     }
   }

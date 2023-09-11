@@ -350,7 +350,7 @@ int ObAccessService::get_write_store_ctx_guard_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id), K_(tenant_id));
   } else {
-    auto &ctx = ctx_guard.get_store_ctx();
+    ObStoreCtx &ctx = ctx_guard.get_store_ctx();
     ctx.ls_ = ls;
     ctx.timeout_ = timeout;
     if (OB_FAIL(ls->get_write_store_ctx(tx_desc, snapshot, write_flag, ctx, spec_seq_no))) {
@@ -400,7 +400,7 @@ int ObAccessService::get_source_ls_tx_table_guard_(ObStoreCtxGuard &ctx_guard)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("transfer_scn or source ls tx_table_guard is invalid", K(ret), K(src_tx_table_guard), K(user_data));
     } else {
-      auto &ctx = ctx_guard.get_store_ctx();
+      ObStoreCtx &ctx = ctx_guard.get_store_ctx();
       ctx.mvcc_acc_ctx_.set_src_tx_table_guard(src_tx_table_guard);
       ctx.mvcc_acc_ctx_.set_transfer_scn(user_data.transfer_scn_);
       LOG_DEBUG("succ get src tx table guard", K(ret), K(src_ls->get_ls_id()), K(src_tx_table_guard), K(user_data));
@@ -463,7 +463,7 @@ int ObAccessService::check_read_allowed_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id), K_(tenant_id));
   } else {
-    auto &ctx = ctx_guard.get_store_ctx();
+    ObStoreCtx &ctx = ctx_guard.get_store_ctx();
     ctx.ls_ = ls;
     ctx.timeout_ = scan_param.timeout_;
     ctx.tablet_id_ = tablet_id;
@@ -576,7 +576,7 @@ int ObAccessService::check_write_allowed_(
     LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id));
   } else {
     // TODO: this may confuse user, because of txn timeout won't notify user proactively
-    auto lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());
+    int64_t lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());
     if (OB_FAIL(get_lock_id(tablet_id, lock_id))) {
       LOG_WARN("get lock id failed", K(ret), K(tablet_id));
     } else if (OB_FAIL(lock_param.set(lock_id,

@@ -47,6 +47,7 @@ namespace common
 #define CM_ERROR_ON_SCALE_OVER           (1ULL << 10)
 #define CM_STRICT_JSON                   (1ULL << 11)
 
+#define CM_ADD_ZEROFILL                  (1ULL << 47)
 #define CM_CS_LEVEL_RESERVED1            (1ULL << 48)
 #define CM_CS_LEVEL_RESERVED2            (1ULL << 49)
 #define CM_CS_LEVEL_RESERVED3            (1ULL << 50)
@@ -137,6 +138,7 @@ typedef uint64_t ObCastMode;
 #define CM_SET_CS_LEVEL(mode, level) \
   ((mode) &= ~(CM_CS_LEVEL_MASK << CM_CS_LEVEL_SHIFT), \
   (mode) |= ((level & CM_CS_LEVEL_MASK) << CM_CS_LEVEL_SHIFT))
+#define CM_IS_ADD_ZEROFILL(mode)                 ((CM_ADD_ZEROFILL & (mode)) != 0)
 struct ObObjCastParams
 {
   // add params when necessary

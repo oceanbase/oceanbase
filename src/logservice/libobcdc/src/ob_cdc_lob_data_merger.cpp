@@ -370,6 +370,8 @@ int ObCDCLobDataMerger::handle_task_(
     ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
     ObLobDataGetCtx &lob_data_get_ctx = task.host_;
     ObLobDataOutRowCtxList *lob_data_out_row_ctx_list = static_cast<ObLobDataOutRowCtxList *>(lob_data_get_ctx.host_);
+    const PartTransTask &part_trans_task = lob_data_out_row_ctx_list->get_dml_stmt_task()->get_host();
+    const int64_t commit_version = part_trans_task.get_trans_commit_version();
     const ObLobData *new_lob_data = lob_data_get_ctx.new_lob_data_;
     const bool is_new_col = task.is_new_col_;
     ObString **fragment_cb_array= lob_data_get_ctx.get_fragment_cb_array(is_new_col);
@@ -384,13 +386,13 @@ int ObCDCLobDataMerger::handle_task_(
       const uint64_t aux_lob_meta_tid = lob_data_out_row_ctx_list->get_aux_lob_meta_table_id();
       const ObLobId &lob_id = new_lob_data->id_;
       const uint32_t idx = task.idx_;
-      LobAuxMetaKey lob_aux_meta_key(tenant_id, trans_id, aux_lob_meta_tid, lob_id, task.seq_no_);
+      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, aux_lob_meta_tid, lob_id, task.seq_no_);
       const char *lob_data_ptr = nullptr;
       int64_t lob_data_len = 0;
-
+      ObIAllocator &allocator = lob_data_out_row_ctx_list->get_allocator();
       // We need retry to get the lob data based on lob_aux_meta_key when return OB_ENTRY_NOT_EXIST,
       // because LobAuxMeta table data and primary table data are processed concurrently.
-      RETRY_FUNC_ON_ERROR_WITH_USLEEP_MS(OB_ENTRY_NOT_EXIST, 1 * _MSEC_, stop_flag, lob_aux_meta_storager, get, lob_aux_meta_key,
+      RETRY_FUNC_ON_ERROR_WITH_USLEEP_MS(OB_ENTRY_NOT_EXIST, 1 * _MSEC_, stop_flag, lob_aux_meta_storager, get, allocator, lob_aux_meta_key,
           lob_data_ptr, lob_data_len);
 
       if (OB_SUCC(ret)) {

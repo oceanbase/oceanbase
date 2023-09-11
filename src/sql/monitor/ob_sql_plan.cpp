@@ -13,6 +13,7 @@
 #include "sql/resolver/ddl/ob_explain_stmt.h"
 #include "sql/optimizer/ob_log_values.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
 #include "lib/time/Time.h"
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "lib/json/ob_json.h"
@@ -208,8 +209,8 @@ int ObSqlPlan::get_plan_outline_info_one_line(PlanText &plan_text,
       LOG_WARN("failed to get plan tree outline", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(plan_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(plan_text))) {
-      LOG_WARN("failed to print global hint", K(ret));
+    } else if (OB_FAIL(get_global_hint_outline(plan_text, *plan))) {
+      LOG_WARN("failed to get plan global hint outline", K(ret));
     } else {
       BUF_PRINT_CONST_STR(" END_OUTLINE_DATA*/", plan_text);
       plan_text.is_outline_data_ = false;
@@ -218,6 +219,43 @@ int ObSqlPlan::get_plan_outline_info_one_line(PlanText &plan_text,
       ret = OB_SUCCESS;
     }
   }
+  return ret;
+}
+
+int ObSqlPlan::get_global_hint_outline(PlanText &plan_text, ObLogPlan &plan)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalHint outline_global_hint;
+  if (OB_FAIL(outline_global_hint.assign(plan.get_optimizer_context().get_global_hint()))) {
+    LOG_WARN("failed to assign global hint", K(ret));
+  } else if (OB_FAIL(construct_outline_global_hint(plan, outline_global_hint))) {
+    LOG_WARN("failed to construct outline global hint", K(ret));
+  } else if (OB_FAIL(outline_global_hint.print_global_hint(plan_text))) {
+    LOG_WARN("failed to print global hint", K(ret));
+  }
+  return ret;
+}
+
+int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outline_global_hint)
+{
+  int ret = OB_SUCCESS;
+  ObDelUpdLogPlan *del_upd_plan = NULL;
+  outline_global_hint.opt_features_version_ = ObGlobalHint::CURRENT_OUTLINE_ENABLE_VERSION;
+  outline_global_hint.pdml_option_ = ObPDMLOption::NOT_SPECIFIED;
+  if (OB_SUCC(ret) && NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))
+      && del_upd_plan->use_pdml()) {
+    outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+  }
+
+  if (OB_SUCC(ret)) {
+    outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+    if (plan.get_optimizer_context().is_use_auto_dop()) {
+      outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
+    } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
+      outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
+    }
+  }
+
   return ret;
 }
 
@@ -475,7 +513,7 @@ int ObSqlPlan::escape_quotes(ObSqlPlanItem &plan_item)
 }
 
 /**
- * escape qutotes for string value
+ * escape quotes for string value
  * oracle: '  => ''
  * mysql:  '  => \'
  */
@@ -494,7 +532,7 @@ int ObSqlPlan::inner_escape_quotes(char* &ptr, int64_t &length)
     int64_t pos = 0;
     if (OB_ISNULL(buf=(char*)allocator_.alloc(buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate mempry", K(ret));
+      LOG_WARN("failed to allocate memory", K(ret));
     } else {
       for (int64_t i = 0; i < length; ++i) {
         if (ptr[i] == '\'') {
@@ -716,8 +754,8 @@ int ObSqlPlan::get_plan_outline_info(PlanText &plan_text,
       LOG_WARN("failed to get plan tree outline", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(temp_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(temp_text))) {
-      LOG_WARN("failed to print global hint", K(ret));
+    } else if (OB_FAIL(get_global_hint_outline(temp_text, *plan))) {
+      LOG_WARN("failed to get plan global hint outline", K(ret));
     } else {
       BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
       BUF_PRINT_CONST_STR(OUTPUT_PREFIX, temp_text);

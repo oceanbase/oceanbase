@@ -72,18 +72,9 @@ void ObTableApiExecutor::clear_evaluated_flag()
     ObExprFrameInfo *expr_info = const_cast<ObExprFrameInfo *>(tb_ctx_.get_expr_frame_info());
     if (OB_NOT_NULL(expr_info)) {
       for (int64_t i = 0; i < expr_info->rt_exprs_.count(); i++) {
-        if (!tb_ctx_.has_auto_inc()) { // 如果是inc/append场景下进行了自增操作，则不应该清自增列转换的flag，特判
+        const ObExpr &expr = expr_info->rt_exprs_.at(i);
+        if (expr.type_ != T_FUN_SYS_AUTOINC_NEXTVAL) {
           expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_);
-        } else {
-          if (expr_info->rt_exprs_.at(i).type_ == T_FUN_COLUMN_CONV) {
-            if (expr_info->rt_exprs_.at(i).args_[4]->type_ == T_FUN_SYS_AUTOINC_NEXTVAL) {
-              // do nothing
-            } else {
-              expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_);
-            }
-          } else {
-            expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_);
-          }
         }
       }
     }

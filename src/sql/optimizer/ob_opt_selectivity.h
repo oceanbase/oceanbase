@@ -246,6 +246,12 @@ public:
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
 
+  int init_column_meta(const OptSelectivityCtx &ctx,
+                       const uint64_t column_id,
+                       OptColumnMeta &col_meta);
+
+  int add_column_meta_no_dup(const uint64_t column_id, const OptSelectivityCtx &ctx);
+
   const OptColumnMeta* get_column_meta(const uint64_t column_id) const;
 
   uint64_t get_table_id() const { return table_id_; }

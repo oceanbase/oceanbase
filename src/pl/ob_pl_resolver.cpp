@@ -11608,6 +11608,7 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                                     expr_factory_,
                                     current_block_->get_namespace(),
                                     self_argument));
+      CK (OB_NOT_NULL(self_argument));
       OZ (self_argument->formalize(&resolve_ctx_.session_info_));
       OX (udf_info.set_is_udf_udt_cons());
       OZ (func.add_expr(self_argument));
@@ -13338,7 +13339,9 @@ ObPLMockSelfArg::~ObPLMockSelfArg()
   int ret = OB_SUCCESS;
   if (mocked_) {
     if (mark_only_) {
-      expr_params_.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM);
+      if (OB_FAIL(expr_params_.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
+        LOG_WARN("failed to clear flag", K(ret));
+      }
     } else {
       std::rotate(expr_params_.begin(), expr_params_.begin() + 1, expr_params_.end());
       if (!expr_params_.at(expr_params_.count() - 1)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
@@ -13478,12 +13481,16 @@ int ObPLResolver::check_routine_callable(const ObPLBlockNS &ns,
       if (expr_params.count() > 0
           && expr_params.at(0)->get_result_type().get_udt_id()
               == access_idxs.at(access_idxs.count() - 1).var_index_) {
-        expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM);
+        if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        }
       } else if (expr_params.count() > 0
                  && expr_params.at(0)->get_result_type().is_xml_sql_type()
                  && (T_OBJ_XML == access_idxs.at(access_idxs.count() - 1).var_index_)) {
         // select 'head' || xmlparse(document '<a>123</a>').getclobval() into a from dual;
-        expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM);
+        if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        }
       } /*else if (expr_params.count() > 0
                  && expr_params.at(0)->get_expr_type() == T_QUESTIONMARK) {
         // do nothing ...
@@ -13593,7 +13600,6 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   const ObUserDefinedType *user_type = NULL;
   ObObjAccessIdx access_idx;
   OV (access_ident.is_pl_udf(), OB_ERR_UNEXPECTED, K(access_ident));
-  OZ (q_name.access_idents_.push_back(access_ident));
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));
   OZ (get_names_by_access_ident(access_ident,
@@ -13601,6 +13607,16 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
                                 access_ident.udf_info_.udf_database_,
                                 access_ident.udf_info_.udf_package_,
                                 access_ident.udf_info_.udf_name_));
+
+  if (OB_SUCC(ret) &&
+      !access_ident.udf_info_.udf_database_.empty() &&
+      access_ident.udf_info_.udf_database_.case_compare(OB_SYS_DATABASE_NAME) != 0) {
+    OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_database_));
+  }
+  if (OB_SUCC(ret) && !access_ident.udf_info_.udf_package_.empty()) {
+    OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_package_));
+  }
+  OZ (q_name.access_idents_.push_back(access_ident));
   OZ (resolve_construct(q_name, access_ident.udf_info_, *user_type, expr));
   CK (OB_NOT_NULL(expr));
   OZ (func.add_expr(expr));

@@ -160,9 +160,14 @@ private:
   const blocksstable::ObColDescIArray *col_descs_;
   int64_t snapshot_version_;
   ObDDLSSTableRedoWriter sstable_redo_writer_;
-  ObDDLRedoLogWriterCallback redo_log_writer_callback_;
   blocksstable::ObDataStoreDesc data_desc_;
+  /**
+   * ATTENTION!
+   * The deconstruction order of the `redo_log_writer_callback_` should be in front of the `macro_block_writer_`
+   * to ensure the safety-used of the ddl macro block.
+  */
   blocksstable::ObMacroBlockWriter macro_block_writer_;
+  ObDDLRedoLogWriterCallback redo_log_writer_callback_;
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator lob_allocator_;
   int64_t lob_cnt_;
@@ -265,7 +270,7 @@ private:
   void destroy();
   int create_all_tablet_contexts(const common::ObIArray<LSTabletIDPair> &ls_tablet_ids);
   int get_tablet_context(const common::ObTabletID &tablet_id, ObSSTableInsertTabletContext *&tablet_ctx);
-  int remove_tablet_context(const common::ObTabletID &tablet_id);
+  int remove_all_tablets_context();
 private:
   typedef
   common::hash::ObHashMap<
@@ -322,7 +327,7 @@ private:
   int get_context_no_lock(
       const int64_t context_id,
       ObSSTableInsertTableContext *&ctx);
-  int remove_context(const int64_t context_id);
+  int remove_context_no_lock(const int64_t context_id);
   int64_t alloc_context_id();
   uint64_t get_context_id_hash(const int64_t context_id);
 private:

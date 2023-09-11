@@ -21,6 +21,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/utility/ob_template_utils.h"
 #include "lib/utility/ob_hang_fatal_error.h"
+#include "lib/utility/serialization.h"
 
 namespace oceanbase
 {
@@ -47,6 +48,9 @@ public:
   int reserve(const int64_t size);
   int at(const int64_t array_idx, ObIArray<T> &array);
   int at(const int64_t array_idx, const int64_t idx, T &obj);
+  int assign(const ObArrayArray<T> &other);
+  NEED_SERIALIZE_AND_DESERIALIZE;
+
   OB_INLINE T &at(const int64_t array_idx, const int64_t idx)
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
@@ -60,6 +64,18 @@ public:
     return array_ptrs_[array_idx]->at(idx);
   }
   OB_INLINE ObIArray<T> &at(const int64_t array_idx)
+  {
+    if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      right_to_die_or_duty_to_live();
+    } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+              KP_(array_ptrs));
+      right_to_die_or_duty_to_live();
+    }
+    return *array_ptrs_[array_idx];
+  }
+  OB_INLINE const ObIArray<T> &at(const int64_t array_idx) const
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
       LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
@@ -210,7 +226,7 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserv
     }
     if (OB_SUCC(ret)) {
       void *ptr = nullptr;
-      for (int64_t i = count_; OB_SUCC(ret) && i < capacity; i++) {
+      for (int64_t i = capacity_; OB_SUCC(ret) && i < capacity; i++) {
         if (OB_NOT_NULL(new_array_ptrs[i])) {
           ret = OB_ERR_UNEXPECTED;
           LIB_LOG(ERROR, "Unexpecte not null array array ptr", K(i), K_(count), K_(capacity), K(capacity),
@@ -334,7 +350,79 @@ int64_t ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::to
   return pos;
 }
 
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::assign(const ObArrayArray<T> &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    this->reuse();
+    int64_t N = other.count();
+    ret = reserve(N);
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+      if (OB_FAIL(array_ptrs_[i]->assign(other.at(i)))) {
+        LIB_LOG(WARN, "fail to assign array", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      count_ = N;
+    }
+  }
+  return ret;
+}
 
+
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::serialize(
+    char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != (ret = serialization::encode_vi64(buf, buf_len, pos, count()))) {
+    LIB_LOG(WARN, "fail to encode ob array count", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count(); i++) {
+    const LocalArrayT &item = *array_ptrs_[i];
+    if (OB_SUCCESS != (ret = serialization::encode(buf, buf_len, pos, item))) {
+      LIB_LOG(WARN, "fail to encode item", K(i), K(ret));
+    }
+  }
+  return ret;
+}
+
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::deserialize(
+    const char *buf, int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  reset();
+  if (OB_SUCCESS != (ret = serialization::decode_vi64(buf, data_len, pos, &count))) {
+    LIB_LOG(WARN, "fail to decode ob array count", K(ret));
+  } else if (OB_SUCCESS != (ret = reserve(count))) {
+    LIB_LOG(WARN, "fail to allocate space", K(ret), K(count));
+  } else {
+    count_ = count;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+    LocalArrayT &item = *array_ptrs_[i];
+    if (OB_SUCCESS != (ret = serialization::decode(buf, data_len, pos, item))) {
+      LIB_LOG(WARN, "fail to decode array item", K(ret), K(i), K(count));
+    }
+  }
+  return ret;
+}
+
+template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typename BlockAllocatorT>
+int64_t ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::get_serialize_size()
+const
+{
+  int64_t size = 0;
+  size += serialization::encoded_length_vi64(count());
+  for (int64_t i = 0; i < count(); i++) {
+    const LocalArrayT &item = *array_ptrs_[i];
+    size += serialization::encoded_length(item);
+  }
+  return size;
+}
 
 
 } // common

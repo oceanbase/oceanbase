@@ -47,13 +47,16 @@ public:
   bool is_dest_table_hidden() const { return is_dest_table_hidden_; }
   void set_heap_table_ddl(const bool flag) { is_heap_table_ddl_ = flag; }
   bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
+  void set_ddl_check_default_value(const bool flag) { is_ddl_check_default_value_bit_ = flag; }
+  bool is_ddl_check_default_value() const { return is_ddl_check_default_value_bit_; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
 public:
   static const int64_t IS_DDL_BIT = 1;
   static const int64_t IS_TABLE_HIDDEN_BIT = 1;
   static const int64_t IS_HEAP_TABLE_DDL_BIT = 1;
-  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT;
+  static const int64_t IS_DDL_CHECK_DEFAULT_VALUE_BIT = 1;
+  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -61,6 +64,7 @@ public:
       uint64_t is_source_table_hidden_: IS_TABLE_HIDDEN_BIT;
       uint64_t is_dest_table_hidden_: IS_TABLE_HIDDEN_BIT;
       uint64_t is_heap_table_ddl_: IS_HEAP_TABLE_DDL_BIT;
+      uint64_t is_ddl_check_default_value_bit_ : IS_DDL_CHECK_DEFAULT_VALUE_BIT;
       uint64_t reserved_bit : RESERVED_BIT;
     };
   };
@@ -103,9 +107,10 @@ public:
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size) override;
   // execute query and return data result
-  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override;
-  int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param);
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override { return this->read(res, tenant_id, sql, 0/*group_id*/); }
+  int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param, int64_t user_set_timeout = 0);
   int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr);
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id) override;
   //only for across cluster
   //cluster_id can not GCONF.cluster_id
   virtual int read(ReadResult &res,
@@ -114,7 +119,8 @@ public:
                    const char *sql) override;
   using ObISQLClient::read;
   // execute update sql
-  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
+  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override { return this->write(tenant_id, sql, 0/**/, affected_rows); }
+  virtual int write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows) override;
   int write(const uint64_t tenant_id, const ObString sql, int64_t &affected_rows, int64_t compatibility_mode,
         const ObSessionParam *session_param = nullptr,
         const common::ObAddr *sql_exec_addr = nullptr);
@@ -133,8 +139,8 @@ public:
   int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor);
 
 protected:
-  int acquire(sqlclient::ObISQLConnection *&conn) { return this->acquire(OB_INVALID_TENANT_ID, conn); }
-  int acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn);
+  int acquire(sqlclient::ObISQLConnection *&conn) { return this->acquire(OB_INVALID_TENANT_ID, conn, 0); }
+  int acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn, const int32_t group_id);
   int read(sqlclient::ObISQLConnection *conn, ReadResult &result,
            const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr = nullptr);
 

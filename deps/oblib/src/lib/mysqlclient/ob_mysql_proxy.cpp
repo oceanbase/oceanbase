@@ -56,11 +56,11 @@ void ObCommonSqlProxy::operator=(const ObCommonSqlProxy &o)
   pool_ = o.pool_;
 }
 
-int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const char *sql)
+int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const char *sql, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   ObISQLConnection *conn = NULL;
-  if (OB_FAIL(acquire(tenant_id, conn))) {
+  if (OB_FAIL(acquire(tenant_id, conn, group_id))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (OB_FAIL(read(conn, result, tenant_id, sql))) {
     LOG_WARN("read failed", K(ret));
@@ -76,7 +76,7 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
   if (OB_ISNULL(exec_sql_addr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("read with typically exec addr failed", K(ret), K(exec_sql_addr));
-  } else if (OB_FAIL(acquire(tenant_id, conn))) {
+  } else if (OB_FAIL(acquire(tenant_id, conn, 0/*group_id*/))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (OB_FAIL(read(conn, result, tenant_id, sql, exec_sql_addr))) {
     LOG_WARN("read failed", K(ret));
@@ -85,11 +85,11 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
   return ret;
 }
 
-int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param)
+int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param, int64_t user_set_timeout)
 {
   int ret = OB_SUCCESS;
   ObISQLConnection *conn = NULL;
-  if (OB_FAIL(acquire(tenant_id, conn))) {
+  if (OB_FAIL(acquire(tenant_id, conn, 0/*group_id*/))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (nullptr != session_param) {
     conn->set_ddl_info(&session_param->ddl_info_);
@@ -104,6 +104,7 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
       conn->set_force_remote_exec(true);
     }
   }
+  conn->set_user_timeout(user_set_timeout);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(read(conn, result, tenant_id, sql))) {
     LOG_WARN("read failed", K(ret));
@@ -133,7 +134,7 @@ int ObCommonSqlProxy::read(ObISQLConnection *conn, ReadResult &result,
   return ret;
 }
 
-int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows)
+int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
@@ -141,7 +142,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql, int64_t &
   if (OB_ISNULL(sql)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty sql");
-  } else if (OB_FAIL(acquire(tenant_id, conn))) {
+  } else if (OB_FAIL(acquire(tenant_id, conn, group_id))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (OB_ISNULL(conn)) {
     ret = OB_INNER_STAT_ERROR;
@@ -171,7 +172,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
   if (OB_UNLIKELY(sql.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty sql");
-  } else if (OB_FAIL(acquire(tenant_id, conn))) {
+  } else if (OB_FAIL(acquire(tenant_id, conn, 0/*group_id*/))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (OB_ISNULL(conn)) {
     ret = OB_INNER_STAT_ERROR;
@@ -254,7 +255,7 @@ int ObCommonSqlProxy::execute(const uint64_t tenant_id, ObIExecutor &executor)
   int ret = OB_SUCCESS;
   int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
   ObISQLConnection *conn = NULL;
-  if (OB_FAIL(acquire(tenant_id, conn))) {
+  if (OB_FAIL(acquire(tenant_id, conn, 0/*group_id*/))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (OB_ISNULL(conn)) {
     ret = OB_INNER_STAT_ERROR;
@@ -336,13 +337,13 @@ int ObCommonSqlProxy::add_slashes(const char *from, const int64_t from_size,
   return ret;
 }
 
-int ObCommonSqlProxy::acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn)
+int ObCommonSqlProxy::acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("mysql proxy not inited", K(ret));
-  } else if (OB_FAIL(pool_->acquire(tenant_id, conn, this))) {
+  } else if (OB_FAIL(pool_->acquire(tenant_id, conn, this, group_id))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (OB_ISNULL(conn)) {
     ret = OB_ERR_UNEXPECTED;
@@ -367,7 +368,7 @@ int ObCommonSqlProxy::read(
   } else if (NULL == sql) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty sql");
-  } else if (OB_FAIL(acquire(tenant_id, conn))) {
+  } else if (OB_FAIL(acquire(tenant_id, conn, 0/*group_id*/))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (NULL == conn) {
     ret = OB_INNER_STAT_ERROR;

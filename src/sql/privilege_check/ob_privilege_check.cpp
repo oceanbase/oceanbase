@@ -924,6 +924,7 @@ int get_dml_stmt_need_privs(
             need_priv.table_ = table_item->table_name_;
             need_priv.priv_set_ = priv_set;
             need_priv.is_sys_table_ = table_item->is_system_table_;
+            need_priv.is_for_update_ = table_item->for_update_;
             need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
             //no check for information_schema select
             if (stmt::T_SELECT != dml_stmt->get_stmt_type()) {
@@ -1901,6 +1902,7 @@ int get_load_data_stmt_need_privs(
       need_priv.table_ = load_data_stmt->get_load_arguments().table_name_;
       need_priv.priv_set_ = OB_PRIV_INSERT;
       need_priv.is_sys_table_ = false;
+      need_priv.is_for_update_ = false;
       need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       ADD_NEED_PRIV(need_priv);
     }

@@ -919,7 +919,7 @@ public:
   static const int32_t DATUM_SIZE = sizeof(common::ObDatum);
   static const int64_t OLD_WORK_AREA_ID = 21;
 
-  explicit ObChunkDatumStore(common::ObIAllocator *alloc = NULL);
+  explicit ObChunkDatumStore(const lib::ObLabel &label, common::ObIAllocator *alloc = NULL);
 
   virtual ~ObChunkDatumStore() { reset(); }
 

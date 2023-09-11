@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#### owner: yuchen.wyc
+#### owner: peihan.dph
 #### owner group: sql3
 #### description: 测试相等比较运算符
 # Initialise

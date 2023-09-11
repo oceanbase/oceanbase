@@ -20,8 +20,8 @@ namespace oceanbase
 namespace storage
 {
 ObTabletBindingMdsUserData::ObTabletBindingMdsUserData()
-  : snapshot_version_(0),
-    schema_version_(0),
+  : snapshot_version_(INT64_MAX),
+    schema_version_(INT64_MAX),
     data_tablet_id_(),
     hidden_tablet_id_(),
     lob_meta_tablet_id_(),
@@ -31,6 +31,17 @@ ObTabletBindingMdsUserData::ObTabletBindingMdsUserData()
 }
 
 void ObTabletBindingMdsUserData::reset()
+{
+  redefined_ = false;
+  snapshot_version_ = INT64_MAX;
+  schema_version_ = INT64_MAX;
+  data_tablet_id_.reset();
+  hidden_tablet_id_.reset();
+  lob_meta_tablet_id_.reset();
+  lob_piece_tablet_id_.reset();
+}
+
+void ObTabletBindingMdsUserData::set_default_value()
 {
   redefined_ = false;
   snapshot_version_ = 0;
@@ -43,15 +54,7 @@ void ObTabletBindingMdsUserData::reset()
 
 bool ObTabletBindingMdsUserData::is_valid() const
 {
-  bool valid = true;
-
-  if (0 == snapshot_version_) {
-    valid = false;
-  } else if (0 == schema_version_) {
-    valid = false;
-  }
-
-  return valid;
+  return snapshot_version_ != INT64_MAX && schema_version_ != INT64_MAX;
 }
 
 int ObTabletBindingMdsUserData::assign(const ObTabletBindingMdsUserData &other)

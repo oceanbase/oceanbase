@@ -3142,9 +3142,10 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    need_new_allocator,
                                    ignore_del_element));
       CK (OB_NOT_NULL(dest_composite));
+      uint8_t extend_type = src.get_meta().get_extend_type();
       if (src.get_ext() == dest.get_ext()) {
         OX (dest.set_extend(reinterpret_cast<int64_t>(src_composite),
-                            src.get_meta().get_extend_type(),
+                            extend_type,
                             src.get_val_len()));
         OZ (ObUserDefinedType::destruct_obj(dest, session));
         OZ (ObPLComposite::deep_copy(*dest_composite,
@@ -3155,13 +3156,13 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    need_new_allocator,
                                    ignore_del_element));
         OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
-                            src.get_meta().get_extend_type(),
+                            extend_type,
                             src.get_val_len()));
         OZ (ObUserDefinedType::destruct_obj(dest, session));
         OX (dest_composite = src_composite);
       }
       OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
-                          src.get_meta().get_extend_type(),
+                          extend_type,
                           src.get_val_len()));
 #ifdef OB_BUILD_ORACLE_PL
     }

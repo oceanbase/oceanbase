@@ -176,7 +176,7 @@ TEST_F(TestTenantTransferService, test_service)
     }
   }
   ObTransferTask task;
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task, 0/*group_id*/));
   ASSERT_TRUE(task.get_status().is_init_status() || task.get_status().is_start_status());
   ASSERT_TRUE(task.get_part_list().count() == g_part_list.count());
   ARRAY_FOREACH(g_part_list, idx) {
@@ -191,7 +191,7 @@ TEST_F(TestTenantTransferService, test_service)
   task.reset();
   ObArenaAllocator allocator;
   ObString tablet_list_str;
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task, 0/*group_id*/));
   LOG_INFO("generate tablet list", K(task));
   ASSERT_TRUE(task.is_valid());
   const ObTransferTabletList &tablet_list = task.get_tablet_list();
@@ -213,11 +213,11 @@ TEST_F(TestTenantTransferService, test_service)
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_cancel_transfer_task(ObTransferTaskID(555))); // task which does not exist will be canceled successfully
   ASSERT_EQ(OB_OP_NOT_ALLOW, tenant_transfer->try_cancel_transfer_task(aborted_task_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_cancel_transfer_task(init_task_id));
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, init_task_id, false, init_task));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, init_task_id, false, init_task, 0/*group_id*/));
 
   // try clear transfer task
   task.reset();
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task, 0/*group_id*/));
   ASSERT_EQ(OB_SUCCESS, ret);
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("update oceanbase.__all_transfer_task set status = 'COMPLETED' where task_id = %ld", task.get_task_id().id()));
@@ -241,7 +241,7 @@ TEST_F(TestTenantTransferService, test_service)
   ASSERT_EQ(OB_SUCCESS, finished_part_list.to_display_str(allocator, finished_part_list_str));
   LOG_WARN("finished_part_list", K(finished_part_list_str));
   ASSERT_TRUE(0 == finished_part_list_str.case_compare("500002:500003,500002:500004,500016:500014,500016:500015"));
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, task_id, false, task, 0/*group_id*/));
   create_time = OB_INVALID_TIMESTAMP;
   finish_time = OB_INVALID_TIMESTAMP;
   ObTransferTask history_task;
@@ -274,7 +274,7 @@ TEST_F(TestTenantTransferService, test_batch_part_list)
     }
   }
   ObTransferTask task;
-  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, batch_task_id, false, task));
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, batch_task_id, false, task, 0/*group_id*/));
   ASSERT_TRUE(ObTenantTransferService::PART_COUNT_IN_A_TRANSFER == task.get_part_list().count());
   ARRAY_FOREACH(task.get_part_list(), idx) {
     ASSERT_TRUE(is_contain(g_batch_part_list, task.get_part_list().at(idx)));

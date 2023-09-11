@@ -90,6 +90,7 @@ class ObMaintainDepInfoTaskQueue: public share::ObAsyncTaskQueue
 {
 public:
   static const int64_t INIT_BKT_SIZE = 512;
+  constexpr static const double MAX_QUEUE_USAGE_RATIO = 0.8;
   ObMaintainDepInfoTaskQueue() : last_execute_time_(0) {}
   virtual ~ObMaintainDepInfoTaskQueue()
   {
@@ -102,6 +103,7 @@ public:
   { last_execute_time_ = execute_time; }
   int add_view_id_to_set(const uint64_t view_id) { return view_info_set_.set_refactored(view_id); }
   int erase_view_id_from_set(const uint64_t view_id) { return view_info_set_.erase_refactored(view_id); }
+  bool is_queue_almost_full() const { return queue_.size() > queue_.capacity() * MAX_QUEUE_USAGE_RATIO; }
 private:
   int64_t last_execute_time_;
   common::hash::ObHashSet<uint64_t, common::hash::ReadWriteDefendMode> view_info_set_;

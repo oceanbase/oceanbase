@@ -94,13 +94,14 @@ int handle_trans_commit_request(ObTxCommitMsg &commit_req, obrpc::ObTransRpcResu
 int handle_trans_commit_response(ObTxCommitRespMsg &commit_resp, obrpc::ObTransRpcResult &result);
 int handle_trans_abort_request(ObTxAbortMsg &abort_req, obrpc::ObTransRpcResult &result);
 int handle_sp_rollback_request(ObTxRollbackSPMsg &sp_rollbacck_req, obrpc::ObTxRpcRollbackSPResult &result);
+int handle_sp_rollback_response(ObTxRollbackSPRespMsg &sp_rollbacck_resp, obrpc::ObTransRpcResult &result);
 int handle_sp_rollback_resp(const share::ObLSID &ls_id,
-                            const int64_t epoch,
+                            const int64_t orig_epoch,
                             const transaction::ObTransID &tx_id,
                             const int status,
-                            const ObAddr &addr,
                             const int64_t request_id,
-                            const obrpc::ObTxRpcRollbackSPResult &result);
+                            const int64_t ret_epoch,
+                            const ObAddr &ret_addr);
 int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const share::ObLSID &receiver_ls_id,
                               const ObTransID &tx_id,

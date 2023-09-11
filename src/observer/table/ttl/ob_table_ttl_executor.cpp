@@ -93,7 +93,7 @@ int ObTableApiTTLExecutor::refresh_exprs_frame(const ObTableEntity *entity)
     LOG_WARN("entity is null", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::refresh_ttl_exprs_frame(tb_ctx_,
                                                                    ins_ctdef.new_row_,
-                                                                   upd_ctdef.delta_exprs_,
+                                                                   upd_ctdef.delta_row_,
                                                                    *entity))) {
     LOG_WARN("fail to refresh ttl exprs frame", K(ret), K(*entity));
   }
@@ -277,7 +277,6 @@ int ObTableApiTTLExecutor::update_row_to_das()
                                      ttl_rtdef_.upd_rtdef_,
                                      upd_rtctx_));
         OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                            constraint_rowkey,
                             ttl_spec_.get_ctdef().upd_ctdef_));
         clear_evaluated_flag();
         OZ(insert_upd_new_row_to_das(ttl_spec_.get_ctdef().upd_ctdef_,
@@ -286,7 +285,6 @@ int ObTableApiTTLExecutor::update_row_to_das()
       } else if (NULL == constraint_value.baseline_datum_row_ &&
                  NULL != constraint_value.current_datum_row_) { // 单单是唯一索引冲突的时候，会走这个分支
         OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                            constraint_rowkey,
                             ttl_spec_.get_ctdef().upd_ctdef_));
         OZ(insert_upd_new_row_to_das(ttl_spec_.get_ctdef().upd_ctdef_,
                                      ttl_rtdef_.upd_rtdef_,

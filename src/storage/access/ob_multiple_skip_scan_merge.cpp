@@ -388,10 +388,8 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
 {
   int ret = OB_SUCCESS;
   range_allocator_.reuse();
-  if (should_check_interrupt()) {
-    if (OB_FAIL(THIS_WORKER.check_status())) {
-      STORAGE_LOG(WARN, "query interrupt, ", K(ret));
-    }
+  if (should_check_interrupt() && OB_FAIL(THIS_WORKER.check_status())) {
+    STORAGE_LOG(WARN, "query interrupt", K(ret));
   } else if (should_retire_to_scan()) {
     // too many distinct prefix, retire to normal scan
     for (int64_t i = 0; OB_SUCC(ret) && i < ss_rowkey_prefix_cnt_; ++i) {

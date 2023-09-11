@@ -108,7 +108,6 @@ protected:
                                const ObTableUpdCtDef &upd_ctdef,
                                bool &is_row_changed);
   int to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
-                       const ObRowkey &constraint_rowkey,
                        const ObTableUpdCtDef &upd_ctdef);
   int generate_del_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
                                     ObTableUpdRtDef &upd_rtdef);

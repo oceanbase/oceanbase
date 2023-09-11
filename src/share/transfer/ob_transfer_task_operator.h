@@ -46,6 +46,7 @@ public:
    * @param [in] task_id:    target task_id
    * @param [in] for_update: select for update
    * @param [out] task:      transfer task
+   * @param [in] group_id:   rpc queue id
    * @return
    * - OB_ENTRY_NOT_EXIST:   not found
    * - OB_SUCCESS:           successful
@@ -56,7 +57,8 @@ public:
       const uint64_t tenant_id,
       const ObTransferTaskID task_id,
       const bool for_update,
-      ObTransferTask &task);
+      ObTransferTask &task,
+      const int32_t group_id);
 
   /*
    * get a transfer task by task_id with create_time and finish_time
@@ -123,6 +125,7 @@ public:
    * @param [in] tenant_id:  target tenant_id
    * @param [in] src_ls:    src ls_id
    * @param [out] task:      transfer task
+   * @param [in] group_id:   rpc queue id
    * @return
    * - OB_ENTRY_NOT_EXIST:   not found
    * - OB_ERR_UNEXPECTED:    more than 1 transfer task on a ls
@@ -133,7 +136,8 @@ public:
       common::ObISQLClient &sql_proxy,
       const uint64_t tenant_id,
       const ObLSID &src_ls,
-      ObTransferTask &task);
+      ObTransferTask &task,
+      const int32_t group_id);
 
   /*
    * get transfer task by dest ls (there is no more than 1 transfer task on a ls)
@@ -142,6 +146,7 @@ public:
    * @param [in] tenant_id:  target tenant_id
    * @param [in] dest_ls:    destination ls_id
    * @param [out] task:      transfer task
+   * @param [in] group_id:   rpc queue id
    * @return
    * - OB_ENTRY_NOT_EXIST:   not found
    * - OB_ERR_UNEXPECTED:    more than 1 transfer task on a ls
@@ -152,7 +157,8 @@ public:
       common::ObISQLClient &sql_proxy,
       const uint64_t tenant_id,
       const ObLSID &dest_ls,
-      ObTransferTask &task);
+      ObTransferTask &task,
+      const int32_t group_id);
 
   /*
    * insert task
@@ -211,6 +217,7 @@ public:
    * @param [in] new_status: new task status
    * @param [in] result:     return code for the transfer process
    * @param [in] comment:    information for task finish
+   * @param [in] group_id:   rpc queue id
    * @return
    * - OB_STATE_NOT_MATCH:  task not found or task status mismatch
    * - OB_SUCCESS:          successful
@@ -223,7 +230,8 @@ public:
       const ObTransferStatus &old_status,
       const ObTransferStatus &new_status,
       const int result,
-      const ObTransferTaskComment &comment);
+      const ObTransferTaskComment &comment,
+      const int32_t group_id);
 
   /*
    * finish task from INIT status to COMPLETED when part_list is all unreachable
@@ -280,6 +288,7 @@ public:
    * @param [in] old_status: old task status
    * @param [in] new_status: new task status
    * @param [in] result:     task result
+   * @param [in] group_id:   rpc queue id
    * @return
    * - OB_STATE_NOT_MATCH:  task not found or task status mismatch
    * - OB_SUCCESS:          successful
@@ -291,7 +300,8 @@ public:
       const ObTransferTaskID task_id,
       const ObTransferStatus &old_status,
       const ObTransferStatus &new_status,
-      const int result);
+      const int result,
+      const int32_t group_id);
 
 
   /*
@@ -302,6 +312,7 @@ public:
    * @param [in] task_id:    target task_id
    * @param [in] old_status: old task status
    * @param [in] start_scn:  start scn
+   * @param [in] group_id:   rpc queue id, default is 0
    * @return
    * - OB_STATE_NOT_MATCH:  task not found or task status mismatch
    * - OB_SUCCESS:          successful
@@ -312,7 +323,8 @@ public:
       const uint64_t tenant_id,
       const ObTransferTaskID task_id,
       const ObTransferStatus &old_status,
-      const share::SCN &start_scn);
+      const share::SCN &start_scn,
+      const int32_t group_id);
 
   /*
    * update finish_scn
@@ -322,6 +334,7 @@ public:
    * @param [in] task_id:    target task_id
    * @param [in] old_status: old task status
    * @param [in] finish_scn: finish scn
+   * @param [in] group_id:   rpc queue id, default is 0
    * @return
    * - OB_STATE_NOT_MATCH:  task not found or task status mismatch
    * - OB_SUCCESS:          successful
@@ -332,7 +345,8 @@ public:
       const uint64_t tenant_id,
       const ObTransferTaskID,
       const ObTransferStatus &old_status,
-      const share::SCN &finish_scn);
+      const share::SCN &finish_scn,
+      const int32_t group_id);
 
   /*
    * record transfer task in __all_transfer_task_history
@@ -415,6 +429,7 @@ private:
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       const bool is_src_ls,
+      const int32_t group_id,
       ObTransferTask &task);
   static int construct_transfer_tasks_(
       common::sqlclient::ObMySQLResult &res,

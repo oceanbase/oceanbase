@@ -23,6 +23,7 @@
 #include "ob_log_part_mgr.h"                        // ObLogPartMgr
 #include "ob_log_ls_mgr.h"                          // ObLogLSMgr
 #include "ob_log_ref_state.h"                       // RefState
+#include "ob_cdc_lob_aux_meta_storager.h"           // ObCDCLobAuxDataCleanTask
 #include <cstdint>
 
 namespace oceanbase
@@ -96,6 +97,7 @@ public:
     const int64_t start_seq,
     const int64_t start_schema_version,
     void *cf_handle,
+    void *lob_storage_cf_handle,
     ObLogTenantMgr &tenant_mgr);
   void reset();
   bool is_inited() const { return inited_; }
@@ -131,6 +133,8 @@ public:
   int64_t get_global_schema_version() const { return global_seq_and_schema_version_.hi; }
   int64_t get_global_seq() const { return global_seq_and_schema_version_.lo; }
   void *get_cf() { return cf_handle_; }
+  void *get_lob_storage_cf_handle() { return lob_storage_cf_handle_; }
+  ObCDCLobAuxDataCleanTask& get_lob_storage_clean_task() { return lob_storage_clean_task_; }
 
 public:
   // Print statistics
@@ -324,6 +328,8 @@ private:
   int64_t                 committer_next_trans_schema_version_ CACHE_ALIGNED;
 
   void                       *cf_handle_;
+  void                       *lob_storage_cf_handle_;
+  ObCDCLobAuxDataCleanTask   lob_storage_clean_task_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTenant);

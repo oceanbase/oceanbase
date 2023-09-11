@@ -32,12 +32,6 @@ class ObTabletHandle;
 struct ObUpdateTableStoreParam;
 }
 
-namespace memtable
-{
-enum class MultiSourceDataUnitType;
-class ObIMultiSourceDataUnit;
-}
-
 namespace blocksstable
 {
 class ObSSTable;
@@ -164,15 +158,6 @@ private:
   int add_sstable_for_merge(ObTabletMergeCtx &ctx);
   int try_schedule_compaction_after_mini(ObTabletMergeCtx &ctx, storage::ObTabletHandle &tablet_handle);
   int try_report_tablet_stat_after_mini(ObTabletMergeCtx &ctx);
-  int read_msd_from_memtable(
-      ObTabletMergeCtx &ctx,
-      storage::ObUpdateTableStoreParam &param,
-      ObArenaAllocator &allocator);
-  int traverse_all_memtables(
-      ObTabletMergeCtx &ctx,
-      memtable::ObIMultiSourceDataUnit *msd,
-      const memtable::MultiSourceDataUnitType &type,
-      ObArenaAllocator &allocator);
 private:
   bool is_inited_;
   ObBasicTabletMergeDag *merge_dag_;

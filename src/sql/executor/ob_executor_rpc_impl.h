@@ -233,13 +233,15 @@ public:
                    uint64_t min_cluster_version,
                    ObQueryRetryInfo *retry_info,
                    ObSQLSessionInfo *session,
-                   bool is_plain_select)
+                   bool is_plain_select,
+                   int32_t group_id)
     : rpc_tenant_id_(rpc_tenant_id),
       timeout_timestamp_(timeout_timestamp),
       min_cluster_version_(min_cluster_version),
       retry_info_(retry_info),
       session_(session),
-      is_plain_select_(is_plain_select)
+      is_plain_select_(is_plain_select),
+      group_id_(group_id)
   {
   }
   ~ObExecutorRpcCtx() {}
@@ -256,11 +258,13 @@ public:
   inline ObQueryRetryInfo *get_retry_info_for_update() const { return retry_info_; }
   bool is_retry_for_rpc_timeout() const { return is_plain_select_; }
   int check_status() const;
+  int32_t get_group_id() const { return group_id_; }
   TO_STRING_KV(K_(rpc_tenant_id),
                K_(timeout_timestamp),
                K_(min_cluster_version),
                K_(retry_info),
-               K_(is_plain_select));
+               K_(is_plain_select),
+               K_(group_id));
 private:
   uint64_t rpc_tenant_id_;
   int64_t timeout_timestamp_;
@@ -269,6 +273,7 @@ private:
   ObQueryRetryInfo *retry_info_;
   const ObSQLSessionInfo *session_;//该类中的变量会并发访问，注意session成功并发访问是否正确
   bool is_plain_select_;//stmt_type == T_SELECT && not select...for update
+  int32_t group_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecutorRpcCtx);
 };

@@ -69,7 +69,7 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_ISNULL(mod)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mod));
-  } else if (OB_FAIL(tablet_to_ls_.init(MAP_BUCKET_NUM, lib::ObLabel("TabletToLS")))) {
+  } else if (OB_FAIL(tablet_to_ls_.init(MAP_BUCKET_NUM, lib::ObLabel("TabletToLS"), tenant_id))) {
     LOG_WARN("create map for tablet to LS fail", KR(ret), K(tenant_id));
   } else if (OB_FAIL(tablet_data_size_.create(MAP_BUCKET_NUM, lib::ObLabel("TabletSizeMap")))) {
     LOG_WARN("create map for tablet data size fail", KR(ret), K(tenant_id));

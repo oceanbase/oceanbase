@@ -276,7 +276,7 @@ private:
   ~ObTableRpcProcessorUtil() = delete;
 };
 
-bool is_bad_routing_err(const int err);
+bool is_require_rerouting_err(const int err);
 
 } // end namespace observer
 } // end namespace oceanbase

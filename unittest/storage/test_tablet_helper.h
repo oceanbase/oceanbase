@@ -19,14 +19,15 @@
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_rpc_struct.h"
+#include "share/scn.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/ls/ob_ls.h"
-#include "share/scn.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_tablet_slog_helper.h"
 #include "storage/init_basic_struct.h"
-#include "storage/tablet/ob_tablet_create_delete_helper.h"
 
 namespace oceanbase
 {
@@ -112,12 +113,9 @@ inline int TestTabletHelper::create_tablet(
 
   ObTabletCreateSSTableParam param;
   prepare_sstable_param(tablet_id, table_schema, param);
-  void *buff = nullptr;
   ObSSTable *sstable = nullptr;
-  if (OB_ISNULL(buff = allocator.alloc(sizeof(ObSSTable)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-  } else if (FALSE_IT(sstable = new (buff) ObSSTable())) {
+  if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, sstable))) {
+    STORAGE_LOG(WARN, "fail to alloc and new", K(ret));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, *sstable))) {
     STORAGE_LOG(WARN, "failed to acquire sstable", K(ret));
   } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
@@ -145,13 +143,17 @@ inline int TestTabletHelper::create_tablet(
       if (tablet_status == ObTabletStatus::Status::DELETED) {
         data.delete_commit_scn_ = SCN::base_scn();
       }
+
+      ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_committed_kv = tablet_handle.get_obj()->mds_data_.tablet_status_.committed_kv_;
       const int64_t data_serialize_size = data.get_serialize_size();
       int64_t pos = 0;
       char *buf = static_cast<char *>(t3m->full_tablet_creator_.get_allocator().alloc(data_serialize_size));
       if (OB_FAIL(data.serialize(buf, data_serialize_size, pos))) {
         STORAGE_LOG(WARN, "data serialize failed", K(ret), K(data_serialize_size), K(pos));
+      } else if (ObTabletObjLoadHelper::alloc_and_new(*tablet_handle.get_allocator(), tablet_status_committed_kv.ptr_)) {
+        STORAGE_LOG(WARN, "failed to alloc and new", K(ret));
       } else {
-        tablet_handle.get_obj()->mds_data_.tablet_status_.committed_kv_.get_ptr()->v_.user_data_.assign(buf, data_serialize_size);
+        tablet_status_committed_kv.ptr_->v_.user_data_.assign(buf, data_serialize_size);
       }
     }
 

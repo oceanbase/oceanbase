@@ -64,6 +64,7 @@ private:
   int parse_data_dict_log_();
   int parse_reserved_snapshot_log_();
   int parse_medium_log_();
+  int parse_dup_table_log_();
 
   //log type belong to trans_service
   int parse_trans_redo_log_(transaction::ObTxLogBlock &tx_log_block,

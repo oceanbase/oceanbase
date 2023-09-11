@@ -711,7 +711,7 @@ OB_SERIALIZE_MEMBER((ObDASScanOp, ObIDASTaskOp),
 ObDASScanResult::ObDASScanResult()
   : ObIDASTaskResult(),
     ObNewRowIterator(),
-    datum_store_(),
+    datum_store_("DASScanResult"),
     result_iter_(),
     output_exprs_(nullptr),
     eval_ctx_(nullptr),

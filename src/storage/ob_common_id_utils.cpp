@@ -70,12 +70,13 @@ int ObCommonIDUtils::gen_unique_id_by_rpc(const uint64_t tenant_id, ObCommonID &
 
 int ObCommonIDUtils::gen_monotonic_id(const uint64_t tenant_id,
     const ObMaxIdType id_type,
+    const int32_t group_id,
     common::ObMySQLProxy &proxy,
     share::ObCommonID &id)
 {
   int ret = OB_SUCCESS;
   uint64_t ret_id = OB_INVALID_ID;
-  ObMaxIdFetcher id_fetcher(proxy);
+  ObMaxIdFetcher id_fetcher(proxy, group_id);
 
   id.reset();
 

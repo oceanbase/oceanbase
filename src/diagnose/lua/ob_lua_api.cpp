@@ -1902,7 +1902,7 @@ int dump_thread_info(lua_State *L)
           struct iovec remote_iov = {thread_base + rpc_dest_addr_offset, sizeof(ObAddr)};
           wait_event[0] = '\0';
           if (0 != join_addr) {
-            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "thread %u %ld", *(uint32_t*)(thread_base + tid_offset), tid_offset);
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "thread %u %ld", *(uint32_t*)(join_addr + tid_offset), tid_offset);
           } else if (OB_NOT_NULL(wait_addr)) {
             uint32_t val = 0;
             struct iovec local_iov = {&val, sizeof(val)};

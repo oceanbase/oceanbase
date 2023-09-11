@@ -1148,6 +1148,8 @@ int ObReferenceObjTable::process_reference_obj_table(const uint64_t tenant_id,
         if (OB_INVALID_ID != dep_obj_id) {
           OZ (task_queue.erase_view_id_from_set(dep_obj_id));
         }
+      } else if (task_queue.is_queue_almost_full()) {
+        ret = OB_SIZE_OVERFLOW;
       } else if (OB_FAIL(task_queue.push(task))) {
         if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
           LOG_WARN("push task failed", K(ret));

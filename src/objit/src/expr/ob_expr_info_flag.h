@@ -22,7 +22,7 @@ enum ObExprInfoFlag
 {
   IS_CONST = 0x0,   // const expression, e.g. 1.2, 'abc'
   IS_COLUMN,        // column expression, e.g. C1, T1.C1
-  IS_STATIC_PARAM,         // vaiable expression, e.g. ?
+  IS_STATIC_PARAM,         // variable expression, e.g. ?
   IS_AGG,           // aggregate function, e.g. max, avg
   IS_FUNC,          // system function
   IS_IN,
@@ -87,7 +87,7 @@ enum ObExprInfoFlag
   IS_JOIN_COND,     // column = column of different tables
   IS_COLUMNLIZED,   // for code generator, @see ObExprGenerator
   IS_ROOT, //for code generator, @see ObExprGenerator
-  IS_DYNAMIC_PARAM, //for opt to distinguish normal paramaterized const and exec-params
+  IS_DYNAMIC_PARAM, //for opt to distinguish normal parameterized const and exec-params
   IS_NEW_AGG_EXPR,
   IS_WITH_ALL,
   IS_WITH_ANY,
@@ -167,5 +167,5 @@ inline const char* get_expr_info_flag_str(const ObExprInfoFlag flag)
   return ret;
 }
 }  // namespace sql
-}  // namespace oceabase
+}  // namespace oceanbase
 #endif /* OCEANBASE_SRC_SQL_RESOLVER_EXPR_OB_EXPR_INFO_FLAG_H_ */

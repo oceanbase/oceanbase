@@ -4875,28 +4875,20 @@ int ObLogPlan::assign_right_popular_value_to_left(ObExchangeInfo &left_exch_info
       LOG_WARN("left_exch_info hash_dist_exprs_ is empty or null.", K(ret), K(left_exch_info));
     } else {
       ObObjType expect_type = left_exch_info.hash_dist_exprs_.at(0).expr_->get_result_meta().get_type();
-      if (ob_is_string_tc(pv.get_type()) && ob_is_large_text(expect_type)) {
-        // add lob locator for string
-        ObString data = pv.get_string();
-        ObTextStringResult new_tmp_lob(expect_type, true, &get_allocator());
-        if (OB_FAIL(new_tmp_lob.init(data.length()))) {
-          LOG_WARN("fail to init text string result", K(ret), K(new_tmp_lob), K(data.length()));
-        } else if (OB_FAIL(new_tmp_lob.append(data))) {
-          LOG_WARN("fail to append data", K(ret), K(new_tmp_lob), K(data.length()));
-        } else {
-          ObString res;
-          new_tmp_lob.get_result_buffer(res);
-          ObObj new_pv;
-          new_pv.set_lob_value(expect_type, res.ptr(), res.length());
-          new_pv.set_has_lob_header();
-          if (OB_FAIL(left_exch_info.popular_values_.push_back(new_pv))) {
-            LOG_WARN("failed to push obj to left_exch_info popular_values", K(ret), K(new_pv), K(left_exch_info));
-          }
+      bool need_cast = (!is_lob_storage(pv.get_type()) && is_lob_storage(expect_type)) ||
+                       (is_lob_storage(pv.get_type()) && !is_lob_storage(expect_type));
+      ObObj new_pv;
+      if (need_cast) {
+        ObCastCtx cast_ctx(&get_allocator(), NULL, CM_NONE, pv.get_meta().get_collation_type());
+        if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, pv, new_pv))) {
+          LOG_WARN("failed to do cast obj", K(ret), K(pv), K(expect_type));;
         }
       } else {
-        if (OB_FAIL(left_exch_info.popular_values_.push_back(pv))) {
-          LOG_WARN("failed to push obj to left_exch_info popular_values", K(ret), K(pv), K(left_exch_info));
-        }
+        new_pv = pv;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(left_exch_info.popular_values_.push_back(new_pv))) {
+        LOG_WARN("failed to push obj to left_exch_info popular_values", K(ret), K(new_pv), K(left_exch_info));
       }
     }
   }

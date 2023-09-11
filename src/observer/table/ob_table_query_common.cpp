@@ -25,7 +25,7 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObIArray<ObString> &select_columns = tb_ctx.get_query_col_names();
   int64_t N = select_columns.count();
-  if (N != 4) {
+  if (N != 4 && N != 5) { // htable maybe has prefix generated column
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("TableQuery with htable_filter should select 4 columns", K(ret), K(N));
   }

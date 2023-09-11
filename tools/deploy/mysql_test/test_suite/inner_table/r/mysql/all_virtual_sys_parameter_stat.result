@@ -316,6 +316,7 @@ _minor_compaction_amplification_factor
 _min_malloc_sample_interval
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
+_obkv_feature_mode
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
 _ob_enable_direct_load
@@ -378,7 +379,7 @@ _transfer_start_rpc_timeout
 _transfer_start_trans_timeout
 _tx_result_retention
 _upgrade_stage
-_wait_interval_after_truncate
+_wait_interval_after_parallel_ddl
 _with_subquery
 _xa_gc_interval
 _xa_gc_timeout

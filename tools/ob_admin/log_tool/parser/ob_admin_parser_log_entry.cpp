@@ -22,6 +22,7 @@
 #include "storage/tx/ob_id_service.h"
 #include "storage/memtable/ob_memtable_mutator.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
+#include "storage/tx/ob_dup_table_dump.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_garbage_collector.h"
 #include "logservice/data_dictionary/ob_data_dict_iterator.h"     // ObDataDictIterator
@@ -578,6 +579,23 @@ int ObAdminParserLogEntry::parse_medium_log_()
   return ret;
 }
 
+int ObAdminParserLogEntry::parse_dup_table_log_()
+{
+  int ret = OB_SUCCESS;
+
+  oceanbase::transaction::ObDupTableLogDumpIterator dup_table_log_dump_iter;
+
+  if (OB_FAIL(dup_table_log_dump_iter.init_with_log_buf(buf_ + pos_, buf_len_, &str_arg_))) {
+    LOG_WARN("fail to init  dup table log dump_iter", K(ret));
+  } else if (OB_FAIL(dup_table_log_dump_iter.dump_dup_table_log())) {
+    LOG_WARN("fail to dump dup table log", K(ret));
+  } else {
+    pos_ += dup_table_log_dump_iter.get_iter_buf_pos();
+  }
+
+  return ret;
+}
+
 int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBaseHeader &header)
 {
   int ret = OB_SUCCESS;
@@ -654,6 +672,10 @@ int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBa
       }
       case oceanbase::logservice::ObLogBaseType::MEDIUM_COMPACTION_LOG_BASE_TYPE: {
         ret = parse_medium_log_();
+        break;
+      }
+      case oceanbase::logservice::ObLogBaseType::DUP_TABLE_LOG_BASE_TYPE: {
+        ret = parse_dup_table_log_();
         break;
       }
 

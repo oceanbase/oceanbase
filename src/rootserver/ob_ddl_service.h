@@ -99,7 +99,6 @@ class ObDDLService
 {
 public:
   typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletID;
-  typedef ObFixedLengthString<OB_ROOT_KEY_LEN + 1> RootKeyValue;
 public:
   friend class ObTableGroupHelp;
   friend class ObStandbyClusterSchemaProcessor;
@@ -1924,14 +1923,16 @@ public:
   int check_need_create_root_key(const obrpc::ObCreateTenantArg &arg, bool &need_create);
   int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
   const uint64_t tenant_id, obrpc::RootKeyType &key_type,
-  RootKeyValue &key_value);
+  common::ObString &key_value,
+  common::ObIAllocator &allocator);
   static int get_root_key_from_obs(
              const uint64_t &cluster_id,
              obrpc::ObSrvRpcProxy &rpc_proxy,
              const obrpc::ObRootKeyArg &arg,
              const common::ObIArray<common::ObAddr> &addrs,
              obrpc::RootKeyType &key_type,
-             RootKeyValue &key_value);
+             common::ObString &key_value,
+             common::ObIAllocator &allocator);
   int standby_create_root_key(
              const uint64_t tenant_id,
              const obrpc::ObCreateTenantArg &arg,
@@ -2242,6 +2243,9 @@ private:
 
   virtual int publish_schema(const uint64_t tenant_id,
                              const common::ObAddrIArray &addrs);
+
+  int check_tenant_has_been_dropped_(const uint64_t tenant_id, bool &is_dropped);
+
   int get_zone_region(
       const common::ObZone &zone,
       const common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
@@ -2613,7 +2617,8 @@ public:
                     bool with_snapshot = false) override;
   virtual int start(ObISQLClient *proxy,
                     const uint64_t tenant_id,
-                    bool with_snapshot = false) override;
+                    bool with_snapshot = false,
+                    const int32_t group_id = 0) override;
   static int lock_all_ddl_operation(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id);

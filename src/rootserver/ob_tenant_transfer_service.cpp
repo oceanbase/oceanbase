@@ -177,10 +177,10 @@ int ObTenantTransferService::process_task_(const ObTransferTask::TaskStatus &tas
 int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTransferTask task;
   ObMySQLTransaction trans;
-  bool member_list_is_same = false;
-  bool update_comment_to_wait_for_member_list = false;
+  ObTransferTaskComment result_comment = EMPTY_COMMENT;
   ObArray<ObTabletID> tablet_ids;
   ObTableLockOwnerID lock_owner_id;
   ObTransferPartList not_exist_part_list;
@@ -205,7 +205,8 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
       tenant_id_,
       task_id,
       true/*for_update*/,
-      task))) {
+      task,
+      0/*group_id*/))) {
     LOG_WARN("fail to get task", KR(ret), K_(tenant_id), K(task_id), K(task));
   } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -218,15 +219,12 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
       *sql_proxy_,
       task.get_src_ls(),
       task.get_dest_ls(),
-      member_list_is_same))) { // can't use trans
-    LOG_WARN("fail to check ls member_list", KR(ret), K(task), K(member_list_is_same));
-  } else if (!member_list_is_same) {
+      result_comment))) { // can't use trans
+    LOG_WARN("fail to check ls member_list", KR(ret), K(task));
+  } else if (EMPTY_COMMENT != result_comment) {
     ret = OB_NEED_RETRY;
-    TTS_INFO("member_lists of src_ls and dest_ls are not same, need retry",
-        KR(ret), K_(tenant_id), K(member_list_is_same), K(task));
-    if (task.get_comment() != ObTransferTaskComment::WAIT_FOR_MEMBER_LIST) {
-      update_comment_to_wait_for_member_list = true;
-    }
+    TTS_INFO("member_lists of src_ls and dest_ls are not same or there has inacitve server in member_list, need retry",
+        KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
   } else if (OB_FAIL(lock_table_and_part_(
       trans,
       task.get_src_ls(),
@@ -288,22 +286,10 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     }
   }
 
-  if ((OB_NEED_RETRY == ret && update_comment_to_wait_for_member_list)
-      || OB_TRANS_TIMEOUT == ret || OB_TIMEOUT == ret) {
-    ObTimeoutCtx ctx_comment;
-    int tmp_ret = OB_SUCCESS;
-    ObTransferTaskComment comment = (OB_NEED_RETRY == ret)
-        ? ObTransferTaskComment::WAIT_FOR_MEMBER_LIST
-        : ObTransferTaskComment::TRANSACTION_TIMEOUT;
-    if (OB_TMP_FAIL(ctx_comment.set_timeout(2000000/*2s*/))) { // overwrite timeout
-      LOG_WARN("set default timeout ctx failed", KR(tmp_ret), K(ctx_comment), K_(tenant_id), K(task_id));
-    } else if (OB_TMP_FAIL(ObTransferTaskOperator::update_comment(
-        *sql_proxy_,
-        tenant_id_,
-        task_id,
-        comment))) {
-      LOG_WARN("update comment failed", KR(tmp_ret), K_(tenant_id), K(task_id), K(comment));
-    }
+  // update comments for expected error codes
+  if (OB_TMP_FAIL(update_comment_for_expected_errors_(ret, task_id, result_comment))) {
+    LOG_WARN("update comment for expected errors failed", KR(tmp_ret), KR(ret),
+        K_(tenant_id), K(task_id), "result_comment", transfer_task_comment_to_str(result_comment));
   }
 
   if (OB_SUCC(ret)) {
@@ -321,24 +307,87 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
 
 ERRSIM_POINT_DEF(EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME);
 
+// 1.check leader member_lists of src_ls and dest_ls are same
+// 2.if member_lists are same, check that all servers in member_list are acitve
 int ObTenantTransferService::check_ls_member_list_(
     common::ObISQLClient &sql_proxy,
     const ObLSID &src_ls,
     const ObLSID &dest_ls,
-    bool &is_same)
+    ObTransferTaskComment &result_comment)
 {
   int ret = OB_SUCCESS;
+  result_comment = EMPTY_COMMENT;
+  bool all_members_are_active = false;
+  ObLSReplica::MemberList src_ls_member_list;
+  ObLSReplica::MemberList dest_ls_member_list;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(get_member_lists_by_inner_sql_(
+      sql_proxy,
+      src_ls,
+      dest_ls,
+      src_ls_member_list,
+      dest_ls_member_list))) {
+    LOG_WARN("get member list by inner sql failed", KR(ret), K(src_ls), K(dest_ls));
+  } else if (!ObLSReplica::servers_in_member_list_are_same(
+      src_ls_member_list,
+      dest_ls_member_list)) {
+    // result 1: member_lists are not same
+    result_comment = WAIT_FOR_MEMBER_LIST;
+    LOG_WARN("member_list of src_ls and dest_ls are not same", KR(ret), K_(tenant_id), K(src_ls),
+        K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list), K(result_comment));
+  } else if (OB_FAIL(ObLSReplica::check_all_servers_in_member_list_are_active(
+      src_ls_member_list,
+      all_members_are_active))) {
+    LOG_WARN("check all servers in member list are active failed",
+        KR(ret), K(src_ls_member_list), K(all_members_are_active));
+  } else if (!all_members_are_active) {
+    // result 2: member_lists are same, but server in member_list is inactive
+    result_comment = INACTIVE_SERVER_IN_MEMBER_LIST;
+    LOG_WARN("member_list has inactive server", KR(ret), K(src_ls),
+        K(src_ls_member_list), K(all_members_are_active), K(result_comment));
   } else {
-    is_same = false;
+    // result 3: member_lists are same && all members are active
+    result_comment = EMPTY_COMMENT;
+    TTS_INFO("member_lists of src_ls and dest_ls are same and all members are acitve",
+        KR(ret), K_(tenant_id), K(src_ls), K(dest_ls), K(all_members_are_active),
+        K(src_ls_member_list), K(dest_ls_member_list), K(result_comment));
+  }
+  // just for debug
+  if (OB_FAIL(ret)) {
+  } else if (OB_IN_STOP_STATE == EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME) {
+    result_comment = INACTIVE_SERVER_IN_MEMBER_LIST;
+    TTS_INFO("errsim tenant transfer check ls member list with inactive server", K(result_comment));
+  } else if (OB_STATE_NOT_MATCH == EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME) {
+    result_comment = WAIT_FOR_MEMBER_LIST;
+    TTS_INFO("errsim tenant transfer check ls member list not same", K(result_comment));
+  }
+  return ret;
+}
+
+// get ls leader member list of src_ls and dest_ls
+int ObTenantTransferService::get_member_lists_by_inner_sql_(
+    common::ObISQLClient &sql_proxy,
+    const ObLSID &src_ls,
+    const ObLSID &dest_ls,
+    ObLSReplica::MemberList &src_ls_member_list,
+    ObLSReplica::MemberList &dest_ls_member_list)
+{
+  int ret = OB_SUCCESS;
+  src_ls_member_list.reset();
+  dest_ls_member_list.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!src_ls.is_valid() || !dest_ls.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(src_ls), K(dest_ls));
+  } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       ObSqlString sql;
       ObString src_ls_member_list_str;
       ObString dest_ls_member_list_str;
-      ObLSReplica::MemberList src_ls_member_list;
-      ObLSReplica::MemberList dest_ls_member_list;
       common::sqlclient::ObMySQLResult *res = NULL;
       if (OB_FAIL(sql.assign_fmt(
           "SELECT PAXOS_MEMBER_LIST FROM %s WHERE TENANT_ID = %lu AND ROLE = 'LEADER'"
@@ -371,12 +420,8 @@ int ObTenantTransferService::check_ls_member_list_(
           to_cstring(dest_ls_member_list_str),
           dest_ls_member_list))) {
         LOG_WARN("text2member_list failed", KR(ret), K_(tenant_id), K(dest_ls), K(dest_ls_member_list_str));
-      } else if (ObLSReplica::servers_in_member_list_are_same(src_ls_member_list, dest_ls_member_list)) {
-        is_same = true;
-      } else {
-        is_same = false;
       }
-
+      // double check sql result
       if (OB_FAIL(ret)) {
         if (OB_UNLIKELY(OB_ITER_END == ret)) { // read less than two rows
           ret = OB_LEADER_NOT_EXIST;
@@ -395,21 +440,8 @@ int ObTenantTransferService::check_ls_member_list_(
             K(sql), K(src_ls_member_list_str), K(dest_ls_member_list_str));
       } else {
         ret = OB_SUCCESS;
-        if (is_same) {
-          LOG_INFO("member_list of src_ls and dest_ls are same", KR(ret), K_(tenant_id), K(src_ls),
-              K(dest_ls), K(is_same), K(src_ls_member_list), K(dest_ls_member_list));
-        } else {
-          LOG_WARN("member_list of src_ls and dest_ls are not same", KR(ret), K_(tenant_id), K(src_ls),
-              K(dest_ls), K(is_same), K(src_ls_member_list), K(dest_ls_member_list));
-        }
       }
     } // end SMART_VAR
-  }
-  if (OB_SUCC(ret)) {
-    if (EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME) {
-      is_same = false;
-      TTS_INFO("errsim tenant transfer check ls member list not same", K(is_same));
-    }
   }
   return ret;
 }
@@ -1104,7 +1136,8 @@ int ObTenantTransferService::try_cancel_transfer_task(const ObTransferTaskID tas
       tenant_id_,
       task_id,
       true/*for_update*/,
-      task))) {
+      task,
+      0/*group_id*/))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get task", KR(ret), K_(tenant_id), K(task_id), K(task));
     } else {
@@ -1560,6 +1593,50 @@ int ObTenantTransferService::set_transaction_timeout_(common::ObTimeoutCtx &ctx)
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, tx_timeout))) {
       LOG_WARN("set default timeout ctx failed", KR(ret), K(ctx), K(tx_timeout));
     }
+  }
+  return ret;
+}
+
+//       err        -->        comment
+// OB_TRANS_TIMEOUT      TRANSACTION_TIMEOUT
+// OB_TIMEOUT            TRANSACTION_TIMEOUT
+// OB_NEED_RETRY         WAIT_FOR_MEMBER_LIST/INACTIVE_SERVER_IN_MEMBER_LIST
+int ObTenantTransferService::update_comment_for_expected_errors_(
+    const int err,
+    const ObTransferTaskID &task_id,
+    const ObTransferTaskComment &result_comment)
+{
+  int ret = OB_SUCCESS;
+  ObTransferTaskComment actual_comment = EMPTY_COMMENT;
+  ObTimeoutCtx ctx;
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_SUCCESS == err) {
+    // skip
+  } else if (OB_UNLIKELY(!task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid task_id", KR(ret), K(task_id));
+  } else if (OB_TRANS_TIMEOUT == err || OB_TIMEOUT == err) {
+    actual_comment = TRANSACTION_TIMEOUT;
+  } else if (OB_NEED_RETRY == err) {
+    if (WAIT_FOR_MEMBER_LIST != result_comment && INACTIVE_SERVER_IN_MEMBER_LIST != result_comment) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected comment with err", KR(ret), K(err), K(result_comment));
+    } else {
+      actual_comment = result_comment;
+    }
+  }
+  if (OB_FAIL(ret) || EMPTY_COMMENT == actual_comment) {
+    // do nothing
+  } else if (OB_FAIL(ctx.set_timeout(GCONF.internal_sql_execute_timeout))) { // overwrite timeout
+    LOG_WARN("set default timeout ctx failed", KR(ret), K(ctx), K_(tenant_id), K(task_id));
+  } else if (OB_FAIL(ObTransferTaskOperator::update_comment(
+      *sql_proxy_,
+      tenant_id_,
+      task_id,
+      actual_comment))) {
+    LOG_WARN("update comment failed", KR(ret), K_(tenant_id), K(task_id), K(actual_comment));
   }
   return ret;
 }

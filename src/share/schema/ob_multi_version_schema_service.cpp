@@ -2207,7 +2207,12 @@ int ObMultiVersionSchemaService::add_schema(
     // try switch allocator
     if (OB_SUCC(ret)) {
       bool can_switch = false;
-      int64_t switch_cnt = ObSchemaService::g_liboblog_mode_ ? init_version_cnt_ : GCONF._max_schema_slot_num;
+      int64_t max_schema_slot_num = OB_MAX_VERSION_COUNT;
+      omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+      if (tenant_config.is_valid()) {
+        max_schema_slot_num = tenant_config->_max_schema_slot_num;
+      }
+      const int64_t switch_cnt = ObSchemaService::g_liboblog_mode_ ? init_version_cnt_ : max_schema_slot_num;
       if (OB_FAIL(mem_mgr->check_can_switch_allocator(switch_cnt, can_switch))) {
         LOG_WARN("fail to check can switch allocator", KR(ret));
       } else if (can_switch) {
@@ -2384,8 +2389,9 @@ int ObMultiVersionSchemaService::async_refresh_schema(
     // do nothing
   } else {
     int64_t retry_cnt = 0;
-    int64_t MAX_RETRY_CNT = 1000;
-    const __useconds_t RETRY_IDLE_TIME = 100 * 1000L; // 100ms
+    const __useconds_t RETRY_IDLE_TIME = 10 * 1000L; // 10ms
+    const int64_t MAX_RETRY_CNT = 100 * 1000 * 1000L / RETRY_IDLE_TIME; // 100s at most
+    const int64_t SUBMIT_TASK_FREQUENCE = 2 * 1000 * 1000L / RETRY_IDLE_TIME; // each 2s
     while (OB_SUCC(ret)) {
       if (THIS_WORKER.is_timeout()
           || (INT64_MAX == THIS_WORKER.get_timeout_ts() && retry_cnt >= MAX_RETRY_CNT)) {
@@ -2400,21 +2406,13 @@ int ObMultiVersionSchemaService::async_refresh_schema(
         // success
         break;
       } else {
-        if (0 == retry_cnt % 20) {
-          // try refresh schema each 2s
-          {
-            bool is_dropped = false;
-            ObSchemaGetterGuard guard;
-            if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-              LOG_WARN("fail to get schema guard", KR(ret));
-            } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
-              LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
-            } else if (is_dropped) {
-              ret = OB_TENANT_HAS_BEEN_DROPPED;
-              LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
-            }
-          }
-          if (OB_FAIL(ret)) {
+        if (0 == retry_cnt % SUBMIT_TASK_FREQUENCE) {
+          bool is_dropped = false;
+          if (OB_FAIL(check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+            LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+          } else if (is_dropped) {
+            ret = OB_TENANT_HAS_BEEN_DROPPED;
+            LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
           } else if (OB_ISNULL(GCTX.ob_service_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("observice is null", K(ret));

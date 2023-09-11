@@ -114,7 +114,9 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(
                               false,
                               p_param_list);
     for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->question_marks_count_; ++i) {
-      OZ (param_list.push_back(ObObjParam(ObObj(ObNullType))));
+      ObObjParam param = ObObjParam(ObObj(ObNullType));
+      const_cast<ObObjMeta&>(param.get_null_meta()).reset();
+      OZ (param_list.push_back(param));
     }
     OZ (package_guard.init());
     OX (func_ast.set_db_name(params_.session_info_->get_database_name()));

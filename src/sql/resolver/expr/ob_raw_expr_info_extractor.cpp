@@ -515,7 +515,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
     } else if (T_FUN_NORMAL_UDF == expr.get_expr_type()
                || T_FUN_AGG_UDF == expr.get_expr_type()) {
       /*
-       * it seems we have no chioce but to set the udf uncalculable.
+       * it seems we have no choice but to set the udf uncalculable.
        * we can not say a udf expr is const or not util we finish the xxx_init() function.
        * but we do the xxx_init() at the expr deduce type stage which was done after we
        * extractor info from expr.
@@ -576,19 +576,19 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
            || T_FUN_SYS_XML_ELEMENT == expr.get_expr_type()
            || T_FUN_SYS_XMLPARSE == expr.get_expr_type()
            || IS_LABEL_SE_POLICY_FUNC(expr.get_expr_type()))
-        && expr.has_flag(IS_CONST_EXPR)) {
-      expr.clear_flag(IS_CONST_EXPR);
+        && OB_FAIL(expr.clear_flag(IS_CONST_EXPR))) {
+      LOG_WARN("failed to clear flag", K(ret));
     }
 
     if (OB_SUCC(ret) && T_FUN_SYS_JSON_VALUE == expr.get_expr_type()) {
       if (expr.get_param_count() >= 12) {
         ObRawExpr * sub_expr = expr.get_param_expr(7);
-        if (OB_NOT_NULL(sub_expr)) {
-          sub_expr->clear_flag(IS_CONST_EXPR);
-        }
-        sub_expr = expr.get_param_expr(4);
-        if (OB_NOT_NULL(sub_expr)) {
-          sub_expr->clear_flag(IS_CONST_EXPR);
+        if (OB_NOT_NULL(sub_expr)
+            && OB_FAIL(sub_expr->clear_flag(IS_CONST_EXPR))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        } else if (OB_NOT_NULL(sub_expr = expr.get_param_expr(4))
+                   && OB_FAIL(sub_expr->clear_flag(IS_CONST_EXPR))) {
+          LOG_WARN("failed to clear flag", K(ret));
         }
       }
     }

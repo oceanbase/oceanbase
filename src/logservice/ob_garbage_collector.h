@@ -251,6 +251,7 @@ public:
   int check_ls_can_offline(const share::ObLSStatus &ls_status);
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
   static bool is_valid_ls_gc_state(const LSGCState &state);
+  static bool is_ls_offline_gc_state(const LSGCState &state);
 
   int diagnose(GCDiagnoseInfo &diagnose_info) const;
 
@@ -314,10 +315,10 @@ private:
   const int64_t GET_GTS_TIMEOUT_US = 10L * 1000 * 1000; //10s
   int get_gts_(const int64_t timeout_us, share::SCN &gts_scn);
   bool is_ls_blocked_state_(const LSGCState &state);
-  bool is_ls_offline_state_(const LSGCState &state);
   bool is_ls_wait_gc_state_(const LSGCState &state);
   bool is_ls_blocked_finished_(const LSGCState &state);
   bool is_ls_offline_finished_(const LSGCState &state);
+
   bool is_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status);
   void try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status);
   int try_check_and_set_wait_gc_when_log_archive_is_off_(

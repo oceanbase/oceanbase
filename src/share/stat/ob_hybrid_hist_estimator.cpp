@@ -598,7 +598,7 @@ int ObHybridHistograms::build_hybrid_hist(ObIArray<BucketNode> &bucket_pairs,
       dynamic_size = true;
       // first bucket always contain only one values. following code will handle first value is 
       // popular value or not.
-      if (bucket_pairs.at(0).is_pop_) {
+      if (bucket_pairs.at(0).is_pop_ || bucket_num == pop_count + 1) {
         bucket_size = (total_count - pop_freq) / (bucket_num - pop_count);
       } else {
         bucket_size = (total_count - pop_freq - bucket_pairs.at(0).ep_count_)
@@ -678,7 +678,7 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
       // first bucket always contain only one values. following code will handle first value is
       // popular value or not.
       BucketDesc *desc = reinterpret_cast<BucketDesc*>(row->get_extra_payload());
-      if (desc->is_pop_) {
+      if (desc->is_pop_ || bucket_num == pop_count + 1) {
         bucket_size = (total_count - pop_freq) / (bucket_num - pop_count);
       } else {
         bucket_size = (total_count - pop_freq - desc->ep_count_) / (bucket_num - pop_count - 1);

@@ -432,13 +432,14 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   // 3. decided by session variable: _enable_parallel_dml is true or _force_parallel_dml_dop > 1;
   int ret = OB_SUCCESS;
   ObSqlCtx *sql_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
   bool can_use_pdml = true;
   bool session_enable_pdml = false;
   bool enable_auto_dop = false;
   uint64_t session_pdml_dop = ObGlobalHint::UNSET_PARALLEL;
-  if (OB_ISNULL(ctx_.get_exec_ctx())) {
+  if (OB_ISNULL(ctx_.get_exec_ctx()) || OB_ISNULL(query_ctx = ctx_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()));
+    LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()), K(query_ctx));
   } else if (OB_ISNULL(sql_ctx = ctx_.get_exec_ctx()->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()));
@@ -464,7 +465,8 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     // do nothing
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
     // 1. enable parallel dml by hint
-  } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE) {
+  } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE
+             || query_ctx->get_query_hint().has_outline_data()) {
     can_use_pdml = false; // 1. disable parallel dml by hint
   } else if (ctx_.get_global_hint().enable_auto_dop()) {
     // 2.1 enable parallel dml by auto dop
@@ -501,25 +503,10 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
   ObSEArray<const ObDmlTableInfo*, 2> table_infos;
-  bool enable_all_pdml_feature = false; // 默认非注入错误情况下，关闭PDML不稳定feature
-  // 目前通过注入错误的方式来打开PDML不稳定功能，用于PDML全部功能的case回归
-  // 对应的event注入任何类型的错误，都会打开PDML非稳定功能
-  ret = OB_E(EventTable::EN_ENABLE_PDML_ALL_FEATURE) OB_SUCCESS;
-  LOG_TRACE("event: check pdml all feature", K(ret));
-  if (OB_FAIL(ret)) {
-    enable_all_pdml_feature = true;
-    ret = OB_SUCCESS;
-    ctx_.add_plan_note(PDML_ENABLE_BY_TRACE_EVENT);
-  }
-  LOG_TRACE("event: check pdml all feature result", K(ret), K(enable_all_pdml_feature));
-  // 检查是否开启全部pdml feature：
-  // 1. 如果开启，is open = true
-  // 2. 如果没有开启，需要依次检查被禁止的不稳定的功能，如果存在被禁止的不稳定功能 is open = false
+  // 依次检查被禁止的不稳定的功能，如果存在被禁止的不稳定功能 is open = false
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the schema guard is null", K(ret));
-  } else if (enable_all_pdml_feature) {
-    is_use_pdml = true;
   } else if (pdml_stmt.is_ignore()) {
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_IGNORE);
@@ -735,7 +722,10 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   int64_t session_force_parallel_dop = ObGlobalHint::UNSET_PARALLEL;
   bool session_enable_auto_dop = false;
   bool session_enable_manual_dop = false;
-  if (ctx_.has_pl_udf()) {
+  if (OB_ISNULL(ctx_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query ctx is nul", K(ret));
+  } else if (ctx_.has_pl_udf()) {
     //following above rule, but if stmt contain pl_udf, force das, parallel should be 1
     ctx_.set_parallel_rule(PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE);
   } else if (ctx_.has_cursor_expression()) {
@@ -749,6 +739,9 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
     ctx_.set_parallel(ctx_.get_global_hint().get_parallel_degree());
   } else if (ctx_.get_global_hint().enable_auto_dop()) {
     ctx_.set_parallel_rule(PXParallelRule::AUTO_DOP);
+  } else if (ctx_.get_query_ctx()->get_query_hint().has_outline_data()) {
+    ctx_.set_parallel_rule(PXParallelRule::MANUAL_HINT);
+    ctx_.set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
   } else if (session.is_user_session() && !ctx_.get_global_hint().enable_manual_dop() &&
              OB_FAIL(OB_E(EventTable::EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN) OB_SUCCESS)) {
     ret = OB_SUCCESS;
@@ -774,7 +767,7 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   } else {
     LOG_TRACE("succeed to init parallel policy", K(session.is_user_session()),
                         K(ctx_.can_use_pdml()), K(ctx_.get_parallel_rule()), K(ctx_.get_parallel()),
-                        K(ctx_.get_parallel_degree_limit()), K(ctx_.get_parallel_min_scan_time_threshold()));
+                        K(ctx_.get_auto_dop_params()));
   }
   return ret;
 }
@@ -782,31 +775,38 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
 int ObOptimizer::set_auto_dop_params(const ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  const uint64_t default_parallel_degree_limit = 256;
-  uint64_t parallel_degree_limit = default_parallel_degree_limit;
+  uint64_t parallel_degree_limit = 0;
   uint64_t parallel_min_scan_time_threshold = 1000;
-  int64_t parallel_servers_target = 0;
+  AutoDOPParams params;
   if (!session.is_user_session()) {
     /* do nothing */
   } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_PARALLEL_DEGREE_LIMIT, parallel_degree_limit))) {
     LOG_WARN("failed to get sys variable parallel degree limit", K(ret));
   } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD, parallel_min_scan_time_threshold))) {
     LOG_WARN("failed to get sys variable parallel threshold", K(ret));
-  } else if (0 != parallel_degree_limit) {
-    /* do nothing */
-  } else if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(session.get_effective_tenant_id(),
-                                                            SYS_VAR_PARALLEL_SERVERS_TARGET,
-                                                            parallel_servers_target))) {
-    LOG_WARN("fail read tenant variable", K(ret), K(session.get_effective_tenant_id()));
-  } else if (parallel_servers_target > 0) {
-    parallel_degree_limit = parallel_servers_target;
-  } else {
-    parallel_degree_limit = default_parallel_degree_limit;
+  }
+
+  if (OB_SUCC(ret) && 0 == parallel_degree_limit) {
+    const ObTenantBase *tenant = NULL;
+    int64_t parallel_servers_target = 0;
+    if (OB_ISNULL(tenant = MTL_CTX())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (session.is_user_session() &&
+               OB_FAIL(ObSchemaUtils::get_tenant_int_variable(session.get_effective_tenant_id(),
+                                                              SYS_VAR_PARALLEL_SERVERS_TARGET,
+                                                              parallel_servers_target))) {
+      LOG_WARN("fail read tenant variable", K(ret), K(session.get_effective_tenant_id()));
+    } else {
+      params.unit_min_cpu_ = std::max(tenant->unit_min_cpu(), 0.0);
+      params.parallel_servers_target_ = std::max(parallel_servers_target, 0L);
+    }
   }
 
   if (OB_SUCC(ret)) {
-    ctx_.set_parallel_degree_limit(parallel_degree_limit);
-    ctx_.set_parallel_min_scan_time_threshold(parallel_min_scan_time_threshold);
+    params.parallel_min_scan_time_threshold_ = parallel_min_scan_time_threshold;
+    params.parallel_degree_limit_ = parallel_degree_limit;
+    ctx_.set_auto_dop_params(params);
   }
   return ret;
 }
@@ -1101,7 +1101,7 @@ int ObOptimizer::update_column_usage_infos()
         LOG_WARN("get unexpected null", K(ret), K(optstat_monitor_mgr));
       } else if (OB_FAIL(optstat_monitor_mgr->update_local_cache(ctx_.get_column_usage_infos()))) {
         LOG_WARN("failed to update local cache", K(ret));
-      } else {/*do nothiing*/}
+      } else {/*do nothing*/}
     }
   }
   return ret;

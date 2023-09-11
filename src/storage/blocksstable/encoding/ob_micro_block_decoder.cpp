@@ -73,11 +73,13 @@ public:
   ObDecoderCtxArray() : ctxs_()
   {
     ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
+    attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
     ctxs_.set_attr(attr);
   };
   virtual ~ObDecoderCtxArray()
   {
     ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
+    attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
     FOREACH(it, ctxs_) {
       ObDecoderCtx *c = *it;
       OB_DELETE(ObDecoderCtx, attr, c);
@@ -96,6 +98,7 @@ public:
       LOG_WARN("invalid argument", K(ret));
     } else {
       ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
+      attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
       if (ctxs_.count() < size) {
         for (int64_t i = ctxs_.count(); OB_SUCC(ret) && i < size; ++i) {
           ObDecoderCtx *ctx = OB_NEW(ObDecoderCtx, attr);
@@ -133,12 +136,14 @@ public:
   ObTLDecoderCtxArray() : ctxs_array_()
   {
     ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
+    attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
     ctxs_array_.set_attr(attr);
   }
 
   virtual ~ObTLDecoderCtxArray()
   {
     ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
+    attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
     FOREACH(it, ctxs_array_) {
       ObDecoderCtxArray *ctxs = *it;
       OB_DELETE(ObDecoderCtxArray, attr, ctxs);
@@ -155,6 +160,7 @@ public:
       LOG_WARN("NULL instance", K(ret));
     } else if (tl_array->ctxs_array_.empty()) {
       ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
+      attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
       ctxs = OB_NEW(ObDecoderCtxArray, attr);
       if (NULL == ctxs) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -171,6 +177,7 @@ public:
   {
     int ret = OB_SUCCESS;
     ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtx");
+    attr.sub_ctx_id_ = ObSubCtxIds::THREAD_LOCAL_DECODE_CTX_ID;
     ObTLDecoderCtxArray *tl_array = instance();
     if (NULL == tl_array) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

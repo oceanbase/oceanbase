@@ -1568,12 +1568,15 @@ public:
   OB_INLINE int get_json_print_data(ObString &json_data, char *buf, int64_t buf_len, int64_t &pos) const {
     int ret = OB_SUCCESS;
     json_data = get_string();
-    if (!has_lob_header()) {
+    ObLobCommon* lob_comm = reinterpret_cast<ObLobCommon*>(json_data.ptr());
+    bool bret = has_lob_header() ||
+                (json_data.length() >= sizeof(ObLobCommon) && lob_comm->is_valid());
+    if (!bret) {
       // if it called in log params, like K(json), it maybe a json with disk lob header only
       // cannot judge here is a plain json data or json data with disk lob header
       COMMON_LOG(DEBUG, "Lob: get json data without mem lob header", K(*this));
     } else {
-      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, bret);
       if (OB_UNLIKELY(!loc.is_valid(false))) {
         // do nothing, warn log inside
         COMMON_LOG(WARN, "Lob: invalid json lob", K(ret), K(json_data));
@@ -2035,21 +2038,25 @@ inline ObObj::ObObj()
 inline ObObj::ObObj(bool val)
 {
   set_bool(val);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(int32_t val)
 {
   set_int32(val);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(int64_t val)
 {
   set_int(val);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(ObObjType type)
 {
   meta_.set_type(type);
+  val_len_ = 0;
 }
 
 inline ObObj::ObObj(const ObObj &other)

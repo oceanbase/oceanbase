@@ -13,12 +13,12 @@ let $c1 = query_get_value(select count(*) as cnt from oceanbase.__all_spatial_re
 #alter system change tenant mysql ;
 #sleep 2;
 
-if ($c1 != 5152)
+if ($c1 != 5160)
 {
   --source mysql_test/test_suite/geometry/t/default_srs_data_mysql.sql
+  sleep 30;
 }
 
-sleep 30;
 # TODO@dazhi: use mysql tenant
 #disconnect conn_admin;
 #connection default;

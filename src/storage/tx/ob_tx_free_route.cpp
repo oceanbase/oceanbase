@@ -51,7 +51,7 @@ void ObTxnFreeRouteCtx::init_before_handle_request(ObTxDesc *tx)
   audit_record_.proxy_flag_ = is_proxy_support_;
   if (OB_NOT_NULL(tx)) {
     if (tx->flags_.DEFER_ABORT_) {
-      auto txs = MTL_WITH_CHECK_TENANT(ObTransService*, tx->tenant_id_);
+      ObTransService *txs = MTL_WITH_CHECK_TENANT(ObTransService*, tx->tenant_id_);
       if (OB_ISNULL(txs)) {
         int ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "[tx free route] MTL(txs) is null", K(ret), K(tx->tenant_id_));
@@ -155,7 +155,7 @@ inline int ObTxnFreeRouteCtx::state_update_verify_by_version(const TxnFreeRouteS
     TRANS_LOG(ERROR, "the state is stale", K(ret));
   }
   dup_sync = false;
-  auto &sync_info = state_sync_infos_[state];
+  const StateSyncInfo &sync_info = state_sync_infos_[state];
   if (sync_info.last_version_ > version) {
     // stale
     ret = OB_ERR_UNEXPECTED;
@@ -289,7 +289,7 @@ static int encode_header_(const ObTxnFreeRouteCtx &ctx, char* buf, const int64_t
 {
   int ret = OB_SUCCESS;
   TxStateHeader header;
-  auto &tx_id = ctx.get_prev_tx_id().is_valid() ? ctx.get_prev_tx_id() : ctx.get_tx_id();
+  ObTransID tx_id = ctx.get_prev_tx_id().is_valid() ? ctx.get_prev_tx_id() : ctx.get_tx_id();
   if (OB_FAIL(OB_E(EventTable::EN_TX_FREE_ROUTE_ENCODE_STATE_ERROR, ctx.get_session_id()) OB_SUCCESS)) {
     TRANS_LOG(ERROR, "inject failure", K(ret), K(ctx));
   } else if (!tx_id.is_valid()) {
@@ -337,7 +337,7 @@ int ObTransService::txn_free_route__handle_tx_exist_(const ObTransID &tx_id, ObT
   } else if (!tmp_tx->is_xa_trans()) {
     // some session hold this txn already, close the session and release this txn
     // then continue with retry
-    auto assoc_sess_id = tmp_tx->assoc_sess_id_;
+    uint32_t assoc_sess_id = tmp_tx->assoc_sess_id_;
     TRANS_LOG(WARN, "tx found associate with other session, will kill the session",
               K(assoc_sess_id), K(tx_id));
     if (OB_FAIL(txn_free_route__kill_session_(assoc_sess_id))) {
@@ -386,9 +386,9 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
 {
   int ret = OB_SUCCESS;
   bool need_add_tx = false;
-  auto &audit_record = ctx.audit_record_;
+  ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
   audit_record.upd_static_ = true;
-  auto before_tx_id = OB_NOT_NULL(tx) ? tx->tx_id_ : ObTransID();
+  ObTransID before_tx_id = OB_NOT_NULL(tx) ? tx->tx_id_ : ObTransID();
   TXN_FREE_ROUTE_PROCESS_HEADER(TxnFreeRouteState::STATIC);
   if (OB_FAIL(ret)) {
   } else if (header.flag_.is_tx_terminated()) {
@@ -430,7 +430,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
       }
     }
     if (OB_SUCC(ret)) {
-      auto start_ts = ObTimeUtility::current_time();
+      int64_t start_ts = ObTimeUtility::current_time();
       ObSpinLockGuard guard(tx->lock_);
       if (OB_FAIL(tx->decode_static_state(buf, len, pos))) {
         // unretryable
@@ -450,7 +450,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
       } else if (FALSE_IT(tx->flags_.SHADOW_ = tx->is_xa_trans() && tx->addr_ != self_)) {
         // mark as SHADOW_ for XA's temporary node, exclude XA orig node
       }
-      auto elapsed_us = ObTimeUtility::current_time() - start_ts;
+      int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
       ObTransTraceLog &tlog = tx->get_tlog();
       REC_TRANS_TRACE_EXT(&tlog, tx_free_route_update_static, OB_Y(ret),
                           OB_ID(txid), header.tx_id_.get_id(),
@@ -502,7 +502,7 @@ int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_
                                                          int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  auto &audit_record = ctx.audit_record_;
+  ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
   audit_record.upd_dyn_ = true;
   int64_t logic_clock = 0;
   TXN_FREE_ROUTE_PROCESS_HEADER(TxnFreeRouteState::DYNAMIC);
@@ -520,7 +520,7 @@ int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "tx should not be null", K(ret), K(session_id));
   } else {
-    auto start_ts = ObTimeUtility::current_time();
+    int64_t start_ts = ObTimeUtility::current_time();
     ObSpinLockGuard guard(tx->lock_);
     if (!tx->tx_id_.is_valid()) {
       // bug, dynamic state exist, txn should be active
@@ -533,7 +533,7 @@ int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_
     } else if (OB_FAIL(tx->decode_dynamic_state(buf, len, pos))) {
       TRANS_LOG(ERROR, "decode dynamic state fail", K(ret));
     }
-    auto elapsed_us = ObTimeUtility::current_time() - start_ts;
+    int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
     ObTransTraceLog &tlog = tx->get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, tx_free_route_update_dynamic, OB_Y(ret),
                         OB_ID(time_used), elapsed_us,
@@ -561,7 +561,7 @@ int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id
                                                        int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  auto &audit_record = ctx.audit_record_;
+  ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
   audit_record.upd_parts_ = true;
   TXN_FREE_ROUTE_PROCESS_HEADER(TxnFreeRouteState::PARTICIPANT);
   if (OB_FAIL(ret)) {
@@ -583,7 +583,7 @@ int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "tx should not be null", K(ret), K(session_id));
   } else {
-    auto start_ts = ObTimeUtility::current_time();
+    int64_t start_ts = ObTimeUtility::current_time();
     ObSpinLockGuard guard(tx->lock_);
     if (!tx->tx_id_.is_valid()) {
       // bug, dynamic state exist, txn should be active
@@ -592,7 +592,7 @@ int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id
     } else if (OB_FAIL(tx->decode_parts_state(buf, len, pos))) {
       TRANS_LOG(WARN, "decode participants fail", K(ret));
     }
-    auto elapsed_us = ObTimeUtility::current_time() - start_ts;
+    int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
     ObTransTraceLog &tlog = tx->get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, tx_free_route_update_participants, OB_Y(ret),
                         OB_ID(txid), header.tx_id_.get_id(),
@@ -619,7 +619,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
 {
   int ret = OB_SUCCESS;
   int64_t logic_clock = 0;
-  auto &audit_record = ctx.audit_record_;
+  ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
   audit_record.upd_extra_ = true;
   TXN_FREE_ROUTE_PROCESS_HEADER(TxnFreeRouteState::EXTRA);
   if (OB_FAIL(ret)) {
@@ -642,7 +642,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
   } else {
     bool add_tx = OB_ISNULL(tx);
     bool replace_tx = OB_NOT_NULL(tx) && tx->tx_id_ != header.tx_id_;
-    auto before_tx_id = OB_NOT_NULL(tx) ? tx->tx_id_ : ObTransID();
+    ObTransID before_tx_id = OB_NOT_NULL(tx) ? tx->tx_id_ : ObTransID();
     audit_record.replace_tx_ = replace_tx;
     audit_record.alloc_tx_ = add_tx;
     if (OB_FAIL(decode_i64(buf, len, pos, &logic_clock))) {
@@ -664,7 +664,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
       }
     }
     if (OB_SUCC(ret)) {
-      auto start_ts = ObTimeUtility::current_time();
+      int64_t start_ts = ObTimeUtility::current_time();
       ObSpinLockGuard guard(tx->lock_);
       if (OB_FAIL(tx->decode_extra_state(buf, len, pos))) {
         TRANS_LOG(ERROR, "decode extra fail", K(ret));
@@ -676,7 +676,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
         release_tx(*tx);
         tx = NULL;
       } else {
-        auto elapsed_us = ObTimeUtility::current_time() - start_ts;
+        int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
         ObTransTraceLog &tlog = tx->get_tlog();
         REC_TRANS_TRACE_EXT(&tlog, tx_free_route_update_extra, OB_Y(ret),
                             OB_ID(txid), header.tx_id_.get_id(),
@@ -850,7 +850,7 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
   //
   // if niether of these flag was setted, the detailed changed txn state is exist as the content of
   // normal state, otherwise it's empty
-  auto &audit_record = ctx.audit_record_;
+  ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
   if (OB_NOT_NULL(tx)) {
     tx->lock_.lock();
   }
@@ -1078,7 +1078,7 @@ bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
 int ObTransService::push_tx_state_to_remote_(ObTxDesc &tx, const ObAddr &txn_addr)
 {
   int ret = OB_SUCCESS;
-  auto start_ts = ObTimeUtility::current_time();
+  int64_t start_ts = ObTimeUtility::current_time();
   ObTxFreeRoutePushState state;
   state.tenant_id_ = tenant_id_;
   int64_t len = 0;
@@ -1121,7 +1121,7 @@ int ObTransService::push_tx_state_to_remote_(ObTxDesc &tx, const ObAddr &txn_add
       TRANS_LOG(INFO, "[tx free route] push txn state success", K(txn_addr), K(tx));
     }
   }
-  auto elapsed_us = ObTimeUtility::current_time() - start_ts;
+  int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, tx_free_route_send_state, OB_Y(ret),
                       OB_ID(time_used), elapsed_us,
@@ -1146,7 +1146,7 @@ int ObTransService::tx_free_route_handle_push_state(const ObTxFreeRoutePushState
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx is null", K(ret));
   } else {
-    auto start_ts = ObTimeUtility::current_time();
+    int64_t start_ts = ObTimeUtility::current_time();
     const char *buf = state.buf_.ptr();
     int64_t buf_len = state.buf_.length();
     int64_t static_len = state.dynamic_offset_;
@@ -1193,7 +1193,7 @@ int ObTransService::tx_free_route_handle_push_state(const ObTxFreeRoutePushState
         ret = COVER_SUCC(tmp_ret);
       }
     }
-    auto elapsed_us = ObTimeUtility::current_time() - start_ts;
+    int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
     ObTransTraceLog &tlog = tx->get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, tx_free_route_recv_state, OB_Y(ret),
                         OB_ID(time_used), elapsed_us,

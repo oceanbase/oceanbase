@@ -81,7 +81,7 @@ int ObMPDisconnect::run()
         EVENT_INC(SQL_USER_LOGOUTS_CUMULATIVE);
         LOG_INFO("free session successfully", "sessid", ctx_.sessid_);
         if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(&conn, is_need_clear)))) {
-          LOG_ERROR("fail to jugde need clear", K(ret), "sessid", conn.sessid_, "server_id", GCTX.server_id_);
+          LOG_ERROR("fail to judge need clear", K(ret), "sessid", conn.sessid_, "server_id", GCTX.server_id_);
         } else if (is_need_clear) {
           if (OB_FAIL(GCTX.session_mgr_->mark_sessid_unused(conn.sessid_))) {
             LOG_WARN("mark session id unused failed", K(ret), "sessid", conn.sessid_);

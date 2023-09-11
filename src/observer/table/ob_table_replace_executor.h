@@ -48,6 +48,7 @@ public:
       : ObTableApiModifyExecutor(ctx),
         allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         replace_spec_(replace_spec),
+        insert_row_(NULL),
         insert_rows_(0),
         delete_rows_(0),
         conflict_checker_(allocator_, eval_ctx_, replace_spec_.get_conflict_checker_ctdef()),
@@ -93,6 +94,7 @@ private:
                    const ObChunkDatumStore::StoredRow *replace_row,
                    const ObChunkDatumStore::StoredRow *delete_row);
   int prepare_final_replace_task();
+  int cache_insert_row();
   int do_delete(ObConflictRowMap *primary_map);
   int do_insert();
   int reuse();
@@ -100,6 +102,7 @@ private:
   common::ObArenaAllocator allocator_;
   const ObTableApiReplaceSpec &replace_spec_;
   ObTableReplaceRtDef replace_rtdef_;
+  ObChunkDatumStore::StoredRow *insert_row_;
   int64_t insert_rows_;
   int64_t delete_rows_;
   sql::ObConflictChecker conflict_checker_;

@@ -128,14 +128,14 @@ int ObDBMSSchedTableOperator::update_for_end(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
-    } else if (DATA_VERSION_4_2_1_0 <= data_version) {
+    } else if (MOCK_DATA_VERSION <= data_version) {
       CK (OB_LIKELY(!job_info.job_class_.empty()));
     }
   }
 
   ObDBMSSchedJobClassInfo job_class_info;
   ObArenaAllocator allocator;
-  if (DATA_VERSION_4_2_1_0 <= data_version) {
+  if (MOCK_DATA_VERSION <= data_version) {
     OZ (get_dbms_sched_job_class_info(tenant_id, job_info.is_oracle_tenant(), job_info.get_job_class(), allocator, job_class_info));
   }
   // when if failures > 16 then set broken flag.
@@ -177,7 +177,7 @@ int ObDBMSSchedTableOperator::update_for_end(
   //If a non-existent JOB CLASS is entered when creating a JOB,
   //job_run_detail still needs to be recorded.
   bool need_write_job_run_detail = true;
-  if (DATA_VERSION_4_2_1_0 <= data_version) {
+  if (MOCK_DATA_VERSION <= data_version) {
     ObString logging_level = job_class_info.get_logging_level();
     if (logging_level.empty()) {
       LOG_WARN("logging_level may not assigned");
@@ -199,7 +199,7 @@ int ObDBMSSchedTableOperator::update_for_end(
     OZ (dml2.add_column("code", err));
     OZ (dml2.add_column(
       "message", ObHexEscapeSqlStr(errmsg.empty() ? ObString("SUCCESS") : errmsg)));
-    if (DATA_VERSION_4_2_1_0 <= data_version) {
+    if (MOCK_DATA_VERSION <= data_version) {
       OZ (dml2.add_column("job_class", job_info.job_class_));
     }
     OZ (dml2.splice_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TNAME, sql2));
@@ -231,8 +231,6 @@ int ObDBMSSchedTableOperator::check_job_timeout(ObDBMSSchedJobInfo &job_info)
   } else if (ObTimeUtility::current_time() > (job_info.get_this_date() + TO_TS(job_info.get_max_run_duration()))) {
     OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job timeout"));
     LOG_WARN("job is timeout, force update for end", K(job_info), K(ObTimeUtility::current_time()));
-  } else {
-    LOG_DEBUG("job is still running, not timeout", K(job_info));
   }
   return ret;
 }
@@ -246,8 +244,6 @@ int ObDBMSSchedTableOperator::check_auto_drop(ObDBMSSchedJobInfo &job_info)
              (true == job_info.auto_drop_)) {
     OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check auto drop expired job"));
     LOG_WARN("auto drop miss out job", K(job_info), K(ObTimeUtility::current_time()));
-  } else {
-    LOG_DEBUG("job no need to drop", K(job_info));
   }
   return ret;
 }
@@ -516,13 +512,15 @@ int ObDBMSSchedTableOperator::calc_execute_at(
       execute_at = job_info.get_next_date();
       delay = job_info.get_next_date() - now;
     } else if (now - job_info.get_next_date() < TO_TS(job_info.get_max_run_duration())) {
-      LOG_WARN("job maybe missed, retry it", K(now), K(job_info));
+      LOG_WARN("job maybe missed, retry it", K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
       execute_at = now;
       delay = 0;
     } else if (last_sub_next < 5 && last_sub_next >= -5) {
+      LOG_WARN("job maybe missed, retry it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
       execute_at = now;
       delay = 0;
     } else {
+      LOG_WARN("job maybe missed, ignore it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
       delay = -1;
     }
   } else {
@@ -555,7 +553,6 @@ int ObDBMSSchedTableOperator::calc_execute_at(
           if (OB_SUCC(ret)) {
             execute_at = sysdate + job_info.get_interval_ts();
           }
-          LOG_INFO("interval date is", K(sysdate), K(execute_at), K(job_info));
           if (OB_FAIL(ret)) {
           } else if (job_info.get_next_date() > execute_at) {
             execute_at = job_info.get_next_date();
@@ -570,9 +567,11 @@ int ObDBMSSchedTableOperator::calc_execute_at(
         }
       }
     }
+    LOG_INFO("repeat job update nextdate", K(job_info), K(execute_at), K(delay), K(ignore_nextdate));
   } else if (delay < 0 && job_info.get_interval_ts() == 0) {
     OX (job_info.next_date_ = 64060560000000000); // 4000-01-01
     OZ (update_nextdate(job_info.get_tenant_id(), job_info));
+    LOG_INFO("once job update nextdate", K(job_info), K(execute_at), K(delay), K(ignore_nextdate));
   }
 
   return ret;
@@ -603,6 +602,7 @@ int ObDBMSSchedTableOperator::register_default_job_class(uint64_t tenant_id)
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
+  LOG_INFO("register default job class", K(ret), K(tenant_id));
   return ret;
 }
 
@@ -637,6 +637,7 @@ int ObDBMSSchedTableOperator::purge_run_detail_histroy(uint64_t tenant_id)
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
+  LOG_INFO("purge run detail history", K(ret), K(tenant_id), K(sql.ptr()));
   return ret;
 }
 

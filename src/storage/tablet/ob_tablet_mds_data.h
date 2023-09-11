@@ -18,6 +18,7 @@
 #include "lib/string/ob_string.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/compaction/ob_extra_medium_info.h"
 #include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 #include "storage/tablet/ob_tablet_complex_addr.h"
 #include "storage/tablet/ob_tablet_member_wrapper.h"
@@ -35,7 +36,6 @@ namespace compaction
 class ObMediumCompactionInfoKey;
 class ObMediumCompactionInfo;
 class ObMediumCompactionInfoList;
-class ObExtraMediumInfo;
 }
 
 namespace storage
@@ -71,21 +71,25 @@ public:
   ObTabletMdsData &operator=(const ObTabletMdsData&) = delete;
 public:
   void reset();
-  int init(common::ObIAllocator &allocator);
-  int init(
+  int init_for_first_creation(common::ObIAllocator &allocator);
+  int init_with_tablet_status(
+      common::ObIAllocator &allocator,
+      const ObTabletStatus::Status &tablet_status,
+      const ObTabletMdsUserDataType &data_type);
+  int init_by_full_memory_mds_data(
       common::ObIAllocator &allocator,
       const ObTabletFullMemoryMdsData &full_memory_mds_data);
-  int init(
+  int init_for_mds_table_dump(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &mds_table_data,
       const ObTabletMdsData &base_data,
       const int64_t finish_medium_scn);
-  int init(
+  int init_for_evict_medium_info(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other,
       const int64_t finish_medium_scn,
       const ObMergeType merge_type = ObMergeType::MERGE_TYPE_MAX);
-  int init(
+  int init_for_merge_with_full_mds_data(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other,
       const ObTabletFullMediumInfo &full_memory_medium_info_list,
@@ -93,11 +97,8 @@ public:
   int init_with_update_medium_info(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other);
-  int init_empty_shell(const ObTabletCreateDeleteMdsUserData &tablet_status);
-  int set_tablet_status(
-      ObArenaAllocator *allocator,
-      const ObTabletStatus::Status &tablet_status,
-      const ObTabletMdsUserDataType &data_type);
+  int init_empty_shell(
+      const ObTabletCreateDeleteMdsUserData &tablet_status);
   bool is_valid() const;
   void set_mem_addr();
 public:
@@ -122,15 +123,19 @@ public:
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
       const ObTabletDumpedMediumInfo *&medium_info_list);
+  static int load_auto_inc_seq(
+      common::ObIAllocator &allocator,
+      const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
+      const share::ObTabletAutoincSeq *&auto_inc_seq);
   static void free_mds_dump_kv(
       common::ObIAllocator &allocator,
       const mds::MdsDumpKV *kv);
+  static void free_auto_inc_seq(
+      common::ObIAllocator &allocator,
+      const share::ObTabletAutoincSeq *auto_inc_seq);
   static void free_medium_info_list(
       common::ObIAllocator &allocator,
       const ObTabletDumpedMediumInfo *medium_info_list);
-  static int fetch_auto_inc_seq(
-      const ObTabletComplexAddr<share::ObTabletAutoincSeq> &auto_inc_seq_addr,
-      ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper);
   static int build_tablet_status(
       common::ObArenaAllocator &allocator,
       const ObTabletTxMultiSourceDataUnit &tx_data,
@@ -156,50 +161,60 @@ public:
     const compaction::ObMediumCompactionInfoList &info_list,
     ObTabletMdsData &mds_data);
 private:
-  int alloc_and_new(common::ObIAllocator &allocator);
-  int do_init(
+  void reset(common::ObIAllocator &allocator);
+  int set_tablet_status(
       common::ObIAllocator &allocator,
-      const mds::MdsDumpKV *tablet_status_uncommitted_kv,
-      const mds::MdsDumpKV *tablet_status_committed_kv,
-      const mds::MdsDumpKV *aux_tablet_info_uncommitted_kv,
-      const mds::MdsDumpKV *aux_tablet_info_committed_kv,
-      const share::ObTabletAutoincSeq *auto_inc_seq);
-  int init_medium_info_list(
+      const ObTabletStatus::Status &tablet_status,
+      const ObTabletMdsUserDataType &data_type);
+  static int init_single_complex_addr(
       common::ObIAllocator &allocator,
-      const ObTabletDumpedMediumInfo *old_medium_info_list,
-      const compaction::ObExtraMediumInfo &old_extra_medium_info,
-      const int64_t finish_medium_scn = 0,
-      const ObMergeType merge_type = ObMergeType::MERGE_TYPE_MAX);
-  int init_medium_info_list(
+      const ObTabletComplexAddr<mds::MdsDumpKV> &src_addr,
+      ObTabletComplexAddr<mds::MdsDumpKV> &dst_addr);
+  static int init_single_complex_addr(
       common::ObIAllocator &allocator,
-      const ObTabletDumpedMediumInfo *old_medium_info_list,
-      const ObTabletFullMediumInfo &full_memory_medium_info_list,
-      const compaction::ObExtraMediumInfo &old_extra_medium_info,
-      const int64_t finish_medium_scn);
-  int init_with_update_medium_info(
+      const ObTabletComplexAddr<share::ObTabletAutoincSeq> &src_addr,
+      ObTabletComplexAddr<share::ObTabletAutoincSeq> &dst_addr);
+  static int init_single_complex_addr(
       common::ObIAllocator &allocator,
-      const ObTabletDumpedMediumInfo *old_medium_info_list,
-      const compaction::ObExtraMediumInfo &old_extra_medium_info);
-  static int fuse_mds_dump_node(
+      const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &src_addr,
+      const int64_t finish_medium_scn,
+      ObTabletComplexAddr<ObTabletDumpedMediumInfo> &dst_addr);
+  static int init_single_complex_addr(
+      common::ObIAllocator &allocator,
+      const mds::MdsDumpKV &src_data,
+      ObTabletComplexAddr<mds::MdsDumpKV> &dst_addr);
+  static int init_single_complex_addr(
+      common::ObIAllocator &allocator,
+      const share::ObTabletAutoincSeq &src_data,
+      ObTabletComplexAddr<share::ObTabletAutoincSeq> &dst_addr);
+  static int init_single_complex_addr(
+      common::ObIAllocator &allocator,
+      const ObTabletDumpedMediumInfo &src_data,
+      ObTabletComplexAddr<ObTabletDumpedMediumInfo> &dst_addr);
+  static int init_single_complex_addr_and_extra_info(
+      common::ObIAllocator &allocator,
+      const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &src_addr,
+      const compaction::ObExtraMediumInfo &src_addr_extra_info,
+      const ObTabletDumpedMediumInfo &src_data,
+      const compaction::ObExtraMediumInfo &src_data_extra_info,
+      const int64_t finish_medium_scn,
+      ObTabletComplexAddr<ObTabletDumpedMediumInfo> &dst_addr,
+      compaction::ObExtraMediumInfo &dst_extra_info);
+  static int init_single_complex_addr(
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<mds::MdsDumpKV> &mds_table_data,
       const ObTabletComplexAddr<mds::MdsDumpKV> &base_data,
       ObTabletComplexAddr<mds::MdsDumpKV> &fused_data);
-  static int fuse_mds_dump_node(
-      common::ObIAllocator &allocator,
-      const ObTabletMdsDumpStruct &mds_table_data,
-      const ObTabletMdsDumpStruct &base_data,
-      ObTabletMdsDumpStruct &fused_data);
-  static int fuse_mds_dump_node(
+  static int init_single_complex_addr(
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &mds_table_data,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &base_data,
       ObTabletComplexAddr<share::ObTabletAutoincSeq> &fused_data);
-  static int fuse_mds_dump_node(
+  static int init_single_complex_addr(
       common::ObIAllocator &allocator,
-      const int64_t finish_medium_scn,
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &mds_table_data,
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &base_data,
+      const int64_t finish_medium_scn,
       ObTabletComplexAddr<ObTabletDumpedMediumInfo> &fused_data);
   static int read_medium_info(
       common::ObIAllocator &allocator,
@@ -214,6 +229,10 @@ private:
       const ObTabletDumpedMediumInfo &input_medium_info_list1,
       const ObTabletDumpedMediumInfo &input_medium_info_list2,
       ObTabletDumpedMediumInfo &medium_info_list);
+  static int init_single_mds_dump_kv(
+      common::ObIAllocator &allocator,
+      const mds::MdsDumpKV *input_kv,
+      ObTabletComplexAddr<mds::MdsDumpKV> &kv);
   template <typename T>
   static int update_user_data_from_complex_addr(
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
@@ -238,9 +257,11 @@ int ObTabletMdsData::update_user_data_from_complex_addr(
 {
   int ret = common::OB_SUCCESS;
 
-  if (OB_UNLIKELY(!complex_addr.is_memory_object())) {
+  if (OB_UNLIKELY(!complex_addr.is_memory_object() && !complex_addr.is_none_object())) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "complex addr is not memory type", K(ret), K(complex_addr));
+    STORAGE_LOG(WARN, "complex addr is not memory or none type", K(ret), K(complex_addr));
+  } else if (complex_addr.is_none_object()) {
+    // do nothing
   } else {
     const mds::MdsDumpKV *kv = complex_addr.ptr_;
     const common::ObString &str = kv->v_.user_data_;

@@ -35,12 +35,8 @@ public:
                                            bool skip_enclosed_char = false);
 protected:
   int check_and_convert_name(common::ObString &db, common::ObString &table);
-  int check_password_strength(common::ObString &password, common::ObString &user_name);
-  int check_number_count(common::ObString &password, const int64_t &number_count);
-  int check_special_char_count(common::ObString &password, const int64_t &special_char_count);
-  int check_mixed_case_count(common::ObString &password, const int64_t &mix_case_count);
-  int check_user_name(common::ObString &password, common::ObString &user_name);
-  int check_password_len(common::ObString &password, const int64_t &password_len);
+  int check_password_strength(common::ObString &password);
+  int check_user_name(common::ObString &password, const common::ObString &user_name);
   int check_oracle_password_strength(int64_t tenant_id,
                                      int64_t profile_id,
                                      common::ObString &password, 

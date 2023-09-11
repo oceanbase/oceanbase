@@ -2406,12 +2406,12 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                             true/*need_check_sstable*/,
                             true/*allow_duplicate_sstable*/,
                             ObMergeType::MEDIUM_MERGE/*merge_type*/);
-    if (tablet_storage_schema->get_version() < storage_schema.get_version()) {
+    if (tablet_storage_schema->get_schema_version() < storage_schema.get_schema_version()) {
       SERVER_EVENT_ADD("storage_ha", "schema_change_need_merge_tablet_meta",
                       "tenant_id", MTL_ID(),
                       "tablet_id", tablet_id.id(),
-                      "old_schema_version", tablet_storage_schema->get_version(),
-                      "new_schema_version", storage_schema.get_version());
+                      "old_schema_version", tablet_storage_schema->get_schema_version(),
+                      "new_schema_version", storage_schema.get_schema_version());
     }
 #ifdef ERRSIM
     SERVER_EVENT_ADD("storage_ha", "update_major_tablet_table_store",

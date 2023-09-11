@@ -36,7 +36,7 @@ ObDASTCB::ObDASTCB()
     max_batch_size_(0),
     stored_row_(NULL),
     stored_row_arr_(NULL),
-    datum_store_(),
+    datum_store_("DASTaskResMgr"),
     result_iter_(),
     tcb_lock_()
 {

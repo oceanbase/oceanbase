@@ -241,7 +241,7 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     LOG_WARN("fail to alloc ob chunk row store ret", K(ret));
   } else {
     result_info = new(result_info_buf) ObDTLIntermResultInfo();
-    result_info->datum_store_ = new(ptr) ObChunkDatumStore();
+    result_info->datum_store_ = new(ptr) ObChunkDatumStore("DtlIntermRes");
     result_info->is_read_ = false;
     result_info->trace_id_ = *ObCurTraceId::get_trace_id();
     result_info->monitor_info_ = monitor_info;

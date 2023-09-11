@@ -1030,8 +1030,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     LOG_WARN("session info is NULL", K(ret));
   } else if (OB_FAIL(parser.parse(sql,
                                   parse_result,
-                                  parse_mode,
-                                  false/*is_batched_multi_stmt_split_on*/))) {
+                                  parse_mode))) {
     LOG_WARN("generate syntax tree failed", K(sql), K(ret));
   } else if (is_mysql_mode()
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
@@ -1301,7 +1300,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             LOG_WARN("failed to init result set", K(ret));
           } else if (OB_FAIL(ob_write_string(allocator, sess.get_current_query_string(), cur_query))) {
             LOG_WARN("failed to write string", K(ret));
-          } else if (OB_FAIL(sess.store_query_string(trimed_stmt))) {
+          } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
             LOG_WARN("generate syntax tree failed", K(sql), K(ret));
@@ -1614,7 +1613,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
                 K(ret), K(pctx), K(ps_cache));
     } else if (OB_FAIL(ob_write_string(allocator, session.get_current_query_string(), cur_query))) {
       LOG_WARN("failed to write string", K(ret));
-    } else if (OB_FAIL(session.store_query_string(trimed_stmt))) {
+    } else if (OB_FAIL(session.store_query_string(stmt))) {
       LOG_WARN("store query string fail", K(ret));
     } else {
       bool need_do_real_prepare = false;
@@ -4080,7 +4079,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
     ObParser parser(allocator, session->get_sql_mode(), session->get_local_collation_connection(), pc_ctx.def_name_ctx_);
     if (OB_FAIL(parser.parse(outlined_stmt, parse_result,
                              pc_ctx.is_rewrite_sql_ ? UDR_SQL_MODE : STD_MODE,
-                             pc_ctx.sql_ctx_.handle_batched_multi_stmt()))) {
+                             pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
+                             false, lib::is_mysql_mode() && NULL != session->get_pl_context()))) {
       LOG_WARN("Generate syntax tree failed", K(outlined_stmt), K(ret));
     } else if ((PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
       && OB_FAIL(construct_param_store_from_parameterized_params(
@@ -4117,6 +4117,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
       LOG_WARN("parser error number is unexpected, need disconnect", K(ret));
     }
     if (OB_SUCC(ret)) {
+      stmt::StmtType stmt_type = stmt::T_NONE;
       if (OB_ISNULL(parse_result.result_tree_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid args", K(ret), KP(parse_result.result_tree_));
@@ -4140,12 +4141,17 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
           int32_t line_no = 1;
           LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false), str_len, err_msg, line_no);
           LOG_WARN("the text query is invalid", K(outlined_stmt), K(children_node->value_), K(ret));
+        } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
+          LOG_WARN("failed to resolve stmt type", K(ret));
         } else {
           ObItemType type = children_node->type_;
           //如果是非DML语句, 则不进入plan cache
           ObPlanCache *plan_cache = NULL;
           if (T_SHOW_VARIABLES == type) {
             is_show_variables = true;
+          }
+          if (ObStmt::is_ddl_stmt(stmt_type, true)) {
+            THIS_WORKER.set_timeout_ts(session->get_query_start_time() + GCONF._ob_ddl_timeout);
           }
           if (IS_DML_STMT(type) || is_show_variables) {
             if (OB_UNLIKELY(NULL == (plan_cache = session->get_plan_cache()))) {
@@ -4437,6 +4443,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           param.autoinc_offset_ = session.get_local_auto_increment_offset();
           if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
             param.total_value_count_ = pc_ctx.sql_ctx_.get_insert_batch_row_cnt();
+          } else if (phy_plan->is_plain_insert() && pctx->get_array_param_groups().count() == 1) {
+            param.total_value_count_ = pctx->get_array_param_groups().at(0).row_count_;
           }
         }  // end for
       }

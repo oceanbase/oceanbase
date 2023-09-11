@@ -44,6 +44,7 @@
 #include "observer/mysql/ob_query_response_time.h"
 #include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
 #include "sql/resolver/cmd/ob_kill_stmt.h"
+#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {
@@ -4327,6 +4328,10 @@ int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("TTL command is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "TTL command is not supported in data version less than 4.2.1");
+  } else if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ttl is disable", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl is disable, set by config item _obkv_feature_mode");
   } else if (OB_UNLIKELY(T_TABLE_TTL != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_TABLE_TTL", "type", get_type_name(parse_tree.type_));
@@ -4990,7 +4995,7 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_NOT_NULL(parse_tree.children_[8])
         && OB_FAIL(Util::resolve_string(parse_tree.children_[8], stmt->get_rpc_arg().restore_tenant_arg_.description_))) {
       LOG_WARN("failed to resolve desc", K(ret));
-#ifndef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_TDE_SECURITY
     } else if (OB_FAIL(resolve_kms_info_(
         stmt->get_rpc_arg().restore_tenant_arg_.restore_option_, stmt->get_rpc_arg().restore_tenant_arg_.kms_info_))) {
       LOG_WARN("failed to resolve kms info", K(ret));
@@ -5322,7 +5327,7 @@ int ObRecoverTableResolver::resolve_backup_set_pwd_(common::ObString &pwd)
   return ret;
 }
 
-#ifndef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_TDE_SECURITY
 int ObRecoverTableResolver::resolve_kms_info_(const common::ObString &restore_option, common::ObString &kms_info)
 {
   int ret = OB_SUCCESS;

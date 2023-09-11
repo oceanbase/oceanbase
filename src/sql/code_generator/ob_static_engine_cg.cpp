@@ -479,8 +479,8 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
     if (OB_ISNULL(exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(i), K(exprs));
-    } else {
-      exprs.at(i)->clear_flag(flag);
+    } else if (OB_FAIL(exprs.at(i)->clear_flag(flag))) {
+      LOG_WARN("failed to clear flag", K(ret));
     }
   }
 
@@ -693,7 +693,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         support = false;
         stop_checking = true;
       }
-      LOG_DEBUG("check_vectorie_supported", K(disable_vectorize), K(support), K(stop_checking),
+      LOG_DEBUG("check_vectorize_supported", K(disable_vectorize), K(support), K(stop_checking),
                 K(op->get_num_of_child()));
       // continue searching until found an operator with vectorization explicitly disabled
       for (int64_t i = 0; !stop_checking && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
@@ -709,7 +709,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
 
 // 从raw expr中获取rt_expr，并将raw expr push到cur_op_exprs_中
 //
-// 设置operater的rt expr, 从raw expr中获取时，均需要通过该接口，
+// 设置operator的rt expr, 从raw expr中获取时，均需要通过该接口，
 // 其中ObStaticEngineExprCG::generate_rt_expr是ObRawExpr的友元函数， 可直接访问ObRawExpr中rt expr，
 //
 // 为什么不是ObRawExpr中直接提供访问rt expr的接口给外部使用， 而是用友元函数的方式处理？
@@ -2837,7 +2837,7 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
       "desc", op.desc_order(),
       "flags", op.get_gi_flags(),
       "tsc_ids", spec.pw_dml_tsc_ids_,
-      "repart_prunint_idx", spec.repart_pruning_tsc_idx_,
+      "repart_pruning_tsc_idx", spec.repart_pruning_tsc_idx_,
       K(pwj_gi), K(enable_repart_pruning));
   return ret;
 }
@@ -3300,7 +3300,7 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxRepartTransmitSpec &s
     // repartition_exprs_ only use by null aware anti join
     // now just support single join key
     // either repart_keys or repart_sub_keys exists join key
-    // so we can generate from one of them driectly
+    // so we can generate from one of them directly
     if (op.get_repart_keys().count() > 0) {
       if (OB_FAIL(generate_rt_exprs(op.get_repart_keys(), spec.repartition_exprs_))) {
         LOG_WARN("failed to generate repart exprs", K(ret));
@@ -3792,7 +3792,7 @@ int ObStaticEngineCG::generate_dist_aggr_group(ObLogGroupBy &op, ObGroupBySpec &
     const ObDistinctAggrBatch &distinct_batch = op.get_distinct_aggr_batch().at(i);
     aggr_group_idx += distinct_batch.mocked_aggrs_.count();
     if (OB_FAIL(spec.dist_aggr_group_idxes_.push_back(aggr_group_idx))) {
-      LOG_WARN("failed to push back aggr group aggr inndex", K(ret));
+      LOG_WARN("failed to push back aggr group aggr index", K(ret));
     }
   } // end for
   return ret;
@@ -3979,7 +3979,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     }
     root = root->and_next_;
   }
-  // TODO @baixian.zr the above optimization is overrided by ObTscCgService::generate_tsc_ctdef before this commit
+  // TODO @baixian.zr the above optimization is overrode by ObTscCgService::generate_tsc_ctdef before this commit
   // but after the deep copy of pre_query_range_ is removed in ObTscCgService::generate_tsc_ctdef,
   // error is returned in such sql 'set global x=y', should fix this;
   // spec.tsc_ctdef_.pre_query_range_.set_is_equal_and(is_equal_and);
@@ -4654,7 +4654,7 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
                 for (auto l_output_idx = 0;
                      OB_SUCC(ret) && l_output_idx < nlj.get_left()->output_.count();
                      l_output_idx++) {
-                  // check if left child expr appears in other_condtion
+                  // check if left child expr appears in other_condition
                   bool appears_in_cond = false;
                   if (OB_FAIL(cond->contain_expr(
                           nlj.get_left()->output_.at(l_output_idx), appears_in_cond))) {
@@ -4814,7 +4814,7 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
     //} else if (exec_params.count() == 0) {
       //// Do nothing
     //} else if (exec_params.count() != 1) {
-      //// Only one ? expr for all level expr in connent by clause.
+      //// Only one ? expr for all level expr in connect by clause.
       //ret = OB_ERR_UNEXPECTED;
       //LOG_WARN("unexpected exec params count in connect by", K(exec_params.count()), K(ret));
     //} else if (OB_FAIL(nlj_op->init_exec_param_count(exec_params.count()))) {
@@ -5052,7 +5052,7 @@ int ObStaticEngineCG::recursive_get_column_expr(const ObColumnRefRawExpr *&colum
         LOG_WARN("get unexpected null", K(ret));
       } else if ((table_item->is_generated_table() || table_item->is_temp_table()) &&
                  OB_FAIL(recursive_get_column_expr(inner_column, *table_item))) {
-        LOG_WARN("faield to recursive get column expr", K(ret));
+        LOG_WARN("failed to recursive get column expr", K(ret));
       } else {
         column = inner_column;
       }
@@ -5383,7 +5383,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObPxMultiPartSSTableInsertS
   const ObExecContext *exec_ctx = nullptr;
   ObLogPlan *log_plan = nullptr;
   if (OB_FAIL(generate_spec(op, static_cast<ObPxMultiPartInsertSpec &>(spec), in_root_job))) {
-    LOG_WARN("generge multi part sstable insert spec failed", K(ret));
+    LOG_WARN("generate multi part sstable insert spec failed", K(ret));
   } else if (OB_ISNULL(log_plan = op.get_plan()) ||
              OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
     ret = OB_INVALID_ARGUMENT;
@@ -6621,7 +6621,7 @@ int ObStaticEngineCG::generate_insert_all_with_das(ObLogInsertAll &op, ObTableIn
       OB_ISNULL(phy_plan_) ||
       OB_UNLIKELY(op.get_table_list().count() != op.get_insert_all_table_info()->count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpeceted error", K(ret), K(phy_plan_), K(op.get_insert_all_table_info()));
+    LOG_WARN("get unexpected error", K(ret), K(phy_plan_), K(op.get_insert_all_table_info()));
   } else if (OB_FAIL(spec.ins_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                      op.get_table_list().count()))) {
     LOG_WARN("allocate insert ctdef array failed", K(ret));
@@ -6723,7 +6723,7 @@ int ObStaticEngineCG::generate_spec(ObLogStatCollector &op,
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpcted type", K(spec.type_));
+    LOG_WARN("unexpected type", K(spec.type_));
   }
   return ret;
 }
@@ -7003,7 +7003,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       }
       if (OB_SUCC(ret) && metas.count() > 0) {
         if (OB_FAIL(phy_plan.get_encrypt_meta_array().assign(metas))) {
-          LOG_WARN("fail to assgin encrypt meta", K(ret));
+          LOG_WARN("fail to assign encrypt meta", K(ret));
         }
       }
     }
@@ -7546,7 +7546,7 @@ int ObStaticEngineCG::add_output_datum_check_flag(ObOpSpec &spec)
     } else {
       // Because the Unpivot will affect the output datum of the SubplanScan,
       // which is an by designed case, we need to set the SubplanScan operator
-      // to not check the ouput datum.
+      // to not check the output datum.
       spec.get_child(0)->need_check_output_datum_ = false;
     }
   } else {

@@ -304,6 +304,11 @@ void ObBasicSessionInfo::clean_status()
   reset_session_changed_info();
 }
 
+void ObBasicSessionInfo::reset_user_var()
+{
+  user_var_val_map_.reuse();
+}
+
 void ObBasicSessionInfo::reset(bool skip_sys_var)
 {
   set_valid(false);

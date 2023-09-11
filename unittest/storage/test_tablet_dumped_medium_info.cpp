@@ -94,7 +94,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap)
   compaction::ObMediumCompactionInfo *info = nullptr;
 
   ObTabletDumpedMediumInfo input_medium_info1;
-  ret = input_medium_info1.init(allocator);
+  ret = input_medium_info1.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 5, 4, true, info);
@@ -102,7 +102,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 7, 6, true, info);
 
   ObTabletDumpedMediumInfo input_medium_info2;
-  ret = input_medium_info2.init(allocator);
+  ret = input_medium_info2.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 2, 1, true, info);
@@ -112,7 +112,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 6, 5, true, info);
 
   ObTabletDumpedMediumInfo result;
-  ret = result.init(allocator);
+  ret = result.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const int64_t finish_medium_scn = 3;
@@ -136,7 +136,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap)
   compaction::ObMediumCompactionInfo *info = nullptr;
 
   ObTabletDumpedMediumInfo input_medium_info1;
-  ret = input_medium_info1.init(allocator);
+  ret = input_medium_info1.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 5, 4, true, info);
@@ -144,7 +144,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 7, 6, true, info);
 
   ObTabletDumpedMediumInfo input_medium_info2;
-  ret = input_medium_info2.init(allocator);
+  ret = input_medium_info2.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 2, 1, true, info);
@@ -152,7 +152,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap)
 
   {
     ObTabletDumpedMediumInfo result;
-    ret = result.init(allocator);
+    ret = result.init_for_first_creation(allocator);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     const int64_t finish_medium_scn = 1;
@@ -172,7 +172,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap)
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 4, 3, true, info);
   {
     ObTabletDumpedMediumInfo result;
-    ret = result.init(allocator);
+    ret = result.init_for_first_creation(allocator);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     const int64_t finish_medium_scn = 1;
@@ -198,7 +198,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap_and_filter)
   compaction::ObMediumCompactionInfo *info = nullptr;
 
   ObTabletDumpedMediumInfo input_medium_info1;
-  ret = input_medium_info1.init(allocator);
+  ret = input_medium_info1.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 5, 4, true, info);
@@ -206,7 +206,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap_and_filter)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 7, 6, true, info);
 
   ObTabletDumpedMediumInfo input_medium_info2;
-  ret = input_medium_info2.init(allocator);
+  ret = input_medium_info2.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 2, 1, true, info);
@@ -216,7 +216,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap_and_filter)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 6, 5, true, info);
 
   ObTabletDumpedMediumInfo result;
-  ret = result.init(allocator);
+  ret = result.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const int64_t finish_medium_scn = 6;
@@ -236,7 +236,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap_and_filter)
   compaction::ObMediumCompactionInfo *info = nullptr;
 
   ObTabletDumpedMediumInfo input_medium_info1;
-  ret = input_medium_info1.init(allocator);
+  ret = input_medium_info1.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 5, 4, true, info);
@@ -244,7 +244,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap_and_filter)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 7, 6, true, info);
 
   ObTabletDumpedMediumInfo input_medium_info2;
-  ret = input_medium_info2.init(allocator);
+  ret = input_medium_info2.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 2, 1, true, info);
@@ -252,7 +252,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap_and_filter)
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 4, 3, true, info);
 
   ObTabletDumpedMediumInfo result;
-  ret = result.init(allocator);
+  ret = result.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const int64_t finish_medium_scn = 7;
@@ -271,21 +271,21 @@ TEST_F(TestTabletDumpedMediumInfo, standby_cluster)
   compaction::ObMediumCompactionInfo *info = nullptr;
 
   ObTabletDumpedMediumInfo input_medium_info1;
-  ret = input_medium_info1.init(allocator);
+  ret = input_medium_info1.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 7, 5, false, info);
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 9, 8, false, info);
 
   ObTabletDumpedMediumInfo input_medium_info2;
-  ret = input_medium_info2.init(allocator);
+  ret = input_medium_info2.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 2, 1, false, info);
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 4, 2, false, info);
 
   ObTabletDumpedMediumInfo result;
-  ret = result.init(allocator);
+  ret = result.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const int64_t finish_medium_scn = 3;
@@ -307,7 +307,7 @@ TEST_F(TestTabletDumpedMediumInfo, mds_table_dump)
   compaction::ObMediumCompactionInfo *info = nullptr;
 
   ObTabletDumpedMediumInfo input_medium_info1;
-  ret = input_medium_info1.init(allocator);
+  ret = input_medium_info1.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTabletComplexAddr<ObTabletDumpedMediumInfo> mds_table_data;
   mds_table_data.ptr_ = &input_medium_info1;
@@ -316,7 +316,7 @@ TEST_F(TestTabletDumpedMediumInfo, mds_table_dump)
   APPEND_MEDIUM_INFO(input_medium_info1, allocator, 9, 7, false, info);
 
   ObTabletDumpedMediumInfo input_medium_info2;
-  ret = input_medium_info2.init(allocator);
+  ret = input_medium_info2.init_for_first_creation(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTabletComplexAddr<ObTabletDumpedMediumInfo> base_data;
   base_data.ptr_ = &input_medium_info2;
@@ -326,19 +326,17 @@ TEST_F(TestTabletDumpedMediumInfo, mds_table_dump)
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 6, 4, false, info);
   APPEND_MEDIUM_INFO(input_medium_info2, allocator, 7, 6, false, info);
 
-  ObTabletDumpedMediumInfo result;
-  ret = result.init(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTabletComplexAddr<ObTabletDumpedMediumInfo> result_data;
-  result_data.ptr_ = &result;
+  ObTabletDumpedMediumInfo *&result = result_data.ptr_;
 
   const int64_t finish_medium_scn = 4;
-  ret = ObTabletMdsData::fuse_mds_dump_node(allocator, finish_medium_scn, mds_table_data, base_data, result_data);
+  ret = ObTabletMdsData::init_single_complex_addr(allocator, mds_table_data, base_data, finish_medium_scn, result_data);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(3, result.medium_info_list_.count());
-  ASSERT_EQ(6, result.medium_info_list_.at(0)->medium_snapshot_);
-  ASSERT_EQ(7, result.medium_info_list_.at(1)->medium_snapshot_);
-  ASSERT_EQ(9, result.medium_info_list_.at(2)->medium_snapshot_);
+  ASSERT_EQ(3, result->medium_info_list_.count());
+  ASSERT_EQ(6, result->medium_info_list_.at(0)->medium_snapshot_);
+  ASSERT_EQ(7, result->medium_info_list_.at(1)->medium_snapshot_);
+  ASSERT_EQ(9, result->medium_info_list_.at(2)->medium_snapshot_);
 }
 } // namespace unittest
 } // namespace oceanbase

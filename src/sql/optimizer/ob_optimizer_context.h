@@ -84,6 +84,38 @@ struct TableLocRelInfo
   common::ObArray<ObTablePartitionInfo*, common::ModulePageAllocator, true> table_part_infos_;
 };
 
+struct AutoDOPParams {
+  AutoDOPParams()
+    : parallel_degree_limit_(0),
+      parallel_servers_target_(0),
+      unit_min_cpu_(0),
+      parallel_min_scan_time_threshold_(1000)
+    { }
+
+  int64_t get_parallel_degree_limit(const int64_t server_cnt) const {
+    int64_t limit = 0;
+    if (0 < parallel_degree_limit_) {
+      limit = parallel_degree_limit_;
+    } else if (0 >= parallel_servers_target_ || 0 >= unit_min_cpu_ || 0 >= server_cnt) {
+      limit = std::max(parallel_servers_target_, server_cnt * unit_min_cpu_);
+    } else {
+      limit = std::min(parallel_servers_target_, server_cnt * unit_min_cpu_);
+    }
+    return std::max(limit, 1L);
+  }
+  bool is_valid() { return parallel_min_scan_time_threshold_ >= 10
+                          && (parallel_degree_limit_ > 0 || parallel_servers_target_ > 0
+                              || unit_min_cpu_ > 0); }
+  TO_STRING_KV(K_(parallel_degree_limit),
+               K_(parallel_servers_target),
+               K_(unit_min_cpu),
+               K_(parallel_min_scan_time_threshold));
+  int64_t parallel_degree_limit_;
+  int64_t parallel_servers_target_;
+  int64_t unit_min_cpu_;
+  int64_t parallel_min_scan_time_threshold_; // auto dop threshold for table scan cost
+};
+
 class ObOptimizerContext
 {
 
@@ -119,8 +151,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
     can_use_pdml_(false),
     max_parallel_(ObGlobalHint::UNSET_PARALLEL),
-    parallel_degree_limit_(ObGlobalHint::UNSET_PARALLEL),
-    parallel_min_scan_time_threshold_(-1),
+    auto_dop_params_(),
     is_online_ddl_(false),
     ddl_sample_column_count_(0),
     is_heap_table_ddl_(false),
@@ -237,8 +268,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_serial_set_order(bool force_serial_set_order) { force_serial_set_order_ = force_serial_set_order; }
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
-  inline int64_t get_parallel_degree_limit() const { return parallel_degree_limit_; }
-  inline int64_t get_parallel_min_scan_time_threshold() const { return parallel_min_scan_time_threshold_; }
+  inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
+  inline int64_t get_parallel_min_scan_time_threshold() const { return auto_dop_params_.parallel_min_scan_time_threshold_; }
   inline bool force_disable_parallel() const  { return px_parallel_rule_ >= PL_UDF_DAS_FORCE_SERIALIZE
                                                         && px_parallel_rule_ < MAX_OPTION; }
   inline bool is_use_table_dop() const  { return MANUAL_TABLE_DOP == px_parallel_rule_; }
@@ -246,8 +277,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool is_parallel_rule_valid() const { return MAX_OPTION != px_parallel_rule_; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
   void set_max_parallel(int64_t max_parallel) { max_parallel_ = max_parallel_ < max_parallel ? max_parallel : max_parallel_; }
-  void set_parallel_degree_limit(int64_t parallel_degree_limit) { parallel_degree_limit_ = parallel_degree_limit; }
-  void set_parallel_min_scan_time_threshold(int64_t threshold) { parallel_min_scan_time_threshold_ = threshold; }
+  void set_auto_dop_params(const AutoDOPParams &auto_dop_params) {  auto_dop_params_ = auto_dop_params; }
+  const AutoDOPParams &get_auto_dop_params() {  return auto_dop_params_; }
   void set_can_use_pdml(bool u) { can_use_pdml_ = u; }
   inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
   void set_is_online_ddl(bool flag) { is_online_ddl_ = flag; }
@@ -547,8 +578,7 @@ private:
   PXParallelRule px_parallel_rule_;
   bool can_use_pdml_; // can use pdml after check parallel
   int64_t max_parallel_;
-  int64_t parallel_degree_limit_; // parallel limit for auto dop
-  int64_t parallel_min_scan_time_threshold_; // auto dop threshold for table scan cost
+  AutoDOPParams auto_dop_params_; // parameters to calc dop for Auto DOP
   bool is_online_ddl_;
   int64_t ddl_sample_column_count_;
   bool is_heap_table_ddl_; // we need to treat heap table ddl seperately

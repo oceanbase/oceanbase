@@ -53,7 +53,7 @@ static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, s
 
 int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, const int64_t task_id,
     const common::ObArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
-    const ObTransferLockStatus &status, common::ObMySQLProxy &sql_proxy)
+    const ObTransferLockStatus &status, const int32_t group_id, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   ObArray<share::ObLSID> sorted_ls_list;
@@ -63,7 +63,7 @@ int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, c
     std::sort(sorted_ls_list.begin(), sorted_ls_list.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < sorted_ls_list.count(); ++i) {
       const share::ObLSID &ls_id = sorted_ls_list.at(i);
-      if (OB_FAIL(lock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, sql_proxy))) {
+      if (OB_FAIL(lock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, sql_proxy))) {
         LOG_WARN("failed to lock ls member list", K(ret), K(ls_id), K(member_list));
       }
     }
@@ -73,7 +73,7 @@ int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, c
 
 int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const int64_t task_id, const common::ObMemberList &member_list, const ObTransferLockStatus &status,
-    common::ObMySQLProxy &sql_proxy)
+    const int32_t group_id, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int64_t lock_owner = -1;
@@ -83,14 +83,14 @@ int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const s
   if (!ls_id.is_valid() || !member_list.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, sql_proxy))) {
+  } else if (OB_FAIL(unlock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, sql_proxy))) {
     LOG_WARN("failed to unlock ls member list", K(ret));
-  } else if (OB_FAIL(get_lock_owner(tenant_id, ls_id, task_id, status, sql_proxy, lock_owner))) {
+  } else if (OB_FAIL(get_lock_owner(tenant_id, ls_id, task_id, status, group_id, sql_proxy, lock_owner))) {
     LOG_WARN("failed to get lock owner", K(ret), K(tenant_id), K(ls_id), K(task_id), K(status));
   } else if (OB_FAIL(get_member_list_str(member_list, member_list_str))) {
     LOG_WARN("failed to get member list str", K(ret), K(member_list));
   } else if (OB_FAIL(
-                 insert_lock_info(tenant_id, ls_id, task_id, status, lock_owner, member_list_str.ptr(), real_lock_owner, sql_proxy))) {
+                 insert_lock_info(tenant_id, ls_id, task_id, status, lock_owner, member_list_str.ptr(), group_id, real_lock_owner, sql_proxy))) {
     LOG_WARN("failed to insert lock info", K(ret), K(ls_id), K(task_id));
   } else {
 #ifdef ERRSIM
@@ -105,11 +105,11 @@ int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const s
     bool need_lock_palf = false;
     if (OB_FAIL(lock_info.set(tenant_id, ls_id, task_id, status, real_lock_owner, member_list_str.ptr()))) {
       LOG_WARN("failed to set lock info", K(ret), K(tenant_id), K(ls_id), K(task_id), K(status), K(real_lock_owner));
-    } else if (OB_FAIL(get_config_change_lock_stat_(lock_info, palf_lock_owner, palf_is_locked))) {
+    } else if (OB_FAIL(get_config_change_lock_stat_(lock_info, group_id, palf_lock_owner, palf_is_locked))) {
       LOG_WARN("failed to get config change lock stat", K(ret), K(tenant_id), K(ls_id));
     } else if (OB_FAIL(check_lock_status_(palf_is_locked, palf_lock_owner, real_lock_owner, need_lock_palf))) {
       LOG_WARN("failed to check lock status", K(ret), K(palf_is_locked), K(palf_lock_owner), K(real_lock_owner));
-    } else if (need_lock_palf && OB_FAIL(try_lock_config_change_(lock_info, lock_timeout))) {
+    } else if (need_lock_palf && OB_FAIL(try_lock_config_change_(lock_info, lock_timeout, group_id))) {
       LOG_WARN("failed to try lock config config",
           K(ret),
           K(tenant_id),
@@ -128,7 +128,7 @@ int ObMemberListLockUtils::lock_ls_member_list(const uint64_t tenant_id, const s
 
 int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const int64_t task_id, const common::ObMemberList &member_list, const ObTransferLockStatus &status,
-    common::ObMySQLProxy &sql_proxy)
+    const int32_t group_id, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -142,7 +142,7 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     row_key.tenant_id_ = tenant_id;
     row_key.ls_id_ = ls_id;
-    if (OB_FAIL(trans.start(&sql_proxy, meta_tenant_id))) {
+    if (OB_FAIL(trans.start(&sql_proxy, meta_tenant_id, false/*with_snapshot*/, group_id))) {
       LOG_WARN("failed to start trans", K(ret), K(meta_tenant_id));
     } else {
       int64_t lock_owner = -1;
@@ -153,7 +153,7 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
       bool need_unlock = true;
       bool need_relock_before_unlock = false;
 
-      if (OB_FAIL(ObTransferLockInfoOperator::get(row_key, task_id, status, for_update, lock_info, trans))) {
+      if (OB_FAIL(ObTransferLockInfoOperator::get(row_key, task_id, status, for_update, group_id, lock_info, trans))) {
         if (OB_ENTRY_NOT_EXIST == ret) {  // palf need to be unlocked
           ret = OB_SUCCESS;
           LOG_INFO("member list already unlocked",
@@ -166,18 +166,18 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
         } else {
           LOG_WARN("failed to get lock info", K(ret), K(tenant_id), K(row_key));
         }
-      } else if (OB_FAIL(get_config_change_lock_stat_(lock_info, palf_lock_owner, palf_is_locked))) {
+      } else if (OB_FAIL(get_config_change_lock_stat_(lock_info, group_id, palf_lock_owner, palf_is_locked))) {
         LOG_WARN("failed to get config change lock stat");
       } else if (OB_FAIL(check_unlock_status_(palf_is_locked, palf_lock_owner, lock_info.lock_owner_,
           need_unlock, need_relock_before_unlock))) {
         LOG_WARN("failed to check unlock status", K(ret), K(palf_is_locked), K(palf_lock_owner), K(lock_info));
       } else if (FALSE_IT(lock_owner = lock_info.lock_owner_)) {
         // assign lock owner
-      } else if (need_relock_before_unlock && OB_FAIL(relock_before_unlock_(lock_info, palf_lock_owner, lock_timeout))) {
+      } else if (need_relock_before_unlock && OB_FAIL(relock_before_unlock_(lock_info, palf_lock_owner, lock_timeout, group_id))) {
         LOG_WARN("failed to relock config change", K(ret), K(lock_info), K(palf_lock_owner));
-      } else if (need_unlock && OB_FAIL(unlock_config_change_(lock_info, lock_timeout))) {
+      } else if (need_unlock && OB_FAIL(unlock_config_change_(lock_info, lock_timeout, group_id))) {
         LOG_WARN("failed to get paxos member list", K(ret), K(lock_info));
-      } else if (OB_FAIL(ObTransferLockInfoOperator::remove(tenant_id, ls_id, task_id, status, trans))) {
+      } else if (OB_FAIL(ObTransferLockInfoOperator::remove(tenant_id, ls_id, task_id, status, group_id, trans))) {
         LOG_WARN("failed to update lock info", K(ret), K(row_key), K(lock_info), K(palf_lock_owner), K(palf_is_locked));
       } else {
 #ifdef ERRSIM
@@ -228,11 +228,12 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
   return ret;
 }
 
-int ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy)
+int ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(
+    const uint64_t tenant_id, const int32_t group_id, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTransferTaskLockInfo> lock_infos;
-  if (OB_FAIL(ObTransferLockInfoOperator::fetch_all(sql_proxy, tenant_id, lock_infos))) {
+  if (OB_FAIL(ObTransferLockInfoOperator::fetch_all(sql_proxy, tenant_id, group_id, lock_infos))) {
     LOG_WARN("failed to fetch all lock info", K(ret), K(tenant_id));
   } else if (lock_infos.empty()) {
     LOG_INFO("no need unlock member list when switch to standby", K(tenant_id));
@@ -249,6 +250,7 @@ int ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(const uint6
                                         task_id,
                                         fake_member_list,
                                         status,
+                                        group_id,
                                         sql_proxy))) {
         LOG_WARN("failed to unlock ls member list", K(ret), K(lock_info));
       }
@@ -258,7 +260,7 @@ int ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(const uint6
 }
 
 int ObMemberListLockUtils::try_lock_config_change_(
-    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout)
+    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   bool ls_exist = false;
@@ -270,7 +272,7 @@ int ObMemberListLockUtils::try_lock_config_change_(
   storage::ObStorageRpc storage_rpc;
   if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(inner_try_lock_config_change_(lock_info, lock_timeout, storage_rpc))) {
+  } else if (OB_FAIL(inner_try_lock_config_change_(lock_info, lock_timeout, group_id, storage_rpc))) {
     LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("try lock config change fallback", K(lock_info), K(lock_timeout));
@@ -289,7 +291,7 @@ int ObMemberListLockUtils::try_lock_config_change_(
 }
 
 int ObMemberListLockUtils::inner_try_lock_config_change_(
-    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout,
+    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, const int32_t group_id,
     storage::ObStorageRpc &storage_rpc)
 {
   int ret = OB_SUCCESS;
@@ -301,14 +303,14 @@ int ObMemberListLockUtils::inner_try_lock_config_change_(
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(lock_info.tenant_id_, lock_info.ls_id_, src_info.src_addr_))) {
     LOG_WARN("failed to get ls leader", K(ret), K(lock_info));
   } else if (OB_FAIL(storage_rpc.lock_config_change(lock_info.tenant_id_, src_info, lock_info.ls_id_,
-      lock_info.lock_owner_, lock_timeout))) {
+      lock_info.lock_owner_, lock_timeout, group_id))) {
     LOG_WARN("failed to try lock config config", K(ret), K(lock_info));
   }
   return ret;
 }
 
 int ObMemberListLockUtils::get_config_change_lock_stat_(
-    const ObTransferTaskLockInfo &lock_info, int64_t &palf_lock_owner, bool &is_locked)
+    const ObTransferTaskLockInfo &lock_info, const int32_t group_id, int64_t &palf_lock_owner, bool &is_locked)
 {
   int ret = OB_SUCCESS;
   bool ls_exist = false;
@@ -319,7 +321,7 @@ int ObMemberListLockUtils::get_config_change_lock_stat_(
   storage::ObStorageRpc storage_rpc;
   if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(get_config_change_lock_stat_fallback_(lock_info, palf_lock_owner, is_locked, storage_rpc))) {
+  } else if (OB_FAIL(get_config_change_lock_stat_fallback_(lock_info, group_id, palf_lock_owner, is_locked, storage_rpc))) {
     LOG_WARN("failed to get lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("get lock config change stat fallback", K(lock_info), K(palf_lock_owner), K(is_locked));
@@ -338,7 +340,7 @@ int ObMemberListLockUtils::get_config_change_lock_stat_(
 }
 
 int ObMemberListLockUtils::get_config_change_lock_stat_fallback_(
-    const ObTransferTaskLockInfo &lock_info, int64_t &palf_lock_owner,
+    const ObTransferTaskLockInfo &lock_info, const int32_t group_id, int64_t &palf_lock_owner,
     bool &is_locked, storage::ObStorageRpc &storage_rpc)
 {
   int ret = OB_SUCCESS;
@@ -352,14 +354,14 @@ int ObMemberListLockUtils::get_config_change_lock_stat_fallback_(
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(lock_info.tenant_id_, lock_info.ls_id_, src_info.src_addr_))) {
     LOG_WARN("failed to get ls leader", K(ret), K(lock_info));
   } else if (OB_FAIL(storage_rpc.get_config_change_lock_stat(lock_info.tenant_id_, src_info,
-      lock_info.ls_id_, palf_lock_owner, is_locked))) {
+      lock_info.ls_id_, group_id, palf_lock_owner, is_locked))) {
     LOG_WARN("failed to get config change lock stat", K(ret), K(lock_info));
   }
   return ret;
 }
 
 int ObMemberListLockUtils::unlock_config_change_(
-    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout)
+    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   bool ls_exist = false;
@@ -371,7 +373,7 @@ int ObMemberListLockUtils::unlock_config_change_(
   storage::ObStorageRpc storage_rpc;
   if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(unlock_config_change_fallback_(lock_info, lock_timeout, storage_rpc))) {
+  } else if (OB_FAIL(unlock_config_change_fallback_(lock_info, lock_timeout, group_id, storage_rpc))) {
     LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("unlock lock config change fallback", K(lock_info), K(lock_timeout));
@@ -390,7 +392,8 @@ int ObMemberListLockUtils::unlock_config_change_(
 }
 
 int ObMemberListLockUtils::unlock_config_change_fallback_(
-    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, storage::ObStorageRpc &storage_rpc)
+    const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, const int32_t group_id,
+    storage::ObStorageRpc &storage_rpc)
 {
   int ret = OB_SUCCESS;
   ObStorageHASrcInfo src_info;
@@ -401,7 +404,7 @@ int ObMemberListLockUtils::unlock_config_change_fallback_(
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(lock_info.tenant_id_, lock_info.ls_id_, src_info.src_addr_))) {
     LOG_WARN("failed to get ls leader", K(ret), K(lock_info));
   } else if (OB_FAIL(storage_rpc.unlock_config_change(lock_info.tenant_id_, src_info, lock_info.ls_id_,
-      lock_info.lock_owner_, lock_timeout))) {
+      lock_info.lock_owner_, lock_timeout, group_id))) {
     LOG_WARN("failed to try lock config config", K(ret), K(lock_info));
   }
   return ret;
@@ -410,7 +413,7 @@ int ObMemberListLockUtils::unlock_config_change_fallback_(
 /* ObMemberListLockUtils */
 
 int ObMemberListLockUtils::get_lock_owner(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-    const ObTransferLockStatus &status, common::ObMySQLProxy &proxy, int64_t &lock_owner)
+    const ObTransferLockStatus &status, const int32_t group_id, common::ObMySQLProxy &proxy, int64_t &lock_owner)
 {
   int ret = OB_SUCCESS;
   share::ObCommonID common_id;
@@ -419,7 +422,7 @@ int ObMemberListLockUtils::get_lock_owner(const uint64_t tenant_id, const share:
   if (!is_valid_tenant_id(tenant_id) || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id not valid", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ObCommonIDUtils::gen_monotonic_id(meta_tenant_id, id_type, proxy, common_id))) {
+  } else if (OB_FAIL(ObCommonIDUtils::gen_monotonic_id(meta_tenant_id, id_type, group_id, proxy, common_id))) {
     LOG_WARN("failed to gen monotonic id", K(ret), K(meta_tenant_id));
   } else {
     lock_owner = common_id.id();
@@ -454,7 +457,7 @@ int ObMemberListLockUtils::get_member_list_str(
 
 int ObMemberListLockUtils::insert_lock_info(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
     const ObTransferLockStatus &status, const int64_t lock_owner, const common::ObString &comment,
-    int64_t &real_lock_owner, common::ObISQLClient &sql_proxy)
+    const int32_t group_id, int64_t &real_lock_owner, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -465,7 +468,7 @@ int ObMemberListLockUtils::insert_lock_info(const uint64_t tenant_id, const shar
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   if (OB_FAIL(lock_info.set(tenant_id, ls_id, task_id, status, lock_owner, comment))) {
     LOG_WARN("failed to set lock info", K(ret), K(tenant_id), K(ls_id), K(status), K(real_lock_owner));
-  } else if (OB_FAIL(trans.start(&sql_proxy, meta_tenant_id))) {
+  } else if (OB_FAIL(trans.start(&sql_proxy, meta_tenant_id, false/*with_snapshot*/, group_id))) {
     LOG_WARN("failed to start trans", K(ret), K(meta_tenant_id));
   } else {
     if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true/*for_update*/, tenant_info))) {
@@ -473,11 +476,11 @@ int ObMemberListLockUtils::insert_lock_info(const uint64_t tenant_id, const shar
     } else if (!tenant_info.is_primary()) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("tenant is not primary, do not allow insert lock info", K(tenant_id), K(tenant_info));
-    } else if (OB_FAIL(ObTransferLockInfoOperator::insert(lock_info, trans))) {
+    } else if (OB_FAIL(ObTransferLockInfoOperator::insert(lock_info, group_id, trans))) {
       if (OB_ENTRY_EXIST == ret) {
         ret = OB_SUCCESS;
         ObTransferTaskLockInfo tmp_lock_info;
-        if (OB_FAIL(get_lock_info(tenant_id, ls_id, task_id, status, tmp_lock_info, trans))) {
+        if (OB_FAIL(get_lock_info(tenant_id, ls_id, task_id, status, group_id, tmp_lock_info, trans))) {
           LOG_WARN("failed to get lock info", K(ret), K(ls_id));
         } else {
           real_lock_owner = tmp_lock_info.lock_owner_;
@@ -497,7 +500,7 @@ int ObMemberListLockUtils::insert_lock_info(const uint64_t tenant_id, const shar
 }
 
 int ObMemberListLockUtils::get_lock_info(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
-    const ObTransferLockStatus &status, ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy)
+    const ObTransferLockStatus &status, const int32_t group_id, ObTransferTaskLockInfo &lock_info, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   lock_info.reset();
@@ -508,7 +511,7 @@ int ObMemberListLockUtils::get_lock_info(const uint64_t tenant_id, const share::
   if (!row_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(row_key));
-  } else if (OB_FAIL(ObTransferLockInfoOperator::get(row_key, task_id, status, for_update, lock_info, sql_proxy))) {
+  } else if (OB_FAIL(ObTransferLockInfoOperator::get(row_key, task_id, status, for_update, group_id, lock_info, sql_proxy))) {
     LOG_WARN("failed to get lock info", K(ret), K(row_key), K(task_id), K(status));
   }
   return ret;
@@ -588,10 +591,10 @@ int ObMemberListLockUtils::check_unlock_status_(
 }
 
 int ObMemberListLockUtils::relock_before_unlock_(const ObTransferTaskLockInfo &lock_info,
-    const int64_t palf_lock_owner, const int64_t lock_timeout)
+    const int64_t palf_lock_owner, const int64_t lock_timeout, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(try_lock_config_change_(lock_info, lock_timeout))) {
+  if (OB_FAIL(try_lock_config_change_(lock_info, lock_timeout, group_id))) {
     LOG_WARN("failed to try lock config change", K(ret), K(lock_info));
   } else {
     LOG_WARN("relock before unlock", K(ret), K(lock_info));

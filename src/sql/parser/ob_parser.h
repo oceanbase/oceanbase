@@ -77,7 +77,7 @@ public:
   //  situation we will try find ';' delimiter to parser part of string in case of save memory,
   //  but this maybe parser error and throw error info. However, we will still try parser remain
   //  string when parse part of string failed, if we throw parse part error info, maybe will let
-  //  someone misunderstand have bug, So, we introduce this mark to decide to throw parser erorr.
+  //  someone misunderstand have bug, So, we introduce this mark to decide to throw parser error.
   //  eg: select '123;' from dual; select '123' from dual;
   int parse_sql(const common::ObString &stmt,
                 ParseResult &parse_result,

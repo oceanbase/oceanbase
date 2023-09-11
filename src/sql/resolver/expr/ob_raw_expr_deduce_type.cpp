@@ -240,7 +240,7 @@ int ObRawExprDeduceType::calc_result_type_with_const_arg(
 
 /* Most expressions not accept lob type parameters. It reports an error in two situations before:
  * 1. report an error in calc_result_type function of expression;
- * 2. cast lob to calc_type not suppoted/expected.
+ * 2. cast lob to calc_type not supported/expected.
  * Only a few expressions deal with lob type parameters in calc_result_type, so most errors caused by 2.
  * However, this makes some problems:
  * For example, cast lob to number is not supported before, and this results that nvl(lob, number)
@@ -377,7 +377,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     // 以防calc_result_typeX没有对其进行设置
     // 理想情况下，不应该要这个循环，所有calc_type的设置都在calc_result_typeX中完成
 
-    // For avg(), internally it will call 'divison', which requires that both input are
+    // For avg(), internally it will call 'division', which requires that both input are
     // casted into number. However, this requirements are not remembered in the input_types
     // for the avg() expression but as the calc_type for the input expression itself. This
     // demands that we set the calculation type here.
@@ -2361,7 +2361,11 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       // @TODO : nijia.nj, 细分各种window_funciton
       if (T_WIN_FUN_CUME_DIST == expr.get_func_type() ||
           T_WIN_FUN_PERCENT_RANK == expr.get_func_type()) {
-        if (is_oracle_mode()) {
+        const uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+        if (is_oracle_mode() ||
+            !((ob_version >= CLUSTER_VERSION_2277 && ob_version < CLUSTER_VERSION_3000)
+              || (ob_version >= CLUSTER_VERSION_312 && ob_version < CLUSTER_VERSION_3200)
+              || ob_version >= CLUSTER_VERSION_3_2_3_0)) {
           result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObNumberType]);
           result_type.set_calc_accuracy(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObNumberType]);
           result_type.set_number();
@@ -2831,7 +2835,7 @@ int ObRawExprDeduceType::set_agg_udf_result_type(ObAggFunRawExpr &expr)
   int ret = OB_SUCCESS;
   ObIArray<ObRawExpr*> &param_exprs = expr.get_real_param_exprs_for_update();
   common::ObSEArray<common::ObString, 16> udf_attributes; /* udf's input args' name */
-  common::ObSEArray<ObExprResType, 16> udf_attributes_types; /* udf's aatribute type */
+  common::ObSEArray<ObExprResType, 16> udf_attributes_types; /* udf's attribute type */
   common::ObSEArray<ObUdfConstArgs, 16> const_results; /* const input expr' result */
   ObAggUdfFunction udf_func;
   const share::schema::ObUDFMeta &udf_meta = expr.get_udf_meta();
@@ -3295,7 +3299,7 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
     ObRawExpr *&child_ptr = real_param_exprs.at(i);
     if (skip_cast_expr(parent, i)) {
       // do nothing
-    //兼容oralce行为,regr_sxx和regr_syy只需在计算的参数加cast,regr_sxy行为和regr_syy一致，比较诡异，暂时兼容
+    //兼容oracle行为,regr_sxx和regr_syy只需在计算的参数加cast,regr_sxy行为和regr_syy一致，比较诡异，暂时兼容
     } else if ((parent.get_expr_type() == T_FUN_REGR_SXX && i == 0) ||
                (parent.get_expr_type() == T_FUN_REGR_SYY && i == 1) ||
                (parent.get_expr_type() == T_FUN_REGR_SXY && i == 1) ||

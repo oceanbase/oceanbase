@@ -7294,7 +7294,8 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
     LOG_DEBUG("column convert", K(obj.get_meta()), K(result_types[i].get_meta_type()),
               K(current_type.at(i)), K(result_types[i].get_accuracy()));
     if (obj.is_pl_extend()/* && pl::PL_RECORD_TYPE == obj.get_meta().get_extend_type()*/
-        && result_types[i].get_meta_type().is_ext()) {
+        && result_types[i].get_meta_type().is_ext()
+        && obj.get_meta().get_extend_type() != PL_CURSOR_TYPE) {
       //record嵌object场景，object属性在resolver阶段要求强一致，无需强转
       OZ (calc_array.push_back(obj));
     } else if (obj.get_meta() == result_types[i].get_meta_type()
@@ -7435,6 +7436,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                            1 == type_count &&
                            1 == obj_array.count() &&
                            obj_array.at(0).is_pl_extend() &&
+                           obj_array.at(0).get_meta().get_extend_type() != PL_CURSOR_TYPE &&
                            obj_array.at(0).get_meta().get_extend_type() != PL_OPAQUE_TYPE); // xmltypes may need to do cast
   if (!is_schema_object) {
     if (OB_SUCC(ret) && type_count != obj_array.count()) {
@@ -7766,7 +7768,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                 } else {
                   OZ (deep_copy_obj(*table->get_allocator(), current_obj, tmp));
                 }
-                OZ (store_datum(current_datum, tmp));
+                OZ (store_datum(current_datum, tmp, ctx->exec_ctx_->get_my_session()));
               }
             }
           }
@@ -7863,7 +7865,7 @@ int ObSPIService::store_datums(ObObj &dest_addr,
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && !is_opaque && i < obj_array.count(); ++i) {
-      if (OB_FAIL(store_datum(current_datum, obj_array.at(i)))) {
+      if (OB_FAIL(store_datum(current_datum, obj_array.at(i), session_info))) {
         LOG_WARN("failed to arrange store", K(dest_addr), K(i), K(obj_array.at(i)), K(obj_array), K(ret));
       }
     }
@@ -7871,15 +7873,20 @@ int ObSPIService::store_datums(ObObj &dest_addr,
   return ret;
 }
 
-int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj)
+int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 == current_addr) || obj.is_invalid_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(current_addr), K(obj), K(ret));
   } else {
-    new (reinterpret_cast<ObObj*>(current_addr))ObObj(obj);
-    current_addr += sizeof(ObObj);
+    ObObj *cur_obj = reinterpret_cast<ObObj*>(current_addr);
+    if (OB_FAIL(ObUserDefinedType::destruct_obj(*cur_obj, session_info))) {
+      LOG_WARN("fail to destruct obj", KPC(cur_obj), K(obj), K(ret));
+    } else {
+      new (cur_obj)ObObj(obj);
+      current_addr += sizeof(ObObj);
+    }
   }
   return ret;
 }
@@ -8542,10 +8549,13 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
   }
 
-  if (OB_NOT_NULL(dblink_conn)) {
+  if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
       LOG_WARN("failed to relese connection", K(tmp_ret));
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
     }
   }
   return ret;

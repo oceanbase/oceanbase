@@ -33,12 +33,12 @@ ObSingleConnectionProxy::~ObSingleConnectionProxy()
   (void)close();
 }
 
-int ObSingleConnectionProxy::connect(const uint64_t tenant_id, ObISQLClient *sql_client)
+int ObSingleConnectionProxy::connect(const uint64_t tenant_id, const int32_t group_id, ObISQLClient *sql_client)
 {
   int ret = OB_SUCCESS;
-  if (NULL == sql_client || NULL == sql_client->get_pool()) {
+  if (NULL == sql_client || NULL == sql_client->get_pool() || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(sql_client));
+    LOG_WARN("invalid argument", K(sql_client), K(group_id));
   } else if (NULL != pool_ || NULL != conn_) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("transaction can only be started once", K(tenant_id), K(pool_), K(conn_));
@@ -46,7 +46,7 @@ int ObSingleConnectionProxy::connect(const uint64_t tenant_id, ObISQLClient *sql
     oracle_mode_ =  sql_client->is_oracle_mode();
     pool_ = sql_client->get_pool();
 
-    if (OB_FAIL(pool_->acquire(tenant_id, conn_, sql_client))) {
+    if (OB_FAIL(pool_->acquire(tenant_id, conn_, sql_client, group_id))) {
       LOG_WARN("acquire connection failed", K(ret), K(tenant_id), K(pool_));
     } else if (NULL == conn_) {
       ret = OB_INNER_STAT_ERROR;
@@ -72,10 +72,11 @@ int ObSingleConnectionProxy::connect(const uint64_t tenant_id, ObISQLClient *sql
 }
 
 int ObSingleConnectionProxy::read(ReadResult &res,
-    const uint64_t tenant_id, const char *sql)
+    const uint64_t tenant_id, const char *sql, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   res.reset();
+  UNUSED(group_id);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed");
@@ -92,6 +93,7 @@ int ObSingleConnectionProxy::read(ReadResult &res,
   LOG_TRACE("execute sql", KCSTRING(sql), K(ret));
   return ret;
 }
+
 int ObSingleConnectionProxy::read(ReadResult &res,
     const int64_t cluster_id,
     const uint64_t tenant_id, const char *sql)
@@ -116,9 +118,10 @@ int ObSingleConnectionProxy::read(ReadResult &res,
 }
 
 int ObSingleConnectionProxy::write(
-    const uint64_t tenant_id, const char *sql, int64_t &affected_rows)
+    const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
+  UNUSED(group_id);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed");

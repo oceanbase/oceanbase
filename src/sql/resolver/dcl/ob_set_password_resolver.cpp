@@ -156,7 +156,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         } else {
           ObString password(static_cast<int32_t>(node->children_[1]->str_len_),
                             node->children_[1]->str_value_);
-          if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
+          if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (lib::is_oracle_mode() && OB_FAIL(
                      resolve_oracle_password_strength(user_name, host_name, password))) {

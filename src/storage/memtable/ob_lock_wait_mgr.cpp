@@ -36,7 +36,7 @@ namespace obmysql
 void request_finish_callback()
 {
   bool unused = false;
-  auto lock_wait_mgr = MTL(memtable::ObLockWaitMgr*);
+  memtable::ObLockWaitMgr *lock_wait_mgr = MTL(memtable::ObLockWaitMgr*);
   if (OB_ISNULL(lock_wait_mgr)) {
     TRANS_LOG(TRACE, "MTL(lock wait mgr) is null", K(MTL_ID()));
   } else {
@@ -513,18 +513,18 @@ ObLink* ObLockWaitMgr::check_timeout()
           iter->on_retry_lock(hash);
           TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "LOCK_MGR: req wait lock cost too much time", K(curr_lock_seq), K(last_lock_seq), K(*iter));
         } else {
-          auto tx_desc = session_info->get_tx_desc();
+          transaction::ObTxDesc *&tx_desc = session_info->get_tx_desc();
           bool ac = false, has_explicit_start_tx = session_info->has_explicit_start_trans();
           session_info->get_autocommit(ac);
           if (OB_ISNULL(tx_desc) && (!ac || has_explicit_start_tx)) {
-            auto session_id = session_info->get_sessid();
-            auto &trace_id = session_info->get_current_trace_id();
+            uint32_t session_id = session_info->get_sessid();
+            const common::ObCurTraceId::TraceId &trace_id = session_info->get_current_trace_id();
             TRANS_LOG(WARN, "LOG_MGR: found session ac = 0 or has_explicit_start_trans but txDesc was released!",
                       K(session_id), K(trace_id), K(ac), K(has_explicit_start_tx));
           }
         }
         if (OB_NOT_NULL(session_info)) {
-          auto tx_desc = session_info->get_tx_desc();
+          transaction::ObTxDesc *&tx_desc = session_info->get_tx_desc();
           TRANS_LOG(INFO, "check transaction state", KP(tx_desc));
         }
       }
@@ -583,15 +583,15 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
     Key key(&row_key);
     uint64_t &hold_key = get_thread_hold_key();
     if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
-      auto row_hash = hash_rowkey(tablet_id, key);
-      auto tx_hash = hash_trans(holder_tx_id);
-      auto row_lock_seq = get_seq(row_hash);
-      auto tx_lock_seq = get_seq(tx_hash);
+      uint64_t row_hash = hash_rowkey(tablet_id, key);
+      uint64_t tx_hash = hash_trans(holder_tx_id);
+      int64_t row_lock_seq = get_seq(row_hash);
+      int64_t tx_lock_seq = get_seq(tx_hash);
       bool locked = false, wait_on_row = true;
       if (OB_FAIL(rechecker(locked, wait_on_row))) {
         TRANS_LOG(WARN, "recheck lock fail", K(key), K(holder_tx_id));
       } else if (locked) {
-        auto hash = wait_on_row ? row_hash : tx_hash;
+        uint64_t hash = wait_on_row ? row_hash : tx_hash;
         if (hold_key == hash) {
           hold_key = 0;
         }
@@ -636,7 +636,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
     TRANS_LOG(WARN, "lock wait mgr not inited", K(ret));
   } else if (NULL == (node = get_thread_node())) {
   } else if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
-    auto hash = LockHashHelper::hash_lock_id(lock_id);
+    uint64_t hash = LockHashHelper::hash_lock_id(lock_id);
     const bool need_delay = is_remote_sql;
     char lock_id_buf[common::MAX_LOCK_ID_BUF_LENGTH];
     lock_id.to_string(lock_id_buf, sizeof(lock_id_buf));
@@ -648,7 +648,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
     if (need_delay) {
       delay_header_node_run_ts(hash);
     }
-    auto lock_seq = get_seq(hash);
+    int64_t lock_seq = get_seq(hash);
     bool need_wait = false;
     if (OB_FAIL(check_need_wait(need_wait))) {
       TRANS_LOG(WARN, "check need wait failed", K(ret));

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
@@ -59,51 +60,46 @@ int ObDCLResolver::check_and_convert_name(ObString &db, ObString &table)
   return ret;
 }
 
-int ObDCLResolver::check_password_strength(common::ObString &password, common::ObString &user_name)
+int ObDCLResolver::check_password_strength(common::ObString &password)
 {
   int ret = OB_SUCCESS;
   int64_t pw_policy = 0;
-  uint64_t valid_pw_len = 0;
+  int64_t check_user_name_flag = 0;
+  size_t char_len = ObCharset::strlen_char(ObCharset::get_system_collation(), password.ptr(),
+                                               static_cast<int64_t>(password.length()));
+  bool passed = true;
   if (OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Session info is not inited", K(ret));
-    // 0 代表密码政策为low, 1代表密码政策为medium
   } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_POLICY, pw_policy))) {
     LOG_WARN("fail to get validate_password_policy variable", K(ret));
-  } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_LENGTH, valid_pw_len))) {
-    LOG_WARN("fail to get validate_password_length variable", K(ret));
+  } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME, check_user_name_flag))) {
+    LOG_WARN("fail to get validate_password_check_user_name variable", K(ret));
+  } else if (!check_user_name_flag && OB_FAIL(check_user_name(password, session_info_->get_user_name()))) {
+    LOG_WARN("password cannot be the same with user name", K(ret));
+  } else if (OB_FAIL(ObExprValidatePasswordStrength::validate_password_low(password,
+                                                                           char_len,
+                                                                           *session_info_,
+                                                                           passed))) {
+    LOG_WARN("password len dont satisfied current pw policy", K(ret));
   } else if (ObPasswordPolicy::LOW == pw_policy) {
-    if (OB_FAIL(check_password_len(password, valid_pw_len))) {
-      LOG_WARN("password len dont satisfied current pw policy", K(ret));
-    }
+    // do nothing
   } else if (ObPasswordPolicy::MEDIUM == pw_policy) {
-    uint64_t valid_pw_len = 0;
-    int64_t check_user_name_flag = 0;
-    uint64_t mix_case_count = 0;
-    uint64_t number_count = 0;
-    uint64_t special_char_count = 0;
-    if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME, check_user_name_flag))) {
-      LOG_WARN("fail to get validate_password_check_user_name variable", K(ret));
-    } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT, number_count))) {
-      LOG_WARN("fail to get validate_password_number_count variable", K(ret));
-    } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT, special_char_count))) {
-      LOG_WARN("fail to get validate_password_length variable", K(ret));
-    } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT, mix_case_count))) {
-      LOG_WARN("fail to get validate_password_mixed_case_count variable", K(ret));
-    } else if (OB_FAIL(check_number_count(password, number_count))) {
-      LOG_WARN("password number count not satisfied current pw policy", K(ret));
-    } else if (OB_FAIL(check_special_char_count(password, special_char_count))) {
-      LOG_WARN("password special char count not satisfied current pw policy", K(ret));
-    } else if (OB_FAIL(check_mixed_case_count(password, mix_case_count))) {
-      LOG_WARN("password mixed case count not satisfied current pw policy", K(ret));
-    } else if (!check_user_name_flag && OB_FAIL(check_user_name(password, user_name))) {
-      LOG_WARN("password cannot be the same with user name", K(ret));
-    } else if (OB_FAIL(check_password_len(password, valid_pw_len))) {
+    if (OB_FAIL(ObExprValidatePasswordStrength::validate_password_medium(password,
+                                                                         char_len,
+                                                                         *session_info_,
+                                                                         passed))) {
       LOG_WARN("password len dont satisfied current pw policy", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the value of password policy is unexpectd", K(ret));
+    LOG_WARN("the value of password policy is unexpected", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(!passed)) {
+      ret = OB_ERR_NOT_VALID_PASSWORD;
+      LOG_WARN("the password is not valid", K(ret));
+    }
   }
   return ret;
 }
@@ -183,85 +179,7 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
   return ret;
 }
 
-
-int ObDCLResolver::check_number_count(common::ObString &password, const int64_t &number_count)
-{
-  int ret = OB_SUCCESS;
-  int64_t count = 0;
-  for (int i = 0; OB_SUCC(ret) && i < password.length(); ++i) {
-    if (password[i] >= '0' && password[i] <= '9') {
-      count++;
-    }
-    if (count >= number_count) {
-      break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (number_count > count) {
-      ret = OB_ERR_NOT_VALID_PASSWORD;
-      LOG_WARN("the password is not valid", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDCLResolver::check_special_char_count(common::ObString &password, const int64_t &special_char_count)
-{
-  int ret = OB_SUCCESS;
-  int64_t count = 0;
-  for (int i = 0; OB_SUCC(ret) && i < password.length(); ++i) {
-    if ((password[i] >= '!' && password[i] <= '/')||
-        (password[i] >= ':' && password[i] <= '?')) {
-      count++;
-    }
-    if (count >= special_char_count) {
-      break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (special_char_count > count) {
-      ret = OB_ERR_NOT_VALID_PASSWORD;
-      LOG_WARN("the password is not valid", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDCLResolver::check_mixed_case_count(common::ObString &password, const int64_t &mix_case_count)
-{
-  int ret = OB_SUCCESS;
-  int64_t lower_count = 0;
-  int64_t upper_count = 0;
-  for (int i = 0; OB_SUCC(ret) && i < password.length(); ++i) {
-    if (islower(password[i])) {
-      lower_count++;
-    } else if (isupper(password[i])) {
-      upper_count++;
-    }
-    if (lower_count >= mix_case_count && upper_count >= mix_case_count) {
-      break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (mix_case_count > lower_count || mix_case_count > upper_count) {
-      ret = OB_ERR_NOT_VALID_PASSWORD;
-      LOG_WARN("the password is not valid", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDCLResolver::check_password_len(common::ObString &password, const int64_t &password_len)
-{
-  int ret = OB_SUCCESS;
-  if (password.length() < password_len) {
-    ret = OB_ERR_NOT_VALID_PASSWORD;
-    LOG_WARN("the password is not valid", K(ret));
-  }
-  return ret;
-}
-
-int ObDCLResolver::check_user_name(common::ObString &password, common::ObString &user_name)
+int ObDCLResolver::check_user_name(common::ObString &password, const common::ObString &user_name)
 {
   int ret = OB_SUCCESS;
   if (ObCharset::case_insensitive_equal(password, user_name)) {

@@ -141,7 +141,8 @@ public:
            ObISQLClient *client_addr = NULL,
            ObRestoreSQLModifier *sql_modifer = NULL,
            const bool use_static_engine = false,
-           const bool is_oracle_mode = false);
+           const bool is_oracle_mode = false,
+           const int32_t group_id = 0);
   int destroy(void);
   inline void reset() { destroy(); }
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
@@ -189,7 +190,8 @@ public:
   virtual void set_force_remote_exec(bool v) { force_remote_execute_ = v; }
   virtual void set_use_external_session(bool v) { use_external_session_ = v; }
   bool is_nested_conn();
-
+  virtual void set_user_timeout(int64_t timeout) { user_timeout_ = timeout; }
+  virtual int64_t get_user_timeout() const { return user_timeout_; }
   void ref();
   // when ref count decrease to zero, revert connection to connection pool.
   void unref();
@@ -414,7 +416,9 @@ private:
   // ask the inner sql connection to use external session instead of internal one
   // this enables show session / kill session using sql query command
   bool use_external_session_;
-
+  int32_t group_id_;
+  //support set user timeout of stream rpc but not depend on internal_sql_execute_timeout
+  int64_t user_timeout_;
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };
 

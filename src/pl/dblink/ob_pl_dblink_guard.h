@@ -110,7 +110,9 @@ private:
                           int64_t &object_type,
                           ObIAllocator &alloctor);
 
-  int get_dblink_routine_infos(sql::ObSQLSessionInfo &session_info,
+  int get_dblink_routine_infos(common::ObDbLinkProxy *dblink_proxy,
+                               common::sqlclient::ObISQLConnection *dblink_conn,
+                               sql::ObSQLSessionInfo &session_info,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const common::ObString &dblink_name,
                                const common::ObString &db_name,
@@ -118,7 +120,9 @@ private:
                                const common::ObString &routine_name,
                                common::ObIArray<const share::schema::ObIRoutineInfo *> &routine_infos);
 
-  int get_dblink_type_by_name(sql::ObSQLSessionInfo &session_info,
+  int get_dblink_type_by_name(common::ObDbLinkProxy *dblink_proxy,
+                              common::sqlclient::ObISQLConnection *dblink_conn,
+                              sql::ObSQLSessionInfo &session_info,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const common::ObString &dblink_name,
                               const common::ObString &db_name,

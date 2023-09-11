@@ -1990,10 +1990,27 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
       } else if (OB_ISNULL(row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("row is null", K(ret));
-      } else if (OB_FAIL(dest_cursor->row_store_.add_row(*row))) {
-        LOG_WARN("failed to add row to row store", K(ret));
       } else {
-        ++cur;
+        ObNewRow tmp_row = *row;
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
+          ObObj& obj = tmp_row.get_cell(i);
+          ObObj tmp;
+          if (obj.is_pl_extend()) {
+            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*(dest_cursor->allocator_), obj, tmp))) {
+              LOG_WARN("failed to copy pl extend", K(ret));
+            } else {
+              obj = tmp;
+              dest_cursor->complex_objs_.push_back(tmp);
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(dest_cursor->row_store_.add_row(tmp_row))) {
+            LOG_WARN("failed to add row to row store", K(ret));
+          } else {
+            ++cur;
+          }
+        }
       }
     }
 

@@ -919,6 +919,7 @@ int PalfHandleImpl::replace_learners(const common::ObMemberList &added_learners,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_REPLACE_MEMBER_NOT_REMOVE_ERROR);
 int PalfHandleImpl::replace_member_with_learner(const common::ObMember &added_member,
                                                 const common::ObMember &removed_member,
                                                 const palf::LogConfigVersion &config_version,
@@ -944,6 +945,8 @@ int PalfHandleImpl::replace_member_with_learner(const common::ObMember &added_me
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
     } else if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "add_member in replace_member_with_learner failed", KR(ret), KPC(this), K(args));
+    } else if (OB_UNLIKELY(ERRSIM_REPLACE_MEMBER_NOT_REMOVE_ERROR)) {
+      // do nothing
     } else if (FALSE_IT(args.server_ = removed_member)) {
     } else if (FALSE_IT(args.type_ = REMOVE_MEMBER_AND_NUM)) {
     } else if (OB_FAIL(one_stage_config_change_(args, timeout_us + begin_time_us - common::ObTimeUtility::current_time()))) {

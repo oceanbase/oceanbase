@@ -627,11 +627,9 @@ struct EstimateCostInfo {
     const ObCostTableScanInfo &get_cost_table_scan_info() const
     { return est_cost_info_; }
     ObCostTableScanInfo &get_cost_table_scan_info() { return est_cost_info_; }
-    int compute_parallel_degree(const int64_t parallel_degree_limit,
-                                const int64_t micro_block_threshold,
+    int compute_parallel_degree(const int64_t cur_min_parallel_degree,
                                 int64_t &parallel) const;
-    int check_and_prepare_estimate_parallel_params(const int64_t input_parallel_degree_limit,
-                                                   const double cost_threshold_ms,
+    int check_and_prepare_estimate_parallel_params(const int64_t cur_min_parallel_degree,
                                                    int64_t &px_part_gi_min_part_per_dop,
                                                    double &cost_threshold_us,
                                                    int64_t &server_cnt,

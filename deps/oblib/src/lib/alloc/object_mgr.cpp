@@ -63,7 +63,7 @@ void SubObjectMgr::free_block(ABlock *block)
 ObjectMgr::ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id,
                      uint32_t ablock_size, int parallel, IBlockMgr *blk_mgr)
   : IBlockMgr(tenant_id, ctx_id), ta_(allocator),
-    ablock_size_(ablock_size), parallel_(4), blk_mgr_(blk_mgr), sub_cnt_(1),
+    ablock_size_(ablock_size), parallel_(parallel), blk_mgr_(blk_mgr), sub_cnt_(1),
     root_mgr_(common::ObCtxIds::LOGGER_CTX_ID == ctx_id, tenant_id, ctx_id, ablock_size_, blk_mgr_),
     last_wash_ts_(0), last_washed_size_(0)
 {

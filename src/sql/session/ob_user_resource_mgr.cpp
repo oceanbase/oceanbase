@@ -343,6 +343,14 @@ int ObConnectResourceMgr::on_user_connect(
         session.set_conn_res_user_id(user_id);
       }
     }
+  } else {
+    if (!session.has_got_tenant_conn_res()) {
+      if (OB_FAIL(apply_for_tenant_conn_resource(tenant_id, priv, UINT64_MAX))) {
+        LOG_WARN("reach teannt max connections", K(ret));
+      } else {
+        session.set_got_tenant_conn_res(true);
+      }
+    }
   }
   return ret;
 }

@@ -1422,7 +1422,7 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
       LOG_WARN("get unexpected null", K(ret));
     }
     if (OB_FAIL(insert_op->compute_property())) {
-      LOG_WARN("failed to compute propery", K(ret));
+      LOG_WARN("failed to compute property", K(ret));
     } else {
       top = insert_op;
     }

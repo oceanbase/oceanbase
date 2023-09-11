@@ -131,8 +131,8 @@ typedef struct _ParseNode
       uint32_t is_neg_ : 1;// 记录常量节点的父节点是否为T_OP_NEG节点, 1表示是, 0 表示不是
       uint32_t is_hidden_const_ : 1; //1 表示某常量正常parse能识别但fast parse不能识别, 0 表示都能识别。
       uint32_t is_tree_not_param_ :1; //1 表示该节点及其子节点常量均不能参数化, 0表示没该限制
-      uint32_t length_semantics_  :2; //2 for oralce [char|varbinary] (n b [bytes|char])
-      uint32_t is_val_paramed_item_idx_ :1; // T_PROJECT_STRING的vlaues是否是select_item_param_infos数组的下标
+      uint32_t length_semantics_  :2; //2 for oracle [char|varbinary] (n b [bytes|char])
+      uint32_t is_val_paramed_item_idx_ :1; // T_PROJECT_STRING的values是否是select_item_param_infos数组的下标
       uint32_t is_copy_raw_text_ : 1; // 是否回填常量节点的raw_text_，用于select item常量参数化
       uint32_t is_column_varchar_ : 1; // 投影列是否是一个常量字符串，用于select item常量参数化
       uint32_t is_trans_from_minus_: 1; // 负数常量节点是否是从减号操作转换而来，比如1 - 2，词法阶段会生成一个-2
@@ -174,7 +174,7 @@ typedef struct _ParseNode
   int64_t text_len_;
   int64_t pos_; //记录?在带?的sql中的偏移
 
-  struct _ParseNode **children_; /* attributes for non-terninal node, which has children */
+  struct _ParseNode **children_; /* attributes for non-terminal node, which has children */
   ObStmtLoc stmt_loc_; //临时放在这里，后面要移到parse_stmt_node.h中去
   union {
     int64_t raw_param_idx_; // 常量节点在fp_result.raw_params_中的下标
@@ -243,7 +243,7 @@ typedef struct _ObQuestionMarkCtx
 // record the minus status while parsing the sql
 // for example, 'select - -1 from dual'
 // when parser sees the first '-', pos_ = 7, raw_sql_offset = 7, has_minus_ = true, is_cur_numeric_ = false
-// after seeing the second '-', members are reseted, pos_ = 9, raw_sql_offset_ = 9, has_minus_ = true,  is_cur_numberic = false
+// after seeing the second '-', members are reseted, pos_ = 9, raw_sql_offset_ = 9, has_minus_ = true,  is_cur_numeric = false
 // after seeing '1', is_cur_numeric = true, then param node '-1' is returned
 typedef struct _ObMinusStatuCtx
 {

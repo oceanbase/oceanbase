@@ -150,7 +150,7 @@ public:
   static const uint16_t DISABLE_DEBUGSYNC_FLAG = 1 << 12;
   static const uint16_t CONTEXT_FLAG           = 1 << 11;
   static const uint16_t UNNEED_RESPONSE_FLAG   = 1 << 10;
-  static const uint16_t BAD_ROUTING_FLAG       = 1 << 9;
+  static const uint16_t REQUIRE_REROUTING_FLAG = 1 << 9;
   static const uint16_t ENABLE_RATELIMIT_FLAG  = 1 << 8;
   static const uint16_t BACKGROUND_FLOW_FLAG   = 1 << 7;
   static const uint16_t TRACE_INFO_FLAG        = 1 << 6;
@@ -269,8 +269,8 @@ public:
   inline void unset_stream();
   inline void set_unneed_response();
   inline bool unneed_response() const;
-  inline void set_bad_routing();
-  inline bool bad_routing() const;
+  inline void set_require_rerouting();
+  inline bool require_rerouting() const;
 
   inline bool ratelimit_enabled() const;
   inline void enable_ratelimit();
@@ -536,14 +536,14 @@ bool ObRpcPacket::unneed_response() const
   return hdr_.flags_ & ObRpcPacketHeader::UNNEED_RESPONSE_FLAG;
 }
 
-void ObRpcPacket::set_bad_routing()
+void ObRpcPacket::set_require_rerouting()
 {
-  hdr_.flags_ |= ObRpcPacketHeader::BAD_ROUTING_FLAG;
+  hdr_.flags_ |= ObRpcPacketHeader::REQUIRE_REROUTING_FLAG;
 }
 
-bool ObRpcPacket::bad_routing() const
+bool ObRpcPacket::require_rerouting() const
 {
-  return hdr_.flags_ & ObRpcPacketHeader::BAD_ROUTING_FLAG;
+  return hdr_.flags_ & ObRpcPacketHeader::REQUIRE_REROUTING_FLAG;
 }
 
 bool ObRpcPacket::ratelimit_enabled() const

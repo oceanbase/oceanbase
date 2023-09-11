@@ -6180,7 +6180,7 @@ int ObLSTabletService::check_need_rollback_in_transfer_for_4377_(const transacti
     // read from origin tablet, if there's inconsistent, it should throw 4377 error
     // CASE 2.2: transfer_scn_ is valid, the transfer_scn_ is backfilled, it means that
     // tablet has started to transfer out. If it's the first transfer, we should
-    // throw 4377 erorr, otherwise we should compare the transfer_scn_ with the tx_scn,
+    // throw 4377 error, otherwise we should compare the transfer_scn_ with the tx_scn,
     // and decide to rollback the transaction or throw 4377 error.
     // However, we can not be sure about whether this transfer out is the first transfer or not.
     // So we consider all the transfer out status as not the first transfer here, to avoid

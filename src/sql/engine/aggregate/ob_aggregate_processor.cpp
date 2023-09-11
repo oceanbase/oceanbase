@@ -38,6 +38,7 @@
 #include "lib/alloc/malloc_hook.h"
 #endif
 #include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl.h"
 
 namespace oceanbase
 {
@@ -6021,6 +6022,24 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
       } else {
         LOG_TRACE("succeed to get pl agg udf result", K(result_obj), K(result));
       }
+      if (result_obj.is_pl_extend()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_ISNULL(eval_ctx_.exec_ctx_.get_pl_ctx())) {
+          tmp_ret = eval_ctx_.exec_ctx_.init_pl_ctx();
+        }
+        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(eval_ctx_.exec_ctx_.get_pl_ctx())) {
+          tmp_ret = eval_ctx_.exec_ctx_.get_pl_ctx()->add(result_obj);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_agg_udf_obj, eval_ctx_.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+      LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(pl_agg_udf_obj));
     }
   }
   return ret;

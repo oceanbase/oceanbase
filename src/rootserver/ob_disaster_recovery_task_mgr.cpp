@@ -718,12 +718,30 @@ void ObDRTaskMgr::run3()
         if (OB_FAIL(try_pop_task(allocator, task))) {
           LOG_WARN("fail to try pop task", KR(ret));
         } else if (OB_NOT_NULL(task)) {
-          tmp_ret = task->log_execute_start();
-          if (OB_SUCCESS != tmp_ret) {
-            LOG_WARN("fail to log task start", KR(tmp_ret), KPC(task));
-          }
-          if (OB_FAIL(execute_task(*task))) {
-            LOG_WARN("fail to send", KR(ret), KPC(task));
+          const ObAddr &dst_server = task->get_dst_server();
+          ObServerInfoInTable server_info;
+          if (OB_FAIL(SVR_TRACER.get_server_info(dst_server, server_info))) {
+            LOG_WARN("fail to get server_info", KR(ret), K(dst_server));
+          } else if (server_info.is_permanent_offline()) {
+            // dest server permanent offline, do not execute this task, just clean it
+            LOG_INFO("[DRTASK_NOTICE] dest server is permanent offline, task can not execute", K(dst_server), K(server_info));
+            ObThreadCondGuard guard(cond_);
+            if (OB_SUCCESS != (tmp_ret = async_add_cleaning_task_to_updater(
+                                  task->get_task_id(),
+                                  task->get_task_key(),
+                                  OB_REBALANCE_TASK_CANT_EXEC,
+                                  false/*need_record_event*/,
+                                  ObDRTaskRetComment::CANNOT_EXECUTE_DUE_TO_SERVER_PERMANENT_OFFLINE,
+                                  false/*reach_data_copy_concurrency*/))) {
+              LOG_WARN("fail to do execute over", KR(tmp_ret), KPC(task));
+            }
+          } else {
+            if (OB_SUCCESS != (tmp_ret = task->log_execute_start())) {
+              LOG_WARN("fail to log task start", KR(tmp_ret), KPC(task));
+            }
+            if (OB_FAIL(execute_task(*task))) {
+              LOG_WARN("fail to send", KR(ret), KPC(task));
+            }
           }
           free_task_(allocator, task);
         } else {
@@ -734,7 +752,7 @@ void ObDRTaskMgr::run3()
           LOG_WARN("fail to try dump statistic", KR(tmp_ret), K(last_dump_ts));
         }
         if (OB_SUCCESS != (tmp_ret = try_clean_not_in_schedule_task_in_schedule_list_(
-              last_check_task_in_progress_ts))) { 
+              last_check_task_in_progress_ts))) {
            LOG_WARN("fail to try check task in progress", KR(tmp_ret), K(last_check_task_in_progress_ts));
         }
       }

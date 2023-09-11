@@ -70,13 +70,17 @@ struct ObTxRpcRollbackSPResult
 {
   OB_UNIS_VERSION(1);
 public:
+  ObTxRpcRollbackSPResult(): ignore_(false) {}
   int status_;
   int64_t send_timestamp_;
   int64_t born_epoch_;
   ObAddr addr_;
+  // rollback response has changed to use ObTxRollbackSPRespMsg
+  // use this field to indicate handler ignore handle by this msg
+  bool ignore_;
 public:
   int get_status() const { return status_; }
-  TO_STRING_KV(K_(status), K_(send_timestamp), K_(born_epoch), K_(addr));
+  TO_STRING_KV(K_(status), K_(send_timestamp), K_(born_epoch), K_(addr), K_(ignore));
 };
 
 class ObTransRpcProxy : public obrpc::ObRpcProxy
@@ -88,6 +92,7 @@ public:
   RPC_AP(PR3 post_commit_resp_msg, OB_TX_COMMIT_RESP, (transaction::ObTxCommitRespMsg), ObTransRpcResult);
   RPC_AP(PR3 post_abort_msg, OB_TX_ABORT, (transaction::ObTxAbortMsg), ObTransRpcResult);
   RPC_AP(PR3 post_rollback_sp_msg, OB_TX_ROLLBACK_SAVEPOINT, (transaction::ObTxRollbackSPMsg), ObTxRpcRollbackSPResult);
+  RPC_AP(PR3 post_rollback_sp_resp_msg, OB_TX_ROLLBACK_SAVEPOINT_RESP, (transaction::ObTxRollbackSPRespMsg), ObTransRpcResult);
   RPC_AP(PR3 post_keep_alive_msg, OB_TX_KEEPALIVE, (transaction::ObTxKeepaliveMsg), ObTransRpcResult);
   RPC_AP(PR3 post_keep_alive_resp_msg, OB_TX_KEEPALIVE_RESP, (transaction::ObTxKeepaliveRespMsg), ObTransRpcResult);
   // for standby
@@ -125,6 +130,7 @@ TX_P_(Commit, OB_TX_COMMIT);
 TX_P_(CommitResp, OB_TX_COMMIT_RESP);
 TX_P_(Abort, OB_TX_ABORT);
 TX_P_(RollbackSP, OB_TX_ROLLBACK_SAVEPOINT);
+TX_P_(RollbackSPResp, OB_TX_ROLLBACK_SAVEPOINT_RESP);
 TX_P_(Keepalive, OB_TX_KEEPALIVE);
 TX_P_(KeepaliveResp, OB_TX_KEEPALIVE_RESP);
 //for standby
@@ -227,7 +233,6 @@ int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
                             const int64_t epoch,
                             const transaction::ObTransID &tx_id,
                             const int status,
-                            const ObAddr &addr,
                             const int64_t request_id,
                             const ObTxRpcRollbackSPResult &result);
 template<ObRpcPacketCode PC>
@@ -276,7 +281,7 @@ int ObTxRPCCB<PC>::process()
       }
     }
   }
-  if (OB_SUCCESS != ret || OB_SUCCESS != status) {
+  if (OB_SUCCESS != ret || (OB_SUCCESS != status && status != -1)) {
     TRANS_LOG(WARN, "trx rpc callback", K(ret), K(status), K(dst), K(result));
   }
   return ret;
@@ -301,7 +306,6 @@ int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
                             const int64_t epoch,
                             const transaction::ObTransID &tx_id,
                             const int status,
-                            const ObAddr &addr,
                             const int64_t request_id,
                             const ObTxRpcRollbackSPResult &result);
 template<>
@@ -311,7 +315,6 @@ inline int ObTxRPCCB<OB_TX_ROLLBACK_SAVEPOINT>::handle_tx_msg_cb_(const int stat
                                  epoch_,
                                  trans_id_,
                                  status,
-                                 dst,
                                  request_id_,
                                  result_);
 }
@@ -437,6 +440,7 @@ private:
   obrpc::ObTxRPCCB<obrpc::OB_TX_COMMIT_RESP> tx_commit_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_ABORT> tx_abort_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_ROLLBACK_SAVEPOINT> tx_rollback_sp_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_ROLLBACK_SAVEPOINT_RESP> tx_rollback_sp_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_KEEPALIVE> tx_keepalive_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_KEEPALIVE_RESP> tx_keepalive_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE> tx_ask_state_cb_;

@@ -82,6 +82,7 @@ class ObMaxIdFetcher
 {
 public:
   explicit ObMaxIdFetcher(common::ObMySQLProxy &proxy);
+  explicit ObMaxIdFetcher(common::ObMySQLProxy &proxy, const int32_t group_id);
   virtual ~ObMaxIdFetcher();
 
   // For generate new object_ids
@@ -114,6 +115,7 @@ private:
 private:
   common::ObMySQLProxy &proxy_;
   static lib::ObMutex mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
+  int32_t group_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMaxIdFetcher);
 };

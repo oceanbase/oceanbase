@@ -48,6 +48,7 @@ TEST_F(TestTransferLockInfoOperator, TransferLockInfo)
   src_ls_id_ = ObLSID(1001);
   dest_ls_id_ = ObLSID(1002);
   task_id_ = 1;
+  const int32_t group_id = 0;
   ObTransferLockStatus start_status = ObTransferLockStatus(ObTransferLockStatus::START);
   ObTransferLockStatus doing_status = ObTransferLockStatus(ObTransferLockStatus::DOING);
   int64_t start_src_lock_owner = 111;
@@ -63,8 +64,8 @@ TEST_F(TestTransferLockInfoOperator, TransferLockInfo)
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
 
   // insert
-  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::insert(start_src_lock_info, sql_proxy));
-  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::insert(start_dest_lock_info, sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::insert(start_src_lock_info, group_id, sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::insert(start_dest_lock_info, group_id, sql_proxy));
 
   // select
   ObTransferLockInfoRowKey src_row_key;
@@ -77,8 +78,8 @@ TEST_F(TestTransferLockInfoOperator, TransferLockInfo)
   ObTransferTaskLockInfo new_start_src_lock_info;
   ObTransferTaskLockInfo new_start_dest_lock_info;
 
-  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, new_start_src_lock_info, sql_proxy));
-  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::get(dest_row_key, task_id_, start_status, false, new_start_dest_lock_info, sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, group_id, new_start_src_lock_info, sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::get(dest_row_key, task_id_, start_status, false, group_id, new_start_dest_lock_info, sql_proxy));
 
   LOG_INFO("[MITTEST]transfer_lock_info", K(new_start_src_lock_info));
   ASSERT_EQ(new_start_src_lock_info.tenant_id_, start_src_lock_info.tenant_id_);
@@ -95,11 +96,11 @@ TEST_F(TestTransferLockInfoOperator, TransferLockInfo)
   ASSERT_EQ(new_start_dest_lock_info.lock_owner_, start_dest_lock_info.lock_owner_);
 
   // remove
-  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::remove(tenant_id_, src_ls_id_, task_id_, start_status, sql_proxy));
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, new_start_src_lock_info, sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::remove(tenant_id_, src_ls_id_, task_id_, start_status, group_id, sql_proxy));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, group_id, new_start_src_lock_info, sql_proxy));
 
-  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::remove(tenant_id_, dest_ls_id_, task_id_, start_status, sql_proxy));
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, new_start_dest_lock_info, sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObTransferLockInfoOperator::remove(tenant_id_, dest_ls_id_, task_id_, start_status, group_id, sql_proxy));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferLockInfoOperator::get(src_row_key, task_id_, start_status, false, group_id, new_start_dest_lock_info, sql_proxy));
 }
 
 } // namespace

@@ -21,12 +21,14 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/list/ob_dlist.h"
+#include "lib/net/ob_addr.h"
 #include "common/ob_common_types.h"
 #include "common/ob_range.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 
 #include "share/table/ob_table_ttl_common.h"
 #include "common/rowkey/ob_rowkey.h"
+#include "common/ob_role.h"
 namespace oceanbase
 {
 namespace common
@@ -144,8 +146,8 @@ template <typename T>
 class ObTableEntityFactory: public ObITableEntityFactory
 {
 public:
-  ObTableEntityFactory(const char *label = common::ObModIds::TABLE_PROC)
-      :alloc_(label)
+  ObTableEntityFactory(const char *label = common::ObModIds::TABLE_PROC, uint64_t tenant_id = OB_SERVER_TENANT_ID)
+      :alloc_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id)
   {}
   virtual ~ObTableEntityFactory();
   virtual ObITableEntity *alloc() override;
@@ -955,6 +957,59 @@ public:
   uint64_t max_version_del_rows_;
   uint64_t scan_rows_;
   common::ObString end_rowkey_;
+};
+
+struct ObTableMoveReplicaInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableMoveReplicaInfo()
+      : table_id_(common::OB_INVALID_ID),
+        schema_version_(common::OB_INVALID_VERSION),
+        tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
+        role_(common::ObRole::INVALID_ROLE),
+        replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
+        part_renew_time_(0),
+        reserved_(0)
+  {}
+  virtual ~ObTableMoveReplicaInfo() {}
+  TO_STRING_KV(K_(table_id),
+               K_(schema_version),
+               K_(part_renew_time),
+               K_(tablet_id),
+               K_(server),
+               K_(role),
+               K_(replica_type),
+               K_(reserved));
+  OB_INLINE void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  OB_INLINE void set_schema_version(const uint64_t schema_version) { schema_version_ = schema_version; }
+  OB_INLINE void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+public:
+  uint64_t table_id_;
+  uint64_t schema_version_;
+  common::ObTabletID tablet_id_;
+  common::ObAddr server_;
+  common::ObRole role_;
+  common::ObReplicaType replica_type_;
+  int64_t part_renew_time_;
+  uint64_t reserved_;
+};
+
+class ObTableMoveResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableMoveResult()
+      : reserved_(0)
+  {}
+  virtual ~ObTableMoveResult() {}
+  TO_STRING_KV(K_(replica_info),
+               K_(reserved));
+
+  OB_INLINE ObTableMoveReplicaInfo& get_replica_info() { return replica_info_; }
+private:
+  ObTableMoveReplicaInfo replica_info_;
+  uint64_t reserved_;
 };
 
 

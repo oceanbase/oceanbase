@@ -441,6 +441,9 @@ public:
   }
   int64_t get_last_gc_scan_ts() { return last_gc_scan_ts_; }
 
+  const DupTabletSetAttribute & get_RO_attribute() const  {return dup_set_attr_;}
+  const RelatedSetAttribute & get_RO_related_attribute() const  {return related_set_attr_;}
+
   bool is_logging() const { return dup_set_attr_.change_status_.check_logging(); }
   void set_logging() { dup_set_attr_.change_status_.set_logging(); }
   void clean_logging() { dup_set_attr_.change_status_.clean_logging(); }

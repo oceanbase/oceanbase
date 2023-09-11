@@ -53,7 +53,7 @@ public:
   ObDBMSSchedJobKey(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
     uint64_t execute_at, uint64_t delay,
-    bool check_job, bool check_new, bool check_new_tenant)
+    bool check_job, bool check_new, bool check_new_tenant, bool purge_run_detail = false)
   : tenant_id_(tenant_id),
     is_oracle_tenant_(is_oracle_tenant),
     job_id_(job_id),
@@ -61,7 +61,8 @@ public:
     delay_(delay),
     check_job_(check_job),
     check_new_(check_new),
-    check_new_tenant_(check_new_tenant) {}
+    check_new_tenant_(check_new_tenant),
+    purge_run_detail_(purge_run_detail) {}
 
   virtual ~ObDBMSSchedJobKey() {}
 
@@ -102,8 +103,15 @@ public:
   bool is_oracle_tenant() { return is_oracle_tenant_; }
 
   TO_STRING_KV(
-    K_(check_job), K_(check_new), K_(check_new_tenant),
-    K_(execute_at), K_(delay), K_(job_id), K_(tenant_id));
+    K_(tenant_id),
+    K_(is_oracle_tenant),
+    K_(job_id),
+    K_(execute_at),
+    K_(delay),
+    K_(check_job),
+    K_(check_new),
+    K_(check_new_tenant),
+    K_(purge_run_detail));
 
 private:
   uint64_t tenant_id_;
@@ -213,7 +221,7 @@ public:
                     ObDBMSSchedJobKey *job_key = NULL);
   int register_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJobKey *job_key = NULL, bool ignore_nextdate = false);
 
-  int scheduler_job(ObDBMSSchedJobKey *job_key, bool is_retry = false);
+  int scheduler_job(ObDBMSSchedJobKey *job_key);
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;

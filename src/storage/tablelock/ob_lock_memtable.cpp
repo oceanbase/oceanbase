@@ -170,7 +170,7 @@ int ObLockMemtable::lock_(
         if (lock_op.lock_id_.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
           ret = OB_OBJ_LOCK_EXIST;
         }
-        LOG_INFO("lock is exist", K(ret), K(lock_op));
+        LOG_DEBUG("lock is exist", K(ret), K(lock_op));
       } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
       } else if (OB_FAIL(obj_lock_map_.lock(param, ctx, lock_op, lock_mode_in_same_trans, conflict_tx_set))) {
         if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
@@ -473,7 +473,7 @@ int ObLockMemtable::check_lock_conflict(
     if (lock_op.lock_id_.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
       ret = OB_OBJ_LOCK_EXIST;
     }
-    LOG_INFO("lock is exist", K(ret), K(lock_op));
+    LOG_DEBUG("lock is exist", K(ret), K(lock_op));
   } else if (OB_FAIL(obj_lock_map_.check_allow_lock(lock_op,
                                                     lock_mode_in_same_trans,
                                                     conflict_tx_set,

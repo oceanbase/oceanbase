@@ -1087,9 +1087,9 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
         } else if (FALSE_IT(param.global_value_to_sync_ = sequence_value - 1)) {
           // as sequence_value is an avaliable value. sync value will not be avaliable to user
         } else {
-          while (OB_SUCC(ret)) {
+          for (int64_t retry_cnt = 100; OB_SUCC(ret) && retry_cnt > 0; retry_cnt--) {
             if (OB_FAIL(auto_inc_service.sync_insert_value_global(param))) {
-              if (DDL_TABLE_RESTORE == task_type_ && OB_TENANT_NOT_IN_SERVER == ret) {
+              if (DDL_TABLE_RESTORE == task_type_ && share::ObIDDLTask::in_ddl_retry_white_list(ret)) {
                 if (TC_REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
                   LOG_INFO("set auto increment position failed, retry", K(ret), K(dst_tenant_id_), K(target_object_id_), K(cur_column_id), K(param));
                 }

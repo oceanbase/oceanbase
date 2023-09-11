@@ -74,7 +74,7 @@ int ObMPStmtSendPieceData::before_process()
     const char* pos = pkt.get_cdata();
     // stmt_id
     ObMySQLUtil::get_int4(pos, stmt_id_);
-    ObMySQLUtil::get_int2(pos, param_id_);
+    ObMySQLUtil::get_uint2(pos, param_id_);
     ObMySQLUtil::get_int1(pos, piece_mode_);
     int8_t is_null = 0;
     ObMySQLUtil::get_int1(pos, is_null);
@@ -358,7 +358,7 @@ int64_t ObPieceBuffer::to_string(char *buffer, int64_t len) const
 
 int ObPiece::piece_init(ObSQLSessionInfo &session, 
                         int32_t stmt_id, 
-                        int16_t param_id) {
+                        uint16_t param_id) {
   int ret = OB_SUCCESS;
   set_stmt_id(stmt_id);
   set_param_id(param_id);
@@ -408,7 +408,7 @@ int ObPieceCache::init_piece_cache(ObSQLSessionInfo &session)
 }
 
 int ObPieceCache::make_piece(int32_t stmt_id, 
-                             int16_t param_id, 
+                             uint16_t param_id,
                              ObPiece *&piece, 
                              ObSQLSessionInfo &session)
 {
@@ -508,7 +508,7 @@ int ObPieceCache::close_all(ObSQLSessionInfo &session)
   return ret;
 }
 
-int ObPieceCache::get_piece(int32_t stmt_id, int16_t param_id, ObPiece *&piece)
+int ObPieceCache::get_piece(int32_t stmt_id, uint16_t param_id, ObPiece *&piece)
 {
   int ret = OB_SUCCESS;
   piece = NULL;
@@ -537,7 +537,7 @@ int ObPieceCache::get_piece(int32_t stmt_id, int16_t param_id, ObPiece *&piece)
  */
 // for fetch
 int ObPieceCache::get_piece_buffer(int32_t stmt_id, 
-                                   int16_t param_id,
+                                   uint16_t param_id,
                                    int32_t offset,
                                    uint64_t piece_size, 
                                    ObPieceBuffer &piece_buf,
@@ -605,7 +605,7 @@ int ObPieceCache::get_piece_buffer(int32_t stmt_id,
 // for execute
 // buf needs to allocate memory in the outer layer ！！！
 int ObPieceCache::get_buffer(int32_t stmt_id, 
-                             int16_t param_id, 
+                             uint16_t param_id,
                              uint64_t count,
                              uint64_t &length, 
                              common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
@@ -617,7 +617,7 @@ int ObPieceCache::get_buffer(int32_t stmt_id,
 }
 
 int ObPieceCache::get_oracle_buffer(int32_t stmt_id, 
-                                    int16_t param_id, 
+                                    uint16_t param_id,
                                     uint64_t count,
                                     uint64_t &length, 
                                     common::ObFixedArray<ObSqlString, ObIAllocator> &str_buf,
@@ -651,7 +651,7 @@ int ObPieceCache::get_oracle_buffer(int32_t stmt_id,
 }
 
 int ObPieceCache::get_mysql_buffer(int32_t stmt_id, 
-                                  int16_t param_id, 
+                                  uint16_t param_id,
                                   uint64_t &length, 
                                   ObSqlString &str_buf)
 {

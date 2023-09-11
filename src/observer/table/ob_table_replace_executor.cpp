@@ -208,22 +208,30 @@ int ObTableApiReplaceExecutor::do_insert()
   const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
   const ObTableReplaceCtDef &ctdef = replace_spec_.get_ctdef();
 
-  if (OB_FAIL(refresh_exprs_frame(entity))) {
-    LOG_WARN("fail to refresh expr frame", K(ret));
-  } else if (tb_ctx_.has_auto_inc()) {
-    for (int64_t i = 0; i < ctdef.ins_ctdef_.new_row_.count(); i++) {       // 在自增的场景下，由于自增列的列引用表达式被用户输入的值覆盖
-      if (ctdef.ins_ctdef_.new_row_.at(i)->type_ == T_FUN_COLUMN_CONV) {    // 故需要手动清空eval的flag
-        ctdef.ins_ctdef_.new_row_.at(i)->get_eval_info(eval_ctx_).evaluated_ = false;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+  if (OB_ISNULL(insert_row_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert row is null", K(ret));
+  } else if (OB_FAIL(insert_row_->to_expr(get_primary_table_new_row(), eval_ctx_))) {
+    LOG_WARN("stored row to expr faild", K(ret));
   } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, replace_rtdef_.ins_rtdef_))) {
     LOG_WARN("shuffle insert row failed", K(ret));
   } else {
     replace_rtdef_.ins_rtdef_.cur_row_num_ = 1;
+  }
+
+  return ret;
+}
+
+int ObTableApiReplaceExecutor::cache_insert_row()
+{
+  int ret = OB_SUCCESS;
+  const ObExprPtrIArray &new_row_exprs = get_primary_table_new_row();
+
+  if (OB_FAIL(ObChunkDatumStore::StoredRow::build(insert_row_, new_row_exprs, eval_ctx_, allocator_))) {
+    LOG_WARN("fail to build stored row", K(ret), K(new_row_exprs));
+  } else if (OB_ISNULL(insert_row_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cache insert row is null", K(ret));
   }
 
   return ret;
@@ -278,6 +286,8 @@ int ObTableApiReplaceExecutor::get_next_row()
       LOG_WARN("fail to post all das task", K(ret));
     } else if (!is_duplicated()) {
       LOG_DEBUG("try insert is not duplicated", K(ret));
+    } else if (OB_FAIL(cache_insert_row())) {
+      LOG_WARN("fail to cache insert row", K(ret));
     } else if (OB_FAIL(fetch_conflict_rowkey(conflict_checker_))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
     } else if (OB_FAIL(reset_das_env(replace_rtdef_.ins_rtdef_))) {

@@ -597,7 +597,7 @@ int ObSQLUtils::calc_calculable_expr(ObSQLSessionInfo *session,
     SQL_LOG(WARN, "Invalid arguments", K(expr), K(allocator));
   } else if (!expr->is_static_scalar_const_expr()) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_LOG(WARN, "expr should be calculabe expr", K(*expr), K(ret));
+    SQL_LOG(WARN, "expr should be calculable expr", K(*expr), K(ret));
   } else if (OB_FAIL(calc_const_expr(session,
                                      *expr,
                                      result,
@@ -691,6 +691,10 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
       } else {
         schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
       }
+      uint64_t effective_tenant_id = session->get_effective_tenant_id();
+      if (session->get_ddl_info().is_ddl_check_default_value()) {
+        effective_tenant_id = OB_SERVER_TENANT_ID;
+      }
       SMART_VARS_2((ObExecContext, exec_ctx, tmp_allocator),
                    (ObStaticEngineExprCG, expr_cg, tmp_allocator,
                     session, schema_guard,
@@ -699,7 +703,7 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
                     (NULL != out_ctx ? out_ctx->get_min_cluster_version() : GET_MIN_CLUSTER_VERSION()))) {
         LinkExecCtxGuard link_guard(*session, exec_ctx);
         exec_ctx.set_my_session(session);
-        exec_ctx.set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+        exec_ctx.set_mem_attr(ObMemAttr(effective_tenant_id,
                                         ObModIds::OB_SQL_EXEC_CONTEXT,
                                         ObCtxIds::EXECUTE_CTX_ID));
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
@@ -1681,6 +1685,26 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
     cast_mode |= CM_FORMAT_NUMBER_WITH_LIMIT;
     LOG_DEBUG("in get_default_cast_mode", K(ret), K(is_explicit_cast),
         K(result_flag), K(session->get_stmt_type()), K(cast_mode));
+  }
+  return ret;
+}
+
+int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
+                                          const ObSQLSessionInfo *session,
+                                          ObCastMode &cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(expr), KP(session), K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
+                                                       0,    /* result_flag */
+                                                       session, cast_mode))) {
+    LOG_WARN("failed to get default cast mode", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(expr->get_collation_level(), cast_mode))) {
+    LOG_WARN("failed to set cs level cast mode", K(ret));
+  } else if (expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
+    cast_mode |= CM_ADD_ZEROFILL;
   }
   return ret;
 }
@@ -4114,7 +4138,7 @@ int ObSQLUtils::create_encode_sortkey_expr(
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_ENCODE_SORTKEY, encode_expr))) {
     LOG_WARN("failed to create encode_expr", K(ret));
   } else {
-    // Assamble encode sortkey.
+    // Assemble encode sortkey.
     for (int64_t i = start_key; OB_SUCC(ret) && i < order_keys.count(); i++) {
       ObConstRawExpr *nulls_pos_expr = nullptr;
       ObConstRawExpr *order_expr = nullptr;
@@ -5043,7 +5067,7 @@ int ObSQLUtils::find_synonym_ref_obj(const uint64_t database_id,
     obj_type = ObObjectType::FUNCTION;
     schema_version = routine_info->get_schema_version();
   } else if (OB_FAIL(guard.get_standalone_procedure_info(tenant_id, database_id, object_name, routine_info))) {
-    LOG_WARN("failed to get procedore info", K(ret));
+    LOG_WARN("failed to get procedure info", K(ret));
   } else if (nullptr != routine_info) {
     exist = true;
     object_id = routine_info->get_object_id();
@@ -5098,7 +5122,7 @@ int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
   require = false;
   if (OB_ISNULL(info)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "arguemnt is invalid", K(ret));
+    OB_LOG(WARN, "argument is invalid", K(ret));
   } else if (ident.length() > 0 && ident[0] == '$') {
     require = true;
   }

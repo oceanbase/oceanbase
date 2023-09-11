@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
 #include "observer/table/ob_table_service.h"
+#include "share/table/ob_table_config_util.h"
 
 namespace oceanbase
 {
@@ -395,6 +396,10 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the tablet task ctx is null", KR(ret));
   } else {
+    if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+      local_tenant_task_.ttl_continue_ = false;
+      LOG_DEBUG("local_tenant_task mark continue is false");
+    }
     // lock task ctx for update
     common::ObSpinLockGuard ctx_guard(ctx->lock_);
     ctx->last_modify_time_ = ObTimeUtility::current_time();
@@ -406,6 +411,7 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
         task_para = ctx->ttl_para_;
         is_stop = false;
       } else {
+        ctx->task_status_ = OB_TTL_TASK_PENDING;
         LOG_INFO("pending current task", K(local_tenant_task_.state_), K(local_tenant_task_.ttl_continue_));
       }
     } else if (OB_ITER_END == task_info.err_code_) {
@@ -426,9 +432,12 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
     }
   }
 
-  //schedule task
-  if (is_stop && OB_FAIL(try_schedule_remaining_tasks(ctx))) {
-    LOG_WARN("fail to try schedule task", KR(ret));
+  // schedule remaining tasks
+  if (is_stop) {
+    LOG_INFO("stop current task", K(ret), KPC(ctx), K_(local_tenant_task));
+    if (OB_FAIL(try_schedule_remaining_tasks(ctx))) {
+      LOG_WARN("fail to try schedule task", KR(ret));
+    }
   }
   return ret;
 }
@@ -599,7 +608,10 @@ void OBTTLTimerPeriodicTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
-  if (common::ObTTLUtil::check_can_do_work()) {
+  if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+    // do nothing
+    LOG_DEBUG("ttl is disable");
+  } else if (common::ObTTLUtil::check_can_do_work()) {
     if (OB_FAIL(tablet_ttl_mgr_.check_tenant_memory())) {
       LOG_WARN("fail to check all tenant memory", KR(ret));
     }

@@ -17583,11 +17583,11 @@ static const _error _error_OB_ERR_DBLINK_REMOTE_ECODE = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "Unknown errorcode: %d",
-      .str_user_error        = "Unknown errorcode: %d",
+      .str_error             = "\ndblink remote error code: %d,\nremote error msg: %.*s",
+      .str_user_error        = "\ndblink remote error code: %d,\nremote error msg: %.*s",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5975, Unknown errorcode: %d",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5975, Unknown errorcode: %d"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5975, \ndblink remote error code: %d,\nremote error msg: %.*s",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5975, \ndblink remote error code: %d,\nremote error msg: %.*s"
 };
 static const _error _error_OB_ERR_DBLINK_NO_LIB = {
       .error_name            = "OB_ERR_DBLINK_NO_LIB",

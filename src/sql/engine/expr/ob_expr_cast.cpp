@@ -441,7 +441,8 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           // MySql:cast (1 as decimal(0)) = cast(1 as decimal)
           // Oracle: cast(1.4 as number) = cast(1.4 as number(-1, -1))
           type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][ObNumberType].get_precision());
-        } else if (ObIntTC == dst_type.get_type_class() || ObUIntTC == dst_type.get_type_class()) {
+        } else if ((ObIntTC == dst_type.get_type_class() || ObUIntTC == dst_type.get_type_class())
+                   && dst_type.get_precision() <= 0) {
           // for int or uint , the precision = len
           int32_t len = 0;
           int16_t length_semantics = LS_BYTE;//unused
@@ -471,6 +472,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // interval expr need NOT_NULL_FLAG
       // bug:
       calc_result_flag2(type, type1, type2);
+      if (CM_IS_ADD_ZEROFILL(cast_raw_expr->get_extra())) {
+        type.set_result_flag(ZEROFILL_FLAG);
+      }
     }
   }
   if (OB_SUCC(ret)) {

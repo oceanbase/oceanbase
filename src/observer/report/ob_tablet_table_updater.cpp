@@ -496,7 +496,8 @@ int ObTabletTableUpdater::batch_process_tasks(
       update_tablet_checksums,
       update_tablet_tasks,
       remove_tablet_tasks))) {
-    LOG_ERROR("generate_tasks failed", KR(ret), "batch_tasks count", batch_tasks.count(),
+    //There is a situation where there are too many tablet holds and cannot be obtained
+    LOG_WARN("generate_tasks failed", KR(ret), "batch_tasks count", batch_tasks.count(),
               "update_tablet_replicas", update_tablet_replicas.count(),
               "remove_tablet_replicas", remove_tablet_replicas.count(),
               "update_tablet_checksums", update_tablet_checksums.count(),

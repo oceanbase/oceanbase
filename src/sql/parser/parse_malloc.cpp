@@ -33,7 +33,7 @@ void *malloc_parentheses_info(const size_t nbyte, void *malloc_pool)
   return ptr;
 }
 
-// get memory from the thread obStringBuf, and not release untill thread quits
+// get memory from the thread obStringBuf, and not release until thread quits
 void *parse_malloc(const size_t nbyte, void *malloc_pool)
 {
   void *ptr = NULL;

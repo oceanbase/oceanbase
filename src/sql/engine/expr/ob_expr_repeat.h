@@ -62,6 +62,7 @@ public:
                          ObIAllocator &allocator,
                          const int64_t max_result_size);
 private:
+  static const int64_t MEM_WARN_THRESHOLD = 100 * 1024 * 1024; // 100M
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprRepeat);
 };

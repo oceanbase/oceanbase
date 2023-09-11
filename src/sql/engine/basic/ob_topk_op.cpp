@@ -29,8 +29,7 @@ ObTopKSpec::ObTopKSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
 
 bool ObTopKSpec::is_valid() const
 {
-  return (get_output_count() > 0) && (NULL != org_limit_) &&
-         (NULL != child_) && (child_->get_output_count() > 0);
+  return OB_NOT_NULL(org_limit_) && OB_NOT_NULL(child_);
 }
 
 OB_SERIALIZE_MEMBER((ObTopKSpec, ObOpSpec), minimum_row_count_, topk_precision_,

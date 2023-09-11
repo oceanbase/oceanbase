@@ -1210,6 +1210,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   SCN ddl_start_scn = get_start_scn();
   SCN commit_scn = SCN::min_scn();
   bool is_remote_write = false;
+  bool commit_by_this_execution = false;
   if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls", K(ret), K(ls_id), K(table_key));
@@ -1225,6 +1226,8 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     } else {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
     }
+  } else {
+    commit_by_this_execution = true;
   }
 
   if (OB_TRANS_COMMITED == ret) {
@@ -1280,7 +1283,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
       LOG_WARN("no major after wait merge success", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
       LOG_WARN("fail to get sstable meta handle", K(ret));
-    } else if (OB_UNLIKELY(first_major_sstable->get_key() != table_key)) {
+    } else if (commit_by_this_execution && OB_UNLIKELY(first_major_sstable->get_key() != table_key)) {
       ret = OB_SNAPSHOT_DISCARDED;
       LOG_WARN("ddl major sstable dropped, snapshot holding may have bug", K(ret), KPC(first_major_sstable), K(table_key), K(tablet_id), K(execution_id), K(ddl_task_id));
     } else {

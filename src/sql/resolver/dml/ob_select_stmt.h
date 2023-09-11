@@ -154,7 +154,7 @@ struct ObSelectIntoItem
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj filed_str_; // filed terminated str
-  common::ObObj line_str_; // line teminated str
+  common::ObObj line_str_; // line terminated str
   common::ObSEArray<common::ObString, 16> user_vars_; // user variables
   common::ObSEArray<sql::ObRawExpr*, 16> pl_vars_; // pl variables
   char closed_cht_; // all fileds, "123","ab"

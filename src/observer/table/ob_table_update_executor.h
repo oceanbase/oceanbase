@@ -53,8 +53,7 @@ private:
   int get_next_row_from_child();
   int update_row_to_das();
   int upd_rows_post_proc();
-  int process_single_operation(const ObTableEntity *entity,
-                               const ObTableCtx::ObAssignIds &assign_ids);
+  int process_single_operation(const ObTableEntity *entity);
 private:
   const ObTableApiUpdateSpec &upd_spec_;
   ObTableUpdRtDef upd_rtdef_;

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
+#include "share/ob_errno.h"
 
 int __attribute__((weak)) get_oracle_errno(int index)
 {
@@ -56,38 +57,18 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
         std::min(STRLEN(oracle_msg_prefix), STRLEN(external_errmsg)))))) {
       ob_errno = external_errno; // do not map, show user client errno directly.
     } else {
-      ob_errno = OB_ERR_DBLINK_REMOTE_ECODE; // default ob_errno, if external_errno can not map to any valid ob_errno
-      if (OB_ISNULL(external_errmsg) || 0 == STRLEN(external_errmsg)) {
-        for (int i = 0; i < oceanbase::common::OB_MAX_ERROR_CODE; ++i) {
-          if (external_errno == (is_oracle_err ? get_oracle_errno(i) : get_mysql_errno(i))) {
-            ob_errno = -i;
-            break;
-          }
+      int64_t match_count = 0;
+      for (int i = 0; i < oceanbase::common::OB_MAX_ERROR_CODE; ++i) {
+        if (external_errno == (is_oracle_err ? get_oracle_errno(i) : get_mysql_errno(i))) {
+          ob_errno = -i;
+          ++match_count;
         }
-      } else {
-        ObEditDistance ed;
-        int64_t edit_dist = 0x7fffffffffffffff;
-        int64_t min_edit_dist = 0x7fffffffffffffff;
-        for (int i = 0; i < oceanbase::common::OB_MAX_ERROR_CODE; ++i) {
-          if (external_errno == (is_oracle_err ? get_oracle_errno(i) : get_mysql_errno(i))) {
-            const char *external_errstr = (is_oracle_err ? get_oracle_str_error(i) : get_mysql_str_error(i));
-            if (OB_ISNULL(external_errstr)) {
-              // In the case of a null pointer boundary
-              edit_dist = 0x7ffffffffffffffe;
-            } else {
-              // The edit distance between the strings is used to measure their similarity.
-              // The smaller the edit distance, the greater the similarity, so as to find the most similar error message.
-              ObEditDistance::cal_edit_distance(external_errmsg, external_errstr, STRLEN(external_errmsg), STRLEN(external_errstr), edit_dist);
-            }
-            if (edit_dist < min_edit_dist) {
-              ob_errno = -i;
-              min_edit_dist = edit_dist;
-              if (0 == min_edit_dist) {
-                break;
-              }
-            }
-          }
-        }
+      }
+      if (1 != match_count) {
+        // default ob_errno, if external_errno can not map to any valid ob_errno
+        ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
+        int msg_len = STRLEN(external_errmsg);
+        LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, external_errno, msg_len, external_errmsg);
       }
     }
   }

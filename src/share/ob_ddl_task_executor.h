@@ -94,7 +94,8 @@ private:
   }
   static bool is_stop_state(const int ret_code) {
     return common::OB_IN_STOP_STATE == ret_code || common::OB_SERVER_IS_INIT == ret_code || common::OB_SERVER_IS_STOPPING == ret_code
-        || common::OB_RS_SHUTDOWN == ret_code || common::OB_PARTITION_IS_STOPPED == ret_code;
+        || common::OB_RS_SHUTDOWN == ret_code || common::OB_PARTITION_IS_STOPPED == ret_code
+        || common::OB_PARTITION_IS_BLOCKED == ret_code;
   }
   static bool is_not_master(const int ret_code) {
     return common::OB_STATE_NOT_MATCH == ret_code || common::OB_NOT_MASTER == ret_code || OB_RS_NOT_MASTER == ret_code

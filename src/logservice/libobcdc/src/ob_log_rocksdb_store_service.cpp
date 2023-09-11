@@ -270,7 +270,9 @@ int RocksDbStoreService::get(void *cf_handle, const std::string &key, std::strin
   } else {
     rocksdb::Status s = m_db_->Get(rocksdb::ReadOptions(), column_family_handle, key, &value);
 
-    if (!s.ok()) {
+    if (s.IsNotFound()) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else if (!s.ok()) {
       _LOG_ERROR("RocksDbStoreService get value from rocksdb failed, error %s, key:%s",
           s.ToString().c_str(), key.c_str());
       ret = OB_ERR_UNEXPECTED;

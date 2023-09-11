@@ -542,7 +542,7 @@ int ObTableScanIterator::check_ls_offline_after_read()
 {
   int ret = OB_SUCCESS;
 
-  auto &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
+  memtable::ObMvccAccessCtx &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
 
   if (acc_ctx.tx_table_guards_.check_ls_offline()) {
     ret = OB_LS_OFFLINE;
@@ -555,7 +555,7 @@ int ObTableScanIterator::check_ls_offline_after_read()
 int ObTableScanIterator::check_txn_status_if_read_uncommitted_()
 {
   int ret = OB_SUCCESS;
-  auto &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
+  memtable::ObMvccAccessCtx &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
   if (acc_ctx.snapshot_.tx_id_.is_valid() && acc_ctx.mem_ctx_) {
     if (acc_ctx.mem_ctx_->is_tx_rollbacked()) {
       if (acc_ctx.mem_ctx_->is_for_replay()) {

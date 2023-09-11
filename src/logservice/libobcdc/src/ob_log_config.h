@@ -565,6 +565,12 @@ public:
   DEF_STR(tenant_password, OB_CLUSTER_PARAMETER, "|", "login password for tenant_user");
   // tenatn level sync config end //
 
+  // lob data storage
+  // enable_lob_data_storage_memory : default is enable
+  T_DEF_BOOL(enable_lob_data_storage_memory, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
+  // lob_data_storage_memory_limit takes effect only when enable_lob_data_storage_memory is true.
+  DEF_CAP(lob_data_storage_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "lob data storage memory limit");
+
 #undef OB_CLUSTER_PARAMETER
 
 private:

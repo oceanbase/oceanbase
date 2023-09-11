@@ -102,6 +102,7 @@ static const char* disaster_recovery_task_ret_comment_strs[] = {
   "[rs] task can not execute because server is not alive",
   "[rs] task can not execute because fail to check paxos replica number",
   "[rs] task can not execute because replica is not in service",
+  "[rs] task can not execute because server is permanent offline",
   ""/*default max*/
 };
 
@@ -678,13 +679,13 @@ int ObMigrateLSReplicaTask::check_paxos_number(
   int ret = OB_SUCCESS;
   const ObLSReplica *leader = nullptr;
   if (OB_FAIL(ls_info.find_leader(leader))) {
-    LOG_WARN("fail to get leader", K(ret));
-  } else if (OB_UNLIKELY(nullptr == leader)) {
+    LOG_WARN("fail to get leader", KR(ret), K(ls_info));
+  } else if (OB_ISNULL(leader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("leader replica is null", KR(ret));
   } else if (leader->get_paxos_replica_number() <= 0) {
     ret = OB_REBALANCE_TASK_CANT_EXEC;
-    LOG_WARN("paxos replica number not report", K(ret), KPC(leader));
+    LOG_WARN("paxos replica number not report", KR(ret), KPC(leader));
   } else if (leader->get_paxos_replica_number() != paxos_replica_number_) {
     ret = OB_REBALANCE_TASK_CANT_EXEC;
     LOG_WARN("paxos replica number not match", KR(ret),

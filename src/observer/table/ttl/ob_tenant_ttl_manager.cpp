@@ -16,6 +16,7 @@
 #include "share/ob_max_id_fetcher.h"
 #include "share/table/ob_ttl_util.h"
 #include "lib/oblog/ob_log_module.h"
+#include "share/table/ob_table_config_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -30,7 +31,10 @@ void ObClearTTLHistoryTask::runTimerTask()
 {
   ObCurTraceId::init(GCONF.self_addr_);
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
+  if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+    // do nothing
+    LOG_DEBUG("ttl is disable");
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob clear ttl history task is not init", KR(ret));
   } else if (ObTTLUtil::check_can_do_work()) {
@@ -581,7 +585,10 @@ void ObTTLTaskScheduler::runTimerTask()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
-  if (IS_NOT_INIT) {
+  if (!ObKVFeatureModeUitl::is_ttl_enable()) {
+    // do nothing
+    LOG_DEBUG("ttl is disable");
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl task mgr not init", KR(ret));
   } else if (OB_FAIL(reload_tenant_task())) {

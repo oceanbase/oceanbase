@@ -133,6 +133,7 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxCommitRespP);
   RPC_PROCESSOR(ObTxAbortP);
   RPC_PROCESSOR(ObTxRollbackSPP);
+  RPC_PROCESSOR(ObTxRollbackSPRespP);
   RPC_PROCESSOR(ObTxKeepaliveP);
   RPC_PROCESSOR(ObTxKeepaliveRespP);
   //for dup_table

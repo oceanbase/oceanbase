@@ -290,21 +290,6 @@ int ObStorageSchema::deep_copy_column_array(
   return ret;
 }
 
-int ObStorageSchema::deep_copy(const memtable::ObIMultiSourceDataUnit *src, ObIAllocator *allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == src || nullptr == allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "invalid src info or allocator", K(ret), K(src), K(allocator));
-  } else if (OB_UNLIKELY(src->type() != type())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid type", K(ret), K(type()), KPC(src));
-  } else {
-    ret = init(*allocator, *static_cast<const ObStorageSchema *>(src));
-  }
-  return ret;
-}
-
 void ObStorageSchema::reset()
 {
   storage_schema_version_ = 0;

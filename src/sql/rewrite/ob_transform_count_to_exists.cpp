@@ -51,7 +51,7 @@ int ObTransformCountToExists::transform_one_stmt(common::ObIArray<ObParentDMLStm
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(cond_exprs.assign(stmt->get_condition_exprs()))) {
-    LOG_WARN("failed to assgin where condition exprs", K(ret));
+    LOG_WARN("failed to assign where condition exprs", K(ret));
   } else if (OB_FAIL(collect_trans_params(stmt, cond_exprs, trans_params))) {
     LOG_WARN("failed to transform count to exists", K(ret));
   } else if (trans_params.empty()) {

@@ -23,7 +23,7 @@ namespace oceanbase
 {
 namespace common
 {
- class ObISQLClient;
+ class ObMySQLProxy;
 }
 namespace datadict
 {
@@ -34,7 +34,7 @@ public:
   ObDataDictSqlClient();
   ~ObDataDictSqlClient() { destroy(); }
 public:
-  int init(common::ObISQLClient *sql_client);
+  int init(common::ObMySQLProxy *sql_client);
   void destroy();
 public:
   int get_ls_info(
@@ -59,14 +59,10 @@ private:
   int parse_record_from_row_(
       common::sqlclient::ObMySQLResult &result,
       int64_t &record_count,
-      share::ObLSArray &ls_array);
-  int parse_record_from_row_(
-      common::sqlclient::ObMySQLResult &result,
-      int64_t &record_count,
       int64_t &schema_version);
 private:
   bool is_inited_;
-  common::ObISQLClient *sql_proxy_;
+  common::ObMySQLProxy *sql_proxy_;
 };
 
 } // namespace datadict

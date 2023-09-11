@@ -89,6 +89,16 @@ struct ObDASScanCtDef;
 struct ObDASScanRtDef;
 REGISTER_DAS_OP(DAS_OP_TABLE_BATCH_SCAN, ObDASGroupScanOp, ObDASScanResult, ObDASScanCtDef, ObDASScanRtDef);
 
+class ObDASSplitRangesOp;
+class ObDASSplitRangesResult;
+class ObDASEmptyCtDef;
+class ObDASEmptyRtDef;
+REGISTER_DAS_OP(DAS_OP_SPLIT_MULTI_RANGES, ObDASSplitRangesOp, ObDASSplitRangesResult, ObDASEmptyCtDef, ObDASEmptyRtDef);
+
+class ObDASRangesCostOp;
+class ObDASRangesCostResult;
+REGISTER_DAS_OP(DAS_OP_GET_RANGES_COST, ObDASRangesCostOp, ObDASRangesCostResult, ObDASEmptyCtDef, ObDASEmptyRtDef);
+
 #undef REGISTER_DAS_OP
 }  // namespace sql
 }  // namespace oceanbase

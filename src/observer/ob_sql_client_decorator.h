@@ -30,9 +30,12 @@ public:
 
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size) override;
-  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override;
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override { return this->read(res, tenant_id, sql, 0 /*group_id*/); }
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id) override;
   virtual int read(ReadResult &res, const int64_t cluster_id, const uint64_t tenant_id, const char *sql) override;
-  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
+  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override { return this->write(tenant_id, sql, 0/*group_id*/, affected_rows); }
+  virtual int write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows) override;
+
   virtual sqlclient::ObISQLConnectionPool *get_pool() override;
   virtual sqlclient::ObISQLConnection *get_connection() override;
   using ObISQLClient::read;
@@ -86,9 +89,11 @@ public:
 
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size) override;
-  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override;
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override { return this->read(res, tenant_id, sql, 0 /*group_id*/); }
+  virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id) override;
   virtual int read(ReadResult &res, const int64_t cluster_id, const uint64_t tenant_id, const char *sql) override;
-  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
+  virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override { return this->write(tenant_id, sql, 0/*group_id*/, affected_rows); }
+  virtual int write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows) override;
   using ObISQLClient::read;
   using ObISQLClient::write;
 

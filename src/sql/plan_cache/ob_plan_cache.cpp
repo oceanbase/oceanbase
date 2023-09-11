@@ -558,7 +558,7 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
   if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)
       || OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguement",K(ret),
+    LOG_WARN("invalid argument",K(ret),
              K(pc_ctx.sql_ctx_.schema_guard_), K(pc_ctx.exec_ctx_.get_physical_plan_ctx()));
   } else if (pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
     if (OB_FAIL(construct_multi_stmt_fast_parser_result(allocator,
@@ -1906,7 +1906,7 @@ int64_t ObPlanCache::get_label_hold(lib::ObLabel &label) const
 //   } else if (plan->get_mem_size() >= get_mem_high()) {
 //     // plan mem is too big to reach memory highwater, do not add plan
 //   } else if (OB_FAIL(construct_plan_cache_key(pc_ctx, ObLibCacheNameSpace::NS_CRSR))) {
-//     LOG_WARN("fail to construnct plan cache key", K(ret));
+//     LOG_WARN("fail to construct plan cache key", K(ret));
 //   } else if (OB_FAIL(add_plan_cache(pc_ctx, plan))) {
 //     if (OB_FAIL(deal_add_ps_plan_result(ret, pc_ctx, *plan))) {
 //       LOG_WARN("fail to deal result code", K(ret));
@@ -1946,7 +1946,7 @@ int ObPlanCache::add_ps_plan(T *plan, ObPlanCacheCtx &pc_ctx)
   } else if (plan->get_mem_size() >= get_mem_high()) {
     // plan mem is too big to reach memory highwater, do not add plan
   } else if (OB_FAIL(construct_plan_cache_key(pc_ctx, ObLibCacheNameSpace::NS_CRSR))) {
-    LOG_WARN("fail to construnct plan cache key", K(ret));
+    LOG_WARN("fail to construct plan cache key", K(ret));
   } else if (OB_ISNULL(pc_ctx.raw_sql_.ptr())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(WARN, "pc_ctx.raw_sql_.ptr() is NULL, cannot add plan to plan cache by sql", K(ret));
@@ -2022,7 +2022,7 @@ int ObPlanCache::deal_add_ps_plan_result(int add_plan_ret,
     }
   } else {
     pc_ctx.sql_ctx_.self_add_plan_ = true;
-    LOG_TRACE("Successed to add plan to ObPlanCache", K(cache_object));
+    LOG_TRACE("Succeed to add plan to ObPlanCache", K(cache_object));
   }
 
   return ret;
@@ -2186,7 +2186,7 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
   } else if (FALSE_IT(original_param_cnt = pc_ctx.fp_result_.cache_params_->count())) {
     // do nothing
   } else if (OB_FAIL(construct_plan_cache_key(pc_ctx, ObLibCacheNameSpace::NS_CRSR))) {
-    LOG_WARN("fail to construnct plan cache key", K(ret));
+    LOG_WARN("fail to construct plan cache key", K(ret));
   } else {
     ObPsStmtId new_stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
     // the remote plan uses key_id is 0 to distinguish, so if key_id is 0, it cannot be set to OB_INVALID_ID

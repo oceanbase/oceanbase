@@ -470,8 +470,6 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   if (OB_SUCC(ret) && has_parallel_hint() && !ignore_parallel_for_dblink) { //PARALLEL
     if (has_parallel_degree()) {
       PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
-    } else if (plan_text.is_outline_data_) {
-      /* do not print parallel policy for outline data */
     } else if (enable_auto_dop()) {
       PRINT_GLOBAL_HINT_STR("PARALLEL( AUTO )");
     } else if (enable_manual_dop()) {
@@ -502,7 +500,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
     }
   }
   // OPTIMIZER_FEATURES_ENABLE
-  if (OB_SUCC(ret) && (has_valid_opt_features_version() || plan_text.is_outline_data_)) {
+  if (OB_SUCC(ret) && (has_valid_opt_features_version())) {
     int64_t cur_pos = 0;
     const uint64_t version = has_valid_opt_features_version()
                              ? opt_features_version_ : CURRENT_OUTLINE_ENABLE_VERSION;

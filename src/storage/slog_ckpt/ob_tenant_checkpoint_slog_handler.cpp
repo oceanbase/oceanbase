@@ -821,16 +821,28 @@ int ObTenantCheckpointSlogHandler::replay_create_tablets_per_task(
     tablet_transfer_info.reset();
     if (OB_FAIL(ATOMIC_LOAD(&replay_create_tablet_errcode_))) {
       LOG_WARN("replay create has already failed", K(ret));
-    } else if (OB_FAIL(read_from_disk(addr, allocator, buf, buf_len))) {
-      LOG_WARN("fail to read from disk", K(ret), K(addr), KP(buf), K(buf_len));
-    } else if (OB_FAIL(get_tablet_svr(key.ls_id_, ls_tablet_svr, ls_handle))) {
-      LOG_WARN("fail to get ls tablet service", K(ret));
-    } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(addr, buf, buf_len, key.tablet_id_, tablet_transfer_info))) {
-      LOG_WARN("fail to create tablet for replay", K(ret), K(key), K(addr));
-    } else if (tablet_transfer_info.has_transfer_table() && OB_FAIL(record_ls_transfer_info(ls_handle, key.tablet_id_, tablet_transfer_info))) {
-      LOG_WARN("fail to record_ls_transfer_info", K(ret), K(key), K(tablet_transfer_info));
+    } else {
+      // io maybe timeout, so need retry
+      int64_t max_retry_time = 5;
+      do {
+        if (OB_FAIL(read_from_disk(addr, allocator, buf, buf_len))) {
+          LOG_WARN("fail to read from disk", K(ret), K(addr), KP(buf), K(buf_len));
+        } else if (OB_FAIL(get_tablet_svr(key.ls_id_, ls_tablet_svr, ls_handle))) {
+          LOG_WARN("fail to get ls tablet service", K(ret));
+        } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(addr, buf, buf_len, key.tablet_id_, tablet_transfer_info))) {
+          LOG_WARN("fail to create tablet for replay", K(ret), K(key), K(addr));
+        }
+      } while (OB_FAIL(ret) && OB_TIMEOUT == ret && max_retry_time-- > 0);
+
+      if (OB_SUCC(ret)) {
+        if (tablet_transfer_info.has_transfer_table() &&
+            OB_FAIL(record_ls_transfer_info(ls_handle, key.tablet_id_, tablet_transfer_info))) {
+          LOG_WARN("fail to record_ls_transfer_info", K(ret), K(key), K(tablet_transfer_info));
+        }
+      }
     }
   }
+
   if (OB_SUCC(ret)) {
     inc_finished_replay_tablet_cnt(tablet_addr_arr.count());
   }

@@ -456,6 +456,7 @@ int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
           need_priv.table_ = table_name;
           need_priv.priv_set_ = OB_PRIV_SELECT;
           need_priv.is_sys_table_ = table_item->is_system_table_;
+          need_priv.is_for_update_ = table_item->for_update_;
           need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
           if (OB_FAIL(stmt.add_view_need_priv(need_priv))) {
             LOG_WARN("Fail to add need_priv", K(ret), K(need_priv));

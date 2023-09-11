@@ -529,6 +529,7 @@ STAT_EVENT_SET_DEF(CPU_TIME, "cpu time", ObStatClassIds::RESOURCE, 140013, false
 STAT_EVENT_SET_DEF(MEMORY_LIMIT, "effective observer memory limit", ObStatClassIds::RESOURCE, 140014, false, true)
 STAT_EVENT_SET_DEF(SYSTEM_MEMORY, "effective system memory", ObStatClassIds::RESOURCE, 140015, false, true)
 STAT_EVENT_SET_DEF(HIDDEN_SYS_MEMORY, "effective hidden sys memory", ObStatClassIds::RESOURCE, 140016, false, true)
+STAT_EVENT_SET_DEF(MAX_SESSION_NUM, "max session num", ObStatClassIds::RESOURCE, 140017, false, true)
 
 //CLOG
 

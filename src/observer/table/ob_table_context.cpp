@@ -55,6 +55,11 @@ int ObTableCtx::get_tablet_by_rowkey(const ObRowkey &rowkey,
   return ret;
 }
 
+/*
+  init session info
+  1. expr/das/translation need session.
+  2. we use the session pool for authentication because the authentication information is stored in the session pool.
+*/
 int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
 {
   int ret = OB_SUCCESS;
@@ -94,6 +99,206 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
   return ret;
 }
 
+/*
+  1. ObTableColumnItem record some column info, such as column id、column name、and so on.
+  2. we record some specific elements like is_stored_generated_column_
+    is_auto_increment_、auto_filled_timestamp_ for specific function.
+  3. cascaded_column_ids_ is for update stored generate column.
+    such as:
+    - create table t(
+      `c1` int primary key,
+      `c2` varchar(20),
+      `c3` varchar(20) generated always as (substring(`c2`, 1, 4) stored));
+    - insert into t(`c1`, `c2`) values(1, 'hello');
+    - update t set `c2`='world' where `c1`=1;
+    `c3` should be updated as well.
+*/
+int ObTableCtx::construct_column_items()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else {
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
+    ObTableSchema::const_column_iterator end = table_schema_->column_end();
+    for (int64_t i = 0; OB_SUCC(ret) && iter != end; ++iter, i++) {
+      col_schema = *iter;
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is NULL", K(ret));
+      } else {
+        ObTableColumnItem item;
+        item.col_idx_ = i;
+        item.column_id_ = col_schema->get_column_id();
+        item.table_id_ = col_schema->get_table_id();
+        item.column_name_ = col_schema->get_column_name_str();
+        item.default_value_ = col_schema->get_cur_default_value();
+        item.is_generated_column_ = col_schema->is_generated_column();
+        item.is_stored_generated_column_ = col_schema->is_stored_generated_column();
+        item.is_virtual_generated_column_ = col_schema->is_virtual_generated_column();
+        item.is_auto_increment_ = col_schema->is_autoincrement();
+        item.generated_expr_str_ = item.default_value_.get_string();
+        item.auto_filled_timestamp_ = col_schema->is_on_update_current_timestamp();
+        if (item.is_auto_increment_ && OB_FAIL(add_auto_inc_param(*col_schema))) {
+          LOG_WARN("fail to add auto inc param", K(ret), K(item));
+        } else if (item.is_generated_column_
+            && OB_FAIL(col_schema->get_cascaded_column_ids(item.cascaded_column_ids_))) {
+          LOG_WARN("fail to get cascaded column ids", K(ret), K(item), K(*col_schema));
+        } else if (OB_FAIL(column_items_.push_back(item))) {
+          LOG_WARN("fail to push back column item", K(ret), K_(column_items), K(item));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::get_column_item_by_column_id(uint64_t column_id, const ObTableColumnItem *&item) const
+{
+  int ret = OB_SUCCESS;
+
+  if (column_items_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column items is empty", K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; i < column_items_.count() && !found; i++) {
+      const ObTableColumnItem &tmp_item = column_items_.at(i);
+      if (tmp_item.column_id_ == column_id) {
+        found = true;
+        item = &tmp_item;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::get_column_item_by_expr(ObRawExpr *raw_expr, const ObTableColumnItem *&item) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("raw_expr is null", K(ret));
+  } else if (column_items_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column items is empty", K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; i < column_items_.count() && !found; i++) {
+      const ObTableColumnItem &tmp_item = column_items_.at(i);
+      if (tmp_item.raw_expr_ == raw_expr) {
+        found = true;
+        item = &tmp_item;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::get_column_item_by_expr(ObColumnRefRawExpr *expr, const ObTableColumnItem *&item) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("raw_expr is null", K(ret));
+  } else if (column_items_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column items is empty", K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; i < column_items_.count() && !found; i++) {
+      const ObTableColumnItem &tmp_item = column_items_.at(i);
+      if (tmp_item.expr_ == expr) {
+        found = true;
+        item = &tmp_item;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::get_expr_from_column_items(const ObString &col_name, ObRawExpr *&expr) const
+{
+  int ret = OB_SUCCESS;
+
+  if (column_items_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column items is empty", K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count() && !found; i++) {
+      const ObTableColumnItem &item = column_items_.at(i);
+      if (0 == item.column_name_.case_compare(col_name)) {
+        if (OB_ISNULL(item.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("item expr is null", K(ret), K(item));
+        } else {
+          found = true;
+          expr = item.expr_;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::get_expr_from_assignments(const ObString &col_name, ObRawExpr *&expr) const
+{
+  int ret = OB_SUCCESS;
+
+  bool found = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count() && !found; i++) {
+    const ObTableAssignment &assign = assigns_.at(i);
+    if (OB_ISNULL(assign.column_item_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("assign column item is null", K(ret));
+    } else if (0 == assign.column_item_->column_name_.case_compare(col_name)) {
+      found = true;
+      expr = assign.expr_;
+    }
+  }
+
+  return ret;
+}
+
+/*
+  1. ObConflictChecker need ObPhysicalPlanCtx.
+  2. now() expr need ObPhysicalPlanCtx.cur_time_.
+  3. das need ObPhysicalPlanCtx to check task should retry or not.
+*/
+int ObTableCtx::init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema_version)
+{
+  int ret = OB_SUCCESS;
+  void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
+  } else {
+    ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
+    phy_plan_ctx->set_timeout_timestamp(timeout_ts); // ObConflictChecker::init_das_scan_rtdef 需要
+    phy_plan_ctx->set_tenant_schema_version(tenant_schema_version);
+    phy_plan_ctx->set_cur_time(ObTimeUtility::current_time());
+    exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+  }
+  return ret;
+}
+
+/*
+  init table context common param, such as tenant_id_, database_id_，and so on. we also do extra things:
+  - get session info
+  - construct column items
+  - adjust entity
+*/
 int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const common::ObTabletID &arg_tablet_id,
                             const common::ObString &arg_table_name,
@@ -110,7 +315,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                                                     arg_table_name,
                                                     false, /* is_index */
                                                     table_schema_))) {
-    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), "database_id", credential.database_id_, K(arg_table_name));
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
   } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id),
       K(arg_table_name), K(timeout_ts));
@@ -127,19 +332,22 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   const ObTenantSchema *tenant_schema = nullptr;
-  const uint64_t tenant_id = credential.tenant_id_;
-  const uint64_t database_id = credential.database_id_;
+  tenant_id_ = credential.tenant_id_;
+  database_id_ = credential.database_id_;
   ObTabletID tablet_id = arg_tablet_id;
+
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_name));
-  } else if (OB_FAIL(schema_guard_.get_tenant_info(tenant_id, tenant_schema))) {
-    LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id));
+    LOG_WARN("table schema is null", K(ret), K(table_name));
+  } else if (OB_FAIL(schema_guard_.get_tenant_info(tenant_id_, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K_(tenant_id));
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("tenant schema is null", K(ret));
   } else if (OB_FAIL(init_sess_info(credential))) {
     LOG_WARN("fail to init session info", K(ret), K(credential));
+  } else if (OB_FAIL(init_physical_plan_ctx(timeout_ts, tenant_schema->get_schema_version()))) {
+    LOG_WARN("fail to init physical plan ctx", K(ret));
   } else if (!arg_tablet_id.is_valid()) {
     if (is_scan_) { // 扫描场景使用table_schema上的tablet id,客户端已经做了路由分发
       if (table_schema_->is_partitioned_table()) { // 不支持分区表
@@ -161,17 +369,17 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(GCTX.location_service_->get(tenant_id,
+  } else if (OB_FAIL(GCTX.location_service_->get(tenant_id_,
                                                  tablet_id,
                                                  0, /* expire_renew_time */
                                                  is_cache_hit,
                                                  ls_id_))) {
     LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K(table_name));
+  } else if (OB_FAIL(construct_column_items())) {
+    LOG_WARN("fail to construct column items", K(ret));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
   } else {
-    tenant_id_ = tenant_id;
-    database_id_ = database_id;
     table_name_ = table_name;
     ref_table_id_ = table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;
@@ -182,14 +390,10 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
     is_ttl_table_ = !table_schema_->get_ttl_definition().empty();
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(init_phy_plan_ctx())) {
-    LOG_WARN("fail to init physical plan ctx", KR(ret));
-  }
-
   return ret;
 }
 
-// 获取rowkey或者二级索引的columns type
+// get columns type from index_schema or primary table schema
 int ObTableCtx::generate_columns_type(ObIArray<ObExprResType> &columns_type)
 {
   int ret = OB_SUCCESS;
@@ -284,6 +488,13 @@ int ObTableCtx::read_real_lob(ObIAllocator &allocator, ObObj &obj)
   return ret;
 }
 
+/*
+  check column type
+  - nullable
+  - check data type mismatch or not
+  - check collation for string type and convert obj type to the column type (char, varchar or text)
+  - check accuracy
+*/
 int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
                                    ObObj &obj)
 {
@@ -339,6 +550,13 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
   return ret;
 }
 
+/*
+  check user obj is valid or not, we check:
+    - column type
+    - collation type
+    - nullable
+    - accuracy.
+*/
 int ObTableCtx::adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj)
 {
   int ret = OB_SUCCESS;
@@ -353,6 +571,11 @@ int ObTableCtx::adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj)
   return ret;
 }
 
+/*
+  check user rowkey is valid or not.
+  1. rowkey count should equal schema rowkey count, except for auto increment.
+  2. rowkey value should be valid.
+*/
 int ObTableCtx::adjust_rowkey()
 {
   int ret = OB_SUCCESS;
@@ -365,16 +588,11 @@ int ObTableCtx::adjust_rowkey()
     const int64_t schema_rowkey_cnt = table_schema_->get_rowkey_column_num();
     const int64_t entity_rowkey_cnt = rowkey.get_obj_cnt();
     bool has_auto_inc = false; // only one auto increment column in a table
-    bool is_full_filled = entity_rowkey_cnt == schema_rowkey_cnt; // 是否把主键值填全，存在自增列场景下可以不填全
+    bool is_full_filled = entity_rowkey_cnt == schema_rowkey_cnt; // allow not full filled when rowkey has auto_increment;
     const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
     const ObColumnSchemaV2 *col_schema = nullptr;
     uint64_t column_id = OB_INVALID_ID;
     ObObj *obj_ptr = rowkey.get_obj_ptr();
-    // 不存在自增列的情况下，全部校验
-    // 存在自增列情况下，用户填了值，全部校验
-    // 存在自增列情况下，用户没有填值，自增列不校验，其他列校验
-    // idx 是为了在主键中存在自增列是为了解决使用i访问obj_ptr会出现访问越界的问题，因为在主键存在自增列场景下，用户可以
-    // 不填自增列值，这时rowkey中的obj数量少于schema上的rowkey数量
     for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
       bool need_check = true;
       if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
@@ -387,7 +605,7 @@ int ObTableCtx::adjust_rowkey()
         if (col_schema->is_part_key_column()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("auto increment column could not be partition column", K(ret), K(*col_schema));
-        } else if (!is_full_filled) { // 当前列是自增列，但是用户没有填值，不需要校验
+        } else if (!is_full_filled) { // curr column is auto_increment and user not fill，no need to check
           need_check = false;
         }
       }
@@ -416,11 +634,16 @@ int ObTableCtx::adjust_rowkey()
   return ret;
 }
 
+/*
+  check user properties is valid or not.
+  1. rowkey column should not appear in properties, except for get operation.
+  2. we do not check column when do get operation, cause property value is empty.
+*/
 int ObTableCtx::adjust_properties()
 {
   int ret = OB_SUCCESS;
-
   bool is_get = (ObTableOperationType::Type::GET == operation_type_);
+
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
@@ -449,6 +672,10 @@ int ObTableCtx::adjust_properties()
   return ret;
 }
 
+/*
+  check the legality of entity.
+    - we do not check htable's rowkey, cause htable's rowkey is in properties.
+*/
 int ObTableCtx::adjust_entity()
 {
   int ret = OB_SUCCESS;
@@ -482,6 +709,11 @@ bool ObTableCtx::has_exist_in_columns(const ObIArray<ObString> &columns,
   return exist;
 }
 
+/*
+  genreate key range when do scan.
+    1. check the legality of column obj in query range.
+    2. fill primary key object when do index scan when user not filled them.
+*/
 int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
@@ -580,6 +812,14 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
   return ret;
 }
 
+/*
+  init scan parameters.
+    1. init some common scan parameters such as is_weak_read_、scan_order_、limit_、is_index_back_ and so on.
+    2. genreate key range。
+    3. check is_index_back_ when do index scan, need index back if the query column is not in the index table.
+    4. select_col_ids_ is same order with schema,
+      query_col_ids_ and query_col_names_ is same with user query column order.
+*/
 int ObTableCtx::init_scan(const ObTableQuery &query,
                           const bool &is_wead_read)
 {
@@ -624,7 +864,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     } else if (query.is_aggregate_query() && OB_FAIL(init_agg_cell_proj(query.get_aggregations().count()))) {
       LOG_WARN("fail to init agg cell proj", K(ret));
     } else {
-      // select_col_ids用schema序
+      // select_col_ids_ is same order with schema
       int64_t cell_idx = 0;
       for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
           OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter, cell_idx++) {
@@ -645,14 +885,14 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
             LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));
           } else if (is_index_scan_ && !is_index_back_ &&
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
-            is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
+            is_index_back_ = true;
           }
         } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())) {
           if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
           } else if (is_index_scan_ && !is_index_back_ &&
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
-            is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
+            is_index_back_ = true;
           }
         }
       }
@@ -662,7 +902,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
           LOG_WARN("select_col_ids or select_metas count is not equal to select_columns",
               K(select_columns), K(select_col_ids_));
         } else if (!select_all_columns) {
-          // query_col_ids_是用户查询序
+          // query_col_ids_ is user query order
           for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
             if (OB_ISNULL(column_schema = table_schema_->get_column_schema(select_columns.at(i)))) {
               ret = OB_SCHEMA_ERROR;
@@ -683,55 +923,93 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
 
 int ObTableCtx::init_insert()
 {
+  return init_dml_related_tid();
+}
+
+/*
+  stored generate column should be updated when reference column was updated.
+  such as:
+    - create table t(
+      `c1` int primary key,
+      `c2` varchar(20),
+      `c3` varchar(20) generated always as (substring(`c2`, 1, 4) stored));
+    - insert into t(`c1`, `c2`) values(1, 'hello');
+    - update t set `c2`='world' where `c1`=1;
+    c3 should be update.
+  1. match stored generated column by column_id, generated column record cascaded_column_ids_.
+    c1-16 c2-17 c3-18
+    cascaded_column_ids_-(17)
+  2. alloc ObTableColumnItem for new ObTableAssignment.
+*/
+int ObTableCtx::add_stored_generated_column_assignment(const ObTableAssignment &assign)
+{
   int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
-  if (OB_ISNULL(phy_plan_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy_plan_ctx is null", K(ret));
-  } else if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-    LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
+    ObTableColumnItem &item = column_items_.at(i);
+    if (item.is_stored_generated_column_) {
+      bool match = false;
+      for (int64_t j = 0; j < item.cascaded_column_ids_.count() && !match; j++) {
+        const uint64_t column_id = item.cascaded_column_ids_.at(j);
+        if (column_id == assign.column_item_->column_id_) {
+          match = true;
+        }
+      }
+      if (match) {
+        void *buf = ctx_allocator_.alloc(sizeof(ObTableColumnItem));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc ObTableColumnItem", K(ret), K(sizeof(ObTableColumnItem)));
+        } else {
+          ObTableColumnItem *tmp_item = new(buf) ObTableColumnItem();
+          *tmp_item = item;
+          ObTableAssignment tmp_assign(tmp_item);
+          if (OB_FAIL(assigns_.push_back(tmp_assign))) {
+            ctx_allocator_.free(buf);
+            LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(tmp_assign));
+          }
+        }
+      }
+    }
   }
   return init_dml_related_tid();
 }
 
-int ObTableCtx::init_assign_ids(ObAssignIds &assign_ids,
-                                const ObTableEntity &entity)
+/*
+  init assignments when do update or insertUp.
+    1. user assignment should be add.
+    2. stored generate column should be add when reference column is updated.
+      such as:
+        - create table t(
+          `c1` int primary key,
+          `c2` varchar(20),
+          `c3` varchar(20) generated always as (substring(`c2`, 1, 4) stored));
+        - insert into t(`c1`, `c2`) values(1, 'hello');
+        - update t set `c2`='world' where `c1`=1;
+        c3 should be update.
+    3. on update current timestamp should be add.
+*/
+int ObTableCtx::init_assignments(const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> storage_col_ids;
+  ObObj prop_obj;
 
-  if (OB_ISNULL(table_schema_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret));
-  } else if (OB_FAIL(table_schema_->get_column_ids(storage_col_ids))) {
-    LOG_WARN("fail to get column ids", K(ret));
-  } else if (OB_FAIL(assign_ids.init(storage_col_ids.count()))) {
-    LOG_WARN("fail to init assign_ids capacity", K(ret), K(storage_col_ids.count()));
-  } else {
-    ObObj prop_value; // useless
-    const share::schema::ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < storage_col_ids.count(); i++) {
-      ObString cname;
-      ObAssignId assign_id;
-      if (OB_ISNULL(col_schema = table_schema_->get_column_schema(storage_col_ids.at(i)))) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("column not exists", K(ret), K(cname));
-      } else if (col_schema->is_stored_generated_column()) {
-        assign_id.column_id_ = storage_col_ids.at(i);
-        assign_id.idx_ = i;
-        if (OB_FAIL(assign_ids.push_back(assign_id))) {
-          LOG_WARN("fail to push back assign id", K(ret), K(assign_id));
-        }
-      } else if (FALSE_IT(cname = col_schema->get_column_name_str())) {
-        // do nothing
-      } else if (OB_SUCCESS != entity.get_property(cname, prop_value)) {
-        // 这一列没有被更新，跳过
-      } else {
-        assign_id.column_id_ = storage_col_ids.at(i);
-        assign_id.idx_ = i;
-        if (OB_FAIL(assign_ids.push_back(assign_id))) {
-          LOG_WARN("fail to push back assign id", K(ret), K(assign_id));
-        }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
+    ObTableColumnItem &item = column_items_.at(i);
+    if (OB_SUCCESS == entity.get_property(item.column_name_, prop_obj)) {
+      ObTableAssignment assign(&item);
+      assign.assign_value_ = prop_obj; // shadow copy when prop_obj is string type
+      assign.is_assigned_ = true;
+      if (OB_FAIL(assigns_.push_back(assign))) {
+        LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
+      } else if (table_schema_->has_generated_column()
+          && OB_FAIL(add_stored_generated_column_assignment(assign))) {
+        LOG_WARN("fail to add soterd generated column assignment", K(ret), K(assign));
+      }
+    } else if (item.auto_filled_timestamp_) { // on update current timestamp
+      ObTableAssignment assign(&item);
+      if (OB_FAIL(assigns_.push_back(assign))) {
+        LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
       }
     }
   }
@@ -739,38 +1017,51 @@ int ObTableCtx::init_assign_ids(ObAssignIds &assign_ids,
   return ret;
 }
 
+/*
+  init scan parameters.
+    1. init assignments
+    2. init scan parameters for child executor(scan executor) of update executor.
+    3. init related index table ids, cause we need to write index table as well.
+*/
 int ObTableCtx::init_update()
 {
   int ret = OB_SUCCESS;
   is_for_update_ = true;
-  const bool is_batch = OB_ISNULL(batch_op_) ? false : true;
-  const ObTableEntity *entity = nullptr;
-  ObAssignIds assign_ids(allocator_);
-  // 1. init assign_ids_
-  if (OB_FAIL(init_assign_ids(assign_ids_, static_cast<const ObTableEntity&>(*entity_)))) {
-    LOG_WARN("fail to init assign ids", K(ret), K(*entity_));
-  }
 
-  // 2. init scan
-  if (OB_SUCC(ret)) {
+  // 1. init assignments
+  if (OB_FAIL(init_assignments(static_cast<const ObTableEntity&>(*entity_)))) {
+    LOG_WARN("fail to init assignments", K(ret), K(*entity_));
+  } else {
+    // 2. init scan
     index_table_id_ = ref_table_id_;
     is_index_scan_ = false;
     is_index_back_ = false;
     is_get_ = true;
     scan_order_ = ObQueryFlag::Forward;
-    if (OB_FAIL(table_schema_->get_column_ids(select_col_ids_))) { // init select_col_ids_
+    if (OB_FAIL(table_schema_->get_column_ids(select_col_ids_))) {
       LOG_WARN("fail to get column ids", K(ret));
+    } else if (OB_FAIL(init_dml_related_tid())) { // 3. init related index table id
+      LOG_WARN("fail to init dml related table ids", K(ret));
     }
-  }
-
-  // 3. init related index table id
-  if (OB_SUCC(ret) && OB_FAIL(init_dml_related_tid())) {
-    LOG_WARN("fail to init dml related table ids", K(ret));
   }
 
   return ret;
 }
 
+/*
+  init delete parameters.
+    1. init scan parameters for child executor(scan executor) of delete executor.
+      - in htable, we should not query stored generate column.
+        create table if not exists htable1_cf1 (
+          `K` varbinary(1024),
+          `Q` varbinary(256),
+          `T` bigint,
+          `V` varbinary(1024),
+          `K_PREFIX` varbinary(1024) GENERATED ALWAYS AS (substr(`K`,1,32)) STORED, primary key(`K`, `Q`, `T`));
+        `K_PREFIX` should not be query.
+      - htable use query and delete, is_get_ should not be set.
+    2. init related index table ids, cause we need to delete index table as well.
+*/
 int ObTableCtx::init_delete()
 {
   int ret = OB_SUCCESS;
@@ -788,7 +1079,7 @@ int ObTableCtx::init_delete()
     if (OB_ISNULL(column_schema = table_schema_->get_column_schema_by_idx(i))) {
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("fail to get column schema bu idx", K(ret), K(i));
-    } else if (column_schema->is_generated_column()) {
+    } else if (column_schema->is_virtual_generated_column()) {
       // skip
     } else if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
       LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
@@ -800,42 +1091,6 @@ int ObTableCtx::init_delete()
   // 3. init related index table id
   if (OB_SUCC(ret) && OB_FAIL(init_dml_related_tid())) {
     LOG_WARN("fail to init dml related table ids", K(ret));
-  }
-
-  return ret;
-}
-
-int ObTableCtx::init_phy_plan_ctx()
-{
-  int ret = OB_SUCCESS;
-  void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-  } else {
-    ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-    phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-    phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-    phy_plan_ctx->set_cur_time(ObTimeUtility::current_time());
-    exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-  }
-  return ret;
-}
-
-int ObTableCtx::init_replace()
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(init_dml_related_tid())) {
-    LOG_WARN("fail to init dml related tids", K(ret));
-  } else {
-    ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
-    if (OB_ISNULL(phy_plan_ctx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("phy_plan_ctx is null", K(ret));
-    } else if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-    }
   }
 
   return ret;
@@ -870,6 +1125,20 @@ int ObTableCtx::init_ttl_delete(ObRowkey &start_key)
   return ret;
 }
 
+/*
+  init replace parameters.
+    - init related index table ids, cause we need to replace index table as well.
+*/
+int ObTableCtx::init_replace()
+{
+  return init_dml_related_tid();
+}
+
+/*
+  init insertUp parameters.
+    1. init update
+    2. reset for is_for_update_ flag, cause init_update() had set is_for_update_=true
+*/
 int ObTableCtx::init_insert_up()
 {
   int ret = OB_SUCCESS;
@@ -877,14 +1146,6 @@ int ObTableCtx::init_insert_up()
 
   if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init update", K(ret));
-  } else {
-    ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
-    if (OB_ISNULL(phy_plan_ctx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("phy_plan_ctx is null", K(ret));
-    } else if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-    }
   }
 
   // reset for update flag
@@ -892,6 +1153,11 @@ int ObTableCtx::init_insert_up()
   return ret;
 }
 
+/*
+  init get parameters, get operation use scan executor.
+    1. init scan parameters
+    2. get all column when user not filled select columns.
+*/
 int ObTableCtx::init_get()
 {
   int ret = OB_SUCCESS;
@@ -927,143 +1193,160 @@ int ObTableCtx::init_get()
   return ret;
 }
 
+/*
+  init append parameters, append operation use insertUp executor.
+    1. init return_affected_entity_ and return_rowkey_
+    2. init insertUp, cause append operation use insertUp executor.
+    3. construct generated_expr_str, cause append column use stored to generate columns for functionality.
+      - expr string: concat_ws('', `%s`, `%s`), `%s` mean column name
+      3.1 no record in database
+        do: append(c1, "abc")
+        expr: concat_ws('', `c1`, `c1-delta`)
+        result: "abc", cause c1 is null
+      3.1 "abc" in database
+        do: append(c1, "efg")
+        expr: concat_ws('', `c1`, `c1-delta`)
+        result: "abcefg"
+*/
 int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
 {
   int ret = OB_SUCCESS;
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
-  ObSEArray<std::pair<ObString, ObObj>, 8> properties;
 
   if (OB_FAIL(init_insert_up())) {
     LOG_WARN("fail to init insert up", K(ret));
-  } else if (OB_FAIL(entity_->get_properties(properties))) {
-    LOG_WARN("fail to get properties", K(ret));
   } else {
-    const int64_t N = properties.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      ObObj &delta = properties.at(i).second;
-      if (delta.is_null()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
+      ObTableAssignment &assign = assigns_.at(i);
+      const ObObj &delta = assign.assign_value_;
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item is null", K(ret), K(assign));
+      } else if (assign.column_item_->auto_filled_timestamp_) {
+        // do nothing
+      } else if (delta.is_null()) {
         ret = OB_OBJ_TYPE_ERROR;
         LOG_WARN("append NULL is illegal", K(ret), K(delta));
       } else if (OB_UNLIKELY(!ob_is_string_type(delta.get_type()))) {
         ret = OB_OBJ_TYPE_ERROR;
         LOG_WARN("can only append string type", K(ret), K(delta));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // 构造生成列表达式字符串"concat_ws('', `column_name`, `column_name`)"
-    const share::schema::ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < assign_ids_.count(); i++) {
-      uint64_t column_id = assign_ids_.at(i).column_id_;
-      ObString column_name;
-      if (OB_ISNULL(col_schema = table_schema_->get_column_schema(column_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get column schema", K(ret), K(column_id));
-      } else if (FALSE_IT(column_name = col_schema->get_column_name_str())) {
       } else {
-        const int64_t total_len = 22 + column_name.length() + column_name.length();
+        const ObString &column_name = assign.column_item_->column_name_;
+        const int64_t total_len = strlen("concat_ws('', ``, ``)") + 1
+            + column_name.length() + column_name.length();
         int64_t actual_len = -1;
         char *buf = NULL;
         if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(total_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("fail to alloc memory", K(ret), K(total_len));
+          LOG_WARN("fail to alloc memory", K(ret), K(total_len));
         } else if ((actual_len = snprintf(buf, total_len, "concat_ws('', `%s`, `%s`)",
             column_name.ptr(), column_name.ptr())) < 0) {
           ret = OB_SIZE_OVERFLOW;
-          LOG_WARN("fail to construct concat_ws expr string", K(ret), K(total_len));
+          LOG_WARN("fail to construct concat_ws expr string", K(ret), K(total_len), K(delta));
         } else {
-          ObString expr_str(actual_len, buf);
-          if (OB_FAIL(expr_strs_.push_back(expr_str))) {
-            LOG_WARN("fail to push back expr str", K(ret));
-          }
+          ObString generated_expr_str(actual_len, buf);
+          assign.column_item_->generated_expr_str_ = generated_expr_str;
+          assign.is_inc_or_append_ = true;
         }
       }
     }
   }
+
   return ret;
 }
 
+/*
+  init increment parameters, append operation use insertUp executor.
+    1. init return_affected_entity_ and return_rowkey_
+    2. init insertUp, cause increment operation use insertUp executor.
+    3. construct generated_expr_str, cause increment column use stored to generate columns for functionality.
+      - expr string: IFNULL(`%s`, 0) + `%s`, `%s` mean column name
+      3.1 no record in database
+        do: increment(c1, 1)
+        expr: IFNULL(`c1`, 0) + `c1_delta`
+        result: 1, cause c1 is null
+      3.1 1 in database
+        do: increment(c1, 1)
+        expr: IFNULL(`c1`, 0) + `c1_delta`
+        result: 2, cause c1 is null
+*/
 int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
 {
   int ret = OB_SUCCESS;
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
-  ObSEArray<std::pair<ObString, ObObj>, 8> properties;
 
   if (OB_FAIL(init_insert_up())) {
     LOG_WARN("fail to init insert up", K(ret));
-  } else if (OB_FAIL(entity_->get_properties(properties))) {
-    LOG_WARN("fail to get properties", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < properties.count(); i++) {
-      ObObj &delta = properties.at(i).second;
-      if (!ob_is_int_tc(delta.get_type())) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
+      ObTableAssignment &assign = assigns_.at(i);
+      const ObObj &delta = assign.assign_value_;
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item is null", K(ret), K(assign));
+      } else if (assign.column_item_->is_auto_increment_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support increment auto increment column", K(ret), K(assign));
+      } else if (assign.column_item_->auto_filled_timestamp_) {
+        // do nothing
+      } else if (!ob_is_int_tc(delta.get_type())) {
         ret = OB_OBJ_TYPE_ERROR;
         LOG_WARN("delta should only be signed integer type", K(ret), K(delta));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // 构造生成列表达式字符串"ifnull(C1, 0) + C1"
-    const share::schema::ObColumnSchemaV2 *col_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < assign_ids_.count(); i++) {
-      uint64_t column_id = assign_ids_.at(i).column_id_;
-      ObString column_name;
-      if (OB_ISNULL(col_schema = table_schema_->get_column_schema(column_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get column schema", K(ret), K(column_id));
-      } else if (FALSE_IT(column_name = col_schema->get_column_name_str())) {
       } else {
-        const int64_t total_len = column_name.length() + column_name.length() + 16;
+        const ObString &column_name = assign.column_item_->column_name_;
+        const int64_t total_len = strlen("IFNULL(``, 0) + ``") + 1
+            + column_name.length() + column_name.length();
         int64_t actual_len = -1;
         char *buf = NULL;
         if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(total_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("fail to alloc memory", K(ret), K(total_len));
-        } else if ((actual_len = snprintf(buf, total_len, "IFNULL(%s, 0) + %s",
+          LOG_WARN("fail to alloc memory", K(ret), K(total_len));
+        } else if ((actual_len = snprintf(buf, total_len, "IFNULL(`%s`, 0) + `%s`",
             column_name.ptr(), column_name.ptr())) < 0) {
           ret = OB_SIZE_OVERFLOW;
-          LOG_WARN("fail to construct increment expr string", K(ret), K(total_len));
+          LOG_WARN("fail to construct increment expr string", K(ret), K(total_len), K(delta));
         } else {
-          ObString expr_str(actual_len, buf);
-          if (OB_FAIL(expr_strs_.push_back(expr_str))) {
-            LOG_WARN("fail to push back expr str", K(ret));
-          }
+          ObString generated_expr_str(actual_len, buf);
+          assign.column_item_->generated_expr_str_ = generated_expr_str;
+          assign.is_inc_or_append_ = true;
         }
       }
     }
   }
+
   return ret;
 }
 
+/*
+  classify scan expr for get/delete/update/scan operation
+*/
 int ObTableCtx::classify_scan_exprs()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr *> *exprs = is_for_update_ ? &old_row_exprs_ : &all_exprs_.get_expr_array();
-  int64_t exprs_cnt = exprs->count();
+  const ObIArray<ObRawExpr *> &exprs = all_exprs_.get_expr_array();
 
-  if (0 == exprs_cnt) {
+  if (0 == exprs.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exprs is empty", K(ret));
+  } else if (column_items_.count() > exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unecpect column_items_ count", K(ret), K(column_items_), K(exprs.count()));
   } else if (!select_exprs_.empty()) {
     // had classify, do nothing
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < exprs_cnt; i++) {
-      if (exprs->at(i)->is_column_ref_expr()) {
-        ObColumnRefRawExpr *expr = static_cast<ObColumnRefRawExpr *>(exprs->at(i));
-        if (expr->is_rowkey_column() && OB_FAIL(rowkey_exprs_.push_back(expr))) {
-          LOG_WARN("fail to push back rowkey expr", K(ret));
-        } else if (has_exist_in_array(select_col_ids_, expr->get_column_id())
-                  && OB_FAIL(select_exprs_.push_back(expr))) {
-          LOG_WARN("fail to push back select expr", K(ret));
-        } else if (is_index_scan_
-            && has_exist_in_array(index_col_ids_, expr->get_column_id())
-            && OB_FAIL(index_exprs_.push_back(expr))) {
-          LOG_WARN("fail to push back index column expr", K(ret));
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
+      const ObTableColumnItem &tmp_item = column_items_.at(i);
+      if (tmp_item.expr_->is_rowkey_column() && OB_FAIL(rowkey_exprs_.push_back(exprs.at(i)))) {
+        LOG_WARN("fail to push back rowkey expr", K(ret));
+      } else if (has_exist_in_array(select_col_ids_, tmp_item.column_id_)
+          && OB_FAIL(select_exprs_.push_back(exprs.at(i)))) {
+        LOG_WARN("fail to push back select expr", K(ret));
+      } else if (is_index_scan_
+          && has_exist_in_array(index_col_ids_, tmp_item.column_id_)
+          && OB_FAIL(index_exprs_.push_back(exprs.at(i)))) {
+        LOG_WARN("fail to push back index column expr", K(ret));
       }
     }
   }
@@ -1084,7 +1367,8 @@ int ObTableCtx::init_exec_ctx()
   return ret;
 }
 
-// 初始化 das context 中的 table_loc 和 tablet_loc
+
+// get primary tablet location and all index tablet location, add them to das context.
 int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1230,7 +1514,21 @@ int ObTableCtx::init_dml_related_tid()
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("null index schema", K(ret));
       } else if (index_schema->is_index_local_storage()) {
-        if (OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
+        if (ObTableOperationType::Type::UPDATE == operation_type_) { // check index column is updated or not
+          bool found = false;
+          for (int64_t j = 0; OB_SUCC(ret) && j < assigns_.count() && !found; j++) {
+            const ObTableAssignment &assign = assigns_.at(j);
+            if (OB_ISNULL(assign.column_item_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("assign column item is null", K(ret), K(assign));
+            } else if (OB_NOT_NULL(index_schema->get_column_schema(assign.column_item_->column_id_))) {
+              found = true;
+            }
+          }
+          if (found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
+            LOG_WARN("fail to add related index ids", K(ret), K(index_schema->get_table_id()));
+          }
+        } else if (OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
           LOG_WARN("fail to add related index ids", K(ret), K(index_schema->get_table_id()));
         }
       }
@@ -1273,57 +1571,59 @@ int ObTableCtx::add_aggregate_proj(int64_t cell_idx,
   return ret;
 }
 
-int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx &phy_plan_ctx)
+/*
+  add auto increment parameters
+  - each auto increment column contains a param
+  - only support one auto increment column in mysql mode
+*/
+int ObTableCtx::add_auto_inc_param(const ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  ObIArray<share::AutoincParam> &auto_params = phy_plan_ctx.get_autoinc_params();
-  for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
-      OB_SUCC(ret) && iter != table_schema_->column_end() && !has_auto_inc_; ++iter) {
-    const ObColumnSchemaV2 *col_schema = *iter;
-    if (OB_ISNULL(col_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column schema is NULL", K(ret));
-    } else if (col_schema->is_autoincrement()) {
+  ObIArray<AutoincParam> &auto_params = exec_ctx_.get_physical_plan_ctx()->get_autoinc_params();
+  int64_t auto_increment_cache_size = -1;
+
+  if (!auto_params.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected auto params count, should be empty", K(ret));
+  } else if (OB_FAIL(get_session_info().get_auto_increment_cache_size(auto_increment_cache_size))) {
+    LOG_WARN("fail to get increment factor", K(ret));
+  } else {
+    AutoincParam param;
+    param.tenant_id_ = tenant_id_;
+    param.autoinc_table_id_ = table_schema_->get_table_id();
+    param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
+    param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
+    param.autoinc_col_id_ = column_schema.get_column_id();
+    param.auto_increment_cache_size_ = auto_increment_cache_size;
+    param.part_level_ = table_schema_->get_part_level();
+    ObObjType column_type = column_schema.get_data_type();
+    param.autoinc_col_type_ = column_type;
+    param.autoinc_desired_count_ = 0;
+    param.autoinc_mode_is_order_ = table_schema_->is_order_auto_increment_mode();
+    param.autoinc_version_ = table_schema_->get_truncate_version();
+    param.total_value_count_ = 1;
+    param.autoinc_increment_ = 1;
+    param.autoinc_offset_ = 1;
+    param.part_value_no_order_ = true;
+    if (column_schema.is_tbl_part_key_column()) {
+      // don't keep intra-partition value asc order when partkey column is auto inc
+      param.part_value_no_order_ = true;
+    }
+    if (OB_FAIL(auto_params.prepare_allocate(1))) { // only one auto inc in a table
+      LOG_WARN("fail to init auto params", K(ret));
+    } else {
+      auto_params.at(0) = param;
       has_auto_inc_ = true;
-      int64_t auto_increment_cache_size = -1;
-      if (OB_FAIL(get_session_info().get_auto_increment_cache_size(auto_increment_cache_size))) {
-        LOG_WARN("fail to get increment factor", K(ret));
-      } else {
-        AutoincParam &param = get_auto_inc_param();
-        param.tenant_id_ = tenant_id_;
-        param.autoinc_table_id_ = ref_table_id_;
-        param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
-        param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
-        param.autoinc_col_id_ = col_schema->get_column_id();
-        param.auto_increment_cache_size_ = auto_increment_cache_size;
-        param.part_level_ = table_schema_->get_part_level();
-        ObObjType column_type = col_schema->get_data_type();
-        param.autoinc_col_type_ = column_type;
-        param.autoinc_desired_count_ = 0;
-        param.autoinc_mode_is_order_ = table_schema_->is_order_auto_increment_mode();
-        param.autoinc_version_ = table_schema_->get_truncate_version();
-        param.total_value_count_ = 1;
-        param.autoinc_increment_ = 1;
-        param.autoinc_offset_ = 1;
-        param.part_value_no_order_ = true;
-        // for generate column id when use auto inc
-        set_auto_inc_column_id(col_schema->get_column_id());
-        set_auto_inc_column_name(col_schema->get_column_name_str());
-        if (col_schema->is_tbl_part_key_column()) {
-          // don't keep intra-partition value asc order when partkey column is auto inc
-          param.part_value_no_order_ = true;
-        }
-        if (OB_FAIL(auto_params.prepare_allocate(1))) { // only one auto inc in a table
-          LOG_WARN("fail to init auto params", K(ret));
-        } else {
-          auto_params.at(0) = param;
-        }
-      }
     }
   }
+
   return ret;
 }
 
+/*
+  update auto increment local and gobal value.
+  - we need to update local and gobal value after user set specific value.
+*/
 int ObTableCtx::update_auto_inc_value()
 {
   int ret = OB_SUCCESS;
@@ -1339,7 +1639,7 @@ int ObTableCtx::update_auto_inc_value()
   return ret;
 }
 
-// 获取索引表的tablet_id
+// get index table's tablet id
 int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
                                       ObTabletID &related_tablet_id)
 {

@@ -161,6 +161,7 @@ ob_set_subtarget(ob_server table
   table/ttl/ob_tenant_tablet_ttl_mgr.cpp
   table/ttl/ob_table_ttl_task.cpp
   table/ttl/ob_table_ttl_executor.cpp
+  table/ob_table_move_response.cpp
 )
 
 ob_set_subtarget(ob_server table_load

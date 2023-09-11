@@ -279,7 +279,7 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
       }
     } else if (expr->get_expr_type() == T_DATE &&
                OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "date "))) {
-      LOG_WARN("fail to print date strign", K(ret));
+      LOG_WARN("fail to print date string", K(ret));
     } else if (T_BOOL == expr->get_expr_type()) {
       /**
        * For SQL like "select * from T1 where C1 = 1 and C1 = 2",
@@ -562,10 +562,10 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     case T_OP_NE:
     case T_OP_SQ_NE:
       SET_SYMBOL_IF_EMPTY("<>");
-    case T_OP_IN: // in sub-query wille be rewrited as expr = ANY(sub-query)
+    case T_OP_IN: // in sub-query will be rewrited as expr = ANY(sub-query)
       SET_SYMBOL_IF_EMPTY("in");
     case T_OP_NOT_IN:
-      SET_SYMBOL_IF_EMPTY("not in"); // not in sub-query wille be rewrited as expr != all(sub-query)
+      SET_SYMBOL_IF_EMPTY("not in"); // not in sub-query will be rewrited as expr != all(sub-query)
     case T_OP_BIT_OR:
       SET_SYMBOL_IF_EMPTY("|");
     case T_OP_BIT_XOR:
@@ -1080,6 +1080,10 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("json_arrayagg");
     case T_FUN_JSON_OBJECTAGG:
       SET_SYMBOL_IF_EMPTY("json_objectagg");
+    case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
+      SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
+    case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
+      SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -2853,7 +2857,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
             PRINT_IDENT_WITH_QUOT(seq_expr->get_action());
           } else {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sequence should sepcify format as seqname.action", K(ret));
+            LOG_WARN("sequence should specify format as seqname.action", K(ret));
           }
           if (OB_SUCC(ret) && seq_expr->is_dblink_sys_func()) {
             DATA_PRINTF("@%.*s", LEN_AND_PTR(seq_expr->get_dblink_name()));
@@ -3252,7 +3256,7 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
       if (params_type.at(i).is_null()) { // default parameter, do not print
         // do nothing ...
       } else if (0 == i && expr->get_is_udt_cons()) {
-        // do not print construnct null self argument
+        // do not print construct null self argument
       } else {
         if (!params_name.at(i).empty()) {
           PRINT_IDENT_WITH_QUOT(params_name.at(i));
@@ -3773,7 +3777,7 @@ int ObRawExprPrinter::print_partition_exprs(ObWinFunRawExpr *expr)
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       if (OB_ISNULL(expr->get_partition_exprs().at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get partiton by exprs.", K(ret));
+        LOG_WARN("failed to get partition by exprs.", K(ret));
       } else {
         PRINT_EXPR(expr->get_partition_exprs().at(i));
         if (i < N - 1) {

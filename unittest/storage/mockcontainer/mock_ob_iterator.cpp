@@ -859,7 +859,7 @@ int ObMockIteratorBuilder::static_init()
       && OB_SUCCESS != (ret = str_to_flag_.create(
                                   cal_next_prime(FLAG_NUM * 2),
                                   ObModIds::OB_HASH_BUCKET))) {
-    STORAGE_LOG(WARN, "out of memeory");
+    STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_flag_.set_refactored(
                  ObString::make_string("RF_ROW_DOES_NOT_EXIST"),
                  ObDmlFlag::DF_NOT_EXIST)
@@ -894,7 +894,7 @@ int ObMockIteratorBuilder::static_init()
       && OB_SUCCESS != (ret = str_to_dml_.create(
                                   cal_next_prime(DML_NUM * 2),
                                   ObModIds::OB_HASH_BUCKET))) {
-    STORAGE_LOG(WARN, "out of memeory");
+    STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_dml_.set_refactored(
                  ObString::make_string("INSERT"), DF_INSERT)
              || OB_SUCCESS != str_to_dml_.set_refactored(
@@ -913,7 +913,7 @@ int ObMockIteratorBuilder::static_init()
       && OB_SUCCESS != (ret = str_to_base_.create(
                                   cal_next_prime(BASE_NUM * 2),
                                   ObModIds::OB_HASH_BUCKET))) {
-    STORAGE_LOG(WARN, "out of memeory");
+    STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_base_.set_refactored(
                  ObString::make_string("TRUE"), true)
              || OB_SUCCESS != str_to_base_.set_refactored(
@@ -928,7 +928,7 @@ int ObMockIteratorBuilder::static_init()
       && OB_SUCCESS != (ret = str_to_is_get_.create(
                                   cal_next_prime(BASE_NUM * 2),
                                   ObModIds::OB_HASH_BUCKET))) {
-    STORAGE_LOG(WARN, "out of memeory");
+    STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_is_get_.set_refactored(
                  ObString::make_string("TRUE"), true)
              || OB_SUCCESS != str_to_is_get_.set_refactored(
@@ -943,7 +943,7 @@ int ObMockIteratorBuilder::static_init()
       && OB_SUCCESS != (ret = str_to_trans_id_.create(
                                   cal_next_prime(BASE_NUM * 3),
                                   ObModIds::OB_HASH_BUCKET))) {
-    STORAGE_LOG(WARN, "out of memeory");
+    STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_trans_id_.set_refactored(
           ObString::make_string("trans_id_1"), trans_id_list_[0])
       || OB_SUCCESS != str_to_trans_id_.set_refactored(
@@ -981,7 +981,7 @@ int ObMockIteratorBuilder::static_init()
   if (ret == OB_SUCCESS
       && OB_SUCCESS != (ret = str_to_multi_version_row_flag_.create(
       cal_next_prime(MULTI_VERSION_ROW_FLAG_NUM * 2), ObModIds::OB_HASH_BUCKET))) {
-    STORAGE_LOG(WARN, "out of memeory");
+    STORAGE_LOG(WARN, "out of memory");
   } else if (OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("N"), 0)
       || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("C"), 8)
       || OB_SUCCESS != str_to_multi_version_row_flag_.set_refactored(ObString::make_string("L"), 32)

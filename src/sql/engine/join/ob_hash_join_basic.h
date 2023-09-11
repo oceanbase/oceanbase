@@ -162,7 +162,7 @@ public:
       int32_t part_level,
       int64_t part_shift,
       int64_t batchno)
-  : chunk_row_store_(&alloc),
+  : chunk_row_store_(common::ObModIds::OB_ARENA_HASH_JOIN, &alloc),
     inner_callback_(nullptr),
     part_level_(part_level),
     part_shift_(part_shift),

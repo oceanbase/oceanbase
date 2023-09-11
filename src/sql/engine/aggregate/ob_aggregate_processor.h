@@ -318,7 +318,7 @@ public:
   {
   public:
     explicit GroupConcatExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
-      : ExtraResult(alloc, op_monitor_info), row_count_(0), iter_idx_(0), sort_op_(NULL), separator_datum_(NULL), bool_mark_(alloc)
+      : ExtraResult(alloc, op_monitor_info), row_count_(0), iter_idx_(0), row_store_(ObModIds::OB_SQL_AGGR_FUN_GROUP_CONCAT), sort_op_(NULL), separator_datum_(NULL), bool_mark_(alloc)
     {
     }
     virtual ~GroupConcatExtraResult();

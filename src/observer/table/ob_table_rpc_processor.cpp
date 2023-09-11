@@ -29,6 +29,8 @@
 #include "storage/tx/ob_trans_service.h"
 #include "ob_table_session_pool.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
+#include "ob_table_move_response.h"
+#include "share/table/ob_table_config_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -89,9 +91,9 @@ int ObTableLoginP::process()
     }
   }
   // whether the client should refresh location cache
-  if (OB_SUCCESS != ret && is_bad_routing_err(ret)) {
-    ObRpcProcessor::bad_routing_ = true;
-    LOG_WARN("[TABLE] login bad routing", K(ret), "bad_routing", ObRpcProcessor::bad_routing_);
+  if (OB_SUCCESS != ret && is_require_rerouting_err(ret)) {
+    ObRpcProcessor::require_rerouting_ = true;
+    LOG_WARN("[TABLE] login require rerouting", K(ret), "require_rerouting", ObRpcProcessor::require_rerouting_);
   }
   ObTenantStatEstGuard stat_guard(result_.tenant_id_);
 #ifndef NDEBUG
@@ -223,7 +225,7 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      need_retry_in_queue_(false),
      retry_count_(0),
      trans_desc_(NULL),
-     did_async_end_trans_(false)
+     had_do_response_(false)
 {
   need_audit_ = GCONF.enable_sql_audit;
   trans_state_ptr_ = &trans_state_;
@@ -233,7 +235,7 @@ void ObTableApiProcessorBase::reset_ctx()
 {
   trans_state_ptr_->reset();
   trans_desc_ = NULL;
-  did_async_end_trans_ = false;
+  had_do_response_ = false;
 }
 
 int ObTableApiProcessorBase::get_ls_id(const ObTabletID &tablet_id, ObLSID &ls_id)
@@ -568,7 +570,7 @@ int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t tim
       callback.callback(ret);
     }
     // ignore the return code of end_trans
-    did_async_end_trans_ = true; // don't send response in this worker thread
+    had_do_response_ = true; // don't send response in this worker thread
     // @note the req_ may be freed, req_processor can not be read any more.
     // The req_has_wokenup_ MUST set to be true, otherwise req_processor will invoke req_->set_process_start_end_diff, cause memory core
     // @see ObReqProcessor::run() req_->set_process_start_end_diff(ObTimeUtility::current_time());
@@ -880,15 +882,15 @@ int ObTableRpcProcessor<T>::process()
   if (OB_FAIL(process_with_retry(RpcProcessor::arg_.credential_, get_timeout_ts()))) {
     if (OB_NOT_NULL(request_string_)) { // request_string_ has been generated if enable sql_audit
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), K(request_string_));
-    } else if (did_async_end_trans()) { // req_ may be freed
+    } else if (had_do_response()) { // req_ may be freed
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_));
     } else {
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_);
     }
-    // whether the client should refresh location cache
-    if (is_bad_routing_err(ret)) {
-      ObRpcProcessor<T>::bad_routing_ = true;
-      LOG_WARN("table_api request bad routing", K(ret), "bad_routing", ObRpcProcessor<T>::bad_routing_);
+    // whether the client should refresh location cache and retry
+    if (is_require_rerouting_err(ret)) {
+      ObRpcProcessor<T>::require_rerouting_ = true;
+      LOG_WARN("table_api request require rerouting", K(ret), "require_rerouting", ObRpcProcessor<T>::require_rerouting_);
     }
   }
   return ret;
@@ -910,12 +912,26 @@ int ObTableRpcProcessor<T>::before_response(int error_code)
 }
 
 template<class T>
-int ObTableRpcProcessor<T>::response(const int retcode)
+int ObTableRpcProcessor<T>::response(int error_code)
 {
   int ret = OB_SUCCESS;
   // if it is waiting for retry in queue, the response can NOT be sent.
-  if (!need_retry_in_queue_) {
-    ret = RpcProcessor::response(retcode);
+  if (!need_retry_in_queue_ && !had_do_response()) {
+    const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(this->req_->get_packet());
+    if (is_require_rerouting_err(error_code) && rpc_pkt->require_rerouting()) {
+      // response rerouting packet
+      ObTableMoveResponseSender sender(this->req_, error_code);
+      if (OB_FAIL(sender.init(ObTableApiProcessorBase::table_id_, ObTableApiProcessorBase::tablet_id_, *gctx_.schema_service_))) {
+        LOG_WARN("fail to init move response sender", K(ret), K(RpcProcessor::arg_));
+      } else if (OB_FAIL(sender.response())) {
+        LOG_WARN("fail to do move response", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        ret = RpcProcessor::response(error_code); // do common response when do move response failed
+      }
+    } else {
+      ret = RpcProcessor::response(error_code);
+    }
   }
   return ret;
 }
@@ -978,17 +994,19 @@ void ObTableRpcProcessor<T>::generate_sql_id()
   snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
      "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
 }
-bool oceanbase::observer::is_bad_routing_err(const int err)
+bool oceanbase::observer::is_require_rerouting_err(const int err)
 {
-  // bad routing check : whether client should refresh location cache
+  // rerouting: whether client should refresh location cache and retry
   // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
-  return (is_master_changed_error(err)
-          || is_server_down_error(err)
-          || is_partition_change_error(err)
-          || is_server_status_error(err)
-          || is_unit_migrate(err)
-          || is_transaction_rpc_timeout_err(err)
-          || is_has_no_readable_replica_err(err)
-          || is_select_dup_follow_replic_err(err)
-          || is_trans_stmt_need_retry_error(err));
+  bool is_err = is_master_changed_error(err)
+                || is_server_down_error(err)
+                || is_partition_change_error(err)
+                || is_server_status_error(err)
+                || is_unit_migrate(err)
+                || is_transaction_rpc_timeout_err(err)
+                || is_has_no_readable_replica_err(err)
+                || is_select_dup_follow_replic_err(err)
+                || is_trans_stmt_need_retry_error(err);
+
+  return is_err && ObKVFeatureModeUitl::is_rerouting_enable();
 }

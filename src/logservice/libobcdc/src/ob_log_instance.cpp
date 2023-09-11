@@ -937,7 +937,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num, DEFAULT_QUEUE_SIZE, *err_handler);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(lob_aux_meta_storager_.init())) {
+    if (OB_FAIL(lob_aux_meta_storager_.init(store_service_))) {
       LOG_ERROR("lob_aux_meta_storager_ init failed", KR(ret));
     }
   }

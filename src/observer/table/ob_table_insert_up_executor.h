@@ -25,8 +25,7 @@ public:
   ObTableApiInsertUpSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
         insert_up_ctdef_(alloc),
-        conflict_checker_ctdef_(alloc),
-        all_saved_exprs_(alloc)
+        conflict_checker_ctdef_(alloc)
   {
   }
 public:
@@ -34,12 +33,9 @@ public:
   OB_INLINE ObTableInsUpdCtDef& get_ctdef() { return insert_up_ctdef_; }
   OB_INLINE const sql::ObConflictCheckerCtdef& get_conflict_checker_ctdef() const { return conflict_checker_ctdef_; }
   OB_INLINE sql::ObConflictCheckerCtdef& get_conflict_checker_ctdef() { return conflict_checker_ctdef_; }
-  OB_INLINE const common::ObIArray<sql::ObExpr *>& get_all_saved_exprs() const { return all_saved_exprs_; }
-  OB_INLINE common::ObIArray<sql::ObExpr *>& get_all_saved_exprs() { return all_saved_exprs_; }
 private:
   ObTableInsUpdCtDef insert_up_ctdef_;
   sql::ObConflictCheckerCtdef conflict_checker_ctdef_;
-  sql::ExprFixedArray all_saved_exprs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiInsertUpSpec);
 };
@@ -52,6 +48,7 @@ public:
         allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         insert_up_spec_(spec),
         insert_up_rtdef_(),
+        insert_row_(nullptr),
         insert_rows_(0),
         upd_changed_rows_(0),
         upd_rtctx_(eval_ctx_, exec_ctx_, get_fake_modify_op()),
@@ -110,6 +107,7 @@ private:
   int try_insert_row();
   int try_update_row();
   int do_insert_up_cache();
+  int cache_insert_row();
   int prepare_final_insert_up_task();
   int do_update(const ObRowkey &constraint_rowkey,
                 const sql::ObConflictValue &constraint_value);
@@ -119,6 +117,7 @@ private:
   common::ObArenaAllocator allocator_;
   const ObTableApiInsertUpSpec &insert_up_spec_;
   ObTableInsUpdRtDef insert_up_rtdef_;
+  ObChunkDatumStore::StoredRow *insert_row_;
   int64_t insert_rows_;
   int64_t upd_changed_rows_;
   sql::ObDMLRtCtx upd_rtctx_;

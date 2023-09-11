@@ -1394,6 +1394,25 @@ int ObLS::block_tx_start()
   return ret;
 }
 
+int ObLS::block_all()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else {
+    int64_t read_lock = 0;
+    int64_t write_lock = LSLOCKSTORAGE | LSLOCKTX;
+    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
+    // protect with lock_ to make sure there is no tablet transfer in process doing.
+    // transfer in must use this lock too.
+    if (OB_FAIL(ls_tx_svr_.block_all())) {
+      LOG_WARN("block_all failed", K(get_ls_id()));
+    }
+  }
+  return ret;
+}
+
 int ObLS::tablet_transfer_in(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -2297,6 +2316,24 @@ int ObLS::set_restore_status(
     ls_tablet_svr_.enable_to_read();
   } else {
     ls_tablet_svr_.disable_to_read();
+  }
+  return ret;
+}
+
+int ObLS::set_gc_state(const logservice::LSGCState &gc_state)
+{
+  SCN invalid_scn;
+  return set_gc_state(gc_state, invalid_scn);
+}
+
+int ObLS::set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &offline_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
+  } else {
+    ret = ls_meta_.set_gc_state(gc_state, offline_scn);
   }
   return ret;
 }

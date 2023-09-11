@@ -500,15 +500,24 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
   LOG_INFO("put schema mgr",
            "schema version", NULL != schema_mgr ?
            schema_mgr->get_schema_version() : OB_INVALID_VERSION);
-  if (!check_inner_stat()) {
+  if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
-  } else if (NULL == schema_mgr) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_ISNULL(schema_mgr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_mgr));
+    LOG_WARN("invalid argument", KR(ret), KP(schema_mgr));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == schema_mgr->get_tenant_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), "tenant_id", schema_mgr->get_tenant_id());
   } else {
     ObSchemaMgrItem *dst_item = NULL;
     bool is_stop = false;
+    const uint64_t tenant_id = schema_mgr->get_tenant_id();
+    int64_t max_schema_slot_num = max_cached_num_;
+    omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+    if (tenant_config.is_valid()) {
+      max_schema_slot_num = tenant_config->_max_schema_slot_num;
+    }
     TCWLockGuard guard(lock_);
     // 1. In order to avoid the repeated adjustment of the configuration item _max_schema_slot_num that may cause problems
     //  that may be caused by the invisible version in the history, max_cached_num_ can only be increased during
@@ -520,7 +529,7 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
     //  and the schema_mgr memory management strategy is different from the schema refresh scenario.
     //  In order to reduce unnecessary memory usage, a fixed number of 16 slots is also used.
     if (!ObSchemaService::g_liboblog_mode_ && FALLBACK != mode_) {
-      max_cached_num_ = max(max_cached_num_, GCONF._max_schema_slot_num);
+      max_cached_num_ = max(max_cached_num_, max_schema_slot_num);
     }
     int64_t target_pos = -1;
     for (int64_t i = 0; i < max_cached_num_ && !is_stop; ++i) {

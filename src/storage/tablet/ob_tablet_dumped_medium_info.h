@@ -43,7 +43,16 @@ public:
   ObTabletDumpedMediumInfo(const ObTabletDumpedMediumInfo &) = delete;
   ObTabletDumpedMediumInfo &operator=(const ObTabletDumpedMediumInfo &) = delete;
 public:
-  int init(common::ObIAllocator &allocator);
+  int init_for_first_creation(common::ObIAllocator &allocator);
+  int init_for_evict_medium_info(
+      common::ObIAllocator &allocator,
+      const int64_t finish_medium_scn,
+      const ObTabletDumpedMediumInfo &other);
+  int init_for_mds_table_dump(
+      common::ObIAllocator &allocator,
+      const int64_t finish_medium_scn,
+      const ObTabletDumpedMediumInfo &other1,
+      const ObTabletDumpedMediumInfo &other2);
   void reset();
 
   // key order in array: big -> small
@@ -70,6 +79,8 @@ public:
   int64_t simple_to_string(char* buf, const int64_t buf_len, int64_t &pos) const;
 public:
   static bool compare(const compaction::ObMediumCompactionInfo *lhs, const compaction::ObMediumCompactionInfo *rhs);
+private:
+  int do_append(const compaction::ObMediumCompactionInfo &medium_info);
 public:
   bool is_inited_;
   common::ObIAllocator *allocator_;
@@ -86,7 +97,7 @@ public:
 public:
   int init(
       common::ObIAllocator &allocator,
-      const ObTabletDumpedMediumInfo &dumped_medium_info);
+      const ObTabletDumpedMediumInfo *dumped_medium_info);
   void reset();
   int get_next_key(compaction::ObMediumCompactionInfoKey &key);
   int get_next_medium_info(

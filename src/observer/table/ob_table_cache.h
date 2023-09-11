@@ -55,7 +55,7 @@ struct ObTableApiCacheKey: public ObILibCacheKey
   int64_t schema_version_;
   ObTableOperationType::Type operation_type_;
   bool is_ttl_table_;
-  common::ObArray<uint64_t> op_column_ids_;
+  common::ObSEArray<uint64_t, 32> op_column_ids_;
 };
 
 class ObTableApiCacheNode: public ObILibCacheNode

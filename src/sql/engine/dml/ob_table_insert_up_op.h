@@ -82,6 +82,7 @@ public:
       conflict_checker_(ctx.get_allocator(),
                         eval_ctx_,
                         MY_SPEC.conflict_checker_ctdef_),
+      insert_up_row_store_("InsertUpRow"),
       is_ignore_(false)
 
   {

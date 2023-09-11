@@ -396,7 +396,7 @@ int ObPxMultiPartSSTableInsertOp::create_tablet_store(ObTabletID &tablet_id, ObC
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for tablet store", K(ret));
-    } else if (OB_ISNULL(tablet_store = new (buf) ObChunkDatumStore)) {
+    } else if (OB_ISNULL(tablet_store = new (buf) ObChunkDatumStore("SSTABLE_INS"))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to new ObChunkDatumStore", K(ret));
     } else if (OB_FAIL(tablet_store->init(TABLET_STORE_MEM_LIMIT,

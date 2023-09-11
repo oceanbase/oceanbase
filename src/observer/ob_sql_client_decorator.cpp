@@ -39,30 +39,30 @@ int ObSQLClientRetry::read(ReadResult &res, const int64_t cluster_id, const uint
   return OB_NOT_SUPPORTED;
 }
 
-int ObSQLClientRetry::read(ReadResult &res, const uint64_t tenant_id, const char *sql)
+int ObSQLClientRetry::read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql_client_)) {
     ret = OB_INNER_STAT_ERROR;
   } else {
-    ret = sql_client_->read(res, tenant_id, sql);
+    ret = sql_client_->read(res, tenant_id, sql, group_id);
     if (OB_FAIL(ret)) {
       for (int32_t retry = 0; retry < retry_limit_ && OB_SUCCESS != ret; retry++) {
         LOG_WARN("retry execute query when failed", K(ret), K(retry), K_(retry_limit), K(sql));
-        ret = sql_client_->read(res, tenant_id, sql);
+        ret = sql_client_->read(res, tenant_id, sql, group_id);
       }
     }
   }
   return ret;
 }
 
-int ObSQLClientRetry::write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows)
+int ObSQLClientRetry::write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql_client_)) {
     ret = OB_INNER_STAT_ERROR;
   } else {
-    ret = sql_client_->write(tenant_id, sql, affected_rows);
+    ret = sql_client_->write(tenant_id, sql, group_id, affected_rows);
   }
   return ret;
 }
@@ -139,7 +139,7 @@ int ObSQLClientRetryWeak::read(ReadResult &res, const int64_t cluster_id, const 
   return OB_NOT_SUPPORTED;
 }
 
-int ObSQLClientRetryWeak::read(ReadResult &res, const uint64_t tenant_id, const char *sql)
+int ObSQLClientRetryWeak::read(ReadResult &res, const uint64_t tenant_id, const char *sql, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql_client_)) {
@@ -147,13 +147,13 @@ int ObSQLClientRetryWeak::read(ReadResult &res, const uint64_t tenant_id, const 
   } else {
     // normal read
     if (check_sys_variable_) {
-      ret = sql_client_->read(res, tenant_id, sql);
+      ret = sql_client_->read(res, tenant_id, sql, group_id);
     } else {
       sqlclient::ObISQLConnection *conn = sql_client_->get_connection();
       ObSingleConnectionProxy single_conn_proxy;
       if (OB_NOT_NULL(conn)) {
         // for transaction
-      } else if (OB_FAIL(single_conn_proxy.connect(tenant_id, sql_client_))) {
+      } else if (OB_FAIL(single_conn_proxy.connect(tenant_id, group_id, sql_client_))) {
         LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
       } else {
         conn = single_conn_proxy.get_connection();
@@ -166,13 +166,13 @@ int ObSQLClientRetryWeak::read(ReadResult &res, const uint64_t tenant_id, const 
   return ret;
 }
 
-int ObSQLClientRetryWeak::write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows)
+int ObSQLClientRetryWeak::write(const uint64_t tenant_id, const char *sql, const int32_t group_id, int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql_client_)) {
     ret = OB_INNER_STAT_ERROR;
   } else {
-    ret = sql_client_->write(tenant_id, sql, affected_rows);
+    ret = sql_client_->write(tenant_id, sql, group_id, affected_rows);
   }
   return ret;
 }

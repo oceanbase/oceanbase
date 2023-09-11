@@ -21,7 +21,7 @@ namespace oceanbase
 namespace common
 {
 /**
- * Provide a memeory allocate mechanism by allocate
+ * Provide a memory allocate mechanism by allocate
  * a buffer associate with specific thread, whenever
  * this buffer allocate by user function in a thread
  * and free when thread exit.

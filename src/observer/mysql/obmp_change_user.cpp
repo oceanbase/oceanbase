@@ -330,6 +330,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
       OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
     } else {
       uint64_t db_id = OB_INVALID_ID;
+      const ObSysVariableSchema *sys_variable_schema = NULL;
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
       session->set_user_priv_set(session_priv.user_priv_set_);
       session->set_db_priv_set(session_priv.db_priv_set_);
@@ -340,8 +341,13 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
         OB_LOG(WARN, "failed to set default database", K(ret), K(database_));
       } else if (OB_FAIL(session->set_real_client_ip(login_info.client_ip_))) {
           LOG_WARN("failed to set_real_client_ip", K(ret));
-      } else if (OB_FAIL(session->load_default_sys_variable(false, true))) {
-        LOG_WARN("failed to load system variables", K(ret));
+      } else if (OB_FAIL(schema_guard.get_sys_variable_schema(session_priv.tenant_id_, sys_variable_schema))) {
+        LOG_WARN("get sys variable schema failed", K(ret));
+      } else if (OB_ISNULL(sys_variable_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sys variable schema is null", K(ret));
+      } else if (OB_FAIL(session->load_all_sys_vars(*sys_variable_schema, false))) {
+        LOG_WARN("load system variables failed", K(ret));
       } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
         OB_LOG(WARN, "failed to update database variables", K(ret));
       } else if (OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
@@ -350,6 +356,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
         OB_LOG(WARN, "failed to get database id", K(ret));
       } else {
         session->set_database_id(db_id);
+        session->reset_user_var();
       }
     }
   }

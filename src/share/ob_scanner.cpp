@@ -48,7 +48,7 @@ ObScanner::ObScanner(const char *label /*= ObModIds::OB_NEW_SCANNER*/,
                        tenant_id),
       is_result_accurate_(true),
       implicit_cursors_(inner_allocator_),
-      datum_store_(),
+      datum_store_(label),
       rcode_(),
       fb_info_()
 {
@@ -78,7 +78,7 @@ ObScanner::ObScanner(ObIAllocator &allocator,
                        tenant_id),
       is_result_accurate_(true),
       implicit_cursors_(allocator),
-      datum_store_(&allocator),
+      datum_store_(label, &allocator),
       rcode_(),
       fb_info_()
 {

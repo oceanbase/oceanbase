@@ -9847,8 +9847,8 @@ int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<
         if (OB_ISNULL(exec_param)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("exec param is null", K(ret));
-        } else {
-          exec_param->clear_flag(BE_USED);
+        } else if (OB_FAIL(exec_param->clear_flag(BE_USED))) {
+          LOG_WARN("failed to clear flag", K(ret));
         }
       }
     }

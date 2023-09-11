@@ -420,7 +420,8 @@ int ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
     const int64_t old_transfer_seq,
     const ObLSID &old_ls_id,
     const int64_t new_transfer_seq,
-    const ObLSID &new_ls_id)
+    const ObLSID &new_ls_id,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -431,10 +432,11 @@ int ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
       || !tablet_id.is_valid()
       || !old_ls_id.is_valid()
       || !new_ls_id.is_valid()
-      || old_ls_id ==  new_ls_id)) {
+      || old_ls_id ==  new_ls_id
+      || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id),
-        K(tablet_id), K(old_transfer_seq), K(new_transfer_seq), K(old_ls_id), K(new_ls_id));
+        K(tablet_id), K(old_transfer_seq), K(new_transfer_seq), K(old_ls_id), K(new_ls_id), K(group_id));
   } else if (OB_FAIL(sql.append_fmt(
       "UPDATE %s SET transfer_seq = %ld, ls_id = %ld "
       "WHERE tablet_id = %lu AND transfer_seq = %ld AND ls_id = %ld",
@@ -448,7 +450,7 @@ int ObTabletToLSTableOperator::update_ls_id_and_transfer_seq(
         K(tablet_id), K(old_ls_id), K(new_ls_id), K(old_transfer_seq), K(new_transfer_seq));
   } else {
     int64_t affected_rows = 0;
-    if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+    if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), group_id, affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(sql), K(tenant_id));
     } else if (0 == affected_rows) {
       ret = OB_ENTRY_NOT_EXIST;

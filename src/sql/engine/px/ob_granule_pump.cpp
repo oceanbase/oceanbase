@@ -752,7 +752,8 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                                             taskset_ranges,
                                                             taskset_idxs);
     } else {
-      ret = ObGranuleUtil::split_block_ranges(args.ctx_->get_allocator(),
+      ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
+                                              args.ctx_->get_allocator(),
                                               tsc,
                                               ranges,
                                               tablets,
@@ -1321,7 +1322,8 @@ int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args
     LOG_WARN("failed to make whole range", K(ret));
   } else if (OB_FAIL(ranges.push_back(each_partition_range))) {
     LOG_WARN("failed to push partition range to ranges", K(ret));
-  } else if (OB_FAIL(ObGranuleUtil::split_block_ranges(args.ctx_->get_allocator(),
+  } else if (OB_FAIL(ObGranuleUtil::split_block_ranges(*args.ctx_,
+                                                       args.ctx_->get_allocator(),
                                                        NULL,
                                                        ranges,
                                                        tablets,

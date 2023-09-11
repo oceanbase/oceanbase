@@ -120,7 +120,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           if (lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "create user with hostname");
-            LOG_WARN("create user shoud not use hostname in oracle mode", K(ret));
+            LOG_WARN("create user should not use hostname in oracle mode", K(ret));
           }
           ObString password;
           ObString need_enc_str = ObString::make_string("NO");
@@ -169,7 +169,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           }
           create_user_stmt->set_profile_id(profile_id);  //只有oracle模式profile id是有效的
           if (OB_SUCC(ret)) {
-            if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
+            if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
               LOG_WARN("password don't satisfied current policy", K(ret));
             } else if (lib::is_oracle_mode() && OB_FAIL(check_oracle_password_strength(
               params_.session_info_->get_effective_tenant_id(),

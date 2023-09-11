@@ -45,7 +45,7 @@ enum ObReplicaStatus
 
 const char *ob_replica_status_str(const ObReplicaStatus status);
 int get_replica_status(const char* str, ObReplicaStatus &status);
-int get_replica_status(const ObString &status_str, ObReplicaStatus &status);
+int get_replica_status(const common::ObString &status_str, ObReplicaStatus &status);
 
 // [class_full_name] SimpleMember
 // [class_functions] Use this class to build a member_list consists of this simple SimpleMember
@@ -83,6 +83,24 @@ class ObLSReplica
 public:
   static const int64_t DEFAULT_REPLICA_COUNT = 7;
   typedef common::ObSEArray<SimpleMember, DEFAULT_REPLICA_COUNT, ObNullAllocator> MemberList;
+  /*---------------------- MemberList related functions begin -----------------------*/
+  // format-related functions
+  static int member_list2text(const MemberList &member_list, ObSqlString &text);
+  static int text2learner_list(const char *text, GlobalLearnerList &learner_list);
+  static int text2member_list(const char *text, MemberList &member_list);
+  // transform ObMemberList into MemberList
+  static int transform_ob_member_list(
+      const common::ObMemberList &ob_member_list,
+      MemberList &member_list);
+  static bool member_list_is_equal(const MemberList &a, const MemberList &b);
+  static bool server_is_in_member_list(
+      const MemberList &member_list,
+      const common::ObAddr &server);
+  static bool servers_in_member_list_are_same(const MemberList &a, const MemberList &b);
+  static int check_all_servers_in_member_list_are_active(
+      const MemberList &member_list,
+      bool &all_acitve);
+  /*---------------------- MemberList related functions end -------------------------*/
 
   // initial-related functions
   ObLSReplica();
@@ -118,19 +136,6 @@ public:
                                                 || common::REPLICA_TYPE_FULL == replica_type_
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
   inline bool is_in_restore() const { return !restore_status_.is_restore_none(); }
-  // format-related functions
-  static int member_list2text(const MemberList &member_list, ObSqlString &text);
-  static int text2learner_list(const char *text, GlobalLearnerList &learner_list);
-  static int text2member_list(const char *text, MemberList &member_list);
-  // transform ObMemberList into MemberList
-  static int transform_ob_member_list(
-      const common::ObMemberList &ob_member_list,
-      MemberList &member_list);
-  static bool member_list_is_equal(const MemberList &a, const MemberList &b);
-  static bool server_is_in_member_list(
-      const MemberList &member_list,
-      const common::ObAddr &server);
-  static bool servers_in_member_list_are_same(const MemberList &a, const MemberList &b);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   // operator-related functions
   int assign(const ObLSReplica &other);

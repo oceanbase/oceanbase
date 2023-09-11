@@ -410,7 +410,6 @@ int ObTableApiModifyExecutor::check_whether_row_change(const ObChunkDatumStore::
 }
 
 int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
-                                               const ObRowkey &constraint_rowkey,
                                                const ObTableUpdCtDef &upd_ctdef)
 {
   int ret = OB_SUCCESS;
@@ -430,37 +429,35 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
     }
 
     // 2. refresh assign column expr datum
-    const ObTableCtx::ObAssignIds &assign_ids = tb_ctx_.get_assign_ids();
-    const int64_t N = assign_ids.count();
-    for (uint64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      uint64_t assign_id = assign_ids.at(i).idx_;
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(assign_id))) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get column schema", K(ret), K(assign_id), K(*table_schema));
-      } else if (assign_id >= store_row.cnt_) {
-        ret = OB_ERROR_OUT_OF_RANGE;
-        LOG_WARN("assign idx out of range", K(ret), K(assign_id), K(store_row.cnt_));
-      } else if (assign_id >= new_row.count()) {
-        ret = OB_ERROR_OUT_OF_RANGE;
-        LOG_WARN("assign idx out of range", K(ret), K(assign_id), K(new_row.count()));
-      } else if (col_schema->is_virtual_generated_column()) {
+    const ObIArray<ObTableAssignment> &assigns = tb_ctx_.get_assignments();
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
+      const ObTableAssignment &assign = assigns.at(i);
+      if (OB_ISNULL(assign.column_item_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not have virtual generated expr", K(ret));
-      } else if (col_schema->is_stored_generated_column()) {
-        ObTableCtx &ctx = const_cast<ObTableCtx &>(tb_ctx_);
-        if (OB_FAIL(ObTableExprCgService::refresh_generated_column_related_frame(ctx,
-                                                                                 upd_ctdef.old_row_,
-                                                                                 upd_ctdef.full_assign_row_,
-                                                                                 assign_ids,
-                                                                                 *col_schema))) {
-          LOG_WARN("fail to refresh generated column related frame", K(ret), K(ctx), K(*col_schema));
-        }
+        LOG_WARN("assign column item is null", K(ret), K(assign));
+      } else if (new_row.count() < assign.column_item_->col_idx_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
+      } else if (assign.column_item_->is_virtual_generated_column_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
       } else {
-        const ObExpr *expr = new_row.at(assign_id);
-        expr->locate_expr_datum(eval_ctx_) = store_row.cells()[assign_id];
-        expr->get_eval_info(eval_ctx_).evaluated_ = true;
-        expr->get_eval_info(eval_ctx_).projected_ = true;
+        ObExpr *expr = new_row.at(assign.column_item_->col_idx_);
+        if (OB_ISNULL(expr)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("expr is null", K(ret));
+        } else if (assign.column_item_->is_stored_generated_column_) {
+          // do nothing, stored generated column not need to fill
+        } else if (assign.column_item_->auto_filled_timestamp_ && !assign.is_assigned_) {
+          ObDatum *tmp_datum = nullptr;
+          if (OB_FAIL(expr->eval(eval_ctx_, tmp_datum))) {
+            LOG_WARN("fail to eval current timestamp expr", K(ret));
+          }
+        } else {
+          expr->locate_expr_datum(eval_ctx_) = store_row.cells()[assign.column_item_->col_idx_];
+          expr->get_eval_info(eval_ctx_).evaluated_ = true;
+          expr->get_eval_info(eval_ctx_).projected_ = true;
+          }
       }
     }
   }

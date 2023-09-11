@@ -28,7 +28,11 @@ class ObPredicateDeduce {
   };
 
 public:
-  ObPredicateDeduce(ObDMLStmt &stmt) : stmt_(stmt) {}
+  ObPredicateDeduce(ObDMLStmt &stmt) : stmt_(stmt) {
+    graph_.set_attr(ObMemAttr(MTL_ID(), "Graph"));
+    type_safety_.set_attr(ObMemAttr(MTL_ID(), "TypeSafety"));
+    topo_order_.set_attr(ObMemAttr(MTL_ID(), "TopoOrder"));
+  }
 
   int add_predicate(ObRawExpr *pred, bool &is_added);
 

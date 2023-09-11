@@ -17,6 +17,15 @@
 namespace oceanbase {
 namespace common {
 
+bool ObWkbToS2Visitor::prepare(ObGeometry *geo)
+{
+  bool bret = true;
+  if (OB_ISNULL(geo)) {
+    bret = false;
+  }
+  return bret;
+}
+
 void ObWkbToS2Visitor::add_cell_from_point(S2Point point)
 {
   S2CellId cell_id = S2CellId(point).parent(options_.max_level());
@@ -33,8 +42,8 @@ template<typename T_IBIN>
 S2Cell* ObWkbToS2Visitor::MakeS2Point(T_IBIN *geo)
 {
   S2LatLng latlng = S2LatLng::FromDegrees(geo->y(), geo->x());
-  mbr_.AddPoint(latlng);
   add_cell_from_point(latlng);
+  mbr_ = mbr_.is_empty() ? S2LatLngRect(latlng, latlng) : mbr_.Union(S2LatLngRect(latlng, latlng));
   S2Cell* p = new S2Cell(latlng);
   return p;
 }
@@ -105,7 +114,6 @@ S2Polyline* ObWkbToS2Visitor::MakeS2Polyline(T_IBIN *geo)
   for ( ; iter != line->end(); iter++) {
     S2LatLng latlng = S2LatLng::FromDegrees(iter->template get<1>(),
                                             iter->template get<0>());
-    mbr_.AddPoint(latlng);
     add_cell_from_point(latlng);
     vertices.push_back(latlng);
   }
@@ -142,7 +150,6 @@ S2Polygon* ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo)
     typename T_BIN_RING::iterator iter = exterior.begin();
     for (; iter != exterior.end(); ++iter) {
       S2LatLng latlng = S2LatLng::FromDegrees(iter->template get<1>(), iter->template get<0>());
-      mbr_.AddPoint(latlng);
       add_cell_from_point(latlng);
       vertices.push_back(S2Point(latlng));
     }
@@ -157,7 +164,6 @@ S2Polygon* ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo)
     typename T_BIN_RING::iterator iter = (*iterInnerRing).begin();
     for (; iter != (*iterInnerRing).end(); ++iter) {
       S2LatLng latlng = S2LatLng::FromDegrees(iter->template get<1>(), iter->template get<0>());
-      mbr_.AddPoint(latlng);
       add_cell_from_point(latlng);
       vertices.push_back(S2Point(latlng));
     }
@@ -213,7 +219,12 @@ S2Polygon* ObWkbToS2Visitor::MakeProjS2Polygon(T_IBIN *geo)
 int ObWkbToS2Visitor::visit(ObIWkbGeogPoint *geo)
 {
   INIT_SUCC(ret);
-  s2v_.emplace_back(MakeS2Point<ObIWkbGeogPoint>(geo));
+  if (geo->length() < (WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE)) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid swkb length", K(ret), K(geo->length()));
+  } else {
+    s2v_.emplace_back(MakeS2Point<ObIWkbGeogPoint>(geo));
+  }
   return ret;
 }
 
@@ -229,7 +240,14 @@ int ObWkbToS2Visitor::visit(ObIWkbGeomPoint *geo)
 int ObWkbToS2Visitor::visit(ObIWkbGeogLineString *geo)
 {
   INIT_SUCC(ret);
-  s2v_.emplace_back(MakeS2Polyline<ObIWkbGeogLineString, ObWkbGeogLineString>(geo));
+  if (geo->length() < WKB_COMMON_WKB_HEADER_LEN) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid swkb length", K(ret), K(geo->length()));
+  } else {
+    S2Polyline *polyline = MakeS2Polyline<ObIWkbGeogLineString, ObWkbGeogLineString>(geo);
+    s2v_.emplace_back(polyline);
+    mbr_ = mbr_.is_empty() ? polyline->GetRectBound() : mbr_.Union(polyline->GetRectBound());
+  }
   return ret;
 }
 
@@ -249,8 +267,10 @@ int ObWkbToS2Visitor::visit(ObIWkbGeogPolygon *geo)
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("invalid swkb length", K(ret), K(geo->length()));
   } else {
-    s2v_.emplace_back(MakeS2Polygon<ObIWkbGeogPolygon, ObWkbGeogPolygon,
-                                    ObWkbGeogLinearRing, ObWkbGeogPolygonInnerRings>(geo));
+    S2Polygon *polygon = MakeS2Polygon<ObIWkbGeogPolygon, ObWkbGeogPolygon,
+                                    ObWkbGeogLinearRing, ObWkbGeogPolygonInnerRings>(geo);
+    s2v_.emplace_back(polygon);
+    mbr_ = mbr_.is_empty() ? polygon->GetRectBound() : mbr_.Union(polygon->GetRectBound());
   }
 
   return ret;
@@ -350,7 +370,8 @@ int64_t ObWkbToS2Visitor::get_mbr(S2LatLngRect &mbr, bool need_buffer, S1Angle d
     if (need_buffer) {
       mbr_ = mbr_.ExpandedByDistance(distance);
     }
-    mbr = mbr_;
+    // avoid rounding errors in mbr_ calculation
+    mbr = mbr_.ExpandedByDistance(S1Angle::Degrees(DBL_EPSILON));
   }
   return ret;
 }

@@ -2124,7 +2124,7 @@ int ObTabletRestoreTask::process()
     LOG_WARN("failed to record server event", K(tmp_ret));
   }
 #ifdef ERRSIM
-  if (OB_SUCC(ret) && !tablet_restore_ctx_->is_leader_
+  if (OB_SUCC(ret) && tablet_restore_ctx_->is_leader_
       && ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)
       && tablet_restore_ctx_->ls_id_.is_user_ls()) {
     SERVER_EVENT_SYNC_ADD("storage_ha", "follower_restore_major_errsim", "tablet_id", tablet_restore_ctx_->tablet_id_.id());

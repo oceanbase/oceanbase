@@ -568,8 +568,8 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         } else {
           int64_t refresh_time = ObTimeUtility::current_time();
-          if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(ctx,
-              tenant_id, res.schema_version_, GCONF._wait_interval_after_truncate))) {
+          if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+              ctx, tenant_id, res.schema_version_))) {
             LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();
@@ -2208,8 +2208,8 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
           } else if (!res.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("truncate invalid ddl_res", KR(ret), K(res));
-          } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(ctx,
-                     tenant_id, res.task_id_, GCONF._wait_interval_after_truncate))) {
+          } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+                     ctx, tenant_id, res.task_id_))) {
             LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();

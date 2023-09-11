@@ -614,6 +614,9 @@ int ObTransformWinMagic::get_view_to_trans(ObDMLStmt *&stmt,
               LOG_WARN("check view table basic failed", K(ret));
             } else if (!is_valid) {
               //do nothing
+            } else if (drill_down_view->get_from_item_size() != roll_up_view->get_from_item_size()
+                      || drill_down_view->get_table_size() != roll_up_view->get_table_size()) {
+              is_valid = false;
             } else if (OB_FAIL(ObStmtComparer::compute_stmt_overlap(drill_down_view,
                                                                     roll_up_view, 
                                                                     map_info))) {
@@ -857,6 +860,15 @@ int ObTransformWinMagic::check_view_and_view(ObDMLStmt *main_stmt,
   } else if (OB_FAIL(check_outer_stmt_conditions(main_stmt, roll_group_exprs, drill_group_exprs, 
                                                  reverse_map, is_valid))) {
     LOG_WARN("check outer stmt condition failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && map_info.from_map_.count() != roll_up_view->get_from_item_size()) {
+    is_valid = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < map_info.from_map_.count(); i++) {
+    if (map_info.from_map_.at(i) == OB_INVALID_ID) {
+      is_valid = false;
+    }
   }
 
   //check if cnt agg

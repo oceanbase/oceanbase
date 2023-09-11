@@ -35,6 +35,7 @@ ObTableQueryAndMutateP::ObTableQueryAndMutateP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      tb_ctx_(allocator_),
+     default_entity_factory_("QueryAndMutateEntFac", MTL_ID()),
      end_in_advance_(false)
 {
 }
@@ -954,19 +955,19 @@ int ObTableQueryAndMutateP::try_process()
   int64_t affected_rows = 0;
   const bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
   ObHTableLockHandle *lock_handle = nullptr;
-  uint64_t table_id = OB_INVALID_ID;
 
   if (OB_FAIL(init_scan_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init scan table ctx", K(ret));
-  } else if (FALSE_IT(table_id = tb_ctx_.get_ref_table_id())) {
+  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
+  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else if (is_hkv && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(lock_handle))) {
     LOG_WARN("fail to get htable lock handle", K(ret));
-  } else if (is_hkv && OB_FAIL(ObHTableUtils::lock_htable_row(table_id, query, *lock_handle, ObHTableLockMode::EXCLUSIVE))) {
-    LOG_WARN("fail to lock htable row", K(ret), K(table_id), K(query));
+  } else if (is_hkv && OB_FAIL(ObHTableUtils::lock_htable_row(table_id_, query, *lock_handle, ObHTableLockMode::EXCLUSIVE))) {
+    LOG_WARN("fail to lock htable row", K(ret), K_(table_id), K(query));
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_UPDATE,
                                  consistency_level,
-                                 table_id,
+                                 table_id_,
                                  tb_ctx_.get_ls_id(),
                                  get_timeout_ts()))) {
     LOG_WARN("fail to start readonly transaction", K(ret));
