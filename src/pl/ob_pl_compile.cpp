@@ -557,6 +557,10 @@ int ObPLCompiler::check_package_body_legal(const ObPLBlockNS *parent_ns,
                      spec_routine_info->get_name().length(), spec_routine_info->get_name().ptr());
       LOG_WARN("PLS-00323: subprogram or cursor is declared in a package specification and must be defined in the package body",
                K(ret), K(i), K(spec_routine_info->get_decl_str()));
+      ObPL::insert_error_msg(ret);
+      ObPLResolver::record_error_line(session_info_,
+                                      spec_routine_info->get_line_number(),
+                                      spec_routine_info->get_col_number());
     }
   }
   CK (OB_NOT_NULL(parent_ns->get_cursor_table()));
