@@ -4563,7 +4563,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
   const char *table_name = NULL;
   int64_t start_time = ObTimeUtility::current_time();
-  int64_t inc_cnt = 0; // for reserved mem only
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", K(ret));
@@ -4575,7 +4574,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
     } else if (!is_increase_schema) {
       const char *tname = OB_ALL_TABLE_HISTORY_TNAME;
-      if (OB_FAIL(set_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, ctx, inc_cnt))) {
+      if (OB_FAIL(set_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, ctx))) {
         LOG_WARN("fail to set refresh full schema timeout ctx", KR(ret), K(tenant_id), "tname", tname);
       } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_FULL_SCHEMA,
                                  table_name, table_name,
@@ -4595,8 +4594,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         LOG_WARN("append failed", K(ret));
       } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(table, schema_keys, schema_key_size, sql))) {
         LOG_WARN("sql append table id failed", K(ret));
-      } else {
-        inc_cnt = schema_key_size;
       }
     }
     if (OB_SUCC(ret)) {
@@ -4610,8 +4607,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get result. ", K(ret));
-        } else if (OB_FAIL(schema_array.reserve(orig_cnt + inc_cnt))) {
-          LOG_WARN("fail to reserved schem array", KR(ret), K(orig_cnt), K(inc_cnt));
         } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(
                    tenant_id, check_deleted, *result, allocator, schema_array))) {
           LOG_WARN("failed to retrieve table schema", K(ret));
@@ -4626,11 +4621,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   if (OB_SUCC(ret)) {
     ObArray<uint64_t> table_ids;
     ObArray<ObSimpleTableSchemaV2 *> tables;
-    if (OB_FAIL(table_ids.reserve(inc_cnt))) {
-      LOG_WARN("fail to reserved array", KR(ret), K(inc_cnt));
-    } else if (OB_FAIL(tables.reserve(inc_cnt))) {
-      LOG_WARN("fail to reserved array", KR(ret), K(inc_cnt));
-    }
     for (int64_t i = orig_cnt; OB_SUCC(ret) && i < schema_array.count(); ++i) {
       uint64_t table_id = OB_INVALID_ID;
       ObSimpleTableSchemaV2 *table = schema_array.at(i);
@@ -9078,18 +9068,17 @@ int ObSchemaServiceSQLImpl::set_refresh_full_schema_timeout_ctx_(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const char* tname,
-    ObTimeoutCtx &ctx,
-    int64_t &table_cnt)
+    ObTimeoutCtx &ctx)
 {
   int ret = OB_SUCCESS;
   int64_t timeout = 0;
-  table_cnt = 0;
+  int64_t row_cnt = 0;
   if (OB_UNLIKELY(
       OB_INVALID_TENANT_ID == tenant_id
       || OB_ISNULL(tname))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id or tname is empty", KR(ret), K(tenant_id), KP(tname));
-  } else if (OB_FAIL(calc_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, timeout, table_cnt))) {
+  } else if (OB_FAIL(calc_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, timeout, row_cnt))) {
     LOG_WARN("fail to calc refresh full schema timeout", KR(ret), K(tenant_id), "tname", tname);
   } else {
     const int64_t ori_ctx_timeout = ctx.get_timeout();
@@ -9104,7 +9093,7 @@ int ObSchemaServiceSQLImpl::set_refresh_full_schema_timeout_ctx_(
               K(ori_worker_timeout),
               "calc_timeout", timeout,
               "actual_timeout", ctx.get_timeout(),
-              K(table_cnt));
+              K(row_cnt));
   }
   return ret;
 }
@@ -9170,12 +9159,12 @@ int ObSchemaServiceSQLImpl::calc_refresh_full_schema_timeout_ctx_(
     const uint64_t tenant_id,
     const char* tname,
     int64_t &timeout,
-    int64_t &table_cnt)
+    int64_t &row_cnt)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
   timeout = 0;
-  table_cnt = 0;
+  row_cnt = 0;
   int64_t start_time = ObTimeUtility::current_time();
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
@@ -9199,17 +9188,15 @@ int ObSchemaServiceSQLImpl::calc_refresh_full_schema_timeout_ctx_(
     } else if (OB_FAIL(result->next())) {
       LOG_WARN("fail to get next row", KR(ret));
     } else {
-      int64_t row_cnt = 0;
       EXTRACT_INT_FIELD_MYSQL(*result, "count", row_cnt, int64_t);
       if (OB_SUCC(ret)) {
         // each 100w history may cost almost 400s (almost each 7w history may cost `internal_sql_execute_timeout`)
         // for more details: ob/qa/gqk9w2
-        table_cnt = row_cnt;
-        timeout = ((table_cnt / (70 * 1000L)) + 1) * GCONF.internal_sql_execute_timeout;
+        timeout = ((row_cnt / (70 * 1000L)) + 1) * GCONF.internal_sql_execute_timeout;
         FLOG_INFO("[REFRESH_SCHEMA] calc refresh schema timeout",
                    KR(ret), K(tenant_id),
                    "tname", tname,
-                   K(table_cnt), K(timeout),
+                   K(row_cnt), K(timeout),
                    "cost", ObTimeUtility::current_time() - start_time);
       }
     }
