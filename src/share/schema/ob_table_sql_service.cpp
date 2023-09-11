@@ -1520,7 +1520,8 @@ int ObTableSqlService::delete_constraint(common::ObISQLClient &sql_client,
         LOG_WARN("assign insert into __all_constraint_history fail",
             K(ret), K(tenant_id), K((*cst_iter)->get_table_id()), K((*cst_iter)->get_constraint_id()), K(new_schema_version));
       } else if (OB_FAIL(constraint_sql.assign_fmt(
-            "DELETE FROM %s WHERE (tenant_id = %lu AND table_id = %lu AND constraint_id = %lu)",
+            "DELETE FROM %s WHERE (tenant_id, table_id, constraint_id)"
+            " IN ((%lu, %lu, %lu)",
             OB_ALL_CONSTRAINT_TNAME,
             ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
             ObSchemaUtils::get_extract_schema_id(exec_tenant_id, (*cst_iter)->get_table_id()),
@@ -1536,7 +1537,7 @@ int ObTableSqlService::delete_constraint(common::ObISQLClient &sql_client,
         LOG_WARN("assign insert into __all_constraint_history fail", K(ret), K(tenant_id),
                  K((*cst_iter)->get_table_id()), K((*cst_iter)->get_constraint_id()), K(new_schema_version));
       } else if (OB_FAIL(constraint_sql.append_fmt(
-          " OR (tenant_id = %lu AND table_id = %lu AND constraint_id = %lu)",
+          ", (%lu, %lu, %lu)",
           ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, (*cst_iter)->get_table_id()),
           (*cst_iter)->get_constraint_id()))) {
@@ -1560,8 +1561,8 @@ int ObTableSqlService::delete_constraint(common::ObISQLClient &sql_client,
                      K(ret), K(tenant_id), K((*cst_iter)->get_table_id()), K((*cst_iter)->get_constraint_id()),
                      K(*cst_col_iter), K(new_schema_version), K(constraint_column_history_sql));
           } else if (OB_FAIL(constraint_column_sql.assign_fmt(
-              "DELETE FROM %s WHERE "
-              "(tenant_id = %lu AND table_id = %lu AND constraint_id = %lu AND column_id = %lu)",
+              "DELETE FROM %s WHERE (tenant_id, table_id, constraint_id, column_id)"
+              " IN ((%lu, %lu, %lu, %lu)",
               OB_ALL_TENANT_CONSTRAINT_COLUMN_TNAME,
               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
               ObSchemaUtils::get_extract_schema_id(exec_tenant_id, (*cst_iter)->get_table_id()),
@@ -1579,7 +1580,7 @@ int ObTableSqlService::delete_constraint(common::ObISQLClient &sql_client,
                      K(ret), K(tenant_id), K((*cst_iter)->get_table_id()), K((*cst_iter)->get_constraint_id()),
                      K(*cst_col_iter), K(new_schema_version), K(constraint_column_history_sql));
           } else if (OB_FAIL(constraint_column_sql.append_fmt(
-              " OR (tenant_id = %lu AND table_id = %lu AND constraint_id = %lu AND column_id = %lu)",
+              ", (%lu, %lu, %lu, %lu)",
               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
               ObSchemaUtils::get_extract_schema_id(exec_tenant_id, (*cst_iter)->get_table_id()),
               (*cst_iter)->get_constraint_id(),
@@ -1589,6 +1590,10 @@ int ObTableSqlService::delete_constraint(common::ObISQLClient &sql_client,
         }
       }
     }
+  }
+  if ((!constraint_sql.empty() && OB_FAIL(constraint_sql.append_fmt(")")))
+      || (!constraint_column_sql.empty() && OB_FAIL(constraint_column_sql.append_fmt(")")))) {
+    LOG_WARN("assign_fmt assign ) to end failed");
   }
   // execute constraint_sql and constraint_history_sql
   if (OB_SUCC(ret)) {
