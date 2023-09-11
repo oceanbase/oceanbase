@@ -335,7 +335,7 @@ int ObTableApiExecuteP::response(const int retcode)
 
     // return the package even if negate_htable_timestamp fails
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
-    if (is_require_rerouting_err(retcode) && rpc_pkt->require_rerouting()) {
+    if (ObTableRpcProcessorUtil::need_do_move_response(retcode, *rpc_pkt)) {
       // response rerouting packet
       ObTableMoveResponseSender sender(req_, retcode);
       if (OB_FAIL(sender.init(arg_.table_id_, arg_.tablet_id_, *gctx_.schema_service_))) {

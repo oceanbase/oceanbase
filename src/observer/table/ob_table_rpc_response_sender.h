@@ -217,7 +217,8 @@ int ObTableRpcResponseSender<T>::response(const int cb_param)
     } else {
       // 1. send result if process successfully.
       // 2. send result if require rerouting
-      if (common::OB_SUCCESS == retcode || observer::is_require_rerouting_err(retcode)) {
+      if (common::OB_SUCCESS == retcode
+          || observer::ObTableRpcProcessorUtil::is_require_rerouting_err(retcode)) {
         if (OB_FAIL(serialize())) {
           RPC_OBRPC_LOG(WARN, "serialize result fail", K(ret));
         }
@@ -228,7 +229,8 @@ int ObTableRpcResponseSender<T>::response(const int cb_param)
     // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
     bool require_rerouting = false;
     if (OB_SUCC(ret)) {
-      if (common::OB_SUCCESS != retcode && observer::is_require_rerouting_err(retcode)) {
+      if (common::OB_SUCCESS != retcode
+          && observer::ObTableRpcProcessorUtil::is_require_rerouting_err(retcode)) {
         require_rerouting = true;
         RPC_OBRPC_LOG(INFO, "require rerouting", K(retcode), K(require_rerouting));
       }

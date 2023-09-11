@@ -15,6 +15,8 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "share/table/ob_table.h"
 #include "sql/monitor/ob_exec_stat.h"
+#include "share/table/ob_table_config_util.h"
+
 namespace oceanbase
 {
 namespace observer
@@ -73,6 +75,27 @@ audit_record.sql_len_ = sizeof(op_type##_name)
 class ObTableRpcProcessorUtil
 {
 public:
+  OB_INLINE static bool is_require_rerouting_err(const int err)
+  {
+    // rerouting: whether client should refresh location cache and retry
+    // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
+    return is_master_changed_error(err)
+      || is_server_down_error(err)
+      || is_partition_change_error(err)
+      || is_server_status_error(err)
+      || is_unit_migrate(err)
+      || is_transaction_rpc_timeout_err(err)
+      || is_has_no_readable_replica_err(err)
+      || is_select_dup_follow_replic_err(err)
+      || is_trans_stmt_need_retry_error(err);
+  }
+
+  OB_INLINE static bool need_do_move_response(const int err, const obrpc::ObRpcPacket &rpc_pkt)
+  {
+    return is_require_rerouting_err(err)
+      && ObKVFeatureModeUitl::is_rerouting_enable()
+      && rpc_pkt.require_rerouting();
+  }
 
   OB_INLINE static void record_stat(
       sql::ObAuditRecordData &audit_record,
@@ -275,8 +298,6 @@ private:
   ObTableRpcProcessorUtil() = delete;
   ~ObTableRpcProcessorUtil() = delete;
 };
-
-bool is_require_rerouting_err(const int err);
 
 } // end namespace observer
 } // end namespace oceanbase

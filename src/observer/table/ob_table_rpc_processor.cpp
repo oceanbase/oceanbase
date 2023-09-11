@@ -30,7 +30,6 @@
 #include "ob_table_session_pool.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_table_move_response.h"
-#include "share/table/ob_table_config_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -93,7 +92,7 @@ int ObTableLoginP::process()
     }
   }
   // whether the client should refresh location cache
-  if (OB_SUCCESS != ret && is_require_rerouting_err(ret)) {
+  if (OB_SUCCESS != ret && ObTableRpcProcessorUtil::is_require_rerouting_err(ret)) {
     ObRpcProcessor::require_rerouting_ = true;
     LOG_WARN("[TABLE] login require rerouting", K(ret), "require_rerouting", ObRpcProcessor::require_rerouting_);
   }
@@ -892,7 +891,7 @@ int ObTableRpcProcessor<T>::process()
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_);
     }
     // whether the client should refresh location cache and retry
-    if (is_require_rerouting_err(ret)) {
+    if (ObTableRpcProcessorUtil::is_require_rerouting_err(ret)) {
       ObRpcProcessor<T>::require_rerouting_ = true;
       LOG_WARN("table_api request require rerouting", K(ret), "require_rerouting", ObRpcProcessor<T>::require_rerouting_);
     }
@@ -922,7 +921,7 @@ int ObTableRpcProcessor<T>::response(int error_code)
   // if it is waiting for retry in queue, the response can NOT be sent.
   if (!need_retry_in_queue_ && !had_do_response()) {
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(this->req_->get_packet());
-    if (is_require_rerouting_err(error_code) && rpc_pkt->require_rerouting()) {
+    if (ObTableRpcProcessorUtil::need_do_move_response(error_code, *rpc_pkt)) {
       // response rerouting packet
       ObTableMoveResponseSender sender(this->req_, error_code);
       if (OB_FAIL(sender.init(ObTableApiProcessorBase::table_id_, ObTableApiProcessorBase::tablet_id_, *gctx_.schema_service_))) {
@@ -997,20 +996,4 @@ void ObTableRpcProcessor<T>::generate_sql_id()
   checksum = ob_crc64(checksum, &credential_.database_id_, sizeof(credential_.database_id_));
   snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
      "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
-}
-bool oceanbase::observer::is_require_rerouting_err(const int err)
-{
-  // rerouting: whether client should refresh location cache and retry
-  // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
-  bool is_err = is_master_changed_error(err)
-                || is_server_down_error(err)
-                || is_partition_change_error(err)
-                || is_server_status_error(err)
-                || is_unit_migrate(err)
-                || is_transaction_rpc_timeout_err(err)
-                || is_has_no_readable_replica_err(err)
-                || is_select_dup_follow_replic_err(err)
-                || is_trans_stmt_need_retry_error(err);
-
-  return is_err && ObKVFeatureModeUitl::is_rerouting_enable();
 }
