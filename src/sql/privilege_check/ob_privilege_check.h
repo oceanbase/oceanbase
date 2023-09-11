@@ -74,23 +74,21 @@ public:
                                                   const uint64_t user_id,
                                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                                   sql::ObSQLSessionInfo &session);
-
-private:
-
-   ///Get all privilege info needed by a stmt, including sub-queries.
-   ///called by generate_physical_plan
-   ///@param ctx[in]               sql ctx
-   ///@param basic_stmt[in]        the stmt
-   ///@param stmt_need_priv[out]   priv info needed by stmt
-  static int get_stmt_need_privs(const ObSqlCtx &ctx,
+  ///Get all privilege info needed by a stmt, including sub-queries.
+  ///called by generate_physical_plan
+  ///@param session_priv[in]      session privileges
+  ///@param basic_stmt[in]        the stmt
+  ///@param stmt_need_priv[out]   priv info needed by stmt
+  static int get_stmt_need_privs(const share::schema::ObSessionPrivInfo &session_priv,
                                  const ObStmt *basic_stmt,
                                  common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
+private:
    ///Extract priv info needed by a single stmt, may be sub-query.
    ///called by recursive_stmt_need_priv
    ///@param ctx[in]               sql ctx
    ///@param basic_stmt[in]        the stmt
    ///@param stmt_need_priv[out]   priv info needed by stmt
-  static int one_level_stmt_need_priv(const ObSqlCtx &ctx,
+  static int one_level_stmt_need_priv(const share::schema::ObSessionPrivInfo &session_priv,
                                       const ObStmt *basic_stmt,
                                       common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
 

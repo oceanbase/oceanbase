@@ -1149,11 +1149,19 @@ int get_create_table_stmt_need_privs(
         LOG_WARN("fail to assign need_privs", K(ret));
       }
     } else {
+      const ObSelectStmt *select_stmt = stmt->get_sub_select();
+      if (NULL != select_stmt) {
+        need_priv.priv_set_ = OB_PRIV_CREATE | OB_PRIV_INSERT;
+      } else {
+        need_priv.priv_set_ = OB_PRIV_CREATE;
+      }
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
-      need_priv.priv_set_ = OB_PRIV_CREATE;
       need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       ADD_NEED_PRIV(need_priv);
+      if (OB_SUCC(ret) && NULL != select_stmt) {
+        OZ (ObPrivilegeCheck::get_stmt_need_privs(session_priv, select_stmt, need_privs));
+      }
     }
   }
   return ret;
@@ -2283,8 +2291,10 @@ int ObPrivilegeCheck::check_privilege_new(
       if (OB_SUCC(ret)) {
         common::ObSEArray<ObNeedPriv, 4> tmp_need_privs;
         common::ObSEArray<ObOraNeedPriv, 4> tmp_ora_need_privs;
-
-        OZ (get_stmt_need_privs(ctx, basic_stmt, tmp_need_privs));
+        ObSessionPrivInfo session_priv;
+        ctx.session_info_->get_session_priv_info(session_priv);
+        session_priv.set_effective_tenant_id(ctx.session_info_->get_effective_tenant_id());
+        OZ (get_stmt_need_privs(session_priv, basic_stmt, tmp_need_privs));
         OZ (stmt_need_privs.need_privs_.assign(tmp_need_privs));
         /* set user id=-1， means: use current user executing sql and can change
            user to be checked should be -1.
@@ -2373,7 +2383,10 @@ int ObPrivilegeCheck::check_privilege(
 
     if (OB_SUCC(ret)) {
       common::ObSEArray<ObNeedPriv, 4> tmp_need_privs;
-      if (OB_FAIL(get_stmt_need_privs(ctx, basic_stmt, tmp_need_privs))) {
+      ObSessionPrivInfo session_priv;
+      ctx.session_info_->get_session_priv_info(session_priv);
+      session_priv.set_effective_tenant_id(ctx.session_info_->get_effective_tenant_id());
+      if (OB_FAIL(get_stmt_need_privs(session_priv, basic_stmt, tmp_need_privs))) {
         LOG_WARN("Get stmt need privs error", K(ret));
       } else if (OB_FAIL(stmt_need_privs.need_privs_.assign(tmp_need_privs))) {
         LOG_WARN("fail to assign need_privs", K(ret));
@@ -2489,17 +2502,16 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
   return ret;
 }
 
-int ObPrivilegeCheck::get_stmt_need_privs(
-    const ObSqlCtx &ctx,
-    const ObStmt *basic_stmt,
-    ObIArray<ObNeedPriv> &need_privs)
+int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
+                                          const ObStmt *basic_stmt,
+                                          ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *dml_stmt = NULL;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt is NULL", K(ret));
-  } else if (OB_FAIL(one_level_stmt_need_priv(ctx, basic_stmt, need_privs))) {
+  } else if (OB_FAIL(one_level_stmt_need_priv(session_priv, basic_stmt, need_privs))) {
     LOG_WARN("Failed to get one level stmt need priv", K(ret));
   } else if (basic_stmt->is_show_stmt()
              || (stmt::T_SELECT == basic_stmt->get_stmt_type()
@@ -2517,7 +2529,7 @@ int ObPrivilegeCheck::get_stmt_need_privs(
         LOG_WARN("Sub-stmt is NULL", K(ret));
       } else if (sub_stmt->is_view_stmt() && ObStmt::is_dml_stmt(basic_stmt->get_stmt_type())) {
         //do not check privilege of view stmt
-      } else if (OB_FAIL(get_stmt_need_privs(ctx, sub_stmt, need_privs))) {
+      } else if (OB_FAIL(get_stmt_need_privs(session_priv, sub_stmt, need_privs))) {
         LOG_WARN("Failed to extract priv info of shild stmts", K(i), K(dml_stmt), K(ret));
       } else {
         //do nothing
@@ -2965,29 +2977,18 @@ int ObPrivilegeCheck::one_level_stmt_ora_need_priv(
   return ret;
 }
 
-int ObPrivilegeCheck::one_level_stmt_need_priv(
-    const ObSqlCtx &ctx,
-    const ObStmt *basic_stmt,
-    ObIArray<ObNeedPriv> &need_privs)
+int ObPrivilegeCheck::one_level_stmt_need_priv(const ObSessionPrivInfo &session_priv,
+                                               const ObStmt *basic_stmt,
+                                               ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = ctx.session_info_;
-  ObSessionPrivInfo session_priv;
-  if (OB_ISNULL(session_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Session info is invalid", K(session_info), K(ret));
-  } else if (OB_ISNULL(basic_stmt)) {
+  if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt is NULL", K(basic_stmt), K(ret));
+  } else if (OB_UNLIKELY(!session_priv.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Session priv is invalid", K(ret), K(session_priv));
   } else {
-    session_info->get_session_priv_info(session_priv);
-    session_priv.set_effective_tenant_id(session_info->get_effective_tenant_id());
-    if (OB_UNLIKELY(!session_priv.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Session priv is invalid", K(ret), K(session_priv));
-    }
-  }
-  if (OB_SUCC(ret)) {
     stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
     if (stmt_type < 0
         || stmt::get_stmt_type_idx(stmt_type) >= static_cast<int64_t>(sizeof(priv_check_funcs_) / sizeof(ObGetStmtNeedPrivsFunc))) {
