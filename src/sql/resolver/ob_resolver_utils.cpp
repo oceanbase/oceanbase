@@ -905,11 +905,16 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
   OX (match_info.routine_info_ = routine_info);
   // MatchInfo初始化
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info->get_param_count(); ++i) {
-    match_info.match_info_.push_back(ObRoutineMatchInfo::MatchInfo());
+    OZ (match_info.match_info_.push_back(ObRoutineMatchInfo::MatchInfo()));
   }
 
   int64_t offset = 0;
-  if(OB_SUCC(ret) && expr_params.count() > 0 && OB_NOT_NULL(expr_params.at(0))) {
+  if (OB_FAIL(ret)) {
+  } else if (0 == expr_params.count() && routine_info->is_udt_routine() && !routine_info->is_udt_static_routine()) {
+    // set first param matched
+    OX (match_info.match_info_.at(0) = (ObRoutineMatchInfo::MatchInfo(false, ObExtendType, ObExtendType)));
+    OX (offset = 1);
+  } else if(expr_params.count() > 0 && OB_NOT_NULL(expr_params.at(0))) {
     ObRawExpr *first_arg = expr_params.at(0);
     if (first_arg->has_flag(IS_UDT_UDF_SELF_PARAM)) {
       // do nothing, may be we can check if routine is static or not
@@ -1054,16 +1059,10 @@ int ObResolverUtils::match_vacancy_parameters(
       CK (OB_NOT_NULL(routine_param));
       if (OB_FAIL(ret)) {
       } else if (routine_param->get_default_value().empty()) {
-        if (routine_info.is_udt_routine()
-               && !routine_info.is_udt_static_routine()
-               && routine_param->is_self_param()) {
-          // do nothing
-        } else {
-          ret = OB_ERR_SP_WRONG_ARG_NUM;
-          LOG_WARN("argument count not match",
-                 K(ret),
-                 K(routine_info.get_param_count()), K(i));
-        }
+        ret = OB_ERR_SP_WRONG_ARG_NUM;
+        LOG_WARN("argument count not match",
+               K(ret),
+               K(routine_info.get_param_count()), K(i));
       } else {
         OX (match_info.match_info_.at(i) =
           ObRoutineMatchInfo::MatchInfo(routine_param->is_default_cast(),
