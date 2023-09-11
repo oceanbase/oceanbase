@@ -419,5 +419,13 @@ int ObExprRegexpReplace::eval_regexp_replace(
   return ret;
 }
 
+int ObExprRegexpReplace::is_valid_for_generated_column(const ObRawExpr*expr,
+                                                       const common::ObIArray<ObRawExpr *> &exprs,
+                                                       bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  is_valid = lib::is_mysql_mode();
+  return ret;
+}
+
 }
 }

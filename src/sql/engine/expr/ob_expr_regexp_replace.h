@@ -36,6 +36,9 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
 
   static int eval_regexp_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr,
+                                            const common::ObIArray<ObRawExpr *> &exprs,
+                                            bool &is_valid) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpReplace);
 };
