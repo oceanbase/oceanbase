@@ -45,8 +45,6 @@ int ObDDLServerClient::execute_recover_restore_table(const obrpc::ObRecoverResto
     LOG_WARN("fail to rootservice address", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).recover_restore_table_ddl(arg))) {
     LOG_WARN("fail to create not major sstable table", K(ret), K(arg));
-  } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(ddl_task_id, dst_tenant_id))) {
-    LOG_WARN("failed to set register task id", K(ret));
   }
   return ret;
 }
@@ -314,6 +312,7 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
 int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg)
 {
   int ret = OB_SUCCESS;
+  ObAddr rs_leader_addr;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -321,7 +320,9 @@ int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuild
   } else if (OB_ISNULL(common_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy is null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->build_ddl_single_replica_response(arg))) {
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
+    LOG_WARN("fail to rootservice address", K(ret));
+  } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).build_ddl_single_replica_response(arg))) {
     LOG_WARN("failed to finish redef table", K(ret), K(arg));
   }
   return ret;

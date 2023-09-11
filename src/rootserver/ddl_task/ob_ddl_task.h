@@ -548,8 +548,8 @@ public:
   int check_errsim_error();
   #endif
   VIRTUAL_TO_STRING_KV(
-      K(is_inited_), K(need_retry_), K(task_type_), K(trace_id_),
-      K(tenant_id_), K(object_id_), K(schema_version_),
+      K(is_inited_), K(need_retry_), K(is_abort_), K(task_type_), K(trace_id_),
+      K(tenant_id_), K(dst_tenant_id_), K(object_id_), K(schema_version_),
       K(target_object_id_), K(task_status_), K(snapshot_version_),
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),

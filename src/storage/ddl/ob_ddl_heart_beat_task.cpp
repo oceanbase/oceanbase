@@ -124,6 +124,7 @@ int ObDDLHeartBeatTaskContainer::send_task_status_to_rs()
     LOG_WARN("ObDDLHeartBeatTaskContainer not inited", K(ret));
   } else {
     int64_t cnt = 0;
+    ObAddr rs_leader_addr;
     ObArray<ObDDLHeartBeatTaskInfo> heart_beart_task_infos;
     while (OB_SUCC(ret) && cnt < RETRY_COUNT) {
       ObBucketTryRLockAllGuard all_reg_task_guard(bucket_lock_);
@@ -145,7 +146,9 @@ int ObDDLHeartBeatTaskContainer::send_task_status_to_rs()
         break;
       }
     }
-    if (OB_SUCC(ret)) {
+    if (FAILEDx(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
+      LOG_WARN("get rs addr failed", K(ret));
+    } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < heart_beart_task_infos.count(); i++) {
         ObDDLHeartBeatTaskInfo heart_beart_task_info;
         obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
@@ -157,8 +160,8 @@ int ObDDLHeartBeatTaskContainer::send_task_status_to_rs()
           uint64_t tenant_id = heart_beart_task_info.get_tenant_id();
           arg.task_id_ = task_id;
           arg.tenant_id_ = tenant_id;
-          if (OB_FAIL(common_rpc_proxy->update_ddl_task_active_time(arg))) {
-            LOG_WARN("send to task status fail", K(ret));
+          if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).update_ddl_task_active_time(arg))) {
+            LOG_WARN("send to task status fail", K(ret), K(rs_leader_addr), K(tenant_id), K(task_id));
           }
         }
       }
