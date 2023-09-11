@@ -24,7 +24,7 @@ namespace observer
 
 struct ObTableDirectLoadBeginArg
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObTableDirectLoadBeginArg()
     : parallel_(0),

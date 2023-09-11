@@ -273,7 +273,7 @@ public:
 
 class ObTableDirectLoadRequest
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObTableDirectLoadRequest() {}
   template <class Arg>
@@ -328,7 +328,7 @@ public:
 
 class ObTableDirectLoadResult
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObTableDirectLoadResult() : allocator_(nullptr) {}
   template <class Res>
