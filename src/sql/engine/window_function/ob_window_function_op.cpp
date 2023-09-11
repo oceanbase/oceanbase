@@ -489,7 +489,8 @@ int ObWindowFunctionOp::NonAggrCellRankLike::eval(RowsReader& row_reader, const 
     wf_info_.expr_->get_eval_info(op_.eval_ctx_).evaluated_ = true;
     if (T_WIN_FUN_PERCENT_RANK == wf_info_.func_type_) {
       // result will be zero when only one row within frame
-      if (is_mysql_mode()) {
+      if (ObDoubleType == wf_info_.expr_->datum_meta_.type_) {
+        // in mysql mode, percent rank may return double
         if (0 == frame.tail_ - frame.head_) {
           expr_datum.set_double(0);
         } else {
@@ -502,6 +503,9 @@ int ObWindowFunctionOp::NonAggrCellRankLike::eval(RowsReader& row_reader, const 
             expr_datum.set_double(numerator / denominator);
           }
         }
+      } else if (!ob_is_number_tc(wf_info_.expr_->datum_meta_.type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the result type of window function is unexpected", K(ret), K(wf_info_.expr_->datum_meta_));
       } else if (0 == frame.tail_ - frame.head_) {
         number::ObNumber res_nmb;
         res_nmb.set_zero();
@@ -592,7 +596,10 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader& row_reader, const 
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (is_oracle_mode()) {
+  } else if (OB_ISNULL(wf_info_.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(wf_info_.expr_));
+  } else if (ob_is_number_tc(wf_info_.expr_->datum_meta_.type_)) {
     // number of row[cur] >= row[:] (whether `>=` or other is depend on ORDER BY)
     number::ObNumber numerator;
     // total tuple of current window
@@ -612,7 +619,8 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader& row_reader, const 
       expr_datum.set_number(res_nmb);
       val = static_cast<ObDatum &>(expr_datum);
     }
-  } else {
+  } else if (ObDoubleType == wf_info_.expr_->datum_meta_.type_) {
+    // in mysql mode, percent rank may return double
     // number of row[cur] >= row[:] (whether `>=` or other is depend on ORDER BY)
     double numerator;
     // total tuple of current window
@@ -622,7 +630,10 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader& row_reader, const 
     ObDatum &expr_datum = wf_info_.expr_->locate_datum_for_write(op_.eval_ctx_);
     wf_info_.expr_->get_eval_info(op_.eval_ctx_).evaluated_ = true;
     expr_datum.set_double(numerator / denominator);
-    val = static_cast<ObDatum&>(expr_datum);
+    val = static_cast<ObDatum &>(expr_datum);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the result type of window function is unexpected", K(ret), K(wf_info_.expr_->datum_meta_));
   }
 
   return ret;

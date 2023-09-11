@@ -1907,7 +1907,9 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr& expr)
     if (NULL == expr.get_agg_expr()) {
       ObExprResType result_type(alloc_);
       if (T_WIN_FUN_CUME_DIST == expr.get_func_type() || T_WIN_FUN_PERCENT_RANK == expr.get_func_type()) {
-        if (is_oracle_mode()) {
+        const uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+        if (is_oracle_mode() || !((ob_version >= CLUSTER_VERSION_2277 && ob_version < CLUSTER_VERSION_3000) ||
+                                    ob_version >= CLUSTER_VERSION_312)) {
           result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObNumberType]);
           result_type.set_calc_accuracy(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][ObNumberType]);
           result_type.set_number();

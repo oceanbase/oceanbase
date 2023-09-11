@@ -61,7 +61,8 @@ public:
         is_ignore_null_(false),
         is_from_first_(false),
         win_type_(WINDOW_MAX),
-        result_index_(-1)
+        result_index_(-1),
+        result_type_(ObNullType)
   {}
 
   virtual ~FuncInfo()
@@ -94,8 +95,8 @@ public:
   }
 
   TO_STRING_KV(K_(func_type), K_(win_type), K_(is_distinct), K_(is_ignore_null), K_(upper), K_(lower), K_(result_index),
-      K_(partition_cols), K_(sort_cols));
-  ObPhysicalPlan* my_phy_plan_;
+      K_(partition_cols), K_(sort_cols), K_(result_type));
+  ObPhysicalPlan *my_phy_plan_;
   ObItemType func_type_;
   ObAggregateExpression* aggr_column_;
   bool is_distinct_;
@@ -108,6 +109,7 @@ public:
   int64_t result_index_;
   common::ObFixedArray<common::ObColumnInfo, common::ObIAllocator> partition_cols_;
   common::ObFixedArray<ObSortColumn, common::ObIAllocator> sort_cols_;
+  ObObjType result_type_;
 };
 
 class ObWindowFunction : public ObSingleChildPhyOperator {

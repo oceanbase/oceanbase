@@ -9046,6 +9046,7 @@ int ObCodeGeneratorImpl::add_window_function_info(const ColumnIndexProviderImpl&
       func_info.lower_.is_unbounded_ = BOUND_UNBOUNDED == win_expr->get_lower().type_;
       func_info.lower_.is_nmb_literal_ = win_expr->get_lower().is_nmb_literal_;
       func_info.lower_.my_phy_plan_ = phy_plan_;
+      func_info.result_type_ = win_expr->get_result_type().get_type();
       // add window function params.
       ObSqlExpression* new_sql_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < func_params.count(); ++i) {

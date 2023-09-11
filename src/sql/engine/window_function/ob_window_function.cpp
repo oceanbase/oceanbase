@@ -128,7 +128,7 @@ OB_DEF_SERIALIZE(FuncInfo)
   OB_UNIS_ENCODE(result_index_);
   OB_UNIS_ENCODE(partition_cols_);
   OB_UNIS_ENCODE(sort_cols_);
-
+  OB_UNIS_ENCODE(result_type_);
   return ret;
 }
 
@@ -168,6 +168,7 @@ OB_DEF_DESERIALIZE(FuncInfo)
   OB_UNIS_DECODE(result_index_);
   OB_UNIS_DECODE(partition_cols_);
   OB_UNIS_DECODE(sort_cols_);
+  OB_UNIS_DECODE(result_type_);
 
   return ret;
 }
@@ -191,6 +192,7 @@ OB_DEF_SERIALIZE_SIZE(FuncInfo)
   OB_UNIS_ADD_LEN(result_index_);
   OB_UNIS_ADD_LEN(partition_cols_);
   OB_UNIS_ADD_LEN(sort_cols_);
+  OB_UNIS_ADD_LEN(result_type_);
   return len;
 }
 
@@ -646,7 +648,20 @@ int ObWindowFunction::NonAggFuncRankLike::eval(
     }
     if (T_WIN_FUN_PERCENT_RANK == func_ctx_->func_info_->func_type_) {
       // result will be zero when only one row within frame
-      if (share::is_mysql_mode()) {
+      bool need_double = false;
+      if (ob_is_double_type(func_ctx_->func_info_->result_type_)) {
+        need_double = true;
+      } else if (ob_is_number_tc(func_ctx_->func_info_->result_type_)) {
+        need_double = false;
+      } else if (ObNullType == func_ctx_->func_info_->result_type_) {
+        need_double = false;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected result type", K(ret), K(func_ctx_->func_info_->result_type_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (need_double) {
+        // in mysql mode, percent rank may return double
         if (0 == frame.tail_ - frame.head_) {
           val.set_double(0);
         } else {
@@ -695,8 +710,9 @@ int ObWindowFunction::NonAggFuncCumeDist::eval(
 
   int64_t same_idx = row_idx;
   bool should_continue = true;
-  const ObNewRow& ref_row = row;
-  const ObIArray<ObSortColumn>& sort_cols = func_ctx_->func_info_->sort_cols_;
+  const ObNewRow &ref_row = row;
+  const ObIArray<ObSortColumn> &sort_cols = func_ctx_->func_info_->sort_cols_;
+  bool need_double = false;
   while (should_continue && OB_SUCC(ret) && same_idx < frame.tail_) {
     const ObNewRow* a_row = NULL;
     if (OB_FAIL(assist_reader.at(same_idx + 1, a_row))) {
@@ -716,7 +732,29 @@ int ObWindowFunction::NonAggFuncCumeDist::eval(
     }
   }
   if (OB_SUCC(ret)) {
-    ObExprCtx& expr_ctx = func_ctx_->w_ctx_->expr_ctx_;
+    if (ob_is_double_type(func_ctx_->func_info_->result_type_)) {
+      need_double = true;
+    } else if (ob_is_number_tc(func_ctx_->func_info_->result_type_)) {
+      need_double = false;
+    } else if (ObNullType == func_ctx_->func_info_->result_type_) {
+      need_double = false;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected result type", K(ret), K(func_ctx_->func_info_->result_type_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (need_double) {
+    // in mysql mode, cume_dist may return double
+    // number of row[cur] >= row[:] (whether `>=` or other is depend on ORDER BY)
+    double numerator;
+    // total tuple of current window
+    double denominator;
+    numerator = static_cast<double>(same_idx - frame.head_ + 1);
+    denominator = static_cast<double>(frame.tail_ - frame.head_ + 1);
+    val.set_double(numerator / denominator);
+  } else {
+    ObExprCtx &expr_ctx = func_ctx_->w_ctx_->expr_ctx_;
     // number of row[cur] >= row[:] (whether `>=` or other is depend on ORDER BY)
     number::ObNumber numerator;
     // total tuple of current window
