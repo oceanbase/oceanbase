@@ -635,6 +635,9 @@ public:
     ObYearWeekWdaySpec spec_[YEAR_WEEK_WDAY_COUNT];
   }
   */
+public:
+  static int validate_datetime(ObTime &ob_time, const bool is_dayofmonth,
+                               const ObDateSqlMode date_sql_mode);
 private:
   // date add / sub / diff.
   static int merge_date_interval(int64_t base_value, const ObString &interval_str,
@@ -644,8 +647,6 @@ private:
                                  const ObDateSqlMode date_sql_mode);
   // other utility functions.
   static int validate_year(int64_t year);
-  static int validate_datetime(ObTime &ob_time, const bool is_dayofmonth,
-                               const ObDateSqlMode date_sql_mode);
   static int validate_oracle_timestamp(const ObTime &ob_time);
   static int validate_basic_part_of_ob_time_oracle(const ObTime &ob_time);
   static int validate_tz_part_of_ob_time_oracle(const ObTime &ob_time);

@@ -1451,8 +1451,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
-      0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([INTERNAL_FUNCTION(t3.c1, 110, 17) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
+       0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -1471,8 +1471,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
-      0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([INTERNAL_FUNCTION(t3.c1, 110, 17) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
+       0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -1496,8 +1496,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t3: ({t3: (t3.__pk_increment, t3.c1, t3.c2, t3.c3)})}]),
       update([t3.c1=column_conv(BIGINT,PS:(20,0),NULL,1)])
-  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1,
-       DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
+  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([INTERNAL_FUNCTION(t3.c1, 110, 17) = cast('2010-10-10 00:00:00', DATETIME(0, 0))],
+      [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true

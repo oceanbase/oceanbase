@@ -43,6 +43,7 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
+#include "sql/engine/expr/ob_expr_align_date4cmp.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -5266,6 +5267,16 @@ int ObTransformPreProcess::transform_expr(ObRawExprFactory &expr_factory,
       LOG_WARN("transform arg case failed", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    const uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+    // The rewriting is done for the purpose of MySQL compatibility.
+    if ((ob_version >= CLUSTER_VERSION_4_2_1_0) && lib::is_mysql_mode()) {
+      if (OB_FAIL(replace_align_date4cmp_recursively(
+                      expr_factory, expr))) {
+            LOG_WARN("replace align_date4cmp failed", K(ret), K(expr));
+      }
+    }
+  }
   return ret;
 }
 
@@ -5787,6 +5798,171 @@ int ObTransformPreProcess::replace_in_or_notin_recursively(ObRawExprFactory &exp
     (T_OP_IN == root_expr->get_expr_type() || T_OP_NOT_IN == root_expr->get_expr_type())) {
     if (OB_FAIL(check_and_transform_in_or_notin(
                 expr_factory, session, root_expr, trans_happened))) {
+      LOG_WARN("failed to check and transform", K(ret));
+    }
+  }
+  return ret;
+}
+
+ObItemType ObTransformPreProcess::reverse_cmp_type_of_align_date4cmp(const ObItemType &cmp_type)
+{
+  ObItemType new_cmp_type = cmp_type;
+  switch (cmp_type) {
+    case T_OP_LE: {
+      new_cmp_type = T_OP_GE;
+      break;
+    }
+    case T_OP_LT: {
+      new_cmp_type = T_OP_GT;
+      break;
+    }
+    case T_OP_GE: {
+      new_cmp_type = T_OP_LE;
+      break;
+    }
+    case T_OP_GT: {
+      new_cmp_type = T_OP_LT;
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return new_cmp_type;
+}
+
+int ObTransformPreProcess::replace_cast_expr_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                            const ObItemType &cmp_type,
+                                                            ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null.", K(ret));
+  } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
+    const bool is_implicit_cast = !CM_IS_EXPLICIT_CAST(expr->get_extra());
+    ObExprResType cast_res_type = expr->get_result_type();
+    if (is_implicit_cast && (cast_res_type.is_date() || cast_res_type.is_datetime())) {
+      ObRawExpr *cast_child = expr->get_param_expr(0);
+      if (OB_ISNULL(cast_child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cast child expr is null.", K(ret));
+      } else if (ObExprAlignDate4Cmp::is_align_date4cmp_support_obj_type(cast_child->get_data_type())) {
+        // create a new align_date4cmp_expr to replace const_expr
+        ObSysFunRawExpr *align_date4cmp_expr = NULL;
+        if (OB_FAIL(expr_factory.create_raw_expr(T_ALIGN_DATE4CMP, align_date4cmp_expr))) {
+          LOG_WARN("create align_date4cmp_expr fail.", K(ret), K(align_date4cmp_expr));
+        } else if (OB_ISNULL(align_date4cmp_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("align_date4cmp_expr is null.", K(ret));
+        } else {
+          align_date4cmp_expr->set_func_name("INTERNAL_FUNCTION");
+          // Copy cast_mode to facilitate determining the method of handling invalid_time.
+          align_date4cmp_expr->set_extra(expr->get_extra());
+          // add first param_expr(just the cast_child) to align_date4cmp_expr
+          if (OB_FAIL(align_date4cmp_expr->add_param_expr(cast_child))) {
+            LOG_WARN("align_date4cmp_expr add param cast_expr fail.", K(ret), KPC(cast_child));
+          } else {
+            // create second param_expr (a ObConstRawExpr used to represent cmp_type)
+            // and add it to align_date4cmp_expr.
+            ObConstRawExpr *cmp_type_expr = NULL;
+            if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory,
+                                              ObIntType, cmp_type, cmp_type_expr))) {
+            LOG_WARN("failed to build const int cmp_type_expr", K(ret));
+            } else if (OB_ISNULL(cmp_type_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("cmp_type_expr is null.", K(ret));
+            } else if (OB_FAIL(align_date4cmp_expr->add_param_expr(cmp_type_expr))){
+              LOG_WARN("align_date4cmp_expr add param cmp_type_expr fail.", K(ret), KPC(cmp_type_expr));
+            } else {
+              // create third param_expr (a ObConstRawExpr used to represent res_type)
+              // and add it to align_date4cmp_expr.
+              ObConstRawExpr *res_type_expr = NULL;
+              ObObjType cast_res_type = expr->get_result_type().get_type();
+              int64_t cast_res_type_int = cast_res_type;
+              if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory,
+                                                  ObIntType, cast_res_type_int, res_type_expr))) {
+                LOG_WARN("failed to build const int res_type_expr", K(ret));
+              } else if (OB_ISNULL(res_type_expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("res_type_expr is null.", K(ret));
+              } else if (OB_FAIL(align_date4cmp_expr->add_param_expr(res_type_expr))){
+                LOG_WARN("align_date4cmp_expr add param res_type_expr fail.", K(ret), KPC(res_type_expr));
+              } else {
+                // Change the expr pointer pointing to cast_expr
+                // to point to the newly created align_date4cmp_expr.
+                expr = align_date4cmp_expr;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_and_transform_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                           ObRawExpr *&cmp_expr,
+                                                           const ObItemType &cmp_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != cmp_expr->get_param_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param cnt", K(ret), K(cmp_expr->get_param_count()));
+  } else {
+    ObRawExpr *expr0 = cmp_expr->get_param_expr(0);
+    ObRawExpr *expr1 = cmp_expr->get_param_expr(1);
+    if (OB_ISNULL(expr0) || OB_ISNULL(expr1)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null params", K(ret), K(cmp_expr->get_param_expr(0)),
+              K(cmp_expr->get_param_expr(1)));
+    } else {
+      // By default, align_date4cmp_expr expects the first parameter to be
+      // the value on the right side of the comparison operator.
+      // Therefore, if you pass the value on the left side,
+      // you need to reverse the comparison operator that is passed in.
+      const ObItemType reverse_cmp_type = reverse_cmp_type_of_align_date4cmp(cmp_type);
+      if (OB_FAIL(replace_cast_expr_align_date4cmp(expr_factory, reverse_cmp_type, expr0))) {
+        LOG_WARN("replace left cast_expr fail.", K(ret), KPC(expr0));
+      } else {
+        cmp_expr->get_param_expr(0) = expr0;
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(replace_cast_expr_align_date4cmp(expr_factory, cmp_type, expr1))) {
+          LOG_WARN("replace right cast_expr fail.", K(ret), KPC(expr1));
+        } else {
+          cmp_expr->get_param_expr(1) = expr1;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::replace_align_date4cmp_recursively(ObRawExprFactory &expr_factory,
+                                                           ObRawExpr *&root_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_expr is null.", K(ret));
+  }
+  // Traverse all exprs from the root.
+  for (int i = 0; OB_SUCC(ret) && i < root_expr->get_param_count(); i++) {
+    if (OB_ISNULL(root_expr->get_param_expr(i))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null param expr", K(ret));
+    } else if (OB_FAIL(SMART_CALL(replace_align_date4cmp_recursively(expr_factory,
+                                                        root_expr->get_param_expr(i))))) {
+      LOG_WARN("failed to replace in or notin recursively", K(ret));
+    }
+  }
+  // If the current expression is cmp_expr, check if align_date4cmp transformation is necessary.
+  if (OB_SUCC(ret) && IS_COMMON_COMPARISON_OP(root_expr->get_expr_type())) {
+    if (OB_FAIL(check_and_transform_align_date4cmp(
+                expr_factory, root_expr, root_expr->get_expr_type()))) {
       LOG_WARN("failed to check and transform", K(ret));
     }
   }

@@ -428,6 +428,15 @@ struct DistinctObjMeta
                                              const ObSQLSessionInfo &session,
                                              ObRawExpr *&root_expr,
                                              bool &trans_happened);
+  static ObItemType reverse_cmp_type_of_align_date4cmp(const ObItemType &cmp_type);
+  static int replace_cast_expr_align_date4cmp(ObRawExprFactory &expr_factory,
+                                              const ObItemType &cmp_type,
+                                              ObRawExpr *&expr);
+  static int check_and_transform_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                ObRawExpr *&in_expr,
+                                                const ObItemType &cmp_type);
+  static int replace_align_date4cmp_recursively(ObRawExprFactory &expr_factory,
+                                                ObRawExpr *&root_expr);
   int transformer_aggr_expr(ObDMLStmt *stmt, bool &trans_happened);
   int transform_rownum_as_limit_offset(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                        ObDMLStmt *&stmt,

@@ -819,6 +819,7 @@ typedef enum ObItemType
   T_FUN_SYS_RANDOM = 1806,
   T_FUN_SYS_RANDSTR = 1807,
   T_FUN_SYS_END = 2000,
+  T_ALIGN_DATE4CMP = 2010,
 
   T_MAX_OP = 3000,
 

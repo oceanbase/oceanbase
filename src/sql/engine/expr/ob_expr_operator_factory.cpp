@@ -402,6 +402,7 @@
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
 #include "sql/engine/expr/ob_expr_temp_table_ssid.h"
+#include "sql/engine/expr/ob_expr_align_date4cmp.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -997,6 +998,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRandom);
     REG_OP(ObExprRandstr);
     REG_OP(ObExprPrefixPattern);
+    REG_OP(ObExprAlignDate4Cmp);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
