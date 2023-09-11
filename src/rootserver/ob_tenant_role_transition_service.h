@@ -231,7 +231,10 @@ private:
       const share::SCN &ref_scn,
       const share::SCN &sys_ls_sync_scn);
   int check_tenant_server_online_();
-  int construct_inactive_servers_(common::sqlclient::ObMySQLResult &res, ObArray<ObAddr> &inactive_servers);
+  int construct_offline_servers_(
+      common::sqlclient::ObMySQLResult &res,
+      ObArray<ObAddr> &temporary_offline_servers,
+      ObArray<ObAddr> &permanent_offline_servers);
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;

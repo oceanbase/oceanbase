@@ -25,6 +25,8 @@
 #include "share/ls/ob_ls_table_iterator.h"//ObAllLSTableIterator
 #include "share/ls/ob_ls_info.h"//ObLSInfo
 #include "share/ob_all_server_tracer.h"
+#include "share/ls/ob_ls_table_operator.h"
+#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 
 #include "observer/ob_server_struct.h"
 
@@ -183,6 +185,48 @@ void ObEmptyServerChecker::stop()
   }
 }
 
+int ObEmptyServerChecker::check_if_tenant_ls_replicas_exist_in_servers(
+    const uint64_t tenant_id,
+    const common::ObArray<common::ObAddr> &servers,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObLSInfo> tenant_ls_infos;
+  ObArray<ObAddr> empty_servers;
+  exist = false;
+  // if a tenant has ls replicas on a server, the server is not empty.
+  empty_servers.reset();
+  if (OB_ISNULL(GCTX.lst_operator_)) {
+    ret  = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.lst_operator_ is null", KR(ret), KP(GCTX.lst_operator_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GCTX.lst_operator_->load_all_ls_in_tenant(gen_meta_tenant_id(tenant_id), tenant_ls_infos))) {
+    LOG_WARN("fail to execute load_all_ls_in_tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(empty_servers.assign(servers))) {
+    // assumpt that all servers are empty
+    // (i.e. assumpt that the tenant does not have any ls replicas on these servers)
+    // not empty servers will be removed from empty_servers array in func check_server_emtpy_by_ls_
+    LOG_WARN("fail to assign servers to another array", KR(ret), K(servers));
+  } else {
+    for (int64_t i = 0; i < tenant_ls_infos.count() && OB_SUCC(ret) && empty_servers.count() == servers.count(); i++) {
+      // if empty_servers.count() < servers.count()
+      // it means that there is a not empty server
+      // the check can be returned
+      const ObLSInfo &ls_info = tenant_ls_infos.at(i);
+      if (OB_FAIL(check_server_emtpy_by_ls_(ls_info, empty_servers))) {
+        LOG_WARN("fail to check server empty", KR(ret), K(ls_info));
+      } else if (empty_servers.count() < servers.count()) {
+        exist = true;
+        LOG_INFO("the tenant has ls replicas on one of the given servers", KR(ret),
+            K(tenant_id), K(ls_info), K(empty_servers), K(servers));
+      }
+    }
+  }
+  return ret;
+}
+
 //check server not in meta table
 int ObEmptyServerChecker::check_server_empty_()
 {
@@ -210,8 +254,8 @@ int ObEmptyServerChecker::check_server_empty_()
           LOG_WARN("iterate ls table failed", K(ret));
         }
         break;
-      } else if (OB_FAIL(check_server_emtpy_by_ls_(ls_info))) {
-        LOG_WARN("failed to check server empty", KR(ret), K(ls_info));
+      } else if (OB_FAIL(check_server_emtpy_by_ls_(ls_info, empty_servers_))) {
+        LOG_WARN("failed to check server empty", KR(ret), K(ls_info), K(empty_servers_));
       }
     }
   }
@@ -222,17 +266,13 @@ int ObEmptyServerChecker::check_server_empty_()
   return ret;
 
 }
-
-int ObEmptyServerChecker::check_server_emtpy_by_ls_(const share::ObLSInfo &ls_info)
+ERRSIM_POINT_DEF(CHECK_SERVER_EMPTY_WHEN_LS_HAS_NO_LEADER);
+int ObEmptyServerChecker::check_server_emtpy_by_ls_(
+    const share::ObLSInfo &ls_info,
+    common::ObArray<common::ObAddr> &empty_servers)
 {
   int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (stop_) {
-    ret = OB_CANCELED;
-    LOG_WARN("cancle empty server check", KR(ret));
-  } else if (OB_UNLIKELY(!ls_info.is_valid())) {
+  if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls info is invalid", KR(ret), K(ls_info));
   } else {
@@ -252,11 +292,11 @@ int ObEmptyServerChecker::check_server_emtpy_by_ls_(const share::ObLSInfo &ls_in
       // check whether has member on empty servers
       FOREACH_CNT_X(m, replica->get_member_list(), OB_SUCC(ret)) {
         const ObAddr &addr = m->get_server();
-        if (has_exist_in_array(empty_servers_, addr, &idx)) {
+        if (has_exist_in_array(empty_servers, addr, &idx)) {
           //has member in server
-          LOG_INFO("ls replica has member on sever", K(ls_info), K(addr));
-          if (OB_FAIL(empty_servers_.remove(idx))) {
-            LOG_WARN("failed to remove addr from empty servers", KR(ret), K(idx));
+          LOG_INFO("ls replica has member on sever", K(ls_info), K(addr), K(empty_servers));
+          if (OB_FAIL(empty_servers.remove(idx))) {
+            LOG_WARN("failed to remove addr from empty servers", KR(ret), K(idx), K(empty_servers));
           }
         }
       }  // end FORECAH member_list
@@ -264,16 +304,19 @@ int ObEmptyServerChecker::check_server_emtpy_by_ls_(const share::ObLSInfo &ls_in
     // filter server of replicas
     for (int64_t i = 0; i < replica_array.count() && OB_SUCC(ret); ++i) {
       const ObAddr &addr = replica_array.at(i).get_server();
-      if (has_exist_in_array(empty_servers_, addr, &idx)) {
+      if (has_exist_in_array(empty_servers, addr, &idx)) {
         //has member in server
         LOG_INFO("this sever has ls replica", K(ls_info), K(addr));
-        if (OB_FAIL(empty_servers_.remove(idx))) {
+        if (OB_FAIL(empty_servers.remove(idx))) {
           LOG_WARN("failed to remove addr from empty servers", KR(ret), K(idx));
         }
       }
     }//end for
   }
-
+  if (OB_SUCC(ret) && CHECK_SERVER_EMPTY_WHEN_LS_HAS_NO_LEADER) {
+    ret = OB_LEADER_NOT_EXIST;
+    LOG_WARN("errsim CHECK_SERVER_EMPTY_WHEN_LS_HAS_NO_LEADER opened", KR(ret));
+  }
   return ret;
 }
 
