@@ -326,7 +326,8 @@ int ObAllPlanCacheStatI1::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); i++) {
     // to keep the save interface
     if (common::OB_INVALID_TENANT_ID == tenant_ids_.at(i)
-        || is_virtual_tenant_id(tenant_ids_.at(i))) {
+        || is_virtual_tenant_id(tenant_ids_.at(i))
+        || (!is_sys_tenant(effective_tenant_id_) && tenant_ids_.at(i) != effective_tenant_id_)) {
       // skip
     } else {
       ret = tenant_ids.push_back(tenant_ids_.at(i));
