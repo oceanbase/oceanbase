@@ -5904,6 +5904,12 @@ int ObAlterTableResolver::check_mysql_rename_column(const AlterColumnSchema &alt
                        alter_column_schema.get_origin_column_name().length(),
                        alter_column_schema.get_origin_column_name().ptr());
         LOG_WARN("alter column has generated column deps", K(ret), K(alter_column_schema));
+      } else if (column->is_func_idx_column()) { // renname column with func index deps is forbidden
+        ret = OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX;
+        LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX,
+                       alter_column_schema.get_origin_column_name().length(),
+                       alter_column_schema.get_origin_column_name().ptr());
+        LOG_WARN("alter column has function index deps", K(ret), K(alter_column_schema));
       }
     }
   }

@@ -12267,11 +12267,11 @@ static const _error _error_OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = ER_DEPENDENT_BY_FUNCTIONAL_INDEX,
       .sqlstate              = "HY000",
-      .str_error             = "Column has a functional index dependency and cannot be dropped.",
-      .str_user_error        = "Column '%.*s' has a functional index dependency and cannot be dropped.",
+      .str_error             = "Column has a functional index dependency and cannot be dropped or renamed.",
+      .str_user_error        = "Column '%.*s' has a functional index dependency and cannot be dropped or renamed.",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5497, Column has a functional index dependency and cannot be dropped.",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5497, Column '%.*s' has a functional index dependency and cannot be dropped."
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5497, Column has a functional index dependency and cannot be dropped or renamed.",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5497, Column '%.*s' has a functional index dependency and cannot be dropped or renamed."
 };
 static const _error _error_OB_ERR_FUNCTIONAL_INDEX_ON_LOB = {
       .error_name            = "OB_ERR_FUNCTIONAL_INDEX_ON_LOB",

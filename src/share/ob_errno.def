@@ -1140,7 +1140,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_WAIT_INTERVAL, -5495, -1, "HY000", "missing o
 
 //for functional index in mysql mode
 DEFINE_ERROR_EXT(OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, -5496, ER_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, "HY000", "Functional index cannot refer to an auto-increment column.", "Functional index '%.*s' cannot refer to an auto-increment column.");
-DEFINE_ERROR_EXT(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, -5497, ER_DEPENDENT_BY_FUNCTIONAL_INDEX, "HY000", "Column has a functional index dependency and cannot be dropped.", "Column '%.*s' has a functional index dependency and cannot be dropped.");
+DEFINE_ERROR_EXT(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, -5497, ER_DEPENDENT_BY_FUNCTIONAL_INDEX, "HY000", "Column has a functional index dependency and cannot be dropped or renamed.", "Column '%.*s' has a functional index dependency and cannot be dropped or renamed.");
 DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_LOB, -5498, ER_FUNCTIONAL_INDEX_ON_LOB, "HY000", "Cannot create a functional index on an expression that returns a BLOB or TEXT. Please consider using CAST.");
 DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_FIELD, -5499, ER_FUNCTIONAL_INDEX_ON_FIELD, "HY000", "Functional index on a column is not supported. Consider using a regular index instead.");
 DEFINE_ERROR(OB_ERR_GENCOL_LEGIT_CHECK_FAILED, -5500, -1, "HY000", "Legitimacy check failed for generated columns.");
