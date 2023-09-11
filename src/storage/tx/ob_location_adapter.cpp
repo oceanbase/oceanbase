@@ -150,6 +150,9 @@ int ObLocationAdapter::get_leader_(const int64_t cluster_id,
     ObLSExistState state;
     if (OB_SUCCESS != (tmp_ret = ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
       TRANS_LOG(WARN, "check if ls exist failed", K(tmp_ret), K(ls_id));
+      if (OB_TENANT_NOT_EXIST == tmp_ret) {
+        ret = tmp_ret;
+      }
     } else if (state.is_deleted()) {
       // rewrite ret
       ret = OB_LS_IS_DELETED;
@@ -230,6 +233,9 @@ int ObLocationAdapter::nonblock_get(const int64_t cluster_id,
     ObLSExistState state;
     if (OB_SUCCESS != (tmp_ret = ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
       TRANS_LOG(WARN, "check if ls exist failed", K(tmp_ret), K(ls_id));
+      if (OB_TENANT_NOT_EXIST == tmp_ret) {
+        ret = tmp_ret;
+      }
     } else if (state.is_deleted()) {
       // rewrite ret
       ret = OB_LS_IS_DELETED;
