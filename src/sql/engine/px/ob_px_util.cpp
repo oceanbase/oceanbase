@@ -682,6 +682,8 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
   ObArray<const ObPxSqcMeta *> sqcs;
   if (OB_FAIL(child.get_sqcs(sqcs))) {
     LOG_WARN("fail get sqcs", K(ret));
+  } else if (OB_FAIL(generate_dh_map_info(parent))) {
+    LOG_WARN("fail to generate dh map info", K(ret));
   } else {
     for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); ++i) {
       const ObPxSqcMeta &child_sqc = *sqcs.at(i);
@@ -703,7 +705,13 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         sqc.get_monitoring_info().assign(child_sqc.get_monitoring_info());
-        if (OB_FAIL(parent.add_sqc(sqc))) {
+        if (!parent.get_p2p_dh_map_info().is_empty()) {
+          if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(parent.get_p2p_dh_map_info()))) {
+            LOG_WARN("fail to assign p2p dh map info", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(parent.add_sqc(sqc))) {
           LOG_WARN("fail add sqc", K(sqc), K(ret));
         }
       }
