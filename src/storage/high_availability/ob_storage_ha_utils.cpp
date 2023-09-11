@@ -326,6 +326,7 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   case OB_PARTITION_NOT_LEADER:
   case OB_TRANS_TIMEOUT:
   case OB_TIMEOUT:
+  case OB_EAGAIN:
       bool_ret = true;
       break;
     default:
