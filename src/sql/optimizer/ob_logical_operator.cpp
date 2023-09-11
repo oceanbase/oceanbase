@@ -356,7 +356,6 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     contain_pw_merge_op_(false),
     contain_das_op_(false),
     contain_match_all_fake_cte_(false),
-    dup_table_pos_(),
     strong_sharding_(NULL),
     weak_sharding_(),
     is_pipelined_plan_(false),
@@ -5299,49 +5298,6 @@ int ObLogicalOperator::collect_batch_exec_param(void* ctx,
       } else if (param.branch_id_ <= branch_id_ &&
                  OB_FAIL(left_above_params.push_back(static_cast<ObExecParamRawExpr*>(param.expr_)))) {
         LOG_WARN("failed to push back left params", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogicalOperator::adjust_dup_table_replica_pos(int64_t dup_table_pos)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObShardingInfo*, 4> input_shardings;
-  if (NULL == strong_sharding_ ||
-      OB_INVALID_INDEX == dup_table_pos) {
-    // do noting
-  } else if (dup_table_pos_.empty()) {
-    // do nothing
-  } else if (OB_ISNULL(strong_sharding_->get_phy_table_location_info()) ||
-             OB_UNLIKELY(1 != strong_sharding_->get_phy_table_location_info()->get_partition_cnt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret));
-  } else {
-    const ObCandiTabletLoc &phy_part_loc =
-      strong_sharding_->get_phy_table_location_info()->get_phy_part_loc_info_list_for_update().at(0);
-    const ObIArray<ObRoutePolicy::CandidateReplica> &replicas =
-                                        phy_part_loc.get_partition_location().get_replica_locations();
-    if (OB_UNLIKELY(dup_table_pos < 0 || dup_table_pos >= replicas.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(dup_table_pos), K(replicas.count()), K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      if (OB_ISNULL(get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(input_shardings.push_back(get_child(i)->get_strong_sharding()))) {
-        LOG_WARN("failed to push back input shardings", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      const ObAddr &addr = replicas.at(dup_table_pos).get_server();
-      dup_table_pos_.reuse();
-      if (OB_FAIL(ObOptimizerUtil::compute_duplicate_table_replica_pos(addr,
-                                                                       input_shardings,
-                                                                       dup_table_pos_))) {
-        LOG_WARN("failed to compute duplicate table replica pos", K(ret));
       }
     }
   }

@@ -739,8 +739,6 @@ struct EstimateCostInfo {
       use_hybrid_hash_dm_(false),
       join_type_(UNKNOWN_JOIN),
       need_mat_(false),
-      left_dup_table_pos_(OB_INVALID_ID),
-      right_dup_table_pos_(OB_INVALID_ID),
       left_need_sort_(false),
       left_prefix_pos_(0),
       right_need_sort_(false),
@@ -776,8 +774,6 @@ struct EstimateCostInfo {
         use_hybrid_hash_dm_(false),
         join_type_(join_type),
         need_mat_(need_mat),
-        left_dup_table_pos_(OB_INVALID_INDEX),
-        right_dup_table_pos_(OB_INVALID_INDEX),
         left_need_sort_(false),
         left_prefix_pos_(0),
         right_need_sort_(false),
@@ -907,8 +903,6 @@ struct EstimateCostInfo {
       }
       return sm_type;
     }
-    inline int64_t get_left_dup_table_pos() { return left_dup_table_pos_; }
-    inline int64_t get_right_dup_table_pos() { return right_dup_table_pos_; }
     bool contain_normal_nl() const { return contain_normal_nl_; }
     void set_contain_normal_nl(bool contain) { contain_normal_nl_ = contain; }
     int check_is_contain_normal_nl();
@@ -981,8 +975,6 @@ struct EstimateCostInfo {
                  K_(is_slave_mapping),
                  K_(join_type),
                  K_(need_mat),
-                 K_(left_dup_table_pos),
-                 K_(right_dup_table_pos),
                  K_(left_need_sort),
                  K_(left_prefix_pos),
                  K_(right_need_sort),
@@ -1008,9 +1000,6 @@ struct EstimateCostInfo {
     bool use_hybrid_hash_dm_; // if use hybrid hash distribution method for hash-hash dm
     ObJoinType join_type_;
     bool need_mat_;
-    // for duplicated table
-    int64_t left_dup_table_pos_;
-    int64_t right_dup_table_pos_;
     // for merge joins only
     bool left_need_sort_;
     int64_t left_prefix_pos_;

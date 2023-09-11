@@ -275,7 +275,21 @@ public:
     return OB_TBL_LOCATION_UNINITIALIZED == location_type_;
   }
   void set_can_reselect_replica(const bool b) { can_reselect_replica_ = b; }
-  bool get_can_reselect_replica() const { return can_reselect_replica_; }
+  inline bool get_can_reselect_replica() const
+  {
+    bool ret = false;
+    if (!can_reselect_replica_) {
+      ret = false;
+    } else if (NULL == phy_table_location_info_ ||
+        (1 != phy_table_location_info_->get_partition_cnt())) {
+      ret = false;
+    } else {
+      ret = phy_table_location_info_->get_phy_part_loc_info_list().at(0)
+                                      .get_partition_location()
+                                      .get_replica_locations().count() > 0;
+    }
+    return ret;
+  }
 
   inline bool is_distributed_without_table_location() const {
     return is_distributed() && NULL == phy_table_location_info_;

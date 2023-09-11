@@ -264,8 +264,9 @@ public:
   int check_das_dppr_filter_exprs(const ObIArray<ObRawExpr *> &input_filters,
                                   bool &has_dppr_filters);
 
-  int set_duplicated_table_location(ObLogicalOperator *op,
-                                    int64_t dup_table_pos);
+  int choose_duplicate_table_replica(ObLogicalOperator *op,
+                                    const ObAddr &addr,
+                                    bool is_root);
   /**
    *  Get allocator used in sql compilation
    *
@@ -1733,6 +1734,8 @@ private: // member functions
                               common::ObIArray<ObObj> &popular_values) const;
   bool has_depend_json_table(const ObRelIds& table_ids);
   int adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const;
+
+  int compute_duplicate_table_replicas(ObLogicalOperator *op);
 public:
   const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
   bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }

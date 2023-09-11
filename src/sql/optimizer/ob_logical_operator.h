@@ -1473,11 +1473,6 @@ public:
   inline int set_weak_sharding(ObIArray<ObShardingInfo*> &weak_sharding) {
     return weak_sharding_.assign(weak_sharding);
   }
-  inline ObIArray<int64_t> &get_dup_table_pos() { return dup_table_pos_; }
-  inline int set_dup_table_pos(ObIArray<int64_t> &dup_table_pos)
-  {
-    return dup_table_pos_.assign(dup_table_pos);
-  }
   inline bool get_contains_fake_cte() const { return contain_fake_cte_; }
   inline void set_contains_fake_cte(bool contain_fake_cte)
   {
@@ -1666,7 +1661,6 @@ public:
   // 生成 partition id 表达式
   int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
 
-  int adjust_dup_table_replica_pos(int64_t dup_table_pos);
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1852,7 +1846,6 @@ protected:
   bool contain_pw_merge_op_;
   bool contain_das_op_;
   bool contain_match_all_fake_cte_;
-  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> dup_table_pos_; // for duplicated table
   ObShardingInfo *strong_sharding_;
   common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;
   bool is_pipelined_plan_;

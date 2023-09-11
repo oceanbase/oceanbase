@@ -1316,30 +1316,29 @@ public:
   static int compute_basic_sharding_info(const ObAddr &local_addr,
                                          const ObIArray<ObLogicalOperator *> &child_ops,
                                          ObIAllocator &allocator,
-                                         ObIArray<int64_t> &reselected_pos,
                                          ObShardingInfo *&result_sharding,
                                          int64_t &inherit_sharding_index);
 
   static int compute_basic_sharding_info(const ObAddr &local_addr,
                                          const ObIArray<ObShardingInfo*> &input_shardings,
                                          ObIAllocator &allocator,
-                                         ObIArray<int64_t> &reselected_pos,
                                          ObShardingInfo *&result_sharding,
                                          int64_t &inherit_sharding_index);
 
   static int get_duplicate_table_replica(const ObCandiTableLoc &phy_table_loc,
                                          ObIArray<ObAddr> &valid_addrs);
 
-  static int compute_duplicate_table_replica_pos(const ObAddr &addr,
-                                                 const ObIArray<ObShardingInfo*> &input_shardings,
-                                                 ObIArray<int64_t> &reselected_pos);
-
   static int compute_duplicate_table_sharding(const ObAddr &local_addr,
+                                              const ObAddr &selected_addr,
                                               ObIAllocator &allocator,
-                                              const ObShardingInfo &src_sharding,
-                                              const int64_t reselected_pos,
-                                              bool can_reselect_replica,
+                                              ObShardingInfo &src_sharding,
+                                              ObIArray<ObAddr> &valid_addrs,
                                               ObShardingInfo *&target_sharding);
+
+  static int generate_duplicate_table_replicas(ObIAllocator &allocator,
+                                               const ObCandiTableLoc *source_table_loc,
+                                               ObIArray<ObAddr> &valid_addrs,
+                                               ObCandiTableLoc *&target_table_loc);
 
   static int64_t get_join_style_parallel(const int64_t left_parallel,
                                          const int64_t right_parallel,

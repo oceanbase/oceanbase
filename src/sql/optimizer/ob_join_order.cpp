@@ -4168,8 +4168,7 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
   if (OB_ISNULL(input_sharding) || OB_ISNULL(plan.get_stmt()) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(input_sharding), K(ret));
-  } else if (!input_sharding->get_can_reselect_replica() &&
-             (input_sharding->is_single() || input_sharding->is_distributed_without_partitioning())) {
+  } else if (input_sharding->is_single() || input_sharding->is_distributed_without_partitioning()) {
     output_sharding = input_sharding;
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
@@ -4225,7 +4224,6 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
         } else if (OB_FAIL(temp_sharding->get_partition_func().assign(part_func))) {
           LOG_WARN("failed to assign part funcs", K(ret));
         } else {
-          temp_sharding->set_can_reselect_replica(false);
           output_sharding = temp_sharding;
           LOG_TRACE("succeed to convert subplan scan sharding", K(*output_sharding));
         }
@@ -5362,8 +5360,6 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   is_slave_mapping_ = other.is_slave_mapping_;
   join_type_ = other.join_type_;
   need_mat_ = other.need_mat_;
-  left_dup_table_pos_ = other.left_dup_table_pos_;
-  right_dup_table_pos_ = other.right_dup_table_pos_;
   left_need_sort_ = other.left_need_sort_;
   left_prefix_pos_ = other.left_prefix_pos_;
   right_need_sort_ = other.right_need_sort_;
@@ -5413,7 +5409,6 @@ int JoinPath::compute_join_path_sharding()
       }
     } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
       ObSEArray<ObShardingInfo*, 2> input_shardings;
-      ObSEArray<int64_t, 2> reselected_dup_pos;
       if (OB_ISNULL(left_path_->strong_sharding_) || OB_ISNULL(right_path_->strong_sharding_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(left_path_->strong_sharding_),
@@ -5425,18 +5420,9 @@ int JoinPath::compute_join_path_sharding()
                                               opt_ctx.get_local_server_addr(),
                                               input_shardings,
                                               *parent_->get_allocator(),
-                                              reselected_dup_pos,
                                               strong_sharding_,
                                               inherit_sharding_index_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
-      } else if (reselected_dup_pos.empty()) {
-        /*no duplicated table, do nothing*/
-      } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected array count", K(reselected_dup_pos.count()), K(ret));
-      } else {
-        left_dup_table_pos_ = reselected_dup_pos.at(0);
-        right_dup_table_pos_ = reselected_dup_pos.at(1);
       }
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
       strong_sharding_ = opt_ctx.get_local_sharding();
@@ -5661,6 +5647,8 @@ int JoinPath::compute_join_path_plan_type()
   if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(ret));
+  } else if (NULL != strong_sharding_ && strong_sharding_->get_can_reselect_replica()) {
+    phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED;
   } else if (is_local()) {
     phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_LOCAL;
   } else if (is_remote()) {
@@ -6793,8 +6781,6 @@ void JoinPath::reuse()
   is_slave_mapping_ = false;
   join_type_ = UNKNOWN_JOIN;
   need_mat_ = false;
-  left_dup_table_pos_ = OB_INVALID_ID;
-  right_dup_table_pos_ = OB_INVALID_ID;
   left_need_sort_ = false;
   left_prefix_pos_ = 0;
   right_need_sort_ = false;
