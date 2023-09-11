@@ -390,27 +390,39 @@ int ObDDLChecksumOperator::check_column_checksum(
   return ret;
 }
 
+/**
+ * The request of complement data task is to clean up the scan checksum record of the specified tablet.
+ * The request of insert into select is to clean up all tablets' checksum record.
+ * And the input argument (tablet_task_id) is to classify the above two scenarios, default value (OB_INVALID_INDEX)
+ * means to clear all checksum records.
+*/
 int ObDDLChecksumOperator::delete_checksum(
     const uint64_t tenant_id,
     const int64_t execution_id,
     const uint64_t source_table_id,
     const uint64_t dest_table_id,
     const int64_t ddl_task_id,
-    common::ObMySQLProxy &sql_proxy)
+    common::ObMySQLProxy &sql_proxy,
+    const int64_t tablet_task_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ObSqlString remove_tablet_chksum_sql;
   int64_t affected_rows = 0;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || execution_id < 0 || OB_INVALID_ID == ddl_task_id
                   || OB_INVALID_ID == source_table_id || OB_INVALID_ID == dest_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(source_table_id), K(dest_table_id));
+  } else if (OB_INVALID_INDEX != tablet_task_id
+    && OB_FAIL(remove_tablet_chksum_sql.assign_fmt("AND (task_id >> %ld) = %ld ", ObDDLChecksumItem::PX_SQC_ID_OFFSET, tablet_task_id))) {
+    LOG_WARN("assign fmt failed", K(ret), K(tablet_task_id), K(remove_tablet_chksum_sql));
   } else if (OB_FAIL(sql.assign_fmt(
       "DELETE /*+ use_plan_cache(none) */ FROM %s "
-      "WHERE tenant_id = 0 AND execution_id = %ld AND ddl_task_id = %ld AND table_id IN (%ld, %ld)",
-      OB_ALL_DDL_CHECKSUM_TNAME, execution_id, ddl_task_id, source_table_id, dest_table_id))) {
-    LOG_WARN("fail to assign fmt", K(ret));
+      "WHERE tenant_id = 0 AND execution_id = %ld AND ddl_task_id = %ld AND table_id IN (%ld, %ld) %.*s",
+      OB_ALL_DDL_CHECKSUM_TNAME, execution_id, ddl_task_id, source_table_id, dest_table_id,
+      static_cast<int>(remove_tablet_chksum_sql.length()), remove_tablet_chksum_sql.ptr()))) {
+    LOG_WARN("fail to assign fmt", K(ret), K(remove_tablet_chksum_sql));
   } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", KR(ret), K(sql));
   } else if (OB_UNLIKELY(affected_rows < 0)) {

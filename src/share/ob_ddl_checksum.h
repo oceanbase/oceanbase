@@ -42,6 +42,8 @@ struct ObDDLChecksumItem
   }
   TO_STRING_KV(K_(execution_id), K_(tenant_id), K_(table_id),
       K_(ddl_task_id), K_(column_id), K_(task_id), K_(checksum));
+  static const int64_t PX_SQC_ID_OFFSET = 48;
+  static const int64_t PX_TASK_ID_OFFSET = 32;
   int64_t execution_id_;
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -95,7 +97,8 @@ public:
       const uint64_t source_table_id,
       const uint64_t dest_table_id,
       const int64_t ddl_task_id,
-      common::ObMySQLProxy &sql_proxy);
+      common::ObMySQLProxy &sql_proxy,
+      const int64_t tablet_task_id = OB_INVALID_INDEX);
 private:
   static int fill_one_item(const ObDDLChecksumItem &item,
       share::ObDMLSqlSplicer &dml);

@@ -616,7 +616,6 @@ int ObComplementPrepareTask::process()
   ObComplementDataDag *dag = nullptr;
   ObComplementWriteTask *write_task = nullptr;
   ObComplementMergeTask *merge_task = nullptr;
-  LOG_WARN("start to process ObComplementPrepareTask", K(ret));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementPrepareTask has not been inited", K(ret));
@@ -630,8 +629,16 @@ int ObComplementPrepareTask::process()
     FLOG_INFO("major sstable exists, all task should finish", K(ret), K(*param_));
   } else if (OB_FAIL(context_->write_start_log(*param_))) {
     LOG_WARN("write start log failed", K(ret), KPC(param_));
+  } else if (OB_FAIL(ObDDLChecksumOperator::delete_checksum(param_->dest_tenant_id_,
+                                                            param_->execution_id_,
+                                                            param_->orig_table_id_,
+                                                            0/*use 0 just to avoid clearing target table chksum*/,
+                                                            param_->task_id_,
+                                                            *GCTX.sql_proxy_,
+                                                            param_->tablet_task_id_))) {
+    LOG_WARN("failed to delete checksum", K(ret), KPC(param_));
   } else {
-    LOG_INFO("finish the complement prepare task", K(ret));
+    LOG_INFO("finish the complement prepare task", K(ret), KPC(param_));
   }
 
   if (OB_FAIL(ret)) {
@@ -1241,7 +1248,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
                                                               report_col_checksums,
                                                               report_col_ids,
                                                               1/*execution_id*/,
-                                                              param_->tablet_task_id_ << 48 | task_id_,
+                                                              param_->tablet_task_id_ << ObDDLChecksumItem::PX_SQC_ID_OFFSET | task_id_,
                                                               *GCTX.sql_proxy_))) {
       LOG_WARN("fail to report origin table checksum", K(ret));
     } else {
