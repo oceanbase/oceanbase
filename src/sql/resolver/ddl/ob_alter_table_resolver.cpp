@@ -1764,7 +1764,7 @@ int ObAlterTableResolver::inner_add_partition(ParseNode *part_elements_node,
       LOG_WARN("failed to resolve reange partition elements", K(ret));
     }
   } else if (part_option.is_list_part()) {
-    if (T_RANGE_SUBPARTITION_LIST == part_elements_node->type_) {
+    if (T_RANGE_PARTITION_LIST == part_elements_node->type_) {
       ret = OB_ERR_PARTITION_NOT_EXPECT_VALUES_LESS_THAN;
       LOG_WARN("VALUES LESS THAN or AT clause cannot be used with List partitioned tables", K(ret));
     } else if (OB_FAIL(resolve_list_partition_elements(alter_stmt,

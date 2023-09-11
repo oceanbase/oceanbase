@@ -1504,7 +1504,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DATATYPE, -5874, -1, "HY000", "invalid dataty
 DEFINE_ORACLE_ERROR(OB_ERR_NOT_COMPOSITE_PARTITION, -5875, -1, "HY000", "table is not partitioned by composite partition method", 14253, "table is not partitioned by composite partition method");
 DEFINE_ORACLE_ERROR(OB_ERR_SUBPARTITION_NOT_EXPECT_VALUES_IN, -5876, -1, "HY000", "VALUES IN (<value list>) cannot be used for Range subpartitioned tables", 14214, "VALUES (<value list>) cannot be used for Range subpartitioned tables");
 DEFINE_ORACLE_ERROR(OB_ERR_SUBPARTITION_EXPECT_VALUES_IN, -5877, -1, "HY000", "VALUES IN (<value list>) clause expected", 14217, "VALUES (<value list>) clause expected");
-DEFINE_ORACLE_ERROR(OB_ERR_PARTITION_NOT_EXPECT_VALUES_LESS_THAN, -5878, -1, "HY000", "VALUES LESS THAN or AT clause cannot be used with List partitioned tables", 14310, "VALUES LESS THAN or AT clause cannot be used with List partitioned tables");
+DEFINE_ORACLE_ERROR(OB_ERR_PARTITION_NOT_EXPECT_VALUES_LESS_THAN, -5878, 1480, "HY000", "Only RANGE PARTITIONING can use VALUES LESS THAN in partition definition", 14310, "VALUES LESS THAN or AT clause cannot be used with List partitioned tables");
 DEFINE_ORACLE_ERROR(OB_ERR_PARTITION_EXPECT_VALUES_LESS_THAN, -5879, -1, "HY000", "Expecting VALUES LESS THAN  or AT clause", 14311, "Expecting VALUES LESS THAN  or AT clause");
 DEFINE_ORACLE_ERROR(OB_ERR_PROGRAM_UNIT_NOT_EXIST, -5880, -1, "HY000", "Procedure, function, package, or package body does not exist", 4042, "procedure, function, package, or package body does not exist");
 DEFINE_ERROR(OB_ERR_INVALID_RESTORE_POINT_NAME, -5881, -1, "HY000", "invalid restore point name specified in connection string");
@@ -2339,6 +2339,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_SEQUENCE_NOT_DEFINE, -9753, -1, "HY000", "sequence is
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN, -11000, ER_VALUES_CLAUSE_NEED_HAVE_COLUMN, "HY000", "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement.");
 DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, -11001, ER_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, "HY000", "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.");
+DEFINE_ERROR_EXT(OB_WRONG_PARTITION_NAME, -11002, ER_WRONG_PARTITION_NAME, "HY000", "Incorrect partition name", "Incorrect partition name '%.*s'");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code

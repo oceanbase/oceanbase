@@ -1778,6 +1778,7 @@ constexpr int OB_ERR_FORALL_ON_REMOTE_TABLE = -9752;
 constexpr int OB_ERR_SEQUENCE_NOT_DEFINE = -9753;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
+constexpr int OB_WRONG_PARTITION_NAME = -11002;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3154,7 +3155,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NOT_COMPOSITE_PARTITION__USER_ERROR_MSG "table is not partitioned by composite partition method"
 #define OB_ERR_SUBPARTITION_NOT_EXPECT_VALUES_IN__USER_ERROR_MSG "VALUES IN (<value list>) cannot be used for Range subpartitioned tables"
 #define OB_ERR_SUBPARTITION_EXPECT_VALUES_IN__USER_ERROR_MSG "VALUES IN (<value list>) clause expected"
-#define OB_ERR_PARTITION_NOT_EXPECT_VALUES_LESS_THAN__USER_ERROR_MSG "VALUES LESS THAN or AT clause cannot be used with List partitioned tables"
+#define OB_ERR_PARTITION_NOT_EXPECT_VALUES_LESS_THAN__USER_ERROR_MSG "Only RANGE PARTITIONING can use VALUES LESS THAN in partition definition"
 #define OB_ERR_PARTITION_EXPECT_VALUES_LESS_THAN__USER_ERROR_MSG "Expecting VALUES LESS THAN  or AT clause"
 #define OB_ERR_PROGRAM_UNIT_NOT_EXIST__USER_ERROR_MSG "Procedure, function, package, or package body does not exist"
 #define OB_ERR_INVALID_RESTORE_POINT_NAME__USER_ERROR_MSG "invalid restore point name specified in connection string"
@@ -3906,6 +3907,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SEQUENCE_NOT_DEFINE__USER_ERROR_MSG "sequence is not yet defined in this session"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
+#define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -6034,6 +6036,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SEQUENCE_NOT_DEFINE__ORA_USER_ERROR_MSG "ORA-08002: sequence is not yet defined in this session"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
+#define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11002, Incorrect partition name '%.*s'"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6044,7 +6047,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2124];
+extern int g_all_ob_errnos[2125];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

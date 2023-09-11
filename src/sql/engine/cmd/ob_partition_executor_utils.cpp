@@ -621,23 +621,34 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Empty partition", K(i), K(ret));
     } else {
-
+      bool is_increasing = true;
       rowkey_cur = &array[i]->get_high_bound_val();
       if (rowkey_cur->get_obj_cnt() != rowkey_last->get_obj_cnt()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid object count", K(*rowkey_cur), K(*rowkey_last), K(ret));
       } else {
-        for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && OB_SUCC(ret); j++) {
+        for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && is_increasing && OB_SUCC(ret); j++) {
           if (!ObSQLUtils::is_same_type_for_compare(rowkey_cur->get_obj_ptr()[j].get_meta(),
                                                     rowkey_last->get_obj_ptr()[j].get_meta())
               && !rowkey_cur->get_obj_ptr()[j].is_max_value()
               && !rowkey_last->get_obj_ptr()[j].is_max_value()) {
             ret = OB_ERR_PARTITION_VALUE_ERROR;
             LOG_WARN("partiton value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
+          } else if (rowkey_cur->get_obj_ptr()[j].is_max_value() &&
+                     rowkey_last->get_obj_ptr()[j].is_max_value()) {
+            is_increasing = false;
           }
         }
       }
-      if (OB_SUCC(ret) && *rowkey_cur <= *rowkey_last) {
+      if (OB_SUCC(ret) && is_increasing) {
+        if (*rowkey_cur <= *rowkey_last) {
+          is_increasing = false;
+        } else {
+          rowkey_last = rowkey_cur;
+          last_part = cur_part;
+        }
+      }
+      if (OB_SUCC(ret) && !is_increasing) {
         if (stmt::T_ALTER_TABLE == stmt_type) {
           ret = OB_ERR_ADD_PART_BOUN_NOT_INC;
           LOG_WARN("Range values should be increasing", K(*rowkey_cur), K(*rowkey_last), K(ret));
@@ -648,9 +659,6 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
           LOG_USER_ERROR(OB_ERR_RANGE_NOT_INCREASING_ERROR,
                         lib::is_oracle_mode() ? err_msg.length() : 0, err_msg.ptr());
         }
-      } else {
-        rowkey_last = rowkey_cur;
-        last_part = cur_part;
       }
     }
   }

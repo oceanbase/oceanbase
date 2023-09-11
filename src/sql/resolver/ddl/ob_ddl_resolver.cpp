@@ -4765,29 +4765,19 @@ int ObDDLResolver::resolve_list_partition_elements(const ObDDLStmt *stmt,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
-      } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
-                  || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
-                 && !is_oracle_mode()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition expr list node is null", K(ret), K(element_node));
       } else {
         ObString partition_name;
-        if (OB_NOT_NULL(element_node->children_[PARTITION_NAME_NODE])) {
-          ParseNode *partition_name_node = element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE];
-          partition_name.assign_ptr(partition_name_node->str_value_,
-                                    static_cast<int32_t>(partition_name_node->str_len_));
-        } else if (is_subpartition) {
-          subpartition.set_is_empty_partition_name(true);
-          has_empty_name = true;
-        } else {
-          partition.set_is_empty_partition_name(true);
+        ObBasePartition *target_partition = is_subpartition ?
+            static_cast<ObBasePartition*>(&subpartition) : static_cast<ObBasePartition*>(&partition);
+        if (OB_FAIL(resolve_partition_name(element_node->children_[PARTITION_NAME_NODE],
+                                           partition_name,
+                                           *target_partition))) {
+          LOG_WARN("failed to resolve partition name", K(ret));
+        } else if (target_partition->is_empty_partition_name()) {
           has_empty_name = true;
         }
         ParseNode *expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE];
-        if (partition_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
-          ret = OB_ERR_TOO_LONG_IDENT;
-          LOG_WARN("partition name is too long", KR(ret), K(partition_name.length()));
-        } else if (T_EXPR_LIST != expr_list_node->type_ && T_DEFAULT != expr_list_node->type_) { //也有可能等于default
+        if (T_EXPR_LIST != expr_list_node->type_ && T_DEFAULT != expr_list_node->type_) { //也有可能等于default
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr_list_node->type_ is not T_EXPR_LIST or T_DEFAULT", K(ret),
                    "expr_list_node type", expr_list_node->type_);
@@ -4823,20 +4813,14 @@ int ObDDLResolver::resolve_list_partition_elements(const ObDDLStmt *stmt,
         if (OB_SUCC(ret)) {
           if (is_subpartition) {
             subpartition.set_tablespace_id(tablespace_id);
-            if (OB_FAIL(subpartition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(subpartitions.push_back(subpartition))) {
+            if (OB_FAIL(subpartitions.push_back(subpartition))) {
               LOG_WARN("fail to push back subpartition", KR(ret), K(subpartition));
             }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          partition.set_tablespace_id(tablespace_id);
-          if (OB_FAIL(partition.set_part_name(partition_name))) {
-            LOG_WARN("Failed to set part name", K(ret));
-          } else if (OB_FAIL(partitions.push_back(partition))) {
-            LOG_WARN("Failed to push back partition", KR(ret), K(partition));
+          } else {
+            partition.set_tablespace_id(tablespace_id);
+            if (OB_FAIL(partitions.push_back(partition))) {
+              LOG_WARN("Failed to push back partition", KR(ret), K(partition));
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -4888,28 +4872,19 @@ int ObDDLResolver::resolve_range_partition_elements(const ObDDLStmt *stmt,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
-      } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
-                  || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
-                 && !is_oracle_mode()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition expr list node is null", K(ret), K(element_node));
       } else {
         ObString partition_name;
-        if (OB_NOT_NULL(element_node->children_[PARTITION_NAME_NODE])) {
-          ParseNode *partition_name_node = element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE];
-          partition_name.assign_ptr(partition_name_node->str_value_,
-                                    static_cast<int32_t>(partition_name_node->str_len_));
-        } else if (is_subpartition) {
-          subpartition.set_is_empty_partition_name(true);
-          has_empty_name = true;
-        } else {
-          partition.set_is_empty_partition_name(true);
+        ObBasePartition *target_partition = is_subpartition ?
+            static_cast<ObBasePartition*>(&subpartition) : static_cast<ObBasePartition*>(&partition);
+        if (OB_FAIL(resolve_partition_name(element_node->children_[PARTITION_NAME_NODE],
+                                           partition_name,
+                                           *target_partition))) {
+          LOG_WARN("failed to resolve partition name", K(ret));
+        } else if (target_partition->is_empty_partition_name()) {
           has_empty_name = true;
         }
         ParseNode *expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE];
-        if (partition_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
-          ret = OB_ERR_TOO_LONG_IDENT;
-        } else if (T_EXPR_LIST != expr_list_node->type_) {
+        if (T_EXPR_LIST != expr_list_node->type_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr_list_node->type_ is not T_EXPR_LIST", K(ret));
         } else if (part_func_exprs.count() != expr_list_node->num_child_) {
@@ -4944,16 +4919,12 @@ int ObDDLResolver::resolve_range_partition_elements(const ObDDLStmt *stmt,
           if (OB_SUCC(ret)) {
             if (is_subpartition) {
               subpartition.set_tablespace_id(tablespace_id);
-              if (OB_FAIL(subpartition.set_part_name(partition_name))) {
-                LOG_WARN("Failed to set part name", K(ret));
-              } else if (OB_FAIL(subpartitions.push_back(subpartition))) {
+              if (OB_FAIL(subpartitions.push_back(subpartition))) {
                 LOG_WARN("fail to push back subpartition", KR(ret), K(subpartition));
               }
             } else {
               partition.set_tablespace_id(tablespace_id);
-              if (OB_FAIL(partition.set_part_name(partition_name))) {
-                LOG_WARN("Failed to set part name", K(ret));
-              } else if (OB_FAIL(partitions.push_back(partition))) {
+              if (OB_FAIL(partitions.push_back(partition))) {
                 LOG_WARN("fail to push back partition", KR(ret), K(partition));
               } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
                 // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
@@ -6025,29 +5996,19 @@ int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
-      } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
-                  || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
-                  && !is_oracle_mode()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition expr list node is null", K(ret), K(element_node));
       } else {
         ObString partition_name;
-        if (OB_NOT_NULL(element_node->children_[PARTITION_NAME_NODE])) {
-          ParseNode *partition_name_node = element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE];
-          partition_name.assign_ptr(partition_name_node->str_value_,
-                                    static_cast<int32_t>(partition_name_node->str_len_));
-        } else if (is_subpartition) {
-          subpartition.set_is_empty_partition_name(true);
-          has_empty_name = true;
-        } else {
-          partition.set_is_empty_partition_name(true);
+        ObBasePartition *target_partition = is_subpartition ?
+            static_cast<ObBasePartition*>(&subpartition) : static_cast<ObBasePartition*>(&partition);
+        if (OB_FAIL(resolve_partition_name(element_node->children_[PARTITION_NAME_NODE],
+                                           partition_name,
+                                           *target_partition))) {
+          LOG_WARN("failed to resolve partition name", K(ret));
+        } else if (target_partition->is_empty_partition_name()) {
           has_empty_name = true;
         }
         ParseNode *expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE];
-        if (partition_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
-          ret = OB_ERR_TOO_LONG_IDENT;
-          LOG_WARN("partition_name is too long", KR(ret), K(partition_name.length()));
-        } else if (T_EXPR_LIST != expr_list_node->type_) {
+        if (T_EXPR_LIST != expr_list_node->type_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr_list_node->type_ is not T_EXPR_LIST", K(ret));
         } else if (expr_num != expr_list_node->num_child_) {
@@ -6059,15 +6020,11 @@ int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
             LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
           }
           if (is_subpartition) {
-            if (OB_FAIL(subpartition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(subpartitions.push_back(subpartition))) {
+            if (OB_FAIL(subpartitions.push_back(subpartition))) {
               LOG_WARN("fail to push back subpartition", KR(ret), K(subpartition));
             }
           } else {
-            if (OB_FAIL(partition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(partitions.push_back(partition))) {
+            if (OB_FAIL(partitions.push_back(partition))) {
               LOG_WARN("fail to push back partition", KR(ret), K(partition));
             }
           }
@@ -6327,33 +6284,23 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
       } else if (element_node->type_ != T_PARTITION_LIST_ELEMENT) {
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("not a valid list partition define", K(element_node->type_));
-      } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
-                  || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
-                 && !is_oracle_mode()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition expr list node is null", K(ret), K(element_node));
       } else if (is_subpartition
                  && OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         ret = OB_ERR_PARSE_SQL;
         LOG_WARN("subpartition can not specify part id", K(ret), K(i), K(is_subpartition), K(in_tablegroup));
       } else {
         ObString partition_name;
-        if (OB_NOT_NULL(element_node->children_[PARTITION_NAME_NODE])) {
-          ParseNode *partition_name_node = element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE];
-          partition_name.assign_ptr(partition_name_node->str_value_,
-                                    static_cast<int32_t>(partition_name_node->str_len_));
-        } else if (is_subpartition) {
-          subpartition.set_is_empty_partition_name(true);
-          has_empty_name = true;
-        } else {
-          partition.set_is_empty_partition_name(true);
+        ObBasePartition *target_partition = is_subpartition ?
+            static_cast<ObBasePartition*>(&subpartition) : static_cast<ObBasePartition*>(&partition);
+        if (OB_FAIL(resolve_partition_name(element_node->children_[PARTITION_NAME_NODE],
+                                           partition_name,
+                                           *target_partition))) {
+          LOG_WARN("failed to resolve partition name", K(ret));
+        } else if (target_partition->is_empty_partition_name()) {
           has_empty_name = true;
         }
         ParseNode *expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE];
-        if (partition_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
-          ret = OB_ERR_TOO_LONG_IDENT;
-          LOG_WARN("partition name is too long", KR(ret), K(partition_name.length()));
-        } else if (T_EXPR_LIST != expr_list_node->type_ && T_DEFAULT != expr_list_node->type_) { //也有可能等于default
+        if (T_EXPR_LIST != expr_list_node->type_ && T_DEFAULT != expr_list_node->type_) { //也有可能等于default
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr_list_node->type_ is not T_EXPR_LIST or T_DEFAULT", K(ret));
         }
@@ -6364,15 +6311,11 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
             LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
           }
           if (is_subpartition) {
-            if (OB_FAIL(subpartition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(subpartitions.push_back(subpartition))) {
+            if (OB_FAIL(subpartitions.push_back(subpartition))) {
               LOG_WARN("fail to push back subpartition", KR(ret), K(subpartition));
             }
           } else {
-            if (OB_FAIL(partition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(partitions.push_back(partition))) {
+            if (OB_FAIL(partitions.push_back(partition))) {
               LOG_WARN("fail to push back partition", KR(ret), K(partition));
             }
           }
@@ -8850,9 +8793,26 @@ int ObDDLResolver::resolve_partition_name(ParseNode *partition_name_node,
   } else {
     ParseNode *name_node = partition_name_node->children_[NAMENODE];
     partition_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
-    if (partition_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
-      ret = OB_ERR_TOO_LONG_IDENT;
-    } else if (OB_FAIL(partition.set_part_name(partition_name))) {
+    if (OB_FAIL(ObSQLUtils::check_ident_name(CS_TYPE_UTF8MB4_GENERAL_CI,
+                                             partition_name,
+                                             false, //check_for_path_chars
+                                             OB_MAX_PARTITION_NAME_LENGTH))) {
+      if (OB_ERR_WRONG_IDENT_NAME == ret) {
+        if (lib::is_oracle_mode()) {
+          // It allows the last char of partition name is space in oracle mode
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_WRONG_PARTITION_NAME;
+          LOG_WARN("get wrong partition name", K(partition_name), K(ret));
+          LOG_USER_ERROR(OB_WRONG_PARTITION_NAME, partition_name.length(), partition_name.ptr());
+        }
+      } else if (OB_ERR_TOO_LONG_IDENT == ret) {
+        LOG_WARN("partition name is too long", K(partition_name.length()), K(ret));
+      } else {
+        LOG_WARN("fail to check ident name", K(partition_name), K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(partition.set_part_name(partition_name))) {
       LOG_WARN("failed to set part name", K(ret));
     }
   }
@@ -10203,10 +10163,15 @@ int ObDDLResolver::resolve_list_partition_elements(ObPartitionedStmt *stmt,
       ObString partition_name;
       int64_t tablespace_id = OB_INVALID_ID;
       bool current_spec = false;
-      if (OB_ISNULL(element_node = node->children_[i]) ||
-          OB_ISNULL(expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE])) {
+      if (OB_ISNULL(element_node = node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpect node", K(ret), K(element_node), K(expr_list_node));
+        LOG_WARN("get unexpect node", K(ret), K(element_node));
+      } else if (element_node->type_ != T_PARTITION_LIST_ELEMENT) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("not a valid range partition define", K(element_node->type_));
+      } else if (OB_ISNULL(expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpect node", K(ret), K(expr_list_node));
       } else if (T_EXPR_LIST != expr_list_node->type_ && T_DEFAULT != expr_list_node->type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected node type", K(ret), K(expr_list_node->type_));

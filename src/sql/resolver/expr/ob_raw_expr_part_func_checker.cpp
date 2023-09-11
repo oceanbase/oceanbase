@@ -80,6 +80,7 @@ int ObRawExprPartFuncChecker::visit(ObOpRawExpr &expr)
     case T_OP_GE:
     case T_OP_GT:
     case T_OP_NE:
+    case T_OP_IS:
     /* bit operator */
     case T_OP_BIT_OR:
     case T_OP_BIT_AND:

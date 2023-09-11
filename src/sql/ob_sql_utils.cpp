@@ -1314,12 +1314,12 @@ int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
     }
   }
   if (OB_SUCC(ret)) {
-    if (last_char_is_space) {
-      ret = OB_ERR_WRONG_IDENT_NAME;
-      LOG_WARN("incorrect ident name", K(name), K(ret));
-    } else if (name_len > static_cast<size_t>(max_ident_len)) {
+    if (name_len > static_cast<size_t>(max_ident_len)) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_WARN("ident name is too long", K(ret), K(name), K(name.length()), K(name_len));
+    } else if (last_char_is_space) {
+      ret = OB_ERR_WRONG_IDENT_NAME;
+      LOG_WARN("incorrect ident name", K(name), K(ret));
     }
   }
   return ret;

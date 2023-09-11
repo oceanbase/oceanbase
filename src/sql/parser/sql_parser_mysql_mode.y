@@ -6828,7 +6828,7 @@ PARTITION relation_factor opt_part_id opt_engine_option opt_subpartition_list
 opt_range_partition_list:
 '(' range_partition_list ')'
 {
-  merge_nodes($$, result, T_PARTITION_LIST, $2);
+  merge_nodes($$, result, T_RANGE_PARTITION_LIST, $2);
 }
 ;
 

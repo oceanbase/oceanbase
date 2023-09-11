@@ -656,9 +656,9 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
-private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
+private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   struct SessionInfoCtx
   {
