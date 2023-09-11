@@ -90,7 +90,8 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
 
 int ObOptimizer::get_optimization_cost(ObDMLStmt &stmt,
                                        ObLogPlan *&plan,
-                                       double &cost)
+                                       double &cost,
+                                       ObDMLStmt::TempTableInfo *current_temp_table_)
 {
   int ret = OB_SUCCESS;
   cost = 0.0;
@@ -106,8 +107,32 @@ int ObOptimizer::get_optimization_cost(ObDMLStmt &stmt,
     LOG_WARN("failed to init env info", K(ret));
   } else if (OB_FAIL(generate_plan_for_temp_table(stmt))) {
     LOG_WARN("failed to generate plan for temp table", K(ret));
+  } else if (NULL != current_temp_table_) {
+    ObSqlTempTableInfo temp_table_info;
+    ObRawExpr *temp_table_nonwhere_filter = NULL;
+    ObRawExpr *temp_table_where_filter = NULL;
+    if (OB_UNLIKELY(!stmt.is_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("temp table query should be select stmt", K(stmt));
+    } else if (OB_FAIL(ObSqlTempTableInfo::collect_specified_temp_table(ctx_.get_allocator(),
+                                                                 current_temp_table_->temp_table_query_,
+                                                                 current_temp_table_->upper_stmts_,
+                                                                 current_temp_table_->table_items_,
+                                                                 temp_table_info))) {
+      LOG_WARN("failed to collect_specified_temp_table", K(ret));
+    } else if (OB_FAIL(try_push_down_temp_table_filter(temp_table_info,
+                                                       temp_table_nonwhere_filter,
+                                                       temp_table_where_filter,
+                                                       static_cast<ObSelectStmt *>(&stmt)))) {
+      LOG_WARN("failed to push down filter for temp table", K(ret));
+    } else if (NULL != temp_table_where_filter &&
+               OB_FAIL(plan->get_pushdown_filters().push_back(temp_table_where_filter))) {
+      LOG_WARN("failed to push down filter", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(plan->generate_raw_plan())) {
-      LOG_WARN("failed to perform optimization", K(ret));
+    LOG_WARN("failed to perform optimization", K(ret));
   } else {
     cost = plan->get_optimization_cost();
   }
@@ -247,7 +272,8 @@ int ObOptimizer::generate_plan_for_temp_table(ObDMLStmt &stmt)
 */
 int ObOptimizer::try_push_down_temp_table_filter(ObSqlTempTableInfo &info,
                                                  ObRawExpr *&nonwhere_filter,
-                                                 ObRawExpr *&where_filter)
+                                                 ObRawExpr *&where_filter,
+                                                 ObSelectStmt *temp_table_query)
 {
   int ret = OB_SUCCESS;
   bool have_filter = true;
@@ -257,6 +283,7 @@ int ObOptimizer::try_push_down_temp_table_filter(ObSqlTempTableInfo &info,
   ObSEArray<const ObDMLStmt *, 4> parent_stmts;
   ObSEArray<const ObSelectStmt *, 4> subqueries;
   ObSEArray<int64_t, 4> table_ids;
+  temp_table_query = (temp_table_query == NULL) ? info.table_query_ : temp_table_query;
   for (int64_t i = 0; OB_SUCC(ret) && have_filter && i < info.table_infos_.count(); ++i) {
     TableItem *table =  info.table_infos_.at(i).table_item_;
     ObDMLStmt *stmt = info.table_infos_.at(i).upper_stmt_;
@@ -269,7 +296,7 @@ int ObOptimizer::try_push_down_temp_table_filter(ObSqlTempTableInfo &info,
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(parent_stmts.push_back(stmt))) {
       LOG_WARN("failed to push back", K(ret));
-    } else if (OB_FAIL(subqueries.push_back(table->ref_query_))) {
+    } else if (OB_FAIL(subqueries.push_back(temp_table_query))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(table_ids.push_back(table->table_id_))) {
       LOG_WARN("failed to push back", K(ret));

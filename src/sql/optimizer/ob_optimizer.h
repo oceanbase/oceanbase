@@ -182,7 +182,8 @@ namespace sql
     virtual int optimize(ObDMLStmt &stmt, ObLogPlan *&plan);
     virtual int get_optimization_cost(ObDMLStmt &stmt,
                                       ObLogPlan *&plan,
-                                      double &cost);
+                                      double &cost,
+                                      ObDMLStmt::TempTableInfo *current_temp_table_);
     virtual int get_cte_optimization_cost(ObDMLStmt &root_stmt,
                                           ObSelectStmt *cte_query,
                                           ObIArray<ObSelectStmt *> &stmts,
@@ -225,7 +226,8 @@ namespace sql
 
     int try_push_down_temp_table_filter(ObSqlTempTableInfo &temp_table_info,
                                         ObRawExpr *&temp_table_filter,
-                                        ObRawExpr *&where_filter);
+                                        ObRawExpr *&where_filter,
+                                        ObSelectStmt *temp_table_query = NULL);
     int push_down_temp_table_filter(ObSqlTempTableInfo &temp_table_info,
                                     ObRawExpr *&temp_table_filter);
 

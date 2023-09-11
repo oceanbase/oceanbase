@@ -412,7 +412,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
           //optctx.set_only_ds_basic_stat(true);
           ObOptimizer optimizer(optctx);
           ObLogPlan *plan = NULL;
-          if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost))) {
+          if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost, current_temp_table_))) {
             LOG_WARN("failed to get optimization cost", K(ret));
           } else if (NULL == check_ctx) {
             // do nothing
@@ -788,6 +788,7 @@ int ObTransformRule::transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stm
     }
     for(int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
       ObDMLStmt *child_stmt = temp_table_infos.at(i).temp_table_query_;
+      current_temp_table_ = &temp_table_infos.at(i);
       if (OB_ISNULL(child_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null child stmt", K(ret));
@@ -796,6 +797,7 @@ int ObTransformRule::transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stm
                                                               child_stmt)))) {
         LOG_WARN("failed to transform stmt recursively", K(ret));
       }
+      current_temp_table_ = NULL;
       //reset ref query
       for (int64_t j = 0; OB_SUCC(ret) && j < temp_table_infos.at(i).table_items_.count(); ++j) {
         TableItem *temp_table = temp_table_infos.at(i).table_items_.at(j);

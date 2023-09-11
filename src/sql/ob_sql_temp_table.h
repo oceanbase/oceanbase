@@ -89,6 +89,14 @@ public:
                          table_plan_(NULL) {}
   virtual ~ObSqlTempTableInfo() {}
 
+  void reset() {
+    temp_table_id_ = OB_INVALID_ID;
+    table_name_.reset();
+    table_query_ = NULL;
+    table_plan_ = NULL;
+    table_infos_.reset();
+  }
+
   TO_STRING_KV(K_(temp_table_id),
                K_(table_name),
                K_(table_infos));
@@ -98,6 +106,11 @@ public:
                                  ObIArray<ObSqlTempTableInfo*> &temp_table_infos,
                                  ObQueryCtx *query_ctx,
                                  bool do_collect_filter);
+  static int collect_specified_temp_table(ObIAllocator &allocator,
+                                          ObSelectStmt *specified_query,
+                                          const ObIArray<ObDMLStmt *> &upper_stmts,
+                                          const ObIArray<TableItem *> &table_items,
+                                          ObSqlTempTableInfo &temp_table_info);
   static int collect_temp_table_filters(ObDMLStmt *stmt,
                                         TableItem *table,
                                         ObIArray<ObRawExpr*> &table_filters,

@@ -91,7 +91,7 @@ int ObSqlTempTableInfo::collect_temp_tables(ObIAllocator &allocator,
                                                         temp_table_infos, query_ctx, do_collect_filter)))) {
         LOG_WARN("failed to add all temp tables", K(ret));
       } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObSqlTempTableInfo)))) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("get unexpected null", K(ret));
       } else {
         temp_table_info = new (ptr) ObSqlTempTableInfo();
@@ -113,6 +113,45 @@ int ObSqlTempTableInfo::collect_temp_tables(ObIAllocator &allocator,
           LOG_WARN("failed to push back table item", K(ret));
         } else if (OB_FAIL(temp_table_infos.push_back(temp_table_info))) {
           LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSqlTempTableInfo::collect_specified_temp_table(ObIAllocator &allocator,
+                                                     ObSelectStmt *specified_query,
+                                                     const ObIArray<ObDMLStmt *> &upper_stmts,
+                                                     const ObIArray<TableItem *> &table_items,
+                                                     ObSqlTempTableInfo &temp_table_info)
+{
+  int ret = OB_SUCCESS;
+  temp_table_info.reset();
+  if (OB_ISNULL(specified_query) ||
+      OB_UNLIKELY(upper_stmts.count() != table_items.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(specified_query), K(upper_stmts), K(table_items));;
+  } else {
+    temp_table_info.table_query_ = specified_query;
+    for (int64_t i = 0; OB_SUCC(ret) && i < upper_stmts.count(); i ++) {
+      TableItem *table = table_items.at(i);
+      ObDMLStmt *stmt = upper_stmts.at(i);
+      if (OB_ISNULL(stmt) || OB_ISNULL(table) ||
+          OB_UNLIKELY(specified_query != table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected params", K(table_items), K(upper_stmts));
+      } else {
+        TableInfo table_info;
+        table_info.upper_stmt_ = stmt;
+        table_info.table_item_ = table;
+        if (OB_FAIL(collect_temp_table_filters(table_info.upper_stmt_,
+                                               table_info.table_item_,
+                                               table_info.table_filters_,
+                                               table_info.filter_conditions_))) {
+          LOG_WARN("failed to collect temp table info", K(ret));
+        } else if (OB_FAIL(temp_table_info.table_infos_.push_back(table_info))) {
+          LOG_WARN("failed to push back table info", K(ret));
         }
       }
     }

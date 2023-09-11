@@ -274,7 +274,8 @@ public:
       transformer_type_(INVALID_TRANSFORM_TYPE),
       trans_happened_(false),
       cost_based_trans_tried_(false),
-	    stmt_cost_(-1)
+      current_temp_table_(NULL),
+      stmt_cost_(-1)
   {
   }
   virtual ~ObTransformRule()
@@ -448,6 +449,7 @@ protected:
   uint64_t transformer_type_;
   bool trans_happened_;
   bool cost_based_trans_tried_;
+  ObDMLStmt::TempTableInfo *current_temp_table_;
 
 private:
   double stmt_cost_;
