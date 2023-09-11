@@ -2771,21 +2771,19 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
 
       }
 
-      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
-          && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-        if (OB_DDL_ADD_COLUMN == static_cast<AlterColumnSchema&>(column).alter_type_) {
+      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())) {
+        ObCharsetType charset_type = charset_type_;
+        ObCollationType collation_type = collation_type_;
+        if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
           ObTableSchema &table_schema = static_cast<ObAlterTableStmt *>(stmt_)->get_alter_table_arg().alter_table_schema_;
-          if (OB_FAIL(check_and_fill_column_charset_info(column,
-                                                         table_schema.get_charset_type(),
-                                                         table_schema.get_collation_type()))) {
-            SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
+          if (CHARSET_INVALID == charset_type) {
+            charset_type = table_schema.get_charset_type();
+          }
+          if (CS_TYPE_INVALID == collation_type) {
+            collation_type = table_schema.get_collation_type();
           }
         }
-      }
-
-      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
-          && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
-        if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
+        if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type, collation_type))) {
           SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
         } else if (data_type.get_meta_type().is_lob() || data_type.get_meta_type().is_json()
                    || data_type.get_meta_type().is_geometry()) {
