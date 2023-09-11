@@ -278,7 +278,7 @@ public:
   // check early lock release is prepared
   int check_elr_prepared(bool& elr_prepared, int64_t& elr_commit_version);
   int insert_prev_trans(const uint32_t ctx_id, ObTransCtx* prev_trans_ctx);
-  // void audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type);
+  void audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type);
   int handle_redo_log_sync_response(const ObRedoLogSyncResponseMsg& msg);
   bool is_redo_log_sync_finish() const;
   bool is_prepare_leader_revoke() const;

@@ -768,7 +768,7 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
       } else {
         can_rollback_stmt_ = true;
       }
-      //(void)audit_partition(false, stmt_type);
+      (void)audit_partition(false, stmt_type);
     } else {
       mt_ctx_.set_read_snapshot(snapshot_version_);
     }
@@ -962,8 +962,7 @@ int ObPartTransCtx::end_task_(
             // Remove the predecessor array to avoid the useless dependencies
             ctx_dependency_wrap_.clear_cur_stmt_prev_trans_item();
           }
-
-          //(void)audit_partition(true, stmt_type);
+          (void)audit_partition(true, stmt_type);
           TRANS_LOG(
               DEBUG, "rollback stmt success", K(is_rollback), K(plan_type), K_(commit_task_count), "context", *this);
         }
@@ -975,10 +974,9 @@ int ObPartTransCtx::end_task_(
         if (OB_PHY_PLAN_UNCERTAIN == plan_type) {
           need_print_trace_log_ = true;
         }
-        /*
         if (stmt_info_.is_task_match(stmt_min_sql_no)) {
           (void)audit_partition(true, stmt_type);
-        }*/
+        }
       }
     } else {
       // do nothing
@@ -10131,7 +10129,6 @@ void ObPartTransCtx::check_memtable_ctx_ref()
   }
 }
 
-/*
 void ObPartTransCtx::audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type)
 {
   int tmp_ret = OB_SUCCESS;
@@ -10172,7 +10169,7 @@ void ObPartTransCtx::audit_partition(const bool is_rollback, const sql::stmt::St
       // do ntohing
     }
   }
-}*/
+}
 
 int ObPartTransCtx::post_redo_log_sync_to_not_mask_addr_(
     const uint64_t log_id, const int64_t log_ts, const int64_t log_type)
