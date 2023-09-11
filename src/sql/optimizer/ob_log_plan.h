@@ -91,7 +91,7 @@ struct FunctionTableDependInfo {
     K_(depend_table_set),
     K_(table_idx)
   );
-  ObSqlBitSet<> depend_table_set_;  //function table expr所依赖的表
+  ObRelIds depend_table_set_;  //function table expr所依赖的表
   int64_t table_idx_; //function table的bit index
 };
 typedef struct FunctionTableDependInfo JsonTableDependInfo;
