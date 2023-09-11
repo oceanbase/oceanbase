@@ -62,7 +62,7 @@ public:
   int64_t write_seq() const { return write_seq_; }
   void set_write_seq(const uint64_t write_seq) { write_seq_ = write_seq; }
   int64_t device_id() const { return device_id_; }
-  void set_device_id(const uint64_t  device_id) { device_id_ = device_id_; }
+  void set_device_id(const uint64_t device_id) { device_id_ = device_id; }
 
   MacroBlockId& operator =(const MacroBlockId &other)
   {
