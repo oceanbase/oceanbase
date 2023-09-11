@@ -22,6 +22,7 @@
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include <string.h>
 #include "share/ob_lob_access_utils.h"
+#include "sql/ob_spi.h"
 #include "lib/charset/ob_charset.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #ifdef OB_BUILD_ORACLE_XML
@@ -97,6 +98,26 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
 
   // 发送 field 信息
   if (OB_SUCC(ret)) {
+    if (result->get_exec_context().get_query_cache_ctx()->insert_query_cache_) {
+      // Store fields to query cache.
+      ObQueryCacheValueHandle handle;
+      const ColumnsFieldArray &real_fields = reinterpret_cast<const ColumnsFieldArray &>(fields);
+      if (OB_FAIL(session_.get_query_cache()->insert(result->get_exec_context().get_query_cache_ctx()->query_cache_key_,
+                                                    real_fields,
+                                                    handle))) {
+        // The resultset will not be inserted into the query cache
+        // if there is a key that already exists.
+        // Only allow one thread insert key successfully when them have same key.
+        result->get_exec_context().get_query_cache_ctx()->insert_query_cache_ = false;
+        handle.handle_.reset();
+        if (ret == OB_ENTRY_EXIST) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        result->get_exec_context().get_query_cache_ctx()->query_cache_handle_ = handle;
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); ++i) {
       bool is_not_match = false;
       ObMySQLField field;
@@ -201,6 +222,8 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       LOG_WARN("fields is null", K(ret), KP(fields));
     }
   }
+  const int64_t query_cache_limit = 64 * 1024; // 64KB
+  int64_t cur_row_size = 0;
   while (OB_SUCC(ret) && row_num < limit_count && !OB_FAIL(result.get_next_row(result_row)) ) {
     ObNewRow *row = const_cast<ObNewRow*>(result_row);
     if (is_prexecute_ && row_num == limit_count - 1) {
@@ -229,11 +252,11 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
           ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL,
             fields->at(i).type_.get_collation_type());
           if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
-                                           cast_ctx,
-                                           value,
-                                           value))) {
+                                                  cast_ctx,
+                                                  value,
+                                                  value))) {
             LOG_WARN("failed to cast object", K(ret), K(value),
-                     K(value.get_type()), K(fields->at(i).type_.get_type()));
+                    K(value.get_type()), K(fields->at(i).type_.get_type()));
           }
         }
       }
@@ -266,12 +289,35 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         }
       }
     }
+
+    // Store the row to query cache.
+    if (result.get_exec_context().get_query_cache_ctx()->insert_query_cache_) {
+      ObNewRow tmp_row = *row;
+      // A query resultset size need < query_cache_limit to add query cache.
+      cur_row_size += row->get_deep_copy_size();
+      ObQueryCacheValueHandle &handle = result.get_exec_context().get_query_cache_ctx()->query_cache_handle_;
+      if (cur_row_size < query_cache_limit) {
+        if (OB_SUCC(ret) && OB_FAIL(handle.query_cache_value_->add_row(tmp_row))) {
+          LOG_WARN("failed to add row to row store", K(ret));
+          result.get_exec_context().get_query_cache_ctx()->insert_query_cache_ = false;
+          if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+            ret = OB_SUCCESS;
+          }
+          handle.handle_.reset();
+        }
+      } else {
+        result.get_exec_context().get_query_cache_ctx()->insert_query_cache_ = false;
+        handle.handle_.reset();
+        LOG_WARN("resultset size over query cache limit", K(ret), K(cur_row_size));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session_);
       ObSMRow sm(protocol_type, *row, dtc_params,
-                         result.get_field_columns(),
-                         ctx_.schema_guard_,
-                         session_.get_effective_tenant_id());
+                result.get_field_columns(),
+                ctx_.schema_guard_,
+                session_.get_effective_tenant_id());
       sm.set_packed(is_packed);
       OMPKRow rp(sm);
       rp.set_is_packed(is_packed);
@@ -289,6 +335,10 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         }
       }
     }
+  }
+  if (result.get_exec_context().get_query_cache_ctx()->insert_query_cache_
+      && OB_NOT_NULL(result.get_exec_context().get_query_cache_ctx()->query_cache_handle_.query_cache_value_)) {
+    result.get_exec_context().get_query_cache_ctx()->query_cache_handle_.query_cache_value_->set_packed(is_packed);
   }
   if (is_cac_found_rows) {
     while (OB_SUCC(ret) && !OB_FAIL(result.get_next_row(result_row))) {

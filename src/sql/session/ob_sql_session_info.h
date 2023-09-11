@@ -44,6 +44,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/monitor/flt/ob_flt_extra_info.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "sql/query_cache/ob_query_cache.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
 
@@ -1247,6 +1248,9 @@ public:
 
   void set_ignore_stmt(bool v) { is_ignore_stmt_ = v; }
   bool is_ignore_stmt() const { return is_ignore_stmt_; }
+
+  // use for query cache
+  ObQueryCache *get_query_cache() { return ObQueryCache::get_instance(); }
 
   // piece
   void *get_piece_cache(bool need_init = false);

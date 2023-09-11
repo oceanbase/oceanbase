@@ -445,6 +445,13 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("location cache not supported to flush");
       } break;
+      case CACHE_TYPE_QUERY_CACHE: {
+          if (OB_FAIL(ctx.get_my_session()->get_query_cache()->flush())) {
+            LOG_WARN("clear query cache failed", K(ret));
+          } else {
+            LOG_INFO("success erase all query cache", K(ret));
+          }
+      } break;
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid cache type", "type", stmt.flush_cache_arg_.cache_type_);

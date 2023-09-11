@@ -89,6 +89,7 @@ class ObOperator;
 class ObOpInput;
 class ObSql;
 struct ObEvalCtx;
+struct ObQueryCacheCtx;
 typedef  common::ObArray<const common::ObIArray<int64_t> *> ObRowIdListArray;
 struct ColumnContent;
 typedef common::ObFixedArray<ColumnContent, common::ObIAllocator> ColContentFixedArray;
@@ -239,6 +240,10 @@ public:
   inline ObTaskExecutorCtx &get_task_exec_ctx();
   inline ObTaskExecutorCtx *get_task_executor_ctx();
   inline ObDASCtx &get_das_ctx() { return das_ctx_; }
+  /**
+   * @brief get query cache context.
+   */
+  inline ObQueryCacheCtx *get_query_cache_ctx();
   /**
    * @brief get session_mgr.
    */
@@ -539,6 +544,7 @@ protected:
   //common::ObInterruptibleTaskID interrupt_id_;
   bool has_non_trivial_expr_op_ctx_;
   ObSqlCtx *sql_ctx_;
+  ObQueryCacheCtx query_cache_ctx_;
   pl::ObPLContext *pl_stack_ctx_;
   bool need_disconnect_; // 是否需要断掉与客户端的连接
   //@todo: (linlin.xll) ObPLCtx is ambiguous with ObPLContext, need to rename it
@@ -728,6 +734,11 @@ inline ObTaskExecutorCtx &ObExecContext::get_task_exec_ctx()
 inline ObTaskExecutorCtx *ObExecContext::get_task_executor_ctx()
 {
   return &task_executor_ctx_;
+}
+
+inline ObQueryCacheCtx *ObExecContext::get_query_cache_ctx()
+{
+  return &query_cache_ctx_;
 }
 
 inline ObSQLSessionMgr *ObExecContext::get_session_mgr() const

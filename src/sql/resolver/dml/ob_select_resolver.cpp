@@ -1340,6 +1340,12 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
           LOG_USER_ERROR(OB_ERR_CANT_USE_OPTION_HERE, "SQL_CALC_FOUND_ROWS");
         }
       }
+      if (option_node->type_ == T_SQL_CACHE) {
+        select_stmt->set_sql_cache(true);
+      }
+      if (option_node->type_ == T_SQL_NO_CACHE) {
+        select_stmt->set_sql_no_cache(true);
+      }
     }
   }
   if (OB_SUCC(ret)) {

@@ -718,6 +718,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
     ObWaitEventStat total_wait_desc;
     ObDiagnoseSessionInfo *di = NULL;
+    // use for query cache
+    bool use_query_cache = false;
+    bool insert_query_cache = false;
+    ObQueryCacheValueHandle handle;
+    ObQueryCache *query_cache = session.get_query_cache();
     if (OB_SUCC(ret)) {
       if (enable_perf_event) {
         di = ObDiagnoseSessionInfo::get_local_diagnose_info();
@@ -737,6 +742,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       ctx_.enable_sql_resource_manage_ = true;
       //storage::ObPartitionService* ps = static_cast<storage::ObPartitionService *> (GCTX.par_ser_);
       //bool is_read_only = false;
+      result.get_exec_context().get_query_cache_ctx()->query_cache_key_ =
+            ObQueryCacheKey(session.get_login_tenant_id(),
+                            session.get_database_id(),
+                            sql,
+                            session);
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_ISNULL(ctx_.schema_guard_)) {
@@ -744,6 +754,18 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         LOG_WARN("newest schema is NULL", K(ret));
       } else if (OB_FAIL(set_session_active(sql, session, single_process_timestamp_))) {
         LOG_WARN("fail to set session active", K(ret));
+      } else if (OB_FAIL(can_use_query_cache(sql, session, result, use_query_cache))) {
+        LOG_WARN("failed to check can use query cache", K(ret));
+      } else if (use_query_cache
+                && OB_SUCC(query_cache->query(result.get_exec_context().get_query_cache_ctx()->query_cache_key_, handle))) {
+        handle.query_cache_value_->add_frequency();
+        // send result set to client
+        if (OB_FAIL(query_cache_response_query_header(handle, result, session))) {
+          LOG_WARN("failed to response query header to client from query cache", K(ret));
+        } else if (OB_FAIL(query_cache_response_result(handle, result, session))) {
+          LOG_WARN("failed to response result to client from query cache", K(ret), K(sql));
+        }
+        handle.handle_.reset();
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx_, result))) {
         exec_start_timestamp_ = ObTimeUtility::current_time();
         if (!THIS_WORKER.need_retry()) {
@@ -777,6 +799,12 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
+
+        // Check query whether need insert into query cache after paser.
+        if (OB_FAIL(can_insert_query_cache(session, result, insert_query_cache))) {
+          LOG_WARN("execute check whether can insert query cache fail", K(ret));
+        }
+        
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
         need_response_error = false;
@@ -821,6 +849,22 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
+
+      // query cache record some statistics
+      if (result.get_exec_context().get_query_cache_ctx()->insert_query_cache_) {
+        ObQueryCacheValueHandle insert_handle = result.get_exec_context().get_query_cache_ctx()->query_cache_handle_;
+        if (OB_NOT_NULL(insert_handle.query_cache_value_)) {
+          const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+          insert_handle.query_cache_value_->set_exec_time(time_cost);
+          const int64_t row_cnt = insert_handle.query_cache_value_->get_row_cnt();
+          const int64_t value_cost = insert_handle.query_cache_value_->get_row_mem_size();
+          insert_handle.query_cache_value_->set_cost(value_cost);
+          insert_handle.query_cache_value_->set_valid(true);
+          session.get_query_cache()->add_mem_size(value_cost);
+          session.get_query_cache()->add_row_cnt(row_cnt);
+          insert_handle.handle_.reset();
+        }
+      }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
@@ -1008,6 +1052,201 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
                                                         ret);
     }
 #endif
+  }
+  return ret;
+}
+
+int ObMPQuery::can_use_query_cache(const ObString &sql,
+                                  sql::ObSQLSessionInfo &session,
+                                  ObMySQLResultSet &result,
+                                  bool &use_query_cache)
+{
+  int ret = OB_SUCCESS;
+  int64_t query_cache_type_temp;
+  if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_USE_QUERY_CACHE, query_cache_type_temp))) {
+    LOG_WARN("failed to get sys variable query cache type", K(ret));
+  } else {
+    // check sys varible 'query_cache_type' before parse.
+    use_query_cache = (query_cache_type_temp != 0); 
+    // remove prefix space
+    ObString trimed_stmt = const_cast<ObString &>(sql).trim();
+    // only support select stmt.
+    use_query_cache &= (stmt::T_SELECT == session.get_stmt_type());
+    use_query_cache &= (trimed_stmt.length() > 6 && 0 == STRNCASECMP(trimed_stmt.ptr(), "select", 6));
+    // not support inner db
+    use_query_cache &= (!is_inner_db(session.get_database_id()));
+  }
+  result.get_exec_context().get_query_cache_ctx()->use_query_cache_ =  use_query_cache;
+  return ret;
+}
+
+int ObMPQuery::can_insert_query_cache(sql::ObSQLSessionInfo &session,
+                                      ObMySQLResultSet &result,
+                                      bool &insert_query_cache)
+{ 
+  int ret = OB_SUCCESS;
+  int64_t query_cache_type_temp;
+  insert_query_cache = result.get_exec_context().get_query_cache_ctx()->use_query_cache_;
+  insert_query_cache &= (session.get_query_cache()->count() <= 100000);
+  if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_USE_QUERY_CACHE, query_cache_type_temp))) {
+    LOG_WARN("failed to get sys variable query cache type", K(ret));
+  } else if (insert_query_cache) {
+    // check sys varible 'query_cache_type' after parse.
+    insert_query_cache &= (query_cache_type_temp == 1 && false == result.get_exec_context().get_query_cache_ctx()->is_select_sql_no_cache_)
+                      || (query_cache_type_temp == 2 && true == result.get_exec_context().get_query_cache_ctx()->is_select_sql_cache_);
+    // not support inner table
+    const ObPhysicalPlan *temp_plan = result.get_physical_plan();
+    const common::ObIArray<ObTableLocation> &table_locations = temp_plan->get_table_locations();
+    for (int i = 0; i < table_locations.count() && insert_query_cache; ++i) {
+      const ObTableLocation &table_location = table_locations.at(i);
+      insert_query_cache &= (!is_inner_table(table_location.get_table_id()));
+    }
+    insert_query_cache &= (table_locations.count() > 0);
+    // not support uncertainty function
+    // TODO
+  }
+  result.get_exec_context().get_query_cache_ctx()->insert_query_cache_ = insert_query_cache;
+  return ret;
+}
+
+int ObMPQuery::query_cache_response_query_header(const ObQueryCacheValueHandle &handle,
+                                                ObMySQLResultSet &result,
+                                                sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  bool ac = true;
+  int field_cnt = handle.query_cache_value_->get_fields().count();
+  if (field_cnt <= 0) {
+    LOG_WARN("result set column", K(field_cnt));
+    ret = OB_ERR_BAD_FIELD_ERROR;
+  } else if (OB_FAIL(session.get_autocommit(ac))) {
+    LOG_WARN("fail to get autocommit", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    OMPKResheader rhp;
+    rhp.set_field_count(field_cnt);
+    if (OB_FAIL(packet_sender_.response_packet(rhp, &session))) {
+      LOG_WARN("response packet fail", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const ColumnsFieldIArray *fields = &handle.query_cache_value_->get_fields();
+    if (OB_ISNULL(fields)) {
+      ret = OB_INVALID_ARGUMENT;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < field_cnt; ++i) {
+      bool is_not_match = false;
+      ObMySQLField field;
+      const ObField &ob_field = fields->at(i);
+      if (is_not_match) {
+        /*do nothing*/
+      } else {
+        ret = ObMySQLResultSet::to_mysql_field(ob_field, field);
+        result.replace_lob_type(session, ob_field, field);
+        if (result.get_is_com_filed_list()) {
+          field.default_value_ = static_cast<EMySQLFieldType>(ob_field.default_value_.get_ext());
+        }
+        result.set_errcode(ret);
+        if (OB_SUCC(ret)) {
+          OMPKField fp(field);
+          if (OB_FAIL(packet_sender_.response_packet(fp, &result.get_session()))) {
+            LOG_WARN("response packet fail", K(ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    OMPKEOF eofp;
+    eofp.set_warning_count(0);
+    ObServerStatusFlags flags = eofp.get_server_status();
+    flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
+      = (session.is_server_status_in_transaction() ? 1 : 0);
+    flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
+    flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = false;
+    if (!session.is_obproxy_mode()) {
+      flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session.partition_hit().get_bool();
+    }
+    eofp.set_server_status(flags);
+
+    if (OB_FAIL(packet_sender_.response_packet(eofp, &session))) {
+      LOG_WARN("response packet fail", K(ret));
+    }
+  }
+  return ret;
+}
+int ObMPQuery::query_cache_response_row(sql::ObSQLSessionInfo &session,
+                                        ObMySQLResultSet &result,
+                                        const common::ObNewRow &row,
+                                        const ColumnsFieldIArray *fields,
+                                        bool is_packed)
+{
+  int ret = OB_SUCCESS;
+  bool has_charset_convert = false;
+  if (OB_ISNULL(fields)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fields is null", K(ret), KP(fields));
+  } else {
+    if (OB_SUCC(ret)) {
+      const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
+      ObSMRow sm_row(MYSQL_PROTOCOL_TYPE::TEXT, row, dtc_params, 
+                                                fields,
+                                                ctx_.schema_guard_,  
+                                                session.get_effective_tenant_id());
+      sm_row.set_packed(is_packed);
+      obmysql::OMPKRow rp(sm_row);
+      rp.set_is_packed(is_packed);
+      if (OB_FAIL(response_packet(rp, &session))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("response packet fail", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+int ObMPQuery::query_cache_response_result(const ObQueryCacheValueHandle &handle,
+                                          ObMySQLResultSet &result,
+                                          sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  // response result
+  const ColumnsFieldArray *fields = &handle.query_cache_value_->get_fields();
+  const common::ObNewRow *row = NULL;
+  int max_count = handle.query_cache_value_->get_row_cnt();
+  bool is_packed = handle.query_cache_value_->is_packed();
+  for (int row_id = 0; row_id < max_count; ++row_id) {
+    handle.query_cache_value_->get_row(row_id, row);
+    if (OB_FAIL(query_cache_response_row(session, result, *row, fields, is_packed))) {
+      LOG_WARN("query cache response row fail.", K(ret), K(row_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("response query result fail", K(ret));
+  } else {
+    int ac = 1;
+    OMPKEOF eofp;
+    const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
+    uint16_t warning_count = 0;
+    if (OB_ISNULL(warnings_buf)) {
+      LOG_WARN("can not get thread warnings buffer");
+    } else {
+      warning_count = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
+    }
+    eofp.set_warning_count(warning_count);
+    ObServerStatusFlags flags = eofp.get_server_status();
+    flags.status_flags_.OB_SERVER_STATUS_IN_TRANS
+      = (session.is_server_status_in_transaction() ? 1 : 0);
+    flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
+    flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = false; /*no more result*/
+    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = false;
+    flags.status_flags_.OB_SERVER_STATUS_LAST_ROW_SENT = false;
+    eofp.set_server_status(flags);
+    // for obproxy
+    if (OB_SUCC(ret)) {
+        if (OB_FAIL(response_packet(eofp, &session))) {
+          LOG_WARN("response packet fail", K(ret));
+        }
+    }
   }
   return ret;
 }

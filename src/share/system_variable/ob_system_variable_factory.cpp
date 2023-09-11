@@ -121,6 +121,12 @@ const char *ObSysVarParallelDegreePolicy::PARALLEL_DEGREE_POLICY_NAMES[] = {
   "AUTO",
   0
 };
+const char *ObSysVarUseQueryCache::USE_QUERY_CACHE_NAMES[] = {
+  "OFF",
+  "ON",
+  "DEMAND",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -344,6 +350,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "tx_isolation",
   "tx_read_only",
   "unique_checks",
+  "use_query_cache",
   "validate_password_check_user_name",
   "validate_password_length",
   "validate_password_mixed_case_count",
@@ -580,6 +587,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_TX_ISOLATION,
   SYS_VAR_TX_READ_ONLY,
   SYS_VAR_UNIQUE_CHECKS,
+  SYS_VAR_USE_QUERY_CACHE,
   SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME,
   SYS_VAR_VALIDATE_PASSWORD_LENGTH,
   SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT,
@@ -827,7 +835,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "runtime_filter_wait_time_ms",
   "runtime_filter_max_in_num",
   "runtime_bloom_filter_max_size",
-  "optimizer_features_enable"
+  "optimizer_features_enable",
+  "use_query_cache"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1229,6 +1238,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarRuntimeFilterMaxInNum)
         + sizeof(ObSysVarRuntimeBloomFilterMaxSize)
         + sizeof(ObSysVarOptimizerFeaturesEnable)
+        + sizeof(ObSysVarUseQueryCache)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3332,6 +3342,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_FEATURES_ENABLE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerFeaturesEnable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarUseQueryCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarUseQueryCache", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_USE_QUERY_CACHE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarUseQueryCache));
       }
     }
 
@@ -5904,6 +5923,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerFeaturesEnable())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarOptimizerFeaturesEnable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_USE_QUERY_CACHE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarUseQueryCache)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarUseQueryCache)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarUseQueryCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarUseQueryCache", K(ret));
       }
       break;
     }
