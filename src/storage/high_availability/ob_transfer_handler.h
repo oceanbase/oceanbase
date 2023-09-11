@@ -37,6 +37,13 @@ namespace oceanbase
 namespace storage
 {
 
+enum class ObTransferWaitEventType
+{
+  WAIT_LS_REPLAY_PASS_START_SCN = 0,
+  PRECHECK_LS_REPLAY_SCN = 1,
+  TRANSFER_WAIT_SCN_EVENT_MAX,
+};
+
 class ObTransferHandler : public ObIHAHandler,
                           public logservice::ObIReplaySubHandler,
                           public logservice::ObIRoleChangeSubHandler,
@@ -156,6 +163,23 @@ private:
       const int64_t index,
       ObTimeoutCtx &timeout_ctx,
       share::SCN &start_scn);
+  int wait_ls_replay_event_(
+      const share::ObTransferTaskInfo &task_info,
+      const ObTransferWaitEventType &event_type,
+      const common::ObArray<ObAddr> &member_addr_list,
+      const share::SCN &check_scn,
+      ObTimeoutCtx &timeout_ctx);
+  int inner_get_scn_for_wait_event_(
+      const share::ObTransferTaskInfo &task_info,
+      const ObStorageHASrcInfo &src_info,
+      const ObTransferWaitEventType &wait_event,
+      share::SCN &replica_scn);
+  int precheck_ls_replay_scn_(
+      const share::ObTransferTaskInfo &task_info);
+  int get_max_decided_scn_(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      share::SCN &check_scn);
 
   int wait_src_ls_replay_to_start_scn_(
       const share::ObTransferTaskInfo &task_info,
