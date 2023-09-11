@@ -543,8 +543,8 @@ public:
    * @param [in] alter_table_arg
    * @param [out] cst_ids: new foreign key id
    */
-  int rebuild_hidden_table_foreign_key(obrpc::ObAlterTableArg &alter_table_arg,
-                                       common::ObSArray<uint64_t> &cst_ids);
+  int rebuild_hidden_table_foreign_key_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                                                common::ObSArray<uint64_t> &cst_ids);
   /**
    * This function is called by the storage layer in the second stage of offline ddl
    * For each constraint object in the original table, if it is a check constraint, need to
@@ -553,8 +553,8 @@ public:
    * @param [in] alter_table_arg
    * @param [out] cst_ids: new constraint id
    */
-  int rebuild_hidden_table_constraints(obrpc::ObAlterTableArg &alter_table_arg,
-                                       common::ObSArray<uint64_t> &cst_ids);
+  int rebuild_hidden_table_constraints_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                                                common::ObSArray<uint64_t> &cst_ids);
   /**
    * This function is called by the storage layer in the second stage of offline ddl
    * For each index object of the original table, a related hidden index can be created in
@@ -565,8 +565,8 @@ public:
    * @param [in] frozen_version
    * @param [out] index_ids: new index table id
    */
-  int rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table_arg,
-                                 common::ObSArray<uint64_t> &index_ids);
+  int rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                                          common::ObSArray<uint64_t> &index_ids);
   /**
    * This function is called by the storage layer in the fourth stage of offline ddl
    * If successful, the original table and dependent objects related to the original table need to be cleaned up
@@ -1533,7 +1533,7 @@ private:
       const ObTableSchema &orig_table_schema,
       const bool rebuild_child_table_fk,
       ObArray<ObForeignKeyInfo> &rebuild_fk_infos);
-  int rebuild_hidden_table_foreign_key_in_trans(
+  int rebuild_hidden_table_foreign_key(
       obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -1563,13 +1563,13 @@ private:
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &new_table_schema,
       ObIArray<ObConstraint> &rebuild_constraints);
-  int rebuild_hidden_table_constraints_in_trans(
+  int rebuild_hidden_table_constraints(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       common::ObMySQLTransaction &trans,
       common::ObSArray<uint64_t> &cst_ids);
-  int rebuild_hidden_table_index_in_trans(
+  int rebuild_hidden_table_index(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,

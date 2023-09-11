@@ -15407,7 +15407,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_index_in_trans(
+int ObDDLService::rebuild_hidden_table_index(
                   const uint64_t tenant_id,
                   ObSchemaGetterGuard &schema_guard,
                   ObDDLOperator &ddl_operator,
@@ -15452,19 +15452,12 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(
         }
       }
     }
-    if (trans.is_started()) {
-      int temp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-        ret = (OB_SUCC(ret)) ? temp_ret : ret;
-      }
-    }
   }
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table_arg,
-                                             ObSArray<uint64_t> &index_ids)
+int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                                                      ObSArray<uint64_t> &index_ids)
 {
   int ret = OB_SUCCESS;
   ObSArray<ObTableSchema> new_table_schemas;
@@ -15541,12 +15534,19 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
                                               new_table_schemas,
                                               index_ids))) {
         LOG_WARN("failed to add new index schema", K(ret));
-      } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(dst_tenant_id,
-                                                            *dst_tenant_schema_guard,
-                                                            ddl_operator,
-                                                            trans,
-                                                            new_table_schemas))) {
-        LOG_WARN("failed to rebuild hidden table index in trans", K(ret));
+      } else if (OB_FAIL(rebuild_hidden_table_index(dst_tenant_id,
+                                                    *dst_tenant_schema_guard,
+                                                    ddl_operator,
+                                                    trans,
+                                                    new_table_schemas))) {
+        LOG_WARN("failed to rebuild hidden table index", K(ret));
+      }
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
   }
@@ -15694,7 +15694,7 @@ int ObDDLService::check_and_get_rebuild_constraints(
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_constraints_in_trans(
+int ObDDLService::rebuild_hidden_table_constraints(
                   const ObAlterTableArg &alter_table_arg,
                   const ObTableSchema &orig_table_schema,
                   const ObTableSchema &hidden_table_schema,
@@ -15747,18 +15747,11 @@ int ObDDLService::rebuild_hidden_table_constraints_in_trans(
       }
     }
   }
-  if (trans.is_started()) {
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-      ret = (OB_SUCC(ret)) ? temp_ret : ret;
-    }
-  }
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_constraints(ObAlterTableArg &alter_table_arg,
-                                                   ObSArray<uint64_t> &cst_ids)
+int ObDDLService::rebuild_hidden_table_constraints_in_trans(ObAlterTableArg &alter_table_arg,
+                                                            ObSArray<uint64_t> &cst_ids)
 {
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
@@ -15792,12 +15785,19 @@ int ObDDLService::rebuild_hidden_table_constraints(ObAlterTableArg &alter_table_
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
-    } else if (OB_FAIL(rebuild_hidden_table_constraints_in_trans(alter_table_arg,
-                                                                *orig_table_schema,
-                                                                *hidden_table_schema,
-                                                                trans,
-                                                                cst_ids))) {
-      LOG_WARN("failed to rebuild hidden table constraints in trans", K(ret));
+    } else if (OB_FAIL(rebuild_hidden_table_constraints(alter_table_arg,
+                                                        *orig_table_schema,
+                                                        *hidden_table_schema,
+                                                        trans,
+                                                        cst_ids))) {
+      LOG_WARN("failed to rebuild hidden table constraints", K(ret));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
     }
   }
   int tmp_ret = OB_SUCCESS;
@@ -16124,7 +16124,7 @@ int ObDDLService::get_rebuild_foreign_key_infos(
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_foreign_key_in_trans(
+int ObDDLService::rebuild_hidden_table_foreign_key(
                   ObAlterTableArg &alter_table_arg,
                   const ObTableSchema &orig_table_schema,
                   const ObTableSchema &hidden_table_schema,
@@ -16279,8 +16279,8 @@ int ObDDLService::rebuild_hidden_table_foreign_key_in_trans(
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_foreign_key(ObAlterTableArg &alter_table_arg,
-                                                   ObSArray<uint64_t> &cst_ids)
+int ObDDLService::rebuild_hidden_table_foreign_key_in_trans(ObAlterTableArg &alter_table_arg,
+                                                            ObSArray<uint64_t> &cst_ids)
 {
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
@@ -16314,14 +16314,14 @@ int ObDDLService::rebuild_hidden_table_foreign_key(ObAlterTableArg &alter_table_
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
-    } else if (OB_FAIL(rebuild_hidden_table_foreign_key_in_trans(alter_table_arg,
-                                                                *orig_table_schema,
-                                                                *hidden_table_schema,
-                                                                false/*rebuild_child_table_fk*/,
-                                                                *dst_tenant_schema_guard,
-                                                                trans,
-                                                                cst_ids))) {
-      LOG_WARN("failed to rebuild hidden table foreign key in trans", K(ret));
+    } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
+                                                        *orig_table_schema,
+                                                        *hidden_table_schema,
+                                                        false/*rebuild_child_table_fk*/,
+                                                        *dst_tenant_schema_guard,
+                                                        trans,
+                                                        cst_ids))) {
+      LOG_WARN("failed to rebuild hidden table foreign key", K(ret));
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -16642,7 +16642,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
       } else if (OB_FAIL(drop_child_table_fk(alter_table_arg, new_orig_table_schema,
           *hidden_table_schema, schema_guard, trans))) {
         LOG_WARN("failed to drop origin table fk", K(ret));
-      } else if (OB_FAIL(rebuild_hidden_table_foreign_key_in_trans(alter_table_arg,
+      } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
           *orig_table_schema, *hidden_table_schema, true/*rebuild_child_table_fk*/, schema_guard, trans, fk_cst_ids))) {
         LOG_WARN("failed to rebuild hidden table fk", K(ret));
       } else if (OB_FAIL(check_hidden_table_constraint_exist(hidden_table_schema,
@@ -33077,7 +33077,7 @@ int ObDDLSQLTransaction::end(const bool commit)
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema service is null", K(ret));
-  } else if (enable_check_ddl_epoch_ && OB_FAIL(lock_ddl_epoch(this))) {
+  } else if (commit && enable_check_ddl_epoch_ && OB_FAIL(lock_ddl_epoch(this))) {
     // compare ddl_epoch promise execute on master
     LOG_WARN("lock_ddl_epoch fail", K(ret));
   } else if (commit && need_end_signal_) {

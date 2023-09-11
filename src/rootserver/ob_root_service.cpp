@@ -3818,23 +3818,23 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
   } else {
     switch (arg.ddl_task_type_) {
       case share::REBUILD_INDEX_TASK: {
-        if (OB_FAIL(ddl_service_.rebuild_hidden_table_index(
+        if (OB_FAIL(ddl_service_.rebuild_hidden_table_index_in_trans(
             const_cast<obrpc::ObAlterTableArg &>(arg), obj_ids))) {
-          LOG_WARN("failed to rebuild hidden table index", K(ret));
+          LOG_WARN("failed to rebuild hidden table index in trans", K(ret));
         }
         break;
       }
       case share::REBUILD_CONSTRAINT_TASK: {
-        if (OB_FAIL(ddl_service_.rebuild_hidden_table_constraints(
+        if (OB_FAIL(ddl_service_.rebuild_hidden_table_constraints_in_trans(
             const_cast<obrpc::ObAlterTableArg &>(arg), obj_ids))) {
-          LOG_WARN("failed to rebuild hidden table constraints", K(ret));
+          LOG_WARN("failed to rebuild hidden table constraints in trans", K(ret));
         }
         break;
       }
       case share::REBUILD_FOREIGN_KEY_TASK: {
-        if (OB_FAIL(ddl_service_.rebuild_hidden_table_foreign_key(
+        if (OB_FAIL(ddl_service_.rebuild_hidden_table_foreign_key_in_trans(
             const_cast<obrpc::ObAlterTableArg &>(arg), obj_ids))) {
-          LOG_WARN("failed to rebuild hidden table foreign key", K(ret));
+          LOG_WARN("failed to rebuild hidden table foreign key in trans", K(ret));
         }
         break;
       }
