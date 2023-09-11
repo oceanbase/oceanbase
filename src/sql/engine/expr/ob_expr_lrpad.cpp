@@ -1112,18 +1112,20 @@ int ObExprBaseLRpad::calc_oracle(LRpadType pad_type, const ObExpr &expr,
     const ObString &str_pad = pad_text.get_string();
     const ObCollationType cs_type = expr.datum_meta_.cs_type_;
 
-    // max varchar size is 4000 in Oracle SQL, however 32767 in PL/SQL
-    // OB does not support `MAX_STRING_SIZE = EXTENDED` for now
+    // Max VARCHAR2 size is 32767 in Oracle PL/SQL.
+    // However, Oracle SQL allow user to determine max VARCHAR2 size through `MAX_STRING_SIZE` parameter.
+    // The max VARCHAR2 size is 4000 when `MAX_STRING_SIZE` is set to `STANDARD`, and 32767 when set to `EXTENDED`.
+    // OB does not support `MAX_STRING_SIZE` parameter for now, but behaves compatibly with `EXTENDED` mode.
     const ObExprOracleLRpadInfo *info = nullptr;
-    int64_t max_varchar_size = OB_MAX_ORACLE_VARCHAR_LENGTH;
+    int64_t max_varchar2_size = OB_MAX_ORACLE_VARCHAR_LENGTH;
     if (OB_NOT_NULL(info = static_cast<ObExprOracleLRpadInfo *>(expr.extra_info_)) &&
         info->is_called_in_sql_) {
-      const int64_t STANDARD_MAX_ORACLE_VARCHAR_LENGTH = 4000;
-      max_varchar_size = STANDARD_MAX_ORACLE_VARCHAR_LENGTH;
+      const int64_t ORACLE_EXTENDED_MAX_VARCHAR_LENGTH = 32767;
+      max_varchar2_size = ORACLE_EXTENDED_MAX_VARCHAR_LENGTH;
     }
     int64_t max_result_size = ob_is_text_tc(expr.datum_meta_.type_)
         ? OB_MAX_LONGTEXT_LENGTH
-        : max_varchar_size;
+        : max_varchar2_size;
 
     number::ObNumber len_num(len.get_number());
     int64_t decimal_parts = -1;
