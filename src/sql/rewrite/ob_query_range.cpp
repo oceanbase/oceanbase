@@ -4581,6 +4581,8 @@ int ObQueryRange::do_key_part_node_and(
       if (!l_key_part->is_question_mark() && !r_key_part->is_question_mark()) {
         l_items = l_key_part->item_next_;
         r_items = r_key_part->item_next_;
+        l_key_part->item_next_ = NULL;
+        r_key_part->item_next_ = NULL;
         if (l_key_part->is_in_key() && r_key_part->is_in_key()) {
           ObSEArray<int64_t, 4> common_offsets;
           if (OB_FAIL(ObOptimizerUtil::intersect(l_key_part->in_keypart_->offsets_,
