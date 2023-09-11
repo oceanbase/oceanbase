@@ -73,7 +73,14 @@ int ObITxLogAdapter::check_redo_sync_completed(const ObTransID &tx_id,
   return OB_SUCCESS;
 }
 
-int64_t ObITxLogAdapter::get_committing_dup_trx_cnt() { return 0; }
+int ObITxLogAdapter::get_committing_dup_trx_cnt(int64_t &dup_trx_cnt)
+{
+  int ret = OB_SUCCESS;
+
+  dup_trx_cnt = 0;
+
+  return ret;
+}
 
 int ObITxLogAdapter::add_commiting_dup_trx(const ObTransID &tx_id)
 {
@@ -87,7 +94,7 @@ int ObITxLogAdapter::remove_commiting_dup_trx(const ObTransID &tx_id)
   return OB_SUCCESS;
 }
 
-int ObLSTxLogAdapter::init(ObITxLogParam *param)
+int ObLSTxLogAdapter::init(ObITxLogParam *param, ObTxTable *tx_table)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param) || OB_NOT_NULL(log_handler_)) {
@@ -97,6 +104,7 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param)
     ObTxPalfParam *palf_param = static_cast<ObTxPalfParam *>(param);
     log_handler_ = palf_param->get_log_handler();
     dup_table_ls_handler_ = palf_param->get_dup_table_ls_handler();
+    tx_table_ = tx_table;
   }
   return ret;
 }
@@ -277,15 +285,27 @@ bool ObLSTxLogAdapter::has_dup_tablet()
   return has_dup;
 }
 
-int64_t ObLSTxLogAdapter::get_committing_dup_trx_cnt()
+int ObLSTxLogAdapter::get_committing_dup_trx_cnt(int64_t &dup_trx_cnt)
 {
-  int64_t committing_dup_trx_cnt = 0;
-  if (OB_ISNULL(dup_table_ls_handler_)) {
-    committing_dup_trx_cnt = 0;
+  int ret = OB_SUCCESS;
+
+  dup_trx_cnt = 0;
+  if (OB_ISNULL(dup_table_ls_handler_) || OB_ISNULL(tx_table_)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(dup_table_ls_handler_), KP(tx_table_));
   } else {
-    committing_dup_trx_cnt = dup_table_ls_handler_->get_committing_dup_trx_cnt();
+    dup_trx_cnt = dup_table_ls_handler_->get_committing_dup_trx_cnt();
+    if (0 == dup_trx_cnt) {
+      ObTxTableGuard tx_table_guard;
+      if (OB_FAIL(tx_table_->get_tx_table_guard(tx_table_guard))) {
+        TRANS_LOG(WARN, "get tx table guard failed", K(ret), K(dup_trx_cnt), K(tx_table_guard));
+      } else if (tx_table_guard.check_ls_offline()) {
+        ret = OB_LS_OFFLINE;
+        TRANS_LOG(WARN, "The ls has been offline", K(ret), K(dup_trx_cnt), K(tx_table_guard));
+      }
+    }
   }
-  return committing_dup_trx_cnt;
+  return dup_trx_cnt;
 }
 
 int ObLSTxLogAdapter::add_commiting_dup_trx(const ObTransID &tx_id)

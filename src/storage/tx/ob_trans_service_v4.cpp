@@ -1584,6 +1584,8 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   acquire_from_follower = false;
   int64_t epoch = 0;
+  int64_t committing_dup_trx_cnt = 0;
+  int dup_trx_status = OB_SUCCESS;
   bool leader = false;
   SCN snapshot0;
   SCN snapshot1;
@@ -1603,54 +1605,44 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   }
 
   if (OB_NOT_MASTER == ret && is_read_only) {
-    const int64_t committing_dup_trx_cnt =
-        ls_tx_ctx_mgr->get_ls_log_adapter()->get_committing_dup_trx_cnt();
+    dup_trx_status =
+        ls_tx_ctx_mgr->get_ls_log_adapter()->get_committing_dup_trx_cnt(committing_dup_trx_cnt);
     if (!MTL_IS_PRIMARY_TENANT()) {
       ret = OB_NOT_MASTER;
       TRANS_LOG(DEBUG, "the max_commmit_ts can not be used as a snapshot in standby tenant ", K(ret),
                 K(ls_id), K(snapshot), K(MTL_IS_PRIMARY_TENANT()), K(committing_dup_trx_cnt));
     } else if (!ls_tx_ctx_mgr->get_ls_log_adapter()->is_dup_table_lease_valid()) {
       ret = OB_NOT_MASTER;
-    } else if (committing_dup_trx_cnt > 0) {
+    } else if (committing_dup_trx_cnt > 0 || OB_SUCCESS != dup_trx_status) {
       ret = OB_NOT_MASTER;
       TRANS_LOG(WARN, "discover commiting dup table trx, can not use max_commit_ts", K(ret), K(ls_id),
-                K(committing_dup_trx_cnt));
+                K(committing_dup_trx_cnt), K(dup_trx_status));
     } else {
       ret = OB_SUCCESS;
       acquire_from_follower = true;
-      TRANS_LOG(INFO,
-                "acquire local snapshot from a dup ls follower",
-                K(ret),
-                K(leader),
-                K(epoch),
-                K(acquire_from_follower),
-                K(ls_id),
-                K(committing_dup_trx_cnt),
-                K(can_elr),
-                K(MTL_IS_PRIMARY_TENANT()));
     }
-      //                                 +----------------------------------------------------------------+
-      //                                 |         get max_commit_ts from a follower as snapshot          |
-      //                                 +----------------------------------------------------------------+
-      //                                   |
-      //                                   | may be smaller than a pre_commit trx
-      //                                   v
-      // +----------------+  count > 0   +----------------------------------------------------------------+
-      // |   Not Master   | <----------- |                 commiting dup table trx count                  |
-      // +----------------+              +----------------------------------------------------------------+
-      //                                   |
-      //                                   | count == 0
-      //                                   v
-      // +----------------+  false       +----------------------------------------------------------------+
-      // |   Not Master   | <----------- |      check all tablet loc: all tablet is dup table tablet      |
-      // +----------------+              +----------------------------------------------------------------+
-      //                                   |
-      //                                   | true
-      //                                   v
-      //                                 +----------------------------------------------------------------+
-      //                                 |       use max_commit_ts to read a dup table follower           |
-      //                                 +----------------------------------------------------------------+
-      //
+    //                                 +----------------------------------------------------------------+
+    //                                 |         get max_commit_ts from a follower as snapshot          |
+    //                                 +----------------------------------------------------------------+
+    //                                   |
+    //                                   | may be smaller than a pre_commit trx
+    //                                   v
+    // +----------------+  count > 0   +----------------------------------------------------------------+
+    // |   Not Master   | <----------- |                 commiting dup table trx count                  |
+    // +----------------+              +----------------------------------------------------------------+
+    //                                   |
+    //                                   | count == 0
+    //                                   v
+    // +----------------+  false       +----------------------------------------------------------------+
+    // |   Not Master   | <----------- |      check all tablet loc: all tablet is dup table tablet      |
+    // +----------------+              +----------------------------------------------------------------+
+    //                                   |
+    //                                   | true
+    //                                   v
+    //                                 +----------------------------------------------------------------+
+    //                                 |       use max_commit_ts to read a dup table follower           |
+    //                                 +----------------------------------------------------------------+
+    //
   }
 
   if(OB_FAIL(ret)) {
@@ -1665,6 +1657,13 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
     tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
+
+  if (acquire_from_follower) {
+    TRANS_LOG(INFO, "acquire local snapshot from a dup ls follower", K(ret), K(leader), K(epoch),
+              K(acquire_from_follower), K(ls_id), K(dup_trx_status), K(committing_dup_trx_cnt),
+              K(can_elr), K(snapshot));
+  }
+
   TRANS_LOG(TRACE, "acquire local snapshot", K(ret), K(ls_id), K(snapshot));
   return ret;
 }

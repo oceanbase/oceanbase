@@ -88,7 +88,7 @@ public:
                                         share::SCN &total_max_read_version);
   virtual bool is_dup_table_lease_valid() { return false; }
   virtual bool has_dup_tablet() { return false; }
-  virtual int64_t get_committing_dup_trx_cnt();
+  virtual int get_committing_dup_trx_cnt(int64_t &dup_trx_cnt);
   virtual int add_commiting_dup_trx(const ObTransID &tx_id);
   virtual int remove_commiting_dup_trx(const ObTransID &tx_id);
 };
@@ -96,9 +96,9 @@ public:
 class ObLSTxLogAdapter : public ObITxLogAdapter
 {
 public:
-  ObLSTxLogAdapter() : log_handler_(nullptr) {}
+  ObLSTxLogAdapter() : log_handler_(nullptr), dup_table_ls_handler_(nullptr), tx_table_(nullptr) {}
 
-  int init(ObITxLogParam *param);
+  int init(ObITxLogParam *param, ObTxTable *tx_table);
   int submit_log(const char *buf,
                  const int64_t size,
                  const share::SCN &base_ts,
@@ -130,12 +130,13 @@ public:
                                 share::SCN &total_max_read_version);
   bool is_dup_table_lease_valid();
   bool has_dup_tablet();
-  int64_t get_committing_dup_trx_cnt();
+  int get_committing_dup_trx_cnt(int64_t &dup_trx_cnt);
   int add_commiting_dup_trx(const ObTransID &tx_id);
   int remove_commiting_dup_trx(const ObTransID &tx_id);
 private:
   logservice::ObLogHandler *log_handler_;
   ObDupTableLSHandler *dup_table_ls_handler_;
+  ObTxTable *tx_table_;
 };
 
 } // namespace transaction
