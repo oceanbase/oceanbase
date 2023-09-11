@@ -38,6 +38,8 @@ using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::obrpc;
 
+const ObString ObTableApiProcessorBase::OBKV_TRACE_INFO = ObString::make_string("OBKV Operation");
+
 int ObTableLoginP::process()
 {
   int ret = OB_SUCCESS;
@@ -510,11 +512,12 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
 
 int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
 {
-  return sync_end_trans_(is_rollback, trans_desc_, timeout_ts, lock_handle);
+  return sync_end_trans_(is_rollback, trans_desc_, timeout_ts, lock_handle, &OBKV_TRACE_INFO);
 }
 
 int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTxDesc *&trans_desc,
-                                             int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
+                                             int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/,
+                                             const ObString *trace_info /*nullptr*/)
 {
   int ret = OB_SUCCESS;
 
@@ -524,7 +527,7 @@ int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTx
     if (OB_FAIL(txs->rollback_tx(*trans_desc))) {
       LOG_WARN("fail rollback trans when session terminate", K(ret), KPC(trans_desc));
     }
-  } else if (OB_FAIL(txs->commit_tx(*trans_desc, stmt_timeout_ts))) {
+  } else if (OB_FAIL(txs->commit_tx(*trans_desc, stmt_timeout_ts, trace_info))) {
     ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
     LOG_WARN("fail commit trans when session terminate",
               K(ret), KPC(trans_desc), K(stmt_timeout_ts));
@@ -544,7 +547,8 @@ int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTx
   return ret;
 }
 
-int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
+int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts,
+                                                ObHTableLockHandle *lock_handle /*nullptr*/)
 {
   int ret = OB_SUCCESS;
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);

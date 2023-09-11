@@ -32,6 +32,11 @@ int ObTableApiDeleteExecutor::open()
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
   } else if (OB_FAIL(generate_del_rtdef(del_spec_.get_ctdef(), del_rtdef_))) {
     LOG_WARN("fail to generate delete rtdef");
+  } else {
+    if (tb_ctx_.is_skip_scan()) {
+      set_entity(tb_ctx_.get_entity());
+      set_skip_scan(true);
+    }
   }
 
   return ret;

@@ -793,32 +793,42 @@ int ObTableExprCgService::refresh_delete_exprs_frame(ObTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObObj, 3> rowkey;
-  ObObj k_obj;
-  ObObj q_obj;
-  ObObj t_obj;
-  int64_t time = 0;
+  if (ObTableEntityType::ET_HKV == ctx.get_entity_type()) {
+    ObObj k_obj;
+    ObObj q_obj;
+    ObObj t_obj;
+    int64_t time = 0;
 
-  // htable场景rowkey都在properties中，所以需要从properties中提取出rowkey
-  if (OB_FAIL(entity.get_property(ObHTableConstants::ROWKEY_CNAME_STR, k_obj))) {
-    LOG_WARN("fail to get K", K(ret));
-  } else if (OB_FAIL(entity.get_property(ObHTableConstants::CQ_CNAME_STR, q_obj))) {
-    LOG_WARN("fail to get Q", K(ret));
-  } else if (OB_FAIL(entity.get_property(ObHTableConstants::VERSION_CNAME_STR, t_obj))) {
-    LOG_WARN("fail to get T", K(ret));
-  } else if (OB_FAIL(rowkey.push_back(k_obj))) {
-    LOG_WARN("fail to push back k_obj", K(ret), K(k_obj));
-  } else if (OB_FAIL(rowkey.push_back(q_obj))) {
-    LOG_WARN("fail to push back q_obj", K(ret), K(q_obj));
-  } else if (FALSE_IT(time = t_obj.get_int())) {
-    // do nothing
-  } else if (FALSE_IT(t_obj.set_int(-1 * time))) {
-    // do nothing
-  } else if (OB_FAIL(rowkey.push_back(t_obj))) {
-    LOG_WARN("fail to push back t_obj", K(ret), K(t_obj));
-  } else if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, exprs, rowkey))) {
-    LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
-  } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, exprs, entity))) {
-    LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx));
+    // htable场景rowkey都在properties中，所以需要从properties中提取出rowkey
+    if (OB_FAIL(entity.get_property(ObHTableConstants::ROWKEY_CNAME_STR, k_obj))) {
+      LOG_WARN("fail to get K", K(ret));
+    } else if (OB_FAIL(entity.get_property(ObHTableConstants::CQ_CNAME_STR, q_obj))) {
+      LOG_WARN("fail to get Q", K(ret));
+    } else if (OB_FAIL(entity.get_property(ObHTableConstants::VERSION_CNAME_STR, t_obj))) {
+      LOG_WARN("fail to get T", K(ret));
+    } else if (OB_FAIL(rowkey.push_back(k_obj))) {
+      LOG_WARN("fail to push back k_obj", K(ret), K(k_obj));
+    } else if (OB_FAIL(rowkey.push_back(q_obj))) {
+      LOG_WARN("fail to push back q_obj", K(ret), K(q_obj));
+    } else if (FALSE_IT(time = t_obj.get_int())) {
+      // do nothing
+    } else if (FALSE_IT(t_obj.set_int(-1 * time))) {
+      // do nothing
+    } else if (OB_FAIL(rowkey.push_back(t_obj))) {
+      LOG_WARN("fail to push back t_obj", K(ret), K(t_obj));
+    }
+  } else {
+    if (OB_FAIL(rowkey.assign(entity.get_rowkey_objs()))) {
+      LOG_WARN("fail to assign", K(ret), K(entity.get_rowkey_objs()));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(refresh_rowkey_exprs_frame(ctx, exprs, rowkey))) {
+      LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
+    } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, exprs, entity))) {
+      LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx));
+    }
   }
 
   return ret;
@@ -934,35 +944,43 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
     LOG_WARN("invalid column item count", K(ret), K(items), K(schema_rowkey_cnt));
   }
 
-  for (int64_t i = 0, rowkey_idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+  // not always the primary key is the prefix of table schema
+  // e.g., create table test(a varchar(1024), b int primary key);
+  for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); i++) {
     const ObTableColumnItem &item = items.at(i);
-    const ObExpr *expr = exprs.at(i);
-    if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
-      ObObj null_obj;
-      null_obj.set_null();
-      const ObObj *tmp_obj = is_full_filled ? &rowkey.at(rowkey_idx) : &null_obj;
-      if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *tmp_obj))) {
-        LOG_WARN("fail to write auto increment datum", K(ret), K(is_full_filled), K(*expr), K(*tmp_obj));
-      }
-      if (is_full_filled) {
-        rowkey_idx++;
-      }
-    } else if (!is_full_filled && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
-      ObDatum *tmp_datum = nullptr;
-      if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
-        LOG_WARN("fail to eval current timestamp expr", K(ret));
-      }
+    int64_t rowkey_position = item.rowkey_position_;
+    if (rowkey_position <= 0) {
+      // normal column, do nothing
     } else {
-      if (rowkey_idx >= entity_rowkey_cnt) {
-        ret = OB_INDEX_OUT_OF_RANGE;
-        LOG_WARN("idx out of range", K(ret), K(i), K(entity_rowkey_cnt));
-      } else if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNDEFINED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(rowkey_idx)))) {
-        LOG_WARN("fail to write datum", K(ret), K(rowkey_idx), K(rowkey.at(rowkey_idx)), K(*expr));
+      const ObTableColumnItem &item = items.at(i);
+      const ObExpr *expr = exprs.at(i);
+      if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
+        if (is_full_filled && rowkey_position > entity_rowkey_cnt) {
+          ret = OB_INDEX_OUT_OF_RANGE;
+          LOG_WARN("idx out of range", K(ret), K(i), K(rowkey_position), K(entity_rowkey_cnt));
+        } else {
+          ObObj null_obj;
+          null_obj.set_null();
+          const ObObj *tmp_obj = is_full_filled ? &rowkey.at(rowkey_position-1) : &null_obj;
+          if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *tmp_obj))) {
+            LOG_WARN("fail to write auto increment datum", K(ret), K(is_full_filled), K(*expr), K(*tmp_obj));
+          }
+        }
+      } else if (!is_full_filled && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
+        ObDatum *tmp_datum = nullptr;
+        if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
+          LOG_WARN("fail to eval current timestamp expr", K(ret));
+        }
       } else {
-        rowkey_idx++;
+        if (rowkey_position > entity_rowkey_cnt) {
+          ret = OB_INDEX_OUT_OF_RANGE;
+          LOG_WARN("idx out of range", K(ret), K(i), K(entity_rowkey_cnt), K(rowkey_position));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNDEFINED;
+          LOG_WARN("expr is null", K(ret));
+        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(rowkey_position-1)))) {
+          LOG_WARN("fail to write datum", K(ret), K(rowkey_position), K(rowkey.at(rowkey_position-1)), K(*expr));
+        }
       }
     }
   }
@@ -998,44 +1016,48 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
   } else {
     ObObj prop_value;
     const ObObj *obj = nullptr;
-    const int64_t rowkey_column_cnt = table_schema->get_rowkey_column_num();
-    for (int64_t i = rowkey_column_cnt; OB_SUCC(ret) && i < items.count(); i++) {
+    // not always the primary key is the prefix of table schema
+    // e.g., create table test(a varchar(1024), b int primary key);
+    for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); i++) {
       const ObTableColumnItem &item = items.at(i);
-      const ObExpr *expr = exprs.at(i);
-      if (item.is_generated_column_) { // generate column need eval first
-        ObDatum *tmp_datum = nullptr;
-        if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
-          LOG_WARN("fail to eval generate expr", K(ret));
-        }
+      if (item.rowkey_position_ > 0) {
+        // rowkey column, do nothing
       } else {
-        // 这里使用schema的列名在entity中查找property，有可能出现本身entity中的prop_name是不对的，导致找不到
-        bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(item.column_name_, prop_value));
-        if (not_found) {
-          obj = &item.default_value_;
-        } else {
-          obj = &prop_value;
-        }
-        if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
-          ObObj null_obj;
-          null_obj.set_null();
-          obj = not_found ? &null_obj : &prop_value;
-          if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *obj))) {
-            LOG_WARN("fail to write auto increment datum", K(ret), K(not_found), K(*expr), K(*obj));
-          }
-        } else if (not_found && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
+        const ObExpr *expr = exprs.at(i);
+        if (item.is_generated_column_) { // generate column need eval first
           ObDatum *tmp_datum = nullptr;
           if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
-            LOG_WARN("fail to eval current timestamp expr", K(ret));
+            LOG_WARN("fail to eval generate expr", K(ret));
           }
         } else {
-          if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
-            LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
+          // 这里使用schema的列名在entity中查找property，有可能出现本身entity中的prop_name是不对的，导致找不到
+          bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(item.column_name_, prop_value));
+          if (not_found) {
+            obj = &item.default_value_;
+          } else {
+            obj = &prop_value;
+          }
+          if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
+            ObObj null_obj;
+            null_obj.set_null();
+            obj = not_found ? &null_obj : &prop_value;
+            if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *obj))) {
+              LOG_WARN("fail to write auto increment datum", K(ret), K(not_found), K(*expr), K(*obj));
+            }
+          } else if (not_found && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
+            ObDatum *tmp_datum = nullptr;
+            if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
+              LOG_WARN("fail to eval current timestamp expr", K(ret));
+            }
+          } else {
+            if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, *obj))) {
+              LOG_WARN("fail to write datum", K(ret), K(*obj), K(*expr));
+            }
           }
         }
       }
     }
   }
-
   return ret;
 }
 

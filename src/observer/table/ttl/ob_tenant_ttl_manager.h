@@ -35,12 +35,15 @@ public:
   ObClearTTLHistoryTask()
   : sql_proxy_(nullptr),
     is_inited_(false),
-    tenant_id_(OB_INVALID_TENANT_ID)
+    tenant_id_(OB_INVALID_TENANT_ID),
+    is_paused_(false)
   {}
   ~ObClearTTLHistoryTask() {}
   int init(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy);
   virtual void runTimerTask() override;
   void destroy() {}
+  void pause();
+  void resume();
 
   static const int64_t OB_KV_TTL_GC_INTERVAL =  30 * 1000L * 1000L; // 30s
   static const int64_t OB_KV_TTL_GC_COUNT_PER_TASK = 4096L;
@@ -48,6 +51,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   bool is_inited_;
   uint64_t tenant_id_;
+  bool is_paused_;
 };
 
 struct ObTTLServerInfo
@@ -90,7 +94,8 @@ class ObTTLTaskScheduler : public common::ObTimerTask
 {
 public:
   ObTTLTaskScheduler()
-  : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false), need_reload_(true)
+  : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false),
+    need_reload_(true), is_paused_(false)
   {}
   ~ObTTLTaskScheduler() {}
 
@@ -107,6 +112,9 @@ public:
 
   int try_add_periodic_task();
   void set_need_reload(bool need_reload) { need_reload_ = need_reload; }
+
+  void pause();
+  void resume();
 private:
   virtual bool is_enable_ttl();
 
@@ -158,6 +166,7 @@ private:
   bool need_reload_;
   lib::ObMutex mutex_;
   ObArray<share::ObTabletTablePair> tablet_table_pairs_;
+  bool is_paused_;
   const int64_t OB_TTL_TASK_RETRY_INTERVAL = 15*1000*1000; // 15s
 };
 
@@ -180,6 +189,8 @@ public:
   void stop();
   void destroy();
   int handle_user_ttl(const obrpc::ObTTLRequestArg& arg);
+  void resume();
+  void pause();
 private:
   bool is_inited_;
   ObClearTTLHistoryTask clear_ttl_history_task_;

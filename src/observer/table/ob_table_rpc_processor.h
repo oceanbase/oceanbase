@@ -127,7 +127,8 @@ public:
   static int sync_end_trans_(bool is_rollback,
                              transaction::ObTxDesc *&trans_desc,
                              int64_t timeout_ts,
-                             table::ObHTableLockHandle *lock_handle = nullptr);
+                             table::ObHTableLockHandle *lock_handle = nullptr,
+                             const ObString *trace_info = nullptr);
 
   // for get
   int init_read_trans(const table::ObTableConsistencyLevel  consistency_level,
@@ -190,6 +191,7 @@ protected:
   bool had_do_response_; // asynchronous transactions return packet in advance
   sql::TransState *trans_state_ptr_;
   transaction::ObTxReadSnapshot tx_snapshot_;
+  static const ObString OBKV_TRACE_INFO;
 };
 
 template<class T>

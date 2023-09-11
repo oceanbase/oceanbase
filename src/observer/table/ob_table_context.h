@@ -33,7 +33,8 @@ struct ObTableColumnItem : public sql::ColumnItem
         is_generated_column_(false),
         is_stored_generated_column_(false),
         is_virtual_generated_column_(false),
-        is_auto_increment_(false)
+        is_auto_increment_(false),
+        rowkey_position_(-1)
   {}
   TO_STRING_KV("ColumnItem", static_cast<const sql::ColumnItem &>(*this),
                KPC_(raw_expr),
@@ -43,7 +44,8 @@ struct ObTableColumnItem : public sql::ColumnItem
                K_(cascaded_column_ids),
                K_(generated_expr_str),
                K_(dependant_exprs),
-               K_(is_auto_increment));
+               K_(is_auto_increment),
+               K_(rowkey_position));
   sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
   bool is_generated_column_;
   bool is_stored_generated_column_;
@@ -54,6 +56,7 @@ struct ObTableColumnItem : public sql::ColumnItem
   common::ObString generated_expr_str_;
   common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> dependant_exprs_;
   bool is_auto_increment_;
+  int64_t rowkey_position_; // greater than zero if this is rowkey column, 0 if this is common column
 };
 
 struct ObTableAssignment : public sql::ObAssignment
@@ -147,6 +150,7 @@ public:
     return_rowkey_ = false;
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     is_ttl_table_ = false;
+    is_skip_scan_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -179,7 +183,8 @@ public:
                K_(is_for_insertup),
                K_(entity_type),
                K_(cur_cluster_version),
-               K_(is_ttl_table));
+               K_(is_ttl_table),
+               K_(is_skip_scan));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -291,6 +296,9 @@ public:
         && operation_type_ != ObTableOperationType::GET
         && operation_type_ != ObTableOperationType::SCAN;
   }
+  // for delete
+  OB_INLINE void set_skip_scan(bool skip_scan) { is_skip_scan_ = skip_scan; }
+  OB_INLINE bool is_skip_scan() { return is_skip_scan_; }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
@@ -462,6 +470,8 @@ private:
   // for lob adapt
   uint64_t cur_cluster_version_;
   bool is_ttl_table_;
+  // for delete skip scan
+  bool is_skip_scan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

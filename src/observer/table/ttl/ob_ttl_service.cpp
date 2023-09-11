@@ -49,8 +49,14 @@ int ObTTLService::switch_to_leader()
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(tenant_ttl_mgr_->start())) {
-        LOG_WARN("fail to start tenant_ttl_mgr", K_(tenant_id), KR(ret));
+      if (!has_start_) {
+        if (OB_FAIL(tenant_ttl_mgr_->start())) {
+          LOG_WARN("fail to start tenant_ttl_mgr", K_(tenant_id), KR(ret));
+        } else {
+          has_start_ = true;
+        }
+      } else {
+        tenant_ttl_mgr_->resume();
       }
     }
   }
@@ -75,8 +81,9 @@ void ObTTLService::inner_switch_to_follower()
 {
   FLOG_INFO("ttl_service: switch_to_follower", K_(tenant_id));
   const int64_t start_time_us = ObTimeUtility::current_time();
-  stop();
-  wait();
+  if (OB_NOT_NULL(tenant_ttl_mgr_)) {
+    tenant_ttl_mgr_->pause();
+  }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("ttl_service: switch_to_follower", K_(tenant_id), K(cost_us), KP_(tenant_ttl_mgr));
 }

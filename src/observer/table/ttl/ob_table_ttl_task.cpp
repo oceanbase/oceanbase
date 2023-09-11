@@ -28,6 +28,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::table;
 using namespace oceanbase::rootserver;
 
+const ObString ObTableTTLDeleteTask::TTL_TRACE_INFO = ObString::make_string("TTL Delete");
 
 /**
  * ---------------------------------------- ObTableTTLDeleteTask ----------------------------------------
@@ -215,7 +216,8 @@ int ObTableTTLDeleteTask::process_one()
 
   if (trans_state.is_start_trans_executed() && trans_state.is_start_trans_success()) {
     int tmp_ret = ret;
-    if (OB_FAIL(ObTableApiProcessorBase::sync_end_trans_(OB_SUCCESS != ret, trans_desc, get_timeout_ts()))) {
+    if (OB_FAIL(ObTableApiProcessorBase::sync_end_trans_(OB_SUCCESS != ret, trans_desc, get_timeout_ts(),
+                                                         nullptr, &TTL_TRACE_INFO))) {
       LOG_WARN("fail to end trans", KR(ret));
     }
     ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
@@ -279,6 +281,7 @@ int ObTableTTLDeleteTask::process_ttl_delete(const ObITableEntity &new_entity,
   SMART_VAR(ObTableCtx, delete_ctx, allocator_) {
     if (OB_FAIL(init_tb_ctx(new_entity, delete_ctx))) {
       LOG_WARN("fail to init table ctx", K(ret), K(new_entity));
+    } else if (FALSE_IT(delete_ctx.set_skip_scan(true))) {
     } else if (OB_FAIL(delete_ctx.init_trans(trans_desc, snapshot))) {
       LOG_WARN("fail to init trans", K(ret), K(delete_ctx));
     } else if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(delete_ctx, op_result))) {
@@ -429,9 +432,22 @@ int ObTableTTLDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, Ob
 }
 
 ObTableTTLDeleteRowIterator::ObTableTTLDeleteRowIterator()
-: is_inited_(false), max_version_(0), time_to_live_ms_(0), limit_del_rows_(-1), cur_del_rows_(0),
-  cur_version_(0), cur_rowkey_(), cur_qualifier_(), max_version_cnt_(0), ttl_cnt_(0), scan_cnt_(0),
-  is_last_row_ttl_(true), is_hbase_table_(false), last_row_(nullptr), rowkey_cnt_(0)
+    : allocator_(ObMemAttr(MTL_ID(), "TTLDelRowIter")),
+      is_inited_(false),
+      max_version_(0),
+      time_to_live_ms_(0),
+      limit_del_rows_(-1),
+      cur_del_rows_(0),
+      cur_version_(0),
+      cur_rowkey_(),
+      cur_qualifier_(),
+      max_version_cnt_(0),
+      ttl_cnt_(0),
+      scan_cnt_(0),
+      is_last_row_ttl_(true),
+      is_hbase_table_(false),
+      last_row_(nullptr),
+      rowkey_cnt_(0)
 {
 }
 
@@ -464,6 +480,20 @@ int ObTableTTLDeleteRowIterator::init(const schema::ObTableSchema &table_schema,
         if (has_exist_in_array(full_column_ids, rowkey_column_ids[i], &idx)) {
           if (OB_FAIL(rowkey_cell_ids_.push_back(idx))) {
             LOG_WARN("fail to add rowkey cell idx", K(ret), K(i), K(rowkey_column_ids));
+          }
+        }
+      }
+
+      for (uint64_t i = 0; OB_SUCC(ret) && i < full_column_ids.count(); i++) {
+        const ObColumnSchemaV2 *column_schema = nullptr;
+        uint64_t column_id = full_column_ids.at(i);
+        if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column schema", KR(ret), K(column_id));
+        } else if (!column_schema->is_rowkey_column()) {
+          PropertyPair pair(i, column_schema->get_column_name_str());
+          if (OB_FAIL(properties_pairs_.push_back(pair))) {
+            LOG_WARN("fail to push back", KR(ret), K(i), "column_name", column_schema->get_column_name_str());
           }
         }
       }
@@ -564,6 +594,12 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_ro
       for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
         if (OB_FAIL(delete_entity_.add_rowkey_value(row->get_cell(ttl_row_iter.rowkey_cell_ids_[i])))) {
           LOG_WARN("fail to add rowkey value", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < ttl_row_iter.properties_pairs_.count(); i++) {
+        ObTableTTLDeleteRowIterator::PropertyPair &pair = ttl_row_iter.properties_pairs_.at(i);
+        if (OB_FAIL(delete_entity_.set_property(pair.property_name_, row->get_cell(pair.cell_idx_)))) {
+          LOG_WARN("fail to add rowkey value", K(ret), K(i), K_(ttl_row_iter.properties_pairs));
         }
       }
 

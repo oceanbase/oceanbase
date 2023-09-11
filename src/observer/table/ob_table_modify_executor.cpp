@@ -413,19 +413,22 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
                                                const ObTableUpdCtDef &upd_ctdef)
 {
   int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = tb_ctx_.get_table_schema();
   const ObIArray<ObExpr *> &new_row = upd_ctdef.new_row_;
-  if (OB_UNLIKELY(store_row.cnt_ != new_row.count())) {
+  const ObIArray<ObTableColumnItem>& column_items = tb_ctx_.get_column_items();
+  if (OB_UNLIKELY(store_row.cnt_ != new_row.count()) || OB_UNLIKELY(new_row.count() != column_items.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("datum count mismatch", K(ret), K(store_row.cnt_), K(new_row.count()));
+    LOG_WARN("datum count mismatch", K(ret), K(store_row.cnt_), K(new_row.count()), K(column_items.count()));
   } else {
     // 1. refresh rowkey expr datum
-    const int64_t rowkey_col_cnt = tb_ctx_.get_table_schema()->get_rowkey_column_num();
-    for (uint64_t i = 0; OB_SUCC(ret) && i < rowkey_col_cnt; ++i) {
+    // not always the primary key is the prefix of table schema
+    // e.g., create table test(a varchar(1024), b int primary key);
+    for (uint64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
       const ObExpr *expr = new_row.at(i);
-      expr->locate_expr_datum(eval_ctx_) = store_row.cells()[i];
-      expr->get_eval_info(eval_ctx_).evaluated_ = true;
-      expr->get_eval_info(eval_ctx_).projected_ = true;
+      if (column_items.at(i).rowkey_position_ > 0) {
+        expr->locate_expr_datum(eval_ctx_) = store_row.cells()[i];
+        expr->get_eval_info(eval_ctx_).evaluated_ = true;
+        expr->get_eval_info(eval_ctx_).projected_ = true;
+      }
     }
 
     // 2. refresh assign column expr datum

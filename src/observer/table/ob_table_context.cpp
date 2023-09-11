@@ -142,6 +142,7 @@ int ObTableCtx::construct_column_items()
         item.is_auto_increment_ = col_schema->is_autoincrement();
         item.generated_expr_str_ = item.default_value_.get_string();
         item.auto_filled_timestamp_ = col_schema->is_on_update_current_timestamp();
+        item.rowkey_position_ = col_schema->get_rowkey_position();
         if (item.is_auto_increment_ && OB_FAIL(add_auto_inc_param(*col_schema))) {
           LOG_WARN("fail to add auto inc param", K(ret), K(item));
         } else if (item.is_generated_column_

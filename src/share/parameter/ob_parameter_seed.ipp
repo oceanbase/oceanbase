@@ -1623,6 +1623,10 @@ DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]
 DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
     "specifies whether ttl task is enbled",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ttl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of ttl thread. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
                      "SQL SSL control options, used to specify the minimum SSL/TLS version number. "

@@ -29,7 +29,8 @@ public:
   ObTTLService()
     : is_inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
-      tenant_ttl_mgr_(nullptr)
+      tenant_ttl_mgr_(nullptr),
+      has_start_(false)
   {}
   virtual ~ObTTLService();
   int init(const uint64_t tenant_id);
@@ -73,6 +74,7 @@ private:
   bool is_inited_;
   int64_t tenant_id_;
   ObTenantTTLManager *tenant_ttl_mgr_;
+  bool has_start_;
 };
 }
 }

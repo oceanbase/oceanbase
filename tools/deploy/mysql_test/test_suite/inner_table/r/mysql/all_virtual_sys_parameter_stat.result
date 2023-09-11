@@ -229,6 +229,7 @@ tenant_sql_net_thread_count
 tenant_task_queue_size
 trace_log_slow_query_watermark
 trx_2pc_retry_interval
+ttl_thread_score
 undo_retention
 user_block_cache_priority
 user_row_cache_priority
