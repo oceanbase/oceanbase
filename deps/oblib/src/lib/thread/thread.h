@@ -144,6 +144,7 @@ public:
   static constexpr uint8_t WAIT_IN_TENANT_QUEUE = (1 << 1);
   static constexpr uint8_t WAIT_FOR_IO_EVENT    = (1 << 2);
   static constexpr uint8_t WAIT_FOR_LOCAL_RETRY = (1 << 3); //Statistics of local retry waiting time for dynamically increasing threads.
+  static constexpr uint8_t WAIT_FOR_PX_MSG = (1 << 4);
   // for thread diagnose, maybe replace it with union later.
   static thread_local int64_t loop_ts_;
   static thread_local pthread_t thread_joined_;

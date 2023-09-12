@@ -833,6 +833,7 @@ int ObDtlBasicChannel::wait_unblocking()
       int64_t print_log_t = 10 * 60 * 1000000;
       block_proc_.set_ch_idx_var(&idx);
       LOG_TRACE("wait unblocking", K(ret), K(dfc_->is_block()), KP(id_), K(peer_));
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_PX_MSG);
       do {
         int64_t got_channel_idx = idx;
         if (is_drain()) {
