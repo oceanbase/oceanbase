@@ -532,6 +532,8 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == tablet_info.status_ && tablet_info.tablet_id_.is_ls_inner_tablet()) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("src ls inner tablet is not exist, src ls is maybe deleted", K(ret), K(tablet_info));
+  } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL))) {
+    LOG_WARN("failed to check create new tablet", K(ret), K(tablet_info));
   } else if (OB_FAIL(hold_local_reuse_sstable_(tablet_info.tablet_id_, local_tablet_hdl, major_tables, storage_schema, medium_info_list, allocator))) {
     LOG_WARN("failed to hold local reuse sstable", K(ret), K(tablet_info));
   } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_info.param_, keep_old))) {
