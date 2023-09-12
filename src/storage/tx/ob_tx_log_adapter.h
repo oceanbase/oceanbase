@@ -56,6 +56,9 @@ private:
 class ObITxLogAdapter
 {
 public:
+
+  virtual void reset() {}
+
   virtual int submit_log(const char *buf,
                          const int64_t size,
                          const share::SCN &base_ts,
@@ -97,6 +100,8 @@ class ObLSTxLogAdapter : public ObITxLogAdapter
 {
 public:
   ObLSTxLogAdapter() : log_handler_(nullptr), dup_table_ls_handler_(nullptr), tx_table_(nullptr) {}
+
+  void reset();
 
   int init(ObITxLogParam *param, ObTxTable *tx_table);
   int submit_log(const char *buf,

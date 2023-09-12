@@ -2340,6 +2340,7 @@ int ObTxCtxMgr::remove_ls(const ObLSID &ls_id, const bool graceful)
       // if ls_id has been removed, OB_SUCCESS is returned.
       if (OB_SUCC(get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
         // remove ls_id transaction context from map
+        ls_tx_ctx_mgr->get_ls_log_adapter()->reset();
         if (OB_FAIL(ls_tx_ctx_mgr_map_.del(ls_id, ls_tx_ctx_mgr))) {
           TRANS_LOG(WARN, "remove ls error", KR(ret), K(ls_id));
         } else {

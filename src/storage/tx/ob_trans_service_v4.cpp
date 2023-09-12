@@ -1576,10 +1576,10 @@ int ObTransService::abort_participants_(const ObTxDesc &tx_desc)
   return ret;
 }
 
-int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
-                                            SCN &snapshot,
-                                            const bool is_read_only,
-                                            bool &acquire_from_follower)
+OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
+                                                        SCN &snapshot,
+                                                        const bool is_read_only,
+                                                        bool &acquire_from_follower)
 {
   int ret = OB_SUCCESS;
   acquire_from_follower = false;
@@ -1587,31 +1587,45 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   int64_t committing_dup_trx_cnt = 0;
   int dup_trx_status = OB_SUCCESS;
   bool leader = false;
+  bool is_leader_serving = false;
   SCN snapshot0;
   SCN snapshot1;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
   const bool can_elr = MTL_IS_PRIMARY_TENANT() ? true : false;
-  if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
-    TRANS_LOG(WARN, "get ls_tx_ctx_mgr fail", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_tx_ctx_mgr->get_ls_log_adapter()->get_role(leader, epoch))) {
+  ObLSHandle ls_handle;
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+    TRANS_LOG(WARN, "get ls fail", K(ret), K(ls_id));
+  } else if (!ls_handle.is_valid() || OB_ISNULL(ls_handle.get_ls())) {
+    ret = OB_NOT_MASTER;
+    TRANS_LOG(WARN, "invalid ls, acquire gts for snapshot", K(ret), K(ls_id), K(ls_handle));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader,
+                                                                                         epoch))) {
     TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
   } else if (!leader) {
     ret = OB_NOT_MASTER;
-  } else if (!ls_tx_ctx_mgr->in_leader_serving_state()) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_svr()->check_in_leader_serving_state(
+                 is_leader_serving))) {
     ret = OB_NOT_MASTER;
     // XXX In standby cluster mode, the failure to call acquire_local_snapshot_ is an
     // normal situation, no error log needs to be printed
     // TRANS_LOG(WARN, "check ls tx service leader serving state fail", K(ret), K(ls_id), K(ret));
+  } else if (!is_leader_serving) {
+    ret = OB_NOT_MASTER;
   }
 
-  if (OB_NOT_MASTER == ret && is_read_only) {
+  if (OB_NOT_MASTER == ret && is_read_only && ls_handle.is_valid()
+      && OB_NOT_NULL(ls_handle.get_ls())) {
     dup_trx_status =
-        ls_tx_ctx_mgr->get_ls_log_adapter()->get_committing_dup_trx_cnt(committing_dup_trx_cnt);
+        ls_handle.get_ls()->get_tx_svr()->get_tx_ls_log_adapter()->get_committing_dup_trx_cnt(committing_dup_trx_cnt);
     if (!MTL_IS_PRIMARY_TENANT()) {
       ret = OB_NOT_MASTER;
-      TRANS_LOG(DEBUG, "the max_commmit_ts can not be used as a snapshot in standby tenant ", K(ret),
-                K(ls_id), K(snapshot), K(MTL_IS_PRIMARY_TENANT()), K(committing_dup_trx_cnt));
-    } else if (!ls_tx_ctx_mgr->get_ls_log_adapter()->is_dup_table_lease_valid()) {
+      TRANS_LOG(DEBUG, "the max_commmit_ts can not be used as a snapshot in standby tenant ",
+                K(ret), K(ls_id), K(snapshot), K(MTL_IS_PRIMARY_TENANT()),
+                K(committing_dup_trx_cnt));
+    } else if (!ls_handle.get_ls()
+                    ->get_tx_svr()
+                    ->get_tx_ls_log_adapter()
+                    ->is_dup_table_lease_valid()) {
       ret = OB_NOT_MASTER;
     } else if (committing_dup_trx_cnt > 0 || OB_SUCCESS != dup_trx_status) {
       ret = OB_NOT_MASTER;
@@ -1645,17 +1659,14 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
     //
   }
 
-  if(OB_FAIL(ret)) {
-    //do nothing
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
   } else if (!snapshot0.is_valid_and_not_min()) {
     ret = OB_EAGAIN;
   } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, NULL, snapshot1))) {
   } else {
     snapshot = SCN::max(snapshot0, snapshot1);
-  }
-  if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
-    tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
 
   if (acquire_from_follower) {

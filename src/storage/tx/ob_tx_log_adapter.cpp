@@ -94,6 +94,13 @@ int ObITxLogAdapter::remove_commiting_dup_trx(const ObTransID &tx_id)
   return OB_SUCCESS;
 }
 
+void ObLSTxLogAdapter::reset()
+{
+  log_handler_ = nullptr;
+  dup_table_ls_handler_ = nullptr;
+  tx_table_ = nullptr;
+}
+
 int ObLSTxLogAdapter::init(ObITxLogParam *param, ObTxTable *tx_table)
 {
   int ret = OB_SUCCESS;
