@@ -35,6 +35,10 @@ public:
   RemovedMdsTableRecorder() = default;
   void record(MdsTableBase *mds_table);
   void del(MdsTableBase *mds_table);
+  bool check_is_list_head(MdsTableBase *mds_table) {
+    SpinRLockGuard guard(lock_);
+    return removed_mds_table_list_.list_head_ == (ListNodeBase *)mds_table;
+  }
   template <typename OP>
   void for_each(OP &&op) {
     SpinRLockGuard guard(lock_);

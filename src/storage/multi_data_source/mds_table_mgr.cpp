@@ -128,7 +128,11 @@ int ObMdsTableMgr::unregister_from_mds_table_mgr(MdsTableBase *p_mds_table)
 
 void ObMdsTableMgr::unregister_from_removed_mds_table_recorder(MdsTableBase *p_mds_table)
 {
-  removed_mds_table_recorder_.del(p_mds_table);
+  // make sure this mds_table is recored in list
+  if ((OB_NOT_NULL(p_mds_table->prev_) || OB_NOT_NULL(p_mds_table->next_)) ||// if true, means mds_table is in list
+      removed_mds_table_recorder_.check_is_list_head(p_mds_table)) {// but if both prev_ and next_ are NULL, maybe is list_head, means also in list
+    removed_mds_table_recorder_.del(p_mds_table);
+  }
 }
 
 int ObMdsTableMgr::first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn, ObIArray<ObTabletID> &min_rec_scn_ids)
