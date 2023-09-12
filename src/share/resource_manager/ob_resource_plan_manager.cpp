@@ -192,7 +192,7 @@ int ObResourcePlanManager::normalize_cpu_directives(ObPlanDirectiveSet &directiv
                   cfs_period_us))) {
         LOG_WARN("fail get cpu cfs period", K(d), K(ret));
       } else {
-        if (d.utilization_limit_ == 100) {
+        if (is_sys_tenant(d.tenant_id_) || d.utilization_limit_ == 100) {
           // 不限制
           d.utilization_limit_ = -1;
         } else {

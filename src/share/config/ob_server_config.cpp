@@ -167,6 +167,34 @@ void ObServerConfig::print() const
   OB_LOG(INFO, "===================== *stop server config report* =======================");
 }
 
+double ObServerConfig::get_sys_tenant_default_min_cpu()
+{
+  double min_cpu = server_cpu_quota_min;
+  if (0 == min_cpu) {
+    int64_t cpu_count = get_cpu_count();
+    if (cpu_count < 8) {
+      min_cpu = 1;
+    } else {
+      min_cpu = 2;
+    }
+  }
+  return min_cpu;
+}
+
+double ObServerConfig::get_sys_tenant_default_max_cpu()
+{
+  double max_cpu = server_cpu_quota_min;
+  if (0 == max_cpu) {
+    int64_t cpu_count = get_cpu_count();
+    if (cpu_count < 8) {
+      max_cpu = 1;
+    } else {
+      max_cpu = 2;
+    }
+  }
+  return max_cpu;
+}
+
 int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;

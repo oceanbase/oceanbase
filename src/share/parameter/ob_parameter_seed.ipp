@@ -272,13 +272,13 @@ DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, 
 DEF_BOOL(enable_monotonic_weak_read, OB_TENANT_PARAMETER, "false",
          "specifies observer supportting atomicity and monotonic order read",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(server_cpu_quota_min, OB_CLUSTER_PARAMETER, "1", "[1,16]",
+DEF_DBL(server_cpu_quota_min, OB_CLUSTER_PARAMETER, "0", "[0,16]",
         "the number of minimal vCPUs allocated to the server tenant"
-        "(a special internal tenant that exists on every observer). Range: [1, 16]",
+        "(a special internal tenant that exists on every observer). 0 stands for adaptive. Range: [0, 16]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_DBL(server_cpu_quota_max, OB_CLUSTER_PARAMETER, "1", "[1,16]",
+DEF_DBL(server_cpu_quota_max, OB_CLUSTER_PARAMETER, "0", "[0,16]",
         "the number of maximal vCPUs allocated to the server tenant"
-        "(a special internal tenant that exists on every observer). Range: [1, 16]",
+        "(a special internal tenant that exists on every observer). 0 stands for adaptive. Range: [0, 16]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_CAP_WITH_CHECKER(_hidden_sys_tenant_memory, OB_CLUSTER_PARAMETER, "0M",
         common::ObConfigTenantMemoryChecker, "[0M,)",

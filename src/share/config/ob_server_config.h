@@ -80,8 +80,8 @@ public:
   // print all config to log file
   void print() const;
 
-  double get_sys_tenant_default_min_cpu() { return server_cpu_quota_min; }
-  double get_sys_tenant_default_max_cpu() { return server_cpu_quota_max; }
+  double get_sys_tenant_default_min_cpu();
+  double get_sys_tenant_default_max_cpu();
 
   virtual ObServerRole get_server_type() const { return common::OB_SERVER; }
   virtual bool is_debug_sync_enabled() const { return static_cast<int64_t>(debug_sync_timeout) > 0; }
