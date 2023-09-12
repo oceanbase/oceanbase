@@ -10185,21 +10185,9 @@ int ObPLResolver::mock_self_param(bool need_rotate,
 {
   int ret = OB_SUCCESS;
   uint64_t acc_cnt = obj_access_idents.count();
-  const ObUserDefinedType *user_type = NULL;
-  bool need_mock = true;
   ObRawExpr *self_arg = NULL;
-  if (OB_SUCC(ret) && acc_cnt > 1 && !obj_access_idents.at(acc_cnt - 2).has_brackets_) {
-    OZ (current_block_->get_namespace().get_pl_data_type_by_name(resolve_ctx_,
-                                    acc_cnt > 2 ? obj_access_idents.at(acc_cnt - 3).access_name_ : ObString(""),
-                                    ObString(""),
-                                    obj_access_idents.at(acc_cnt - 2).access_name_,
-                                    user_type), ret, obj_access_idents);
-    if (OB_SUCC(ret) && OB_NOT_NULL(user_type)) {
-      need_mock = false;
-    }
-    ret = OB_SUCCESS;
-  }
-  if (need_mock) {
+  if (!(self_access_idxs.count() > 0 &&
+        ObObjAccessIdx::IS_UDT_NS == self_access_idxs.at(self_access_idxs.count() - 1).access_type_)) {
     if (self_access_idxs.at(self_access_idxs.count() - 1).is_udf_type()) {
       OX (self_arg = self_access_idxs.at(self_access_idxs.count() - 1).get_sysfunc_);
       CK (OB_NOT_NULL(self_arg));
