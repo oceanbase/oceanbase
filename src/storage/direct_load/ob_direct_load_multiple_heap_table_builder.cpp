@@ -81,7 +81,6 @@ int ObDirectLoadMultipleHeapTableBuilder::init(const ObDirectLoadMultipleHeapTab
 }
 
 int ObDirectLoadMultipleHeapTableBuilder::append_row(const ObTabletID &tablet_id,
-                                                     const table::ObTableLoadSequenceNo &seq_no,
                                                      const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
@@ -97,7 +96,7 @@ int ObDirectLoadMultipleHeapTableBuilder::append_row(const ObTabletID &tablet_id
     LOG_WARN("invalid args", KR(ret), K(param_), K(datum_row));
   } else {
     row_.tablet_id_ = tablet_id;
-    if (OB_FAIL(row_.from_datums(datum_row.storage_datums_, datum_row.count_, seq_no))) {
+    if (OB_FAIL(row_.from_datums(datum_row.storage_datums_, datum_row.count_))) {
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(append_row(row_))) {
       LOG_WARN("fail to append row", KR(ret), K(row_));

@@ -14,7 +14,6 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
-using namespace table;
 
 ObDirectLoadExternalRow::ObDirectLoadExternalRow()
   : allocator_("TLD_ext_row"), buf_size_(0), buf_(nullptr)
@@ -25,7 +24,6 @@ ObDirectLoadExternalRow::ObDirectLoadExternalRow()
 void ObDirectLoadExternalRow::reset()
 {
   rowkey_datum_array_.reset();
-  seq_no_.reset();
   buf_size_ = 0;
   buf_ = nullptr;
   allocator_.reset();
@@ -34,7 +32,6 @@ void ObDirectLoadExternalRow::reset()
 void ObDirectLoadExternalRow::reuse()
 {
   rowkey_datum_array_.reuse();
-  seq_no_.reset();
   buf_size_ = 0;
   buf_ = nullptr;
   allocator_.reuse();
@@ -65,7 +62,6 @@ int ObDirectLoadExternalRow::deep_copy(const ObDirectLoadExternalRow &src, char 
       LOG_WARN("fail to deep copy datum array", KR(ret));
     } else {
       buf_size_ = src.buf_size_;
-      seq_no_ = src.seq_no_;
       buf_ = buf + pos;
       MEMCPY(buf + pos, src.buf_, buf_size_);
       pos += buf_size_;
@@ -75,7 +71,7 @@ int ObDirectLoadExternalRow::deep_copy(const ObDirectLoadExternalRow &src, char 
 }
 
 int ObDirectLoadExternalRow::from_datums(ObStorageDatum *datums, int64_t column_count,
-                                         int64_t rowkey_column_count, const ObTableLoadSequenceNo &seq_no)
+                                         int64_t rowkey_column_count)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(transfer_external_row_time_us);
   int ret = OB_SUCCESS;
@@ -102,7 +98,6 @@ int ObDirectLoadExternalRow::from_datums(ObStorageDatum *datums, int64_t column_
       } else {
         buf_ = buf;
         buf_size_ = buf_size;
-        seq_no_ = seq_no;
       }
     }
   }
@@ -158,7 +153,7 @@ OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadExternalRow)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_serialize_time_us);
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, rowkey_datum_array_, seq_no_, buf_size_);
+  LST_DO_CODE(OB_UNIS_ENCODE, rowkey_datum_array_, buf_size_);
   if (OB_SUCC(ret) && OB_NOT_NULL(buf_)) {
     MEMCPY(buf + pos, buf_, buf_size_);
     pos += buf_size_;
@@ -171,7 +166,7 @@ OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadExternalRow)
   OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_deserialize_time_us);
   int ret = OB_SUCCESS;
   reuse();
-  LST_DO_CODE(OB_UNIS_DECODE, rowkey_datum_array_, seq_no_, buf_size_);
+  LST_DO_CODE(OB_UNIS_DECODE, rowkey_datum_array_, buf_size_);
   if (OB_SUCC(ret)) {
     buf_ = buf + pos;
     pos += buf_size_;
@@ -183,7 +178,7 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadExternalRow)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_serialize_time_us);
   int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, rowkey_datum_array_, seq_no_, buf_size_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, rowkey_datum_array_, buf_size_);
   len += buf_size_;
   return len;
 }

@@ -27,10 +27,6 @@ public:
   int init(ObTableLoadStoreCtx *store_ctx);
   int handle_insert_row(const blocksstable::ObDatumRow &row) override;
   int handle_update_row(const blocksstable::ObDatumRow &row) override;
-  int handle_update_row(common::ObArray<const ObDirectLoadExternalRow *> &rows,
-                        const ObDirectLoadExternalRow *&row) override;
-  int handle_update_row(common::ObArray<const ObDirectLoadMultipleDatumRow *> &rows,
-                        const ObDirectLoadMultipleDatumRow *&row) override;
   int handle_update_row(const blocksstable::ObDatumRow &old_row,
                         const blocksstable::ObDatumRow &new_row,
                         const blocksstable::ObDatumRow *&result_row) override;

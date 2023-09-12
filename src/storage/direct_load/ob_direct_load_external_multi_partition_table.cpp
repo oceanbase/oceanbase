@@ -7,7 +7,6 @@
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
-#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -85,7 +84,6 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::init(
 }
 
 int ObDirectLoadExternalMultiPartitionTableBuilder::append_row(const ObTabletID &tablet_id,
-                                                               const table::ObTableLoadSequenceNo &seq_no,
                                                                const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
@@ -103,7 +101,7 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::append_row(const ObTabletID 
     OB_TABLE_LOAD_STATISTICS_TIME_COST(external_append_row_time_us);
     row_.tablet_id_ = tablet_id;
     if (OB_FAIL(row_.external_row_.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                               param_.table_data_desc_.rowkey_column_num_, seq_no))) {
+                                               param_.table_data_desc_.rowkey_column_num_))) {
       LOG_WARN("fail to from datums", KR(ret));
     } else if (OB_FAIL(external_writer_.write_item(row_))) {
       LOG_WARN("fail to write item", KR(ret));
