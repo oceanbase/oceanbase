@@ -57,7 +57,7 @@ int ObLogHandlerBase::revoke_leader()
 int ObLogHandlerBase::change_leader_to(const common::ObAddr &dst_addr)
 {
   int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
+  RLockGuard guard(lock_);
   if (OB_FAIL(palf_handle_.change_leader_to(dst_addr))) {
     PALF_LOG(WARN, "palf change_leader failed", K(ret), K(dst_addr), K(palf_handle_));
   } else {
@@ -93,6 +93,14 @@ int ObLogHandlerBase::get_role(common::ObRole &role, int64_t &proposal_id) const
     role = curr_palf_role;
     proposal_id = saved_proposal_id;
   }
+  return ret;
+}
+
+// Note: do not acquire any lock in the function
+int ObLogHandlerBase::get_role_atomically(common::ObRole &role) const
+{
+  int ret = OB_SUCCESS;
+  role = ATOMIC_LOAD(&role_);
   return ret;
 }
 } // end namespace logservice

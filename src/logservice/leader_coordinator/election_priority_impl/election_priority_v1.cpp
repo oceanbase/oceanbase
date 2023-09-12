@@ -98,7 +98,7 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   palf::PalfHandleGuard palf_handle_guard;
   palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
   ObLogService* log_service = MTL(ObLogService*);
-  common::ObRole role;
+  common::ObRole role = FOLLOWER;
   int64_t unused_pid = -1;
   const bool is_cluster_already_4200 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
   if (OB_ISNULL(log_service)) {
@@ -153,9 +153,9 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
     // 2. Do not set scn to min_scn, if a follower do not replay any logs, its replayed_scn
     // may be SCN::min_scn, and the leadership may be switched to the follower.
     scn = SCN::max_scn();
-  } else if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+  } else if (CLICK_FAIL(get_role_(ls_id, role))) {
     COORDINATOR_LOG_(WARN, "get_role failed");
-  } else if (FOLLOWER == role) {
+  } else if (LEADER != role) {
     if (CLICK_FAIL(log_service->get_log_replay_service()->get_max_replayed_scn(ls_id, scn))) {
       COORDINATOR_LOG_(WARN, "failed to get_max_replayed_scn");
       ret = OB_SUCCESS;
@@ -174,6 +174,28 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(access_mode), K(scn));
   if (OB_SUCC(ret) && !scn.is_valid()) {
     scn.set_min();
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int PriorityV1::get_role_(const share::ObLSID &ls_id, common::ObRole &role) const
+{
+  LC_TIME_GUARD(100_ms);
+  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(ls_id), K(*this)
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService* ls_srv = MTL(ObLSService*);
+  role = FOLLOWER;
+
+  if (OB_ISNULL(ls_srv)) {
+    COORDINATOR_LOG_(ERROR, "ObLSService is nullptr");
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+    COORDINATOR_LOG_(WARN, "get_ls failed", K(ls_id));
+  } else if (OB_UNLIKELY(false == ls_handle.is_valid())) {
+    COORDINATOR_LOG_(WARN, "ls_handler is invalid", K(ls_id), K(ls_handle));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_log_handler()->get_role_atomically(role))) {
+    COORDINATOR_LOG_(WARN, "get_role_atomically failed", K(ls_id));
   }
   return ret;
   #undef PRINT_WRAPPER

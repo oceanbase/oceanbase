@@ -47,6 +47,7 @@ public:
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) = 0;
   int revoke_leader();
   int change_leader_to(const common::ObAddr &dst_addr);
+  int get_role_atomically(common::ObRole &role) const;
 
 protected:
   // @brief query role and proposal_id from ObLogHandler or ObLogRestoreHandler

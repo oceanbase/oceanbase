@@ -117,6 +117,7 @@ protected:
   virtual int refresh_(const share::ObLSID &ls_id) override;
   virtual bool has_fatal_failure_() const override;
   int get_scn_(const share::ObLSID &ls_id, share::SCN &scn);
+  int get_role_(const share::ObLSID &ls_id, common::ObRole &role) const;
 private:
   int compare_observer_stopped_(int &ret, const PriorityV1&) const;
   int compare_server_stopped_flag_(int &ret, const PriorityV1&) const;
