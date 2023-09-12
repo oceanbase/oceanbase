@@ -613,30 +613,33 @@ int ObLCLNode::process_collect_info_message(const ObDeadLockCollectInfoMessage &
   int ret = OB_SUCCESS;
   uint64_t event_id = 0;
 
-  ObDeadLockCollectInfoMessage msg_copy = msg;
-  const ObSArray<ObDetectorInnerReportInfo> &collected_info = msg_copy.get_collected_info();
-  
-  if (!collected_info.empty()) {
-    int64_t detector_id = private_label_.get_id();
-    const UserBinaryKey &victim = collected_info[0].get_user_key(); 
-    DETECT_LOG_(INFO, "witness deadlock", KP(this), K(detector_id), K_(self_key), K(victim));
-  }
-  DETECT_TIME_GUARD(100_ms);
-  DETECT_LOG_(INFO, "reveive collect info message", K(collected_info.count()), PRINT_WRAPPER);
-  if (CLICK() && OB_SUCC(check_and_process_completely_collected_msg_with_lock_(collected_info))) {
-    DETECT_LOG_(INFO, "collect info done", PRINT_WRAPPER);
-    CLICK();
-    (void) ObDeadLockInnerTableService::insert_all(collected_info);
-  } else if (CLICK() && check_dead_loop_with_lock_(collected_info)) {
-    DETECT_LOG_(INFO, "message dead loop, just drop this message", PRINT_WRAPPER);
-  } else if (CLICK() && OB_FAIL(generate_event_id_with_lock_(collected_info, event_id))) {
-    DETECT_LOG_(WARN, "generate event id failed", PRINT_WRAPPER);
-  } else if (CLICK() && OB_FAIL(append_report_info_to_msg_(msg_copy, event_id))) {
-    DETECT_LOG_(WARN, "append report info to collect info message failed", PRINT_WRAPPER);
-  } else if (CLICK() && OB_FAIL(broadcast_with_lock_(msg_copy))) {
-    DETECT_LOG_(WARN, "keep boardcasting collect info msg failed", PRINT_WRAPPER);
+  ObDeadLockCollectInfoMessage msg_copy;
+  if (OB_FAIL(msg_copy.assign(msg))) {
+    DETECT_LOG_(WARN, "fail to copy message", PRINT_WRAPPER);
   } else {
-    DETECT_LOG_(INFO, "successfully keep broadcasting collect info msg", PRINT_WRAPPER);
+    const ObSArray<ObDetectorInnerReportInfo> &collected_info = msg_copy.get_collected_info();
+    if (!collected_info.empty()) {
+      int64_t detector_id = private_label_.get_id();
+      const UserBinaryKey &victim = collected_info[0].get_user_key();
+      DETECT_LOG_(INFO, "witness deadlock", KP(this), K(detector_id), K_(self_key), K(victim));
+    }
+    DETECT_TIME_GUARD(100_ms);
+    DETECT_LOG_(INFO, "reveive collect info message", K(collected_info.count()), PRINT_WRAPPER);
+    if (CLICK() && OB_SUCC(check_and_process_completely_collected_msg_with_lock_(collected_info))) {
+      DETECT_LOG_(INFO, "collect info done", PRINT_WRAPPER);
+      CLICK();
+      (void) ObDeadLockInnerTableService::insert_all(collected_info);
+    } else if (CLICK() && check_dead_loop_with_lock_(collected_info)) {
+      DETECT_LOG_(INFO, "message dead loop, just drop this message", PRINT_WRAPPER);
+    } else if (CLICK() && OB_FAIL(generate_event_id_with_lock_(collected_info, event_id))) {
+      DETECT_LOG_(WARN, "generate event id failed", PRINT_WRAPPER);
+    } else if (CLICK() && OB_FAIL(append_report_info_to_msg_(msg_copy, event_id))) {
+      DETECT_LOG_(WARN, "append report info to collect info message failed", PRINT_WRAPPER);
+    } else if (CLICK() && OB_FAIL(broadcast_with_lock_(msg_copy))) {
+      DETECT_LOG_(WARN, "keep boardcasting collect info msg failed", PRINT_WRAPPER);
+    } else {
+      DETECT_LOG_(INFO, "successfully keep broadcasting collect info msg", PRINT_WRAPPER);
+    }
   }
 
   return ret;

@@ -28,6 +28,8 @@ class ObDeadLockCollectInfoMessage
 public:
   ObDeadLockCollectInfoMessage() = default;
   ~ObDeadLockCollectInfoMessage() = default;
+  ObDeadLockCollectInfoMessage &operator=(const ObDeadLockCollectInfoMessage &) = delete;
+  int assign(const ObDeadLockCollectInfoMessage &rhs);
   int set_dest_key(const UserBinaryKey &dest_key);
   int set_args(const UserBinaryKey &dest_key,
                const common::ObSArray<ObDetectorInnerReportInfo> &collected_info);

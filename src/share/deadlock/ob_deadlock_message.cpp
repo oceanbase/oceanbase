@@ -49,6 +49,17 @@ bool ObDeadLockCollectInfoMessage::is_valid() const
   return dest_key_.is_valid();
 }
 
+int ObDeadLockCollectInfoMessage::assign(const ObDeadLockCollectInfoMessage &rhs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(collected_info_.assign(rhs.collected_info_))) {
+    DETECT_LOG(WARN, "fail to copy collected info");
+  } else {
+    dest_key_ = rhs.dest_key_;
+  }
+  return ret;
+}
+
 const UserBinaryKey &ObDeadLockCollectInfoMessage::get_dest_key() const
 {
   return dest_key_;

@@ -396,6 +396,29 @@ int ObDetectorUserReportInfo::set_columns_(const int64_t idx,
   #undef PRINT_WRAPPER
 }
 
+int ObDetectorUserReportInfo::assign(const ObDetectorUserReportInfo &rhs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(extra_columns_names_.assign(rhs.extra_columns_names_))) {
+    DETECT_LOG(WARN, "fail to copy array", K(rhs));
+  } else if (OB_FAIL(extra_columns_values_.assign(rhs.extra_columns_values_))) {
+    DETECT_LOG(WARN, "fail to copy array", K(rhs));
+  } else if (OB_FAIL(extra_columns_names_guard_.assign(rhs.extra_columns_names_guard_))) {
+    DETECT_LOG(WARN, "fail to copy array", K(rhs));
+  } else if (OB_FAIL(extra_columns_values_guard_.assign(rhs.extra_columns_values_guard_))) {
+    DETECT_LOG(WARN, "fail to copy array", K(rhs));
+  } else {
+    module_name_ = rhs.module_name_;
+    resource_visitor_ = rhs.required_resource_;
+    required_resource_ = rhs.required_resource_;
+    valid_extra_column_size_ = rhs.valid_extra_column_size_;
+    module_name_guard_ = rhs.module_name_guard_;
+    resource_visitor_guard_ = rhs.resource_visitor_guard_;
+    required_resource_guard_ = rhs.required_resource_guard_;
+  }
+  return ret;
+}
+
 ObDetectorInnerReportInfo::ObDetectorInnerReportInfo() :
   tenant_id_(INVALID_VALUE),
   detector_id_(INVALID_VALUE),
@@ -417,20 +440,21 @@ int ObDetectorInnerReportInfo::set_args(const UserBinaryKey &binary_key,
                                         const ObDetectorUserReportInfo &user_report_info)
 {
   int ret = OB_SUCCESS;
-
-  binary_key_ = binary_key;
-  tenant_id_ = MTL_ID();
-  addr_ = addr;
-  detector_id_ = detector_id;
-  report_time_ = report_time;
-  created_time_ = created_time;
-  event_id_ = event_id;
   if (OB_FAIL(check_and_assign_ptr_(role, 0, "ObDetectorInnerReportInfo::set_args", &role_))) {
     DETECT_LOG(ERROR, "assign event field failed");
+  } else if (OB_FAIL(user_report_info_.assign(user_report_info))) {
+    DETECT_LOG(WARN, "assign user_report_info field failed");
+  } else {
+    start_delay_ = start_delay;
+    priority_ = priority;
+    binary_key_ = binary_key;
+    tenant_id_ = MTL_ID();
+    addr_ = addr;
+    detector_id_ = detector_id;
+    report_time_ = report_time;
+    created_time_ = created_time;
+    event_id_ = event_id;
   }
-  start_delay_ = start_delay;
-  priority_ = priority;
-  user_report_info_ = user_report_info;
 
   return ret;
 }
@@ -502,6 +526,26 @@ const ObDetectorPriority &ObDetectorInnerReportInfo::get_priority() const
 const ObDetectorUserReportInfo &ObDetectorInnerReportInfo::get_user_report_info() const
 {
   return user_report_info_;
+}
+
+int ObDetectorInnerReportInfo::assign(const ObDetectorInnerReportInfo &rhs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(user_report_info_.assign(rhs.user_report_info_))) {
+    DETECT_LOG(WARN, "fail to assign user report info", K(rhs));
+  } else {
+    binary_key_ = rhs.binary_key_;
+    tenant_id_ = rhs.tenant_id_;
+    addr_ = rhs.addr_;
+    detector_id_ = rhs.detector_id_;
+    report_time_ = rhs.report_time_;
+    created_time_ = rhs.created_time_;
+    event_id_ = rhs.event_id_;
+    role_ = rhs.role_;
+    start_delay_ = rhs.start_delay_;
+    priority_ = rhs.priority_;
+  }
+  return ret;
 }
 
 }// namespace detector

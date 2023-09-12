@@ -115,7 +115,7 @@ public:
 };
 
 // 真实使用过程中注册和搭建依赖关系的时间点是随机的，通过随机休眠模拟使用场景
-auto collect_callback = [](ObDetectorUserReportInfo& arg){ arg = user_report_info; return OB_SUCCESS; };
+auto collect_callback = [](ObDetectorUserReportInfo& arg){ return arg.assign(user_report_info); };
 
 #define JUDGE_RECORDER(v1,v2,v3,v4,v5,v6,v7,v8)\
 ASSERT_EQ(recorder.function_default_construct_time, v1);\
