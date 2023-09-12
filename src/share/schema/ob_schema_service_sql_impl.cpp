@@ -1190,6 +1190,31 @@ int ObSchemaServiceSQLImpl::get_tenant_system_variable(const ObRefreshSchemaStat
   return ret;
 }
 
+#define GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DEFINE(SCHEMA, SCHEMA_TYPE) \
+  int ObSchemaServiceSQLImpl::get_all_##SCHEMA##s(ObISQLClient &client, \
+                                                  ObIAllocator &allocator, \
+                                                  const ObRefreshSchemaStatus &schema_status, \
+                                                  const int64_t schema_version, \
+                                                  const uint64_t tenant_id, \
+                                                  ObIArray<SCHEMA_TYPE *> &schema_array) \
+  {                                                         \
+    int ret = OB_SUCCESS;                                   \
+    schema_array.reset();                                   \
+    if (!check_inner_stat()) {                              \
+      ret = OB_NOT_INIT;                                    \
+      LOG_WARN("check inner stat fail", KR(ret));           \
+    } else if (OB_FAIL(fetch_##SCHEMA##s(client, allocator, schema_status, schema_version, tenant_id, schema_array))) { \
+      LOG_WARN("fetch "#SCHEMA"s failed", KR(ret), K(schema_status), K(schema_version), K(tenant_id)); \
+      /* for liboblog compatibility */ \
+      if (-ER_NO_SUCH_TABLE == ret && ObSchemaService::g_liboblog_mode_) { \
+        LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error", \
+                 KR(ret), K(schema_status), K(schema_version), K(tenant_id)); \
+        ret = OB_SUCCESS;                                   \
+      }                                                     \
+    }                                                       \
+    return ret;                                             \
+  }
+
 #define GET_ALL_SCHEMA_FUNC_DEFINE(SCHEMA, SCHEMA_TYPE) \
   int ObSchemaServiceSQLImpl::get_all_##SCHEMA##s(ObISQLClient &client, \
                                                   const ObRefreshSchemaStatus &schema_status, \
@@ -1201,12 +1226,13 @@ int ObSchemaServiceSQLImpl::get_tenant_system_variable(const ObRefreshSchemaStat
     schema_array.reset();                                   \
     if (!check_inner_stat()) {                              \
       ret = OB_NOT_INIT;                                    \
-      LOG_WARN("check inner stat fail");                    \
+      LOG_WARN("check inner stat fail", KR(ret));           \
     } else if (OB_FAIL(fetch_##SCHEMA##s(client, schema_status, schema_version, tenant_id, schema_array))) { \
-      LOG_WARN("fetch "#SCHEMA"s failed", K(ret), K(schema_status), K(schema_version), K(tenant_id)); \
+      LOG_WARN("fetch "#SCHEMA"s failed", KR(ret), K(schema_status), K(schema_version), K(tenant_id)); \
       /* for liboblog compatibility */ \
       if (-ER_NO_SUCH_TABLE == ret && ObSchemaService::g_liboblog_mode_) { \
-        LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error", K(ret), K(schema_status), K(schema_version), K(tenant_id)); \
+        LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error", \
+                 KR(ret), K(schema_status), K(schema_version), K(tenant_id)); \
         ret = OB_SUCCESS;                                   \
       }                                                     \
     }                                                       \
@@ -1215,8 +1241,8 @@ int ObSchemaServiceSQLImpl::get_tenant_system_variable(const ObRefreshSchemaStat
 
 GET_ALL_SCHEMA_FUNC_DEFINE(user, ObSimpleUserSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(database, ObSimpleDatabaseSchema);
+GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DEFINE(table, ObSimpleTableSchemaV2);
 GET_ALL_SCHEMA_FUNC_DEFINE(tablegroup, ObSimpleTablegroupSchema);
-GET_ALL_SCHEMA_FUNC_DEFINE(table, ObSimpleTableSchemaV2);
 GET_ALL_SCHEMA_FUNC_DEFINE(outline, ObSimpleOutlineSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(synonym, ObSimpleSynonymSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(routine, ObSimpleRoutineSchema);
@@ -2882,6 +2908,59 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
   LOG_INFO("get batch tenants finish", K(ret));
   return ret;
 }
+#define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DEFINE(SCHEMA, SCHEMA_TYPE)       \
+  int ObSchemaServiceSQLImpl::get_batch_##SCHEMA##s( \
+      const ObRefreshSchemaStatus &schema_status,    \
+      ObISQLClient &sql_client,                      \
+      ObIAllocator &allocator,                       \
+      const int64_t schema_version,                  \
+      ObArray<SchemaKey> &schema_keys,               \
+      ObIArray<SCHEMA_TYPE *> &schema_array)         \
+  {                                                                \
+    int ret = OB_SUCCESS;                                          \
+    schema_array.reset();                                          \
+    LOG_INFO("get batch "#SCHEMA"s", K(schema_version), K(schema_keys));\
+    if (!check_inner_stat()) {                                     \
+      ret = OB_NOT_INIT;                                           \
+      LOG_WARN("check inner stat fail", KR(ret));                  \
+    } else if (OB_FAIL(schema_array.reserve(schema_keys.count()))) {\
+      LOG_WARN("fail to reserve schema array", KR(ret));           \
+    } else {                                                       \
+      std::sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id); \
+      int64_t begin = 0;                                                        \
+      int64_t end = 0;                                                          \
+      while (OB_SUCCESS == ret && end < schema_keys.count()) {                  \
+        const uint64_t tenant_id = schema_keys.at(begin).tenant_id_;            \
+        while (OB_SUCCESS == ret && end < schema_keys.count()                   \
+               && tenant_id == schema_keys.at(end).tenant_id_                   \
+               && end - begin < MAX_IN_QUERY_PER_TIME) {                        \
+          end++;                                                                \
+        }                                                                       \
+        if (OB_FAIL(fetch_##SCHEMA##s(sql_client,                               \
+                                      allocator,                                \
+                                      schema_status,                            \
+                                      schema_version,                           \
+                                      tenant_id,                                \
+                                      schema_array,                             \
+                                      &schema_keys.at(begin),                   \
+                                      end - begin))) {                          \
+          LOG_WARN("fetch batch "#SCHEMA"s failed", KR(ret));                   \
+          /* for liboblog compatibility */                                      \
+          if (-ER_NO_SUCH_TABLE == ret && ObSchemaService::g_liboblog_mode_) {  \
+            LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error",\
+                     KR(ret), K(schema_version), K(tenant_id), K(schema_status));\
+            ret = OB_SUCCESS;                                                   \
+          }                                                                     \
+        }                                                                       \
+        LOG_TRACE("finish fetch batch "#SCHEMA"s", KR(ret), K(begin), K(end),   \
+                  "total_count", schema_keys.count());                          \
+        begin = end;                                                            \
+      }                                                                         \
+    }                                                                           \
+    return ret;                                                                 \
+  }
+
+GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DEFINE(table, ObSimpleTableSchemaV2);
 
 #define GET_BATCH_SCHEMAS_FUNC_DEFINE(SCHEMA, SCHEMA_TYPE)       \
   int ObSchemaServiceSQLImpl::get_batch_##SCHEMA##s( \
@@ -2893,11 +2972,12 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
   {                                                                \
     int ret = OB_SUCCESS;                                          \
     schema_array.reset();                                          \
-    schema_array.reserve(schema_keys.count());                     \
-    LOG_INFO("get batch "#SCHEMA"s", K(schema_version), K(schema_keys));           \
+    LOG_INFO("get batch "#SCHEMA"s", K(schema_version), K(schema_keys));\
     if (!check_inner_stat()) {                                     \
       ret = OB_NOT_INIT;                                           \
-      LOG_WARN("check inner stat fail");                           \
+      LOG_WARN("check inner stat fail", KR(ret));                  \
+    } else if (OB_FAIL(schema_array.reserve(schema_keys.count()))) {\
+      LOG_WARN("fail to reserve schema array", KR(ret));           \
     } else {                                                       \
       std::sort(schema_keys.begin(), schema_keys.end(), SchemaKey::cmp_with_tenant_id); \
       int64_t begin = 0;                                                        \
@@ -2916,18 +2996,19 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
                                       schema_array,                             \
                                       &schema_keys.at(begin),                   \
                                       end - begin))) {                          \
-          LOG_WARN("fetch batch "#SCHEMA"s failed", K(ret));                    \
-          /* for liboblog compatibility */ \
+          LOG_WARN("fetch batch "#SCHEMA"s failed", KR(ret));                   \
+          /* for liboblog compatibility */                                      \
           if (-ER_NO_SUCH_TABLE == ret && ObSchemaService::g_liboblog_mode_) {  \
-            LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error", \
-                     K(ret), K(schema_version), K(tenant_id), K(schema_status)); \
+            LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error",\
+                     KR(ret), K(schema_version), K(tenant_id), K(schema_status));\
             ret = OB_SUCCESS;                                                   \
           }                                                                     \
         }                                                                       \
-        LOG_DEBUG("finish fetch batch "#SCHEMA"s", K(begin), K(end), "total_count", schema_keys.count()); \
+        LOG_TRACE("finish fetch batch "#SCHEMA"s", KR(ret), K(begin), K(end),   \
+                  "total_count", schema_keys.count());                          \
         begin = end;                                                            \
       }                                                                         \
-      LOG_DEBUG("finish fetch batch "#SCHEMA"s", K(schema_array));              \
+      LOG_TRACE("finish fetch batch "#SCHEMA"s", KR(ret), K(schema_array));     \
     }                                                                           \
     return ret;                                                                 \
   }
@@ -2935,7 +3016,6 @@ int ObSchemaServiceSQLImpl::get_batch_tenants(
 GET_BATCH_SCHEMAS_FUNC_DEFINE(user, ObSimpleUserSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(database, ObSimpleDatabaseSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(tablegroup, ObSimpleTablegroupSchema);
-GET_BATCH_SCHEMAS_FUNC_DEFINE(table, ObSimpleTableSchemaV2);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(db_priv, ObDBPriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(table_priv, ObTablePriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(outline, ObSimpleOutlineSchema);
@@ -4392,10 +4472,11 @@ int ObSchemaServiceSQLImpl::fetch_sys_variable_version(
 
 int ObSchemaServiceSQLImpl::fetch_tables(
     ObISQLClient &sql_client,
+    ObIAllocator &allocator,
     const ObRefreshSchemaStatus &schema_status,
     const int64_t schema_version,
     const uint64_t tenant_id,
-    ObIArray<ObSimpleTableSchemaV2> &schema_array,
+    ObIArray<ObSimpleTableSchemaV2 *> &schema_array,
     const SchemaKey *schema_keys,
     const int64_t schema_key_size)
 {
@@ -4408,7 +4489,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
   const char *table_name = NULL;
   int64_t start_time = ObTimeUtility::current_time();
-  int64_t inc_cnt = 0; // for reserved mem only
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", K(ret));
@@ -4420,7 +4500,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
     } else if (!is_increase_schema) {
       const char *tname = OB_ALL_TABLE_HISTORY_TNAME;
-      if (OB_FAIL(set_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, ctx, inc_cnt))) {
+      if (OB_FAIL(set_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, ctx))) {
         LOG_WARN("fail to set refresh full schema timeout ctx", KR(ret), K(tenant_id), "tname", tname);
       } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_FULL_SCHEMA,
                                  table_name, table_name,
@@ -4440,13 +4520,12 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         LOG_WARN("append failed", K(ret));
       } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(table, schema_keys, schema_key_size, sql))) {
         LOG_WARN("sql append table id failed", K(ret));
-      } else {
-        inc_cnt = schema_key_size;
       }
     }
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+        const bool check_deleted = true; // not used
         if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, table_id desc, schema_version desc"))) {
           LOG_WARN("sql append failed", K(ret));
         } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
@@ -4454,9 +4533,8 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get result. ", K(ret));
-        } else if (OB_FAIL(schema_array.reserve(orig_cnt + inc_cnt))) {
-          LOG_WARN("fail to reserved schem array", KR(ret), K(orig_cnt), K(inc_cnt));
-        } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(tenant_id, *result, schema_array))) {
+        } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(
+                   tenant_id, check_deleted, *result, allocator, schema_array))) {
           LOG_WARN("failed to retrieve table schema", K(ret));
         }
       }
@@ -4469,16 +4547,16 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   if (OB_SUCC(ret)) {
     ObArray<uint64_t> table_ids;
     ObArray<ObSimpleTableSchemaV2 *> tables;
-    if (OB_FAIL(table_ids.reserve(inc_cnt))) {
-      LOG_WARN("fail to reserved array", KR(ret), K(inc_cnt));
-    } else if (OB_FAIL(tables.reserve(inc_cnt))) {
-      LOG_WARN("fail to reserved array", KR(ret), K(inc_cnt));
-    }
     for (int64_t i = orig_cnt; OB_SUCC(ret) && i < schema_array.count(); ++i) {
-      const uint64_t table_id = schema_array.at(i).get_table_id();
-      if (OB_FAIL(table_ids.push_back(table_id))) {
+      uint64_t table_id = OB_INVALID_ID;
+      ObSimpleTableSchemaV2 *table = schema_array.at(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema is null", KR(ret), K(i));
+      } else if (FALSE_IT(table_id = table->get_table_id())) {
+      } else if (OB_FAIL(table_ids.push_back(table_id))) {
         LOG_WARN("fail to push back table_id", KR(ret), K(table_id));
-      } else if (OB_FAIL(tables.push_back(&schema_array.at(i)))) {
+      } else if (OB_FAIL(tables.push_back(table))) {
         LOG_WARN("fail to push back table schema", KR(ret), K(table_id));
       }
     }
@@ -8667,18 +8745,17 @@ int ObSchemaServiceSQLImpl::set_refresh_full_schema_timeout_ctx_(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const char* tname,
-    ObTimeoutCtx &ctx,
-    int64_t &table_cnt)
+    ObTimeoutCtx &ctx)
 {
   int ret = OB_SUCCESS;
   int64_t timeout = 0;
-  table_cnt = 0;
+  int64_t row_cnt = 0;
   if (OB_UNLIKELY(
       OB_INVALID_TENANT_ID == tenant_id
       || OB_ISNULL(tname))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id or tname is empty", KR(ret), K(tenant_id), KP(tname));
-  } else if (OB_FAIL(calc_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, timeout, table_cnt))) {
+  } else if (OB_FAIL(calc_refresh_full_schema_timeout_ctx_(sql_client, tenant_id, tname, timeout, row_cnt))) {
     LOG_WARN("fail to calc refresh full schema timeout", KR(ret), K(tenant_id), "tname", tname);
   } else {
     const int64_t ori_ctx_timeout = ctx.get_timeout();
@@ -8693,7 +8770,7 @@ int ObSchemaServiceSQLImpl::set_refresh_full_schema_timeout_ctx_(
               K(ori_worker_timeout),
               "calc_timeout", timeout,
               "actual_timeout", ctx.get_timeout(),
-              K(table_cnt));
+              K(row_cnt));
   }
   return ret;
 }
@@ -8703,12 +8780,12 @@ int ObSchemaServiceSQLImpl::calc_refresh_full_schema_timeout_ctx_(
     const uint64_t tenant_id,
     const char* tname,
     int64_t &timeout,
-    int64_t &table_cnt)
+    int64_t &row_cnt)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
   timeout = 0;
-  table_cnt = 0;
+  row_cnt = 0;
   int64_t start_time = ObTimeUtility::current_time();
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
@@ -8732,17 +8809,15 @@ int ObSchemaServiceSQLImpl::calc_refresh_full_schema_timeout_ctx_(
     } else if (OB_FAIL(result->next())) {
       LOG_WARN("fail to get next row", KR(ret));
     } else {
-      int64_t row_cnt = 0;
       EXTRACT_INT_FIELD_MYSQL(*result, "count", row_cnt, int64_t);
       if (OB_SUCC(ret)) {
         // each 100w history may cost almost 400s (almost each 7w history may cost `internal_sql_execute_timeout`)
         // for more details: ob/qa/gqk9w2
-        table_cnt = row_cnt;
-        timeout = ((table_cnt / (70 * 1000L)) + 1) * GCONF.internal_sql_execute_timeout;
+        timeout = ((row_cnt / (70 * 1000L)) + 1) * GCONF.internal_sql_execute_timeout;
         FLOG_INFO("[REFRESH_SCHEMA] calc refresh schema timeout",
                    KR(ret), K(tenant_id),
                    "tname", tname,
-                   K(table_cnt), K(timeout),
+                   K(row_cnt), K(timeout),
                    "cost", ObTimeUtility::current_time() - start_time);
       }
     }

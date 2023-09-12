@@ -2290,7 +2290,7 @@ int ObSchemaMgr::get_tablegroup_schema(
 }
 
 int ObSchemaMgr::add_tables(
-    const ObIArray<ObSimpleTableSchemaV2> &table_schemas,
+    const ObIArray<ObSimpleTableSchemaV2 *> &table_schemas,
     const bool refresh_full_schema/*= false*/)
 {
   int ret = OB_SUCCESS;
@@ -2306,26 +2306,37 @@ int ObSchemaMgr::add_tables(
   } else {
     bool desc_order = true;
     if (OB_SUCC(ret) && table_schemas.count() >= 2) {
-      // 1. when refresh user simple table schemas, table_schemas will be sorted in desc order by sql.
-      // 2. when broadcast schema or refresh core/system tables or other situations, table_schemas will be sorted in asc order.
-      // Because table_infos_ are sorted in asc order, we should also add table in asc order to reduce performance lost.
-      // Normally, we consider table_schemas are in desc order in most situations.
-      desc_order = table_schemas.at(0).get_table_id() > table_schemas.at(1).get_table_id();
+      if (OB_ISNULL(table_schemas.at(0)) || OB_ISNULL(table_schemas.at(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null", KR(ret), KP(table_schemas.at(0)), K(table_schemas.at(1)));
+      } else {
+        // 1. when refresh user simple table schemas, table_schemas will be sorted in desc order by sql.
+        // 2. when broadcast schema or refresh core/system tables or other situations, table_schemas will be sorted in asc order.
+        // Because table_infos_ are sorted in asc order, we should also add table in asc order to reduce performance lost.
+        // Normally, we consider table_schemas are in desc order in most situations.
+        desc_order = table_schemas.at(0)->get_table_id() > table_schemas.at(1)->get_table_id();
+      }
     }
 
     if (OB_SUCC(ret)) {
       if (desc_order) {
         for (int64_t i = table_schemas.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-          const ObSimpleTableSchemaV2 &table = table_schemas.at(i);
-          if (OB_FAIL(add_table(table, &cost_array))) {
-            LOG_WARN("add table failed", KR(ret), K(table));
+          const ObSimpleTableSchemaV2 *table = table_schemas.at(i);
+          if (OB_ISNULL(table)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table is null", KR(ret), K(i));
+          } else if (OB_FAIL(add_table(*table, &cost_array))) {
+            LOG_WARN("add table failed", KR(ret), KPC(table));
           }
         } // end for
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
-          const ObSimpleTableSchemaV2 &table = table_schemas.at(i);
-          if (OB_FAIL(add_table(table, &cost_array))) {
-            LOG_WARN("add table failed", KR(ret), K(table));
+          const ObSimpleTableSchemaV2 *table = table_schemas.at(i);
+          if (OB_ISNULL(table)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table is null", KR(ret), K(i));
+          } else if (OB_FAIL(add_table(*table, &cost_array))) {
+            LOG_WARN("add table failed", KR(ret), KPC(table));
           }
         } // end for
       }
@@ -2338,7 +2349,7 @@ int ObSchemaMgr::add_tables(
 }
 
 int ObSchemaMgr::reserved_mem_for_tables_(
-    const ObIArray<ObSimpleTableSchemaV2> &table_schemas)
+    const ObIArray<ObSimpleTableSchemaV2*> &table_schemas)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -2354,37 +2365,42 @@ int ObSchemaMgr::reserved_mem_for_tables_(
   const int64_t OBJECT_SIZE = sizeof(void*);
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(table_infos_.reserve(table_cnt))) {
     LOG_WARN("fail to reserved array", KR(ret), K(table_cnt));
   } else {
     //(void) table_id_map_.set_sub_map_mem_size(table_cnt * OBJECT_SIZE);
 
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
-      const ObSimpleTableSchemaV2 &table = table_schemas.at(i);
-      if (table.is_index_table() || table.is_materialized_view()) {
-        index_cnt++;
-      } else if (table.is_aux_vp_table()) {
-        vp_cnt++;
-      } else if (table.is_aux_lob_meta_table()) {
-        lob_meta_cnt++;
-      } else if (table.is_aux_lob_piece_table()) {
-        lob_piece_cnt++;
-      } else if (table.is_user_hidden_table()) {
-        hidden_table_cnt++;
+      const ObSimpleTableSchemaV2 *table = table_schemas.at(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null", KR(ret), K(i));
       } else {
-        other_table_cnt++;
-      }
+        if (table->is_index_table() || table->is_materialized_view()) {
+          index_cnt++;
+        } else if (table->is_aux_vp_table()) {
+          vp_cnt++;
+        } else if (table->is_aux_lob_meta_table()) {
+          lob_meta_cnt++;
+        } else if (table->is_aux_lob_piece_table()) {
+          lob_piece_cnt++;
+        } else if (table->is_user_hidden_table()) {
+          hidden_table_cnt++;
+        } else {
+          other_table_cnt++;
+        }
 
-      if ((table.is_table() || table.is_oracle_tmp_table())
-          && !table.is_user_hidden_table()) {
-        fk_cnt += table.get_simple_foreign_key_info_array().count();
-      }
+        if ((table->is_table() || table->is_oracle_tmp_table())
+            && !table->is_user_hidden_table()) {
+          fk_cnt += table->get_simple_foreign_key_info_array().count();
+        }
 
-      if ((table.is_table() || table.is_oracle_tmp_table())
-          && !table.is_user_hidden_table()
-          && !table.is_mysql_tmp_table()) {
-        cst_cnt += table.get_simple_constraint_info_array().count();
+        if ((table->is_table() || table->is_oracle_tmp_table())
+            && !table->is_user_hidden_table()
+            && !table->is_mysql_tmp_table()) {
+          cst_cnt += table->get_simple_constraint_info_array().count();
+        }
       }
     } // end for
 

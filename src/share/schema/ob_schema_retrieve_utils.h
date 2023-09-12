@@ -229,12 +229,12 @@ public:
              ObObj &out_var_obj);
 
   //for batch table
-  template<typename T>
+  template<typename T, typename TABLE_SCHEMA>
   static int retrieve_table_schema(const uint64_t tenant_id,
                                    const bool check_deleted,
                                    T &result,
                                    common::ObIAllocator &allocator,
-                                   common::ObIArray<ObTableSchema *> &table_schema_array);
+                                   common::ObIArray<TABLE_SCHEMA *> &table_schema_array);
 
   template<typename TABLE_SCHEMA, typename SCHEMA,  typename T>
   static int retrieve_schema(const uint64_t tenant_id,
@@ -359,7 +359,6 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(user);
   RETRIEVE_SCHEMA_FUNC_DECLARE(database);
   RETRIEVE_SCHEMA_FUNC_DECLARE(tablegroup);
-  RETRIEVE_SCHEMA_FUNC_DECLARE(table);
   RETRIEVE_SCHEMA_FUNC_DECLARE(outline);
   RETRIEVE_SCHEMA_FUNC_DECLARE(db_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
@@ -444,7 +443,6 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(user, ObSimpleUserSchema);
   FILL_SCHEMA_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
   FILL_SCHEMA_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
-  FILL_SCHEMA_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   FILL_SCHEMA_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   FILL_SCHEMA_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   FILL_SCHEMA_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);
@@ -503,7 +501,7 @@ public:
 
   template<typename T>
   static int fill_sys_priv_schema(
-                                 const uint64_t tenant_id, 
+                                 const uint64_t tenant_id,
                                  T &result,
                                  ObSysPriv &schema,
                                  bool &is_deleted,
@@ -521,6 +519,9 @@ public:
   template<typename T>
   static int fill_trigger_id(const uint64_t tenant_id, T &result,
                              uint64_t &trigger_id, bool &is_deleted);
+  template<typename T>
+  static int fill_table_schema(const uint64_t tenant_id, const bool check_deleted, T &result,
+                               ObSimpleTableSchemaV2 &table_schema, bool &is_deleted);
   template<typename T>
   static int fill_table_schema(const uint64_t tenant_id, const bool check_deleted, T &result,
                                ObTableSchema &table_schema, bool &is_deleted);

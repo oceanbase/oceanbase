@@ -184,6 +184,13 @@ public:
                                const uint64_t tenant_id,
                                const int64_t schema_version,
                                ObSimpleSysVariableSchema &schema);
+  #define GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE) \
+    virtual int get_all_##SCHEMA##s(common::ObISQLClient &sql_client, \
+                                    common::ObIAllocator &allocator,  \
+                                    const ObRefreshSchemaStatus &schema_status, \
+                                    const int64_t schema_version,      \
+                                    const uint64_t tenant_id,           \
+                                    common::ObIArray<SCHEMA_TYPE *> &schema_array);
   #define GET_ALL_SCHEMA_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)                 \
     virtual int get_all_##SCHEMA##s(common::ObISQLClient &sql_client, \
                                     const ObRefreshSchemaStatus &schema_status, \
@@ -192,8 +199,8 @@ public:
                                     common::ObIArray<SCHEMA_TYPE> &schema_array);
   GET_ALL_SCHEMA_FUNC_DECLARE(user, ObSimpleUserSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
+  GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   GET_ALL_SCHEMA_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
-  GET_ALL_SCHEMA_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   GET_ALL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
@@ -311,6 +318,13 @@ public:
                                 common::ObArray<SchemaKey> &schema_keys,
                                 common::ObIArray<ObSimpleTenantSchema> &schema_array);
 
+#define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE) \
+    virtual int get_batch_##SCHEMA##s(const ObRefreshSchemaStatus &schema_status,\
+                                      common::ObISQLClient &client,     \
+                                      common::ObIAllocator &allocator,  \
+                                      const int64_t schema_version,     \
+                                      common::ObArray<SchemaKey> &schema_keys, \
+                                      common::ObIArray<SCHEMA_TYPE *> &schema_array);
 #define GET_BATCH_SCHEMAS_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)           \
     virtual int get_batch_##SCHEMA##s(const ObRefreshSchemaStatus &schema_status,\
                                       common::ObISQLClient &client,     \
@@ -320,7 +334,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(user, ObSimpleUserSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
-  GET_BATCH_SCHEMAS_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
+  GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
@@ -390,6 +404,15 @@ public:
                                 common::ObArray<uint64_t> &tenant_ids,
                                 common::ObIArray<ObTenantSchema> &schema_array);
 
+#define FETCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)     \
+    int fetch_##SCHEMA##s(common::ObISQLClient &client,     \
+                          common::ObIAllocator &allocator,  \
+                          const ObRefreshSchemaStatus &schema_status,\
+                          const int64_t schema_version,     \
+                          const uint64_t tenant_id,         \
+                          common::ObIArray<SCHEMA_TYPE *> &schema_array, \
+                          const SchemaKey *schema_keys = NULL,         \
+                          const int64_t schema_key_size = 0);
 #define FETCH_SCHEMAS_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)   \
     int fetch_##SCHEMA##s(common::ObISQLClient &client,     \
                           const ObRefreshSchemaStatus &schema_status,\
@@ -400,8 +423,8 @@ public:
                           const int64_t schema_key_size = 0);
   FETCH_SCHEMAS_FUNC_DECLARE(user, ObSimpleUserSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(database, ObSimpleDatabaseSchema);
+  FETCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   FETCH_SCHEMAS_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
-  FETCH_SCHEMAS_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   FETCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
   FETCH_SCHEMAS_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
@@ -964,15 +987,14 @@ private:
       ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const char* tname,
-      ObTimeoutCtx &ctx,
-      int64_t &table_cnt);
+      ObTimeoutCtx &ctx);
 
   int calc_refresh_full_schema_timeout_ctx_(
       ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const char* tname,
       int64_t &timeout,
-      int64_t &table_cnt);
+      int64_t &row_cnt);
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;

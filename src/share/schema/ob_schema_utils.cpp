@@ -480,7 +480,6 @@ int ObSchemaUtils::construct_inner_table_schemas(
   return ret;
 }
 
-
 } // end schema
 } // end share
 } // end oceanbase
