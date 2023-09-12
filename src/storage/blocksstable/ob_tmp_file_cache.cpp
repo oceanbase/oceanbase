@@ -1539,6 +1539,11 @@ int ObTmpTenantMemBlockManager::change_mem()
   if (!tenant_config.is_valid()) {
     COMMON_LOG(INFO, "failed to get tenant config", K_(tenant_id));
   } else {
+    // Here, this memory is used to store temporary file block metadata, which is related to the
+    // datafile size. So, we set the upper limit of memory to be 70% of tenant memory to
+    // avoid excessive tenant memory, and affecting system stability. In theory, the limit
+    // will be reached only when the tenant's memory is extremely small and the disk is extremely
+    // large.
     if (0 == tenant_config->_temporary_file_io_area_size) {
       mem_limit = 2 * (2 << 20);
     } else {
