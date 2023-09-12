@@ -1611,7 +1611,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
         }
       } else if (OB_FAIL(type->deserialize(schema_guard, allocator, charset, cs_type, ncs_type,
                                            tz_info, src, new_dst, new_dst_len, new_dst_pos))) {
-        LOG_WARN("deserialize record element type failed", K(i), K(*this), K(src), K(dst), K(dst_len), K(dst_pos), K(ret));
+        LOG_WARN("deserialize record element type failed", K(i), K(*this), KP(src), KP(dst), K(dst_len), K(dst_pos), K(ret));
       }
       if (OB_FAIL(ret)) {
       } else if (NULL == type->get_data_type()) {
@@ -1625,7 +1625,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
       OX (*not_null = type->get_not_null());
       OX (data_type++);
       OX (not_null++);
-      LOG_DEBUG("deserialize record element type finished", K(ret), K(i), K(*this), K(src), K(dst), K(dst_len), K(dst_pos));
+      LOG_DEBUG("deserialize record element type finished", K(ret), K(i), K(*this), KP(src), KP(dst), K(dst_len), K(dst_pos));
     }
     OX (dst_pos += init_size);
   }
