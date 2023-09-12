@@ -974,12 +974,6 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
                                   tablet_merge_ctx_.merged_sstable_.get_end_scn());
 
-    if (ObMergeType::MINI_MERGE == tablet_merge_ctx_.param_.merge_type_) {
-      if (OB_FAIL(read_msd_from_memtable_(param))) {
-        LOG_WARN("failed to read msd from memtable", K(ret), K(tablet_merge_ctx_));
-      }
-    }
-
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ls->update_tablet_table_store(
         tablet_id_, param, new_tablet_handle))) {
@@ -989,65 +983,6 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
         LOG_WARN("failed to release memtable", K(ret), "end_scn", tablet_merge_ctx_.scn_range_.end_scn_);
       }
     }
-  }
-  return ret;
-}
-
-
-int ObTabletTableBackfillTXTask::read_msd_from_memtable_(ObUpdateTableStoreParam &param)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(traverse_frozen_memtable_(memtable::MultiSourceDataUnitType::TABLET_TX_DATA, &param.tx_data_))) {
-    LOG_WARN("failed to read tx data from memtable", K(ret));
-  } else if (OB_FAIL(traverse_frozen_memtable_(memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO, &param.binding_info_))) {
-    LOG_WARN("failed to read binding info from memtable", K(ret));
-  } else if (OB_FAIL(traverse_frozen_memtable_(memtable::MultiSourceDataUnitType::TABLET_SEQ, &param.autoinc_seq_))) {
-    LOG_WARN("failed to read tablet seq from memtable", K(ret));
-  } else {
-    LOG_INFO("succeeded to read msd from memtable", K(ret),
-        "ls_id", tablet_merge_ctx_.param_.ls_id_,
-        "tablet_id", tablet_merge_ctx_.param_.tablet_id_,
-        "tx_data", param.tx_data_,
-        "binding_info", param.binding_info_,
-        "auto_inc_seq", param.autoinc_seq_);
-  }
-  return ret;
-}
-
-int ObTabletTableBackfillTXTask::traverse_frozen_memtable_(
-    const memtable::MultiSourceDataUnitType &type,
-    memtable::ObIMultiSourceDataUnit *msd)
-{
-  int ret = OB_SUCCESS;
-  ObITable *table = nullptr;
-  memtable::ObMemtable *memtable = nullptr;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet table backfill tx task do not init", K(ret));
-  } else if (OB_ISNULL(msd)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret));
-  } else if (!table_handle_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet handle is invalid", K(ret), K(tablet_merge_ctx_), K(table_handle_));
-  } else if (OB_ISNULL(table = table_handle_.get_table())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table should not be NULL or table type is unexpected", K(ret), K(tablet_merge_ctx_));
-  } else if (table->is_data_memtable()) {
-    // TODO(lixia) delete this code
-    // memtable = static_cast<memtable::ObMemtable*>(table);
-    // if (!memtable->is_frozen_memtable()) {
-    //   ret = OB_ERR_UNEXPECTED;
-    //   LOG_WARN("memtable should be frozen memtable", K(ret), KPC(memtable));
-    // } else if (memtable->has_multi_source_data_unit(type)) {
-    //   if (OB_FAIL(memtable->get_multi_source_data_unit(msd, nullptr/*allocator*/))) {
-    //     LOG_WARN("failed to get msd from memtable", K(ret), K(type));
-    //   }
-    // } else {
-    //   LOG_INFO("memtable do not has multi source data unit", KPC(memtable), K(type));
-    // }
   }
   return ret;
 }

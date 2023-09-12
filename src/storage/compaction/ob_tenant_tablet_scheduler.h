@@ -61,8 +61,7 @@ class ObCompactionScheduleIterator
 public:
   ObCompactionScheduleIterator(
     const bool is_major,
-    ObLSGetMod mod = ObLSGetMod::STORAGE_MOD,
-    const int64_t batch_tablet_cnt = SCHEDULE_TABLET_BATCH_CNT)
+    ObLSGetMod mod = ObLSGetMod::STORAGE_MOD)
     : mod_(mod),
       is_major_(is_major),
       scan_finish_(false),
@@ -72,7 +71,7 @@ public:
       ls_idx_(-1),
       tablet_idx_(0),
       schedule_tablet_cnt_(0),
-      max_batch_tablet_cnt_(batch_tablet_cnt),
+      max_batch_tablet_cnt_(SCHEDULE_TABLET_BATCH_CNT),
       ls_tablet_svr_(nullptr),
       ls_ids_(),
       tablet_ids_()
@@ -81,7 +80,7 @@ public:
     tablet_ids_.set_attr(ObMemAttr(MTL_ID(), "CompIter"));
   }
   ~ObCompactionScheduleIterator() { reset(); }
-  int build_iter();
+  int build_iter(const int64_t batch_tablet_cnt);
   int get_next_ls(ObLSHandle &ls_handle);
   int get_next_tablet(ObTabletHandle &tablet_handle);
   bool is_scan_finish() const { return scan_finish_; }
@@ -365,6 +364,7 @@ private:
   static const int64_t SSTABLE_GC_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t INFO_POOL_RESIZE_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t DEFAULT_COMPACTION_SCHEDULE_INTERVAL = 30 * 1000 * 1000L; // 30s
+  static const int64_t DEFAULT_COMPACTION_SCHEDULE_BATCH_SIZE = 50 * 1000L; // 5w
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
   static const int64_t WAIT_MEDIUM_CHECK_THRESHOLD = 10 * 60 * 1000 * 1000 * 1000L; // 10m // ns
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
@@ -379,6 +379,7 @@ private:
   int sstable_gc_tg_id_; // thread
   int info_pool_resize_tg_id_;   // thread
   int64_t schedule_interval_;
+  int64_t schedule_tablet_batch_size_;
 
   common::ObDedupQueue bf_queue_;
   mutable obsys::ObRWLock frozen_version_lock_;

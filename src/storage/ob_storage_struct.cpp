@@ -352,9 +352,6 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(false),
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
-    tx_data_(),
-    binding_info_(),
-    autoinc_seq_(),
     merge_type_(MERGE_TYPE_MAX)
 {
   clog_checkpoint_scn_.set_min();
@@ -386,9 +383,6 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(allow_duplicate_sstable),
     need_check_transfer_seq_(need_check_transfer_seq),
     transfer_seq_(transfer_seq),
-    tx_data_(),
-    binding_info_(),
-    autoinc_seq_(),
     merge_type_(merge_type)
 {
   clog_checkpoint_scn_ = clog_checkpoint_scn;
@@ -416,9 +410,6 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(false),
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
-    tx_data_(),
-    binding_info_(),
-    autoinc_seq_(),
     merge_type_(merge_type)
 {
   clog_checkpoint_scn_.set_min();

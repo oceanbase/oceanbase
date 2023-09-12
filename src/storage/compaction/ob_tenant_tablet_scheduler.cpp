@@ -257,12 +257,14 @@ int ObTenantTabletScheduler::init()
 {
   int ret = OB_SUCCESS;
   int64_t schedule_interval = DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
+  int64_t schedule_batch_size = DEFAULT_COMPACTION_SCHEDULE_BATCH_SIZE;
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       schedule_interval = tenant_config->ob_compaction_schedule_interval;
       enable_adaptive_compaction_ = tenant_config->_enable_adaptive_compaction;
       fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
+      schedule_batch_size = tenant_config->compaction_schedule_tablet_batch_cnt;
     }
   } // end of ObTenantConfigGuard
   if (IS_INIT) {
@@ -285,6 +287,7 @@ int ObTenantTabletScheduler::init()
     LOG_WARN("Fail to create prohibit medium ls id map", K(ret));
   } else {
     schedule_interval_ = schedule_interval;
+    schedule_tablet_batch_size_ = schedule_batch_size;
     is_inited_ = true;
   }
 
@@ -330,12 +333,16 @@ int ObTenantTabletScheduler::reload_tenant_config()
 {
   int ret = OB_SUCCESS;
   int64_t merge_schedule_interval = DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
+  int64_t schedule_batch_size = DEFAULT_COMPACTION_SCHEDULE_BATCH_SIZE;
+  bool tenant_config_valid = false;
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
+      tenant_config_valid = true;
       merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
       enable_adaptive_compaction_ = tenant_config->_enable_adaptive_compaction;
       fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
+      schedule_batch_size = tenant_config->compaction_schedule_tablet_batch_cnt;
     }
   } // end of ObTenantConfigGuard
   if (IS_NOT_INIT) {
@@ -350,8 +357,12 @@ int ObTenantTabletScheduler::reload_tenant_config()
       LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
     } else {
       schedule_interval_ = merge_schedule_interval;
-      LOG_INFO("succeeded to reload new merge schedule interval", K(merge_schedule_interval));
+      LOG_INFO("succeeded to reload new merge schedule interval", K(merge_schedule_interval), K(tenant_config_valid));
     }
+  }
+  if (OB_SUCC(ret) && schedule_tablet_batch_size_ != schedule_batch_size) {
+    schedule_tablet_batch_size_ = schedule_batch_size;
+    LOG_INFO("succeeded to reload new merge schedule tablet batch cnt", K(schedule_tablet_batch_size_), K(tenant_config_valid));
   }
   return ret;
 }
@@ -479,7 +490,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_minor()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObTenantTabletScheduler has not been inited", K(ret));
-  } else if (OB_FAIL(minor_ls_tablet_iter_.build_iter())) {
+  } else if (OB_FAIL(minor_ls_tablet_iter_.build_iter(schedule_tablet_batch_size_))) {
     LOG_WARN("failed to init iterator", K(ret));
   } else {
     LOG_INFO("start schedule all tablet minor merge", K(minor_ls_tablet_iter_));
@@ -1431,7 +1442,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         LOG_WARN("failed to add suspect info", K(tmp_ret));
       }
     }
-  } else if (OB_FAIL(medium_ls_tablet_iter_.build_iter())) {
+  } else if (OB_FAIL(medium_ls_tablet_iter_.build_iter(schedule_tablet_batch_size_))) {
     LOG_WARN("failed to init iterator", K(ret));
   } else {
     bool all_ls_weak_read_ts_ready = true;
@@ -1618,10 +1629,13 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
 }
 
 // ------------------- ObCompactionScheduleIterator -------------------- //
-int ObCompactionScheduleIterator::build_iter()
+int ObCompactionScheduleIterator::build_iter(const int64_t batch_tablet_cnt)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid()) {
+  if (OB_UNLIKELY(batch_tablet_cnt <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(batch_tablet_cnt));
+  } else if (!is_valid()) {
     ls_ids_.reuse();
     if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids_))) {
       LOG_WARN("failed to get all ls id", K(ret));
@@ -1645,6 +1659,9 @@ int ObCompactionScheduleIterator::build_iter()
     }
   } else { // iter is invalid, no need to build, just set var to start cur batch
     (void) start_cur_batch();
+  }
+  if (OB_SUCC(ret)) {
+    max_batch_tablet_cnt_ = batch_tablet_cnt;
   }
   return ret;
 }

@@ -31,11 +31,10 @@ namespace unittest
 class MockObCompactionScheduleIterator : public storage::ObCompactionScheduleIterator
 {
 public:
-  MockObCompactionScheduleIterator(const int64_t max_batch_tablet_cnt)
+  MockObCompactionScheduleIterator()
     : ObCompactionScheduleIterator(
       true/*is_major, no meaning*/,
-      ObLSGetMod::STORAGE_MOD,
-      max_batch_tablet_cnt),
+      ObLSGetMod::STORAGE_MOD),
       mock_tablet_id_cnt_(0),
       error_tablet_idx_(-1),
       errno_(OB_SUCCESS)
@@ -89,11 +88,12 @@ void TestCompactionIter::test_iter(
   const int64_t error_tablet_idx,
   const int input_errno)
 {
-  MockObCompactionScheduleIterator iter(max_batch_tablet_cnt);
+  MockObCompactionScheduleIterator iter;
   iter.prepare_ls_id_array(ls_cnt);
   iter.mock_tablet_id_cnt_ = tablet_cnt_per_ls;
   iter.error_tablet_idx_ = error_tablet_idx;
   iter.errno_ = input_errno;
+  iter.max_batch_tablet_cnt_ = max_batch_tablet_cnt;
 
   int ret = OB_SUCCESS;
   int iter_cnt = 0;

@@ -555,10 +555,10 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(cluster_id), K_(medium_compat_version), K_(data_version),
-      "compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
+    J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
       "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
-      K_(is_schema_changed), K_(tenant_id), K_(cluster_id), K_(medium_snapshot), K_(last_medium_snapshot), K_(storage_schema),
+      K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
+      K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema),
       K_(contain_parallel_range), K_(parallel_merge_info));
     J_OBJ_END();
   }

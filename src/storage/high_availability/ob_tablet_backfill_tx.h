@@ -149,10 +149,6 @@ private:
   int do_backfill_tx_();
   int prepare_partition_merge_();
   int update_merge_sstable_();
-  int read_msd_from_memtable_(ObUpdateTableStoreParam &param);
-  int traverse_frozen_memtable_(
-      const memtable::MultiSourceDataUnitType &type,
-      memtable::ObIMultiSourceDataUnit *msd);
 
 private:
   bool is_inited_;

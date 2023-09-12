@@ -936,6 +936,7 @@ private:
   int generate_next_dag_(ObIDag *dag);
   int try_move_child_to_ready_list(ObIDag &dag);
   void inner_free_dag(ObIDag &dag);
+  OB_INLINE int64_t get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio);
 
 private:
   bool is_inited_;
@@ -947,6 +948,7 @@ private:
   lib::ObMutex dag_net_map_lock_;
   int64_t dag_cnt_;
   int64_t dag_limit_;
+  int64_t compaction_dag_limit_;
   int64_t check_period_;
   int64_t loop_waiting_dag_list_period_;
   int64_t total_worker_cnt_;

@@ -39,9 +39,11 @@ cache_wash_threshold
 clog_sync_time_warn_threshold
 cluster
 cluster_id
+compaction_dag_cnt_limit
 compaction_high_thread_score
 compaction_low_thread_score
 compaction_mid_thread_score
+compaction_schedule_tablet_batch_cnt
 compatible
 config_additional_dir
 connection_control_failed_connections_threshold

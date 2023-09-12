@@ -1574,6 +1574,7 @@ void ObTenantDagScheduler::reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_HA_LOW, tenant_config->ha_low_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_DDL, tenant_config->ddl_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_TTL, tenant_config->ttl_thread_score);
+    compaction_dag_limit_ = tenant_config->compaction_dag_cnt_limit;
   }
 }
 
@@ -1626,6 +1627,7 @@ int ObTenantDagScheduler::init(
 
     get_default_config();
     dag_limit_ = dag_limit;
+    compaction_dag_limit_ = dag_limit;
     if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagScheduler, tg_id_))) {
       COMMON_LOG(WARN, "TG create dag scheduler failed", K(ret));
     }
@@ -1672,6 +1674,7 @@ void ObTenantDagScheduler::reset()
   WEAK_BARRIER();
   int tmp_ret = OB_SUCCESS;
   int64_t abort_dag_cnt = 0;
+  dump_dag_status();
   for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
     for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
       ObIDag *head = dag_list_[j].get_head(i);
@@ -1680,6 +1683,7 @@ void ObTenantDagScheduler::reset()
       ObIDagNet *tmp_dag_net = nullptr;
       while (NULL != cur_dag && head != cur_dag) {
         next = cur_dag->get_next();
+        FLOG_INFO("destroy dag", "dag_list", j, "prio", i,  KPC(cur_dag));
         if (cur_dag->get_dag_id().is_valid()
           && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
           if (OB_ENTRY_NOT_EXIST != tmp_ret) {
@@ -3364,6 +3368,17 @@ int ObTenantDagScheduler::check_dag_net_exist(
   return ret;
 }
 
+OB_INLINE int64_t ObTenantDagScheduler::get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio)
+{
+  int64_t dag_limit = dag_limit_;
+  if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH == dag_prio
+    || ObDagPrio::DAG_PRIO_COMPACTION_MID == dag_prio
+    || ObDagPrio::DAG_PRIO_COMPACTION_LOW == dag_prio) {
+    dag_limit = compaction_dag_limit_;
+  }
+  return dag_limit;
+}
+
 int ObTenantDagScheduler::inner_add_dag(
     const bool emergency,
     const bool check_size_overflow,
@@ -3377,7 +3392,7 @@ int ObTenantDagScheduler::inner_add_dag(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner dag dag get invalid argument", K(ret), KPC(dag));
   } else {
-    if (check_size_overflow && dag_cnts_[dag->get_type()] >= dag_limit_) {
+    if (check_size_overflow && dag_cnts_[dag->get_type()] >= get_dag_limit((ObDagPrio::ObDagPrioEnum)dag->get_priority())) {
       ret = OB_SIZE_OVERFLOW;
       COMMON_LOG(WARN, "ObTenantDagScheduler is full", K(ret), K_(dag_limit), KPC(dag));
     } else if (OB_FAIL(add_dag_into_list_and_map_(
