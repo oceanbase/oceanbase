@@ -1591,9 +1591,11 @@ int ObTableSqlService::delete_constraint(common::ObISQLClient &sql_client,
       }
     }
   }
-  if ((!constraint_sql.empty() && OB_FAIL(constraint_sql.append_fmt(")")))
-      || (!constraint_column_sql.empty() && OB_FAIL(constraint_column_sql.append_fmt(")")))) {
-    LOG_WARN("assign_fmt assign ) to end failed");
+  if (OB_FAIL(ret)) {
+  } else if (!constraint_sql.empty() && OB_FAIL(constraint_sql.append_fmt(")"))) {
+    LOG_WARN("assign_fmt assign ) to end failed", K(ret), K(constraint_sql));
+  } else if (!constraint_column_sql.empty() && OB_FAIL(constraint_column_sql.append_fmt(")"))) {
+    LOG_WARN("assign_fmt assign ) to end failed", K(ret), K(constraint_column_sql));
   }
   // execute constraint_sql and constraint_history_sql
   if (OB_SUCC(ret)) {
