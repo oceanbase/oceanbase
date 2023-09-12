@@ -112,7 +112,6 @@ static const char* job_status_str_array[JOB_STATUS_MAX] = {
   "SUCCESS",
   "FAILED",
   "SKIP_CHECKING_LS_STATUS",
-  "CANCELED"
 };
 
 ObRsJobStatus ObRsJobTableOperator::get_job_status(const common::ObString &job_status_str)
@@ -414,12 +413,6 @@ int ObRsJobTableOperator::complete_job(int64_t job_id, int result_code, common::
     if (OB_FAIL(pairs.add_column("result_code", result_code))) {
       LOG_WARN("failed to add column", K(ret));
     } else if (OB_FAIL(pairs.add_column("job_status", job_status_str_array[JOB_STATUS_SKIP_CHECKING_LS_STATUS]))) {
-      LOG_WARN("failed to add column", K(ret));
-    }
-  } else if (OB_CANCELED == result_code) {
-    if (OB_FAIL(pairs.add_column("result_code", result_code))) {
-      LOG_WARN("failed to add column", K(ret));
-    } else if (OB_FAIL(pairs.add_column("job_status", job_status_str_array[JOB_STATUS_CANCELED]))) {
       LOG_WARN("failed to add column", K(ret));
     }
   } else {

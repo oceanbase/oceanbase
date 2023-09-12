@@ -232,10 +232,7 @@ public:
                                      common::ObIArray<share::ObUnitInfo> &unit_infos) const;
   virtual int get_deleting_units_of_pool(const uint64_t resource_pool_id,
                                          common::ObIArray<share::ObUnit> &units) const;
-  virtual int commit_shrink_tenant_resource_pool(
-      const uint64_t tenant_id,
-      const int64_t job_id,
-      const int check_ret);
+  virtual int commit_shrink_tenant_resource_pool(const uint64_t tenant_id);
   virtual int get_all_unit_infos_by_tenant(const uint64_t tenant_id,
                                            common::ObIArray<share::ObUnitInfo> &unit_infos);
   virtual int get_unit_infos(const common::ObIArray<share::ObResourcePoolName> &pools,

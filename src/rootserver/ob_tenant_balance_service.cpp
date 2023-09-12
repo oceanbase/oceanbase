@@ -297,16 +297,15 @@ int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bo
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (ObAllTenantInfoProxy::is_primary_tenant(GCTX.sql_proxy_, tenant_id, is_primary)) {
     LOG_WARN("fail to execute is_primary_tenant", KR(ret), K(tenant_id));
-  } else if (is_primary) {
+  } else if (is_primary && ObShareUtil::is_tenant_enable_transfer(tenant_id)) {
     if (OB_FAIL(is_primary_tenant_ls_balance_finished_(tenant_id, is_finished))) {
       LOG_WARN("fail to execute is_primary_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
     }
   } else {
-    // standby & restore
-    is_finished = true;
-    // if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
-    //   LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
-    // }
+    // standby & restore & primary tenant and enable_transfer=false
+    if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
+      LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+    }
   }
   LOG_TRACE("check whether the tenant has balanced ls", K(ret), K(tenant_id), K(is_primary), K(is_finished));
   return ret;
