@@ -4853,8 +4853,9 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
     } else if (src->is_null() || ObMaxType == src->get_type()) {
       //ObMaxTC means deleted element in Collection, no need to copy
       *dest = *src;
-    } else if (PL_CURSOR_TYPE == src->get_meta().get_extend_type()
-        || PL_REF_CURSOR_TYPE == src->get_meta().get_extend_type()) {
+    } else if (src->is_pl_extend() &&
+               (PL_CURSOR_TYPE == src->get_meta().get_extend_type() ||
+               PL_REF_CURSOR_TYPE == src->get_meta().get_extend_type())) {
       OZ (spi_copy_ref_cursor(ctx, allocator, src, dest, dest_type, package_id));
     } else if (src->is_ext() && OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
       OZ (ObPLComposite::copy_element(*src, *dest, *copy_allocator, ctx, ctx->exec_ctx_->get_my_session()));
