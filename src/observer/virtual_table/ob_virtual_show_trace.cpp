@@ -640,7 +640,21 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
 
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tmp_arr.count(); ++i) {
-    if (OB_ISNULL(tmp_arr.at(i))) {
+    if (arr.count() > 0) {
+      if (OB_ISNULL(arr.at(arr.count() - 1))) {
+        // do nothing
+      } else if (OB_ISNULL(tmp_arr.at(i))) {
+         // do nothing
+      } else {
+        if (arr.at(arr.count() - 1)->data_.start_ts_ > tmp_arr.at(i)->data_.start_ts_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid trace span", K(arr.at(arr.count() - 1)->data_), K(tmp_arr.at(i)->data_));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_arr.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "record ptr is null", K(i));
     } else if (OB_FAIL(arr.push_back(tmp_arr.at(i)))) {
