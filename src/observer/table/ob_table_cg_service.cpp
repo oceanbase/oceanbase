@@ -919,7 +919,7 @@ int ObTableExprCgService::refresh_exprs_frame(ObTableCtx &ctx,
 /*
   refresh rowkey frame
   1. The number of entity's rowkey may not equal the number of schema's rowkey
-    when there is auto_increment column in primary keys.
+    when there is auto_increment column in primary keys or default current timestamp column.
   2. auto_increment expr tree is autoinc_nextval_expr - column_conv_expr,
     we need to fill value to column_conv_expr when user had set value.
   3. "IS_DEFAULT_NOW_OBJ(item.default_value_)" means default current_timestamp in column,
@@ -935,6 +935,7 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
   const int64_t entity_rowkey_cnt = rowkey.count();
   bool is_full_filled = (schema_rowkey_cnt == entity_rowkey_cnt); // did user fill all rowkey columns or not
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
+  int64_t skip_pos = 0; // skip columns that do not need to be filled
 
   if (exprs.count() < schema_rowkey_cnt) {
     ret = OB_ERR_UNDEFINED;
@@ -948,7 +949,7 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
   // e.g., create table test(a varchar(1024), b int primary key);
   for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); i++) {
     const ObTableColumnItem &item = items.at(i);
-    int64_t rowkey_position = item.rowkey_position_;
+    int64_t rowkey_position = item.rowkey_position_; // rowkey_position start from 1
     if (rowkey_position <= 0) {
       // normal column, do nothing
     } else {
@@ -961,7 +962,13 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
         } else {
           ObObj null_obj;
           null_obj.set_null();
-          const ObObj *tmp_obj = is_full_filled ? &rowkey.at(rowkey_position-1) : &null_obj;
+          const ObObj *tmp_obj = nullptr;
+          if (!is_full_filled) {
+            tmp_obj = &null_obj;
+            skip_pos++;
+          } else {
+            tmp_obj = &rowkey.at(rowkey_position-1);
+          }
           if (OB_FAIL(write_autoinc_datum(ctx, *expr, eval_ctx, *tmp_obj))) {
             LOG_WARN("fail to write auto increment datum", K(ret), K(is_full_filled), K(*expr), K(*tmp_obj));
           }
@@ -970,16 +977,19 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
         ObDatum *tmp_datum = nullptr;
         if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
           LOG_WARN("fail to eval current timestamp expr", K(ret));
+        } else {
+          skip_pos++;
         }
       } else {
-        if (rowkey_position > entity_rowkey_cnt) {
+        int64_t pos = rowkey_position - 1 - skip_pos;
+        if (pos >= entity_rowkey_cnt) {
           ret = OB_INDEX_OUT_OF_RANGE;
-          LOG_WARN("idx out of range", K(ret), K(i), K(entity_rowkey_cnt), K(rowkey_position));
+          LOG_WARN("idx out of range", K(ret), K(i), K(entity_rowkey_cnt), K(rowkey_position), K(skip_pos));
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNDEFINED;
           LOG_WARN("expr is null", K(ret));
-        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(rowkey_position-1)))) {
-          LOG_WARN("fail to write datum", K(ret), K(rowkey_position), K(rowkey.at(rowkey_position-1)), K(*expr));
+        } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(pos)))) {
+          LOG_WARN("fail to write datum", K(ret), K(rowkey_position), K(rowkey.at(pos)), K(*expr), K(pos));
         }
       }
     }

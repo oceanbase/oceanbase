@@ -351,6 +351,7 @@ public:
   int get_column_item_by_expr(sql::ObColumnRefRawExpr *expr, const ObTableColumnItem *&item) const;
   int get_expr_from_column_items(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
   int get_expr_from_assignments(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
+  int check_insert_up_can_use_put(bool &use_put);
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
