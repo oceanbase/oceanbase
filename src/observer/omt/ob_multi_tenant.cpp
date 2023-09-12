@@ -2436,7 +2436,7 @@ void ObSharedTimer::mtl_wait(ObSharedTimer *&st)
   if (st != NULL) {
     int &tg_id = st->tg_id_;
     if (tg_id > 0) {
-      TG_WAIT(tg_id);
+      TG_WAIT_ONLY(tg_id);
     }
   }
 }

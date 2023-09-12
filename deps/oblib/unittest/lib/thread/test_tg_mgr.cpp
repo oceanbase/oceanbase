@@ -46,7 +46,11 @@ TEST(TG, timer)
   ::usleep(60000);
   ASSERT_EQ(1, task.task_run_count_);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
+  TG_WAIT_ONLY(tg_id);
+  ASSERT_EQ(OB_SUCCESS, TG_CANCEL_R(tg_id, task));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
+  // TG_WAIT = wait + destroy
+  ASSERT_EQ(OB_ERR_UNEXPECTED, TG_CANCEL_R(tg_id, task));
 
   // restart
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
@@ -159,7 +163,7 @@ class MyRunnable : public TGRunnable
 public:
   void run1() override
   {
-    
+
     run_count_++;
     while (!has_set_stop()) {
       ::usleep(50000);
