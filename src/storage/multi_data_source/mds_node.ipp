@@ -365,8 +365,7 @@ int UserMdsNode<K, V>::fill_event_(observer::MdsEvent &event,
   if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(user_data_)))) {
   } else if (FALSE_IT(event.info_str_.assign_ptr(stack_buffer, pos))) {
   } else if (FALSE_IT(last_pos = pos)) {
-  } else if (MDS_FAIL(databuff_printf(stack_buffer, buffer_size, pos, "%s", p_mds_row_ ? to_cstring(*p_mds_row_->key_) : "NULL"))) {
-    MDS_LOG(WARN, "fail to_string user key", K(*this));
+  } else if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", p_mds_row_ ? to_cstring(*p_mds_row_->key_) : "NULL"))) {
   } else if (FALSE_IT(event.key_str_.assign_ptr(&stack_buffer[last_pos], pos - last_pos))) {
   } else if (FALSE_IT(last_pos = pos)) {
   } else {

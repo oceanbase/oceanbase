@@ -232,7 +232,6 @@ bool ObLockWaitMgr::post_process(bool need_retry, bool& need_wait)
     }
     if (need_retry) {
       if ((need_wait = node->need_wait())) {
-        TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;
         // FIXME(xuwang.txw):create detector in check_timeout process
         // below code must keep current order to fix concurrency bug
         // more info see
@@ -578,6 +577,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              ObFunction<int(bool&, bool&)> &rechecker)
 {
   int ret = OB_SUCCESS;
+  TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = false;
   Node *node = NULL;
   if (OB_NOT_NULL(node = get_thread_node())) {
     Key key(&row_key);
@@ -609,6 +609,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                 tx_id,
                 holder_tx_id);
         node->set_need_wait();
+        TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;// to tell end_stmt() not register deadlock
       }
     }
   }
@@ -629,6 +630,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              ObFunction<int(bool&)> &check_need_wait)
 {
   int ret = OB_SUCCESS;
+  TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = false;
   Node *node = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -665,6 +667,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                 holder_tx_id);
       node->set_need_wait();
       node->set_lock_mode(lock_mode);
+      TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = true;// to tell end_stmt() not register deadlock
     }
   }
   return ret;

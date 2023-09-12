@@ -62,6 +62,7 @@ public:
   virtual void set_timeout(const uint64_t timeout) = 0;
   virtual int register_timer_task() = 0;
   virtual void unregister_timer_task() = 0;
+  virtual void dec_count_down_allow_detect() = 0;
   virtual int64_t to_string(char *buffer, const int64_t length) const = 0;// for debugging
   virtual const ObDetectorPriority &get_priority() const = 0;// return detector's priority
   // build a directed dependency relationship to other

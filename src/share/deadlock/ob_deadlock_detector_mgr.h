@@ -96,6 +96,7 @@ public:
                    const CollectCallBack &on_collect_operation,
                    const ObDetectorPriority &priority = ObDetectorPriority(0),
                    const uint64_t start_delay = 0,
+                   const uint32_t count_down_allow_detect = 0,
                    const bool auto_activate_when_detected = true);
   template<typename KeyType1, typename KeyType2>
   int add_parent(const KeyType1 &key, const KeyType2 &parent_key);
@@ -130,6 +131,8 @@ public:
                                 const common::ObIArray<ObDependencyResource> &new_list);
   template<typename T>
   int get_block_list(const T &src_key, common::ObIArray<ObDependencyResource> &cur_list);
+  template<typename T>
+  int dec_count_down_allow_detect(const T &src_key);
   // remove directed dependency relationship between two detector
   template<typename T1, typename T2>
   int activate(const T1 &src_key, const T2 &dest_key);
@@ -164,6 +167,7 @@ private:
                  const CollectCallBack &on_collect_operation,
                  const ObDetectorPriority &priority,
                  const uint64_t start_delay,
+                 const uint32_t count_down_allow_detect,
                  const bool auto_activate_when_detected,
                  ObIDeadLockDetector *&p_detector);
       void release(ObIDeadLockDetector *p_detector);
@@ -236,6 +240,7 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
                                         const CollectCallBack &on_collect_operation,
                                         const ObDetectorPriority &priority,
                                         const uint64_t start_delay,
+                                        const uint32_t count_down_allow_detect,
                                         const bool auto_activate_when_detected)
 {
   CHECK_INIT();
@@ -259,6 +264,7 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
                                                           on_collect_operation,
                                                           priority,
                                                           start_delay,
+                                                          count_down_allow_detect,
                                                           auto_activate_when_detected,
                                                           p_detector))) {
       DETECT_LOG(WARN, "create new detector instance failed", PRINT_WRAPPER, KP(p_detector));
@@ -494,6 +500,28 @@ int ObDeadLockDetectorMgr::get_block_list(const T &src_key,
     DETECT_LOG(WARN, "get block list failed", PRINT_WRAPPER);
   } else {
     // DETECT_LOG(INFO, "replace block list success", PRINT_WRAPPER);
+  }
+
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template<typename T>
+int ObDeadLockDetectorMgr::dec_count_down_allow_detect(const T &src_key)
+{
+  CHECK_INIT();
+  CHECK_ENABLED();
+  #define PRINT_WRAPPER KR(ret)
+  int ret = common::OB_SUCCESS;
+  DetectorRefGuard ref_guard;
+  UserBinaryKey src_user_key;
+
+  if (OB_FAIL(src_user_key.set_user_key(src_key))) {
+    DETECT_LOG(WARN, "src_key serialzation failed", PRINT_WRAPPER);
+  } else if (OB_FAIL(get_detector_(src_user_key, ref_guard))) {
+    DETECT_LOG(WARN, "get_detector failed", PRINT_WRAPPER);
+  } else {
+    ref_guard.get_detector()->dec_count_down_allow_detect();
   }
 
   return ret;

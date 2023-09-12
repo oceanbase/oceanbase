@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #include <gtest/gtest.h>
 #include <stdlib.h>
 #define USING_LOG_PREFIX STORAGE
@@ -332,7 +333,6 @@ TEST_F(ObTestMdsBeforeRecover, before_recover_test)
     do_recycle_and_gc_mds_table(TEST_LS_ID, TEST_TABLET_ID);
     get_latest_scn(TEST_LS_ID, TEST_TABLET_ID, scn_from_table);
     read_virtual_mds_stat(TEST_LS_ID, TEST_TABLET_ID, RESULT);
-    OCCAM_LOG(INFO, "xuwang.txw debug", K(RESULT), K(TEST_LS_ID), K(TEST_TABLET_ID));
     ASSERT_EQ(OB_SUCCESS, LAST_SCN.convert_for_inner_table_field(scn_from_table));
     advance_checkpoint(TEST_LS_ID, LAST_SCN);
     write_result_to_file(BEFORE_RECOVER_RESULT_FILE);
@@ -372,7 +372,6 @@ TEST_F(ObTestMdsAfterRecover, after_recover_test)
   {
     read_virtual_mds_stat(TEST_LS_ID, TEST_TABLET_ID, RESULT);// to fill cache
     read_virtual_mds_stat(TEST_LS_ID, TEST_TABLET_ID, RESULT);
-    OCCAM_LOG(INFO, "xuwang.txw debug", K(RESULT), K(TEST_LS_ID), K(TEST_TABLET_ID));
     write_result_to_file(AFTER_RECOVER_RESULT_FILE);
     ASSERT_EQ(true, compare_before_and_after_recover_results(BEFORE_RECOVER_RESULT_FILE, AFTER_RECOVER_RESULT_FILE));
   }

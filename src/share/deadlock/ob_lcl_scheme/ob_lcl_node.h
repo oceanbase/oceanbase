@@ -97,6 +97,7 @@ public:
             const CollectCallBack &on_collect_operation,
             const ObDetectorPriority &priority,
             const uint64_t start_delay,
+            const uint32_t count_down_allow_detect,
             const bool auto_activate_when_detected);
   ~ObLCLNode();
 public:
@@ -104,6 +105,7 @@ public:
   void set_timeout(const uint64_t timeout) override;
   int register_timer_task() override;
   void unregister_timer_task() override;
+  void dec_count_down_allow_detect() override;
   bool is_successfully_constructed() const { return successfully_constructed_; }
   const ObDetectorPriority &get_priority() const override;// return detector's priority
   // build a directed dependency relationship to other
@@ -124,7 +126,8 @@ public:
                K_(public_label), K_(detect_callback),
                K_(auto_activate_when_detected), KTIME_(created_time), KTIME_(allow_detect_time),
                K_(is_timer_task_canceled), K_(block_list), K_(parent_list),
-               K_(lcl_period), K_(last_send_collect_info_period), K(block_callback_list_.count()))
+               K_(lcl_period), K_(last_send_collect_info_period), K(block_callback_list_.count()),
+               K(ATOMIC_LOAD(&count_down_allow_detect_)))
 private:
   class PushStateTask : public common::ObTimeWheelTask
   {
@@ -183,6 +186,7 @@ private:
   int64_t last_report_waiting_for_period_;
   int64_t last_send_collect_info_period_;
   bool successfully_constructed_;
+  uint32_t count_down_allow_detect_;
   mutable common::ObSpinLock lock_;
 };
 

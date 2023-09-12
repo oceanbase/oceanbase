@@ -9,6 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
+#ifndef DEBUG_FOR_MDS
+#define DEBUG_FOR_MDS
 #include "lib/ob_errno.h"
 #include <chrono>
 #include <thread>
@@ -214,7 +217,6 @@ TEST_F(TestMdsTransactionTest, test_mds_table_gc_and_recycle)
     // 5. 从LS找到tablet结构
     storage::ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
-    MDS_LOG(ERROR, "xuwang.txw debug", K(tablet_id));
     // 6. 调用tablet接口写入多源数据，提交
     MdsCtx ctx1(mds::MdsWriter(ObTransID(1)));
     share::SCN rec_scn;
@@ -226,7 +228,6 @@ TEST_F(TestMdsTransactionTest, test_mds_table_gc_and_recycle)
     // ASSERT_EQ(OB_SUCCESS, static_cast<ObTabletPointer*>(tablet_handle.get_obj()->pointer_hdl_.get_resource_ptr())->mds_table_handler_.mds_table_handle_.get_rec_scn(rec_scn));
     // ASSERT_EQ(mock_scn(10), rec_scn);
     std::this_thread::sleep_for(std::chrono::seconds(5));
-    MDS_LOG(ERROR, "xuwang.txw debug1");
     ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->mds_table_flush(share::SCN::max_scn()));
     // 7. 检查mds table的存在情况
     std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -282,3 +283,4 @@ int main(int argc, char **argv)
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+#endif

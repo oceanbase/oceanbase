@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/atomic/ob_atomic.h"
 #include "share/config/ob_server_config.h"
 #include <algorithm>
 #include "share/ob_occam_time_guard.h"
@@ -42,6 +43,7 @@ ObLCLNode::ObLCLNode(const UserBinaryKey &user_key,
                      const CollectCallBack &on_collect_operation,
                      const ObDetectorPriority &priority,
                      const uint64_t start_delay,
+                     const uint32_t count_down_allow_detect,
                      const bool auto_activate_when_detected)
   :push_state_task_(*this),
   self_key_(user_key),
@@ -56,6 +58,7 @@ ObLCLNode::ObLCLNode(const UserBinaryKey &user_key,
   lcl_period_(0),
   last_report_waiting_for_period_(0),
   last_send_collect_info_period_(0),
+  count_down_allow_detect_(count_down_allow_detect),
   lock_(ObLatchIds::DEADLOCK_LOCK)
 {
   #define PRINT_WRAPPER K(*this), K(resource_id), K(on_detect_operation),\
@@ -129,6 +132,18 @@ int ObLCLNode::register_timer_task()
 void ObLCLNode::unregister_timer_task()
 {
   ATOMIC_STORE(&is_timer_task_canceled_, true);
+}
+
+void ObLCLNode::dec_count_down_allow_detect()
+{
+  uint32_t cnt = 0;
+  bool cas_failed = false;
+  do {
+    cnt = ATOMIC_LOAD(&count_down_allow_detect_);
+    if (cnt > 0) {
+      cas_failed = (ATOMIC_CAS(&count_down_allow_detect_, cnt, cnt - 1) != cnt);
+    }
+  } while (cnt > 0 && cas_failed);
 }
 
 int ObLCLNode::register_timer_with_necessary_retry_with_lock_()
@@ -805,7 +820,11 @@ int ObLCLNode::push_state_to_downstreams_with_lock_()
   }
 
   CLICK();
-  if (OB_FAIL(broadcast_(blocklist_snapshot, lclv_snapshot, public_label_snapshot))) {
+  if (ATOMIC_LOAD(&count_down_allow_detect_) != 0) {
+    DETECT_LOG_(INFO, "not allow do detect cause count_down_allow_detect_ is not dec to 0 yet",
+                      K(blocklist_snapshot), K(lclv_snapshot), K(public_label_snapshot),
+                      K(*this));
+  } else if (OB_FAIL(broadcast_(blocklist_snapshot, lclv_snapshot, public_label_snapshot))) {
     DETECT_LOG_(WARN, "boardcast failed",
                       K(blocklist_snapshot), K(lclv_snapshot), K(public_label_snapshot),
                       K(*this));

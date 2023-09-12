@@ -81,6 +81,7 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
                                                                   const CollectCallBack &on_collect_operation,
                                                                   const ObDetectorPriority &priority,
                                                                   const uint64_t start_delay,
+                                                                  const uint32_t count_down_allow_detect,
                                                                   const bool auto_activate_when_detected,
                                                                   ObIDeadLockDetector *&p_detector)
 {
@@ -104,6 +105,7 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
                                             on_collect_operation,
                                             priority,
                                             start_delay,
+                                            count_down_allow_detect,
                                             auto_activate_when_detected);
     if (false == static_cast<ObLCLNode*>(p_detector)->
                  is_successfully_constructed()) {
@@ -414,6 +416,7 @@ int ObDeadLockDetectorMgr::process_notify_parent_message(
                                                               return common::OB_SUCCESS;
                                                             },
                                                             ObDetectorPriority(PRIORITY_RANGE::EXTREMELY_HIGH, 0),
+                                                            0,
                                                             0,
                                                             true,
                                                             p_detector))) {
