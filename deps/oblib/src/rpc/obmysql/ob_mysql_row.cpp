@@ -62,10 +62,10 @@ int ObMySQLRow::serialize(char *buf, const int64_t len, int64_t &pos) const
   }
 
   if (OB_FAIL(ret)) {
-    pos = pos_bk;
     if (OB_LIKELY(OB_SIZE_OVERFLOW != ret && OB_BUF_NOT_ENOUGH != ret)) {
-      LOG_WARN("serialize ob row fail", K(ret));
+      LOG_WARN("serialize ob row fail", K(ret), K(len), K(pos), K(pos_bk));
     }
+    pos = pos_bk;
   }
   return ret;
 }
