@@ -3183,8 +3183,8 @@ int ObSelectResolver::resolve_cycle_pseudo(const ParseNode *cycle_set_clause,
                K(ret),
                K(cycle_value->text_len_),
                K(cycle_default_value->text_len_));
-  } else if (cycle_value->type_ == T_VARCHAR
-             && cycle_default_value->type_ == T_VARCHAR) {
+  } else if ((cycle_value->type_ == T_VARCHAR || cycle_value->type_ == T_INT)
+             && (cycle_default_value->type_ == T_VARCHAR || cycle_default_value->type_ == T_INT)) {
     if (cycle_value->str_len_ > 0 && cycle_default_value->str_len_ > 0) {
       if (OB_FAIL(resolve_sql_expr(*cycle_value, expr_v))) {
         LOG_WARN("resolve sql expr failed", K(ret));

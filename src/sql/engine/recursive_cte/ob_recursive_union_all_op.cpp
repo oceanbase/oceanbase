@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/recursive_cte/ob_recursive_union_all_op.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 
 
 namespace oceanbase
@@ -74,27 +75,18 @@ int ObRecursiveUnionAllOp::inner_rescan()
 int ObRecursiveUnionAllOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  ObDatum *cycle_value = NULL;
-  ObDatum *non_cycle_value = NULL;
-  const ObExpr *cycle_expr = MY_SPEC.cycle_value_;
-  const ObExpr *cycle_default_expr = MY_SPEC.cycle_default_value_;
   ObOperatorKit *op_kit = nullptr;
   if (OB_ISNULL(left_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Left op is null", K(ret));
   } else if (OB_FAIL(inner_data_.init(MY_SPEC.search_expr_, MY_SPEC.cycle_expr_))) {
     LOG_WARN("Failed to create hash filter", K(ret));
-  } else if (NULL != cycle_expr && OB_FAIL(cycle_expr->eval(eval_ctx_, cycle_value))) {
+  } else if (OB_FAIL(cast_result(MY_SPEC.cycle_value_,
+                     MY_SPEC.cycle_expr_, &inner_data_.cycle_value_))) {
     LOG_WARN("Failed to calculate cycle value", K(ret));
-  } else if (NULL != cycle_expr
-              && OB_FAIL(inner_data_.cycle_value_.deep_copy(*cycle_value, ctx_.get_allocator()))) {
-    LOG_WARN("datum deep copy failed", K(ret));
-  } else if (NULL != cycle_default_expr
-              && OB_FAIL(cycle_default_expr->eval(eval_ctx_, non_cycle_value))) {
+  } else if (OB_FAIL(cast_result(MY_SPEC.cycle_default_value_,
+                     MY_SPEC.cycle_expr_, &inner_data_.non_cycle_value_))) {
     LOG_WARN("Failed to calculate non-cycle value", K(ret));
-  } else if (NULL != cycle_default_expr && OB_FAIL(inner_data_.non_cycle_value_.deep_copy(
-                                                        *non_cycle_value, ctx_.get_allocator()))) {
-    LOG_WARN("datum deep copy failed", K(ret));
   } else if (OB_ISNULL(op_kit = ctx_.get_operator_kit(MY_SPEC.pump_operator_id_))
               || OB_ISNULL(op_kit->op_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -157,6 +149,39 @@ int ObRecursiveUnionAllSpec::set_cycle_pseudo_values(ObExpr *v, ObExpr *d_v) {
   return ret;
 }
 
+int ObRecursiveUnionAllOp::cast_result(const ObExpr *src_expr,
+                                       const ObExpr *dst_expr,
+                                       ObDatum *expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_expr)) {
+    // do nothing
+  } else if (src_expr->datum_meta_.type_ == dst_expr->datum_meta_.type_) {
+    ObDatum *src_value = NULL;
+    if (OB_FAIL(src_expr->eval(eval_ctx_, src_value))) {
+      LOG_WARN("Failed to calculate cycle value", K(ret));
+    } else if (OB_FAIL(expr_datum->deep_copy(*src_value, ctx_.get_allocator()))) {
+      LOG_WARN("deep copy datum failed", K(ret));
+    }
+  } else if (OB_ISNULL(eval_ctx_.datum_caster_) && OB_FAIL(eval_ctx_.init_datum_caster())) {
+    LOG_WARN("init datum caster failed", K(ret));
+  } else {
+    ObCastMode cm = CM_NONE;
+    ObDatum *cast_datum = NULL;
+    if (OB_ISNULL(ctx_.get_my_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql session info is null", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx_.get_my_session(), cm))) {
+      LOG_WARN("Failed to get default cast mode", K(ret));
+    } else if (OB_FAIL(eval_ctx_.datum_caster_->to_type(
+        dst_expr->datum_meta_, *src_expr, cm, cast_datum, eval_ctx_.get_batch_idx()))) {
+      LOG_WARN("fail to dynamic cast", K(ret));
+    } else if (OB_FAIL(expr_datum->deep_copy(*cast_datum, ctx_.get_allocator()))) {
+      LOG_WARN("deep copy datum failed", K(ret));
+    }
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

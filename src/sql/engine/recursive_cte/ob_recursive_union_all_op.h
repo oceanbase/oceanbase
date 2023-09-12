@@ -100,6 +100,7 @@ public:
   }
   const ObRecursiveUnionAllSpec &get_spec() const
   { return static_cast<const ObRecursiveUnionAllSpec &>(spec_); }
+  int cast_result(const ObExpr *src_expr, const ObExpr *dst_expr, ObDatum *expr_datum);
 public:
   ObRecursiveInnerDataOp inner_data_;
 };
