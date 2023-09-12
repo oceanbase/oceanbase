@@ -718,6 +718,7 @@ public:
   int start();
   void stop();
   void wait();
+  void reset();
   void destroy();
   void resume();
   void run1() override;
@@ -795,6 +796,7 @@ public:
   void free_dag_net(T *&dag_net);
   void run1() final;
   void notify();
+  void reset();
   void destroy();
   void get_default_config();
   int64_t get_work_thread_num() const { return work_thread_num_; }

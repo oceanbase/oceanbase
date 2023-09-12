@@ -216,6 +216,7 @@ public:
   int init(const int64_t limit_cnt = DEFAULT_MAX_CNT);
   void stop();
   void wait();
+  void reset();
   void destroy();
   static ObTableStoreStatMgr &get_instance();
   int report_stat(const ObTableStoreStat &stat);

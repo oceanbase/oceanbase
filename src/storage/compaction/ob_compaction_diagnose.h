@@ -236,6 +236,7 @@ public:
            const int64_t page_size=INFO_PAGE_SIZE,
            int64_t max_size=INFO_MAX_SIZE);
 
+  void reset();
   void destroy();
   void clear();
   void clear_with_no_lock();

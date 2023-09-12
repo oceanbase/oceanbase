@@ -98,7 +98,7 @@ int ObTenantSSTableMergeInfoMgr::init(const int64_t page_size)
   }
 
   if (!is_inited_) {
-    destroy();
+    reset();
   }
   return ret;
 }
@@ -106,11 +106,16 @@ int ObTenantSSTableMergeInfoMgr::init(const int64_t page_size)
 void ObTenantSSTableMergeInfoMgr::destroy()
 {
   if (IS_INIT) {
-    major_info_pool_.destroy();
-    minor_info_pool_.destroy();
-    is_inited_ =false;
-    STORAGE_LOG(INFO, "ObTenantSSTableMergeInfoMgr destroy finish");
+    reset();
   }
+}
+
+void ObTenantSSTableMergeInfoMgr::reset()
+{
+  major_info_pool_.destroy();
+  minor_info_pool_.destroy();
+  is_inited_ = false;
+  STORAGE_LOG(INFO, "ObTenantSSTableMergeInfoMgr destroy finish");
 }
 
 int ObTenantSSTableMergeInfoMgr::open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,

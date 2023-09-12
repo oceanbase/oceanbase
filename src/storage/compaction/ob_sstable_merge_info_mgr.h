@@ -39,6 +39,7 @@ public:
   virtual ~ObTenantSSTableMergeInfoMgr();
   int init(const int64_t page_size=compaction::ObIDiagnoseInfoMgr::INFO_PAGE_SIZE);
   int add_sstable_merge_info(ObSSTableMergeInfo &input_info);
+  void reset();
   void destroy();
   int open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
                 compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter);

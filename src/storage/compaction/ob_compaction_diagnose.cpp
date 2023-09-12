@@ -219,7 +219,7 @@ int ObIDiagnoseInfoMgr::init(bool with_map,
     seq_num_ = 1;
     is_inited_ = true;
   } else {
-    destroy();
+    reset();
   }
   return ret;
 }
@@ -227,15 +227,19 @@ int ObIDiagnoseInfoMgr::init(bool with_map,
 void ObIDiagnoseInfoMgr::destroy()
 {
   if (IS_INIT) {
-    common::SpinWLockGuard guard(lock_);
-    common::SpinWLockGuard WLockGuard(rwlock_);
-    clear_with_no_lock();
-    if (info_map_.created()) {
-      info_map_.destroy();
-    }
-    allocator_.reset();
-    is_inited_ = false;
+    reset();
   }
+}
+void ObIDiagnoseInfoMgr::reset()
+{
+  common::SpinWLockGuard guard(lock_);
+  common::SpinWLockGuard WLockGuard(rwlock_);
+  clear_with_no_lock();
+  if (info_map_.created()) {
+    info_map_.destroy();
+  }
+  allocator_.reset();
+  is_inited_ = false;
 }
 
 void ObIDiagnoseInfoMgr::clear()

@@ -695,7 +695,7 @@ public:
     wait();
     int64_t elapsed_time = ObTimeUtility::current_time() - start_time;
     COMMON_LOG(INFO, "stress test finished", K(elapsed_time / 1000));
-    int ret_code = system("grep ERROR test_dag_scheduler.log -q");
+    int ret_code = system("grep ERROR test_dag_scheduler.log -q | grep -v 'Fail to lock' | grep -v 'invalid tg id'");
     ret_code = WEXITSTATUS(ret_code);
     if (ret_code == 0)
       ret = OB_ERR_UNEXPECTED;

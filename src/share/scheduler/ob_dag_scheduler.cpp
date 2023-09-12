@@ -1329,6 +1329,9 @@ int ObTenantDagWorker::init(const int64_t check_period)
     check_period_ = check_period;
     is_inited_ = true;
   }
+  if (!is_inited_) {
+    reset();
+  }
   return ret;
 }
 
@@ -1358,18 +1361,22 @@ void ObTenantDagWorker::wait()
 void ObTenantDagWorker::destroy()
 {
   if (IS_INIT) {
-    stop();
-    wait();
-    task_ = NULL;
-    status_ = DWS_FREE;
-    check_period_ = 0;
-    last_check_time_ = 0;
-    function_type_ = 0;
-    group_id_ = 0;
-    self_ = NULL;
-    is_inited_ = false;
-    TG_DESTROY(tg_id_);
+    reset();
   }
+}
+void ObTenantDagWorker::reset()
+{
+  stop();
+  wait();
+  task_ = NULL;
+  status_ = DWS_FREE;
+  check_period_ = 0;
+  last_check_time_ = 0;
+  function_type_ = 0;
+  group_id_ = 0;
+  self_ = NULL;
+  is_inited_ = false;
+  TG_DESTROY(tg_id_);
 }
 
 void ObTenantDagWorker::notify(DagWorkerStatus status)
@@ -1637,7 +1644,7 @@ int ObTenantDagScheduler::init(
     }
   }
   if (!is_inited_) {
-    destroy();
+    reset();
     COMMON_LOG(WARN, "failed to init ObTenantDagScheduler", K(ret));
   } else {
     dump_dag_status();
@@ -1649,79 +1656,84 @@ int ObTenantDagScheduler::init(
 void ObTenantDagScheduler::destroy()
 {
   if (IS_INIT) {
-    COMMON_LOG(INFO, "ObTenantDagScheduler starts to destroy");
-    stop();
-    notify();
-    wait();
-
-    destroy_all_workers();
-    is_inited_ = false; // avoid alloc dag/dag_net
-    WEAK_BARRIER();
-    int tmp_ret = OB_SUCCESS;
-    int64_t abort_dag_cnt = 0;
-    for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
-      for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
-        ObIDag *head = dag_list_[j].get_head(i);
-        ObIDag *cur_dag = head->get_next();
-        ObIDag *next = NULL;
-        ObIDagNet *tmp_dag_net = nullptr;
-        while (NULL != cur_dag && head != cur_dag) {
-          next = cur_dag->get_next();
-          if (cur_dag->get_dag_id().is_valid()
-            && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
-            if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-              STORAGE_LOG_RET(WARN, tmp_ret, "failed to del sys task", K(tmp_ret), K(cur_dag->get_dag_id()));
-            }
-          }
-          if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, tmp_dag_net))) {
-            STORAGE_LOG_RET(WARN, tmp_ret, "failed to abort dag", K(tmp_ret), KPC(cur_dag));
-          } else {
-            ++abort_dag_cnt;
-          }
-          cur_dag = next;
-        } // end of while
-      } // end of prio loop
-      dag_list_[j].reset();
-    } // end of for
-    blocking_dag_net_list_.reset();
-
-    if (dag_map_.created()) {
-      dag_map_.destroy();
-    }
-    if (dag_net_map_[RUNNING_DAG_NET_MAP].created()) {
-      for (DagNetMap::iterator iter = dag_net_map_[RUNNING_DAG_NET_MAP].begin(); iter != dag_net_map_[RUNNING_DAG_NET_MAP].end(); ++iter) {
-        const bool ha_dag_net = iter->second->is_ha_dag_net();
-        iter->second->~ObIDagNet();
-        if (ha_dag_net) {
-          ha_allocator_.free(iter->second);
-        } else {
-          allocator_.free(iter->second);
-        }
-      } // end of for
-      dag_net_map_[RUNNING_DAG_NET_MAP].destroy();
-    }
-    if (dag_net_id_map_.created()) {
-      dag_net_id_map_.destroy();
-    }
-    COMMON_LOG(INFO, "ObTenantDagScheduler before allocator destroyed", K(abort_dag_cnt), K(allocator_.used()), K(ha_allocator_.used()));
-    allocator_.reset();
-    ha_allocator_.reset();
-    scheduler_sync_.destroy();
-    dag_cnt_ = 0;
-    dag_limit_ = 0;
-    total_worker_cnt_ = 0;
-    work_thread_num_ = 0;
-    total_running_task_cnt_ = 0;
-    scheduled_task_cnt_ = 0;
-    MEMSET(running_task_cnts_, 0, sizeof(running_task_cnts_));
-    MEMSET(dag_cnts_, 0, sizeof(dag_cnts_));
-    MEMSET(scheduled_task_cnts_, 0, sizeof(scheduled_task_cnts_));
-    MEMSET(dag_net_cnts_, 0, sizeof(dag_net_cnts_));
-    waiting_workers_.reset();
-    running_workers_.reset();
-    COMMON_LOG(INFO, "ObTenantDagScheduler destroyed");
-    TG_DESTROY(tg_id_);
+    reset();
   }
+}
+
+void ObTenantDagScheduler::reset()
+{
+  COMMON_LOG(INFO, "ObTenantDagScheduler starts to destroy");
+  stop();
+  notify();
+  wait();
+
+  destroy_all_workers();
+  is_inited_ = false; // avoid alloc dag/dag_net
+  WEAK_BARRIER();
+  int tmp_ret = OB_SUCCESS;
+  int64_t abort_dag_cnt = 0;
+  for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
+    for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
+      ObIDag *head = dag_list_[j].get_head(i);
+      ObIDag *cur_dag = head->get_next();
+      ObIDag *next = NULL;
+      ObIDagNet *tmp_dag_net = nullptr;
+      while (NULL != cur_dag && head != cur_dag) {
+        next = cur_dag->get_next();
+        if (cur_dag->get_dag_id().is_valid()
+          && OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(cur_dag->get_dag_id()))) {
+          if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+            STORAGE_LOG_RET(WARN, tmp_ret, "failed to del sys task", K(tmp_ret), K(cur_dag->get_dag_id()));
+          }
+        }
+        if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, tmp_dag_net))) {
+          STORAGE_LOG_RET(WARN, tmp_ret, "failed to abort dag", K(tmp_ret), KPC(cur_dag));
+        } else {
+          ++abort_dag_cnt;
+        }
+        cur_dag = next;
+      } // end of while
+    } // end of prio loop
+    dag_list_[j].reset();
+  } // end of for
+  blocking_dag_net_list_.reset();
+
+  if (dag_map_.created()) {
+    dag_map_.destroy();
+  }
+  if (dag_net_map_[RUNNING_DAG_NET_MAP].created()) {
+    for (DagNetMap::iterator iter = dag_net_map_[RUNNING_DAG_NET_MAP].begin(); iter != dag_net_map_[RUNNING_DAG_NET_MAP].end(); ++iter) {
+      const bool ha_dag_net = iter->second->is_ha_dag_net();
+      iter->second->~ObIDagNet();
+      if (ha_dag_net) {
+        ha_allocator_.free(iter->second);
+      } else {
+        allocator_.free(iter->second);
+      }
+    } // end of for
+    dag_net_map_[RUNNING_DAG_NET_MAP].destroy();
+  }
+  if (dag_net_id_map_.created()) {
+    dag_net_id_map_.destroy();
+  }
+  COMMON_LOG(INFO, "ObTenantDagScheduler before allocator destroyed", K(abort_dag_cnt), K(allocator_.used()), K(ha_allocator_.used()));
+  allocator_.reset();
+  ha_allocator_.reset();
+  scheduler_sync_.destroy();
+  dag_cnt_ = 0;
+  dag_limit_ = 0;
+  total_worker_cnt_ = 0;
+  work_thread_num_ = 0;
+  total_running_task_cnt_ = 0;
+  scheduled_task_cnt_ = 0;
+  MEMSET(running_task_cnts_, 0, sizeof(running_task_cnts_));
+  MEMSET(dag_cnts_, 0, sizeof(dag_cnts_));
+  MEMSET(scheduled_task_cnts_, 0, sizeof(scheduled_task_cnts_));
+  MEMSET(dag_net_cnts_, 0, sizeof(dag_net_cnts_));
+  waiting_workers_.reset();
+  running_workers_.reset();
+  TG_DESTROY(tg_id_);
+  COMMON_LOG(INFO, "ObTenantDagScheduler destroyed");
 }
 
 void ObTenantDagScheduler::free_dag(ObIDag &dag, ObIDag *parent_dag)
@@ -2704,7 +2716,7 @@ int ObTenantDagScheduler::sys_task_start(ObIDag *dag)
     int tmp_ret = OB_SUCCESS;
     // allow comment truncation, no need to set ret
     if (OB_TMP_FAIL(dag->fill_comment(sys_task_status.comment_, sizeof(sys_task_status.comment_)))) {
-      COMMON_LOG(WARN, "failed to fill comment", K(ret));
+      COMMON_LOG(WARN, "failed to fill comment", K(tmp_ret));
     }
     if (OB_SUCCESS != (ret = ObSysTaskStatMgr::get_instance().add_task(sys_task_status))) {
       COMMON_LOG(WARN, "failed to add sys task", K(ret), K(sys_task_status));
