@@ -189,8 +189,6 @@ private:
   int post_upgrade_for_backup();
   int init_rewrite_rule_version(const uint64_t tenant_id);
   static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
-   //TODO upgrade for 4200
-   int post_upgrade_for_max_ls_id_();
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 1)
@@ -207,6 +205,8 @@ private:
   int post_upgrade_for_grant_create_database_link_priv();
   int post_upgrade_for_grant_drop_database_link_priv();
   int post_upgrade_for_heartbeat_and_server_zone_op_service();
+  int post_upgrade_for_max_ls_id_();
+
 };
 /* =========== special upgrade processor end   ============= */
 

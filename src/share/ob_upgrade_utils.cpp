@@ -815,8 +815,6 @@ int ObUpgradeFor4100Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(recompile_all_views_and_synonyms(tenant_id))) {
     LOG_WARN("fail to init rewrite rule version", K(ret), K(tenant_id));
-  } else if (OB_FAIL(post_upgrade_for_max_ls_id_())) {//TODO for 4200 upgrade
-    LOG_WARN("failed to update max ls id", KR(ret));
   }
   return ret;
 }
@@ -970,7 +968,24 @@ int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t t
 }
 /* =========== 4100 upgrade processor end ============= */
 
-int ObUpgradeFor4100Processor::post_upgrade_for_max_ls_id_()
+int ObUpgradeFor4200Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_grant_create_database_link_priv())) {
+    LOG_WARN("grant create database link failed", K(ret));
+  } else if (OB_FAIL(post_upgrade_for_grant_drop_database_link_priv())) {
+    LOG_WARN("grant drop database link failed", K(ret));
+  } else if (OB_FAIL(post_upgrade_for_heartbeat_and_server_zone_op_service())) {
+    LOG_WARN("post upgrade for heartbeat and server zone op service failed", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_max_ls_id_())) {
+    LOG_WARN("failed to update max ls id", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4200Processor::post_upgrade_for_max_ls_id_()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
@@ -998,21 +1013,6 @@ int ObUpgradeFor4100Processor::post_upgrade_for_max_ls_id_()
       }
     }
     LOG_INFO("update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id));
-  }
-  return ret;
-}
-
-int ObUpgradeFor4200Processor::post_upgrade()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_grant_create_database_link_priv())) {
-    LOG_WARN("grant create database link failed", K(ret));
-  } else if (OB_FAIL(post_upgrade_for_grant_drop_database_link_priv())) {
-    LOG_WARN("grant drop database link failed", K(ret));
-  } else if (OB_FAIL(post_upgrade_for_heartbeat_and_server_zone_op_service())) {
-    LOG_WARN("post upgrade for heartbeat and server zone op service failed", KR(ret));
   }
   return ret;
 }
