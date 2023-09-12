@@ -6065,6 +6065,7 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
       obrpc::ObCopyTabletInfo tablet_info;
+      ObTabletCreateDeleteMdsUserData user_data;
 
       while (OB_SUCC(ret)) {
         tablet_info.reset();
@@ -6078,6 +6079,13 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
         } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
+        } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(
+            share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT))) {
+          //TODO(muwei.ym) CAN NOT USE this condition when MDS supports uncommitted transaction
+          LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
+          if (OB_EMPTY_RESULT == ret) {
+            ret = OB_SUCCESS;
+          }
         } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_info.param_))) {
           LOG_WARN("failed to build migration tablet param", K(ret));
         } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {

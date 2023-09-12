@@ -52,6 +52,7 @@ ERRSIM_POINT_DEF(EN_UPDATE_ALL_TABLET_TO_LS_FAILED);
 ERRSIM_POINT_DEF(EN_UPDATE_TRANSFER_TASK_FAILED);
 ERRSIM_POINT_DEF(EN_START_CAN_NOT_RETRY);
 ERRSIM_POINT_DEF(EN_MAKE_SRC_LS_REBUILD);
+ERRSIM_POINT_DEF(EN_INSERT_TRANSFER_START_FAILED);
 
 ObTransferHandler::ObTransferHandler()
   : is_inited_(false),
@@ -481,6 +482,14 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     } else if (OB_FAIL(do_trans_transfer_start_(task_info, config_version, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     } else {
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_INSERT_TRANSFER_START_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("transfer_errsim", "transfer_start_failed", "result", ret);
+    }
+  }
+#endif
       DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
     }
 
