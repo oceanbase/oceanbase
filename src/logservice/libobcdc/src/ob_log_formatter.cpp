@@ -1189,7 +1189,7 @@ int ObLogFormatter::handle_lob_ctx_cols_(
     if (nullptr != new_lob_ctx_cols && new_lob_ctx_cols->has_out_row_lob()) {
       dml_stmt_task.mark_callback();
       cur_stmt_need_callback = true;
-      new_lob_ctx_cols->reset(&dml_stmt_task, tenant_id, trans_id, aux_lob_meta_tid);
+      new_lob_ctx_cols->reset(&dml_stmt_task, tenant_id, trans_id, aux_lob_meta_tid, false/*is_ddl*/);
 
       if (OB_FAIL(lob_data_merger->push(*new_lob_ctx_cols, stop_flag))) {
         if (OB_IN_STOP_STATE != ret) {

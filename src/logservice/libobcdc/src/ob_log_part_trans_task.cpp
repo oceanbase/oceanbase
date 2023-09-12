@@ -1439,9 +1439,12 @@ int DdlStmtTask::parse_ddl_info_(
   } else {
     PartTransTask &part_trans_task = get_host();
     if (nullptr != new_lob_ctx_cols && new_lob_ctx_cols->has_out_row_lob()) {
-      new_lob_ctx_cols->reset(part_trans_task.get_tenant_id(),
+      new_lob_ctx_cols->reset(
+          this,
+          part_trans_task.get_tenant_id(),
           part_trans_task.get_trans_id(),
-          share::OB_ALL_DDL_OPERATION_AUX_LOB_META_TID);
+          share::OB_ALL_DDL_OPERATION_AUX_LOB_META_TID,
+          true/*is_ddl*/);
 
       IObCDCLobDataMerger *lob_data_merger = TCTX.lob_data_merger_;
 

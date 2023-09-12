@@ -319,13 +319,20 @@ int ObCDCLobAuxMetaStorager::del(
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("ObCDCLobAuxMetaStorager del", K(lob_data_out_row_ctx_list));
-  const PartTransTask &part_trans_task = lob_data_out_row_ctx_list.get_dml_stmt_task()->get_host();
-  const int64_t commit_version = part_trans_task.get_trans_commit_version();
+  const IStmtTask *stmt_task = lob_data_out_row_ctx_list.get_stmt_task();
+  int64_t commit_version = OB_INVALID_VERSION;
   const uint64_t tenant_id = lob_data_out_row_ctx_list.get_tenant_id();
   const transaction::ObTransID &trans_id = lob_data_out_row_ctx_list.get_trans_id();
   const uint64_t aux_lob_meta_tid = lob_data_out_row_ctx_list.get_aux_lob_meta_table_id();
   ObLobDataGetCtxList &lob_data_get_ctx_list = lob_data_out_row_ctx_list.get_lob_data_get_ctx_list();
   ObLobDataGetCtx *cur_lob_data_get_ctx = lob_data_get_ctx_list.head_;
+
+  if (OB_ISNULL(stmt_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("stmt_task is nullptr", KR(ret), K(lob_data_out_row_ctx_list));
+  } else {
+    commit_version = stmt_task->get_host().get_trans_commit_version();
+  }
 
   while (OB_SUCC(ret) && ! stop_flag && cur_lob_data_get_ctx) {
     if (OB_FAIL(del_lob_col_value_(commit_version, tenant_id, trans_id, aux_lob_meta_tid, *cur_lob_data_get_ctx, stop_flag))) {

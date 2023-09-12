@@ -179,6 +179,20 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+void ObLobDataOutRowCtxList::reset(
+    IStmtTask *stmt_task,
+    const uint64_t tenant_id,
+    const transaction::ObTransID &trans_id,
+    const uint64_t aux_lob_meta_table_id,
+    const bool is_ddl)
+{
+  stmt_task_ = stmt_task;
+  is_ddl_ = is_ddl;
+  tenant_id_ = tenant_id;
+  trans_id_ = trans_id;
+  aux_lob_meta_table_id_ = aux_lob_meta_table_id;
+}
+
 int ObLobDataOutRowCtxList::set_old_lob_data(
     const uint64_t column_id,
     const common::ObLobData *old_lob_data)

@@ -186,14 +186,14 @@ struct LobColumnFragmentCtx
 };
 typedef LightyList<LobColumnFragmentCtx> LobColumnFragmentCtxList;
 
-class DmlStmtTask;
+class IStmtTask;
 class ObLobDataOutRowCtxList
 {
 public:
   ObLobDataOutRowCtxList(common::ObIAllocator &allocator) :
     allocator_(allocator),
     is_ddl_(0),
-    dml_stmt_task_(nullptr),
+    stmt_task_(nullptr),
     tenant_id_(OB_INVALID_TENANT_ID),
     aux_lob_meta_table_id_(OB_INVALID_ID),
     lob_data_get_ctxs_(),
@@ -205,7 +205,7 @@ public:
   void reset()
   {
     is_ddl_ = 0;
-    dml_stmt_task_ = nullptr;
+    stmt_task_ = nullptr;
     tenant_id_ = OB_INVALID_TENANT_ID;
     trans_id_.reset();
     aux_lob_meta_table_id_ = OB_INVALID_ID;
@@ -213,30 +213,12 @@ public:
     lob_col_get_succ_count_ = 0;
   }
 
-  // For DML
   void reset(
-      DmlStmtTask *dml_stmt_task,
+      IStmtTask *dml_stmt_task,
       const uint64_t tenant_id,
       const transaction::ObTransID &trans_id,
-      const uint64_t aux_lob_meta_table_id)
-  {
-    dml_stmt_task_ = dml_stmt_task;
-    tenant_id_ = tenant_id;
-    trans_id_ = trans_id;
-    aux_lob_meta_table_id_ = aux_lob_meta_table_id;
-  }
-
-  // For DDL
-  void reset(
-      const uint64_t tenant_id,
-      const transaction::ObTransID &trans_id,
-      const uint64_t aux_lob_meta_table_id)
-  {
-    is_ddl_ = 1;
-    tenant_id_ = tenant_id;
-    trans_id_ = trans_id;
-    aux_lob_meta_table_id_ = aux_lob_meta_table_id;
-  }
+      const uint64_t aux_lob_meta_table_id,
+      const bool is_ddl);
 
   bool is_valid() const
   {
@@ -248,7 +230,7 @@ public:
 
   common::ObIAllocator &get_allocator() { return allocator_; }
   bool is_ddl() const { return is_ddl_; }
-  DmlStmtTask *get_dml_stmt_task() { return dml_stmt_task_; }
+  IStmtTask *get_stmt_task() { return stmt_task_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   const transaction::ObTransID &get_trans_id() const { return trans_id_; }
   uint64_t get_aux_lob_meta_table_id() const { return aux_lob_meta_table_id_; }
@@ -277,7 +259,7 @@ public:
 private:
   common::ObIAllocator &allocator_;
   int8_t is_ddl_ : 1;
-  DmlStmtTask *dml_stmt_task_;    // primary table row
+  IStmtTask *stmt_task_;    // primary table row
   uint64_t tenant_id_;
   transaction::ObTransID trans_id_;
   uint64_t aux_lob_meta_table_id_;
