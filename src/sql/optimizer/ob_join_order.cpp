@@ -2293,6 +2293,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
   bool is_valid = true;
+  ObSQLSessionInfo *session_info = NULL;
   ObSEArray<uint64_t, 8> skyline_index_ids;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
@@ -2300,7 +2301,8 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
       OB_ISNULL(params = opt_ctx->get_params()) ||
       OB_ISNULL(opt_ctx->get_exec_ctx()) ||
       OB_ISNULL(opt_ctx->get_exec_ctx()->get_sql_ctx()) ||
-      OB_ISNULL(helper.table_opt_info_)) {
+      OB_ISNULL(helper.table_opt_info_) ||
+      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(params),
         K(stmt), K(ret));
@@ -2354,6 +2356,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                             skyline_index_ids.at(i),
                                             index_info_cache,
                                             helper,
+                                            session_info,
                                             use_skip_scan))) {
         LOG_WARN("failed to check will use skip scan", K(ret));
       } else if (is_create_das_path &&
@@ -2391,6 +2394,7 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
                                     const uint64_t index_id,
                                     const ObIndexInfoCache &index_info_cache,
                                     PathHelper &helper,
+                                    ObSQLSessionInfo *session_info,
                                     OptSkipScanState &use_skip_scan)
 {
   int ret = OB_SUCCESS;
@@ -2403,6 +2407,8 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
       OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(ret));
+  } else if (!session_info->is_index_skip_scan_enabled()) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (is_virtual_table(ref_id)) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
