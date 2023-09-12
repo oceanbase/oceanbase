@@ -68,7 +68,7 @@ int ObCheckConstraintValidationTask::process()
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (!check_table_empty_ && OB_ISNULL(constraint = table_schema->get_constraint(constraint_id_))) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_CONTRAINT_NOT_FOUND;
     LOG_WARN("error unexpected, can not get constraint", K(ret));
   } else if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check tenant is oracle mode failed", K(ret));
@@ -1143,7 +1143,7 @@ int ObConstraintTask::set_foreign_key_constraint_validated()
           LOG_WARN("fail to alter table", K(ret), K(alter_table_arg), K(fk_arg));
         }
       } else {
-        if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, alter_table_arg))) {
+        if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, target_object_id_, alter_table_arg))) {
           LOG_WARN("failed to refresh name for alter table schema", K(ret));
         } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             alter_table(alter_table_arg, res))) {
@@ -1178,7 +1178,7 @@ int ObConstraintTask::set_check_constraint_validated()
       alter_table_arg.based_schema_object_infos_.reset();
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, alter_table_arg))) {
+    } else if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg))) {
       LOG_WARN("failed to refresh name for alter table schema", K(ret));
     } else {
       alter_table_arg.index_arg_list_.reset();
@@ -1377,8 +1377,8 @@ int ObConstraintTask::rollback_failed_check_constraint()
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, alter_table_arg))) {
-      if (ret == OB_TABLE_NOT_EXIST) {
+    } else if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg))) {
+      if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CONTRAINT_NOT_FOUND == ret) {
         ret = OB_NO_NEED_UPDATE;
       } else {
         LOG_WARN("failed to refresh name for alter table schema", K(ret));
@@ -1448,14 +1448,22 @@ int ObConstraintTask::rollback_failed_foregin_key()
     ObArenaAllocator allocator(lib::ObLabel("ConstraiTask"));
     if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
       LOG_WARN("deep copy table arg failed", K(ret));
+    } else if (FALSE_IT(alter_table_arg.based_schema_object_infos_.reset())) {
+    } else if (!is_table_hidden_ && OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, target_object_id_, alter_table_arg))) {
+      if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CONTRAINT_NOT_FOUND == ret) {
+        ret = OB_NO_NEED_UPDATE;
+      } else {
+        LOG_WARN("failed to refresh name for alter table schema", K(ret));
+      }
     } else if (!fk_arg.is_modify_fk_state_) {
       // alter table tbl_name drop constraint fk_cst_name without ddl_stmt_str
       drop_foreign_key_arg.index_action_type_ = obrpc::ObIndexArg::DROP_FOREIGN_KEY;
-      drop_foreign_key_arg.foreign_key_name_ = fk_arg.foreign_key_name_;
+      drop_foreign_key_arg.foreign_key_name_ = alter_table_arg.foreign_key_arg_list_.at(0).foreign_key_name_;
       alter_table_arg.index_arg_list_.reset();
       if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(&drop_foreign_key_arg))) {
         LOG_WARN("fail to push back arg to index_arg_list", K(ret));
       } else {
+        alter_table_arg.ddl_stmt_str_.reset();
         alter_table_arg.foreign_key_arg_list_.reset();
       }
     } else {
@@ -1481,7 +1489,6 @@ int ObConstraintTask::rollback_failed_foregin_key()
       LOG_WARN("get ddl rpc timeout failed", K(ret));
     }
     if (OB_SUCC(ret)) {
-      alter_table_arg.based_schema_object_infos_.reset();
       alter_table_arg.is_inner_ = true;
       if (is_table_hidden_) {
         ObSArray<uint64_t> unused_ids;
@@ -1496,13 +1503,7 @@ int ObConstraintTask::rollback_failed_foregin_key()
           }
         }
       } else {
-        if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, alter_table_arg))) {
-          if (OB_TABLE_NOT_EXIST == ret) {
-            ret = OB_NO_NEED_UPDATE;
-          } else {
-            LOG_WARN("failed to refresh name for alter table schema", K(ret));
-          }
-        } else if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+        if (OB_FAIL(root_service_->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
             alter_table(alter_table_arg, tmp_res))) {
           LOG_WARN("alter table failed", K(ret));
           if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CANT_DROP_FIELD_OR_KEY == ret) {

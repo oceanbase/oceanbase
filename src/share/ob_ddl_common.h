@@ -352,6 +352,7 @@ public:
   static int refresh_alter_table_arg(
       const uint64_t tenant_id,
       const int64_t orig_table_id,
+      const uint64_t foreign_key_id,
       obrpc::ObAlterTableArg &alter_table_arg);
 
   static int generate_ddl_schema_hint_str(

@@ -277,6 +277,7 @@ int ObDDLUtil::get_tablet_count(const uint64_t tenant_id,
 int ObDDLUtil::refresh_alter_table_arg(
     const uint64_t tenant_id,
     const int64_t orig_table_id,
+    const uint64_t foreign_key_id,
     obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
@@ -314,9 +315,39 @@ int ObDDLUtil::refresh_alter_table_arg(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid cst", K(ret));
     } else if (OB_ISNULL(cur_cst = table_schema->get_constraint(cst->get_constraint_id()))) {
-      LOG_INFO("current constraint not exists, maybe dropped", K(ret), KPC(cst), K(table_schema));
+      ret = OB_ERR_CONTRAINT_NOT_FOUND;
+      LOG_WARN("current constraint not exists, maybe dropped", K(ret), KPC(cst), K(table_schema));
     } else if (OB_FAIL(cst->set_constraint_name(cur_cst->get_constraint_name_str()))) {
       LOG_WARN("failed to set new constraint name", K(ret));
+    }
+  }
+
+  // refresh fk arg list
+  if (OB_FAIL(ret)) {
+  } else if (OB_INVALID_ID == foreign_key_id) {
+    if (OB_UNLIKELY(0 != alter_table_arg.foreign_key_arg_list_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("must specify foreign key id to refresh fk arg list", K(ret), K(alter_table_arg.foreign_key_arg_list_));
+    }
+  } else {
+    if (1 != alter_table_arg.foreign_key_arg_list_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("only support refresh one fk arg", K(ret));
+    } else {
+      const ObIArray<ObForeignKeyInfo> &fk_infos = table_schema->get_foreign_key_infos();
+      const ObForeignKeyInfo *found_fk_info = nullptr;
+      for (int64_t i = 0; nullptr == found_fk_info && i < fk_infos.count(); i++) {
+        const ObForeignKeyInfo &fk_info = fk_infos.at(i);
+        if (fk_info.foreign_key_id_ == foreign_key_id) {
+          found_fk_info = &fk_info;
+        }
+      }
+      if (OB_ISNULL(found_fk_info)) {
+        ret = OB_ERR_CONTRAINT_NOT_FOUND;
+        LOG_WARN("fk info not found, maybe dropped", K(ret), K(orig_table_id), K(foreign_key_id), K(fk_infos));
+      } else if (OB_FAIL(ob_write_string(alter_table_arg.allocator_, found_fk_info->foreign_key_name_, alter_table_arg.foreign_key_arg_list_.at(0).foreign_key_name_, true/*c_style*/))) {
+        LOG_WARN("failed to deep copy str", K(ret));
+      }
     }
   }
 
