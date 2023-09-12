@@ -153,6 +153,7 @@ public:
 private:
   bool is_user_changed_(const char *user_name, const char *user_password, const char *db_name);
   void destroy_tg_();
+  int detect_tenant_mode_(common::sqlclient::ObMySQLServerProvider *server_provider, const char *user_name, const char *user_password);
 private:
   int construct_server_ip_list(const common::ObSqlString &sql, common::ObIArray<common::ObAddr> &addrs);
   bool inited_;
@@ -164,6 +165,7 @@ private:
   common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH + 1> user_password_;
   common::ObFixedLengthString<common::OB_MAX_DATABASE_NAME_BUF_LENGTH> db_name_;
   common::ObMySQLProxy sql_proxy_;
+  bool is_oracle_mode_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreProxyUtil);
