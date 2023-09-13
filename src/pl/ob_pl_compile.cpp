@@ -310,9 +310,13 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
       obj_version.version_ = proc->get_schema_version();
       if (OB_FAIL(func_ast.add_dependency_object(obj_version))) {
         LOG_WARN("add dependency table failed", K(ret));
-      } else if (ROUTINE_PROCEDURE_TYPE == proc->get_routine_type()) {
+      } else if (proc->is_procedure() &&
+                 (ROUTINE_PROCEDURE_TYPE == proc->get_routine_type() ||
+                  ROUTINE_UDT_TYPE == proc->get_routine_type())) {
         func_ast.set_proc_type(STANDALONE_PROCEDURE);
-      } else if (ROUTINE_FUNCTION_TYPE == proc->get_routine_type()) {
+      } else if (proc->is_function() &&
+                 (ROUTINE_FUNCTION_TYPE == proc->get_routine_type() ||
+                  ROUTINE_UDT_TYPE == proc->get_routine_type())) {
         func_ast.set_proc_type(STANDALONE_FUNCTION);
       } else {}
       //添加参数列表
@@ -384,11 +388,11 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pl body is NULL", K(parse_tree), K(ret));
       } else if (OB_FAIL(resolver.init(func_ast))) {
-        LOG_WARN("failed to init resolver", K(*proc), K(ret));
+        LOG_WARN("failed to init resolver", KPC(proc), K(ret));
       } else if (OB_FAIL(resolver.init_default_exprs(func_ast, proc->get_routine_params()))) {
         LOG_WARN("failed to init routine default exprs", K(ret), KPC(proc));
       } else if (OB_FAIL(resolver.resolve_root(parse_tree, func_ast))) {
-        LOG_WARN("failed to analyze pl body", K(*proc), K(ret));
+        LOG_WARN("failed to analyze pl body", KPC(proc), K(ret));
       } else if (session_info_.is_pl_debug_on()) {
         if (OB_FAIL(func_ast.generate_symbol_debuginfo())) {
           LOG_WARN("failed to generate symbol debuginfo", K(ret));
@@ -786,55 +790,53 @@ int ObPLCompiler::init_function(const share::schema::ObRoutineInfo *routine, ObP
       }
     }
     if (OB_SUCC(ret)) {
-    //FIXME: FATAL ERROR!!!! can't modify schema from schema_guard
-    if (routine->is_udt_procedure()) {
-      const_cast<share::schema::ObRoutineInfo *>(routine)->set_routine_type(ROUTINE_PROCEDURE_TYPE);
-    } else if (routine->is_udt_function()) {
-      const_cast<share::schema::ObRoutineInfo *>(routine)->set_routine_type(ROUTINE_FUNCTION_TYPE);
-    }
-    if (ROUTINE_PROCEDURE_TYPE == routine->get_routine_type()) {
-      func.set_proc_type(STANDALONE_PROCEDURE);
-      func.set_ns(ObLibCacheNameSpace::NS_PRCR);
-    } else if (ROUTINE_FUNCTION_TYPE == routine->get_routine_type()) {
-      func.set_proc_type(STANDALONE_FUNCTION);
-      func.set_ns(ObLibCacheNameSpace::NS_SFC);
-    } else {
-      // do nothing...
-    }
-    func.set_tenant_id(routine->get_tenant_id());
-    func.set_database_id(routine->get_database_id());
-    func.set_package_id(routine->get_package_id());
-    func.set_routine_id(routine->get_routine_id());
-    func.set_arg_count(routine->get_param_count());
-    func.set_owner(routine->get_owner_id());
-    func.set_priv_user(routine->get_priv_user());
-    if (routine->is_invoker_right()) {
-      func.set_invoker_right();
-    }
-    // 对于function而言，输出参数也在params里面，这里不能简单的按照param_count进行遍历
-    for (int64_t i = 0; OB_SUCC(ret) && i < routine->get_routine_params().count(); ++i) {
-      ObRoutineParam *param = routine->get_routine_params().at(i);
-      int64_t param_pos = param->get_param_position();
-      if (OB_ISNULL(param)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("routine param is NULL", K(i), K(ret));
-      } else if (param->is_ret_param()) {
-        // 对于返回值, 既不是in也不是out, 不做处理
+      if (routine->is_procedure() &&
+          (ROUTINE_PROCEDURE_TYPE == routine->get_routine_type() ||
+            ROUTINE_UDT_TYPE == routine->get_routine_type())) {
+        func.set_proc_type(STANDALONE_PROCEDURE);
+        func.set_ns(ObLibCacheNameSpace::NS_PRCR);
+      } else if (routine->is_function() &&
+                 (ROUTINE_FUNCTION_TYPE == routine->get_routine_type() ||
+                  ROUTINE_UDT_TYPE == routine->get_routine_type())) {
+        func.set_proc_type(STANDALONE_FUNCTION);
+        func.set_ns(ObLibCacheNameSpace::NS_SFC);
       } else {
-         if (param->is_inout_sp_param() || param->is_out_sp_param()) {
-          if (OB_FAIL(func.add_out_arg(param_pos - 1))) {
-            LOG_WARN("Failed to add out arg", K(param_pos), K(ret));
+        // do nothing...
+      }
+      func.set_tenant_id(routine->get_tenant_id());
+      func.set_database_id(routine->get_database_id());
+      func.set_package_id(routine->get_package_id());
+      func.set_routine_id(routine->get_routine_id());
+      func.set_arg_count(routine->get_param_count());
+      func.set_owner(routine->get_owner_id());
+      func.set_priv_user(routine->get_priv_user());
+      if (routine->is_invoker_right()) {
+        func.set_invoker_right();
+      }
+      // 对于function而言，输出参数也在params里面，这里不能简单的按照param_count进行遍历
+      for (int64_t i = 0; OB_SUCC(ret) && i < routine->get_routine_params().count(); ++i) {
+        ObRoutineParam *param = routine->get_routine_params().at(i);
+        int64_t param_pos = param->get_param_position();
+        if (OB_ISNULL(param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("routine param is NULL", K(i), K(ret));
+        } else if (param->is_ret_param()) {
+          // 对于返回值, 既不是in也不是out, 不做处理
+        } else {
+           if (param->is_inout_sp_param() || param->is_out_sp_param()) {
+            if (OB_FAIL(func.add_out_arg(param_pos - 1))) {
+              LOG_WARN("Failed to add out arg", K(param_pos), K(ret));
+            }
           }
-        }
-        if (OB_SUCC(ret)) {
-          if (param->is_inout_sp_param() || param->is_in_sp_param()) {
-            if (OB_FAIL(func.add_in_arg(param_pos - 1))) {
-              LOG_WARN("Failed to add out arg", K(i), K(param_pos), K(ret));
+          if (OB_SUCC(ret)) {
+            if (param->is_inout_sp_param() || param->is_in_sp_param()) {
+              if (OB_FAIL(func.add_in_arg(param_pos - 1))) {
+                LOG_WARN("Failed to add out arg", K(i), K(param_pos), K(ret));
+              }
             }
           }
         }
       }
-    }
       ObString database_name, package_name;
       OZ (format_object_name(schema_guard_,
                              routine->get_tenant_id(),
