@@ -1316,7 +1316,7 @@ int ObTransferHandler::wait_ls_replay_event_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 200 * 1000; //200ms
+  const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 5 * 1000; //5ms
   const int64_t start_ts = ObTimeUtil::current_time();
   hash::ObHashSet<ObAddr> replica_addr_set;
   if (OB_FAIL(replica_addr_set.create(OB_DEFAULT_REPLICA_NUM))) {
