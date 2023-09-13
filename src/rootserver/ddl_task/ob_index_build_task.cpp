@@ -132,10 +132,11 @@ int ObIndexSSTableBuildTask::process()
       }
       DEBUG_SYNC(BEFORE_INDEX_SSTABLE_BUILD_TASK_SEND_SQL);
       ObTimeoutCtx timeout_ctx;
-      LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_));
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+      LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT));
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                   oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
@@ -800,8 +801,6 @@ int ObIndexBuildTask::send_build_single_replica_request()
     } else {
       set_sql_exec_addr(create_index_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     }
-    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
-    const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
     ObIndexSSTableBuildTask task(
         task_id_,
         tenant_id_,
@@ -820,7 +819,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
                                     create_index_arg_.nls_timestamp_tz_format_))) {
       LOG_WARN("failed to set nls format", K(ret), K(create_index_arg_));
     } else if (OB_FAIL(root_service_->submit_ddl_single_replica_build_task(task))) {
-      LOG_WARN("fail to submit task", K(ret), K(*this), K(timeout));
+      LOG_WARN("fail to submit task", K(ret), KPC(this));
     } else {
       is_sstable_complete_task_submitted_ = true;
       sstable_complete_request_time_ = ObTimeUtility::current_time();
@@ -854,8 +853,7 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   }
 
   if (OB_SUCC(ret) && !is_end) {
-    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
-    if (sstable_complete_request_time_ + timeout < ObTimeUtility::current_time()) {
+    if (sstable_complete_request_time_ + ObDDLUtil::calc_inner_sql_execute_timeout() < ObTimeUtility::current_time()) {
       is_sstable_complete_task_submitted_ = false;
       sstable_complete_request_time_ = 0;
     }

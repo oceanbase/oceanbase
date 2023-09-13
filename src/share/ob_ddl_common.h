@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_DDL_COMMON_H
 
 #include "lib/allocator/page_arena.h"
+#include "share/config/ob_server_config.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/location_cache/ob_location_struct.h"
@@ -442,6 +443,10 @@ public:
   static int reshape_ddl_column_obj(
       common::ObDatum &datum,
       const ObObjMeta &obj_meta);
+  static int64_t calc_inner_sql_execute_timeout()
+  {
+    return max(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT, GCONF._ob_ddl_timeout);
+  }
 
   /**
    * NOTICE: The interface is designed for Offline DDL operation only.

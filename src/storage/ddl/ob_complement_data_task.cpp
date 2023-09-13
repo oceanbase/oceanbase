@@ -2169,7 +2169,7 @@ int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, common::ObCommonSq
   session_param.ddl_info_.set_is_ddl(true);
   session_param.ddl_info_.set_source_table_hidden(false);
   session_param.ddl_info_.set_dest_table_hidden(false);
-  const int64_t sql_total_timeout = max(7 * 24 * 60 * 60 * 1000 * 1000L, GCONF._ob_ddl_timeout);
+  const int64_t sql_total_timeout = ObDDLUtil::calc_inner_sql_execute_timeout();
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret));

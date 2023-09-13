@@ -288,22 +288,6 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
   return ret;
 }
 
-int ObTableRedefinitionTask::check_build_replica_timeout()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
-  } else if (build_replica_request_time_ > 0) {
-    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
-    const int64_t current_time = ObTimeUtility::current_time();
-    if (build_replica_request_time_ + timeout < current_time) {
-      ret = OB_TIMEOUT;
-    }
-  }
-  return ret;
-}
-
 int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
 {
   int ret = OB_SUCCESS;
@@ -387,11 +371,6 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   if (OB_SUCC(ret) && !is_build_replica_end) {
     if (OB_FAIL(check_build_replica_end(is_build_replica_end))) {
       LOG_WARN("check build replica end failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !is_build_replica_end) {
-    if (OB_FAIL(check_build_replica_timeout())) {
-      LOG_WARN("fail to check build replica timeout", K(ret));
     }
   }
 

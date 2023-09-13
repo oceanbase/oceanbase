@@ -93,7 +93,6 @@ private:
   int copy_table_foreign_keys();
   int send_build_replica_request();
   int send_build_replica_request_by_sql();
-  int check_build_replica_timeout();
   int check_build_replica_end(bool &is_end);
   int replica_end_check(const int ret_code);
   int check_modify_autoinc(bool &modify_autoinc);

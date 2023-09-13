@@ -90,15 +90,16 @@ int ObCheckConstraintValidationTask::process()
     session_param.ddl_info_.set_source_table_hidden(table_schema->is_user_hidden_table());
     session_param.ddl_info_.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
+    const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString ddl_schema_hint_str;
       if (check_expr_str.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check_expr_str is empty", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema->get_schema_version(), is_oracle_mode, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
@@ -348,10 +349,11 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
       common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString child_ddl_schema_hint_str;
       ObSqlString parent_ddl_schema_hint_str;
+      const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
       // print str like "select c1, c2 from db.t2 where c1 is not null and c2 is not null minus select c3, c4 from db.t1"
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(child_table_schema.get_table_name_str(), child_table_schema.get_schema_version(), is_oracle_mode, child_ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint", K(ret));
@@ -816,8 +818,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
   }
 
   if (OB_SUCC(ret) && !is_end) {
-    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
-    if (check_replica_request_time_ + timeout < ObTimeUtility::current_time()) {
+    if (check_replica_request_time_ + ObDDLUtil::calc_inner_sql_execute_timeout() < ObTimeUtility::current_time()) {
       check_replica_request_time_ = 0;
     }
   }

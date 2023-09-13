@@ -92,9 +92,10 @@ int ObUpdateAutoincSequenceTask::process()
         // if data_table_id != dest_table_id, meaning this is happening in ddl double write
         session_param.ddl_info_.set_source_table_hidden(data_table_id_ != dest_table_id_);
         ObObj obj;
-        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+        const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set trx timeout failed", K(ret));
-        } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+        } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
           LOG_WARN("set timeout failed", K(ret));
         } else if (OB_FAIL(sql.assign_fmt("SELECT /*+no_rewrite*/ CAST(MAX(`%s`) AS SIGNED) AS MAX_VALUE FROM `%s`.`%s`",
                                     column_schema->get_column_name(),

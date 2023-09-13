@@ -145,6 +145,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       session_param.consumer_group_id_ = consumer_group_id_;
 
       common::ObAddr *sql_exec_addr = nullptr;
+      const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
       if (inner_sql_exec_addr_.is_valid()) {
         sql_exec_addr = &inner_sql_exec_addr_;
         LOG_INFO("inner sql execute addr" , K(*sql_exec_addr));
@@ -155,10 +156,10 @@ int ObDDLRedefinitionSSTableBuildTask::process()
         user_sql_proxy = GCTX.ddl_sql_proxy_;
       }
       LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_),
-              "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_));
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+              "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT));
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else {
         if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
@@ -669,7 +670,7 @@ int ObDDLRedefinitionTask::check_build_single_replica(bool &is_end)
   } else if (OB_FAIL(replica_builder_.check_build_end(is_end, complete_sstable_job_ret_code_))) {
     LOG_WARN("fail to check build end", K(ret));
   } else if (!is_end) {
-    if (sstable_complete_request_time_ + OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT < ObTimeUtility::current_time()) {   // timeout, retry
+    if (sstable_complete_request_time_ + ObDDLUtil::calc_inner_sql_execute_timeout() < ObTimeUtility::current_time()) {   // timeout, retry
       is_sstable_complete_task_submitted_ = false;
       sstable_complete_request_time_ = 0;
     }

@@ -16123,10 +16123,11 @@ int ObDDLService::get_rebuild_foreign_key_infos(
           LOG_WARN("unexpected fk", K(ret), K(new_fk_info), K(orig_table_id));
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (need_rebuild && OB_FAIL(rebuild_fk_infos.push_back(new_fk_info))) {
-        LOG_WARN("fail to push back fk infos that need to rebuild", K(ret));
-      } else {/* do nothing. */}
+      if (OB_SUCC(ret) && need_rebuild) {
+        if (OB_FAIL(rebuild_fk_infos.push_back(new_fk_info))) {
+          LOG_WARN("fail to push back fk infos that need to rebuild", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -16165,10 +16166,12 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
     LOG_WARN("failed to build hidden index table map", K(ret));
   } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to check if oralce compat mode", K(ret));
+  } else if (!hidden_table_schema.get_foreign_key_infos().empty()) {
+    // not empty means already rebuilt.
   } else if (OB_FAIL(get_rebuild_foreign_key_infos(alter_table_arg,
-                                                   orig_table_schema,
-                                                   rebuild_child_table_fk,
-                                                   rebuild_fk_infos))) {
+                                                  orig_table_schema,
+                                                  rebuild_child_table_fk,
+                                                  rebuild_fk_infos))) {
     LOG_WARN("fail to get fk infos that need to rebuild", K(ret));
   } else if (OB_FAIL(inc_table_schema.set_foreign_key_infos(rebuild_fk_infos))) {
     LOG_WARN("fail to set fk infos", K(ret));
