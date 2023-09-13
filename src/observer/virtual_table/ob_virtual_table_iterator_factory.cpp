@@ -2499,7 +2499,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             omt::ObMultiTenant *omt = GCTX.omt_;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualLSLogRestoreStatus, ls_log_restore_status))) {
               SERVER_LOG(ERROR, "failed to init ObVirtualLSLogRestoreStatus", K(ret));
-            } else if (ls_log_restore_status->init(omt)) {
+            } else if (OB_FAIL(ls_log_restore_status->init(omt))) {
               SERVER_LOG(WARN, "fail to init ObVirtualLSLogRestoreStatus with omt", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(ls_log_restore_status);
