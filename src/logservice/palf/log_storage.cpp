@@ -678,36 +678,51 @@ int LogStorage::check_read_out_of_bound_(const block_id_t &block_id,
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   LSN readable_log_tail;
   int64_t curr_flashback_version = OB_INVALID_TIMESTAMP;
-  get_readable_log_tail_guarded_by_lock_(readable_log_tail, curr_flashback_version);
-  block_id_t readable_end_block_id = lsn_2_block(readable_log_tail, logical_block_size_);
+  block_id_t readable_end_block_id = LOG_INVALID_BLOCK_ID;
+  // get_block_id_range firstly, ensure that readable_end_block_id is smaller than or equal to max_block_id
+  // before write any new data.
+  if (OB_FAIL(get_block_id_range(min_block_id, max_block_id)) && OB_ENTRY_NOT_EXIST != ret) {
+   PALF_LOG(ERROR, "get_block_id_range failed", K(ret), K(min_block_id), K(max_block_id));
+  // get_readable_log_tail_guarded_by_lock_ is a barrier point, all read operations
+  // can read integrity data if flashback_version is same as curr_flashback_version
+  } else if (FALSE_IT(get_readable_log_tail_guarded_by_lock_(readable_log_tail, curr_flashback_version))) {
+  } else if (FALSE_IT(readable_end_block_id = lsn_2_block(readable_log_tail, logical_block_size_))) {
   // if read data is concurrently with flashback, return OB_NEED_RETRY.
   // to avoid unnecessary failure, only check flashback_version when read block need to be overwriting.
   // NB: update 'reabable_log_tail_' and 'flashback_version_' is atomic, and updating is performed before
   //     overwriting.
-  if (block_id >= readable_end_block_id && flashback_version != curr_flashback_version) {
+  } else if (block_id >= readable_end_block_id && flashback_version != curr_flashback_version) {
     ret = OB_NEED_RETRY;
     PALF_LOG(WARN, "there is flashbacking during read data, need read retry",
              KPC(this), K(flashback_version), K(curr_flashback_version),
              K(min_block_id), K(max_block_id), K(block_id));
-  } else if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))
-             && OB_ENTRY_NOT_EXIST != ret) {
-   PALF_LOG(ERROR, "get_block_id_range failed", K(ret), K(min_block_id), K(max_block_id));
+    // double check after read data. the block whose name is smaller than 'min_block_id' has been deleted
+    // by GC or rebuild, and the data which read successfully may be not intergrity, therefore return OB_ERR_OUT_OF_LOWER_BOUND
   } else if (min_block_id > block_id) {
     ret = OB_ERR_OUT_OF_LOWER_BOUND;
     PALF_LOG(INFO, "read something out of lower bound, the block may be deleted by GC or rebuild",
              K(min_block_id), K(max_block_id), K(block_id));
-    // there is no possibility read data out of upper bound because we have checked flashback_version.
+    // there is no possibility read data out of upper bound because we have checked flashback_version and checkd
+    // read_lsn whether is greater than readable_log_tail before 'check_read_out_of_bound_'.
   } else if (block_id > max_block_id) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "unexpected error, the block to be read is greater than max_block_id",
              K(min_block_id), K(max_block_id), K(block_id));
   }
-  // if there is no block whose names with 'block_id' and 'block_id' is in range of [min_block_id, max_block_id]
-  // return OB_ERR_UNEXPECTED.
-  if (OB_SUCC(ret) && no_such_block
-      && min_block_id <= block_id && block_id <= max_block_id) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "unexpected error, the block may be deleted by human", K(min_block_id), K(max_block_id), K(block_id));
+  if (OB_SUCC(ret) && no_such_block) {
+    // if there is no block whose names with 'block_id' and 'block_id' is in range of [min_block_id, max_block_id)
+    // return OB_ERR_UNEXPECTED.
+    if (min_block_id <= block_id && block_id < max_block_id) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "unexpected error, the block may be deleted by human", KPC(this), K(flashback_version),
+               K(min_block_id), K(max_block_id), K(block_id));
+    // if max_block_id == block_id, means that the block whose names with 'block_id' is renaming during
+    // flashback, therefore return OB_NEED_RETRY.
+    } else if (max_block_id == block_id) {
+      ret = OB_NEED_RETRY;
+      PALF_LOG(WARN, "in flashback, the block is renaming", KPC(this), K(flashback_version), K(min_block_id),
+               K(max_block_id), K(block_id));
+    }
   }
   return ret;
 }
