@@ -36,7 +36,7 @@ public:
   {}
   virtual ~ObTableApiSessPoolMgr() { destroy(); }
   TO_STRING_KV(K_(is_inited),
-               K_(elimination_task));
+               KPC_(pool));
 public:
   class ObTableApiSessEliminationTask : public common::ObTimerTask
   {
