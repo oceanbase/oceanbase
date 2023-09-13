@@ -384,6 +384,7 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
                                             bool &is_same)
 {
   int ret = OB_SUCCESS;
+  is_same = true;
   bool is_batched_multi_stmt = pc_ctx.sql_ctx_.is_batch_params_execute();
   ParamStore *params = pc_ctx.fp_result_.cache_params_;
   if (is_batched_multi_stmt) {
@@ -410,13 +411,14 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
         LOG_WARN("assign params failed", K(ret), K(param_store));
       } else if (batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same)) {
         LOG_WARN("fail to match_params_info", K(ret), K(outline_param_idx), KPC(params));
-      } else if (!is_same) {
-        ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-        LOG_TRACE("params is not same type", K(ret), KPC(params));
+      } else {
+        // not match this plan, try match next plan
       }
     } else {
       // pc_ctx.fp_result_.cache_params_  在batch场景下，cache_params_不应该为null
-      for (int64_t i = 0; OB_SUCC(ret) && i < query_cnt; ++i) {
+      // When the first set of parameters cannot match the plan_set parameter requirements,
+      // -5787 cannot be returned and the current batch optimization cannot be rolled back.
+      for (int64_t i = 0; OB_SUCC(ret) && is_same && i < query_cnt; ++i) {
         param_store.reuse();
         phy_ctx->reset_datum_param_store();
         phy_ctx->set_original_param_cnt(ab_params->count());
@@ -428,14 +430,14 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
           LOG_WARN("init datum_store failed", K(ret), K(param_store));
         } else if (batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same)) {
           LOG_WARN("fail to match_params_info", K(ret), K(outline_param_idx), KPC(params));
-        } else if (!is_same) {
+        } else if (i != 0 && !is_same) {
           ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
           LOG_TRACE("params is not same type", K(param_store), K(i));
         }
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && is_same) {
       phy_ctx->reset_datum_param_store();
       phy_ctx->set_original_param_cnt(ab_params->count());
       if (OB_FAIL(batch_plan_set->copy_param_flag_from_param_info(ab_params))) {
