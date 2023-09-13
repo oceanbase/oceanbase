@@ -73,8 +73,6 @@ int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_credential(ttl_para))) {
       LOG_WARN("fail to init credential", KR(ret));
-    } else if (OB_FAIL(create_session_pool(ttl_para.tenant_id_))) {
-      LOG_WARN("fail to update session pool");
     } else {
       param_ = ttl_para;
       info_ = &ttl_info;
@@ -84,20 +82,6 @@ int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
   }
   return ret;
 }
-
-int ObTableTTLDeleteTask::create_session_pool(int64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.table_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table service is null", KR(ret));
-  } else if (OB_FAIL(GCTX.table_service_->get_sess_mgr().create_pool_if_not_exists(tenant_id))) {
-    LOG_WARN("fait to get session pool", K(ret), K(tenant_id));
-  }
-
-  return ret;
-}
-
 
 int ObTableTTLDeleteTask::init_credential(const ObTTLTaskParam &ttl_param)
 {

@@ -83,9 +83,12 @@ int ObTableLoginP::process()
     } else if (OB_FAIL(generate_credential(result_.tenant_id_, result_.user_id_, result_.database_id_,
                                            login.ttl_us_, user_token, result_.credential_))) {
       LOG_WARN("failed to generate credential", K(ret), K(login));
-    } else if (OB_FAIL(GCTX.table_service_->get_sess_mgr().update_sess(credential_))) {
-      LOG_WARN("failed to update session pool", K(ret), K_(credential));
     } else {
+      MTL_SWITCH(credential_.tenant_id_) {
+        if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->update_sess(credential_))) {
+          LOG_WARN("failed to update session pool", K(ret), K_(credential));
+        }
+      }
       result_.reserved1_ = 0;
       result_.reserved2_ = 0;
       result_.server_version_ = ObString::make_string(PACKAGE_STRING);
@@ -258,7 +261,7 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   const ObTableApiCredential *sess_credetial = nullptr;
   if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
-  } else if (OB_FAIL(gctx_.table_service_->get_sess_mgr().get_sess_info(credential_, guard))) {
+  } else if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential_, guard))) {
     LOG_WARN("fail to get session info", K(ret), K_(credential));
   } else if (OB_FAIL(guard.get_credential(sess_credetial))) {
     LOG_WARN("fail to get credential", K(ret));

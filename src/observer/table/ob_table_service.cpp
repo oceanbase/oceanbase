@@ -18,24 +18,17 @@ using namespace oceanbase::table;
 
 int ObTableService::init()
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(sess_pool_mgr_.init())) {
-    LOG_WARN("fail to init tableapi session pool manager", K(ret));
-  }
-  return ret;
+  return OB_SUCCESS;
 }
 
 void ObTableService::stop()
 {
-  sess_pool_mgr_.stop();
 }
 
 void ObTableService::wait()
 {
-  sess_pool_mgr_.wait();
 }
 
 void ObTableService::destroy()
 {
-  sess_pool_mgr_.destroy();
 }

@@ -85,6 +85,7 @@
 #include "logservice/palf/log_define.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "observer/table/ob_htable_lock_mgr.h"
+#include "observer/table/ob_table_session_pool.h"
 
 namespace oceanbase
 {
@@ -703,6 +704,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND(table::ObHTableLockMgr::mtl_init, table::ObHTableLockMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
 

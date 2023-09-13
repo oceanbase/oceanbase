@@ -107,7 +107,9 @@ namespace concurrency_control {
 }
 namespace table
 {
+  class ObTTLService;
   class ObHTableLockMgr;
+  class ObTableApiSessPoolMgr;
 }
 namespace logservice
 {
@@ -178,11 +180,6 @@ namespace observer
 }
 namespace storage {
   class MockTenantModuleEnv;
-}
-
-namespace table
-{
-  class ObTTLService;
 }
 
 namespace share
@@ -318,7 +315,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
-      table::ObTTLService*      \
+      table::ObTTLService*,                         \
+      table::ObTableApiSessPoolMgr*                \
   )
 
 

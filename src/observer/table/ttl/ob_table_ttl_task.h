@@ -103,7 +103,6 @@ public:
     }
     return tablet_id;
   }
-  int create_session_pool(int64_t tenant_id);
   uint64_t get_table_id() const { return param_.table_id_; }
   int64_t get_timeout_ts() { return ONE_TASK_TIMEOUT + ObTimeUtility::current_time(); }
   common::ObRowkey &get_start_rowkey() { return rowkey_; }

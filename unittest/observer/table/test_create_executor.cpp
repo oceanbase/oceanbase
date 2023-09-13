@@ -152,7 +152,7 @@ void TestCreateExecutor::TearDown()
 {
 }
 
-ObTableApiSessNodeVal g_sess_node_val(1, NULL);
+ObTableApiSessNodeVal g_sess_node_val(NULL);
 void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchema *table_schema)
 {
   fake_ctx.table_schema_ = table_schema;

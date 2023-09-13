@@ -28,9 +28,6 @@ public:
   void stop();
   void wait();
   void destroy();
-  table::ObTableApiSessPoolMgr& get_sess_mgr() { return sess_pool_mgr_; }
-private:
-  table::ObTableApiSessPoolMgr sess_pool_mgr_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableService);

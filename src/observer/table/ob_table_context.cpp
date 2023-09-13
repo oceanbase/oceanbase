@@ -65,7 +65,7 @@ int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
   int ret = OB_SUCCESS;
 
   // try get session from session pool
-  if (OB_FAIL(GCTX.table_service_->get_sess_mgr().get_sess_info(credential, sess_guard_))) {
+  if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->get_sess_info(credential, sess_guard_))) {
     LOG_WARN("fail to get session info", K(ret), K(credential));
   } else if (OB_ISNULL(sess_guard_.get_sess_node_val())) {
     ret = OB_ERR_UNEXPECTED;
