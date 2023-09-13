@@ -83,13 +83,18 @@ int ObArchiveRoundHandler::start_trans_(common::ObMySQLTransaction &trans)
 int ObArchiveRoundHandler::start_archive(const ObTenantArchiveRoundAttr &round, ObTenantArchiveRoundAttr &new_round)
 {
   int ret = OB_SUCCESS;
-
+  ObTenantArchivePieceAttr first_piece;
+  ObArray<ObTenantArchivePieceAttr> pieces;
   if (!round.state_.is_prepare()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid round", K(ret), K(round));
   } else if (OB_FAIL(prepare_beginning_dest_round_(round, new_round))) {
     LOG_WARN("failed to prepare beginning dest round", K(ret), K(round));
-  } else if (OB_FAIL(checkpoint_to(round, new_round))) {
+  } else if (OB_FAIL(new_round.generate_first_piece(first_piece))) {
+    LOG_WARN("failed to generate first piece", K(ret));
+  } else if (OB_FAIL(pieces.push_back(first_piece))) {
+    LOG_WARN("failed to push back first piece", K(ret));
+  } else if (OB_FAIL(checkpoint_to(round, new_round, pieces))) {
     LOG_WARN("failed to checkpoint", K(ret), K(round), K(new_round));
   }
   return ret;

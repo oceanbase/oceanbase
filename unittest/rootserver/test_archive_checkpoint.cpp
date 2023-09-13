@@ -43,6 +43,7 @@ public:
   {
     const int64_t ONE_SECOND_US = 1000 * 1000;
     struct tm timeinfo;
+    memset(&timeinfo, 0, sizeof(timeinfo));
     strptime(time_str.ptr(), "%Y-%m-%d %H:%M:%S", &timeinfo);
     time_t timestamp = mktime(&timeinfo);
     return timestamp * ONE_SECOND_US;
@@ -613,7 +614,7 @@ TEST_F(ArchiveCheckpointerTest, in_beginning_02)
         100,
         10,
         ObArchivePieceStatus::active(),
-        ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,
+        ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,
         expect_piece);
 
       
@@ -646,7 +647,7 @@ TEST_F(ArchiveCheckpointerTest, in_beginning_02)
           100,
           10,
           ObArchivePieceStatus::active(),
-          ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,
+          ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,
           expect_piece.piece_info_);
         
         ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1001 = test.gen_checkpoint_ls_piece(

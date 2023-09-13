@@ -88,7 +88,9 @@ int ObTenantArchiveMgr::decide_piece_id(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid start_piece_id", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(scn));
   } else {
-    piece_id = (scn.convert_to_ts() - piece_start_scn.convert_to_ts()) / piece_switch_interval + start_piece_id;
+    const int64_t piece_switch_interval_ns = piece_switch_interval * 1000;
+    const uint64_t delta = scn.get_val_for_inner_table_field() - piece_start_scn.get_val_for_inner_table_field();
+    piece_id = delta / piece_switch_interval_ns + start_piece_id;
   }
 
   return ret;
@@ -111,8 +113,10 @@ int ObTenantArchiveMgr::decide_piece_start_scn(
   } else if (0 >= piece_switch_interval) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid piece_switch_interval", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
-  } else if (OB_FAIL(start_scn.convert_from_ts(piece_start_scn.convert_to_ts() + (piece_id - start_piece_id) * piece_switch_interval))) {
-    LOG_WARN("fail to set start scn", K(ret), K(piece_start_scn), K(piece_id), K(start_piece_id), K(piece_switch_interval));
+  } else {
+    const int64_t piece_switch_interval_ns = piece_switch_interval * 1000;
+    const uint64_t delta = piece_switch_interval_ns * (piece_id - start_piece_id);
+    start_scn = SCN::plus(piece_start_scn, delta);
   }
 
   return ret;
@@ -129,65 +133,6 @@ int ObTenantArchiveMgr::decide_piece_end_scn(
   // piece end scn is the start of next piece.
   if (OB_FAIL(decide_piece_start_scn(piece_start_scn, start_piece_id, piece_switch_interval, piece_id + 1, end_scn))) {
     LOG_WARN("failed to decide piece end scn", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
-  }
-
-  return ret;
-}
-
-int ObTenantArchiveMgr::decide_first_piece_start_scn(
-  const SCN &start_scn,
-  const int64_t piece_switch_interval,
-  SCN &piece_start_scn)
-{
-  int ret = OB_SUCCESS;
-
-  const int64_t ONE_DAY = 24 * 3600 * 1000000L; // us
-  const int64_t ONE_HOUR = 3600 * 1000000L; // us
-  const int64_t ONE_MINUTE = 60 * 1000000L; // us
-  const int64_t TEN_SECONDS = 10 * 60 * 1000000L; // us
-  // If 'piece_switch_interval' is equal or bigger than one day, then it must be an integer multiple of day.
-  if (ONE_DAY <= piece_switch_interval) {
-    if (0 != piece_switch_interval % ONE_DAY) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("piece switch interval must be an integer multiple of day", K(ret), K(start_scn), K(piece_switch_interval));
-    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / ONE_DAY) * ONE_DAY))) {
-      LOG_WARN("fail to set piece start scn", K(ret));
-    }
-  }
-
-  // If 'piece_switch_interval' is equal or bigger than one hour, then it must be an integer multiple of hour.
-  else if (ONE_HOUR <= piece_switch_interval) {
-    if (0 != piece_switch_interval % ONE_HOUR) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("piece switch interval must be an integer multiple of hour", K(ret), K(start_scn), K(piece_switch_interval));
-    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / ONE_HOUR) * ONE_HOUR))) {
-      LOG_WARN("fail to set piece start scn", K(ret));
-    }
-  } 
-
-  // If 'piece_switch_interval' is equal or bigger than one minute, then it must be an integer multiple of minute.
-  else if (ONE_MINUTE <= piece_switch_interval) {
-    if (0 != piece_switch_interval % ONE_MINUTE) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("piece switch interval must be an integer multiple of minute", K(ret), K(start_scn), K(piece_switch_interval));
-    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / ONE_MINUTE) * ONE_MINUTE))) {
-      LOG_WARN("fail to set piece start scn", K(ret));
-    }
-  }
-
-  // If 'piece_switch_interval' is equal or bigger than 10 seconds, then it must be an integer multiple of 10 seconds.
-  else if (TEN_SECONDS <= piece_switch_interval) {
-    if (0 != piece_switch_interval % TEN_SECONDS) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("piece switch interval must be an integer multiple of 10 seconds", K(ret), K(start_scn), K(piece_switch_interval));
-    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / TEN_SECONDS) * TEN_SECONDS))) {
-      LOG_WARN("fail to set piece start scn", K(ret));
-    }
-  }
-  
-  else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("piece switch interval is not valid", K(ret), K(start_scn), K(piece_switch_interval));
   }
 
   return ret;

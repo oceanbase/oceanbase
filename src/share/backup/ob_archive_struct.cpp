@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_archive_struct.h"
+#include "share/backup/ob_tenant_archive_mgr.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -279,6 +280,43 @@ int ObTenantArchiveRoundAttr::generate_next_round(const int64_t incarnation,
   next_round.piece_switch_interval_ = piece_switch_interval;
   next_round.path_ = path;
 
+  next_round.frozen_input_bytes_ = 0;
+  next_round.frozen_input_bytes_ = 0;
+  next_round.active_input_bytes_ = 0;
+  next_round.active_output_bytes_ = 0;
+
+  return ret;
+}
+
+int ObTenantArchiveRoundAttr::generate_first_piece(ObTenantArchivePieceAttr &first_piece) const
+{
+  int ret = OB_SUCCESS;
+  if (!state_.is_beginning()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("round state is not BEGINNING", K(ret), K(*this));
+  } else if (OB_FAIL(first_piece.set_path(path_))) {
+    LOG_WARN("failed to set path", K(ret), K(*this));
+  } else if (OB_FAIL(ObTenantArchiveMgr::decide_piece_end_scn(start_scn_, base_piece_id_, piece_switch_interval_, base_piece_id_, first_piece.end_scn_))) {
+    LOG_WARN("failed to get end scn", K(ret), K(*this));
+  } else {
+    first_piece.key_.tenant_id_ = key_.tenant_id_;
+    first_piece.key_.dest_id_ = dest_id_;
+    first_piece.key_.round_id_ = round_id_;
+    first_piece.key_.piece_id_ = base_piece_id_;
+    first_piece.incarnation_ = incarnation_;
+    first_piece.dest_no_ = key_.dest_no_;
+    first_piece.file_count_ = 0;
+    first_piece.start_scn_ = start_scn_;
+    first_piece.checkpoint_scn_ = start_scn_;
+    first_piece.max_scn_ = start_scn_;
+    first_piece.compatible_ = compatible_;
+    first_piece.input_bytes_ = 0;
+    first_piece.output_bytes_ = 0;
+    first_piece.set_active();
+    first_piece.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE;
+    first_piece.cp_file_id_ = 0;
+    first_piece.cp_file_offset_ = 0;
+  }
   return ret;
 }
 
