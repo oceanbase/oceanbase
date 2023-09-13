@@ -8031,9 +8031,11 @@ int ObResolverUtils::check_encryption_name(ObString &encryption_name, bool &need
              0 == encryption_name.case_compare("aes-256") ||
              0 == encryption_name.case_compare("aes-128-gcm") ||
              0 == encryption_name.case_compare("aes-192-gcm") ||
-             0 == encryption_name.case_compare("aes-256-gcm") ||
+#ifdef OB_USE_BABASSL
              0 == encryption_name.case_compare("sm4-cbc") ||
-             0 == encryption_name.case_compare("sm4-gcm")) {
+             0 == encryption_name.case_compare("sm4-gcm") ||
+#endif
+             0 == encryption_name.case_compare("aes-256-gcm")) {
     need_encrypt = true;
   } else if (!is_oracle && 0 == encryption_name.case_compare("y")) {
     need_encrypt = true;
