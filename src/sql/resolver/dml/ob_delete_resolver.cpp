@@ -336,6 +336,9 @@ int ObDeleteResolver::find_delete_table_with_mysql_rule(const ObString &db_name,
   if (OB_SUCC(ret)) {
     if (table_items.count() == 1) {
       table_item = const_cast<TableItem*>(table_items.at(0));
+      if (!db_name.empty() && !table_item->alias_name_.empty()) {
+       table_item = NULL;
+      }
     } else if (db_name.empty()) {
       //如果table_items中有多个table_item，说明delete子句没有指定table的database_name
       //而from子句中所有表都是基表，例如delete t1.* from db1.t1, db2.t1;
