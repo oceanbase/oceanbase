@@ -484,7 +484,7 @@ int ObOpSpec::accept(ObOpSpecVisitor &visitor) const
     LOG_WARN("failed to pre visit", K(ret));
   }
   if (OB_FAIL(ret)) {
-    // do nothingn
+    // do nothing
   } else if (OB_ISNULL(children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null children", K(ret));
@@ -791,7 +791,7 @@ int ObOperator::init_skip_vector()
 // copy from ob_phy_operator.cpp
 int ObOperator::rescan()
 {
-  //rescan must reset the oeprator context to the state after call operator open()
+  //rescan must reset the operator context to the state after call operator open()
   //for the general non-terminal operator, function rescan() is to call children rescan()
   //if you want to do more, you must rewrite this function
   //for the general terminal operator, function rescan() does nothing
@@ -1052,7 +1052,7 @@ int ObOperator::get_next_row()
   begin_cpu_time_counting();
   begin_ash_line_id_reg();
   if (OB_FAIL(check_stack_once())) {
-    LOG_WARN("too deep recusive", K(ret));
+    LOG_WARN("too deep recursive", K(ret));
   } else {
     if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
@@ -1153,7 +1153,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
   begin_ash_line_id_reg();
 
   if (OB_FAIL(check_stack_once())) {
-    LOG_WARN("too deep recusive", K(ret));
+    LOG_WARN("too deep recursive", K(ret));
   } else {
     if (OB_UNLIKELY(spec_.need_check_output_datum_ && brs_checker_)) {
       if (OB_FAIL(brs_checker_->check_datum_modified())) {

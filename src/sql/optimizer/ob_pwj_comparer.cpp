@@ -685,10 +685,10 @@ int ObStrictPwjComparer::is_sub_partition_logically_equal(const PwjTable &l_tabl
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(get_subpartition_indexes_by_part_index(l_table, l_part_index,
                                                                 l_used_partition_indexes))) {
-        LOG_WARN("faield to get subpartition indexes by part index", K(ret));
+        LOG_WARN("failed to get subpartition indexes by part index", K(ret));
       } else if (OB_FAIL(get_subpartition_indexes_by_part_index(r_table, r_part_index,
                                                                 r_used_partition_indexes))) {
-        LOG_WARN("faield to get subpartition indexes by part index", K(ret));
+        LOG_WARN("failed to get subpartition indexes by part index", K(ret));
       } else if (l_used_partition_indexes.count() != r_used_partition_indexes.count()) {
         is_equal = false;
       } else if (is_hash_like_part(l_table.subpart_type_)) {
@@ -821,7 +821,7 @@ int ObStrictPwjComparer::check_hash_subpartition_equal(ObSubPartition **l_subpar
           OB_ISNULL(l_subpartition_array[l_indexes.at(i)]) ||
           OB_ISNULL(r_subpartition_array[r_indexes.at(i)])) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpeted error", K(ret), K(l_subpartition_array), K(r_subpartition_array));
+        LOG_WARN("get unexpected error", K(ret), K(l_subpartition_array), K(r_subpartition_array));
       } else {
         subpart_tablet_id_pair.first = l_subpartition_array[l_indexes.at(i)]->get_tablet_id().id();
         subpart_tablet_id_pair.second = r_subpartition_array[r_indexes.at(i)]->get_tablet_id().id();
@@ -1062,7 +1062,7 @@ int ObStrictPwjComparer::get_sub_part_tablet_id(const PwjTable &table,
     }
     if (OB_SUCC(ret) && !find) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to find part_index in all_partition_idnexes", K(ret),
+      LOG_WARN("failed to find part_index in all_partition_indexes", K(ret),
                   K(part_index), K(table.all_partition_indexes_));
     }
   }

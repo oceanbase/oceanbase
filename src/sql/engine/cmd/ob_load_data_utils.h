@@ -241,7 +241,7 @@ private:
 
 /*
  * ObKMPStateMachine is a str matcher
- * efficently implimented using KMP algorithem
+ * efficiently implemented using KMP algorithm
  * to detect a given str from a char stream
  */
 class ObKMPStateMachine

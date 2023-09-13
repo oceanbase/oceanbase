@@ -246,7 +246,7 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(handle_session_exception(session))) {
-          LOG_WARN("session exeception happened", K(ret));
+          LOG_WARN("session exception happened", K(ret));
           if (OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
             LOG_WARN("cancel ddl task failed", K(tmp_ret));
             ret = OB_SUCCESS;

@@ -108,7 +108,7 @@ int ObPxCoroWorker::deep_copy_assign(const ObPxRpcInitTaskArgs &src,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail alloc memory", K(ser_arg_len), KP(ser_ptr), K(ret));
   } else if (OB_FAIL(src.serialize(static_cast<char *>(ser_ptr), ser_arg_len, ser_pos))) {
-    LOG_WARN("fail serialzie init task arg", KP(ser_ptr), K(ser_arg_len), K(ser_pos), K(ret));
+    LOG_WARN("fail serialize init task arg", KP(ser_ptr), K(ser_arg_len), K(ser_pos), K(ret));
   } else if (OB_FAIL(dest.deserialize(static_cast<const char *>(ser_ptr), ser_pos, des_pos))) {
     LOG_WARN("fail des task arg", KP(ser_ptr), K(ser_pos), K(des_pos), K(ret));
   } else if (ser_pos != des_pos) {

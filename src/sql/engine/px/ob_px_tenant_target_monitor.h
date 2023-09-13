@@ -98,7 +98,7 @@ public:
   ObPxTargetCond() {}
   ~ObPxTargetCond() {}
 public:
-  // wait when no resource availiable
+  // wait when no resource available
   int wait(const int64_t wait_time_us);
   // notify threads to wakeup and retry
   void notifyAll();

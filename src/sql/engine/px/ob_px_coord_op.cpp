@@ -675,7 +675,7 @@ int ObPxCoordOp::destroy_all_channel()
         }
         /*
          * actually, the qc and sqc can see the channel id of sqc.
-         * sqc channel's onwer is SQC, not QC.
+         * sqc channel's owner is SQC, not QC.
          * if we release there, all these channel will be release twice.
          * So, sqc channel will be release by sqc, not qc.
          *
@@ -792,7 +792,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(loop.process_one_if(&control_channels, nth_channel))) {
         if (OB_EAGAIN == ret) {
-          LOG_DEBUG("no msessage, waiting sqc report", K(ret));
+          LOG_DEBUG("no message, waiting sqc report", K(ret));
           ret = OB_SUCCESS;
         } else if (OB_ITER_END != ret) {
           LOG_WARN("fail process message", K(ret));

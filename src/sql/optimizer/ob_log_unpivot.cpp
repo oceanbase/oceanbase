@@ -344,7 +344,7 @@ int ObLogUnpivot::compute_fd_item_set()
       /*do nothing*/
     } else if (OB_NOT_NULL(fd_item_set) && // rollup 时 fd_item_set is null
                OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
-      LOG_WARN("falied to deduce fd item set", K(ret));
+      LOG_WARN("failed to deduce fd item set", K(ret));
     } else {
       set_fd_item_set(fd_item_set);
     }

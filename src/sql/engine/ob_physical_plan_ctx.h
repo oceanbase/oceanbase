@@ -471,7 +471,7 @@ private:
   static const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
   static const int64_t ESTIMATE_TRANS_RESERVE_TIME = 70 * 1000;
   //oracle calc time during running, not before running.
-  //oracle datetime func has two categoris: sysdate/systimestamp, current_date/current_timestamp/localtimestamp
+  //oracle datetime func has two categories: sysdate/systimestamp, current_date/current_timestamp/localtimestamp
   //so we use `cur_time_` for first used-category, `cur_time_ + DELTA_TARDY_TIME_US` for second used-category.
   static const int64_t DELTA_TARDY_TIME_US = 5;
   common::ObIAllocator &allocator_;
@@ -588,7 +588,7 @@ private:
   ObRemoteSqlInfo remote_sql_info_;
   //used for expr output pack, do encode according to its field
   const common::ObIArray<ObField> *field_array_;
-  //used for expr output pack, do bianry encode or text encode
+  //used for expr output pack, do binary encode or text encode
   bool is_ps_protocol_;
   //used for monitor operator information
   int64_t plan_start_time_;

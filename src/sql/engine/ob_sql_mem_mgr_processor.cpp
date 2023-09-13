@@ -236,7 +236,7 @@ int ObSqlMemMgrProcessor::extend_max_memory_size(
   int ret = OB_SUCCESS;
   need_dump = true;
   if (OB_FAIL(try_upgrade_auto_mgr(allocator, mem_used))) {
-    LOG_WARN("failed to try udgrade auto manager", K(ret));
+    LOG_WARN("failed to try upgrade auto manager", K(ret));
   } else if (OB_UNLIKELY(!is_auto_mgr())) {
     /* do nothing */
   } else if (OB_NOT_NULL(sql_mem_mgr_)) {

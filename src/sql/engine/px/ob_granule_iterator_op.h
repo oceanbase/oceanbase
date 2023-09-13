@@ -64,7 +64,7 @@ public:
 private:
   int deep_copy_range(ObIAllocator *allocator, const ObNewRange &src, ObNewRange &dst);
 public:
-  // the dop, the QC deside the dop before our task send to SQC server
+  // the dop, the QC decide the dop before our task send to SQC server
   // but the dop may be change as the worker server don't has enough process.
   int64_t parallelism_;
   // 在 affinitize 模式下 GI 需要知道当前 GI 所属的 task id，以拉取对应的 partition 任务

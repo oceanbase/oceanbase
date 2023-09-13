@@ -114,7 +114,7 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
     }
     // virtual table can't get part idx from mock list table schema
     // so don't call extract_all_partition_indexes,
-    // and not used pwj enhence on virtual table
+    // and not used pwj enhance on virtual table
     if (is_virtual_table(ref_table_id)) {
       // do nothing
     } else if (OB_FAIL(ObPwjComparer::extract_all_partition_indexes(phy_table_location_info,
@@ -160,7 +160,7 @@ int ObShardingInfo::set_partition_key(
         }
       }
     } else if (OB_FAIL(partition_keys.push_back(part_expr))) {
-      LOG_WARN("Failed to add partiton column expr", K(ret));
+      LOG_WARN("Failed to add partition column expr", K(ret));
     } else { }
   }
   return ret;
@@ -471,7 +471,7 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
                                                        is_partition_wise))) {
         LOG_WARN("failed to check if match partition wise join", K(ret));
       } else if (is_partition_wise) {
-        LOG_TRACE("suceed to check if match partition wise join", K(is_partition_wise));
+        LOG_TRACE("succeed to check if match partition wise join", K(is_partition_wise));
       } else if (OB_FAIL(append(left_sharding, left_weak_sharding)) ||
                  OB_FAIL(append(right_sharding, right_weak_sharding))) {
         LOG_WARN("failed to append sharding info", K(ret));
@@ -546,7 +546,7 @@ int ObShardingInfo::check_if_match_extended_partition_wise(const EqualSets &equa
                                                                 is_ext_partition_wise))) {
         LOG_WARN("failed to check if match extended partition wise join", K(ret));
       } else if (is_ext_partition_wise) {
-        LOG_TRACE("suceed to check if match extended partition wise join", K(is_ext_partition_wise));
+        LOG_TRACE("succeed to check if match extended partition wise join", K(is_ext_partition_wise));
       } else if (OB_FAIL(append(left_sharding, left_weak_sharding)) ||
                  OB_FAIL(append(right_sharding, right_weak_sharding))) {
         LOG_WARN("failed to append sharding info", K(ret));

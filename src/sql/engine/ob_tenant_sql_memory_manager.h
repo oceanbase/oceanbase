@@ -314,7 +314,7 @@ public:
   int64_t est_cache_size_;        // 估计的全内存大小
   int64_t est_one_pass_size_;     // 估计的one pass大小
   int64_t last_memory_used_;      // 上次执行内存使用大小
-  int64_t last_execution_;        // 上次执行的状态，是optimal、onepass还是multimpass
+  int64_t last_execution_;        // 上次执行的状态，是optimal、onepass还是multipass
   int64_t last_degree_;           // 上次执行dop
   int64_t total_executions_;      // 每个worker算执行一次
   int64_t optimal_executions_;    // 全内存执行次数

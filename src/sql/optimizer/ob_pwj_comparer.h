@@ -114,14 +114,14 @@ public:
   virtual int add_table(PwjTable &table, bool &is_match_pwj);
 
   /**
-   * 从phy_table_locaton_info中提取以下分区相关的信息
+   * 从phy_table_location_info中提取以下分区相关的信息
    * @param all_partition_ids:
-   *    phy_table_locaton_info中所有的partition_id(物理分区id)
+   *    phy_table_location_info中所有的partition_id(物理分区id)
    * @param all_partition_indexes:
-   *    phy_table_locaton_info中每一个partition_id(物理分区id)的
+   *    phy_table_location_info中每一个partition_id(物理分区id)的
    *    part_id(一级逻辑分区id)在part_array中的偏移
    * @param all_subpartition_indexes:
-   *    phy_table_locaton_info中每一个partition_id(物理分区id)的
+   *    phy_table_location_info中每一个partition_id(物理分区id)的
    *    subpart_id(二级逻辑分区id)在subpart_array中的偏移
    * @param is_partition_single:
    *    二级分区表的phy_table_location_info_中，是否只涉及到一个一级分区

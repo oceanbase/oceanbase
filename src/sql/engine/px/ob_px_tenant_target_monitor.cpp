@@ -107,7 +107,7 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
       role_ = FOLLOWER;
       // from leader to follower, refresh all the statistics
       if (OB_FAIL(reset_follower_statistics(-1))) {
-        LOG_WARN("reset statisitcs failed", K(ret));
+        LOG_WARN("reset statistics failed", K(ret));
       }
     }
     if (OB_FAIL(query_statistics(leader))) {
@@ -120,7 +120,7 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
       role_ = LEADER;
       // from follower to leader or observer is not longer alive, refresh all the statistics
       if (OB_FAIL(reset_leader_statistics())) {
-        LOG_WARN("reset statisitcs failed", K(ret));
+        LOG_WARN("reset statistics failed", K(ret));
       }
       LOG_INFO("refresh global_target_usage_", K(tenant_id_), K(version_), K(server_), K(need_refresh_all));
     }
@@ -465,14 +465,14 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
     }
   }
   if (OB_SUCC(ret) && need_wait) {
-    // when got no resource, wait for next avaliable resource
+    // when got no resource, wait for next available resource
     //
     // NOTE: when any resource returned , ALL waiting threads are waken up
     //       this is because the returned resource maybe a very big chunk,
     //       which can feed many waiting threads
     LOG_DEBUG("wait begin", K(wait_time_us), K(session_target), K(req_cnt));
     int64_t wait_us = min(wait_time_us, 1000000L);
-    target_cond_.wait(wait_us); // sleep at most 1sec, in order to check interrput
+    target_cond_.wait(wait_us); // sleep at most 1sec, in order to check interrupt
     LOG_DEBUG("wait finish");
   }
   return ret;

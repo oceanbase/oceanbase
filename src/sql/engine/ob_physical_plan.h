@@ -508,9 +508,9 @@ private:
    * is not saved:
    *  1. resolve the statement to get the partition columns
    *  2. extract the range of the partition columns using query range and given predicates
-   *  3. get the ObRawExpr of the partition expr and convert it to a postfix expresssion
+   *  3. get the ObRawExpr of the partition expr and convert it to a postfix expression
    *  4. calculate the partition ids using the postfix expression
-   *  5. inquire the location cache servince to get a list of partition locations given
+   *  5. inquire the location cache service to get a list of partition locations given
    *     the partition ids
    *
    *  However, with the pre table location saved, we can readily skip steps 1, 2(partially),
@@ -657,7 +657,7 @@ public:
   bool enable_append_; // for APPEND hint
   uint64_t append_table_id_;
   ObLogicalPlanRawData logical_plan_;
-  // for detecor manager
+  // for detector manager
   bool is_enable_px_fast_reclaim_;
 };
 

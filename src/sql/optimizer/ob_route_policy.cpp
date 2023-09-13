@@ -209,7 +209,7 @@ int ObRoutePolicy::get_server_locality(const ObAddr &addr,
     const ObServerLocality &cur_locality = server_locality_array.at(i);
     if (addr == cur_locality.get_addr()) {
       if (OB_FAIL(svr_locality.assign(cur_locality))) {
-        LOG_WARN("fail to assgin locality", K(addr), K(cur_locality), K(server_locality_array), K(ret));
+        LOG_WARN("fail to assign locality", K(addr), K(cur_locality), K(server_locality_array), K(ret));
       } else {
         is_found = true;
       }
