@@ -57,8 +57,7 @@ ObRestoreScheduler::ObRestoreScheduler()
     sql_proxy_(NULL), rpc_proxy_(NULL),
     srv_rpc_proxy_(NULL), lst_operator_(NULL),
     restore_service_(nullptr), self_addr_(),
-    tenant_id_(OB_INVALID_TENANT_ID),
-    idle_time_us_(1)
+    tenant_id_(OB_INVALID_TENANT_ID)
 {
 }
 
@@ -99,7 +98,6 @@ void ObRestoreScheduler::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    idle_time_us_ = GCONF._restore_idle_time;
     ObCurTraceId::init(GCTX.self_addr());
     LOG_INFO("[RESTORE] try process restore job");
     ObArray<ObPhysicalRestoreJob> job_infos;
@@ -251,7 +249,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(may_update_restore_concurrency_(new_tenant_id, job_info))) {
       LOG_WARN("failed to update restore concurrency", K(ret), K(new_tenant_id), K(job_info));
     } else {
-      idle_time_us_ = 1;// wakeup immediately
+      restore_service_->wakeup();
     }
   }
   int tmp_ret = OB_SUCCESS;
@@ -877,7 +875,7 @@ int ObRestoreScheduler::try_update_job_status(
       LOG_WARN("fail update job status", K(ret), K(job), K(next_status), K(tenant_id_));
     } else {
       //can not be zero
-      idle_time_us_ = 1;// wakeup immediately
+      restore_service_->wakeup();
       LOG_INFO("[RESTORE] switch job status", K(ret), K(job), K(next_status));
       (void)record_rs_event(job, next_status);
     }
@@ -1062,7 +1060,7 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
     }
   }
   if (OB_FAIL(ret)) {
-    idle_time_us_ = 1;// wakeup immediately
+    restore_service_->wakeup();
   }
   LOG_INFO("[RESTORE] create init ls", KR(ret), K(job_info));
 

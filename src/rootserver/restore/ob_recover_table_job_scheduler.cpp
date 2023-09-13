@@ -15,6 +15,7 @@
 #include "ob_recover_table_job_scheduler.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/restore/ob_recover_table_initiator.h"
+#include "rootserver/restore/ob_restore_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/ob_primary_standby_service.h"
 #include "share/location_cache/ob_location_service.h"
@@ -35,8 +36,11 @@ void ObRecoverTableJobScheduler::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
-int ObRecoverTableJobScheduler::init(share::schema::ObMultiVersionSchemaService &schema_service,
-    common::ObMySQLProxy &sql_proxy, obrpc::ObCommonRpcProxy &rs_rpc_proxy, obrpc::ObSrvRpcProxy &srv_rpc_proxy)
+int ObRecoverTableJobScheduler::init(
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    common::ObMySQLProxy &sql_proxy,
+    obrpc::ObCommonRpcProxy &rs_rpc_proxy,
+    obrpc::ObSrvRpcProxy &srv_rpc_proxy)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = gen_user_tenant_id(MTL_ID());
@@ -56,6 +60,16 @@ int ObRecoverTableJobScheduler::init(share::schema::ObMultiVersionSchemaService 
   return ret;
 }
 
+void ObRecoverTableJobScheduler::wakeup_()
+{
+  ObRestoreService *restore_service = nullptr;
+  if (OB_ISNULL(restore_service = MTL(ObRestoreService *))) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore service must not be null");
+  } else {
+    restore_service->wakeup();
+  }
+}
+
 void ObRecoverTableJobScheduler::do_work()
 {
   int ret = OB_SUCCESS;
@@ -68,6 +82,7 @@ void ObRecoverTableJobScheduler::do_work()
   } else if (OB_FAIL(helper_.get_all_recover_table_job(*sql_proxy_, jobs))) {
     LOG_WARN("failed to get recover all recover table job", K(ret));
   } else {
+    ObCurTraceId::init(GCTX.self_addr());
     ARRAY_FOREACH(jobs, i) {
       ObRecoverTableJob &job = jobs.at(i);
       if (!job.is_valid()) {
@@ -139,6 +154,7 @@ int ObRecoverTableJobScheduler::try_advance_status_(share::ObRecoverTableJob &jo
   } else if (need_advance_status && OB_FAIL(helper_.advance_status(*sql_proxy_, job, next_status))) {
     LOG_WARN("failed to advance statsu", K(ret), K(job), K(next_status));
   } else {
+    wakeup_();
     ROOTSERVICE_EVENT_ADD("recover_table", "advance_status", K(tenant_id), K(job_id), K(next_status));
   }
   return ret;

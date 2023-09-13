@@ -72,6 +72,7 @@ public:
 public:
   int idle();
   int check_stop() const override;
+  void wakeup() { ATOMIC_INC(&wakeup_cnt_);}
 
 private:
   bool inited_;
@@ -82,6 +83,7 @@ private:
   common::ObAddr self_addr_;
   uint64_t tenant_id_;
   int64_t idle_time_us_;
+  int64_t wakeup_cnt_;
   ObRestoreScheduler restore_scheduler_;
   ObRecoverTableJobScheduler recover_table_scheduler_;
   ObImportTableJobScheduler import_table_scheduler_;

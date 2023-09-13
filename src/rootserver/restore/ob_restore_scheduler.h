@@ -134,7 +134,6 @@ private:
   ObRestoreService *restore_service_;
   common::ObAddr self_addr_;
   uint64_t tenant_id_;
-  int64_t idle_time_us_;
   DISALLOW_COPY_AND_ASSIGN(ObRestoreScheduler);
 };
 

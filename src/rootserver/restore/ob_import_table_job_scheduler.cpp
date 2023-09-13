@@ -21,6 +21,7 @@
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "share/restore/ob_import_util.h"
+#include "rootserver/restore/ob_restore_service.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -28,13 +29,17 @@ using namespace common;
 using namespace share;
 
 ObImportTableJobScheduler::ObImportTableJobScheduler()
-  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
-    schema_service_(nullptr), sql_proxy_(nullptr),
-    job_helper_(), task_helper_()
+  : is_inited_(false),
+    tenant_id_(OB_INVALID_TENANT_ID),
+    schema_service_(nullptr),
+    sql_proxy_(nullptr),
+    job_helper_(),
+    task_helper_()
 {}
 
 int ObImportTableJobScheduler::init(
-    share::schema::ObMultiVersionSchemaService &schema_service, common::ObMySQLProxy &sql_proxy)
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = gen_user_tenant_id(MTL_ID());
@@ -54,6 +59,16 @@ int ObImportTableJobScheduler::init(
   return ret;
 }
 
+void ObImportTableJobScheduler::wakeup_()
+{
+  ObRestoreService *restore_service = nullptr;
+  if (OB_ISNULL(restore_service = MTL(ObRestoreService *))) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore service must not be null");
+  } else {
+    restore_service->wakeup();
+  }
+}
+
 void ObImportTableJobScheduler::do_work()
 {
   int ret = OB_SUCCESS;
@@ -69,6 +84,7 @@ void ObImportTableJobScheduler::do_work()
   } else if (OB_FAIL(job_helper_.get_all_import_table_jobs(*sql_proxy_, jobs))) {
     LOG_WARN("failed to get recover all recover table job", K(ret));
   } else {
+    ObCurTraceId::init(GCTX.self_addr());
     ARRAY_FOREACH(jobs, i) {
       ObImportTableJob &job = jobs.at(i);
       if (!job.is_valid()) {
@@ -443,6 +459,8 @@ int ObImportTableJobScheduler::advance_status_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(job_helper_.advance_status(sql_proxy, job, next_status))) {
     LOG_WARN("failed to advance status", K(ret), K(job), K(next_status));
+  } else {
+    wakeup_();
   }
   return ret;
 }
@@ -463,6 +481,15 @@ int ObImportTableTaskScheduler::init(share::schema::ObMultiVersionSchemaService 
     is_inited_ = true;
   }
   return ret;
+}
+
+void ObImportTableTaskScheduler::wakeup_() {
+  ObRestoreService *restore_service = nullptr;
+  if (OB_ISNULL(restore_service = MTL(ObRestoreService *))) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore service must not be null");
+  } else {
+    restore_service->wakeup();
+  }
 }
 
 void ObImportTableTaskScheduler::reset()
@@ -552,6 +579,8 @@ int ObImportTableTaskScheduler::try_advance_status_(const int err_code)
     }
     if (FAILEDx(helper_.advance_status(*sql_proxy_, *import_task_, next_status))) {
       LOG_WARN("failed to advance status", K(ret), KPC_(import_task), K(next_status));
+    } else {
+      wakeup_();
     }
   }
   return ret;

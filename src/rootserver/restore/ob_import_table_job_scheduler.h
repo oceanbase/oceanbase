@@ -44,7 +44,8 @@ class ObImportTableJobScheduler final
 public:
   ObImportTableJobScheduler();
   ~ObImportTableJobScheduler() {}
-  int init(share::schema::ObMultiVersionSchemaService &schema_service, common::ObMySQLProxy &sql_proxy);
+  int init(share::schema::ObMultiVersionSchemaService &schema_service,
+      common::ObMySQLProxy &sql_proxy);
   void do_work();
 
 private:
@@ -60,6 +61,7 @@ private:
   int get_import_table_tasks_(const share::ObImportTableJob &job, common::ObIArray<share::ObImportTableTask> &import_tasks);
   int reconstruct_ref_constraint_(share::ObImportTableJob &job);
   int check_import_ddl_task_exist_(const share::ObImportTableTask &task, bool &is_exist);
+  void wakeup_();
 
   int advance_status_(common::ObISQLClient &sql_proxy, const share::ObImportTableJob &job, const share::ObImportTableJobStatus &next_status);
 private:
@@ -72,14 +74,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObImportTableJobScheduler);
 };
 
-class ObImportTableTaskScheduler
+class ObImportTableTaskScheduler final
 {
 public:
   ObImportTableTaskScheduler()
-    : is_inited_(false), schema_service_(nullptr), sql_proxy_(nullptr), import_task_(nullptr), helper_() {}
+    : is_inited_(false), schema_service_(nullptr), sql_proxy_(nullptr), import_task_(nullptr),
+      helper_() {}
   virtual ~ObImportTableTaskScheduler() { reset(); }
   int init(share::schema::ObMultiVersionSchemaService &schema_service,
-      common::ObMySQLProxy &sql_proxy, share::ObImportTableTask &task);
+      common::ObMySQLProxy &sql_proxy,
+      share::ObImportTableTask &task);
   void reset();
   int process();
   TO_STRING_KV(KPC_(import_task));
@@ -94,6 +98,7 @@ private:
   int statistics_import_results_();
   int gen_import_ddl_task_();
   int wait_import_ddl_task_finish_(bool &is_finish);
+  void wakeup_();
 protected:
   bool is_inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

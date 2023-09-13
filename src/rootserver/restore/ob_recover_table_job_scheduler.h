@@ -42,7 +42,8 @@ class ObISQLClient;
 
 namespace rootserver
 {
-class ObRecoverTableJobScheduler
+class ObRestoreService;
+class ObRecoverTableJobScheduler final
 {
 public:
   ObRecoverTableJobScheduler()
@@ -51,7 +52,9 @@ public:
   virtual ~ObRecoverTableJobScheduler() {}
   void reset();
   int init(share::schema::ObMultiVersionSchemaService &schema_service,
-      common::ObMySQLProxy &sql_proxy, obrpc::ObCommonRpcProxy &rs_rpc_proxy, obrpc::ObSrvRpcProxy &srv_rpc_proxy);
+      common::ObMySQLProxy &sql_proxy,
+      obrpc::ObCommonRpcProxy &rs_rpc_proxy,
+      obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   void do_work();
 
 private:
@@ -82,6 +85,7 @@ private:
   int canceling_(share::ObRecoverTableJob &job);
   int user_finish_(const share::ObRecoverTableJob &job);
   int check_compatible_() const;
+  void wakeup_();
 private:
   bool is_inited_;
   uint64_t tenant_id_;

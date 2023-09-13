@@ -31,6 +31,7 @@ ObRestoreService::ObRestoreService()
     self_addr_(),
     tenant_id_(OB_INVALID_TENANT_ID),
     idle_time_us_(1),
+    wakeup_cnt_(0),
     restore_scheduler_(),
     recover_table_scheduler_()
 
@@ -91,6 +92,8 @@ int ObRestoreService::idle()
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (!has_set_stop() && 0 < ATOMIC_LOAD(&wakeup_cnt_)) {
+    ATOMIC_SET(&wakeup_cnt_, 0); // wake up immediately
   } else {
     ObTenantThreadHelper::idle(idle_time_us_);
     idle_time_us_ = GCONF._restore_idle_time;
