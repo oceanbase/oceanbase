@@ -52,7 +52,7 @@ int ObDASGroupScanOp::rescan()
       group_iter = static_cast<ObGroupScanIter *>(group_lookup_op_->get_lookup_iter());
       if (NULL == group_iter) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid arguement", K(group_iter), K(*group_lookup_op_), K(ret));
+        LOG_WARN("invalid argument", K(group_iter), K(*group_lookup_op_), K(ret));
       } else {
         group_iter->init_group_range(iter_.get_cur_group_idx(), iter_.get_group_size());
       }
@@ -328,7 +328,7 @@ int ObGroupLookupOp::switch_lookup_scan_group()
   group_iter = static_cast<ObGroupScanIter *>(get_lookup_iter());
   if (NULL == group_iter) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguement", K(group_iter), K(ret));
+    LOG_WARN("invalid argument", K(group_iter), K(ret));
   } else {
     ret = group_iter->switch_scan_group();
     ++lookup_group_cnt_;
@@ -345,7 +345,7 @@ int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
   group_iter = static_cast<ObGroupScanIter *>(get_lookup_iter());
   if (NULL == group_iter) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguement", K(group_iter), K(ret));
+    LOG_WARN("invalid argument", K(group_iter), K(ret));
   } else {
     ret = group_iter->set_scan_group(group_id);
     if(-1 == group_id) {

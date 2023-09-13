@@ -100,7 +100,7 @@ struct LocationConstraint
   bool operator==(const LocationConstraint &other) const;
   bool operator!=(const LocationConstraint &other) const;
 
-  // calculate the inclusion relationship between ObLocationConstaints
+  // calculate the inclusion relationship between ObLocationConstraints
   static int calc_constraints_inclusion(const ObLocationConstraint *left,
                                         const ObLocationConstraint *right,
                                         InclusionType &inclusion_result);
@@ -598,7 +598,7 @@ public:
   // all_plan_const_param_constraints_ 表示该sql中存在的全部常量约束
   // 比如：create table t (a bigint, b bigint as (a + 1 + 2), c bigint as (a + 2 + 3), index idx_b(b), index idx_c(c));
   // 对于：select * from t where a + 1 + 2 > 0;
-  // 有：all_plan_const_param_constaints_ = {[1, 2]}, all_possible_const_param_constraints_ = {[1, 2], [2, 3]}
+  // 有：all_plan_const_param_constraints_ = {[1, 2]}, all_possible_const_param_constraints_ = {[1, 2], [2, 3]}
   // 对于：select * from t where a + 3 + 4 > 0;
   // 有：all_plan_const_param_constraints_ = {}, all_possible_const_param_constraints_ = {[1, 2], [2, 3]}
   common::ObIArray<ObPCConstParamInfo> *all_plan_const_param_constraints_;

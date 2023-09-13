@@ -448,7 +448,7 @@ int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type
         break;
       }
       case T_DATETIME: {
-        //oracle mode treate date as datetime
+        //oracle mode treats date as datetime
         DATA_PRINTF("date");
         break;
       }

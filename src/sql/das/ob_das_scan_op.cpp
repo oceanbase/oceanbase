@@ -202,7 +202,7 @@ int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
       lookup_rtdef->stmt_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
       lookup_rtdef->scan_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
       if (OB_FAIL(lookup_rtdef->init_pd_op(*remote_info->exec_ctx_, *lookup_ctdef))) {
-        LOG_WARN("init lookup pushdown opeartor failed", K(ret));
+        LOG_WARN("init lookup pushdown operator failed", K(ret));
       } else {
         lookup_rtdef->p_pd_expr_op_->get_eval_ctx()
             .set_max_batch_size(lookup_ctdef->pd_expr_spec_.max_batch_size_);

@@ -74,7 +74,7 @@ int ObMonitorInfoManager::get_by_request_id(int64_t request_id,
   index = -1;
   if (OB_UNLIKELY(request_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid agument", K(ret), K(request_id));
+    LOG_WARN("invalid argument", K(ret), K(request_id));
   } else {
     int64_t start_idx = slow_query_queue_.get_pop_idx();
     int64_t end_idx = slow_query_queue_.get_push_idx();
@@ -105,7 +105,7 @@ int ObMonitorInfoManager::get_by_index(int64_t index,
   plan_info = NULL;
   if (OB_UNLIKELY(index < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguemnt", K(ret), K(index));
+    LOG_WARN("invalid argument", K(ret), K(index));
   } else if (index >= get_start_index() + get_size()) {
     ret = OB_ITER_END;
   } else if (NULL == (plan_info = static_cast<ObPhyPlanMonitorInfo*>(slow_query_queue_.get(index, ref)))) {
@@ -144,7 +144,7 @@ int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo *info)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid agument", K(ret), K(info));
+    LOG_WARN("invalid argument", K(ret), K(info));
   } else {
     int64_t retry_times = 3;
     while (retry_times > 0) {
@@ -186,7 +186,7 @@ int ObMonitorInfoManager::alloc(int64_t request_id,
   void *ptr = NULL;
   if (OB_UNLIKELY(request_id < 0)) {
      ret = OB_INVALID_ARGUMENT;
-     LOG_WARN("invalid agument", K(ret), K(request_id));
+     LOG_WARN("invalid argument", K(ret), K(request_id));
   } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObPhyPlanMonitorInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to alloc memory", K(ret), K(request_id), K(allocator_.allocated()), K_(memory_limit));
@@ -232,7 +232,7 @@ int ObMonitorInfoManager::gc()
     }
   }
   if (OB_FAIL(reclain_map())) {
-    LOG_WARN("fail to reclain map", K(ret));
+    LOG_WARN("fail to reclaim map", K(ret));
   }
   return ret;
 }

@@ -265,11 +265,11 @@ enum ObTableLocationType
 enum ObRepartitionType
 {
   OB_REPARTITION_NO_REPARTITION = 0,//不重分区
-  OB_REPARTITION_ONE_SIDE_ONE_LEVEL,//只有一边按照一级分区做repartiton,不repartition的一边是一级分区
-  OB_REPARTITION_ONE_SIDE_TWO_LEVEL,//只有一边按照二级分区做repartiton, 不repartition的一边是二级分区
+  OB_REPARTITION_ONE_SIDE_ONE_LEVEL,//只有一边按照一级分区做repartition,不repartition的一边是一级分区
+  OB_REPARTITION_ONE_SIDE_TWO_LEVEL,//只有一边按照二级分区做repartition, 不repartition的一边是二级分区
   OB_REPARTITION_BOTH_SIDE_ONE_LEVEL,//两边都按照一级分区方式做repartition, 分区键是连接键
-  OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST,//只有一边按照另外一边(二级分区表)的一级分区做repartiton
-  OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB,//只有一边按照另外一边(二级分区)的二级分区做repartiton
+  OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST,//只有一边按照另外一边(二级分区表)的一级分区做repartition
+  OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB,//只有一边按照另外一边(二级分区)的二级分区做repartition
 };
 
 enum ObRepartitionScope
