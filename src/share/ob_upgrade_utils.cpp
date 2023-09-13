@@ -994,19 +994,23 @@ int ObUpgradeFor4200Processor::post_upgrade_for_max_ls_id_()
   if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_), K(tenant_id_));
-  } else if (!is_user_tenant(tenant_id_)) {
-    LOG_INFO("meta and sys tenant no need to update max ls id", K(tenant_id_));
+  } else if (!is_meta_tenant(tenant_id_)) {
+    LOG_INFO("user and sys tenant no need to update max ls id", K(tenant_id_));
   } else {
     common::ObMySQLTransaction trans;
     share::ObLSStatusOperator ls_op;
     ObLSID max_ls_id;
-    const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
-    if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
-      LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id_));
-    } else if (OB_FAIL(ls_op.get_tenant_max_ls_id(tenant_id_, max_ls_id, trans))) {
-      LOG_WARN("failed to get tenant max ls id", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_max_ls_id(tenant_id_, max_ls_id, trans, true))) {
-      LOG_WARN("failed to update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id));
+    ObAllTenantInfo tenant_info;
+    const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
+    if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
+      LOG_WARN("failed to start trans", KR(ret), K(user_tenant_id), K(tenant_id_));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                  user_tenant_id, &trans, true, tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(user_tenant_id));
+    } else if (OB_FAIL(ls_op.get_tenant_max_ls_id(user_tenant_id, max_ls_id, trans))) {
+      LOG_WARN("failed to get tenant max ls id", KR(ret), K(tenant_id_), K(user_tenant_id));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_max_ls_id(user_tenant_id, max_ls_id, trans, true))) {
+      LOG_WARN("failed to update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id), K(user_tenant_id));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -1015,7 +1019,7 @@ int ObUpgradeFor4200Processor::post_upgrade_for_max_ls_id_()
         ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
     }
-    LOG_INFO("update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id));
+    LOG_INFO("update tenant max ls id", KR(ret), K(tenant_id_), K(max_ls_id), K(user_tenant_id));
   }
   return ret;
 }
