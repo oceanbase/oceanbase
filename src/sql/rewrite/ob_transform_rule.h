@@ -420,6 +420,8 @@ private:
                              ObDMLStmt *&copied_stmt,
                              bool is_trans_stmt);
 
+  int prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_stmt, ObDMLStmt *&root_stmt_with_filter);
+
   virtual int is_expected_plan(ObLogPlan *plan,
                                void *check_ctx,
                                bool is_trans_plan,

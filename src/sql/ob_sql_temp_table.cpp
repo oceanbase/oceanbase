@@ -124,7 +124,8 @@ int ObSqlTempTableInfo::collect_specified_temp_table(ObIAllocator &allocator,
                                                      ObSelectStmt *specified_query,
                                                      const ObIArray<ObDMLStmt *> &upper_stmts,
                                                      const ObIArray<TableItem *> &table_items,
-                                                     ObSqlTempTableInfo &temp_table_info)
+                                                     ObSqlTempTableInfo &temp_table_info,
+                                                     bool &all_has_filter)
 {
   int ret = OB_SUCCESS;
   temp_table_info.reset();
@@ -134,7 +135,8 @@ int ObSqlTempTableInfo::collect_specified_temp_table(ObIAllocator &allocator,
     LOG_WARN("unexpected param", K(specified_query), K(upper_stmts), K(table_items));;
   } else {
     temp_table_info.table_query_ = specified_query;
-    for (int64_t i = 0; OB_SUCC(ret) && i < upper_stmts.count(); i ++) {
+    all_has_filter = upper_stmts.count() > 0;
+    for (int64_t i = 0; OB_SUCC(ret) && all_has_filter && i < upper_stmts.count(); i ++) {
       TableItem *table = table_items.at(i);
       ObDMLStmt *stmt = upper_stmts.at(i);
       if (OB_ISNULL(stmt) || OB_ISNULL(table) ||
@@ -152,6 +154,8 @@ int ObSqlTempTableInfo::collect_specified_temp_table(ObIAllocator &allocator,
           LOG_WARN("failed to collect temp table info", K(ret));
         } else if (OB_FAIL(temp_table_info.table_infos_.push_back(table_info))) {
           LOG_WARN("failed to push back table info", K(ret));
+        } else {
+          all_has_filter &= !table_info.table_filters_.empty();
         }
       }
     }

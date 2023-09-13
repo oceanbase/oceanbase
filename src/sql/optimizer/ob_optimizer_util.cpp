@@ -8923,7 +8923,7 @@ int ObOptimizerUtil::split_or_filter_into_subquery(const ObDMLStmt &parent_stmt,
                                               check_match_index))) {
       LOG_WARN("failed to split or fitler", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < or_filter_params.count(); i ++) {
+    for (int64_t i = 0; i < or_filter_params.count(); i ++) {
       if (OB_NOT_NULL(or_filter_params.at(i))) {
         or_filter_params.at(i)->~ObIArray();
       }
@@ -9022,6 +9022,140 @@ int ObOptimizerUtil::split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &
     }
   }
 
+  return ret;
+}
+
+/**
+ * If every appearance of cte is accompanied by some filter,
+ * We can combine these filters to reduce the data materialized by cte.
+ * We try to push these filters to where condition.
+ * If all filters can be push to where condition, nonwhere_filter will be NULL.
+ * Otherwise, we might have both where_filter and nonwhere_filter.
+ * e.g.
+ *   with cte as (select a,count(*) as cnt from t1 group by a)
+ *    select * from cte where a = 1 and cnt = 1 union all select * from cte where a = 2 and cnt = 2;
+ *   nonwhere_filter :  (a = 1 and cnt = 1) or (a = 2 and cnt = 2)
+ *   where_filter : (a = 1) or (a = 2)
+*/
+int ObOptimizerUtil::try_push_down_temp_table_filter(ObOptimizerContext &opt_ctx,
+                                                     ObSqlTempTableInfo &info,
+                                                     ObRawExpr *&nonwhere_filter,
+                                                     ObRawExpr *&where_filter)
+{
+  int ret = OB_SUCCESS;
+  bool have_filter = true;
+  nonwhere_filter = NULL;
+  where_filter = NULL;
+  ObSEArray<ObIArray<ObRawExpr *> *, 4> temp_table_filters;
+  ObSEArray<const ObDMLStmt *, 4> parent_stmts;
+  ObSEArray<const ObSelectStmt *, 4> subqueries;
+  ObSEArray<int64_t, 4> table_ids;
+  ObSelectStmt *temp_table_query = info.table_query_;
+  for (int64_t i = 0; OB_SUCC(ret) && have_filter && i < info.table_infos_.count(); ++i) {
+    TableItem *table =  info.table_infos_.at(i).table_item_;
+    ObDMLStmt *stmt = info.table_infos_.at(i).upper_stmt_;
+    if (OB_ISNULL(table) || OB_ISNULL(stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (info.table_infos_.at(i).table_filters_.empty()) {
+      have_filter = false;
+    } else if (OB_FAIL(temp_table_filters.push_back(&info.table_infos_.at(i).table_filters_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(parent_stmts.push_back(stmt))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(subqueries.push_back(temp_table_query))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(table_ids.push_back(table->table_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && have_filter) {
+    OPT_TRACE("pushdown filter into temp table:", info.table_query_);
+    bool can_push_all = false;
+    if (OB_FAIL(ObOptimizerUtil::split_or_filter_into_subquery(parent_stmts,
+                                                               subqueries,
+                                                               table_ids,
+                                                               temp_table_filters,
+                                                               opt_ctx,
+                                                               where_filter,
+                                                               can_push_all,
+                                                               /*check_match_index = */false))) {
+      LOG_WARN("failed to split filter", K(ret));
+    } else if (can_push_all) {
+      // do nothing
+    } else if (OB_FAIL(push_down_temp_table_filter(opt_ctx.get_expr_factory(), opt_ctx.get_session_info(),
+                                                   info, nonwhere_filter))) {
+      LOG_WARN("failed to push down remain temp table filter", K(ret));
+    }
+    if (NULL != where_filter) {
+      OPT_TRACE("succeed to pushdown filter to where:", where_filter);
+    }
+    if (NULL != nonwhere_filter) {
+      OPT_TRACE("succeed to pushdown filter into the top of temp table:", nonwhere_filter);
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::push_down_temp_table_filter(ObRawExprFactory &expr_factory,
+                                                 ObSQLSessionInfo *session_info,
+                                                 ObSqlTempTableInfo &info,
+                                                 ObRawExpr *&temp_table_filter,
+                                                 ObSelectStmt *temp_table_query)
+{
+  int ret = OB_SUCCESS;
+  temp_table_filter = NULL;
+  ObSEArray<ObRawExpr *, 8> and_exprs;
+  ObRawExpr *or_expr = NULL;
+  bool have_temp_table_filter = true;
+  temp_table_query = (NULL == temp_table_query) ? info.table_query_ : temp_table_query;
+  if (OB_ISNULL(temp_table_query)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(info), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && have_temp_table_filter && i < info.table_infos_.count(); ++i) {
+    have_temp_table_filter &= !info.table_infos_.at(i).table_filters_.empty();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && have_temp_table_filter && i < info.table_infos_.count(); ++i) {
+    ObDMLStmt *upper_stmt = info.table_infos_.at(i).upper_stmt_;
+    TableItem *table = info.table_infos_.at(i).table_item_;
+    ObIArray<ObRawExpr *> &table_filters = info.table_infos_.at(i).table_filters_;
+    ObSEArray<ObRawExpr *, 8> rename_exprs;
+    ObRawExpr *and_expr = NULL;
+    if (table_filters.empty() || OB_ISNULL(upper_stmt) ||
+        OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table info", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*upper_stmt,
+                                                               *temp_table_query,
+                                                               table->table_id_,
+                                                               session_info,
+                                                               expr_factory,
+                                                               table_filters,
+                                                               rename_exprs))) {
+      LOG_WARN("failed to rename push down preds", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_and_expr(expr_factory,
+                                                      rename_exprs,
+                                                      and_expr))) {
+      LOG_WARN("failed to build and expr", K(ret));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(and_exprs.push_back(and_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) || !have_temp_table_filter) {
+  } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(expr_factory,
+                                                    and_exprs,
+                                                    or_expr))) {
+    LOG_WARN("failed to build or expr", K(ret));
+  } else if (OB_FAIL(or_expr->formalize(session_info))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(or_expr->pull_relation_id())) {
+    LOG_WARN("failed to pull relation id and levels", K(ret));
+  } else {
+    temp_table_filter = or_expr;
+  }
   return ret;
 }
 

@@ -182,8 +182,7 @@ namespace sql
     virtual int optimize(ObDMLStmt &stmt, ObLogPlan *&plan);
     virtual int get_optimization_cost(ObDMLStmt &stmt,
                                       ObLogPlan *&plan,
-                                      double &cost,
-                                      ObDMLStmt::TempTableInfo *current_temp_table_);
+                                      double &cost);
     virtual int get_cte_optimization_cost(ObDMLStmt &root_stmt,
                                           ObSelectStmt *cte_query,
                                           ObIArray<ObSelectStmt *> &stmts,
@@ -223,13 +222,6 @@ namespace sql
     int check_whether_contain_nested_sql(const ObDMLStmt &stmt);
     int check_force_default_stat();
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
-
-    int try_push_down_temp_table_filter(ObSqlTempTableInfo &temp_table_info,
-                                        ObRawExpr *&temp_table_filter,
-                                        ObRawExpr *&where_filter,
-                                        ObSelectStmt *temp_table_query = NULL);
-    int push_down_temp_table_filter(ObSqlTempTableInfo &temp_table_info,
-                                    ObRawExpr *&temp_table_filter);
 
   private:
     ObOptimizerContext &ctx_;

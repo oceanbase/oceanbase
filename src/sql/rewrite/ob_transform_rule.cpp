@@ -412,7 +412,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
           //optctx.set_only_ds_basic_stat(true);
           ObOptimizer optimizer(optctx);
           ObLogPlan *plan = NULL;
-          if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost, current_temp_table_))) {
+          if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost))) {
             LOG_WARN("failed to get optimization cost", K(ret));
           } else if (NULL == check_ctx) {
             // do nothing
@@ -435,6 +435,82 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
   return ret;
 }
 
+
+int ObTransformRule::prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_stmt, ObDMLStmt *&root_stmt_with_filter)
+{
+  int ret = OB_SUCCESS;
+  ObSqlTempTableInfo temp_table_info;
+  ObRawExpr *temp_table_filter = NULL;
+  ObSelectStmt *sel_root_stmt = static_cast<ObSelectStmt *>(&root_stmt);
+  bool have_temp_table_filter = false;
+  if (NULL == current_temp_table_) {
+    root_stmt_with_filter = &root_stmt;
+  } else if (OB_UNLIKELY(!root_stmt.is_select_stmt()) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
+            OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(root_stmt));
+  } else if (OB_FAIL(ObSqlTempTableInfo::collect_specified_temp_table(*ctx_->allocator_,
+                                                                       current_temp_table_->temp_table_query_,
+                                                                       current_temp_table_->upper_stmts_,
+                                                                       current_temp_table_->table_items_,
+                                                                       temp_table_info,
+                                                                       have_temp_table_filter))) {
+    LOG_WARN("failed to collect_specified_temp_table", K(ret));
+  } else if (have_temp_table_filter) {
+    TableItem *new_table_item = NULL;
+    ObSEArray<ObRawExpr *, 8> column_exprs;
+    root_stmt_with_filter = NULL;
+    ObSelectStmt *sel_stmt_with_filter = NULL;
+    if (OB_FAIL(ctx_->stmt_factory_->create_stmt(sel_stmt_with_filter))) {
+      LOG_WARN("failed to create stmt", K(ret));
+    } else if (OB_ISNULL(sel_stmt_with_filter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FALSE_IT(sel_stmt_with_filter->set_query_ctx(sel_root_stmt->get_query_ctx()))) {
+    } else if (OB_FAIL(sel_stmt_with_filter->adjust_statement_id(ctx_->allocator_,
+                                                                 ctx_->src_qb_name_,
+                                                                 ctx_->src_hash_val_))) {
+      LOG_WARN("failed to adjust statement id", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, sel_stmt_with_filter, sel_root_stmt, new_table_item))) {
+      LOG_WARN("failed to add new table item", K(ret));
+    } else if (OB_ISNULL(new_table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(sel_stmt_with_filter->add_from_item(new_table_item->table_id_, false))) {
+      LOG_WARN("failed to add from item", K(ret));
+    } else if (OB_FAIL(sel_stmt_with_filter->rebuild_tables_hash())) {
+      LOG_WARN("failed to rebuid table hash", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
+                                                          *new_table_item,
+                                                          sel_stmt_with_filter,
+                                                          column_exprs))) {
+      LOG_WARN("failed to create column items", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+                                                            column_exprs,
+                                                            sel_stmt_with_filter))) {
+      LOG_WARN("failed to create select item", K(ret));
+    } else if (OB_FAIL(sel_stmt_with_filter->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::push_down_temp_table_filter(*ctx_->expr_factory_,
+                                                                    ctx_->session_info_,
+                                                                    temp_table_info,
+                                                                    temp_table_filter,
+                                                                    sel_stmt_with_filter))) {
+      LOG_WARN("failed to push down filter for temp table", K(ret));
+    } else if (OB_ISNULL(temp_table_filter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("filter is null", K(temp_table_info));
+    } else if (OB_FAIL(sel_stmt_with_filter->add_condition_expr(temp_table_filter))) {
+      LOG_WARN("failed to add condition expr", K(ret));
+    } else {
+      root_stmt_with_filter = sel_stmt_with_filter;
+    }
+  } else {
+    root_stmt_with_filter = &root_stmt;
+  }
+  return ret;
+}
+
 int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                             ObDMLStmt &stmt,
                                             ObDMLStmt *&copied_stmt,
@@ -444,6 +520,7 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   ObSEArray<ObSelectStmt*, 2> old_temp_table_stmts;
   ObSEArray<ObSelectStmt*, 2> new_temp_table_stmts;
   ObDMLStmt *root_stmt = NULL;
+  ObDMLStmt *root_stmt_with_filter = NULL;
   ObDMLStmt *copied_trans_stmt = NULL;
   ObString cur_qb_name;
   ObDMLStmt *orig_stmt = NULL;
@@ -453,8 +530,10 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
     LOG_WARN("params are invalid", K(ret), K(ctx_), K(stmt.get_query_ctx()));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, &stmt, orig_stmt, root_stmt))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
+  } else if (OB_FAIL(prepare_root_stmt_with_temp_table_filter(*root_stmt, root_stmt_with_filter))) {
+    LOG_WARN("failed to prepare root stmt with temp table filter", K(ret));
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
-                                                      root_stmt, copied_stmt))) {
+                                                      root_stmt_with_filter, copied_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
   } else if (OB_FAIL(deep_copy_temp_table(*copied_stmt,
                                           *ctx_->stmt_factory_,

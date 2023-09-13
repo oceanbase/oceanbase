@@ -1497,6 +1497,16 @@ public:
 
   static bool find_superset(const ObRelIds &rel_ids,
                            const ObIArray<ObRelIds> &single_table_ids);
+
+  static int try_push_down_temp_table_filter(ObOptimizerContext &opt_ctx,
+                                             ObSqlTempTableInfo &temp_table_info,
+                                             ObRawExpr *&temp_table_filter,
+                                             ObRawExpr *&where_filter);
+  static int push_down_temp_table_filter(ObRawExprFactory &expr_factory,
+                                         ObSQLSessionInfo *session_info,
+                                         ObSqlTempTableInfo &temp_table_info,
+                                         ObRawExpr *&temp_table_filter,
+                                         ObSelectStmt *temp_table_query = NULL);
 private:
   //disallow construct
   ObOptimizerUtil();

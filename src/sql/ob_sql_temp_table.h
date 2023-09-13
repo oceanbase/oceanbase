@@ -110,7 +110,8 @@ public:
                                           ObSelectStmt *specified_query,
                                           const ObIArray<ObDMLStmt *> &upper_stmts,
                                           const ObIArray<TableItem *> &table_items,
-                                          ObSqlTempTableInfo &temp_table_info);
+                                          ObSqlTempTableInfo &temp_table_info,
+                                          bool &all_has_filter);
   static int collect_temp_table_filters(ObDMLStmt *stmt,
                                         TableItem *table,
                                         ObIArray<ObRawExpr*> &table_filters,
