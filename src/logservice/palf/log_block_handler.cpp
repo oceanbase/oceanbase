@@ -21,7 +21,7 @@
 #include "share/ob_errno.h"                             // errno
 #include "share/rc/ob_tenant_base.h"                    // mtl_malloc
 #include "log_writer_utils.h"                           // LogWriteBuf
-#include "log_io_uitls.h"                               // close_with_ret
+#include "log_io_utils.h"                               // close_with_ret
 namespace oceanbase
 {
 using namespace common;

@@ -69,7 +69,7 @@ int remove_directory_rec(const char *path, ILogBlockPool *log_block_pool)
   DIR *dir = NULL;
   struct dirent *entry = NULL;
   if (NULL == (dir = opendir(path))) {
-    ret = OB_ERR_SYS;
+    ret = convert_sys_errno();
     PALF_LOG(WARN, "opendir failed", K(path));
   } else {
     char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};

@@ -24,6 +24,8 @@ int openat_with_retry(const int dir_fd,
                       int &fd);
 int close_with_ret(const int fd);
 
+int rename_with_retry(const char *src_name, const char *dest_name);
+
 } // end namespace palf
 } // end namespace oceanbase
 #endif

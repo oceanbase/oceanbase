@@ -21,7 +21,7 @@
 #include "share/ob_errno.h"                             // OB_NO_SUCH_FILE_OR_DIRECTORY
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "lsn.h"                                        // LSN
-#include "log_io_uitls.h"                               // openat_with_retry
+#include "log_io_utils.h"                               // openat_with_retry
 
 namespace oceanbase
 {

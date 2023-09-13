@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "log_io_uitls.h"
+#include "log_io_utils.h"
 #include "log_define.h"
 namespace oceanbase
 {
@@ -51,6 +51,25 @@ int close_with_ret(const int fd)
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "close block failed", K(ret), K(errno), K(fd));
   } else {
+  }
+  return ret;
+}
+
+int rename_with_retry(const char *src_name,
+                      const char *dest_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_name) || OB_ISNULL(dest_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KP(src_name), KP(dest_name));
+  } else {
+    do {
+      if (-1 == ::rename(src_name, dest_name)) {
+        ret  = convert_sys_errno();
+        PALF_LOG(WARN, "rename file failed", KR(ret), K(src_name), K(dest_name));
+        ob_usleep(RETRY_INTERVAL);
+      }
+    } while(OB_ALLOCATE_DISK_SPACE_FAILED == ret);
   }
   return ret;
 }

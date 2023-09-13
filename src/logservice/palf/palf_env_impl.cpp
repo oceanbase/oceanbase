@@ -29,6 +29,7 @@
 #include "log_loop_thread.h"
 #include "log_rpc.h"
 #include "log_block_pool_interface.h"
+#include "log_io_utils.h"
 
 namespace oceanbase
 {
@@ -419,9 +420,8 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id));
-  } else if (OB_FAIL(palf_handle_impl->set_monitor_cb(monitor_))) {
-    PALF_LOG(WARN, "set_monitor_cb failed", K(ret), K(palf_id), KP_(monitor));
   } else {
+    (void) palf_handle_impl->set_monitor_cb(monitor_);
     palf_handle_impl->set_scan_disk_log_finished();
     ipalf_handle_impl = palf_handle_impl;
   }
@@ -548,8 +548,7 @@ int PalfEnvImpl::create_directory(const char *base_dir)
   } else if (-1 == (::mkdir(meta_dir, mode))) {
     ret = convert_sys_errno();
     PALF_LOG(WARN, "mkdir failed", K(ret), K(errno), K(tmp_base_dir), K(base_dir));
-  } else if (-1 == (::rename(tmp_base_dir, base_dir))) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(rename_with_retry(tmp_base_dir, base_dir))) {
     PALF_LOG(ERROR, "rename tmp dir to normal dir failed", K(ret), K(errno), K(tmp_base_dir), K(base_dir));
   } else if (OB_FAIL(FileDirectoryUtils::fsync_dir(log_dir_))) {
     PALF_LOG(ERROR, "fsync_dir failed", K(ret), K(errno), K(tmp_base_dir), K(base_dir));
@@ -557,8 +556,8 @@ int PalfEnvImpl::create_directory(const char *base_dir)
     PALF_LOG(INFO, "prepare_directory_for_creating_ls success", K(ret), K(base_dir));
   }
   if (OB_FAIL(ret)) {
-    remove_directory_rec(tmp_base_dir, log_block_pool_);
-    remove_directory_rec(base_dir, log_block_pool_);
+    remove_directory(tmp_base_dir);
+    remove_directory(base_dir);
   }
   return ret;
 }
@@ -566,8 +565,8 @@ int PalfEnvImpl::create_directory(const char *base_dir)
 // step:
 // 1. rename log directory to tmp directory.
 // 2. delete tmp directory.
-// NB: '%s.tmp' is invalid block or invalid directory, before the restart phash of PalfEnvImpl,
-//     need delete thses tmp block or directory.
+// NB: '%s.tmp' is invalid block or invalid directory, before the restart phase of PalfEnvImpl,
+//     need delete these tmp block or directory.
 int PalfEnvImpl::remove_directory(const char *log_dir)
 {
   int ret = OB_SUCCESS;
@@ -576,16 +575,28 @@ int PalfEnvImpl::remove_directory(const char *log_dir)
   if (0 > (pret = snprintf(tmp_log_dir, MAX_PATH_SIZE, "%s%s", log_dir, TMP_SUFFIX))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprintf failed", K(ret), K(pret), K(log_dir), K(tmp_log_dir));
-  } else if (-1 == ::rename(log_dir, tmp_log_dir)) {
-    ret = convert_sys_errno();
-    PALF_LOG(ERROR, "rename log dir to tmp dir failed", K(ret), K(errno), K(tmp_log_dir), K(log_dir));
-  } else if (OB_FAIL(remove_directory_rec(tmp_log_dir, log_block_pool_))) {
-    PALF_LOG(WARN, "remove_directory_rec failed", K(ret), K(log_dir), K(errno));
-  } else if (OB_FAIL(FileDirectoryUtils::fsync_dir(log_dir_))) {
-    PALF_LOG(ERROR, "fsync_dir failed", K(ret), KPC(this), K(log_dir));
+  } else if (OB_FAIL(rename_with_retry(log_dir, tmp_log_dir))) {
+    PALF_LOG(WARN, "rename log dir to tmp dir failed", K(ret), K(errno), K(tmp_log_dir), K(log_dir));
   } else {
-    PALF_LOG(WARN, "remove success", K(ret), K(log_dir));
+    bool result = true;
+    do {
+      if (OB_FAIL(FileDirectoryUtils::is_exists(tmp_log_dir, result))) {
+        CLOG_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
+      } else if (!result) {
+        CLOG_LOG(WARN, "directory not exists", KPC(this), K(log_dir));
+        break;
+      } else if (OB_FAIL(remove_directory_rec(tmp_log_dir, log_block_pool_))) {
+        PALF_LOG(WARN, "remove_directory_rec failed", K(tmp_log_dir), KP(log_block_pool_));
+      } else {
+      }
+      if (OB_FAIL(ret) && true == result) {
+        PALF_LOG(WARN, "remove directory failed, may be physical disk full", K(ret), KPC(this));
+        usleep(100*1000);
+      }
+    } while (OB_FAIL(ret));
   }
+  (void)FileDirectoryUtils::fsync_dir(log_dir_);
+  PALF_LOG(WARN, "remove_directory finished", KR(ret), K(log_dir), KP(this));
   return ret;
 }
 
@@ -1218,9 +1229,8 @@ int PalfEnvImpl::move_incomplete_palf_into_tmp_dir_(const int64_t palf_id)
   } else if (0 > (pret = snprintf(dest_log_dir, MAX_PATH_SIZE, "%s/%ld_%ld", tmp_log_dir_, palf_id, timestamp))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprintf failed, unexpected error", K(ret));
-  } else if (-1 == ::rename(src_log_dir, dest_log_dir)) {
-    ret = convert_sys_errno();
-    PALF_LOG(ERROR, "::rename failed", K(ret), KPC(this), K(src_log_dir), K(dest_log_dir));
+  } else if (OB_FAIL(rename_with_retry(src_log_dir, dest_log_dir))) {
+    PALF_LOG(ERROR, "rename failed", K(ret), KPC(this), K(src_log_dir), K(dest_log_dir));
   } else if (OB_FAIL(FileDirectoryUtils::fsync_dir(log_dir_))) {
     PALF_LOG(ERROR, "fsync_dir failed", K(ret), KPC(this), K(src_log_dir), K(dest_log_dir));
   } else {
