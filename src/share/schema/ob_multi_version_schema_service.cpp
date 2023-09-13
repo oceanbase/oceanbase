@@ -2375,15 +2375,15 @@ int ObMultiVersionSchemaService::async_refresh_schema(
   bool check_formal = ObSchemaService::is_formal_version(schema_version);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
+    LOG_WARN("inner stat error", KR(ret));
   } else if (OB_INVALID_TENANT_ID == tenant_id
              || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(schema_version));
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version));
   } else if (OB_FAIL(get_tenant_refreshed_schema_version(
                      tenant_id, local_schema_version))) {
     LOG_WARN("fail to get tenant refreshed schema version",
-             K(ret), K(tenant_id), K(schema_version));
+             KR(ret), K(tenant_id), K(schema_version));
   } else if (local_schema_version >= schema_version
              && (!check_formal || ObSchemaService::is_formal_version(local_schema_version))) {
     // do nothing
@@ -2396,23 +2396,30 @@ int ObMultiVersionSchemaService::async_refresh_schema(
       if (THIS_WORKER.is_timeout()
           || (INT64_MAX == THIS_WORKER.get_timeout_ts() && retry_cnt >= MAX_RETRY_CNT)) {
         ret = OB_TIMEOUT;
-        LOG_WARN("already timeout", K(ret), K(tenant_id), K(schema_version));
+        LOG_WARN("already timeout", KR(ret), K(tenant_id), K(schema_version));
       } else if (OB_FAIL(get_tenant_refreshed_schema_version(
                          tenant_id, local_schema_version))) {
         LOG_WARN("fail to get tenant refreshed schema version",
-                 K(ret), K(tenant_id), K(schema_version));
+                 KR(ret), K(tenant_id), K(schema_version));
       } else if (local_schema_version >= schema_version
                  && (!check_formal || ObSchemaService::is_formal_version(local_schema_version))) {
         // success
         break;
       } else {
         if (0 == retry_cnt % SUBMIT_TASK_FREQUENCE) {
-          bool is_dropped = false;
-          if (OB_FAIL(check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
-            LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
-          } else if (is_dropped) {
-            ret = OB_TENANT_HAS_BEEN_DROPPED;
-            LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
+          {
+            bool is_dropped = false;
+            ObSchemaGetterGuard guard;
+            if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+              LOG_WARN("fail to get schema guard", KR(ret));
+            } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+              LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+            } else if (is_dropped) {
+              ret = OB_TENANT_HAS_BEEN_DROPPED;
+              LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (OB_ISNULL(GCTX.ob_service_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("observice is null", K(ret));
@@ -2422,7 +2429,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
               ret = OB_SUCCESS;
             } else {
               LOG_WARN("fail to submit async refresh schema task",
-                       K(ret), K(tenant_id), K(schema_version));
+                       KR(ret), K(tenant_id), K(schema_version));
             }
           }
         }
