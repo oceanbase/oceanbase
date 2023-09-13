@@ -243,7 +243,6 @@ private:
   int from_ttl_record(ObTabletID& tablet_id, common::ObTTLStatus& record, bool with_status = true, bool with_err_code = true);
   void mark_ttl_ctx_dirty(ObTTLTenantInfo& tenant_info, ObTTLTaskCtx& ctx);
   void check_ttl_tenant_state();
-  int transform_tenant_state(const common::ObTTLTaskStatus& tenant_status, common::ObTTLTaskStatus& status);
   int try_schedule_prepare_task(ObTabletID& tablet_id);
   void mark_tenant_checked();
   int refresh_tablet_task(ObTTLTaskCtx &ttl_task, bool refresh_status, bool refresh_retcode = false);

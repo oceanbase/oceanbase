@@ -268,6 +268,11 @@ public:
   static int parse(const char* str, ObTTLDutyDuration& duration);
   static bool current_in_duration(ObTTLDutyDuration& duration);
 
+  static int transform_tenant_state(const common::ObTTLTaskStatus& tenant_status, common::ObTTLTaskStatus& status);
+  static int check_tenant_state(uint64_t tenant_id,
+                                common::ObISQLClient& proxy,
+                                const ObTTLTaskStatus local_state,
+                                const int64_t local_task_id);
   static int insert_ttl_task(uint64_t tenant_id,
                              const char* tname,
                              common::ObISQLClient& proxy,
@@ -306,6 +311,7 @@ public:
   static int read_tenant_ttl_task(uint64_t tenant_id,
                                   common::ObISQLClient& proxy,
                                   ObTTLStatus &ttl_record,
+                                  const bool for_update = false,
                                   common::ObIAllocator *allocator = NULL);
 
   static int move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,

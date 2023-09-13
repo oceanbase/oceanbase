@@ -131,6 +131,55 @@ bool ObTTLUtil::current_in_duration(ObTTLDutyDuration& duration)
   return bret;
 }
 
+int ObTTLUtil::transform_tenant_state(const common::ObTTLTaskStatus& tenant_status,
+                                      common::ObTTLTaskStatus& status)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_status == OB_RS_TTL_TASK_CREATE) {
+    status = OB_TTL_TASK_RUNNING;
+  } else if (tenant_status == OB_RS_TTL_TASK_SUSPEND) {
+    status = OB_TTL_TASK_PENDING;
+  } else if (tenant_status == OB_RS_TTL_TASK_CANCEL) {
+    status = OB_TTL_TASK_CANCEL;
+  } else if (tenant_status == OB_RS_TTL_TASK_MOVE) {
+    status = OB_TTL_TASK_MOVING;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(tenant_status), K(status));
+  }
+  return ret;
+}
+
+int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
+                                  common::ObISQLClient& proxy,
+                                  const ObTTLTaskStatus local_state,
+                                  const int64_t local_task_id)
+{
+  int ret = OB_SUCCESS;
+
+  ObTTLStatus tenant_task;
+  ObTTLTaskStatus tenant_state;
+  if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id, proxy, tenant_task, true))) {
+    if (OB_ITER_END == ret) {
+      // tenant task maybe remove
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lock tenant task for update failed, tenant task maybe removed", K(ret), K(tenant_id), K(local_state));
+    } else {
+      LOG_WARN("failed to lock tenant task for update", KR(ret), K(tenant_id), K(local_state));
+    }
+  } else if (local_task_id != tenant_task.task_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant task id is different from local task id", KR(ret), K(local_task_id), K(tenant_task.task_id_));
+  } else if (OB_FAIL(transform_tenant_state(static_cast<ObTTLTaskStatus>(tenant_task.status_), tenant_state))) {
+    LOG_WARN("fail to transform ttl tenant task status", KR(ret), K(tenant_task.status_));
+  } else if (tenant_state != local_state) {
+    ret = OB_EAGAIN;
+    FLOG_INFO("state of tenant task is different from local task state", K(ret), K(tenant_id), K(tenant_task.task_id_ ), K(local_state));
+  }
+
+  return ret;
+}
+
 int ObTTLUtil::insert_ttl_task(uint64_t tenant_id,
                                const char* tname,
                                common::ObISQLClient& proxy,
@@ -423,6 +472,7 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
 int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
                                     common::ObISQLClient& sql_client,
                                     ObTTLStatus& ttl_record,
+                                    const bool for_update,
                                     ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -430,7 +480,7 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s where table_id = '%ld'", OB_ALL_KV_TTL_TASK_TNAME, TTL_TENNAT_TASK_TABLE_ID))) {
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE table_id = '%ld'%s", OB_ALL_KV_TTL_TASK_TNAME, TTL_TENNAT_TASK_TABLE_ID, for_update ? " FOR UPDATE" : ""))) {
     LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {

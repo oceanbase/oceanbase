@@ -204,7 +204,7 @@ int ObTTLTaskScheduler::calc_next_task_state(ObTTLTaskType user_cmd_type,
     next_state = ObTTLTaskStatus::OB_RS_TTL_TASK_CANCEL;
   } else {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("fail to modify ttl tasks status, the state is not mismatch",
+    LOG_WARN("fail to modify ttl tasks status, the state is mismatch. Maybe previous tasks is running",
       KR(ret), K(curr_state), K(user_cmd_type));
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Change the current TTL task state to the destination state");
   }

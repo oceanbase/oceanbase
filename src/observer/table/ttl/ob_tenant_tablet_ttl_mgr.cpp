@@ -338,25 +338,6 @@ int ObTenantTabletTTLMgr::check_cmd_state_valid(const common::ObTTLTaskStatus cu
   return ret;
 }
 
-int ObTenantTabletTTLMgr::transform_tenant_state(const common::ObTTLTaskStatus& tenant_status,
-                                                 common::ObTTLTaskStatus& status)
-{
-  int ret = OB_SUCCESS;
-  if (tenant_status == OB_RS_TTL_TASK_CREATE) {
-    status = OB_TTL_TASK_RUNNING;
-  } else if (tenant_status == OB_RS_TTL_TASK_SUSPEND) {
-    status = OB_TTL_TASK_PENDING;
-  } else if (tenant_status == OB_RS_TTL_TASK_CANCEL) {
-    status = OB_TTL_TASK_CANCEL;
-  } else if (tenant_status == OB_RS_TTL_TASK_MOVE) {
-    status = OB_TTL_TASK_MOVING;
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid type", K(tenant_status), K(status));
-  }
-  return ret;
-}
-
 void ObTenantTabletTTLMgr::mark_tenant_need_check()
 {
   int ret = OB_SUCCESS;
@@ -974,13 +955,10 @@ int ObTenantTabletTTLMgr::sync_sys_table(ObTabletID& tablet_id)
         bool commit = false;
         int tmp_ret = OB_SUCCESS;
         bool is_exists = false;
-        if (OB_FAIL(construct_task_record_filter(ctx->task_info_.task_id_,
-                                                 ctx->task_info_.table_id_,
-                                                 ctx->task_info_.tablet_id_,
-                                                 filters))) {
-          LOG_WARN("fail to construct task record filter", KR(ret));
-        } else if (OB_FAIL(trans.start(get_sql_proxy(), gen_meta_tenant_id(tenant_id_)))) {
+        if (OB_FAIL(trans.start(get_sql_proxy(), gen_meta_tenant_id(tenant_id_)))) {
           LOG_WARN("fail to start transation", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(ObTTLUtil::check_tenant_state(tenant_id_, trans, local_tenant_task_.state_, local_tenant_task_.task_id_))) {
+          FLOG_INFO("local tenant task state is different from sys table", KR(ret), K_(tenant_id), K(local_tenant_task_.state_));
         } else if (OB_FAIL(ObTTLUtil::check_ttl_task_exists(tenant_id_, trans, ctx->task_info_.task_id_,
                     ctx->task_info_.table_id_, ctx->task_info_.tablet_id_, is_exists))) {
           LOG_WARN("fail to check ttl task exist");
@@ -1019,13 +997,10 @@ int ObTenantTabletTTLMgr::sync_sys_table(ObTabletID& tablet_id)
         bool commit = false;
         int tmp_ret = OB_SUCCESS;
         bool is_exists = false;
-        if (OB_FAIL(construct_task_record_filter(ctx->task_info_.task_id_,
-                                                 ctx->task_info_.table_id_,
-                                                 ctx->task_info_.tablet_id_,
-                                                 filters))) {
-          LOG_WARN("fail to construct task record filter", KR(ret));
-        } else if (OB_FAIL(trans.start(get_sql_proxy(), gen_meta_tenant_id(tenant_id_)))) {
+        if (OB_FAIL(trans.start(get_sql_proxy(), gen_meta_tenant_id(tenant_id_)))) {
           LOG_WARN("fail to start transation", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(ObTTLUtil::check_tenant_state(tenant_id_, trans, local_tenant_task_.state_, local_tenant_task_.task_id_))) {
+          FLOG_INFO("local tenant task state is different from sys table", KR(ret), K_(tenant_id), K(local_tenant_task_.state_));
         } else if (OB_FAIL(ObTTLUtil::check_ttl_task_exists(tenant_id_, trans, ctx->task_info_.task_id_,
                     ctx->task_info_.table_id_, ctx->task_info_.tablet_id_, is_exists))) {
           LOG_WARN("fail to check ttl task exist");
@@ -1333,8 +1308,10 @@ int ObTenantTabletTTLMgr::reload_tenant_task()
       KR(ret), K_(local_tenant_task), K(tenant_task.task_id_));
       local_tenant_task_.reuse();
   } else if (OB_RS_TTL_TASK_MOVE == static_cast<ObTTLTaskStatus>(tenant_task.status_)) {
-    // do nothing, wait tenant ttl manager finish move
-  } else if (OB_FAIL(transform_tenant_state(static_cast<ObTTLTaskStatus>(tenant_task.status_), expected_state))) {
+    FLOG_INFO("tenant task is moving now, tablet ttl task should not continue",
+      KR(ret), K_(local_tenant_task), K(tenant_task.task_id_));
+    local_tenant_task_.reuse();
+  } else if (OB_FAIL(ObTTLUtil::transform_tenant_state(static_cast<ObTTLTaskStatus>(tenant_task.status_), expected_state))) {
     LOG_WARN("fail to transform ttl tenant task status", KR(ret), K(tenant_task.status_));
   } else if (OB_FAIL(check_cmd_state_valid(local_tenant_task_.state_, expected_state))) {
     LOG_WARN("ttl cmd state machine is wrong", KR(ret), K_(tenant_id), K(tenant_task), K(expected_state));
