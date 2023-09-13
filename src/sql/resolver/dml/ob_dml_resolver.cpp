@@ -6509,6 +6509,10 @@ int ObDMLResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &ord
     SQL_RESV_LOG(WARN, "index order item not support in update");
   } else if (OB_FAIL(resolve_sql_expr(*(sort_node.children_[0]), expr))) {
     SQL_RESV_LOG(WARN, "resolve sql expression failed", K(ret));
+  } else if (expr->has_flag(CNT_ASSIGN_EXPR)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Not supported variable assignment in order by item", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable assignment in order by item");
   } else {
     order_item.expr_ = expr;
   }

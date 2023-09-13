@@ -1766,6 +1766,11 @@ int ObSelectResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &
       LOG_WARN("ORDER BY item must be the number of a SELECT-list expression", K(ret));
     }
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(order_item.expr_) && order_item.expr_->has_flag(CNT_ASSIGN_EXPR)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Not supported variable assignment in order by item", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable assignment in order by item");
+  }
   return ret;
 }
 
