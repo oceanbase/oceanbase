@@ -3544,7 +3544,9 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           LOG_WARN("fail to get key", K(ret), K(i));
         } else if (is_pretty && OB_FAIL(ObJsonBaseUtil::append_newline_and_indent(j_buf, depth))) {
           LOG_WARN("fail to newline and indent", K(ret), K(depth), K(i), K(key));
-        } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, true, key.ptr(), key.length()))) { // key
+        } else if (key.empty() && OB_FAIL(ObJsonBaseUtil::append_string(j_buf, false, "\"\"", 2))) {
+          LOG_WARN("fail to newline and indent", K(ret), K(depth), K(i), K(key));
+        } else if (!key.empty() && OB_FAIL(ObJsonBaseUtil::append_string(j_buf, true, key.ptr(), key.length()))) { // key
           LOG_WARN("fail to print string", K(ret), K(depth), K(i), K(key));
         } else if (OB_FAIL(j_buf.append(":"))) {
           LOG_WARN("fail to append \":\"", K(ret), K(depth), K(i), K(key));
