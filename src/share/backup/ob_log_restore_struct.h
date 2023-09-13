@@ -84,7 +84,7 @@ struct ObRestoreSourceServiceAttr final
   int check_restore_source_is_self_(bool &is_self, uint64_t tenant_id) const;
   bool operator ==(const ObRestoreSourceServiceAttr &other) const;
   int assign(const ObRestoreSourceServiceAttr &attr);
-  TO_STRING_KV(K_(addr), K_(user), K_(encrypt_passwd));
+  TO_STRING_KV(K_(addr), K_(user));
   common::ObArray<common::ObAddr> addr_;
   ObRestoreSourceServiceUser user_;
   char encrypt_passwd_[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH];

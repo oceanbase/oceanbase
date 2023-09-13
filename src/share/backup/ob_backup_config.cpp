@@ -189,7 +189,6 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
       } else if (0 == STRCASECMP(tmp_token, OB_STR_SERVICE)) {
         is_service = true;
       }
-      LOG_INFO("log restore source parse token", K(tmp_token), K(str), K(token));
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("fail to parse value", K(value));
