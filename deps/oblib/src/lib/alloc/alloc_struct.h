@@ -619,6 +619,8 @@ extern bool is_ob_mem_mgr_path();
 #define FORCE_EXPLICT_500_MALLOC() \
   OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_explict_500_malloc_)
 
+#define FORCE_MALLOC_FOR_ABSENT_TENANT() \
+  OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_malloc_for_absent_tenant_)
 } // end of namespace lib
 } // end of namespace oceanbase
 

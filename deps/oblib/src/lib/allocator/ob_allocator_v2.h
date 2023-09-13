@@ -67,9 +67,7 @@ private:
   void reset() override { os_.reset(); }
 private:
   __MemoryContext__ *mem_context_;
-  bool do_not_use_me_;
   ObMemAttr attr_;
-  ObMemAttr nattr_;
   const bool use_pm_;
   void *pm_;
   lib::ISetLocker *locker_;
@@ -123,7 +121,6 @@ public:
 inline ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr, const bool use_pm,
                                 const uint32_t ablock_size)
   : mem_context_(mem_context),
-    do_not_use_me_(false),
     attr_(attr),
     use_pm_(use_pm),
     pm_(nullptr),
@@ -134,16 +131,6 @@ inline ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr 
     nos_(mem_context_, ablock_size),
     is_inited_(false)
 {
-  nattr_ = attr_;
-  do_not_use_me_ = false;
-  if (FORCE_EXPLICT_500_MALLOC()) {
-    do_not_use_me_ = OB_SERVER_TENANT_ID == attr.tenant_id_ && !attr.use_500() &&
-      ob_thread_tenant_id() != OB_SERVER_TENANT_ID;
-    if (do_not_use_me_) {
-      nattr_.tenant_id_ = ob_thread_tenant_id();
-      nattr_.ctx_id_ = ObCtxIds::DO_NOT_USE_ME;
-    }
-  }
 }
 
 inline int ObAllocator::init()
@@ -165,13 +152,12 @@ inline int ObAllocator::init()
     blk_mgr_.set_tenant_id(attr_.tenant_id_);
     blk_mgr_.set_ctx_id(attr_.ctx_id_);
     blk_mgr = &blk_mgr_;
-    if (do_not_use_me_) {
-      nblk_mgr_.set_tenant_id(nattr_.tenant_id_);
-      nblk_mgr_.set_ctx_id(nattr_.ctx_id_);
-      nblk_mgr = &nblk_mgr_;
-    }
   }
+
   if (OB_SUCC(ret)) {
+    nblk_mgr_.set_tenant_id(OB_SERVER_TENANT_ID);
+    nblk_mgr_.set_ctx_id(attr_.ctx_id_);
+    nblk_mgr = &nblk_mgr_;
     os_.set_block_mgr(blk_mgr);
     os_.set_locker(locker_);
     nos_.set_block_mgr(nblk_mgr);

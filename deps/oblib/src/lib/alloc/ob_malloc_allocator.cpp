@@ -153,6 +153,15 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
         ptr = allocator->alloc(size, inner_attr);
       }
     }
+  } else if (OB_ENTRY_NOT_EXIST == ret && FORCE_MALLOC_FOR_ABSENT_TENANT()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("force malloc when tenant allocator does not exist");
+    inner_attr.tenant_id_ = OB_SERVER_TENANT_ID;
+    allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
+    if (OB_ISNULL(allocator)) {
+    } else {
+      ptr = allocator->alloc(size, inner_attr);
+    }
   }
 
   return ptr;

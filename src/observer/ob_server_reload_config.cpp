@@ -318,6 +318,10 @@ int ObServerReloadConfig::operator()()
   {
     common::g_enable_backtrace = GCONF._enable_backtrace_function;
   }
+
+  {
+    ObMallocAllocator::get_instance()->force_malloc_for_absent_tenant_ = GCONF._force_malloc_for_absent_tenant;
+  }
   return real_ret;
 }
 

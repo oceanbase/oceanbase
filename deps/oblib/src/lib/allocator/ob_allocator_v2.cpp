@@ -30,26 +30,20 @@ void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
     ret = init();
   }
   if (OB_SUCC(ret)) {
-    if (do_not_use_me_) {
-      ObMemAttr inner_attr = nattr_;
-      if (attr.label_.is_valid()) {
-        inner_attr.label_ = attr.label_;
-      }
-      auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
-                                                                                 inner_attr.ctx_id_);
-      if (ta != NULL) {
-        ptr = ObTenantCtxAllocator::common_alloc(size, inner_attr, *(ta.ref_allocator()), nos_);
-      }
+    ObMemAttr inner_attr = attr_;
+    if (attr.label_.is_valid()) {
+      inner_attr.label_ = attr.label_;
     }
-    if (OB_LIKELY(!ptr)) {
-      ObMemAttr inner_attr = attr_;
-      if (attr.label_.is_valid()) {
-        inner_attr.label_ = attr.label_;
-      }
-      auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
-                                                                                 inner_attr.ctx_id_);
-      if (ta != NULL) {
-        ptr = ObTenantCtxAllocator::common_alloc(size, inner_attr, *(ta.ref_allocator()), os_);
+    auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
+                                                                                inner_attr.ctx_id_);
+    if (OB_LIKELY(NULL != ta)) {
+      ptr = ObTenantCtxAllocator::common_alloc(size, inner_attr, *(ta.ref_allocator()), os_);
+    } else if (FORCE_MALLOC_FOR_ABSENT_TENANT()) {
+      inner_attr.tenant_id_ = OB_SERVER_TENANT_ID;
+      ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(inner_attr.tenant_id_,
+                                                                            inner_attr.ctx_id_);
+      if (NULL != ta) {
+        ptr = ObTenantCtxAllocator::common_alloc(size, inner_attr, *(ta.ref_allocator()), nos_);
       }
     }
   }
