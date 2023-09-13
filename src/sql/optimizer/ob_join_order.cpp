@@ -2407,8 +2407,6 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
       OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(ret));
-  } else if (!session_info->is_index_skip_scan_enabled()) {
-    use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (is_virtual_table(ref_id)) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
@@ -2428,6 +2426,8 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
   } else if (hint_force_skip_scan) {
     use_skip_scan = OptSkipScanState::SS_HINT_ENABLE;
   } else if (hint_force_no_skip_scan) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
+  } else if (!session_info->is_index_skip_scan_enabled()) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
