@@ -114,13 +114,9 @@ int ObExprResultTypeUtil::get_merge_result_type(ObExprResType &res_type,
   int ret = OB_SUCCESS;
   ObObjType type1 = res_type1.get_type();
   ObObjType type2 = res_type2.get_type();
-  if (OB_UNLIKELY(type1 >= ObMaxType || type2 >= ObMaxType)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("the wrong type", K(type1),K(type2),K(ret));
-  } else {
-    res_type.set_type(MERGE_RESULT_TYPE[type1][type2]);
-  }
-
+  ObObjType type = ObMaxType;
+  ret = get_merge_result_type(type, type1, type2);
+  res_type.set_type(type);
   return ret;
 }
 
@@ -133,7 +129,11 @@ int ObExprResultTypeUtil::get_merge_result_type(ObObjType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("the wrong type", K(type1),K(type2),K(ret));
   } else {
-    type = MERGE_RESULT_TYPE[type1][type2];
+    if (is_oracle_mode()) {
+      type = MERGE_RESULT_TYPE_ORACLE[type1][type2];
+    } else {
+      type = MERGE_RESULT_TYPE[type1][type2];
+    }
   }
 
   return ret;
