@@ -14007,7 +14007,8 @@ int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
   ObSEArray<ObRelIds, 8> connect_infos;
   ObSEArray<ObRelIds, 8> single_table_ids;
   ObRelIds table_ids;
-  if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator_,
+  ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator,
                                                  quals,
                                                  all_equal_sets))) {
     LOG_WARN("failed to compute equal set", K(ret));

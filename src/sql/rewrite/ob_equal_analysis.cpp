@@ -20,7 +20,7 @@ using namespace common;
 namespace sql
 {
 ObEqualAnalysis::ObEqualAnalysis()
-    : equal_set_alloc_(ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS),
+    : equal_set_alloc_(ObMemAttr(MTL_ID(), ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS)),
       column_set_(),
       equal_sets_()
 {
