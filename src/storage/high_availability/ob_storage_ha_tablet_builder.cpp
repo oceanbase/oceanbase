@@ -346,7 +346,7 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
 
       const ObTabletID tablet_id = tablet_info.tablet_id_;
       if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
-        if (OB_TABLET_NOT_EXIST) {
+        if (OB_TABLET_NOT_EXIST == ret) {
           LOG_INFO("tablet is not exist", K(tablet_id));
           ret = OB_SUCCESS;
           continue;

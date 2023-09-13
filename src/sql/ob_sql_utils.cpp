@@ -1085,6 +1085,16 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
                                              const stmt::StmtType stmt_type,
                                              const bool is_index_table)
 {
+  return check_and_convert_table_name(cs_type, preserve_lettercase, name, lib::is_oracle_mode(), stmt_type, is_index_table);
+}
+
+int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
+                                             const bool preserve_lettercase,
+                                             ObString &name,
+                                             const bool is_oracle_mode,
+                                             const stmt::StmtType stmt_type,
+                                             const bool is_index_table)
+{
   /**
    * MYSQL模式
    *  如果table name的字节数大于192则报错OB_WRONG_TABLE_NAME;
@@ -1101,7 +1111,7 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
   int ret = OB_SUCCESS;
   int64_t name_len = name.length();
   const char *name_str = name.ptr();
-  const int64_t max_user_table_name_length = lib::is_oracle_mode()
+  const int64_t max_user_table_name_length = is_oracle_mode
               ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
   const int64_t max_index_name_prefix_len = 30;
   if (0 == name_len

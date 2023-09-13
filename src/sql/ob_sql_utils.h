@@ -327,6 +327,12 @@ public:
   static int check_and_convert_table_name(const common::ObCollationType cs_type,
                                           const bool preserve_lettercase,
                                           common::ObString &name,
+                                          const bool is_oracle_mode,
+                                          const stmt::StmtType stmt_type = stmt::T_NONE,
+                                          const bool is_index_table = false);
+  static int check_and_convert_table_name(const common::ObCollationType cs_type,
+                                          const bool preserve_lettercase,
+                                          common::ObString &name,
                                           const stmt::StmtType stmt_type = stmt::T_NONE,
                                           const bool is_index_table = false);
   static int check_index_name(const common::ObCollationType cs_type, common::ObString &name);

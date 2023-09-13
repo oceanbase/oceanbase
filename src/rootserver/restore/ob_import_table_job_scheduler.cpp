@@ -347,7 +347,8 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
       if (task.get_status().is_finish()) {
       } else if (OB_FAIL(check_import_ddl_task_exist_(task, is_exist))) {
         LOG_WARN("failed to check import ddl task", K(ret));
-      } else if (!is_exist) {
+      } else if (is_exist && OB_FAIL(ObDDLServerClient::abort_redef_table(arg))) {
+        LOG_WARN("failed to abort redef table", K(ret), K(arg));
       } else {
         LOG_INFO("[IMPORT_TABLE]cancel import table task", K(arg));
         share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
@@ -355,8 +356,6 @@ int ObImportTableJobScheduler::canceling_(share::ObImportTableJob &job)
         if (OB_FAIL(result.set_result(OB_CANCELED, trace_id, GCONF.self_addr_))) {
           LOG_WARN("failed to set result", K(ret));
         } else if (OB_FALSE_IT(task.set_result(result))) {
-        } else if (OB_FAIL(ObDDLServerClient::abort_redef_table(arg))) {
-          LOG_WARN("failed to abort redef table", K(ret), K(arg));
         } else if (OB_FAIL(task_helper_.advance_status(*sql_proxy_, task, next_status))) {
           LOG_WARN("failed to cancel import task", K(ret), K(task));
         } else {

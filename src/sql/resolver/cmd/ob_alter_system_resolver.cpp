@@ -5212,6 +5212,7 @@ int ObRecoverTableResolver::resolve_remap_tables_(
     share::ObRemapTableItem remap_table_item;
     ObCollationType cs_type = CS_TYPE_INVALID;
     bool perserve_lettercase = Worker::CompatMode::ORACLE == compat_mode ? true : (case_mode != OB_LOWERCASE_AND_INSENSITIVE);
+    bool is_oracle_mode = Worker::CompatMode::ORACLE == compat_mode;
     // No matter what name case mode is of target tenant, the names of remap tables are case sensitive.
     const ObNameCaseMode sensitive_case_mode = OB_ORIGIN_AND_SENSITIVE;
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
@@ -5249,11 +5250,11 @@ int ObRecoverTableResolver::resolve_remap_tables_(
 
         if (!src_db_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, src_db_name))) {
           LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(src_db_name));
-        } else if (!src_tb_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, src_tb_name))) {
+        } else if (!src_tb_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, src_tb_name, is_oracle_mode))) {
           LOG_WARN("failed to check and convert table name", K(ret), K(cs_type), K(perserve_lettercase), K(src_tb_name));
         } else if (!dst_db_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, dst_db_name))) {
           LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(dst_db_name));
-        } else if (!dst_tb_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, dst_tb_name))) {
+        } else if (!dst_tb_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, dst_tb_name, is_oracle_mode))) {
           LOG_WARN("failed to check and convert table name", K(ret), K(cs_type), K(perserve_lettercase), K(dst_tb_name));
         } else if (!src_pt_name.empty() && src_pt_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
           ret = OB_ERR_WRONG_VALUE;
@@ -5367,6 +5368,7 @@ int ObRecoverTableResolver::resolve_recover_tables_(
   int ret = OB_SUCCESS;
   ObCollationType cs_type = CS_TYPE_INVALID;
   bool perserve_lettercase = Worker::CompatMode::ORACLE == compat_mode ? true : (case_mode != OB_LOWERCASE_AND_INSENSITIVE);
+  bool is_oracle_mode = Worker::CompatMode::ORACLE == compat_mode;
   // No matter what name case mode is of target tenant, the names of recover tables are case sensitive.
     const ObNameCaseMode sensitive_case_mode = OB_ORIGIN_AND_SENSITIVE;
   if (OB_ISNULL(node)) {
@@ -5404,7 +5406,7 @@ int ObRecoverTableResolver::resolve_recover_tables_(
       } else if (OB_NOT_NULL(db_node) && OB_NOT_NULL(tb_node) && OB_ISNULL(pt_node)) {
         // db_name.tb_name recover tb_name of db_name
         ObString db_name(db_node->str_len_, db_node->str_value_), tb_name(tb_node->str_len_, tb_node->str_value_);
-        if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, tb_name))) {
+        if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, tb_name, is_oracle_mode))) {
           LOG_WARN("failed to check and convert table name", K(ret), K(cs_type), K(perserve_lettercase), K(tb_name));
         } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, db_name))) {
           LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(db_name));
