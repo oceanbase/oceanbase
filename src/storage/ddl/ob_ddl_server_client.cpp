@@ -43,7 +43,7 @@ int ObDDLServerClient::execute_recover_restore_table(const obrpc::ObRecoverResto
     LOG_WARN("common rpc proxy is null", K(ret));
   } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
     LOG_WARN("fail to rootservice address", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).recover_restore_table_ddl(arg))) {
+  } else if (OB_FAIL(common_rpc_proxy->to(rs_leader_addr).timeout(GCONF._ob_ddl_timeout).recover_restore_table_ddl(arg))) {
     LOG_WARN("fail to create not major sstable table", K(ret), K(arg));
   }
   return ret;
