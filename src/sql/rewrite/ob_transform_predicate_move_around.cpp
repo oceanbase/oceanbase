@@ -2820,7 +2820,8 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
     LOG_WARN("failed to remove right filters", K(ret));
   } else if (OB_FAIL(add_var_to_array_no_dup(transed_stmts_, stmt))) {
     LOG_WARN("append transed stmt failed", K(ret));
-  } else if (OB_FAIL(stmt->get_column_exprs(semi_info->right_table_id_, column_exprs))) {
+  } else if (OB_FAIL(ObTransformUtils::get_explicated_ref_columns(semi_info->right_table_id_,
+                                                                  stmt, column_exprs))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                stmt,

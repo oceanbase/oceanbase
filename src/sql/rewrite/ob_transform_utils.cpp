@@ -8069,6 +8069,29 @@ int ObTransformUtils::rebuild_select_items(ObSelectStmt &stmt,
   return ret;
 }
 
+int ObTransformUtils::get_explicated_ref_columns(const uint64_t table_id,
+                                                 ObDMLStmt *stmt,
+                                                 ObIArray<ObRawExpr*> &table_cols) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> tmp_exprs;
+  if (OB_FAIL(stmt->get_column_exprs(table_id, tmp_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_exprs.count(); i++) {
+      ObRawExpr *expr = tmp_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column expr is null", K(ret));
+      } else if (expr->is_explicited_reference()) {
+        if (OB_FAIL(table_cols.push_back(expr))) {
+          LOG_WARN("failed to push back into array", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::right_join_to_left(ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
