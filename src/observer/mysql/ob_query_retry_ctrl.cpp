@@ -449,15 +449,6 @@ public:
     } else {
       const ObMultiStmtItem &multi_stmr_item = v.ctx_.multi_stmt_item_;
       try_packet_retry(v);
-      if (RETRY_TYPE_LOCAL == v.retry_type_ &&
-          !(multi_stmr_item.is_part_of_multi_stmt() || multi_stmr_item.is_batched_multi_stmt())) {
-        // 1. multi_query without batch_optimization must do local_retry
-        // 2. If is multi_query with batch_optimization, must do local_retry
-        v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
-        v.retry_type_ = RETRY_TYPE_NONE;
-        v.no_more_test_ = true;
-        LOG_WARN_RET(v.client_ret_, "can not retry local", K(v));
-      }
     }
   }
 };
