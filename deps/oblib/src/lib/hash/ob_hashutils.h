@@ -1399,6 +1399,8 @@ public:
   void take_off_from_fl(Block *block)
   {
     if (block == block->next) {
+      abort_unless(block == block_free_list_);
+      block->prev = block->next = NULL;
       block_free_list_ = NULL;
     } else {
       block->prev->next = block->next;

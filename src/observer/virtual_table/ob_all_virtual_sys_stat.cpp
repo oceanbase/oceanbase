@@ -33,7 +33,7 @@ ObAllVirtualSysStat::ObAllVirtualSysStat()
     port_(0),
     stat_iter_(0),
     tenant_id_(OB_INVALID_TENANT_ID),
-    diag_info_()
+    diag_info_(allocator_)
 {
 }
 

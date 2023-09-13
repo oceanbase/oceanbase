@@ -27,7 +27,7 @@ ObInfoSchemaKvCacheTable::ObInfoSchemaKvCacheTable()
     cache_iter_(0),
     str_buf_(),
     arenallocator_(),
-    tenant_di_info_(),
+    tenant_di_info_(allocator_),
     tenant_dis_()
 {
 }
