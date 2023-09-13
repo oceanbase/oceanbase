@@ -748,7 +748,6 @@ int ObLogRestoreProxyUtil::detect_tenant_mode_(common::sqlclient::ObMySQLServerP
           } else {
             if (mysql != mysql_real_connect(mysql, host, user_name, user_password, default_db_name, port, NULL, 0)) {
               LOG_WARN("mysql connect failed", "mysql_error", mysql_error(mysql), K(host), K(port));
-              ret = OB_NEED_RETRY;
             } else {
  #ifdef OB_BUILD_ORACLE_PARSER
               is_oracle_mode_ = mysql->oracle_mode;
