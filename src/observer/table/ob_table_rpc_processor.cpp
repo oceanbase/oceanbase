@@ -529,10 +529,12 @@ int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTx
     if (OB_FAIL(txs->rollback_tx(*trans_desc))) {
       LOG_WARN("fail rollback trans when session terminate", K(ret), KPC(trans_desc));
     }
-  } else if (OB_FAIL(txs->commit_tx(*trans_desc, stmt_timeout_ts, trace_info))) {
+  } else {
     ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
-    LOG_WARN("fail commit trans when session terminate",
-              K(ret), KPC(trans_desc), K(stmt_timeout_ts));
+    if (OB_FAIL(txs->commit_tx(*trans_desc, stmt_timeout_ts, trace_info))) {
+      LOG_WARN("fail commit trans when session terminate",
+                K(ret), KPC(trans_desc), K(stmt_timeout_ts));
+    }
   }
 
   int tmp_ret = ret;
