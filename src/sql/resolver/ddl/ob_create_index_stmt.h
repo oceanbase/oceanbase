@@ -63,6 +63,7 @@ public:
   }
   inline share::schema::ObIndexUsingType get_index_using_type() const { return create_index_arg_.index_using_type_; }
   void set_table_name(const common::ObString &table_name);
+  void set_name_generated_type(const ObNameGeneratedType type);
 
   inline void set_data_table_id(const uint64_t table_id);
   inline void set_data_index_id(const uint64_t table_id);
@@ -127,6 +128,11 @@ inline const common::ObString &ObCreateIndexStmt::get_database_name() const
 inline void ObCreateIndexStmt::set_table_name(const common::ObString &table_name)
 {
   create_index_arg_.table_name_ = table_name;
+}
+
+inline void ObCreateIndexStmt::set_name_generated_type(const ObNameGeneratedType type)
+{
+  create_index_arg_.index_schema_.set_name_generated_type(type);
 }
 
 inline void ObCreateIndexStmt::set_tenant_id(const uint64_t tenant_id)

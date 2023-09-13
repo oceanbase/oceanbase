@@ -408,13 +408,19 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
               } else if (OB_ISNULL(cst = table_schema.get_constraint(cst_id))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get constraint failed", K(ret), K(cst_id));
+              } else if (is_oracle_mode && cst->is_sys_generated_name(false/*check_unknown*/)) {
+                if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NOT NULL"))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print NOT NULL", K(ret));
+                }
               } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " CONSTRAINT \"%.*s\" NOT NULL",
                                                 cst->get_constraint_name_str().length(),
                                                 cst->get_constraint_name_str().ptr()))) {
                 SHARE_SCHEMA_LOG(WARN, "fail to print NOT NULL", K(ret));
-              } else if (print_constraint_stat(col->is_not_null_rely_column(),
+              }
+              if (OB_SUCC(ret) &&
+                  OB_FAIL(print_constraint_stat(col->is_not_null_rely_column(),
                         col->is_not_null_enable_column(), col->is_not_null_validate_column(),
-                        buf, buf_len, pos)) {
+                        buf, buf_len, pos))) {
                 LOG_WARN("print constraint state failed", K(ret));
               }
             }
@@ -559,11 +565,21 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         // is_alter_table_add for dbms_metadata.get_ddl getting uk cst info
         SHARE_SCHEMA_LOG(WARN, "fail to print comma", K(ret));
       } else if (index_schema->is_unique_index()) {
-        if (OB_FAIL(is_oracle_mode ?
-                    databuff_printf(buf, buf_len, pos, " CONSTRAINT \"%.*s\" UNIQUE ",
-                        new_index_name.length(), new_index_name.ptr()) :
-                    databuff_printf(buf, buf_len, pos, " UNIQUE KEY "))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print UNIQUE KEY", K(ret));
+        if (is_oracle_mode) {
+          if (index_schema->is_sys_generated_name(false/*check_unknown*/)) {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, " UNIQUE "))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print UNIQUE KEY", K(ret));
+            }
+          } else {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, " CONSTRAINT \"%.*s\" UNIQUE ",
+                                        new_index_name.length(), new_index_name.ptr()))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print UNIQUE KEY", K(ret));
+            }
+          }
+        } else {
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " UNIQUE KEY "))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print UNIQUE KEY", K(ret));
+          }
         }
       } else if (index_schema->is_domain_index()) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " FULLTEXT KEY "))) {
@@ -827,10 +843,16 @@ int ObSchemaPrinter::print_table_definition_constraints(const ObTableSchema &tab
         }
       }
     } else if (is_oracle_mode && CONSTRAINT_TYPE_CHECK == cst->get_constraint_type()) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  CONSTRAINT "))) {
+      if (cst->is_sys_generated_name(false/*check_unknown*/)) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print", K(ret), K(*cst));
+        }
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  CONSTRAINT "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print constraint", K(ret), K(*cst));
       } else if (OB_FAIL(print_identifier(buf, buf_len, pos, new_cst_name, true))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print constraint", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " CHECK (%.*s)",
                                          cst->get_check_expr_str().length(),
                                          cst->get_check_expr_str().ptr()))) {
@@ -1141,7 +1163,9 @@ int ObSchemaPrinter::print_table_definition_rowkeys(const ObTableSchema &table_s
       for (; OB_SUCC(ret) && iter != table_schema.constraint_end(); ++iter) {
         ObString new_cst_name;
         if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()){
-          if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+          if (is_oracle_mode && (*iter)->is_sys_generated_name(false/*check_unknown*/)) {
+            // do nothing
+          } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
                       allocator,
                       (*iter)->get_constraint_name_str(),
                       new_cst_name,
@@ -1150,16 +1174,18 @@ int ObSchemaPrinter::print_table_definition_rowkeys(const ObTableSchema &table_s
           } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                      ",\n  CONSTRAINT \"%s\" PRIMARY KEY (", new_cst_name.ptr()))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print CONSTRAINT cons_name PRIMARY KEY(", K(ret));
+          } else {
+            has_pk_constraint_name = true;
           }
-          has_pk_constraint_name = true;
           break; // 一张表只可能有一个主键约束
         }
       }
     }
     if (OB_SUCC(ret) && !has_pk_constraint_name) {
-      //以下两种情况打印pk约束时，不打印pk名称
+      //以下三种情况打印pk约束时，不打印pk名称
       //1. mysql mode 没有主键名称
       //2. oracle mode 2.1.0 之前包含2.1.0 server创建的表，不支持主键名
+      //3. oracle mode 主键名称由系统生成
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  PRIMARY KEY ("))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print PRIMARY KEY(", K(ret));
       }
@@ -1318,7 +1344,11 @@ int ObSchemaPrinter::print_table_definition_foreign_keys(const ObTableSchema &ta
       ObString new_fk_name;
       // 只打印子表创建的外键信息，不打印作为父表的信息
       if (foreign_key_info->child_table_id_ == table_schema.get_table_id()) {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  CONSTRAINT "))) {
+        if (is_oracle_mode && foreign_key_info->is_sys_generated_name(false/*check_unknown*/)) {
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  "))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print CONSTRAINT", K(ret));
+          }
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n  CONSTRAINT "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print CONSTRAINT", K(ret));
         } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
                    allocator,
@@ -1332,6 +1362,8 @@ int ObSchemaPrinter::print_table_definition_foreign_keys(const ObTableSchema &ta
         } else if (!foreign_key_info->foreign_key_name_.empty() &&
                    OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print foreign key name", K(ret));
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "FOREIGN KEY ("))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FOREIGN KEY(", K(ret));
         } else if (OB_FAIL(print_column_list(table_schema, foreign_key_info->child_column_ids_, buf, buf_len, pos))) {

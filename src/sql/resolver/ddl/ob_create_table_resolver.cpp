@@ -2225,7 +2225,7 @@ int ObCreateTableResolver::set_index_name()
   } else if (OB_FAIL(ob_write_string(*allocator_, index_name_, index_arg_.index_name_))) {
     SQL_RESV_LOG(WARN, "write short index name failed", K(ret));
   } else {
-    // do nothing
+    index_arg_.index_schema_.set_name_generated_type(name_generated_type_);
   }
 
   return ret;
@@ -2874,11 +2874,14 @@ int ObCreateTableResolver::resolve_index_name(
     ObString &uk_name)
 {
   int ret =OB_SUCCESS;
+  name_generated_type_ = GENERATED_TYPE_USER;
   if (NULL == node) {
     if (lib::is_oracle_mode() && is_unique) {
       if (NULL == uk_name.ptr()) {
         if (OB_FAIL(ObTableSchema::create_cons_name_automatically(index_name_, table_name_, *allocator_, CONSTRAINT_TYPE_UNIQUE_KEY, lib::is_oracle_mode()))) {
           SQL_RESV_LOG(WARN, "create index name automatically failed", K(ret));
+        } else {
+          name_generated_type_ = GENERATED_TYPE_SYSTEM;
         }
       } else {
         index_name_.assign_ptr(uk_name.ptr(), uk_name.length());
@@ -2886,10 +2889,14 @@ int ObCreateTableResolver::resolve_index_name(
     } else if (lib::is_oracle_mode() && !is_unique) {
       if (OB_FAIL(ObTableSchema::create_idx_name_automatically_oracle(index_name_, table_name_, *allocator_))) {
         SQL_RESV_LOG(WARN, "create index name automatically failed", K(ret));
+      } else {
+        name_generated_type_ = GENERATED_TYPE_SYSTEM;
       }
     } else { // mysql mode
       if (OB_FAIL(generate_index_name(index_name_, current_index_name_set_, first_column_name))) {
         SQL_RESV_LOG(WARN, "generate index name failed", K(ret), K(index_name_));
+      } else {
+        name_generated_type_ = GENERATED_TYPE_SYSTEM;
       }
     }
   } else if (T_IDENT != node->type_) {

@@ -58,6 +58,7 @@ int ObConstraint::assign(const ObConstraint &src_schema)
     is_modify_rely_flag_ = src_schema.is_modify_rely_flag_;
     is_modify_enable_flag_ = src_schema.is_modify_enable_flag_;
     is_modify_validate_flag_ = src_schema.is_modify_validate_flag_;
+    name_generated_type_ = src_schema.name_generated_type_;
     int ret = OB_SUCCESS;
     if (OB_FAIL(deep_copy_str(src_schema.constraint_name_, constraint_name_))) {
       LOG_WARN("Fail to deep copy constraint_name", K(ret));
@@ -128,6 +129,7 @@ void ObConstraint::reset()
   column_cnt_ = 0;
   column_id_array_ = NULL;
   need_validate_data_ = true;
+  name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   ObSchema::reset();
 }
 
@@ -161,7 +163,7 @@ OB_DEF_SERIALIZE(ObConstraint)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, need_validate_data_);
+    LST_DO_CODE(OB_UNIS_ENCODE, need_validate_data_, name_generated_type_);
   }
   return ret;
 }
@@ -210,7 +212,7 @@ OB_DEF_DESERIALIZE(ObConstraint)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, need_validate_data_);
+    LST_DO_CODE(OB_UNIS_DECODE, need_validate_data_, name_generated_type_);
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
@@ -246,7 +248,7 @@ OB_DEF_SERIALIZE_SIZE(ObConstraint)
   for (int64_t i = 0; i < column_cnt_; ++i) {
     len += serialization::encoded_length_vi64(column_id_array_[i]);
   }
-  LST_DO_CODE(OB_UNIS_ADD_LEN, need_validate_data_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, need_validate_data_, name_generated_type_);
   return len;
 }
 
@@ -270,6 +272,7 @@ int64_t ObConstraint::to_string(char *buf, const int64_t buf_len) const
     K_(is_modify_enable_flag),
     K_(is_modify_validate_flag),
     K_(need_validate_data),
+    K_(name_generated_type),
     "column_id_array", ObArrayWrap<uint64_t>(column_id_array_, column_cnt_));
   J_OBJ_END();
   return pos;
@@ -311,6 +314,27 @@ int ObConstraint::assign_not_null_cst_column_id(const uint64_t column_id)
     column_cnt_ = 1;
   }
   return ret;
+}
+
+bool ObConstraint::is_sys_generated_name(bool check_unknown) const
+{
+  bool bret = false;
+  if (GENERATED_TYPE_SYSTEM == name_generated_type_) {
+    bret = true;
+  } else if (GENERATED_TYPE_UNKNOWN == name_generated_type_ && check_unknown) {
+    const char *cst_type_name = CONSTRAINT_TYPE_PRIMARY_KEY == constraint_type_ ? "_OBPK_" :
+                                CONSTRAINT_TYPE_CHECK       == constraint_type_ ? "_OBCHECK_" :
+                                CONSTRAINT_TYPE_UNIQUE_KEY  == constraint_type_ ? "_OBUNIQUE_" :
+                                CONSTRAINT_TYPE_NOT_NULL    == constraint_type_ ? "_OBNOTNULL_" : nullptr;
+    if (OB_NOT_NULL(cst_type_name)) {
+      const int64_t cst_type_name_len = static_cast<int64_t>(strlen(cst_type_name));
+      bret = (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                  constraint_name_.ptr(), constraint_name_.length(), cst_type_name, cst_type_name_len));
+    }
+  } else {
+    bret = false;
+  }
+  return bret;
 }
 
 } //end of namespace schema

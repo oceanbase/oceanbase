@@ -319,6 +319,8 @@ int ObDDLUtil::refresh_alter_table_arg(
       LOG_WARN("current constraint not exists, maybe dropped", K(ret), KPC(cst), K(table_schema));
     } else if (OB_FAIL(cst->set_constraint_name(cur_cst->get_constraint_name_str()))) {
       LOG_WARN("failed to set new constraint name", K(ret));
+    } else {
+      cst->set_name_generated_type(cur_cst->get_name_generated_type());
     }
   }
 

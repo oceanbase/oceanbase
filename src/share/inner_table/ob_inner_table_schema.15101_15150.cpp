@@ -6339,6 +6339,21 @@ int ObInnerTableSchema::all_virtual_table_real_agent_ora_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("NAME_GENERATED_TYPE", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("GMT_CREATE", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -9928,6 +9943,21 @@ int ObInnerTableSchema::all_virtual_foreign_key_real_agent_ora_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("NAME_GENERATED_TYPE", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("GMT_CREATE", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -11109,6 +11139,21 @@ int ObInnerTableSchema::all_virtual_constraint_real_agent_ora_schema(ObTableSche
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("VALIDATE_FLAG", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("NAME_GENERATED_TYPE", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

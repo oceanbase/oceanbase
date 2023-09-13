@@ -2465,7 +2465,8 @@ public:
     need_validate_data_(true),
     is_parent_table_mock_(false),
     parent_database_id_(common::OB_INVALID_ID),
-    parent_table_id_(common::OB_INVALID_ID)
+    parent_table_id_(common::OB_INVALID_ID),
+    name_generated_type_(GENERATED_TYPE_UNKNOWN)
   {}
   virtual ~ObCreateForeignKeyArg()
   {}
@@ -2493,6 +2494,7 @@ public:
     is_parent_table_mock_ = false;
     parent_database_id_ = common::OB_INVALID_ID;
     parent_table_id_ = common::OB_INVALID_ID;
+    name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   }
   bool is_valid() const;
   int assign(const ObCreateForeignKeyArg &other) {
@@ -2522,6 +2524,7 @@ public:
       is_parent_table_mock_ = other.is_parent_table_mock_;
       parent_database_id_ = other.parent_database_id_;
       parent_table_id_ = other.parent_table_id_;
+      name_generated_type_ = other.name_generated_type_;
     }
     return ret;
   }
@@ -2548,6 +2551,7 @@ public:
   bool is_parent_table_mock_;
   uint64_t parent_database_id_;  // used in ddl_service to store related object_id
   uint64_t parent_table_id_;     // used in ddl_service to store related object_id
+  ObNameGeneratedType name_generated_type_;
 };
 
 struct ObDropForeignKeyArg : public ObIndexArg

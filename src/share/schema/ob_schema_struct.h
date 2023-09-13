@@ -6185,6 +6185,13 @@ enum ObConstraintType
   CONSTRAINT_TYPE_MAX,
 };
 
+enum ObNameGeneratedType
+{
+  GENERATED_TYPE_UNKNOWN = 0,
+  GENERATED_TYPE_USER = 1,
+  GENERATED_TYPE_SYSTEM = 2
+};
+
 enum ObReferenceAction
 {
   ACTION_INVALID = 0,
@@ -6229,7 +6236,8 @@ public:
       ref_cst_type_(CONSTRAINT_TYPE_INVALID),
       ref_cst_id_(common::OB_INVALID_ID),
       is_modify_fk_name_flag_(false),
-      is_parent_table_mock_(false)
+      is_parent_table_mock_(false),
+      name_generated_type_(GENERATED_TYPE_UNKNOWN)
   {}
   ObForeignKeyInfo(common::ObIAllocator *allocator);
   virtual ~ObForeignKeyInfo() {}
@@ -6268,6 +6276,11 @@ public:
 
   int get_child_column_id(const uint64_t parent_column_id, uint64_t &child_column_id) const;
   int get_parent_column_id(const uint64_t child_column_id, uint64_t &parent_column_id) const;
+  inline void set_name_generated_type(const ObNameGeneratedType is_sys_generated) {
+    name_generated_type_ = is_sys_generated;
+  }
+  inline ObNameGeneratedType get_name_generated_type() const { return name_generated_type_; }
+  bool is_sys_generated_name(bool check_unknown) const;
   inline void reset()
   {
     table_id_ = common::OB_INVALID_ID;
@@ -6290,6 +6303,7 @@ public:
     ref_cst_id_ = common::OB_INVALID_ID;
     is_modify_fk_name_flag_ = false;
     is_parent_table_mock_ = false;
+    name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   }
   int assign(const ObForeignKeyInfo &other);
   inline int64_t get_convert_size() const
@@ -6307,7 +6321,8 @@ public:
                K_(foreign_key_name), K_(enable_flag), K_(is_modify_enable_flag),
                K_(validate_flag), K_(is_modify_validate_flag),
                K_(rely_flag), K_(is_modify_rely_flag), K_(is_modify_fk_state),
-               K_(ref_cst_type), K_(ref_cst_id), K_(is_modify_fk_name_flag), K_(is_parent_table_mock));
+               K_(ref_cst_type), K_(ref_cst_id), K_(is_modify_fk_name_flag), K_(is_parent_table_mock),
+               K_(name_generated_type));
 
 public:
   uint64_t table_id_;   // table_id is not in __all_foreign_key.
@@ -6330,6 +6345,7 @@ public:
   uint64_t ref_cst_id_;
   bool is_modify_fk_name_flag_;
   bool is_parent_table_mock_;
+  ObNameGeneratedType name_generated_type_;
 private:
   static const char *reference_action_str_[ACTION_MAX + 1];
 };

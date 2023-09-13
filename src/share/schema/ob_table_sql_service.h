@@ -323,12 +323,14 @@ private:
   // modify constraint name in __all_constraint while drop table to recyclebin
   int gen_constraint_update_name_dml(const uint64_t exec_tenant_id,
                                      const ObString &cst_name,
+                                     const ObNameGeneratedType name_generated_type,
                                      const int64_t new_schema_version,
                                      const ObConstraint &constraint,
                                      share::ObDMLSqlSplicer &dml);
   // modify constraint name in __all_constraint_history while drop table to recyclebin
   int gen_constraint_insert_new_name_row_dml(const uint64_t exec_tenant_id,
                                              const ObString &cst_name,
+                                             const ObNameGeneratedType name_generated_type,
                                              const int64_t new_schema_version,
                                              const ObConstraint &constraint,
                                              share::ObDMLSqlSplicer &dml);

@@ -939,6 +939,7 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
           fk_arg.is_modify_rely_flag_ = fk_info.is_modify_rely_flag_;
           fk_arg.is_modify_fk_state_ = fk_info.is_modify_fk_state_;
           fk_arg.need_validate_data_ = fk_info.validate_flag_;
+          fk_arg.name_generated_type_ = fk_info.name_generated_type_;
           ObDDLTaskRecord task_record;
           ObCreateDDLTaskParam param(dst_tenant_id_,
                                      ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT,

@@ -3449,6 +3449,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             foreign_key_info.validate_flag_ = foreign_key_arg.validate_flag_;
             foreign_key_info.rely_flag_ = foreign_key_arg.rely_flag_;
             foreign_key_info.is_parent_table_mock_ = foreign_key_arg.is_parent_table_mock_;
+            foreign_key_info.name_generated_type_ = foreign_key_arg.name_generated_type_;
           }
           // add foreign key info.
           if (OB_SUCC(ret)) {

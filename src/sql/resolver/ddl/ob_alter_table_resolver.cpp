@@ -1460,6 +1460,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                           index_name,
                           create_index_arg->index_name_))) {
                     LOG_WARN("fail to wirte string", K(ret), K(index_name), K(first_column_name));
+                  } else {
+                    create_index_arg->index_schema_.set_name_generated_type(GENERATED_TYPE_SYSTEM);
                   }
                 }
               }
@@ -1478,6 +1480,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                   LOG_WARN("fail to get collation connection", K(ret));
                 } else if (OB_FAIL(ObSQLUtils::check_index_name(cs_type, create_index_arg->index_name_))) {
                   LOG_WARN("fail to check index name", K(ret), K(create_index_arg->index_name_));
+                } else {
+                  create_index_arg->index_schema_.set_name_generated_type(GENERATED_TYPE_USER);
                 }
               }
             }
@@ -3012,6 +3016,7 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
             && node.children_[1]->str_len_ != 0) {
           create_index_arg->index_name_.assign_ptr(node.children_[1]->str_value_,
                                                    static_cast<int32_t>(node.children_[1]->str_len_));
+          create_index_arg->index_schema_.set_name_generated_type(GENERATED_TYPE_USER);
         }
       } else {
         create_index_arg->index_name_.assign_ptr(common::OB_PRIMARY_INDEX_NAME,
@@ -3656,6 +3661,7 @@ int ObAlterTableResolver::resolve_modify_foreign_key_state(const ParseNode *node
       ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
       const ObDatabaseSchema *parent_db_schema = NULL;
       const ObTableSchema *parent_table_schema = NULL;
+      foreign_key_arg.name_generated_type_ = foreign_key_info->name_generated_type_;
       if (OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "schema_guard is null", K(ret));

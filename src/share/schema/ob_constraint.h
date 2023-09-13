@@ -111,6 +111,11 @@ public:
   inline const_cst_col_iterator cst_col_begin() const { return column_id_array_; }
   inline const_cst_col_iterator cst_col_end() const
   { return NULL == column_id_array_ ? NULL : &(column_id_array_[column_cnt_]); }
+  inline void set_name_generated_type(const ObNameGeneratedType name_generated_type) {
+    name_generated_type_ = name_generated_type;
+  }
+  inline ObNameGeneratedType get_name_generated_type() const { return name_generated_type_; }
+  bool is_sys_generated_name(bool check_unknown) const;
 
   // other
   int64_t get_convert_size() const;
@@ -134,6 +139,7 @@ private:
   int64_t column_cnt_;
   uint64_t *column_id_array_;
   bool need_validate_data_;
+  ObNameGeneratedType name_generated_type_;
 };
 
 }//end of namespace schema

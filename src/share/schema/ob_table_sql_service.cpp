@@ -1461,9 +1461,11 @@ int ObTableSqlService::rename_csts_in_inner_table(common::ObISQLClient &sql_clie
     dml_for_update.reuse();
     dml_for_insert.reuse();
     int64_t affected_rows = 0;
+    // `drop table` modify constraint_name but do not modify name_generated_type
+    const ObNameGeneratedType name_generated_type = (*iter)->get_name_generated_type();
     if (OB_FAIL(ObTableSchema::create_cons_name_automatically(new_cst_name, table_schema.get_table_name_str(), allocator, (*iter)->get_constraint_type(), is_oracle_mode))) {
       SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
-    } else if (OB_FAIL(gen_constraint_update_name_dml(exec_tenant_id, new_cst_name, new_schema_version, **iter, dml_for_update))) {
+    } else if (OB_FAIL(gen_constraint_update_name_dml(exec_tenant_id, new_cst_name, name_generated_type, new_schema_version, **iter, dml_for_update))) {
       LOG_WARN("failed to delete from __all_constraint or __all_constraint_history", K(ret), K(new_cst_name), K(**iter), K(table_schema));
     } else if (OB_FAIL(exec_update(sql_client, tenant_id, table_schema.get_table_id(),
                                    OB_ALL_CONSTRAINT_TNAME, dml_for_update, affected_rows))) {
@@ -1471,7 +1473,7 @@ int ObTableSqlService::rename_csts_in_inner_table(common::ObISQLClient &sql_clie
     } else if (!is_single_row(affected_rows)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert succeeded but affected_rows is not one", K(ret), K(affected_rows));
-    } else if (OB_FAIL(gen_constraint_insert_new_name_row_dml(exec_tenant_id, new_cst_name, new_schema_version, **iter, dml_for_insert))) {
+    } else if (OB_FAIL(gen_constraint_insert_new_name_row_dml(exec_tenant_id, new_cst_name, name_generated_type, new_schema_version, **iter, dml_for_insert))) {
       LOG_WARN("failed to delete from __all_constraint or __all_constraint_history", K(ret), K(new_cst_name), K(**iter), K(table_schema));
     } else if (OB_FAIL(exec_insert(sql_client, tenant_id, table_schema.get_table_id(),
                                    OB_ALL_CONSTRAINT_HISTORY_TNAME, dml_for_insert, affected_rows))) {
@@ -2805,6 +2807,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("ttl_definition", ObHexEscapeSqlStr(ttl_definition))))
         || (data_version >= DATA_VERSION_4_2_1_0
             && OB_FAIL(dml.add_column("kv_attributes", ObHexEscapeSqlStr(kv_attributes))))
+        || (data_version >= DATA_VERSION_4_2_1_0
+            && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -2926,6 +2930,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("ttl_definition", ObHexEscapeSqlStr(ttl_definition))))
         || (data_version >= DATA_VERSION_4_2_1_0
             && OB_FAIL(dml.add_column("kv_attributes", ObHexEscapeSqlStr(kv_attributes))))
+        || ((data_version >= DATA_VERSION_4_2_1_0)
+            && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3991,8 +3997,10 @@ int ObTableSqlService::gen_constraint_dml(
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(constraint.get_tenant_id(), data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, constraint.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
                                                exec_tenant_id, constraint.get_table_id())))
@@ -4004,6 +4012,8 @@ int ObTableSqlService::gen_constraint_dml(
       || OB_FAIL(dml.add_column("rely_flag", constraint.get_rely_flag()))
       || OB_FAIL(dml.add_column("enable_flag", constraint.get_enable_flag()))
       || OB_FAIL(dml.add_column("validate_flag", constraint.get_validate_flag()))
+      || (data_version >= DATA_VERSION_4_2_1_0
+            && OB_FAIL(dml.add_column("name_generated_type", constraint.get_name_generated_type())))
       || OB_FAIL(dml.add_gmt_create())
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("dml add constraint failed", K(ret));
@@ -4038,19 +4048,25 @@ int ObTableSqlService::gen_constraint_column_dml(const uint64_t exec_tenant_id,
 int ObTableSqlService::gen_constraint_update_name_dml(
     const uint64_t exec_tenant_id,
     const ObString &cst_name,
+    const ObNameGeneratedType name_generated_type,
     const int64_t new_schema_version,
     const ObConstraint &constraint,
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(constraint.get_tenant_id(), data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, constraint.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
                                                exec_tenant_id, constraint.get_table_id())))
       || OB_FAIL(dml.add_pk_column("constraint_id", constraint.get_constraint_id()))
       || OB_FAIL(dml.add_column("schema_version", new_schema_version))
       || OB_FAIL(dml.add_column("constraint_name", ObHexEscapeSqlStr(cst_name)))
+      || (data_version >= DATA_VERSION_4_2_1_0
+            && OB_FAIL(dml.add_column("name_generated_type", name_generated_type)))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("dml add constraint failed", K(ret));
   }
@@ -4062,6 +4078,7 @@ int ObTableSqlService::gen_constraint_update_name_dml(
 int ObTableSqlService::gen_constraint_insert_new_name_row_dml(
     const uint64_t exec_tenant_id,
     const ObString &cst_name,
+    const ObNameGeneratedType name_generated_type,
     const int64_t new_schema_version,
     const ObConstraint &constraint,
     share::ObDMLSqlSplicer &dml)
@@ -4069,7 +4086,10 @@ int ObTableSqlService::gen_constraint_insert_new_name_row_dml(
   int ret = OB_SUCCESS;
   const int64_t is_deleted = 0;
 
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(constraint.get_tenant_id(), data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, constraint.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
                                                exec_tenant_id, constraint.get_table_id())))
@@ -4078,6 +4098,8 @@ int ObTableSqlService::gen_constraint_insert_new_name_row_dml(
       || OB_FAIL(dml.add_column("constraint_type", constraint.get_constraint_type()))
       || OB_FAIL(dml.add_column("constraint_name", ObHexEscapeSqlStr(cst_name)))
       || OB_FAIL(dml.add_column("check_expr", ObHexEscapeSqlStr(constraint.get_check_expr())))
+      || (data_version >= DATA_VERSION_4_2_1_0
+            && OB_FAIL(dml.add_column("name_generated_type", name_generated_type)))
       || OB_FAIL(dml.add_gmt_create())
       || OB_FAIL(dml.add_gmt_modified())
       || OB_FAIL(dml.add_column("is_deleted", is_deleted))) {
@@ -4323,7 +4345,10 @@ int ObTableSqlService::gen_foreign_key_dml(const uint64_t exec_tenant_id,
 {
   int ret = OB_SUCCESS;
   dml.reset();
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("foreign_key_id", ObSchemaUtils::get_extract_schema_id(
                                                      exec_tenant_id, foreign_key_info.foreign_key_id_)))
@@ -4340,6 +4365,8 @@ int ObTableSqlService::gen_foreign_key_dml(const uint64_t exec_tenant_id,
       || OB_FAIL(dml.add_column("ref_cst_type", foreign_key_info.ref_cst_type_))
       || OB_FAIL(dml.add_column("ref_cst_id", foreign_key_info.ref_cst_id_))
       || OB_FAIL(dml.add_column("is_parent_table_mock", foreign_key_info.is_parent_table_mock_))
+      || (data_version >= DATA_VERSION_4_2_1_0
+            && OB_FAIL(dml.add_column("name_generated_type", foreign_key_info.name_generated_type_)))
       || OB_FAIL(dml.add_gmt_create())
       || OB_FAIL(dml.add_gmt_modified())
       ) {

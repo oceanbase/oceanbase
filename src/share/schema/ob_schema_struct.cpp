@@ -11410,7 +11410,8 @@ ObForeignKeyInfo::ObForeignKeyInfo(ObIAllocator *allocator)
     ref_cst_type_(CONSTRAINT_TYPE_INVALID),
     ref_cst_id_(common::OB_INVALID_ID),
     is_modify_fk_name_flag_(false),
-    is_parent_table_mock_(false)
+    is_parent_table_mock_(false),
+    name_generated_type_(GENERATED_TYPE_UNKNOWN)
 {}
 
 int ObForeignKeyInfo::assign(const ObForeignKeyInfo &other)
@@ -11440,6 +11441,7 @@ int ObForeignKeyInfo::assign(const ObForeignKeyInfo &other)
     foreign_key_name_ = other.foreign_key_name_; // Shallow copy
     is_modify_fk_name_flag_ = other.is_modify_fk_name_flag_;
     is_parent_table_mock_ = other.is_parent_table_mock_;
+    name_generated_type_ = other.name_generated_type_;
   }
   return ret;
 }
@@ -11462,6 +11464,22 @@ const char *ObForeignKeyInfo::reference_action_str_[ACTION_MAX + 1] =
   ""
 };
 
+bool ObForeignKeyInfo::is_sys_generated_name(bool check_unknown) const
+{
+  bool bret = false;
+  if (GENERATED_TYPE_SYSTEM == name_generated_type_) {
+    bret = true;
+  } else if (GENERATED_TYPE_UNKNOWN == name_generated_type_ && check_unknown) {
+    const char *cst_type_name = "_OBFK_";
+    const int64_t cst_type_name_len = static_cast<int64_t>(strlen(cst_type_name));
+    bret = (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                  foreign_key_name_.ptr(), foreign_key_name_.length(), cst_type_name, cst_type_name_len));
+  } else {
+    bret = false;
+  }
+  return bret;
+}
+
 OB_SERIALIZE_MEMBER(ObForeignKeyInfo,
                     table_id_,
                     foreign_key_id_,
@@ -11475,7 +11493,8 @@ OB_SERIALIZE_MEMBER(ObForeignKeyInfo,
                     ref_cst_type_,
                     ref_cst_id_,
                     is_modify_fk_name_flag_,
-                    is_parent_table_mock_);
+                    is_parent_table_mock_,
+                    name_generated_type_);
 
 OB_SERIALIZE_MEMBER(ObSimpleForeignKeyInfo,
                     tenant_id_,

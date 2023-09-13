@@ -666,7 +666,8 @@ protected:
                                  share::schema::ObReferenceAction &update_action,
                                  share::schema::ObReferenceAction &delete_action);
   int resolve_foreign_key_name(const ParseNode *constraint_node,
-                               common::ObString &foreign_key_name);
+                               common::ObString &foreign_key_name,
+                               ObNameGeneratedType &name_generated_type);
   int resolve_foreign_key_state(
       const ParseNode *fk_state_node,
       obrpc::ObCreateForeignKeyArg &arg);
@@ -686,6 +687,7 @@ protected:
                                              ObStmt *stmt);
   static int add_not_null_constraint(share::schema::ObColumnSchemaV2 &column,
                               const common::ObString &cst_name,
+                              bool is_sys_generate_name,
                               share::schema::ObConstraint &cst,
                               common::ObIAllocator &allocator,
                               ObStmt *stmt);
@@ -912,6 +914,7 @@ protected:
   bool is_external_table_;
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
+  ObNameGeneratedType name_generated_type_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

@@ -3327,6 +3327,7 @@ int ObDDLOperator::alter_table_rename_index(
           if (nullptr != new_index_status) {
             new_index_table_schema.set_index_status(*new_index_status);
           }
+          new_index_table_schema.set_name_generated_type(GENERATED_TYPE_USER);
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(new_index_table_schema.set_table_name(new_index_table_name))) {
@@ -9704,6 +9705,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
         cst.set_constraint_id(new_cst_id);
         cst.set_schema_version(new_schema_version);
         cst.set_constraint_name(cst_name);
+        cst.set_name_generated_type(GENERATED_TYPE_SYSTEM);
         cst.set_check_expr(check_expr_str);
         cst.set_constraint_type(CONSTRAINT_TYPE_NOT_NULL);
         cst.set_rely_flag(false);

@@ -1320,6 +1320,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, ttl_definition, table_schema, true, ignore_column_error, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, kv_attributes, table_schema, true, ignore_column_error, "");
+
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, name_generated_type, table_schema, ObNameGeneratedType, true/*skip null*/, true/*ignore column error*/, GENERATED_TYPE_UNKNOWN);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -1465,6 +1467,7 @@ int ObSchemaRetrieveUtils::fill_constraint(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, schema_version, constraint, int64_t);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, constraint_name, constraint);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, check_expr, constraint);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, name_generated_type, constraint, ObNameGeneratedType, true/*skip null*/, true/*ignore column error*/, GENERATED_TYPE_UNKNOWN);
   }
 
   return ret;
@@ -4601,6 +4604,7 @@ int ObSchemaRetrieveUtils::fill_foreign_key_info(
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ref_cst_type, foreign_key_info, ObConstraintType, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ref_cst_id, foreign_key_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, -1);
       EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, is_parent_table_mock, foreign_key_info, true, ObSchemaService::g_ignore_column_retrieve_error_, default_is_parent_table_mock);
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, name_generated_type, foreign_key_info, ObNameGeneratedType, true/*skip null*/, true/*ignore column error*/, GENERATED_TYPE_UNKNOWN);
     }
   }
   return ret;

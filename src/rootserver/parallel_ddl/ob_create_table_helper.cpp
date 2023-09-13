@@ -1425,6 +1425,7 @@ int ObCreateTableHelper::generate_foreign_keys_()
           foreign_key_info.validate_flag_ = foreign_key_arg.validate_flag_;
           foreign_key_info.rely_flag_ = foreign_key_arg.rely_flag_;
           foreign_key_info.is_parent_table_mock_ = foreign_key_arg.is_parent_table_mock_;
+          foreign_key_info.name_generated_type_  = foreign_key_arg.name_generated_type_;
         }
 
         // 5. add foreign key info

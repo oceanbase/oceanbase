@@ -108,6 +108,7 @@ int ObCreateIndexResolver::resolve_index_table_name_node(
     } else {
       crt_idx_stmt->set_database_name(database_name);
       crt_idx_stmt->set_table_name(table_name);
+      crt_idx_stmt->set_name_generated_type(GENERATED_TYPE_USER);
       crt_idx_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
     }
   }
@@ -516,6 +517,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     } else {
       crt_idx_stmt->set_database_name(tmp_new_db_name);
       crt_idx_stmt->set_table_name(tmp_new_tbl_name);
+      crt_idx_stmt->set_name_generated_type(GENERATED_TYPE_USER);
     }
   }
 

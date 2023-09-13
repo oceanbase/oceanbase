@@ -112,7 +112,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     hash_subpart_num_(-1),
     is_external_table_(false),
     ttl_definition_(),
-    kv_attributes_()
+    kv_attributes_(),
+    name_generated_type_(GENERATED_TYPE_UNKNOWN)
 {
   table_mode_.reset();
 }
@@ -7120,6 +7121,7 @@ int ObDDLResolver::resolve_check_constraint_node(
                                                            column_schema))) {
             LOG_WARN("resolver constraint expr failed", K(ret));
           } else {
+            cst.set_name_generated_type(is_sys_generated_cst_name ? GENERATED_TYPE_SYSTEM : GENERATED_TYPE_USER);
             // resolve constranit_state in oracle mode
             if (lib::is_oracle_mode()) {
               if (OB_FAIL(resolve_check_cst_state_node_oracle(cst_check_state_node, cst))) {
@@ -7259,7 +7261,7 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
 {
   int ret = OB_SUCCESS;
   ObString cst_name;
-
+  bool is_sys_generated_cst_name = false;
   if ((T_PRIMARY_KEY != pk_cst_node.type_) && (T_COLUMN_DEFINITION != pk_cst_node.type_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "node type is wrong.", K(ret), K(pk_cst_node.type_));
@@ -7274,6 +7276,8 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
         // 用户没有显式为主键命名时，系统为主键约束命名
         if (OB_FAIL(ObTableSchema::create_cons_name_automatically(cst_name, table_name_, *allocator_, CONSTRAINT_TYPE_PRIMARY_KEY, lib::is_oracle_mode()))) {
           SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+        } else {
+          is_sys_generated_cst_name = true;
         }
       } else if (NULL == cst_name_node->str_value_ || 0 == cst_name_node->str_len_) {
         ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
@@ -7286,6 +7290,8 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
     if (NULL == pk_name.ptr()) {
       if (OB_FAIL(ObTableSchema::create_cons_name_automatically(cst_name, table_name_, *allocator_, CONSTRAINT_TYPE_PRIMARY_KEY, lib::is_oracle_mode()))) {
         SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+      } else {
+        is_sys_generated_cst_name = true;
       }
     } else {
       cst_name.assign_ptr(pk_name.ptr(), pk_name.length());
@@ -7306,6 +7312,7 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
         LOG_WARN("duplicate constraint name", K(ret), K(cst_name));
       } else if (OB_FAIL(cst.set_constraint_name(cst_name))) {
       } else {
+        cst.set_name_generated_type(is_sys_generated_cst_name ? GENERATED_TYPE_SYSTEM : GENERATED_TYPE_USER);
         cst.set_constraint_type(CONSTRAINT_TYPE_PRIMARY_KEY);
         ret = csts.push_back(cst);
       }
@@ -7684,7 +7691,7 @@ int ObDDLResolver::resolve_foreign_key_node(const ParseNode *node,
         LOG_WARN("failed to resolve foreign key parent columns", K(ret));
       } else if (OB_FAIL(resolve_foreign_key_options(reference_options, arg.update_action_, arg.delete_action_))) {
         LOG_WARN("failed to resolve foreign key options", K(ret));
-      } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_))) {
+      } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_, arg.name_generated_type_))) {
         LOG_WARN("failed to resolve foreign key name", K(ret));
       } else if (OB_FAIL(check_foreign_key_reference(arg, is_alter_table, NULL))) {
         LOG_WARN("failed to check reference columns", K(ret));
@@ -7732,7 +7739,7 @@ int ObDDLResolver::resolve_foreign_key_node(const ParseNode *node,
             LOG_WARN("failed to resolve foreign key parent columns in oracle mode", K(ret));
           } else if (OB_FAIL(resolve_foreign_key_option(reference_options, arg.update_action_, arg.delete_action_))) {
             LOG_WARN("failed to resolve foreign key options", K(ret));
-          } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_))) {
+          } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_, arg.name_generated_type_))) {
             LOG_WARN("failed to resolve foreign key name", K(ret));
           } else if (OB_FAIL(check_foreign_key_reference(arg, is_alter_table, NULL))) {
             LOG_WARN("failed to check reference columns", K(ret));
@@ -7780,7 +7787,7 @@ int ObDDLResolver::resolve_foreign_key_node(const ParseNode *node,
             LOG_WARN("failed to resolve foreign key parent columns", K(ret));
           } else if (OB_FAIL(resolve_foreign_key_option(reference_options, arg.update_action_, arg.delete_action_))) {
             LOG_WARN("failed to resolve foreign key options", K(ret));
-          } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_))) {
+          } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_, arg.name_generated_type_))) {
             LOG_WARN("failed to resolve foreign key name", K(ret));
           } else if (OB_FAIL(check_foreign_key_reference(arg, is_alter_table, column))) {
             LOG_WARN("failed to check reference columns", K(ret));
@@ -8066,10 +8073,12 @@ int ObDDLResolver::resolve_foreign_key_option(const ParseNode *option_node,
 // @param [out] foreign_key_name
 // @return oceanbase error code defined in lib/ob_errno.def
 int ObDDLResolver::resolve_foreign_key_name(const ParseNode *constraint_node,
-                                            ObString &foreign_key_name)
+                                            ObString &foreign_key_name,
+                                            ObNameGeneratedType &name_generated_type)
 {
   int ret = OB_SUCCESS;
   foreign_key_name.reset();
+  name_generated_type = GENERATED_TYPE_USER;
 
   if (OB_NOT_NULL(constraint_node)) {
     if (!is_oracle_mode()) {
@@ -8099,6 +8108,8 @@ int ObDDLResolver::resolve_foreign_key_name(const ParseNode *constraint_node,
         }
       } else if (OB_FAIL(create_fk_cons_name_automatically(foreign_key_name))) {
         SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+      } else {
+        name_generated_type = GENERATED_TYPE_SYSTEM;
       }
     } else {
       // oracle mode
@@ -8123,6 +8134,8 @@ int ObDDLResolver::resolve_foreign_key_name(const ParseNode *constraint_node,
     }
   } else if (OB_FAIL(create_fk_cons_name_automatically(foreign_key_name))) {
     SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+  } else {
+    name_generated_type = GENERATED_TYPE_SYSTEM;
   }
 
   return ret;
@@ -8540,12 +8553,14 @@ int ObDDLResolver::resolve_not_null_constraint_node(
   } else {
     ParseNode *cst_name_node = is_oracle_mode() && NULL != cst_node ? cst_node->children_[0] : NULL;
     ParseNode *cst_check_state_node = is_oracle_mode() && NULL != cst_node ? cst_node->children_[1] : NULL;
-
+    bool is_sys_generate_name = false;
     if (NULL == cst_name_node) {
       if (OB_FAIL(ObTableSchema::create_cons_name_automatically(cst_name, table_name_, *allocator_,
                                                                 CONSTRAINT_TYPE_NOT_NULL,
                                                                 lib::is_oracle_mode()))) {
         SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+      } else {
+        is_sys_generate_name = true;
       }
     } else if (NULL == cst_name_node->str_value_ || 0 == cst_name_node->str_len_) {
       ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
@@ -8572,7 +8587,7 @@ int ObDDLResolver::resolve_not_null_constraint_node(
         } else {
           // do nothing if alter table modify identity_column not null
         }
-      } else if (OB_FAIL(add_not_null_constraint(column, cst_name, cst, *allocator_, stmt_))) {
+      } else if (OB_FAIL(add_not_null_constraint(column, cst_name, is_sys_generate_name, cst, *allocator_, stmt_))) {
         LOG_WARN("add not null constraint", K(ret));
       } else {
         LOG_DEBUG("before column set not null", K(column), K(cst));
@@ -8599,7 +8614,7 @@ int ObDDLResolver::add_default_not_null_constraint(ObColumnSchemaV2 &column,
                                                                 CONSTRAINT_TYPE_NOT_NULL,
                                                                 lib::is_oracle_mode()))) {
     LOG_WARN("create cons name automatically failed", K(ret));
-  } else if (OB_FAIL(add_not_null_constraint(column, cst_name, cst, allocator, stmt))) {
+  } else if (OB_FAIL(add_not_null_constraint(column, cst_name, true, cst, allocator, stmt))) {
     LOG_WARN("add not null constraint", K(ret));
   } else {
     column.add_not_null_cst();
@@ -8610,6 +8625,7 @@ int ObDDLResolver::add_default_not_null_constraint(ObColumnSchemaV2 &column,
 
 int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
                                            const ObString &cst_name,
+                                           bool is_sys_generate_name,
                                            ObConstraint &cst,
                                            ObIAllocator &allocator,
                                            ObStmt *stmt)
@@ -8637,10 +8653,12 @@ int ObDDLResolver::add_not_null_constraint(ObColumnSchemaV2 &column,
     LOG_WARN("constraint_name length overflow", K(ret), K(cst_name.length()));
   } else if (OB_FAIL(cst.assign_not_null_cst_column_id(column.get_column_id()))) {
     LOG_WARN("assign column ids failed", K(ret));
+  } else if (OB_FAIL(cst.set_constraint_name(cst_name))) {
+    LOG_WARN("failed to set constraint name", K(ret));
   } else {
     cst.set_tenant_id(column.get_tenant_id());
     cst.set_table_id(column.get_table_id());
-    cst.set_constraint_name(cst_name);
+    cst.set_name_generated_type(is_sys_generate_name ? GENERATED_TYPE_SYSTEM : GENERATED_TYPE_USER);
     cst.set_constraint_type(CONSTRAINT_TYPE_NOT_NULL);
     cst.set_check_expr(column.get_column_name_str());
     const ObString &column_name = column.get_column_name_str();

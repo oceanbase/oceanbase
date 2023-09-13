@@ -797,6 +797,7 @@ int ObIndexBuilder::generate_schema(
       } else if (OB_FAIL(set_index_table_options(arg, data_schema, schema))) {
         LOG_WARN("set_index_table_options failed", K(arg), K(data_schema), K(ret));
       } else {
+        schema.set_name_generated_type(arg.index_schema_.get_name_generated_type());
         LOG_INFO("finish generate index schema", K(schema));
       }
     }
@@ -855,6 +856,7 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
     } else if (OB_FAIL(schema.set_table_name(index_table_name))) {
       LOG_WARN("set_table_name failed", K(index_table_name), K(arg), K(ret));
     } else {
+      schema.set_name_generated_type(arg.index_schema_.get_name_generated_type());
       schema.set_table_id(arg.index_table_id_);
       schema.set_table_type(USER_INDEX);
       schema.set_index_type(arg.index_type_);
