@@ -1011,6 +1011,10 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablet_(
     } else if (OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(dest_ls_id))) {
       LOG_WARN("failed to set dest ls rebuild", K(tmp_ret), K(dest_ls_id));
     }
+  } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
+    // Minor is not exist, wait to be restored.
+    ret = OB_EAGAIN;
+    LOG_WARN("src ls tablet is EMPTY, need retry", K(ret), K(tablet_meta));
   }
   return ret;
 }
