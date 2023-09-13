@@ -1456,6 +1456,7 @@ struct NullAwareAntiJoinInfo {
                            const uint64_t index_id,
                            const ObIndexInfoCache &index_info_cache,
                            PathHelper &helper,
+                           ObSQLSessionInfo *session_info,
                            OptSkipScanState &use_skip_scan);
 
     int get_access_path_ordering(const uint64_t table_id,

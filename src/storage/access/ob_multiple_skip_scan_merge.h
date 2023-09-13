@@ -51,7 +51,9 @@ private:
       const int64_t datum_cnt, const bool is_min);
   int update_scan_rowkey_range();
   int update_scan_rows_range(blocksstable::ObDatumRow &row);
-  int check_range_exceeded(bool &exceeded);
+  int shrink_scan_rows_range(bool &exceeded);
+  int prepare_scan_row_range();
+  void set_border_falg(const bool is_left, const blocksstable::ObDatumRange &src, blocksstable::ObDatumRange &dst);
   OB_INLINE blocksstable::ObStorageDatum* start_key_of_scan_rowkey_range()
   { return datums_ + START_KEY_OFFSET_OF_SCAN_ROWKEY_RANGE * schema_rowkey_cnt_; }
   OB_INLINE blocksstable::ObStorageDatum* end_key_of_scan_rowkey_range()
@@ -94,6 +96,7 @@ private:
   int64_t datums_cnt_;
   blocksstable::ObStorageDatum *datums_;
   const blocksstable::ObDatumRange *origin_range_;
+  const blocksstable::ObDatumRange *skip_scan_range_;
   common::ObArenaAllocator range_allocator_;
   common::ObArenaAllocator rowkey_allocator_;
 };

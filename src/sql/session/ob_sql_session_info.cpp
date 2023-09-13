@@ -451,6 +451,17 @@ int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
   return ret;
 }
 
+bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_optimizer_skip_scan_enabled;
+  }
+  return bret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {

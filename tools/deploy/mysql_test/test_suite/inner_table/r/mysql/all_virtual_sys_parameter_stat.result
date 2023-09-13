@@ -314,6 +314,7 @@ _ob_ssl_invited_nodes
 _ob_trans_rpc_timeout
 _optimizer_better_inlist_costing
 _optimizer_group_by_placement
+_optimizer_skip_scan_enabled
 _optimizer_sortmerge_join_enabled
 _parallel_max_active_sessions
 _parallel_min_message_pool
