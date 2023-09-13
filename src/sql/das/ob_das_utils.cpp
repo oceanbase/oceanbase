@@ -344,7 +344,7 @@ int ObDASUtils::generate_spatial_index_rows(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for spatial index row mbr", K(ret));
     } else if (OB_FAIL(spa_mbr.to_char(mbr, mbr_len))) {
-      LOG_WARN("failed transfrom ObSpatialMBR to string", K(ret));
+      LOG_WARN("failed transform ObSpatialMBR to string", K(ret));
     } else {
       for (uint64_t i = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
         if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_num)))) {

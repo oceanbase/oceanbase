@@ -768,7 +768,7 @@ int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
     } else {
       LOG_TRACE("get trans_result",
                 "cur_stmt", session->get_current_query_string(),
-                "scanner_trans_rsult", scanner.get_trans_result(),
+                "scanner_trans_result", scanner.get_trans_result(),
                 "tx_desc", *session->get_tx_desc());
     }
   }

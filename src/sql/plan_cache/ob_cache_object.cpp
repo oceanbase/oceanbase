@@ -157,7 +157,7 @@ int ObPlanCacheObject::check_pre_calc_cons(const bool is_ignore_stmt,
   ObSEArray<ObDatumObjParam, 4> datum_params;
   if (OB_ISNULL(phy_plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid phyiscal plan ctx", K(ret), K(phy_plan_ctx));
+    LOG_WARN("invalid physical plan ctx", K(ret), K(phy_plan_ctx));
   } else if (OB_FALSE_IT(phy_plan_ctx->set_ignore_stmt(is_ignore_stmt))) {
   } else if (PRE_CALC_ERROR == expect_res) {
     if (OB_FAIL(pre_calc_frame.eval_expect_err(exec_ctx, is_match))) {

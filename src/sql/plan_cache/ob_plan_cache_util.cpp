@@ -251,7 +251,7 @@ int ObPhyLocationGetter::reselect_duplicate_table_best_replica(const ObIArray<Ob
   return ret;
 }
 
-//need_check_on_same_server: out, 是否需要检查分区在同一sesrver, 如果这里检查过了就置为false
+//need_check_on_same_server: out, 是否需要检查分区在同一server, 如果这里检查过了就置为false
 int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                            const ObPlanCacheCtx &pc_ctx,
                                            ObIArray<ObCandiTableLoc> &candi_table_locs,
@@ -295,7 +295,7 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
           candi_table_loc.set_duplicate_type(table_location.get_duplicate_type());
           candi_table_loc.set_table_location_key(
               table_location.get_table_id(), table_location.get_ref_table_id());
-          LOG_DEBUG("plan cache utitl", K(candi_table_loc));
+          LOG_DEBUG("plan cache util", K(candi_table_loc));
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(table_location_ptrs.push_back(&table_location))) {
