@@ -359,8 +359,15 @@ void ObMinorFreezeTest::logstream_freeze()
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
     for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
+      int ret = OB_EAGAIN;
+      while (OB_EAGAIN == ret) {
+        ret = ls_handles_.at(j).get_ls()->logstream_freeze((i % 2 == 0) ? true : false);
 
-      ASSERT_EQ(OB_SUCCESS, ls_handles_.at(j).get_ls()->logstream_freeze((i % 2 == 0) ? true : false));
+        if (OB_EAGAIN == ret) {
+          ob_usleep(rand() % SLEEP_TIME);
+        }
+      }
+      ASSERT_EQ(OB_SUCCESS, ret);
     }
     i = i + 1;
   }
@@ -377,7 +384,14 @@ void ObMinorFreezeTest::tablet_freeze()
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
     for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
-      ASSERT_EQ(OB_SUCCESS, ls_handles_.at(j).get_ls()->tablet_freeze(tablet_ids_.at(j), (i % 2 == 0) ? true : false));
+      int ret = OB_EAGAIN;
+      while (OB_EAGAIN == ret) {
+        ret = ls_handles_.at(j).get_ls()->tablet_freeze(tablet_ids_.at(j), (i % 2 == 0) ? true : false);
+        if (OB_EAGAIN == ret) {
+          ob_usleep(rand() % SLEEP_TIME);
+        }
+      }
+      ASSERT_EQ(OB_SUCCESS, ret);
     }
     i = i + 1;
   }
@@ -424,6 +438,7 @@ void ObMinorFreezeTest::insert_and_freeze()
 {
   std::thread tenant_freeze_thread([this]() { tenant_freeze(); });
   std::thread tablet_freeze_thread([this]() { tablet_freeze(); });
+  std::thread logstream_freeze_thread([this]() { logstream_freeze(); });
   std::thread tablet_freeze_for_replace_tablet_meta_thread([this]() { tablet_freeze_for_replace_tablet_meta(); });
   std::thread check_frozen_memtable_thread([this]() { check_frozen_memtable(); });
   std::thread batch_tablet_freeze_thread([this]() { batch_tablet_freeze(); });
@@ -435,6 +450,7 @@ void ObMinorFreezeTest::insert_and_freeze()
 
   tenant_freeze_thread.join();
   tablet_freeze_thread.join();
+  logstream_freeze_thread.join();
   tablet_freeze_for_replace_tablet_meta_thread.join();
   check_frozen_memtable_thread.join();
   batch_tablet_freeze_thread.join();

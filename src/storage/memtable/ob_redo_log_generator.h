@@ -101,6 +101,7 @@ private:
                            const bool log_for_lock_node,
                            bool &fake_fill);
   bool check_dup_tablet_(const ObITransCallback * callback_ptr) const;
+  void bug_detect_for_logging_blocked_();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedoLogGenerator);
   bool is_inited_;
@@ -111,6 +112,9 @@ private:
   ObTransCallbackMgr *callback_mgr_;
   ObIMemtableCtx *mem_ctx_;
   transaction::ObTxEncryptMeta *clog_encrypt_meta_;
+
+  // logging block bug detector
+  int64_t last_logging_blocked_time_;
 };
 }; // end namespace memtable
 }; // end namespace oceanbase

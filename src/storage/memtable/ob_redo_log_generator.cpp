@@ -35,6 +35,7 @@ void ObRedoLogGenerator::reset()
   generate_cursor_.reset();
   callback_mgr_ = nullptr;
   mem_ctx_ = NULL;
+  last_logging_blocked_time_ = 0;
   if (clog_encrypt_meta_ != NULL) {
     op_free(clog_encrypt_meta_);
     clog_encrypt_meta_ = NULL;
@@ -58,6 +59,7 @@ int ObRedoLogGenerator::set(ObTransCallbackMgr *mgr, ObIMemtableCtx *mem_ctx)
   generate_cursor_ = mgr->begin();
   callback_mgr_ = mgr;
   mem_ctx_ = mem_ctx;
+  last_logging_blocked_time_ = 0;
   is_inited_ = true;
 
   return ret;
@@ -105,8 +107,20 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
           // Becasue the first callback is linked to a logging_blocked memtable
           transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(mem_ctx_->get_trans_ctx());
           part_ctx->set_block_frozen_memtable(static_cast<memtable::ObMemtable *>(iter->get_memtable()));
+
+          int64_t current_time = ObTimeUtility::current_time();
+          if (last_logging_blocked_time_ == 0) {
+            last_logging_blocked_time_ = current_time;
+          } else if (current_time - last_logging_blocked_time_ > 5 * 1_min) {
+            TRANS_LOG(WARN, "logging block cost too much time", KPC(part_ctx), KPC(iter));
+            if (REACH_TENANT_TIME_INTERVAL(1_min)) {
+              bug_detect_for_logging_blocked_();
+            }
+          }
         }
       } else {
+        last_logging_blocked_time_ = 0;
+
         bool fake_fill = false;
         if (MutatorType::MUTATOR_ROW == iter->get_mutator_type()) {
           ret = fill_row_redo(cursor, mmw, redo, log_for_lock_node, fake_fill, encrypt_info);
@@ -395,6 +409,22 @@ bool ObRedoLogGenerator::check_dup_tablet_(const ObITransCallback *callback_ptr)
   }
 
   return is_dup_tablet;
+}
+
+void ObRedoLogGenerator::bug_detect_for_logging_blocked_()
+{
+  int ret = OB_SUCCESS;
+
+  ObITransCallbackIterator bug_detect_cursor;
+  int64_t count = 0;
+  for (bug_detect_cursor = generate_cursor_ + 1;
+       callback_mgr_->end() !=bug_detect_cursor
+         && count <= 5;
+       ++bug_detect_cursor) {
+    ObITransCallback *bug_detect_iter = (ObITransCallback *)*bug_detect_cursor;
+    count++;
+    TRANS_LOG(WARN, "logging block print callback", KPC(bug_detect_iter), K(count));
+  }
 }
 
 }; // end namespace memtable
