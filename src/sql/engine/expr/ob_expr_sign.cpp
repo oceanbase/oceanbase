@@ -134,6 +134,10 @@ int calc_sign_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         }
         break;
       }
+      case ObBitTC: {
+        res_int = arg_datum->get_bit() == 0 ? 0 : 1;
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected arg_type", K(ret), K(arg_type));

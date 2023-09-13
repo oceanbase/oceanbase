@@ -896,3 +896,17 @@ select sign(1E-400) from dual;
 +--------------+
 |            0 |
 +--------------+
+
+##bug:
+drop table if exists t1;
+create table t1(c1 bit(64),c2 bit(64));
+insert into t1(c1) values(1);
+
+select sign(c1) from t1;
++----------+
+| sign(c1) |
++----------+
+|        1 |
++----------+
+
+drop table t1;
