@@ -346,7 +346,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
       } else if (OB_ISNULL(sys_variable_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sys variable schema is null", K(ret));
-      } else if (OB_FAIL(session->load_all_sys_vars(*sys_variable_schema, false))) {
+      } else if (OB_FAIL(session->load_all_sys_vars(*sys_variable_schema, true))) {
         LOG_WARN("load system variables failed", K(ret));
       } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
         OB_LOG(WARN, "failed to update database variables", K(ret));
