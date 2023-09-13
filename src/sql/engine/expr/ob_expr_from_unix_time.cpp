@@ -190,6 +190,7 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
   ObDatum *param2 = NULL;
   bool res_null = false;
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObString locale_name;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session is null", K(ret));
@@ -243,15 +244,35 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
                            ob_time,
                            get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0, false))) {
         LOG_WARN("failed to cast datum to obtime with date", K(ret));
-      } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(
-                                            ob_time,
-                                            param2->get_string(),
-                                            buf, BUF_LEN, pos, res_null))) {
-        LOG_WARN("failed to convert str", K(ret));
-      } else if (res_null) {
-        expr_datum.set_null();
+      } else if (lib::is_mysql_mode()) {
+        if (OB_FAIL(session->get_locale_name(locale_name))) {
+          LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
+        } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(ob_time,
+                                                          param2->get_string(),
+                                                          buf,
+                                                          BUF_LEN,
+                                                          pos,
+                                                          res_null,
+                                                          locale_name))) {
+          LOG_WARN("failed to convert ob time to str with format");
+        } else if (res_null) {
+          expr_datum.set_null();
+        } else {
+          expr_datum.set_string(buf, static_cast<int32_t>(pos));
+        }
       } else {
-        expr_datum.set_string(buf, static_cast<int32_t>(pos));
+        if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(ob_time,
+                                                      param2->get_string(),
+                                                      buf,
+                                                      BUF_LEN,
+                                                      pos,
+                                                      res_null))) {
+        LOG_WARN("failed to convert ob time to str with format");
+        } else if (res_null) {
+          expr_datum.set_null();
+        } else {
+          expr_datum.set_string(buf, static_cast<int32_t>(pos));
+        }
       }
     }
   }
