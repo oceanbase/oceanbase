@@ -4433,22 +4433,14 @@ int ObLSTabletService::process_lob_row(
               ObString val_str = old_obj.get_string();
               ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
               if (!lob_common->in_row_ && data_tbl_rowkey_change) {
+                ObLobAccessParam lob_param;
                 if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
                   ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("not enough space for lob header", K(ret), K(val_str));
-                } else {
-                  char *buf = reinterpret_cast<char*>(run_ctx.lob_allocator_.alloc(val_str.length()));
-                  if (OB_ISNULL(buf)) {
-                    ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_WARN("alloc memory failed.", K(ret), K(val_str));
-                  } else {
-                    MEMCPY(buf, val_str.ptr(), val_str.length());
-                    lob_common = reinterpret_cast<ObLobCommon*>(buf);
-                    ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
-                    ObLobDataOutRowCtx *ctx = reinterpret_cast<ObLobDataOutRowCtx*>(lob_data->buffer_);
-                    ctx->op_ = ObLobDataOutRowCtx::OpType::EMPTY_SQL;
-                    new_obj.set_lob_value(new_obj.get_type(), buf, val_str.length()); // remove has lob header flag
-                  }
+                  LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
+                } else if (OB_FAIL(delete_lob_col(run_ctx, run_ctx.col_descs_->at(i), old_obj, old_sql_obj, lob_common, lob_param))) {
+                  LOG_WARN("[STORAGE_LOB]failed to erase old lob col", K(ret), K(old_sql_row), K(old_row), K(i));
+                } else if (OB_FAIL(insert_lob_col(run_ctx, run_ctx.col_descs_->at(i), new_obj, nullptr, nullptr))) { // no need del_param
+                  LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row), K(i));
                 }
               } else {
                 new_obj.set_lob_value(new_obj.get_type(), val_str.ptr(), val_str.length()); // remove has lob header flag
