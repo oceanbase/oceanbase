@@ -125,7 +125,17 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                   case (PARAM_LIST): {
                     char *param_list_buf = NULL;
                     int64_t param_list_buf_size = OB_MAX_VARCHAR_LENGTH;
-                    if (OB_UNLIKELY(NULL == (param_list_buf
+                    const ObColumnSchemaV2 *tmp_column_schema = NULL;
+                    bool type_is_lob = true;
+                    if (OB_ISNULL(table_schema_) ||
+                        OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
+                      ret = OB_ERR_UNEXPECTED;
+                      SERVER_LOG(WARN, "table or column schema is null", KR(ret), KP(table_schema_), KP(tmp_column_schema));
+                    } else {
+                      type_is_lob = tmp_column_schema->get_meta_type().is_lob();
+                    }
+                    if (OB_FAIL(ret)) {
+                    } else if (OB_UNLIKELY(NULL == (param_list_buf
                         = static_cast<char *>(local_allocator.alloc(param_list_buf_size))))) {
                       ret = OB_ALLOCATE_MEMORY_FAILED;
                       SERVER_LOG(ERROR, "fail to alloc param_list_buf", K(ret));
@@ -139,6 +149,9 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                                                                                 pos,
                                                                                 TZ_INFO(session_)))) {
                         SERVER_LOG(WARN, "Generate table definition failed");
+                      } else if (type_is_lob) {
+                          cells[col_idx].set_lob_value(ObLongTextType, param_list_buf, pos);
+                          cells[col_idx].set_collation_type(CS_TYPE_BINARY);
                       } else {
                         ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), param_list_buf);
                         cells[col_idx].set_varchar(value_str);
@@ -167,19 +180,23 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                           SHARE_SCHEMA_LOG(WARN, "fail to get data type str", KPC(routine_info->get_ret_type()));
                         }
                       } else {
-                        ObDataType ret_type;
-                        if (OB_FAIL(ob_sql_type_str(returns_buf,
-                                                    returns_buf_size,
-                                                    pos,
-                                                    ret_type.get_obj_type(),
-                                                    ret_type.get_length(),
-                                                    ret_type.get_precision(),
-                                                    ret_type.get_scale(),
-                                                    ret_type.get_collation_type()))) {
-                          SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(ret_type));
-                        }
+                        // proc no returns, fill empty.
                       }
-                      if (OB_SUCC(ret)) {
+                      const ObColumnSchemaV2 *tmp_column_schema = NULL;
+                      bool type_is_lob = true;
+                      if (OB_FAIL(ret)) {
+                      } else if (OB_ISNULL(table_schema_) ||
+                          OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
+                        ret = OB_ERR_UNEXPECTED;
+                        SERVER_LOG(WARN, "table or column schema is null", KR(ret), KP(table_schema_), KP(tmp_column_schema));
+                      } else {
+                        type_is_lob = tmp_column_schema->get_meta_type().is_lob();
+                      }
+                      if (OB_FAIL(ret)) {
+                      } else if (type_is_lob) {
+                        cells[col_idx].set_lob_value(ObLongTextType, returns_buf, pos);
+                        cells[col_idx].set_collation_type(CS_TYPE_BINARY);
+                      } else {
                         ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), returns_buf);
                         cells[col_idx].set_varchar(value_str);
                         cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
