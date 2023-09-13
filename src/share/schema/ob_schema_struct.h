@@ -4630,6 +4630,13 @@ enum ObPrivLevel
   OB_PRIV_MAX_LEVEL,
 };
 
+enum ObPrivCheckType
+{
+  OB_PRIV_CHECK_ALL,
+  OB_PRIV_CHECK_ANY,
+  OB_PRIV_CHECK_OTHER,
+};
+
 const char *ob_priv_level_str(const ObPrivLevel grant_level);
 
 struct ObNeedPriv
@@ -4639,13 +4646,14 @@ struct ObNeedPriv
              ObPrivLevel priv_level,
              ObPrivSet priv_set,
              const bool is_sys_table,
-             const bool is_for_update = false)
+             const bool is_for_update = false,
+             ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
-        is_sys_table_(is_sys_table), is_for_update_(is_for_update)
+        is_sys_table_(is_sys_table), is_for_update_(is_for_update), priv_check_type_(priv_check_type)
   { }
   ObNeedPriv()
       : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
-        is_for_update_(false)
+        is_for_update_(false), priv_check_type_(OB_PRIV_CHECK_ALL)
   { }
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
@@ -4654,7 +4662,9 @@ struct ObNeedPriv
   ObPrivSet priv_set_;
   bool is_sys_table_; // May be used to represent the table of schema metadata
   bool is_for_update_;
-  TO_STRING_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update));
+  ObPrivCheckType priv_check_type_;
+  TO_STRING_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
+               K_(priv_check_type));
 };
 
 struct ObStmtNeedPrivs

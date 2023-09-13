@@ -496,6 +496,8 @@ public:
                       bool print_warn = true);
   int check_single_table_priv(const ObSessionPrivInfo &session_priv,
                               const ObNeedPriv &table_need_priv);
+  int check_single_table_priv_or(const ObSessionPrivInfo &session_priv,
+                                 const ObNeedPriv &table_need_priv);
   int get_session_priv_info(const uint64_t tenant_id,
                             const uint64_t user_id,
                             const ObString &database_name,

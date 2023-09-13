@@ -400,7 +400,165 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
   return ret;
 }
 
-// fix me: should do privilege check for table items in select_stmt recursively
+// get all tables/view in subquery.
+int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *select_stmt,
+                                         hash::ObHashMap<int64_t, const TableItem *> &select_tables)
+{
+  int ret = OB_SUCCESS;
+  ObString info_schema(OB_INFORMATION_SCHEMA_NAME);
+  if (NULL != select_stmt) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_items().count(); i++) {
+      const TableItem *table_item = select_stmt->get_table_item(i);
+      const TableItem *dummy_item = NULL;
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table_item is NULL ptr", K(ret));
+      } else if (!(table_item->is_basic_table() || table_item->is_view_table_) ||
+                 (table_item->database_name_.empty() && !table_item->dblink_name_.empty())) {
+        /* do nothing */
+      } else if (OB_FAIL(select_tables.get_refactored(table_item->ref_id_, dummy_item))) {
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("failed to get refactor", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          bool is_database_name_equal = false;
+          if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_, table_item->database_name_,
+                                                     info_schema, OB_TABLE_NAME_CLASS,
+                                                     is_database_name_equal))) {
+          } else if (is_database_name_equal) {
+            //do nothing
+          } else if (OB_FAIL(select_tables.set_refactored(table_item->ref_id_, table_item))) {
+            LOG_WARN("failed to set refacted", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // subquery + generated table in child_stmts
+      ObSEArray<ObSelectStmt *, 4> child_stmts;
+      if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
+        LOG_WARN("get child stmt failed", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
+          if (OB_ISNULL(child_stmts.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("child stmt is NULL", K(ret));
+          } else if (SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables))) {
+            LOG_WARN("failed to get need privs in child stmt", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+/* select (expr or sub_query) from (table/view/generated table) elsewhere (expr or subquery)
+ * - tables will appear at select expr, select sub_query, from item, elsewhere expr
+ * - only pure column ref expr to a table/view in select expr need any privileges
+ * - select sub_query, from item, elsewhere expr need select privileges
+ */
+int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
+                                         hash::ObHashMap<int64_t, const TableItem *> &select_tables,
+                                         hash::ObHashMap<int64_t, const TableItem *> &any_tables)
+{
+  int ret = OB_SUCCESS;
+  ObRelIds select_table_ids;  // select priv tables in root_stmt
+  ObString info_schema(OB_INFORMATION_SCHEMA_NAME);
+  const TableItem *dummy_item = NULL;
+  // 1. get tables in select_item, need select privilege
+  for (int64_t i = 0; OB_SUCC(ret) && i < root_stmt.get_select_item_size(); i++) {
+    const ObRawExpr *expr = root_stmt.get_select_item(i).expr_;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get NULL ptr", K(ret));
+    } else if (!expr->is_column_ref_expr()) {
+      if (OB_FAIL(select_table_ids.add_members(expr->get_relation_ids()))) {
+        LOG_WARN("failed to add members", K(ret));
+      } else { /* do nothing */ }
+    }
+  }
+  // 2. get tables in elsewhere, need select privilege
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr *, 4> else_exprs; // exprs in elsewhere
+    ObStmtExprGetter visitor;
+    visitor.set_relation_scope();
+    visitor.remove_scope(SCOPE_SELECT);
+    visitor.set_recursive(false);
+    if (OB_FAIL(root_stmt.get_relation_exprs(else_exprs, visitor))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < else_exprs.count(); i++) {
+        const ObRawExpr *expr = else_exprs.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get NULL ptr", K(ret));
+        } else if (OB_FAIL(select_table_ids.add_members(expr->get_relation_ids()))) {
+          LOG_WARN("failed to add members", K(ret));
+        } else { /* do nothing */ }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // subquery + generated table in child_stmts
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(root_stmt.get_child_stmts(child_stmts))) {
+      LOG_WARN("get child stmt failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
+        if (OB_ISNULL(child_stmts.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("child stmt is NULL", K(ret));
+        } else if (SMART_CALL(get_sel_priv_tables_in_subquery(child_stmts.at(i), select_tables))) {
+          LOG_WARN("failed to get need privs in child stmt", K(ret));
+        }
+      }
+    }
+  }
+  // 4. get tables at from_scope tables/views, need any privileges
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root_stmt.get_table_items().count(); i++) {
+      const TableItem *table_item = root_stmt.get_table_item(i);
+      bool is_database_name_equal = false;
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null");
+      } else if (!(table_item->is_basic_table() || table_item->is_view_table_) ||
+                 (table_item->database_name_.empty() && !table_item->dblink_name_.empty())) {
+        /* do nothing */
+      } else if (OB_FAIL(select_tables.get_refactored(table_item->ref_id_, dummy_item))) {
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("failed to get refactored", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_, table_item->database_name_,
+                                       info_schema, OB_TABLE_NAME_CLASS, is_database_name_equal))) {
+          } else if (is_database_name_equal) {
+            /* do nothing */
+          } else if (select_table_ids.has_member(root_stmt.get_table_bit_index(table_item->table_id_))) {
+            if (OB_FAIL(select_tables.set_refactored(table_item->ref_id_, table_item))) {
+              LOG_WARN("failed to set refactor", K(ret));
+            }
+          } else {
+            if (OB_FAIL(any_tables.get_refactored(table_item->ref_id_, dummy_item))) {
+              if (OB_HASH_NOT_EXIST != ret) {
+                LOG_WARN("failed to get refactored", K(ret));
+              } else {
+                ret = OB_SUCCESS;
+                if (OB_FAIL(any_tables.set_refactored(table_item->ref_id_, table_item))) {
+                  LOG_WARN("failed to set refactor", K(ret));
+                }
+              }
+            }
+          }
+        }
+      } else { /* do nothing */ }
+    }
+  }
+  return ret;
+}
+
+// MySQL5.7 privilege check refrence https://dev.mysql.com/doc/refman/5.7/en/create-view.html
 int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
                                                  ObSelectStmt &select_stmt,
                                                  const bool is_force_view)
@@ -408,61 +566,95 @@ int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
   int ret = OB_SUCCESS;
   const bool is_sys_table = false;
   int64_t table_size = select_stmt.get_table_size();
-  int64_t need_privs_size = is_force_view ? 2 : table_size + 2;
-  ObNeedPriv need_priv(stmt.get_database_name(), stmt.get_table_name(),
-                       OB_PRIV_TABLE_LEVEL, OB_PRIV_DROP, is_sys_table);
+  common::hash::ObHashMap<int64_t, const TableItem *> select_tables;
+  common::hash::ObHashMap<int64_t, const TableItem *> any_tables;
+  ObNeedPriv need_priv(stmt.get_database_name(), stmt.get_table_name(), OB_PRIV_TABLE_LEVEL,
+                       OB_PRIV_DROP, is_sys_table);
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ should not be NULL", K(ret));
-  } else if (OB_FAIL(stmt.get_view_need_privs().reserve(need_privs_size))) {
-    LOG_WARN("fail to reserve view need privs array", K(ret));
-  } else if (stmt.get_create_table_arg().if_not_exist_
-              && OB_FAIL(stmt.add_view_need_priv(need_priv))) {
-    LOG_WARN("Fail to add need_priv", K(ret));
-  } else if (OB_FALSE_IT(need_priv.priv_set_ = OB_PRIV_CREATE_VIEW)) {
-  } else if (OB_FAIL(stmt.add_view_need_priv(need_priv))) {
-    LOG_WARN("Fail to add need_priv", K(ret));
-  } else if (is_force_view) {
-    /* do not add table to check privilege for force view */
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_size; ++i) {
-      ObString database_name;
-      ObString table_name;
-      const TableItem *table_item = select_stmt.get_table_item(i);
-      if (OB_ISNULL(table_item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table item is null");
-      } else if (table_item->is_basic_table() || table_item->is_view_table_) {
-        //no check for information_schema select
-        ObString info_schema("information_schema");
-        bool is_table_name_equal = false;
-        if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info_, table_item->database_name_,
-                                                   info_schema, OB_TABLE_NAME_CLASS,
-                                                   is_table_name_equal))) {
-        } else if (is_table_name_equal) {
-          //do nothing
-        } else if (table_item->database_name_.empty() && !table_item->dblink_name_.empty()) {
-          //do nothing
-        } else if (OB_FAIL(ob_write_string(*allocator_,
-                                            table_item->database_name_,
-                                            database_name))) {
-          LOG_WARN("Write string database name error", K(ret));
-        } else if (OB_FAIL(ob_write_string(*allocator_,
-                                            table_item->table_name_,
-                                            table_name))) {
-          LOG_WARN("Write table name error", K(table_item->table_name_), K(ret));
-        } else {
-          need_priv.db_ = database_name;
-          need_priv.table_ = table_name;
-          need_priv.priv_set_ = OB_PRIV_SELECT;
-          need_priv.is_sys_table_ = table_item->is_system_table_;
-          need_priv.is_for_update_ = table_item->for_update_;
-          need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
-          if (OB_FAIL(stmt.add_view_need_priv(need_priv))) {
-            LOG_WARN("Fail to add need_priv", K(ret), K(need_priv));
+  } else if (OB_FAIL(select_tables.create(8, "DDLResolver"))) {
+    LOG_WARN("failed to create a hashmap", K(ret));
+  } else if (OB_FAIL(any_tables.create(8, "DDLResolver"))) {
+    LOG_WARN("failed to create a hashmap", K(ret));
+  } else if (!is_force_view &&
+             OB_FAIL(get_need_priv_tables(select_stmt, select_tables, any_tables))) {
+    LOG_WARN("failed to get need priv tables", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    int64_t need_privs_size = is_force_view ? 2 : 2 + select_tables.size() + any_tables.size();
+    if (OB_FAIL(stmt.get_view_need_privs().reserve(need_privs_size))) {
+      LOG_WARN("fail to reserve view need privs array", K(ret));
+    } else if (stmt.get_create_table_arg().if_not_exist_ &&
+               OB_FAIL(stmt.add_view_need_priv(need_priv))) {
+      LOG_WARN("Fail to add need_priv", K(ret));
+    } else if (OB_FALSE_IT(need_priv.priv_set_ = OB_PRIV_CREATE_VIEW)) {
+    } else if (OB_FAIL(stmt.add_view_need_priv(need_priv))) {
+      LOG_WARN("Fail to add need_priv", K(ret));
+    } else if (!is_force_view) {
+      if (!any_tables.empty()) {
+        hash::ObHashMap<int64_t, const TableItem *>::iterator iter = any_tables.begin();
+        for (; OB_SUCC(ret) && iter != any_tables.end(); iter++) {
+          ObString database_name;
+          ObString table_name;
+          const TableItem *table_item = iter->second;
+          if (OB_ISNULL(table_item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table item is null");
+          } else if (OB_FAIL(ob_write_string(*allocator_, table_item->database_name_,
+                                             database_name))) {
+            LOG_WARN("Write string database name error", K(ret));
+          } else if (OB_FAIL(ob_write_string(*allocator_, table_item->table_name_, table_name))) {
+            LOG_WARN("Write table name error", K(table_item->table_name_), K(ret));
+          } else {
+            ObNeedPriv need_priv_else(database_name, table_name, OB_PRIV_TABLE_LEVEL,
+                                      OB_PRIV_SELECT | OB_PRIV_INSERT | OB_PRIV_UPDATE | OB_PRIV_DELETE,
+                                      table_item->is_system_table_, table_item->for_update_,
+                                      OB_PRIV_CHECK_ANY);
+            if (OB_FAIL(stmt.add_view_need_priv(need_priv_else))) {
+              LOG_WARN("Fail to add need_priv", K(ret), K(need_priv_else));
+            }
           }
         }
       }
+      if (OB_SUCC(ret) && !select_tables.empty()) {
+        hash::ObHashMap<int64_t, const TableItem *>::iterator iter = select_tables.begin();
+        for (; OB_SUCC(ret) && iter != select_tables.end(); iter++) {
+          ObString database_name;
+          ObString table_name;
+          const TableItem *table_item = iter->second;
+          if (OB_ISNULL(table_item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table item is null");
+          } else if (OB_FAIL(ob_write_string(*allocator_, table_item->database_name_,
+                                             database_name))) {
+            LOG_WARN("Write string database name error", K(ret));
+          } else if (OB_FAIL(ob_write_string(*allocator_, table_item->table_name_, table_name))) {
+            LOG_WARN("Write table name error", K(table_item->table_name_), K(ret));
+          } else {
+            ObNeedPriv need_priv_else(database_name, table_name, OB_PRIV_TABLE_LEVEL,
+                                      OB_PRIV_SELECT, table_item->is_system_table_,
+                                      table_item->for_update_);
+            if (OB_FAIL(stmt.add_view_need_priv(need_priv_else))) {
+              LOG_WARN("Fail to add need_priv", K(ret), K(need_priv_else));
+            }
+          }
+        }
+      }
+    }
+  }
+  if (select_tables.created()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = select_tables.destroy()))) {
+      LOG_WARN("failed to destroy select_tables map", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  if (any_tables.created()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = any_tables.destroy()))) {
+      LOG_WARN("failed to destroy any_tables map", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
     }
   }
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
