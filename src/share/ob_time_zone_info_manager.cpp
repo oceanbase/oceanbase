@@ -229,6 +229,8 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
             tz_info_map_.id_map_ = shared_tz_info_map_.id_map_;
             tz_info_map_.name_map_ = shared_tz_info_map_.name_map_;
           }
+          LOG_INFO("share tz info inited", K(ret), K(shared_tz_info_map_.id_map_),
+                  K(shared_tz_info_map_.name_map_));
         } else {
           if (OB_FAIL(fill_tz_info_map(*result, tz_info_map_buf_, tenant_id_))) {
             LOG_ERROR("fail to fill tz_info_map", K(ret));
@@ -255,7 +257,7 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
           last_version_ = current_tz_version;
           LOG_INFO("success to fetch tz_info map", K(ret), K(last_version_), K(tenant_id_),
                     "new_last_version", current_tz_version, K(same_with_sys),
-                    K(tz_info_map_.id_map_->size()));
+                    K(tz_info_map_.id_map_->size()), K(first_map));
         }
       }
     }
