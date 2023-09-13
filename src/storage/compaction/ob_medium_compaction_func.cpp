@@ -60,6 +60,7 @@ int64_t ObMediumCompactionScheduleFunc::to_string(char *buf, const int64_t buf_l
 }
 
 int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
+    const ObMediumCompactionScheduleFunc &func,
     ObLS &ls,
     ObTablet &tablet,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
@@ -68,8 +69,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
     ObGetMergeTablesResult &result,
     int64_t &schema_version)
 {
-  UNUSED(allocator);
-  UNUSED(schema_version);
+  UNUSEDx(func, allocator, schema_version);
   int ret = OB_SUCCESS;
   ObGetMergeTablesParam param;
   param.merge_type_ = META_MAJOR_MERGE;
@@ -92,6 +92,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
 }
 
 int ObMediumCompactionScheduleFunc::choose_major_snapshot(
+    const ObMediumCompactionScheduleFunc &func,
     ObLS &ls,
     ObTablet &tablet,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
@@ -173,7 +174,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
 
   if (OB_FAIL(ret)) {
   } else if (schedule_medium_merge) {
-    if (OB_FAIL(switch_to_choose_medium_snapshot(allocator, ls, tablet, freeze_info.freeze_version, medium_info, schema_version))) {
+    if (OB_FAIL(switch_to_choose_medium_snapshot(func, allocator, ls, tablet, freeze_info.freeze_version, medium_info, schema_version))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("failed to switch to choose medium snapshot", K(ret), K(tablet));
       }
@@ -196,6 +197,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
 }
 
 int ObMediumCompactionScheduleFunc::switch_to_choose_medium_snapshot(
+    const ObMediumCompactionScheduleFunc &func,
     ObArenaAllocator &allocator,
     ObLS &ls,
     ObTablet &tablet,
@@ -204,13 +206,12 @@ int ObMediumCompactionScheduleFunc::switch_to_choose_medium_snapshot(
     int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
-  const int64_t ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
   int64_t medium_snapshot = 0;
 
-  if (ls_weak_read_ts < freeze_version + 1) {
+  if (func.weak_read_ts_ < freeze_version + 1) {
     ret = OB_EAGAIN;
     LOG_WARN("weak read ts is smaller than new medium snapshot, try later", K(ret), K(tablet));
-  } else if (FALSE_IT(medium_snapshot = MAX(ls_weak_read_ts, freeze_version + 1))) {
+  } else if (FALSE_IT(medium_snapshot = MAX(func.weak_read_ts_, freeze_version + 1))) {
   } else if (OB_FAIL(choose_medium_schema_version(allocator, medium_snapshot, tablet, schema_version))) {
     LOG_WARN("fail to choose medium schema version", K(ret), K(tablet));
   } else {
@@ -488,7 +489,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
         medium_info.medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
       }
 
-      if (OB_FAIL(choose_medium_scn[is_major](ls_, *tablet, merge_reason, allocator_, medium_info, result, schema_version))) {
+      if (OB_FAIL(choose_medium_scn[is_major](*this, ls_, *tablet, merge_reason, allocator_, medium_info, result, schema_version))) {
         if (OB_NO_NEED_MERGE != ret) {
           LOG_WARN("failed to choose medium snapshot", K(ret), KPC(this));
         }

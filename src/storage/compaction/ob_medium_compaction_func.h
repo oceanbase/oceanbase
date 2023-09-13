@@ -102,6 +102,7 @@ protected:
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id);
   static int choose_medium_snapshot(
+      const ObMediumCompactionScheduleFunc &func,
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
@@ -110,6 +111,7 @@ protected:
       ObGetMergeTablesResult &result,
       int64_t &schema_version);
   static int choose_major_snapshot(
+      const ObMediumCompactionScheduleFunc &func,
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
@@ -118,6 +120,7 @@ protected:
       ObGetMergeTablesResult &result,
       int64_t &schema_version);
   static int switch_to_choose_medium_snapshot(
+    const ObMediumCompactionScheduleFunc &func,
     ObArenaAllocator &allocator,
     ObLS &ls,
     ObTablet &tablet,
@@ -151,6 +154,7 @@ protected:
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w
   static const int64_t MEDIUM_FUNC_CNT = 2;
   typedef int (*ChooseMediumScn)(
+      const ObMediumCompactionScheduleFunc &func,
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
