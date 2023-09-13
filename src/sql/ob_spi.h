@@ -44,7 +44,10 @@ class ObExprObjAccess;
 struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator) {}
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator)
+  {
+    row_desc_.set_tenant_id(MTL_ID());
+  }
 
   ~ObSPICursor()
   {
