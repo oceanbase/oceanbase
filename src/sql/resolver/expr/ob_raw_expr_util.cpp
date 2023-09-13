@@ -4547,7 +4547,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            common::ObIAllocator &allocator,
                                            const ObColumnRefRawExpr &col_ref,
                                            ObRawExpr *&expr,
-                                           const ObSQLSessionInfo *session_info)
+                                           const ObSQLSessionInfo *session_info,
+                                           bool is_generated_column)
 {
   int ret = OB_SUCCESS;
   ObString column_conv_info;
@@ -4584,7 +4585,7 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               !col_ref.is_not_null_for_write(),
                                               &column_conv_info,
                                               &col_ref.get_enum_set_values(),
-                                              expr))) {
+                                              expr, false, is_generated_column))) {
       LOG_WARN("fail to build column convert expr", K(ret));
     }
   }
@@ -4600,7 +4601,8 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
                                            const common::ObString *column_conv_info,
                                            const ObIArray<ObString> *type_infos,
                                            ObRawExpr *&expr,
-                                           bool is_in_pl)
+                                           bool is_in_pl,
+                                           bool is_generated_column)
 {
   int ret = OB_SUCCESS;
   ObObjType dest_type = type;
@@ -4681,12 +4683,17 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
   stmt::StmtType stmt_type_bak = stmt::T_NONE;
   if (OB_SUCC(ret)) {
     stmt_type_bak = session_info->get_stmt_type();
+    bool is_ddl = const_cast<sql::ObSQLSessionInfo *>(session_info)->get_ddl_info().is_ddl();
+    bool is_strict = lib::is_mysql_mode() && is_strict_mode(session_info->get_sql_mode());
+    bool ignore_charset_error = is_generated_column && stmt_type_bak==stmt::T_SELECT;
     (const_cast<ObSQLSessionInfo *>(session_info))->set_stmt_type(stmt::T_NONE);
     if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
                                                   0,    /* result_flag */
                                                   session_info,
                                                   def_cast_mode))) {
       LOG_WARN("fail to get_default_cast_mode", K(ret));
+    } else if ((!is_ddl && !is_strict) || ignore_charset_error ) {
+        def_cast_mode |= CM_CHARSET_CONVERT_IGNORE_ERR;
     }
   }
   if (OB_SUCC(ret)) {
