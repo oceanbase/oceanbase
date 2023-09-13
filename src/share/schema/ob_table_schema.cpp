@@ -6224,7 +6224,6 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 external_file_format_,
                 external_file_pattern_);
   }
-  LST_DO_CODE(OB_UNIS_ENCODE, name_generated_type_);
   }();
 
   if (OB_SUCC(ret)) {
@@ -6233,6 +6232,11 @@ OB_DEF_SERIALIZE(ObTableSchema)
 
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(kv_attributes_);
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                name_generated_type_);
   }
   return ret;
 }
@@ -6583,7 +6587,6 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                   external_file_format_,
                   external_file_pattern_);
     }
-    LST_DO_CODE(OB_UNIS_DECODE, name_generated_type_);
   }
   }();
 
@@ -6599,6 +6602,10 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(kv_attributes, kv_attributes_))) {
       LOG_WARN("deep_copy_str failed", K(ret), K(kv_attributes));
     }
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                name_generated_type_);
   }
   return ret;
 }
