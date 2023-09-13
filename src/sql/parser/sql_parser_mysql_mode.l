@@ -62,7 +62,7 @@ common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
 comment          ({sql_comment})
-identifier        (([A-Za-z0-9$_]|{UTF8_GB_CHAR})*)
+identifier        (([A-Za-z0-9$_]|{UTF8_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
 user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
 version_num      ([0-9]+\.+[0-9]*)
