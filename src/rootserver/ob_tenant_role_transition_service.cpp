@@ -1433,7 +1433,7 @@ void ObTenantRoleTransitionService::broadcast_tenant_info(const char* const log_
       obrpc::ObRefreshTenantInfoArg arg;
       const ObUnit &unit = units.at(i);
       bool alive = true;
-      int64_t trace_time;
+      int64_t trace_time = 0;
       if (OB_FAIL(GCTX.server_tracer_->is_alive(unit.server_, alive, trace_time))) {
         LOG_WARN("check server alive failed", KR(ret), K(unit));
       } else if (!alive) {

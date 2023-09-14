@@ -14217,8 +14217,8 @@ int ObDDLService::drop_aux_table_in_truncate(
   const bool is_index = USER_INDEX == table_type;
   ObSEArray<uint64_t, 16> aux_vp_tid_array;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  uint64_t lob_meta_table_id;
-  uint64_t lob_piece_table_id;
+  uint64_t lob_meta_table_id = 0;
+  uint64_t lob_piece_table_id = 0;
   int64_t N = 0;
   if (table_type == USER_INDEX) {
     if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
@@ -19349,8 +19349,8 @@ int ObDDLService::flashback_aux_table(
   const uint64_t tenant_id = table_schema.get_tenant_id();
   ObSEArray<uint64_t, 16> aux_vp_tid_array;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  uint64_t lob_meta_table_id;
-  uint64_t lob_piece_table_id;
+  uint64_t lob_meta_table_id = 0;
+  uint64_t lob_piece_table_id = 0;
   int64_t N = 0;
   if (table_type == USER_INDEX) {
     if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
@@ -24723,7 +24723,7 @@ int ObDDLService::check_rename_object_type(
     RenameOracleObjectType &obj_type)
 {
   int ret = OB_SUCCESS;
-  uint64_t sequence_id;
+  uint64_t sequence_id = 0;
   bool sequence_exist = false;
   bool is_system_generated = false;
   obj_type = RENAME_TYPE_INVALID;
@@ -27683,7 +27683,7 @@ int ObDDLService::grant_sys_priv_to_ur(
   int64_t refreshed_schema_version = 0;
   const ObUserInfo *user_info = NULL;
   ObSysPriv *sys_priv = NULL;
-  uint64_t grantee_id;
+  uint64_t grantee_id = 0;
   ObSArray<ObString> users_name;
   ObSArray<ObString> hosts_name;
 
@@ -27780,7 +27780,7 @@ int ObDDLService::grant_table_and_col_privs_to_user(
                          schema_guard));
   /* 2. deal with cols privs */
   /* 2.1 reorg privs according to colid */
-  uint64_t colid;
+  uint64_t colid = 0;
   ObRawObjPrivArray obj_priv_array;
   for (int i = 0; i < arg.ins_col_ids_.count() && OB_SUCC(ret); i++) {
     obj_priv_array.reset();
@@ -28497,7 +28497,7 @@ int ObDDLService::build_need_flush_role_array(
   ObIArray<uint64_t> &disable_flag_array)
 {
   int ret = OB_SUCCESS;
-  uint64_t role_id;
+  uint64_t role_id = 0;
   uint64_t target_disable_flag = 0;
   uint64_t org_disable_flag = 0;
   ObSEArray<uint64_t, 8> org_role_id_array;
@@ -29488,9 +29488,9 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
 int ObDDLService::alter_outline(const obrpc::ObAlterOutlineArg &alter_outline_arg)
 {
   int ret = OB_SUCCESS;
-  int64_t start_usec;
-  int64_t end_usec;
-  int64_t cost_usec;
+  int64_t start_usec = 0;
+  int64_t end_usec = 0;
+  int64_t cost_usec = 0;
   const uint64_t tenant_id = alter_outline_arg.alter_outline_info_.get_tenant_id();
   start_usec = ObTimeUtility::current_time();
   if (OB_FAIL(check_inner_stat())) {

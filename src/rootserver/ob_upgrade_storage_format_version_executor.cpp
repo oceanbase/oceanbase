@@ -159,7 +159,7 @@ int ObUpgradeStorageFormatVersionExecutor::execute()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("job is is invalid", K(ret), K(job_id));
     } else {
-      int64_t cur_version;
+      int64_t cur_version = 0;
       if (OB_FAIL(root_service_->get_zone_mgr().get_storage_format_version(cur_version))) {
          LOG_WARN("fail to get current version", K(ret), K(cur_version));
        } else if (cur_version >= OB_STORAGE_FORMAT_VERSION_MAX - 1) {

@@ -231,7 +231,7 @@ int ObBackupDataScheduler::do_build_task_(
     ObBackupScheduleTask *&task)
 {
   int ret = OB_SUCCESS;
-  int64_t task_deep_copy_size;
+  int64_t task_deep_copy_size = 0;
   void *raw_ptr = nullptr;
   if (OB_FAIL(tmp_task.build(job, set_task_attr, ls_task))) {
     LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(job), K(ls_task));

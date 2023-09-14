@@ -788,7 +788,7 @@ int ObPartitionBalance::save_balance_group_stat_()
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObSqlString sql;
-  int64_t affected_rows;
+  int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
   int64_t start_time = ObTimeUtility::current_time();
   if (!inited_) {

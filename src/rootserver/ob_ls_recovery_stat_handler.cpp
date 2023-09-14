@@ -185,7 +185,7 @@ int ObLSRecoveryStatHandler::do_get_ls_level_readable_scn_(SCN &read_scn)
 {
   int ret = OB_SUCCESS;
   palf::AccessMode access_mode;
-  int64_t unused_mode_version;
+  int64_t unused_mode_version = 0;
   share::SCN majority_min_readable_scn = SCN::min_scn();
   read_scn = SCN::min_scn();
 
@@ -385,7 +385,7 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
       const auto member = ob_member_list.at(i);
 
       bool alive = true;
-      int64_t trace_time;
+      int64_t trace_time = 0;
       if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
         LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
       } else if (OB_UNLIKELY(!member.is_valid())) {

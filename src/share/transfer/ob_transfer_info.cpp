@@ -191,7 +191,7 @@ int ObTransferTabletInfo::init(
 int ObTransferTabletInfo::parse_from_display_str(const common::ObString &str)
 {
   int ret = OB_SUCCESS;
-  uint64_t tablet_id;
+  uint64_t tablet_id = 0;
   errno = 0;
   if (OB_UNLIKELY(2 != sscanf(str.ptr(), "%lu:%ld", &tablet_id, &transfer_seq_))) {
     ret = OB_INVALID_ARGUMENT;
@@ -281,7 +281,7 @@ bool ObTransferPartInfo::operator==(const ObTransferPartInfo &other) const
 int ObDisplayTabletID::parse_from_display_str(const common::ObString &str)
 {
   int ret = OB_SUCCESS;
-  uint64_t tablet_id;
+  uint64_t tablet_id = 0;
   errno = 0;
   if (OB_UNLIKELY(1 != sscanf(str.ptr(), "%lu", &tablet_id))) {
     ret = OB_INVALID_ARGUMENT;

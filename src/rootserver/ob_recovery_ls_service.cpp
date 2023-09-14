@@ -1179,8 +1179,8 @@ void ObRecoveryLSService::try_update_primary_ip_list()
   ObRestoreSourceServiceAttr service_attr;
   ObMySQLTransaction trans;
   ObSqlString user_and_tenant;
-  int64_t primary_cluster_id;
-  uint64_t primary_tenant_id;
+  int64_t primary_cluster_id = 0;
+  uint64_t primary_tenant_id = 0;
   char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
 
   if (OB_FAIL(restore_source_mgr.init(tenant_id_, proxy_))) {

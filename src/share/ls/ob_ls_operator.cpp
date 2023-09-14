@@ -926,7 +926,7 @@ int ObLSAttrOperator::get_random_normal_user_ls(
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       ObSqlString sql;
-      int64_t int_ls_id;
+      int64_t int_ls_id = 0;
       common::sqlclient::ObMySQLResult *res;
       if (OB_FAIL(sql.assign_fmt(
           "select ls_id from %s where ls_id > %ld and status = '%s' and flag = '%s' order by rand() limit 1",

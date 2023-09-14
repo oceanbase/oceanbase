@@ -7098,7 +7098,7 @@ int ObDDLOperator::build_table_and_col_priv_array_for_revoke_all(
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObObjPriv *, 4> obj_priv_array;
-  uint64_t col_id;
+  uint64_t col_id = 0;
   CK (obj_priv_key.is_valid());
   OZ (schema_guard.get_obj_privs_in_grantor_ur_obj_id(obj_priv_key.tenant_id_,
                                                       obj_priv_key,
@@ -7630,7 +7630,7 @@ int ObDDLOperator::get_flush_priv_array(
     const ObUserInfo &user_info)
 {
   int ret = OB_SUCCESS;
-  int64_t raw_priv;
+  int64_t raw_priv = 0;
   bool exists = false;
 
   need_flush = FALSE;

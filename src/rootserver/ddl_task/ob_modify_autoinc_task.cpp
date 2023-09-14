@@ -329,7 +329,7 @@ int ObModifyAutoincTask::modify_autoinc()
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("cannot find orig table", K(ret), K(alter_table_arg_));
     } else {
-      int64_t alter_column_id;
+      int64_t alter_column_id = 0;
 
       ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
       ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();

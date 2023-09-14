@@ -345,7 +345,7 @@ int ObBalanceGroupLSStatOperator::delete_balance_group_ls_stat(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  int64_t affected_rows;
+  int64_t affected_rows = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));

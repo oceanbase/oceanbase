@@ -248,7 +248,7 @@ int ObBackupCleanScheduler::build_task_(
     ObBackupScheduleTask *&task)
 {
   int ret = OB_SUCCESS;
-  int64_t task_deep_copy_size;
+  int64_t task_deep_copy_size = 0;
   void *raw_ptr = nullptr;
   ObBackupCleanLSTask tmp_task;
   if (OB_FAIL(tmp_task.build(task_attr, ls_task))) {

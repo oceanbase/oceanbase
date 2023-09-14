@@ -2510,8 +2510,8 @@ int ObDRWorker::do_single_replica_permanent_offline_(
   } else if (is_offline) {
     FLOG_INFO("found ls replica need to permanent offline", K(tenant_id), K(ls_id), K(member_to_remove), K(replica_type), K(dr_ls_info));
     share::ObTaskId task_id;
-    int64_t new_paxos_replica_number;
-    int64_t old_paxos_replica_number;
+    int64_t new_paxos_replica_number = 0;
+    int64_t old_paxos_replica_number = 0;
     common::ObAddr leader_addr;
     const common::ObAddr source_server; // not useful
     const bool need_check_has_leader_while_remove_replica = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type);
@@ -2808,14 +2808,14 @@ int ObDRWorker::generate_migrate_ls_task(
   } else {
     ObDRTaskKey task_key;
     bool task_exist = false;
-    uint64_t tenant_id;
+    uint64_t tenant_id = 0;
     share::ObLSID ls_id;
     share::ObTaskId task_id;
     ObReplicaMember data_source;
     int64_t data_size = 0;
     bool skip_change_member_list = false;
     ObDstReplica dst_replica;
-    int64_t old_paxos_replica_number;
+    int64_t old_paxos_replica_number = 0;
     const bool need_check_has_leader_while_remove_replica = false;
     const bool is_high_priority_task = true;
     bool can_generate = false;
@@ -3622,8 +3622,8 @@ int ObDRWorker::try_remove_readonly_replica_for_deleting_unit_(
     LOG_WARN("invalid argument", KR(ret), K(ls_replica));
   } else {
     share::ObTaskId task_id;
-    int64_t new_paxos_replica_number;
-    int64_t old_paxos_replica_number;
+    int64_t new_paxos_replica_number = 0;
+    int64_t old_paxos_replica_number = 0;
     common::ObAddr leader_addr;
     const common::ObAddr source_server; // not useful
     const bool need_check_has_leader_while_remove_replica = false;
@@ -3797,7 +3797,7 @@ int ObDRWorker::try_type_transform_for_deleting_unit_(
     // try to generate type transform task
     share::ObTaskId task_id;
     ObDRTaskKey task_key;
-    uint64_t tenant_id;
+    uint64_t tenant_id = 0;
     share::ObLSID ls_id;
     common::ObAddr leader_addr;
     int64_t old_paxos_replica_number = 0;
@@ -4254,7 +4254,7 @@ int ObDRWorker::try_cancel_unit_migration(
         LOG_WARN("fail to check need generate cancel unit migration task", KR(ret));
       } else if (need_generate) {
         share::ObTaskId task_id;
-        uint64_t tenant_id;
+        uint64_t tenant_id = 0;
         share::ObLSID ls_id;
         common::ObAddr leader_addr;
         int64_t old_paxos_replica_number = 0;
@@ -4554,14 +4554,14 @@ int ObDRWorker::try_migrate_to_unit(
                       is_unit_in_group_related))) {
         LOG_WARN("fail to check need generate migrate to unit task", KR(ret));
       } else if (need_generate) {
-        uint64_t tenant_id;
+        uint64_t tenant_id = 0;
         share::ObLSID ls_id;
         share::ObTaskId task_id;
         ObReplicaMember data_source;
         int64_t data_size = 0;
         ObDstReplica dst_replica;
         bool skip_change_member_list = false;
-        int64_t old_paxos_replica_number;
+        int64_t old_paxos_replica_number = 0;
         bool can_generate = false;
         const bool need_check_has_leader_while_remove_replica = false;
         const bool is_high_priority_task = false;
