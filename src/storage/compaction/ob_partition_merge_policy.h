@@ -218,6 +218,7 @@ public:
     TOMBSTONE_SCENE = 2,
     INEFFICIENT_QUERY = 3,
     FREQUENT_WRITE = 4,
+    TENANT_MAJOR = 5,
     INVALID_REASON
   };
 

@@ -668,7 +668,8 @@ const char *ObProhibitScheduleMediumMap::ProhibitFlagStr[] = {
   "MEDIUM",
 };
 ObProhibitScheduleMediumMap::ObProhibitScheduleMediumMap()
-  : lock_(),
+  : transfer_flag_cnt_(0),
+    lock_(),
     ls_id_map_()
 {
   STATIC_ASSERT(static_cast<int64_t>(FLAG_MAX) == ARRAYSIZEOF(ProhibitFlagStr), "flag str len is mismatch");
@@ -739,6 +740,7 @@ int ObProhibitScheduleMediumMap::clear_flag(const ObLSID &ls_id, const ProhibitF
 
 void ObProhibitScheduleMediumMap::destroy()
 {
+  transfer_flag_cnt_ = 0;
   ls_id_map_.destroy();
 }
 
@@ -922,10 +924,11 @@ int ObTenantTabletScheduler::schedule_tablet_meta_major_merge(
     if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (FALSE_IT(last_major = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_max_sync_medium_scn(max_sync_medium_scn))) {
-      LOG_WARN("failed to get max sync medium snapshot", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_handle.get_obj()->read_medium_info_list(allocator, medium_list))) {
-       LOG_WARN("failed to read medium info list", K(ret), K(tablet_id));
+      LOG_WARN("failed to read medium info list", K(ret), K(tablet_id));
+    } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
+        *tablet_handle.get_obj(), *medium_list, max_sync_medium_scn))) {
+      LOG_WARN("failed to get max sync medium snapshot", K(ret), K(ls_id), K(tablet_id));
     } else if ((nullptr != medium_list && medium_list->size() > 0)
         || nullptr == last_major
         || max_sync_medium_scn > last_major->get_snapshot_version()) {

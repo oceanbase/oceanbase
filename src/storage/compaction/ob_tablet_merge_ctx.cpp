@@ -1183,7 +1183,11 @@ int ObTabletMergeCtx::try_swap_tablet_handle()
       const ObTabletMapKey key(param_.ls_id_, param_.tablet_id_);
       if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(
         WashTabletPriority::WTP_LOW, key, allocator_, tablet_handle_, true/*force_alloc_new*/))) {
-        LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_TABLET_NOT_EXIST;
+        } else {
+          LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
+        }
       } else if (OB_FAIL(inner_init_for_medium())) {
         LOG_WARN("failed to init for medium", K(ret), K(param_));
       } else if (OB_FAIL(tablet_handle_.get_obj()->clear_memtables_on_table_store())) {

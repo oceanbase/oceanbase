@@ -248,7 +248,7 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
       // it is ok to not have any records
     }
 
-    {
+    if (!is_virtual_tenant_id(tenant_id)) { // skip virtual tenant
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
       if (tenant_config.is_valid()) {
         MTL_SWITCH(tenant_id) {

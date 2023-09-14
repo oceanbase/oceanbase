@@ -30,6 +30,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/scn.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_medium_compaction_func.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -430,7 +431,12 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
     }
 
     int64_t max_medium_scn = 0;
-    if (OB_FAIL(tablet.get_max_sync_medium_scn(max_medium_scn))) {
+    ObArenaAllocator allocator("GetMediumList", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const compaction::ObMediumCompactionInfoList *medium_list = nullptr;
+    if (OB_FAIL(tablet.read_medium_info_list(allocator, medium_list))) {
+      LOG_WARN("failed to read medium info list", K(ret), KPC(medium_list));
+    } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
+        tablet, *medium_list, max_medium_scn))) {
       LOG_WARN("failed to get max medium snapshot", K(ret), K(tablet));
     } else {
       min_snapshot = max(min_snapshot, max_medium_scn);
@@ -941,9 +947,8 @@ int ObPartitionMergePolicy::check_need_medium_merge(
 
   if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (FALSE_IT(last_major =
+  } else if (OB_ISNULL(last_major =
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
-  } else if (nullptr == last_major) {
     // no major, no medium
   } else {
     need_merge = last_major->get_snapshot_version() < medium_snapshot;
@@ -986,8 +991,7 @@ int ObPartitionMergePolicy::check_need_medium_merge(
                    tablet_id,
                    ObSuspectInfoType::SUSPECT_CANT_MAJOR_MERGE,
                    medium_snapshot, static_cast<int64_t>(is_tablet_data_status_complete),
-                   static_cast<int64_t>(need_force_freeze),
-                   tablet.get_tablet_meta().max_serialized_medium_scn_))) {
+                   static_cast<int64_t>(need_force_freeze)))) {
      LOG_WARN("failed to add suspect info", K(tmp_ret));
    }
   }
@@ -1269,7 +1273,8 @@ const char * ObAdaptiveMergeReasonStr[] = {
   "LOAD_DATA_SCENE",
   "TOMBSTONE_SCENE",
   "INEFFICIENT_QUERY",
-  "FREQUENT_WRITE"
+  "FREQUENT_WRITE",
+  "TENANT_MAJOR"
 };
 
 const char* ObAdaptiveMergePolicy::merge_reason_to_str(const int64_t merge_reason)

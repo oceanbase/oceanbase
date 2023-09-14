@@ -180,6 +180,7 @@ public:
 
   int assign(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
   int init(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
+  int init_data_version();
   int gene_parallel_info(
       ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &paral_range);
@@ -197,6 +198,7 @@ public:
   bool is_valid() const;
   bool from_cur_cluster() const { return cluster_id_ == GCONF.cluster_id && tenant_id_ == MTL_ID(); }
   bool cluster_id_equal() const { return cluster_id_ == GCONF.cluster_id; } // for compat
+  bool should_throw_for_standby_cluster() const;
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -210,8 +212,8 @@ public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
   static const int64_t MEDIUM_COMPAT_VERSION = 1;
-  static const int64_t MEDIUM_COMPAT_VERSION_V2 = 2;
-
+  static const int64_t MEDIUM_COMPAT_VERSION_V2 = 2; // for add last_medium_snapshot_
+  static const int64_t MEDIUM_COMPAT_VERSION_V3 = 3; // for stanby tenant, not throw medium info
 private:
   static const int32_t SCS_ONE_BIT = 1;
   static const int32_t SCS_RESERVED_BITS = 32;

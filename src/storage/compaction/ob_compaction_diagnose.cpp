@@ -1152,7 +1152,10 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_ISNULL(last_major_sstable =
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
-  } else if (OB_FAIL(tablet.get_max_sync_medium_scn(max_sync_medium_scn))){
+  } else if (OB_FAIL(tablet.read_medium_info_list(allocator, medium_list))) {
+    LOG_WARN("failed to load medium info list", K(ret), K(tablet));
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
+      tablet, *medium_list, max_sync_medium_scn))){
     LOG_WARN("failed to get max sync medium scn", K(ret), K(ls_id), K(tablet_id));
   } else {
     // diagnose medium

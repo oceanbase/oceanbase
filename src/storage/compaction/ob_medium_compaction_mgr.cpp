@@ -235,8 +235,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
   ObMediumCompactionInfo replay_medium_info;
   if (OB_FAIL(replay_medium_info.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("failed to deserialize medium compaction info", K(ret));
-  } else if (!replay_medium_info.cluster_id_equal()
-      && replay_medium_info.is_medium_compaction()) {
+  } else if (replay_medium_info.should_throw_for_standby_cluster()) {
     // throw medium compaction clog from other cluster
     ret = OB_NO_NEED_UPDATE;
   } else { // new mds path
@@ -659,6 +658,21 @@ void ObMediumCompactionInfoList::gene_info(
     J_OBJ_END();
     J_OBJ_END();
   }
+}
+
+int ObMediumCompactionInfoList::get_max_sync_medium_scn(int64_t &max_sync_medium_scn) const
+{
+  int ret = OB_SUCCESS;
+  max_sync_medium_scn = 0;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("medium list is invalid", KR(ret), KPC(this));
+  } else if (FALSE_IT(max_sync_medium_scn = get_last_compaction_scn())) {
+  } else if (!medium_info_list_.is_empty()) {
+    max_sync_medium_scn = MAX(max_sync_medium_scn,
+      ((ObMediumCompactionInfo *)medium_info_list_.get_last())->medium_snapshot_);
+  }
+  return ret;
 }
 
 } //namespace compaction

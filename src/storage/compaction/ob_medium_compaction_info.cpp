@@ -359,7 +359,7 @@ const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionTyp
 }
 
 ObMediumCompactionInfo::ObMediumCompactionInfo()
-  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V2),
+  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V3),
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
@@ -409,6 +409,28 @@ int ObMediumCompactionInfo::init(
   return ret;
 }
 
+int ObMediumCompactionInfo::init_data_version()
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
+  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_1_0_0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid data version to schedule medium compaction", K(ret), K(compat_version));
+  } else {
+    data_version_ = compat_version;
+    if (compat_version < DATA_VERSION_4_2_0_0) {
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
+    } else if (compat_version < DATA_VERSION_4_2_1_0) {
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+    } else {
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
+    }
+  }
+  return ret;
+}
+
 bool ObMediumCompactionInfo::is_valid() const
 {
   return COMPACTION_TYPE_MAX != compaction_type_
@@ -417,7 +439,7 @@ bool ObMediumCompactionInfo::is_valid() const
       && storage_schema_.is_valid()
       && parallel_merge_info_.is_valid()
       && (MEDIUM_COMPAT_VERSION == medium_compat_version_
-        || (MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_ && last_medium_snapshot_ != 0));
+        || (MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_ && last_medium_snapshot_ != 0));
 }
 
 void ObMediumCompactionInfo::reset()
@@ -435,6 +457,19 @@ void ObMediumCompactionInfo::reset()
   data_version_ = 0;
   storage_schema_.reset();
   parallel_merge_info_.destroy();
+}
+
+bool ObMediumCompactionInfo::should_throw_for_standby_cluster() const
+{
+  bool bret = false;
+  if (medium_compat_version_ < MEDIUM_COMPAT_VERSION_V3) {
+    // for old version medium, should throw if cluster_id is different
+    bret = !cluster_id_equal() && is_medium_compaction();
+  } else {
+    // for new version medium, all medium should be kept
+    bret = false;
+  }
+  return bret;
 }
 
 int ObMediumCompactionInfo::gene_parallel_info(
@@ -475,7 +510,7 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
           OB_UNIS_ENCODE,
           parallel_merge_info_);
     }
-    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_) {
       LST_DO_CODE(
         OB_UNIS_ENCODE,
         last_medium_snapshot_);
@@ -512,7 +547,7 @@ int ObMediumCompactionInfo::deserialize(
       clear_parallel_range();
       LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), K(buf), K(data_len), K(pos));
     }
-    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_) {
       LST_DO_CODE(
         OB_UNIS_DECODE,
         last_medium_snapshot_);
@@ -534,7 +569,7 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
   if (contain_parallel_range_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parallel_merge_info_);
   }
-  if (MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+  if (MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_) {
     LST_DO_CODE(
       OB_UNIS_ADD_LEN,
       last_medium_snapshot_);

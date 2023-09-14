@@ -48,6 +48,10 @@ public:
       ObMediumCompactionInfo::ObCompactionType &compaction_type,
       int64_t &schedule_scn);
   static int get_palf_role(const share::ObLSID &ls_id, ObRole &role);
+  static int get_max_sync_medium_scn(
+    const ObTablet &tablet,
+    const ObMediumCompactionInfoList &medium_list,
+    int64_t &max_sync_medium_scn);
   static int get_table_schema_to_merge(
     ObMultiVersionSchemaService &schema_service,
     const ObTablet &tablet,
@@ -56,10 +60,8 @@ public:
     ObMediumCompactionInfo &medium_info);
 
   int schedule_next_medium_for_leader(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
-
   int decide_medium_snapshot(
-      const bool is_major,
-      const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE);
+      const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason);
 
   int check_medium_finish(const ObLSLocality &ls_locality);
 
@@ -149,6 +151,9 @@ protected:
       const ObTabletID &tablet_id,
       const int64_t schema_version,
       uint64_t &table_id);
+  int get_adaptive_reason(
+    const int64_t schedule_major_snapshot,
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &adaptive_merge_reason);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60L * 1000L * 1000L; // 60s
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w

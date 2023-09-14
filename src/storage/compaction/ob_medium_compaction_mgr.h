@@ -131,6 +131,7 @@ public:
   {
     return extra_info_;
   }
+  int get_max_sync_medium_scn(int64_t &max_received_medium_scn) const;
 
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;

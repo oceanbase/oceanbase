@@ -12,6 +12,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
+#include "storage/compaction/ob_medium_compaction_func.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -199,7 +200,8 @@ int ObAllVirtualTabletCompactionInfo::process_curr_tenant(common::ObNewRow *&row
           cur_row_.cells_[i].set_int(medium_info_list->get_wait_check_medium_scn());
           break;
         case MAX_RECEIVED_SCN:
-          if (OB_SUCCESS == tablet->get_max_sync_medium_scn(max_sync_medium_scn)) {
+          if (OB_SUCCESS == compaction::ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
+              *tablet, *medium_info_list, max_sync_medium_scn)) {
             cur_row_.cells_[i].set_int(max_sync_medium_scn);
           } else {
             cur_row_.cells_[i].set_int(-1);
