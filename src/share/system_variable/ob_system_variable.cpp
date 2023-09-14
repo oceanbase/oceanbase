@@ -35,6 +35,7 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
+#include "lib/locale/ob_locale_type.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_warning.h"
 #endif
@@ -2388,6 +2389,28 @@ int ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid(
   }
   return ret;
 }
+
+
+
+int ObSysVarOnCheckFuncs::check_locale_type_is_valid(
+    sql::ObExecContext &ctx,
+    const ObSetVar &set_var,
+    const ObBasicSysVar &sys_var,
+    const common::ObObj &in_val,
+    common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  const ObString &locale_val = in_val.get_string();
+  if (true == set_var.is_set_default_) {
+    //do nothing
+  } else if (!is_valid_ob_locale(locale_val)) {            //check if the variable is valid
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid locale type", K(ret), K(in_val));
+  }
+  return ret;
+}
+
+
 
 int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
                                                const ObSetVar &set_var,

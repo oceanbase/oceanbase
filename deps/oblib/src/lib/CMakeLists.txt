@@ -150,6 +150,11 @@ ob_set_subtarget(oblib_lib common_mixed
   wait_event/ob_wait_event.cpp
 )
 
+ob_set_subtarget(oblib_lib locale
+  locale/ob_locale_type.cc
+  locale/ob_locale.cpp
+)
+
 ob_set_subtarget(oblib_lib lock
   lock/cond.cpp
   lock/mutex.cpp
