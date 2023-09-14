@@ -828,6 +828,7 @@ void ObMemtableCtx::update_max_submitted_seq_no(const transaction::ObTxSEQ seq_n
 int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no, const transaction::ObTxSEQ from_seq_no)
 {
   int ret = OB_SUCCESS;
+  common::ObTimeGuard timeguard("remove callbacks for rollback to", 10 * 1000);
   ObByteLockGuard guard(lock_);
 
   if (!to_seq_no.is_valid() || !from_seq_no.is_valid()) {
@@ -878,6 +879,7 @@ int ObMemtableCtx::remove_callback_for_uncommited_txn(
   const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
+  common::ObTimeGuard timeguard("remove callbacks for uncommitted txn", 10 * 1000);
   ObByteLockGuard guard(lock_);
 
   if (OB_ISNULL(memtable_set)) {

@@ -27,17 +27,6 @@ class ObCallbackScope;
 class ObTxCallbackList
 {
 public:
-  class SpinLockGuard
-  {
-  public:
-    explicit SpinLockGuard(common::ObLatch& lock);
-    ~SpinLockGuard();
-  private:
-    // print log and lbt, if the lock is held too much time.
-    common::ObSimpleTimeGuard time_guard_;
-    common::ObLatch &lock_;
-  };
-public:
   ObTxCallbackList(ObTransCallbackMgr &callback_mgr);
   ~ObTxCallbackList();
   void reset();
@@ -168,7 +157,7 @@ private:
   uint64_t tmp_checksum_;
 
   ObTransCallbackMgr &callback_mgr_;
-  common::ObLatch latch_;
+  common::ObByteLock latch_;
   DISALLOW_COPY_AND_ASSIGN(ObTxCallbackList);
 };
 

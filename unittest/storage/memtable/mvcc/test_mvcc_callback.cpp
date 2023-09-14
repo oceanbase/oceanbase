@@ -1163,7 +1163,7 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(const ObITransCallback *c
 {
   int ret = OB_SUCCESS;
   has_remove = false;
-  SpinLockGuard guard(latch_);
+  ObByteLockGuard guard(latch_);
 
   const int64_t fast_commit_callback_count = unittest::TestTxCallbackList::fast_commit_reserve_cnt_;
   const int64_t recommand_reserve_count = (fast_commit_callback_count + 1) / 2;
@@ -1191,7 +1191,7 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
   const share::SCN)
 {
   int ret = OB_SUCCESS;
-  SpinLockGuard guard(latch_);
+  ObByteLockGuard guard(latch_);
 
   ObRemoveSyncCallbacksWCondFunctor functor(
     // condition for remove
