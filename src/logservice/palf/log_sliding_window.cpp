@@ -316,7 +316,8 @@ bool LogSlidingWindow::can_receive_larger_log_(const int64_t log_id) const
     // because it is updated after the last slid log_task's ref_cnt decrease to 0.
     bool_ret = false;
     if (palf_reach_time_interval(5 * 1000 * 1000, larger_log_warn_time_)) {
-      PALF_LOG(INFO, "sw is full, cannot submit larger log", K_(palf_id), K_(self), K(start_log_id), K(sw_end_log_id), K(log_id));
+      PALF_LOG(INFO, "sw is full, cannot submit larger log", K_(palf_id), K_(self), K(start_log_id), \
+          K(sw_end_log_id), K(log_id));
     }
   }
   return bool_ret;
@@ -327,7 +328,11 @@ bool LogSlidingWindow::leader_can_submit_larger_log_(const int64_t log_id) const
   // leader submit new log时调用本接口
   bool bool_ret = true;
   const int64_t start_log_id = get_start_id();
-  if (log_id - start_log_id >= PALF_MAX_LEADER_SUBMIT_LOG_COUNT) {
+  // sw_end_log_id may be less than (start_log_id + PALF_SLIDING_WINDOW_SIZE),
+  // because it is updated after the last slid log_task's ref_cnt decrease to 0.
+  const int64_t sw_end_log_id = sw_.get_end_sn();
+  if (log_id - start_log_id >= PALF_MAX_LEADER_SUBMIT_LOG_COUNT
+      || log_id >= sw_end_log_id) {
     // should guarantee:
     // 1. sliding window in follower - sliding window size in leader > 2, otherwise
     // logs in follower may not be slided, because the log which committed_end_lsn
@@ -337,7 +342,8 @@ bool LogSlidingWindow::leader_can_submit_larger_log_(const int64_t log_id) const
     // because sliding window is full.
     bool_ret = false;
     if (palf_reach_time_interval(5 * 1000 * 1000, larger_log_warn_time_)) {
-      PALF_LOG(INFO, "sw is full, cannot submit larger log", K_(palf_id), K_(self), K(start_log_id), K(log_id));
+      PALF_LOG(INFO, "sw is full, cannot submit larger log", K_(palf_id), K_(self), K(start_log_id), \
+          K(sw_end_log_id), K(log_id));
     }
   }
   return bool_ret;
