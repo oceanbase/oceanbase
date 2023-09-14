@@ -16,8 +16,10 @@
 #include <stdint.h>
 namespace oceanbase {
 namespace memtable {
+class ObMvccRow;
 class ObMvccAccessCtx;
 class ObMvccRow;
+class ObMvccValueIterator;
 }
 namespace transaction {
 class ObTransID;
@@ -32,12 +34,28 @@ namespace share {
 class ObLSID;
 class SCN;
 }
-namespace storage {
+namespace blocksstable {
+class ObDatumRowkey;
+}
+namespace storage
+{
+class ObTableIterParam;
+class ObTableAccessContext;
 class ObStoreRowLockState;
 class ObTxTableGuards;
 
 class ObRowConflictHandler {
 public:
+  static int check_row_locked(const storage::ObTableIterParam &param,
+                              storage::ObTableAccessContext &context,
+                              const blocksstable::ObDatumRowkey &rowkey,
+                              const bool by_myself = false,
+                              const bool post_lock = false);
+  static int check_row_locked(const storage::ObTableIterParam &param,
+                              storage::ObTableAccessContext &context,
+                              const blocksstable::ObDatumRowkey &rowkey,
+                              ObStoreRowLockState &lock_state,
+                              share::SCN &max_trans_veresion);
   // There are 2 cases that can lead to row conflict in foreign key constraint check:
   // Case 1: the row is locked, mainly beacuse there's an uncommitted transaction on it.
   // If the check meet this case, we should call post_row_read_conflict to put it into
@@ -47,8 +65,11 @@ public:
   // snapshot_version of current transaction, it will cause tsc.
   // If the check meet this case, we should return error code to sql layer, and it will
   // choose to retry or throw an exception according to the isolation level.
-  static int check_foreign_key_constraint_for_memtable(memtable::ObMvccAccessCtx *ctx,
-                                                       memtable::ObMvccRow *row,
+  static int check_foreign_key_constraint(const storage::ObTableIterParam &param,
+                                          storage::ObTableAccessContext &context,
+                                          const common::ObStoreRowkey &rowkey);
+  static int check_foreign_key_constraint_for_memtable(memtable::ObMvccAccessCtx &acc_ctx,
+                                                       memtable::ObMvccRow *value,
                                                        storage::ObStoreRowLockState &lock_state);
   static int check_foreign_key_constraint_for_sstable(storage::ObTxTableGuards &tx_table_guards,
                                                       const transaction::ObTransID &read_trans_id,
@@ -71,6 +92,6 @@ public:
                                     const int64_t total_trans_node_cnt,
                                     const share::SCN &trans_scn);
 };
-}
-}
+}  // namespace storage
+}  // namespace oceanbase
 #endif

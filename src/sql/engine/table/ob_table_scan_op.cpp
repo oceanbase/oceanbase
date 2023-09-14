@@ -890,7 +890,9 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
   if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
-    das_rtdef.scan_flag_.set_for_foreign_key_check();
+    if (plan_ctx->get_phy_plan()->has_for_update() && ObSQLUtils::is_iter_uncommitted_row(&ctx_)) {
+      das_rtdef.scan_flag_.set_iter_uncommitted_row();
+    }
   }
   if (MY_SPEC.batch_scan_flag_ || is_lookup) {
     das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;

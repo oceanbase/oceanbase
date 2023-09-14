@@ -71,6 +71,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_medium_list_checker.h"
+#include "storage/memtable/ob_row_conflict_handler.h"
 
 namespace oceanbase
 {
@@ -2382,19 +2383,25 @@ int ObTablet::check_row_locked_by_myself(
     bool &locked)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
   ObMemtable *write_memtable = nullptr;
   ObTableIterParam param;
   ObTableAccessContext context;
+  locked = false;
 
   if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
     LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
   } else if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
     LOG_WARN("prepare param context fail, ", K(ret), K(rowkey));
-  } else if (OB_FAIL(write_memtable->check_row_locked_by_myself(param, context, rowkey, locked))) {
-    LOG_WARN("failed to lock write memtable", K(ret), K(rowkey));
+  } else if (OB_TMP_FAIL(ObRowConflictHandler::check_row_locked(param, context, rowkey, true /* by_myself */))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
+      locked = true;
+    } else if (OB_TRANSACTION_SET_VIOLATION != tmp_ret) {
+      ret = tmp_ret;
+      LOG_WARN("failed to check row locked by myself", K(tmp_ret), K(rowkey));
+    }
   }
-
   return ret;
 }
 

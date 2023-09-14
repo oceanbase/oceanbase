@@ -1156,6 +1156,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
       && !dml_param.table_param_->get_data_table().can_read_index()) {
     dml_param.write_flag_.set_is_write_only_index();
   }
+  if (base_rtdef.is_for_foreign_key_check_) {
+    dml_param.write_flag_.set_check_row_locked();
+  }
   return ret;
 }
 
@@ -1185,7 +1188,9 @@ int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
       }
     }
   }
-
+  if (ObSQLUtils::is_fk_nested_sql(&dml_rtctx.get_exec_ctx())) {
+    das_rtdef.is_for_foreign_key_check_ = true;
+  }
   return ret;
 }
 

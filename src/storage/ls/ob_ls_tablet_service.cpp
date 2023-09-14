@@ -3486,6 +3486,9 @@ int ObLSTabletService::need_check_old_row_legitimacy(ObDMLRunningCtx &run_ctx,
       //index can not be read during building index, so does not check old index row
       need_check = false;
     }
+    if (ObDmlFlag::DF_LOCK == run_ctx.dml_flag_) {
+      need_check = false;
+    }
   }
   return ret;
 }

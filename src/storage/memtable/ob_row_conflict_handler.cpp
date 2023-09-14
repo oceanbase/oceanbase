@@ -11,6 +11,8 @@
  */
 #define USING_LOG_PREFIX TRANS
 #include "ob_row_conflict_handler.h"
+#include "storage/memtable/ob_memtable.h"
+#include "storage/blocksstable/ob_sstable.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx_table/ob_tx_table_guards.h"
@@ -20,19 +22,166 @@ using namespace common;
 using namespace memtable;
 using namespace transaction;
 namespace storage {
-int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccAccessCtx *ctx,
-                                                                    ObMvccRow *row,
+int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &param,
+                                           storage::ObTableAccessContext &context,
+                                           const blocksstable::ObDatumRowkey &rowkey,
+                                           const bool by_myself,
+                                           const bool post_lock)
+{
+  int ret = OB_SUCCESS;
+  ObStoreRowLockState lock_state;
+  ObMvccAccessCtx acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+  share::SCN max_trans_version = share::SCN::min_scn();
+  const ObTransID my_tx_id = acc_ctx.get_tx_id();
+  const share::SCN snapshot_version = acc_ctx.get_snapshot_version();
+
+  if (OB_FAIL(check_row_locked(param, context, rowkey, lock_state, max_trans_version))) {
+    LOG_WARN("check row locked failed", K(ret), K(context), K(rowkey));
+  } else {
+    if (lock_state.is_locked_) {
+      if ((by_myself && lock_state.lock_trans_id_ == my_tx_id)
+          || (!by_myself && lock_state.lock_trans_id_ != my_tx_id)) {
+        ret = OB_TRY_LOCK_ROW_CONFLICT;
+        if (post_lock) {
+          post_row_read_conflict(acc_ctx,
+                                 rowkey.get_store_rowkey(),
+                                 lock_state,
+                                 context.tablet_id_,
+                                 context.ls_id_,
+                                 0,
+                                 0, /* these two params get from mvcc_row, and for statistics, so we ignore them */
+                                 lock_state.trans_scn_);
+        }
+      }
+    } else if (max_trans_version > snapshot_version) {
+      ret = OB_TRANSACTION_SET_VIOLATION;
+    }
+  }
+  return ret;
+}
+
+int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &param,
+                                           storage::ObTableAccessContext &context,
+                                           const blocksstable::ObDatumRowkey &rowkey,
+                                           ObStoreRowLockState &lock_state,
+                                           share::SCN &max_trans_version)
+{
+  int ret = OB_SUCCESS;
+  ObMemtableKey mtk;
+  ObMvccWriteGuard guard;
+  ObStoreCtx *ctx = context.store_ctx_;
+
+  if (!ctx->mvcc_acc_ctx_.is_write() || !rowkey.is_memtable_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid param", K(ret), KP(ctx), K(rowkey));
+  } else if (OB_ISNULL(ctx->table_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tables handle or iterator in context is null", K(ret), K(ctx));
+  } else if (OB_FAIL(guard.write_auth(*ctx))) {
+    TRANS_LOG(WARN, "not allow to write", KP(ctx));
+  } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &rowkey.get_store_rowkey()))) {
+    TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
+  } else {
+    const ObIArray<ObITable *> *stores = nullptr;
+    common::ObSEArray<ObITable *, 4> iter_tables;
+    ctx->table_iter_->resume();
+    while (OB_SUCC(ret)) {
+      ObITable *table_ptr = nullptr;
+      if (OB_FAIL(ctx->table_iter_->get_next(table_ptr))) {
+        if (OB_ITER_END != ret) {
+          TRANS_LOG(WARN, "failed to get next tables", K(ret));
+        }
+      } else if (OB_ISNULL(table_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "table must not be null", K(ret), KPC(ctx->table_iter_));
+      } else if (OB_FAIL(iter_tables.push_back(table_ptr))) {
+        TRANS_LOG(WARN, "rowkey_exists check::", K(ret), KPC(table_ptr));
+      }
+    } // end while
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+    if (OB_SUCC(ret)) {
+      share::SCN snapshot_version = ctx->mvcc_acc_ctx_.get_snapshot_version();
+      stores = &iter_tables;
+      for (int64_t i = stores->count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        lock_state.reset();
+        if (NULL == stores->at(i)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "ObIStore is null", K(ret), K(i));
+        } else if (stores->at(i)->is_data_memtable()) {
+          ObMemtable *memtable = static_cast<ObMemtable *>(stores->at(i));
+          if (OB_FAIL(memtable->get_mvcc_engine().check_row_locked(ctx->mvcc_acc_ctx_, &mtk, lock_state))) {
+            TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(mtk));
+          }
+        } else if (stores->at(i)->is_sstable()) {
+          blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable *>(stores->at(i));
+          if (OB_FAIL(sstable->check_row_locked(param, context, rowkey, lock_state))) {
+            TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(rowkey));
+          }
+          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(*sstable));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "unknown store type", K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          if (lock_state.is_locked_) {
+            break;
+          } else if (max_trans_version < lock_state.trans_version_) {
+            max_trans_version = lock_state.trans_version_;
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRowConflictHandler::check_foreign_key_constraint(const storage::ObTableIterParam &param,
+                                                       storage::ObTableAccessContext &context,
+                                                       const common::ObStoreRowkey &rowkey)
+{
+  int ret = OB_SUCCESS;
+  ObMvccAccessCtx acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+  blocksstable::ObDatumRowkeyHelper rowkey_converter;
+  blocksstable::ObDatumRowkey datum_rowkey;
+  if (OB_FAIL(rowkey_converter.convert_datum_rowkey(rowkey.get_rowkey(), datum_rowkey))) {
+    STORAGE_LOG(WARN, "Failed to convert datum rowkey", K(ret), K(rowkey));
+  } else if (OB_FAIL(check_row_locked(param, context, datum_rowkey, false /* by_myself */, true /* post_lock */))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(
+          WARN, "meet lock conflict during check foreign key constraint", K(ret), K(acc_ctx.get_tx_id()), K(rowkey));
+      }
+    } else if (OB_TRANSACTION_SET_VIOLATION == ret) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(WARN,
+                  "meet tsc during check foreign key constraint",
+                  K(ret),
+                  K(acc_ctx.get_tx_id()),
+                  K(acc_ctx.get_snapshot_version()));
+      }
+    } else {
+      TRANS_LOG(WARN, "check row locked failed", K(param), K(context), K(rowkey));
+    }
+  }
+  return ret;
+}
+
+int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccAccessCtx &ctx,
+                                                                    ObMvccRow *value,
                                                                     ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
+  if (OB_ISNULL(value)) {
     ret = OB_BAD_NULL_ERROR;
     TRANS_LOG(ERROR, "the ObMvccValueIterator is null", K(ret));
-  } else if (OB_FAIL(row->check_row_locked(*ctx, lock_state))) {
+  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), K(lock_state));
   } else {
-    const ObTransID my_tx_id = ctx->get_tx_id();
-    const share::SCN snapshot_version = ctx->get_snapshot_version();
+    const ObTransID my_tx_id = ctx.get_tx_id();
+    const share::SCN snapshot_version = ctx.get_snapshot_version();
     if (lock_state.is_locked_ && my_tx_id != lock_state.lock_trans_id_) {
       ret = OB_TRY_LOCK_ROW_CONFLICT;
       if (REACH_TIME_INTERVAL(1000 * 1000)) {
@@ -169,6 +318,5 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
   }
   return ret;
 }
-
-}
-}
+}  // namespace storage
+}  // namespace oceanbase

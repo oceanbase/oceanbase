@@ -51,12 +51,12 @@ private:
   static int check_exist_inner_sql(ObTableModifyOp &modify_op,
                                    const ObForeignKeyArg &fk_arg,
                                    const ObExprPtrIArray &row,
-                                   bool expect_zero);
+                                   bool expect_zero,
+                                   bool iter_uncommitted_row);
   static int check_exist_scan_task(ObTableModifyOp &modify_op,
                                    const ObForeignKeyArg &fk_arg,
                                    const ObExprPtrIArray &row,
-                                   ObForeignKeyChecker *fk_checker,
-                                   bool expect_zero);
+                                   ObForeignKeyChecker *fk_checker);
   static int cascade(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
                      const ObExprPtrIArray &old_row, const ObExprPtrIArray &new_row);
 

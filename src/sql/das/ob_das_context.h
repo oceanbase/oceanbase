@@ -54,8 +54,10 @@ public:
       jump_read_group_id_(-1),
       flags_(0)
   {
+    is_fk_cascading_ = 0;
     need_check_server_ = 1;
     same_server_ = 1;
+    iter_uncommitted_row_ = 0;
   }
   ~ObDASCtx()
   {
@@ -139,10 +141,10 @@ public:
       uint64_t is_fk_cascading_                 : 1; //fk starts to trigger nested sql
       uint64_t need_check_server_               : 1; //need to check if partitions hit the same server
       uint64_t same_server_                     : 1; //if partitions hit the same server, could be local or remote
-      uint64_t reserved_                        : 62;
+      uint64_t iter_uncommitted_row_            : 1; //iter uncommitted row in fk_checker
+      uint64_t reserved_                        : 60;
     };
   };
-
 };
 }  // namespace sql
 }  // namespace oceanbase

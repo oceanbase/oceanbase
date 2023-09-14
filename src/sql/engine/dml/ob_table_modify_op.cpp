@@ -87,6 +87,8 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
             LOG_WARN("is_self_ref_row failed", K(ret), K(old_row), K(fk_arg));
           } else if (new_row.empty() && is_self_ref && op.is_fk_nested_session()) {
             // delete self refercnced row should not cascade delete.
+          } else if (OB_FAIL(check_exist_inner_sql(op, fk_arg, old_row, true, true))) {
+            LOG_WARN("check exist before cascade failed", K(ret), K(fk_arg), K(old_row));
           } else if (OB_FAIL(cascade(op, fk_arg, old_row, new_row))) {
             LOG_WARN("failed to cascade", K(ret), K(fk_arg), K(old_row), K(new_row));
           } else if (!new_row.empty() && is_self_ref) {
@@ -114,7 +116,9 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
             }
           }
         } else if (ACTION_SET_NULL == fk_arg.ref_action_) {
-          if (OB_FAIL(set_null(op, fk_arg, old_row))) {
+          if (OB_FAIL(check_exist_inner_sql(op, fk_arg, old_row, true, true))) {
+            LOG_WARN("check exist before cascade failed", K(ret), K(fk_arg), K(old_row));
+          } else if (OB_FAIL(set_null(op, fk_arg, old_row))) {
             LOG_WARN("failed to perform set null for foreign key", K(ret));
           }
         }
@@ -159,20 +163,24 @@ int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op, const ObForeignKey
                          const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
   if (!expect_zero) {
-    ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker, expect_zero);
+    ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker);
   } else {
-    ret = check_exist_inner_sql(modify_op, fk_arg, row, expect_zero);
+    if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, true))) {
+      LOG_WARN("check exist and iter uncommmited row meet failed", K(ret));
+    } else if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, false))) {
+      LOG_WARN("check exist and iter commmited row meet failed", K(ret));
+    }
   }
   return ret;
 }
 
 int ForeignKeyHandle::check_exist_scan_task(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
-                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero)
+                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker)
 {
   int ret = OB_SUCCESS;
   bool has_result = false;
-  DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
   if (OB_ISNULL(fk_checker)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("foreign key checker is nullptr", K(ret));
@@ -189,16 +197,16 @@ int ForeignKeyHandle::check_exist_scan_task(ObTableModifyOp &modify_op, const Ob
 }
 
 int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
-                                  const ObForeignKeyArg &fk_arg,
-                                  const ObExprPtrIArray &row,
-                                  bool expect_zero)
+                                            const ObForeignKeyArg &fk_arg,
+                                            const ObExprPtrIArray &row,
+                                            bool expect_zero,
+                                            bool iter_uncommitted_row)
 {
-  DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
   int ret = OB_SUCCESS;
   static const char *SELECT_FMT_MYSQL  =
-    "select /*+ no_parallel */ 1 from `%.*s`.`%.*s` where %.*s limit 2";
+    "select /*+ no_parallel */ 1 from `%.*s`.`%.*s` where %.*s limit 2 for update";
   static const char *SELECT_FMT_ORACLE =
-    "select /*+ no_parallel */ 1 from \"%.*s\".\"%.*s\" where %.*s and rownum <= 2";
+    "select /*+ no_parallel */ 1 from \"%.*s\".\"%.*s\" where %.*s and rownum <= 2 for update";
   const char *select_fmt = lib::is_mysql_mode() ? SELECT_FMT_MYSQL : SELECT_FMT_ORACLE;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
                           OB_MALLOC_NORMAL_BLOCK_SIZE,
@@ -232,6 +240,9 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
     stmt_buf[stmt_pos++] = 0;
   }
   if (OB_SUCC(ret) && stmt_pos > 0) {
+    if (iter_uncommitted_row) {
+      op.get_exec_ctx().get_das_ctx().iter_uncommitted_row_ = true;
+    }
     LOG_DEBUG("foreign_key_check_exist", "stmt", stmt_buf, K(row), K(fk_arg));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
@@ -282,14 +293,16 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
                *  is true, then is_zero is false, need to exclude the case of self reference and
                *  only affect one row. other cases return OB_ERR_ROW_IS_REFERENCED.
                */
-              if (OB_FAIL(is_self_ref_row(op.get_eval_ctx(), row, fk_arg, is_self_ref))) {
-                LOG_WARN("is_self_ref_row failed", K(ret), K(row), K(fk_arg));
-              } else if (is_zero && !is_self_ref) {
-                ret = OB_ERR_NO_REFERENCED_ROW;
-                LOG_WARN("parent row is not exist", K(ret), K(fk_arg), K(row));
-              } else if (!is_zero) {
-                ret = OB_ERR_ROW_IS_REFERENCED;
-                LOG_WARN("child row is exist", K(ret), K(fk_arg), K(row));
+              if (!iter_uncommitted_row) {
+                if (OB_FAIL(is_self_ref_row(op.get_eval_ctx(), row, fk_arg, is_self_ref))) {
+                  LOG_WARN("is_self_ref_row failed", K(ret), K(row), K(fk_arg));
+                } else if (is_zero && !is_self_ref) {
+                  ret = OB_ERR_NO_REFERENCED_ROW;
+                  LOG_WARN("parent row is not exist", K(ret), K(fk_arg), K(row));
+                } else if (!is_zero) {
+                  ret = OB_ERR_ROW_IS_REFERENCED;
+                  LOG_WARN("child row is exist", K(ret), K(fk_arg), K(row));
+                }
               }
             }
           }
@@ -318,6 +331,8 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
       }
     }
   }
+  op.get_exec_ctx().get_das_ctx().iter_uncommitted_row_ = false;
+
   return ret;
 }
 
@@ -1293,6 +1308,7 @@ int ObTableModifyOp::inner_get_next_row()
 
 int ObTableModifyOp::perform_batch_fk_check()
 {
+  DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < fk_checkers_.count(); ++i) {
     bool all_has_result = false;

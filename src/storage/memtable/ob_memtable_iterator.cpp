@@ -1439,7 +1439,8 @@ OB_INLINE int ObReadRow::iterate_row_value_(
         const ObTransID reader_tx_id = value_iter.get_reader_tx_id();
         share::SCN row_version = tx_node->trans_version_;
         row_scn = row_version.get_val_for_tx();
-        if (!value_iter.get_mvcc_acc_ctx()->is_standby_read_
+        if (!row.is_have_uncommited_row() &&
+            !value_iter.get_mvcc_acc_ctx()->is_standby_read_
             && !(snapshot_tx_id == tx_node->get_tx_id() || reader_tx_id == tx_node->get_tx_id())
             && row_version.is_max()) {
           TRANS_LOG(ERROR, "meet row scn with undecided value", KPC(tx_node),

@@ -4437,6 +4437,17 @@ bool ObSQLUtils::is_fk_nested_sql(ObExecContext *cur_ctx)
   return bret;
 }
 
+bool ObSQLUtils::is_iter_uncommitted_row(ObExecContext *cur_ctx)
+{
+  bool bret = false;
+  if (cur_ctx != nullptr &&
+      cur_ctx->get_parent_ctx() != nullptr &&
+      cur_ctx->get_parent_ctx()->get_das_ctx().iter_uncommitted_row_) {
+    bret = true;
+  }
+  return bret;
+}
+
 //notice: if a SQL is triggered by a PL defined as an autonomous transaction,
 //then it is not nested sql, nor is it restricted by the constraints of nested sql
 bool ObSQLUtils::is_nested_sql(ObExecContext *cur_ctx)

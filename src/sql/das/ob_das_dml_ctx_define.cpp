@@ -44,7 +44,8 @@ OB_DEF_SERIALIZE(ObDASDMLBaseRtDef)
     timeout_ts_,
     sql_mode_,
     prelock_,
-    tenant_schema_version_);
+    tenant_schema_version_,
+    is_for_foreign_key_check_);
   return ret;
 }
 
@@ -55,7 +56,8 @@ OB_DEF_DESERIALIZE(ObDASDMLBaseRtDef)
     timeout_ts_,
     sql_mode_,
     prelock_,
-    tenant_schema_version_);
+    tenant_schema_version_,
+    is_for_foreign_key_check_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -69,7 +71,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASDMLBaseRtDef)
     timeout_ts_,
     sql_mode_,
     prelock_,
-    tenant_schema_version_);
+    tenant_schema_version_,
+    is_for_foreign_key_check_);
   return len;
 }
 

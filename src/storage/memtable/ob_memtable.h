@@ -290,18 +290,6 @@ public:
   virtual int replay_schema_version_change_log(
       const int64_t schema_version);
 
-  // check_row_locked_by_myself check whether lock is locked by myself
-  // ctx is the locker tx's context, we need the tx_id for check
-  // tablet_id is necessary for the query_engine's key engine(NB: do we need it now?)
-  // columns is the schema of the new_row, it contains the row key
-  // rowkey is the row key used for lock
-  // locked returns whether lock is locked by myself
-  int check_row_locked_by_myself(
-    const storage::ObTableIterParam &param,
-    storage::ObTableAccessContext &context,
-    const blocksstable::ObDatumRowkey &rowkey,
-	bool &locked);
-
   // // TODO: ==================== Memtable Other Interface ==================
   int set_freezer(storage::ObFreezer *handler);
   storage::ObFreezer *get_freezer() { return freezer_; }
@@ -509,7 +497,6 @@ private:
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
                    const ObTxNodeArg &arg);
-
   int lock_row_on_frozen_stores_(
       const storage::ObTableIterParam &param,
       const ObTxNodeArg &arg,
@@ -541,8 +528,6 @@ private:
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       const common::ObStoreRowkey &rowkey);
-
-
 
   int post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                const ObMemtableKey &row_key,

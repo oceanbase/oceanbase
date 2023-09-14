@@ -56,15 +56,13 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
       is_inited_ = true;
     }
   }
-
   TRANS_LOG(TRACE, "value_iter.init", K(ret),
-            KPC(value),
-            KPC_(version_iter),
-            K(query_flag.is_read_latest()),
-            KPC(key),
-            K(ctx),
-            K(lbt()));
-
+          KPC(value),
+          KPC_(version_iter),
+          K(query_flag.is_read_latest()),
+          KPC(key),
+          K(ctx),
+          K(lbt()));
   return ret;
 }
 
@@ -420,7 +418,7 @@ int ObMvccRowIterator::get_next_row(
       TRANS_LOG(ERROR, "unexpected value null pointer", "ctx", *ctx_);
       ret = OB_ERR_UNEXPECTED;
     } else if (query_flag_.is_for_foreign_key_check()) {
-      if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ctx_, value, lock_state))) {
+      if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(*ctx_, value, lock_state))) {
         // we will throw error code if it's failed here, but we need to
         // post lock with key outside, so we have to set it here.
         key = tmp_key;
@@ -498,4 +496,3 @@ int ObMvccRowIterator::try_purge(const ObTxSnapshot &snapshot_info,
 
 } // namespace memtable
 } // namespace oceanbase
-
