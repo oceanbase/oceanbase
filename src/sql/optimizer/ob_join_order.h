@@ -1591,7 +1591,10 @@ struct NullAwareAntiJoinInfo {
     int extract_preliminary_query_range(const common::ObIArray<ColumnItem> &range_columns,
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
+                                        int64_t table_id,
                                         ObQueryRange* &range);
+
+    int check_enable_better_inlist(int64_t table_id, bool &enable);
 
     int get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                             const ObIArray<ObRawExpr*> &predicates,

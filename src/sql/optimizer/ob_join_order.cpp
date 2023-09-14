@@ -926,7 +926,8 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                   ? agent_table_filter
                                                                     : helper.filters_,
                                                                  range_info.get_expr_constraints(),
-								 query_range))) {
+                                                                 table_id,
+								             query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
                                                                       is_oracle_inner_index_table
@@ -3169,6 +3170,7 @@ int ObJoinOrder::check_exprs_overlap_index(const ObIArray<ObRawExpr*>& quals,
 int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                  const ObIArray<ObRawExpr*> &predicates,
                                                  ObIArray<ObExprConstraint> &expr_constraints,
+                                                 int64_t table_id,
                                                  ObQueryRange *&query_range)
 {
   int ret = OB_SUCCESS;
@@ -3191,7 +3193,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
     if (OB_ISNULL(tmp_ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for query range", K(ret));
-    } else if (session_info->is_better_inlist_enabled(enable_better_inlist)) {
+    } else if (OB_FAIL(check_enable_better_inlist(table_id, enable_better_inlist))) {
       LOG_WARN("failed to check better inlist enabled", K(ret));
     } else if (enable_better_inlist &&
                OB_FAIL(get_candi_range_expr(range_columns,
@@ -3226,6 +3228,34 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
         tmp_qr = NULL;
       }
     }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_enable_better_inlist(int64_t table_id, bool &enable)
+{
+  int ret = OB_SUCCESS;
+  enable = false;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  OptTableMeta *table_meta = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(ret));
+  } else if (!session_info->is_user_session()) {
+    enable = false;
+  } else if (session_info->is_better_inlist_enabled(enable)) {
+    LOG_WARN("failed to check better inlist enabled", K(ret));
+  } else if (!enable) {
+    //do nothing
+  } else if (OB_ISNULL(table_meta=get_plan()->get_basic_table_metas().
+                                  get_table_meta_by_table_id(table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null table meta", K(ret));
+  } else if (table_meta->use_default_stat()) {
+    enable = false;
   }
   return ret;
 }

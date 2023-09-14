@@ -1599,7 +1599,7 @@ ERRSIM_DEF_TIME(errsim_transfer_backfill_error_time, OB_TENANT_PARAMETER, "0", "
 DEF_TIME(_stall_threshold_for_dynamic_worker, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
         "threshold of dynamic worker works",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_optimizer_better_inlist_costing, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_optimizer_better_inlist_costing, OB_TENANT_PARAMETER, "True",
         "enable improved costing of index access using in-list(s)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_optimizer_skip_scan_enabled, OB_TENANT_PARAMETER, "False",
