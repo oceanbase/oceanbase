@@ -8056,7 +8056,8 @@ int ObResolverUtils::check_not_supported_tenant_name(const ObString &tenant_name
   int ret = OB_SUCCESS;
   if (0 == tenant_name.case_compare("all") ||
       0 == tenant_name.case_compare("all_user") ||
-      0 == tenant_name.case_compare("all_meta")) {
+      0 == tenant_name.case_compare("all_meta") ||
+      OB_NOT_NULL(tenant_name.find('$'))) {
     ret = OB_NOT_SUPPORTED;
   }
   return ret;
