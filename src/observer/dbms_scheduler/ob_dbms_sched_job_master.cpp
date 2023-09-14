@@ -592,6 +592,8 @@ int ObDBMSSchedJobMaster::load_and_register_all_jobs(ObDBMSSchedJobKey *job_key)
   ObSEArray<uint64_t, 32> tenant_ids;
   int64_t now = ObTimeUtility::current_time();
   int64_t delay = MIN_SCHEDULER_INTERVAL;
+  uint64_t max_tenant_id = job_key->get_tenant_id();
+  int tmp_ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("dbms sched job not init yet", K(ret), K(inited_));
@@ -600,9 +602,6 @@ int ObDBMSSchedJobMaster::load_and_register_all_jobs(ObDBMSSchedJobKey *job_key)
   } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
     LOG_WARN("fail to get all tenant ids", K(ret));
   } else {
-    uint64_t max_tenant_id = job_key->get_tenant_id();
-    CK (OB_NOT_NULL(job_key));
-    CK (job_key->is_check_new_tenant());
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
       const ObTenantSchema *tenant_schema = NULL;
       if (tenant_ids.at(i) > job_key->get_tenant_id()) {
@@ -624,16 +623,13 @@ int ObDBMSSchedJobMaster::load_and_register_all_jobs(ObDBMSSchedJobKey *job_key)
         OX (max_tenant_id = max_tenant_id > tenant_ids.at(i) ? max_tenant_id : tenant_ids.at(i));
       }
     }
-    if (OB_NOT_NULL(job_key)) {
-      job_key->set_tenant_id(max_tenant_id);
-      job_key->set_execute_at(now + delay);
-      job_key->set_delay(delay);
-      if (OB_FAIL(scheduler_task_.scheduler(job_key))) {
-        LOG_WARN("failed to scheduler check tenant job", K(ret));
-      }
-    }
   }
-
+  job_key->set_tenant_id(max_tenant_id);
+  job_key->set_execute_at(now + delay);
+  job_key->set_delay(delay);
+  if (OB_SUCCESS != (tmp_ret = scheduler_task_.scheduler(job_key))) {
+    LOG_WARN("failed to scheduler check tenant job", K(tmp_ret));
+  }
   return ret;
 }
 
@@ -644,9 +640,13 @@ int ObDBMSSchedJobMaster::load_and_register_new_jobs(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSEArray<ObDBMSSchedJobInfo, 16> job_infos;
   ObArenaAllocator allocator;
-  OZ (table_operator_.get_dbms_sched_job_infos_in_tenant(tenant_id, is_oracle_tenant,
-                                                         allocator, job_infos));
-  LOG_INFO("load and register new jobs", K(ret), K(tenant_id), K(is_oracle_tenant), KPC(job_key), K(job_infos));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = table_operator_.get_dbms_sched_job_infos_in_tenant(tenant_id, is_oracle_tenant,
+                                                         allocator, job_infos))) {
+    LOG_WARN("get dbms sched job infos in tenant failed", K(tmp_ret));
+    job_infos.reset(); // if some error happend when read table, the job info maybe not reliable
+  }
+  LOG_INFO("load and register new jobs", K(ret), K(tenant_id), K(is_oracle_tenant), K(job_infos));
   OZ (register_jobs(tenant_id, is_oracle_tenant, job_infos, job_key));
   return ret;
 }
