@@ -1705,7 +1705,8 @@ private: // member functions
                                   int64_t max_read_stale_time,
                                   common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                   bool &is_hit_partition,
-                                  share::ObFollowerFirstFeedbackType &follower_first_feedback);
+                                  share::ObFollowerFirstFeedbackType &follower_first_feedback,
+                                  int64_t &proxy_stat);
   static int calc_hit_partition_for_compat(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                            const common::ObAddr &local_server,
                                            bool &is_hit_partition,
@@ -1714,6 +1715,10 @@ private: // member functions
                                           const common::ObAddr &local_server,
                                           const ObAddrList &intersect_servers,
                                           share::ObFollowerFirstFeedbackType &follower_first_feedback);
+
+  static int calc_rwsplit_partition_feedback(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
+                                             const common::ObAddr &local_server,
+                                             int64_t &proxy_stat);
 
   int set_connect_by_property(JoinPath *join_path, ObLogJoin &log_join);
   static int calc_intersect_servers(const ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,

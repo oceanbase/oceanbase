@@ -3292,13 +3292,26 @@ static struct VarsInit{
     ObSysVars[232].alias_ = "OB_SV_OPTIMIZER_FEATURES_ENABLE" ;
     }();
 
+    [&] (){
+      ObSysVars[233].default_value_ = "0" ;
+      ObSysVars[233].info_ = "In the weak read state, the replica status of the current machine is fed back to the proxy." ;
+      ObSysVars[233].name_ = "_ob_proxy_weakread_feedback" ;
+      ObSysVars[233].data_type_ = ObIntType ;
+      ObSysVars[233].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[233].id_ = SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK] = 233 ;
+      ObSysVars[233].base_value_ = "0" ;
+    ObSysVars[233].alias_ = "OB_SV__OB_PROXY_WEAKREAD_FEEDBACK" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 233;
+static int64_t var_amount = 234;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -2076,6 +2076,7 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
   ObTaskExecutorCtx &task_exec_ctx = exec_ctx.get_task_exec_ctx();
   bool is_hit_partition = false;
+  int64_t proxy_stat = 0;
   ObFollowerFirstFeedbackType follower_first_feedback = FFF_HIT_MIN;
   int64_t route_policy_type = 0;
   bool proxy_priority_hit_support = false;
@@ -2098,13 +2099,21 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
                                                 tenant_id,
                                                 max_read_stale_time,
                                                 phy_tbl_loc_info_list,
-                                                is_hit_partition, follower_first_feedback))) {
+                                                is_hit_partition, follower_first_feedback, proxy_stat))) {
       LOG_WARN("fail to weak select intersect replicas", K(ret), K(local_server), K(phy_tbl_loc_info_list.count()));
     } else {
       session->partition_hit().try_set_bool(is_hit_partition);
       if (FFF_HIT_MIN != follower_first_feedback) {
         if (OB_FAIL(session->set_follower_first_feedback(follower_first_feedback))) {
           LOG_WARN("fail to set_follower_first_feedback", K(follower_first_feedback), K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret) && proxy_stat != 0) {
+        ObObj val;
+        val.set_int(proxy_stat);
+        if (OB_FAIL(session->update_sys_variable(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK, val))) {
+          LOG_WARN("replace user val failed", K(ret), K(val));
         }
       }
     }
@@ -2183,9 +2192,11 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
                                     int64_t max_read_stale_time,
                                     ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,
-                                    ObFollowerFirstFeedbackType &follower_first_feedback)
+                                    ObFollowerFirstFeedbackType &follower_first_feedback,
+                                    int64_t &proxy_stat)
 {
   int ret = OB_SUCCESS;
+  proxy_stat = 0;
   is_hit_partition = true;//当前没有办法来判断是否能选择在一台机器上，所以将该值设置为true
   ObCandiTableLoc * phy_tbl_loc_info = nullptr;
   ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_SELECT_REPLICA);
@@ -2241,7 +2252,9 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
       } else {
         ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_SELECT_REPLICA);
         ObAddrList intersect_servers(allocator);
-        if (OB_FAIL(calc_hit_partition_for_compat(phy_tbl_loc_info_list, local_server, is_hit_partition, intersect_servers))) {
+        if (OB_FAIL(calc_rwsplit_partition_feedback(phy_tbl_loc_info_list, local_server, proxy_stat))) {
+          LOG_WARN("fail to calc proxy partition feedback", K(ret));
+        } else if (OB_FAIL(calc_hit_partition_for_compat(phy_tbl_loc_info_list, local_server, is_hit_partition, intersect_servers))) {
           LOG_WARN("fail to calc hit partition for compat", K(ret));
         } else {
           if (is_hit_partition && route_policy.is_follower_first_route_policy_type(route_policy_ctx)) {
@@ -2319,6 +2332,79 @@ int ObLogPlan::calc_follower_first_feedback(const ObIArray<ObCandiTableLoc*> &ph
               K(is_leader_replica), K(local_server), K(intersect_servers));
   }
 
+  return ret;
+}
+
+int ObLogPlan::calc_rwsplit_partition_feedback(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
+                                               const common::ObAddr &local_server,
+                                               int64_t &proxy_stat)
+{
+  INIT_SUCC(ret);
+
+  bool all_leader = false;
+  bool all_follower = false;
+  bool need_break = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !need_break  && (i < phy_tbl_loc_info_list.count()); ++i) {
+    // table
+    const ObCandiTableLoc *phy_tbl_loc_info = phy_tbl_loc_info_list.at(i);
+    if (OB_ISNULL(phy_tbl_loc_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("phy_tbl_loc_info is NULL", K(ret), K(i), K(phy_tbl_loc_info_list.count()));
+    } else {
+      const ObCandiTabletLocIArray &phy_part_loc_info_list =
+                          phy_tbl_loc_info->get_phy_part_loc_info_list();
+      if (phy_part_loc_info_list.empty()) {
+        // just defense, when partition location list is empty, treat as it's not leader replica
+        need_break = true;
+      }
+
+      for (int64_t j = 0; OB_SUCC(ret) && !need_break && (j < phy_part_loc_info_list.count()); ++j) {
+        // partition
+        bool found_server = false;
+        const ObCandiTabletLoc &phy_part_loc_info = phy_part_loc_info_list.at(j);
+        const ObIArray<ObRoutePolicy::CandidateReplica> &replica_loc_list =
+                                    phy_part_loc_info.get_partition_location().get_replica_locations();
+        LOG_TRACE("weak read list", K(replica_loc_list), K(local_server));
+        for (int64_t k = 0; !found_server && (k < replica_loc_list.count()); ++k) {
+          // replica
+          const ObRoutePolicy::CandidateReplica &tmp_replica = replica_loc_list.at(k);
+          if (local_server == tmp_replica.get_server()) {
+            found_server = true;
+            if (is_strong_leader(tmp_replica.get_role())) {
+              all_leader = true;
+              // part leader, part follower
+              need_break = all_follower ? true : false;
+            } else {
+              all_follower = true;
+              // part leader, part follower
+              need_break = all_leader ? true : false;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  LOG_TRACE("get feedback policy", K(all_leader), K(all_follower));
+  //Design a kv pair (hidden user variable, __ob_proxy_weakread_feedback(bool)):
+  //state:
+  //1. The current machine does not have any replicas (returns true)
+  //2. Some/all copies involved are distributed on the current machine:
+  //     a. ALL FOLLOWER (do not return)
+  //     b. ALL LEADER (return true)
+  //     c. PART LEADER/PART FOLLOWER (return true)
+  if (!all_leader && !all_follower) {
+    // Current machine has no replica (proxy sent incorrectly, refresh location cache).
+    proxy_stat = 1;
+  } else if (all_leader && all_follower) {
+    // part leader, part follower
+    proxy_stat = 3;
+  } else if (all_leader) {
+    // all leader (proxy sent incorrectly, refresh location cache)
+    proxy_stat = 2;
+  } else if (all_follower) {
+    // proxy not need refresh location cache
+  }
   return ret;
 }
 

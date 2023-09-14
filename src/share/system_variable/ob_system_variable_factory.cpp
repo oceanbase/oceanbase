@@ -138,6 +138,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_nlj_batching_enabled",
   "_ob_ols_policy_session_labels",
   "_ob_proxy_session_temporary_table_used",
+  "_ob_proxy_weakread_feedback",
   "_ob_px_bcast_optimization",
   "_ob_px_slave_mapping_threshold",
   "_optimizer_gather_stats_on_load",
@@ -374,6 +375,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__NLJ_BATCHING_ENABLED,
   SYS_VAR__OB_OLS_POLICY_SESSION_LABELS,
   SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED,
+  SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK,
   SYS_VAR__OB_PX_BCAST_OPTIMIZATION,
   SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
   SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
@@ -827,7 +829,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "runtime_filter_wait_time_ms",
   "runtime_filter_max_in_num",
   "runtime_bloom_filter_max_size",
-  "optimizer_features_enable"
+  "optimizer_features_enable",
+  "_ob_proxy_weakread_feedback"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1229,6 +1232,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarRuntimeFilterMaxInNum)
         + sizeof(ObSysVarRuntimeBloomFilterMaxSize)
         + sizeof(ObSysVarOptimizerFeaturesEnable)
+        + sizeof(ObSysVarObProxyWeakreadFeedback)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3332,6 +3336,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_FEATURES_ENABLE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerFeaturesEnable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObProxyWeakreadFeedback())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObProxyWeakreadFeedback", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObProxyWeakreadFeedback));
       }
     }
 
@@ -5904,6 +5917,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerFeaturesEnable())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarOptimizerFeaturesEnable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObProxyWeakreadFeedback)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObProxyWeakreadFeedback)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObProxyWeakreadFeedback())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObProxyWeakreadFeedback", K(ret));
       }
       break;
     }

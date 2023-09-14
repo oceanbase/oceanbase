@@ -3322,5 +3322,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_ob_proxy_weakread_feedback": {
+    "id": 10151,
+    "name": "_ob_proxy_weakread_feedback",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "int",
+    "info": "In the weak read state, the replica status of the current machine is fed back to the proxy.",
+    "flags": "READONLY | SESSION | INVISIBLE",
+    "publish_version": "420",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
