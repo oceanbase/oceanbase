@@ -14078,6 +14078,7 @@ int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
             //probably type deduced failed. do nothing
             LOG_WARN("new qual is not formalized correctly", K(ret), K(*new_qual));
             ret = OB_SUCCESS;
+            new_qual = NULL;
             continue; //do not add this expr.
           }
         } else if (OB_FAIL(new_qual->pull_relation_id())) {
