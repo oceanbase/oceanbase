@@ -112,6 +112,7 @@ public:
                               bool &can_start_service,
                               SCN &min_version,
                               share::ObLSID &ls_id);
+  bool check_can_skip_ls(ObLS *ls);
 public:
   // tenant level variables init and destroy function
   static int mtl_init(ObTenantWeakReadService* &twrs);

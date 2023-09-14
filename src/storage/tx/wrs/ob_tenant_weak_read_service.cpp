@@ -711,6 +711,26 @@ void ObTenantWeakReadService::run1()
   ISTAT("thread end", K_(tenant_id));
 }
 
+bool ObTenantWeakReadService::check_can_skip_ls(ObLS *ls)
+{
+  bool bool_ret = false;
+  int ret = OB_SUCCESS;
+  share::SCN offline_scn;
+
+  if (OB_NOT_NULL(ls)) {
+    if (ls->get_ls_wrs_handler()->can_skip_ls()) {
+      bool_ret = true;
+    } else if (OB_SUCC(ls->get_offline_scn(offline_scn)) && offline_scn.is_valid()) {
+      bool_ret = true;
+      FLOG_INFO("ls offline scn is valid, skip it", K(ls->get_ls_id()), K(offline_scn));
+    } else {
+      bool_ret = false;
+    }
+  }
+
+  return bool_ret;
+}
+
 int ObTenantWeakReadService::check_can_start_service(const SCN &current_gts,
                                                      bool &can_start_service,
                                                      SCN &min_version,
@@ -745,7 +765,7 @@ int ObTenantWeakReadService::check_can_start_service(const SCN &current_gts,
       } else if (OB_ISNULL(ls)) {
         ret = OB_PARTITION_NOT_EXIST;
         FLOG_WARN("iterate ls fail", KP(ls));
-      } else if (ls->get_ls_wrs_handler()->can_skip_ls()) {
+      } else if (check_can_skip_ls(ls)) {
         // do nothing
       } else {
         ++total_ls_cnt;
