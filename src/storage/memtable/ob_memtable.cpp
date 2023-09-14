@@ -208,6 +208,11 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
+void ObMemtable::pre_batch_destroy_keybtree()
+{
+  (void)query_engine_.pre_batch_destroy_keybtree();
+}
+
 int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
   const ObLSID ls_id, const memtable::ObMemtableSet *memtable_set)
 {

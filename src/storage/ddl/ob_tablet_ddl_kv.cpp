@@ -152,7 +152,7 @@ void ObBlockMetaTree::destroy()
 {
   is_inited_ = false;
   macro_blocks_.reset();
-  block_tree_.destroy();
+  block_tree_.destroy(false /*is_batch_destroy*/);
   data_desc_.reset();
   for (int64_t i = 0; i < sorted_rowkeys_.count(); ++i) {
     const ObDataMacroBlockMeta *cur_meta = sorted_rowkeys_.at(i).block_meta_;

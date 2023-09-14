@@ -31,6 +31,8 @@ namespace memtable
 {
 class ObMvccRow;
 
+typedef keybtree::ObKeyBtree<ObStoreRowkeyWrapper, ObMvccRow *> ObMemtableKeyBtree;
+
 class ObIQueryEngineIterator
 {
 public:
@@ -152,6 +154,7 @@ public:
   ~ObQueryEngine() { destroy(); }
   int init(const uint64_t tenant_id);
   void destroy();
+  void pre_batch_destroy_keybtree();
   int set(const ObMemtableKey *key, ObMvccRow *value);
   int get(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMemtableKey *returned_key);
   int ensure(const ObMemtableKey *key, ObMvccRow *value);

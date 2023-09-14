@@ -31,6 +31,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/memtable/mvcc/ob_query_engine.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/ob_thread_define.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
@@ -527,12 +528,22 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
   return ret;
 }
 
+void ObTenantMetaMemMgr::batch_destroy_memtable_(memtable::ObMemtableSet *memtable_set)
+{
+  for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
+       set_iter != memtable_set->end();
+       ++set_iter) {
+    (void)(((memtable::ObMemtable *)set_iter->first)->pre_batch_destroy_keybtree());
+  }
+  memtable::ObMemtableKeyBtree::batch_destroy();
+}
+
 void ObTenantMetaMemMgr::batch_gc_memtable_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  for (auto iter = gc_memtable_map_.begin();
+  for (common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*>::iterator iter = gc_memtable_map_.begin();
        iter != gc_memtable_map_.end(); ++iter) {
     const ObLSID &ls_id = iter->first;
     memtable::ObMemtableSet *memtable_set = iter->second;
@@ -545,7 +556,9 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
         } else {
           LOG_WARN("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
         }
-        for (auto set_iter = memtable_set->begin(); set_iter != memtable_set->end(); ++set_iter) {
+        for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
+             set_iter != memtable_set->end();
+             ++set_iter) {
           if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first),
                                                    ObITable::TableType::DATA_MEMTABLE))) {
             LOG_ERROR("push table into gc queue failed, maybe there will be leak",
@@ -558,7 +571,11 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
           LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
         }
       } else {
-        for (auto set_iter = memtable_set->begin(); set_iter != memtable_set->end(); ++set_iter) {
+        (void)batch_destroy_memtable_(memtable_set);
+
+        for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
+             set_iter != memtable_set->end();
+             ++set_iter) {
           pool_arr_[static_cast<int>(ObITable::TableType::DATA_MEMTABLE)]->free_obj((void *)(set_iter->first));
         }
 
@@ -571,7 +588,7 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
   }
 
   if (REACH_TENANT_TIME_INTERVAL(1_hour)) {
-    for (auto iter = gc_memtable_map_.begin();
+    for (common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*>::iterator iter = gc_memtable_map_.begin();
          iter != gc_memtable_map_.end(); ++iter) {
       memtable::ObMemtableSet *memtable_set = iter->second;
       if (OB_NOT_NULL(memtable_set)) {

@@ -384,6 +384,7 @@ public:
   int64_t get_memtable_mgr_op_cnt() { return ATOMIC_LOAD(&memtable_mgr_op_cnt_); }
   int64_t inc_memtable_mgr_op_cnt() { return ATOMIC_AAF(&memtable_mgr_op_cnt_, 1); }
   int64_t dec_memtable_mgr_op_cnt() { return ATOMIC_SAF(&memtable_mgr_op_cnt_, 1); }
+  void pre_batch_destroy_keybtree();
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);

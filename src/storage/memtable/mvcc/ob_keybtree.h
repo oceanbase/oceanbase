@@ -220,7 +220,9 @@ public:
   int64_t size() const { return size_.value(); }
   void dump(FILE *file) { print(file); }
   void print(FILE *file) const;
-  int destroy();
+  int destroy(const bool is_batch_destroy);
+  int pre_batch_destroy();
+  static int batch_destroy();
   int del(const BtreeKey key, BtreeVal &value, int64_t version);
   int re_insert(const BtreeKey key, BtreeVal value);
   int insert(const BtreeKey key, BtreeVal &value);
@@ -230,12 +232,12 @@ public:
   int set_key_range(BtreeRawIterator &handle, const BtreeKey min_key, const bool start_exclude,
                     const BtreeKey max_key, bool end_exclude, int64_t version);
   BtreeNode *alloc_node(const bool is_emergency);
-  void free_node(BtreeNode *p);
+  static void free_node(BtreeNode *p);
   void retire(common::HazardList &retire_list);
   int32_t update_split_info(int32_t split_pos);
-  common::RetireStation &get_retire_station();
-  common::QClock& get_qclock();
-  common::ObQSync& get_qsync();
+  static common::RetireStation &get_retire_station();
+  static common::QClock& get_qclock();
+  static common::ObQSync& get_qsync();
 private:
   void destroy(BtreeNode *root);
 private:

@@ -175,11 +175,16 @@ void ObQueryEngine::destroy()
   if (IS_NOT_INIT) {
     // do nothing
   } else {
-    keybtree_.destroy();
+    keybtree_.destroy(true /*is_batch_destroy*/);
     btree_allocator_.reset();
     keyhash_.destroy();
   }
   is_inited_ = false;
+}
+
+void ObQueryEngine::pre_batch_destroy_keybtree()
+{
+  (void)keybtree_.pre_batch_destroy();
 }
 
 int ObQueryEngine::set(const ObMemtableKey *key, ObMvccRow *value)

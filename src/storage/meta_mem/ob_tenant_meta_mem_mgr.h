@@ -476,6 +476,7 @@ private:
   void destroy_gc_tablets_queue();
   int push_memtable_into_gc_map_(memtable::ObMemtable *memtable);
   void batch_gc_memtable_();
+  void batch_destroy_memtable_(memtable::ObMemtableSet *memtable_set);
 
 private:
   common::SpinRWLock wash_lock_;
