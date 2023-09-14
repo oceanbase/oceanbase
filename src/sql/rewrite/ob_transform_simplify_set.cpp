@@ -724,76 +724,68 @@ int ObTransformSimplifySet::replace_set_stmt_with_child_stmt(ObSelectStmt *&pare
                                                              ObSelectStmt *child_stmt)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null pointer", K(ret));
   } else {
-    if ((parent_stmt->has_order_by() && (child_stmt->has_order_by() || child_stmt->has_limit()))
-        || (parent_stmt->has_limit() && child_stmt->has_limit())
-        || (parent_stmt->is_set_distinct() && child_stmt->has_limit())
-        || (parent_stmt->has_select_into() && child_stmt->has_select_into())) {
-      /* 1. for limit clause
-       * if both parent_stmt and child_stmt has limit, we should create a view to hold parent's limit.
-       *
-       * 2. for add_order_by, child stmt shouldn't have order_by_items or limit items.
-       * if we meet conflict order by items. We can't directly reset child's order by.
-       *  e.g., select * from t1 order by c1 limit 2 UNION ALL select * from t2 where 1=2 order by c2;
-       * if we overwrite the order by, the result is not correct.
-       * 
-       * 3. for distinct.
-       * if child stmt has limit, we can't add distinct to child stmt. Since limit should be done before distinct.
-       * 
-       * 4. select into is not allowed in subquery, we add the code here to handle conflict select into.
-       * just in case of some transformer rule generating conflict select into.
-       */
-      ObSelectStmt *view_stmt = NULL;
-      if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, child_stmt, view_stmt))) {
-        LOG_WARN("fail to create view with generated table", K(ret));
-      } else if (OB_ISNULL(view_stmt)) {
-        LOG_WARN("view table is null", K(ret));
-      } else if (OB_FAIL(add_order_by(view_stmt, parent_stmt))) {
-        // set child's order by to view.
-        LOG_WARN("fail to assign parents's order items to child", K(ret));
-      } else {
-        //set child's limit to view. and reset child's order by items.
-        view_stmt->set_fetch_info(parent_stmt->get_offset_expr(),
-                                 parent_stmt->get_limit_expr(),
-                                 parent_stmt->get_limit_percent_expr());
-        if (parent_stmt->is_set_distinct()) {
-          view_stmt->assign_distinct();
-        }
-        if (parent_stmt->has_select_into()) {
-          view_stmt->set_select_into(parent_stmt->get_select_into());
-        }
-        parent_stmt = view_stmt;
-      }
+    /* 1. for limit clause
+      * if both parent_stmt and child_stmt has limit, we should create a view to hold parent's limit.
+      *
+      * 2. for add_order_by, child stmt shouldn't have order_by_items or limit items.
+      * if we meet conflict order by items. We can't directly reset child's order by.
+      *  e.g., select * from t1 order by c1 limit 2 UNION ALL select * from t2 where 1=2 order by c2;
+      * if we overwrite the order by, the result is not correct.
+      *
+      * 3. for distinct.
+      * if child stmt has limit, we can't add distinct to child stmt. Since limit should be done before distinct.
+      *
+      * 4. select into is not allowed in subquery, we add the code here to handle conflict select into.
+      * just in case of some transformer rule generating conflict select into.
+    */
+    ObSelectStmt *view_stmt = NULL;
+    if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, child_stmt, view_stmt))) {
+      LOG_WARN("fail to create view with generated table", K(ret));
+    } else if (OB_ISNULL(view_stmt)) {
+      LOG_WARN("view table is null", K(ret));
+    } else if (OB_FAIL(add_order_by(view_stmt, parent_stmt))) {
+      // set child's order by to view.
+      LOG_WARN("fail to assign parents's order items to child", K(ret));
     } else {
-      /* order by clause*/
-      if (parent_stmt->has_order_by()) {
-        if (OB_FAIL(add_order_by(child_stmt, parent_stmt))) {
-          LOG_WARN("fail to assign parents's order items to child", K(ret));
+      // set child's limit to view. and reset child's order by items.
+      view_stmt->set_fetch_info(parent_stmt->get_offset_expr(),
+                                parent_stmt->get_limit_expr(),
+                                parent_stmt->get_limit_percent_expr());
+      if (parent_stmt->is_set_distinct()) {
+        view_stmt->assign_distinct();
+      }
+      if (parent_stmt->has_select_into()) {
+        view_stmt->set_select_into(parent_stmt->get_select_into());
+      }
+      // if the result type of the view stmt's projection expr does not match that of the parent set stmt
+      // cast expr need to be added to view's select items
+      if (OB_SUCC(ret) && OB_UNLIKELY(view_stmt->get_select_item_size() != parent_stmt->get_select_item_size())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select item size missmatch", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_select_item_size(); i++) {
+          ObRawExpr *expr1 = parent_stmt->get_select_item(i).expr_;
+          ObRawExpr *expr2 = view_stmt->get_select_item(i).expr_;
+          if (OB_ISNULL(expr1) || OB_ISNULL(expr2)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null pointer", K(ret), KP(expr1), KP(expr2));
+          } else {
+            if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*(ctx_->expr_factory_),
+                                                               expr1,
+                                                               expr2,
+                                                               ctx_->session_info_))) {
+              LOG_WARN("fail to add cast expr for replace", K(ret));
+            } else {
+              view_stmt->get_select_item(i).expr_ = expr2;
+            }
+          }
         }
       }
-
-      if (OB_SUCC(ret) && parent_stmt->is_set_distinct()) {
-        if (child_stmt->is_set_stmt()) {
-          child_stmt->assign_set_distinct();
-        } else {
-          child_stmt->assign_distinct();
-        }
-      }
-
-      if (OB_SUCC(ret) && parent_stmt->has_select_into()) {
-        child_stmt->set_select_into(parent_stmt->get_select_into());
-      }
-
-      /*limit clause*/
-      if (OB_SUCC(ret) && parent_stmt->has_limit()) {
-        child_stmt->set_fetch_info(parent_stmt->get_offset_expr(),
-                                  parent_stmt->get_limit_expr(),
-                                  parent_stmt->get_limit_percent_expr());
-      }
-      parent_stmt = child_stmt;
+      parent_stmt = view_stmt;
     }
   }
   
