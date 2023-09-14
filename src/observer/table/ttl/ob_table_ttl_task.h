@@ -97,11 +97,7 @@ public:
   virtual int process() override;
   common::ObTabletID get_tablet_id() const
   {
-    common::ObTabletID tablet_id;
-    if (OB_NOT_NULL(info_)) {
-      tablet_id = info_->get_tablet_id();
-    }
-    return tablet_id;
+    return info_.get_tablet_id();
   }
   uint64_t get_table_id() const { return param_.table_id_; }
   int64_t get_timeout_ts() { return ONE_TASK_TIMEOUT + ObTimeUtility::current_time(); }
@@ -118,7 +114,7 @@ private:
 private:
   bool is_inited_;
   table::ObTTLTaskParam param_;
-  table::ObTTLTaskInfo *info_;
+  table::ObTTLTaskInfo info_;
   common::ObArenaAllocator allocator_;
   common::ObRowkey rowkey_;
   table::ObTenantTabletTTLMgr *ttl_tablet_mgr_;

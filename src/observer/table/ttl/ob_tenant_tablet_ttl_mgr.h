@@ -67,6 +67,7 @@ public:
   virtual ~OBTTLTimerPeriodicTask() {}
   virtual void runTimerTask() override;
 private:
+  static const int64_t TTL_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s
   ObTenantTabletTTLMgr &tablet_ttl_mgr_;
 };
 
@@ -77,10 +78,10 @@ class ObTenantTabletTTLMgr : public logservice::ObIReplaySubHandler,
 public:
   friend ObTTLTaskCtx;
   ObTenantTabletTTLMgr()
-  : tenant_id_(common::OB_INVALID_TENANT_ID),
+  : allocator_(ObMemAttr(MTL_ID(), "TenantTTLMgr")),
+    tenant_id_(common::OB_INVALID_TENANT_ID),
     schema_service_(NULL),
     sql_proxy_(NULL),
-    allocator_(ObMemAttr(MTL_ID(), "TenantTTLMgr")),
     is_inited_(false),
     is_timer_start_(false),
     periodic_delay_(TTL_PERIODIC_DELAY),
@@ -89,7 +90,8 @@ public:
     tg_id_(0),
     local_schema_version_(OB_INVALID_VERSION),
     has_start_(false),
-    is_paused_(false)
+    is_paused_(false),
+    dag_ref_cnt_(0)
   {
   }
 
@@ -137,7 +139,8 @@ public:
   int reload_tenant_task();
   int report_task_status(ObTTLTaskInfo& task_info,
                          table::ObTTLTaskParam& task_para,
-                         bool& is_stop);
+                         bool& is_stop,
+                         bool need_copy_task = true);
   void on_schema_changed(uint64_t schema_changed_tenant_id);
 
   // timer handle function
@@ -145,6 +148,11 @@ public:
   int check_and_handle_event();
   int check_tenant_memory();
   int check_inner_stat();
+  void inc_dag_ref() { ATOMIC_INC(&dag_ref_cnt_); }
+  void dec_dag_ref() { ATOMIC_DEC(&dag_ref_cnt_); }
+  int64_t get_dag_ref() const { return ATOMIC_LOAD(&dag_ref_cnt_); }
+  int safe_to_destroy(bool &is_safe);
+  int sync_all_dirty_task(common::ObIArray<ObTabletID>& dirty_tasks);
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
@@ -249,7 +257,6 @@ private:
   int check_schema_version();
   void resume();
   void pause();
-
 private:
   static const int64_t DEFAULT_TTL_BUCKET_NUM = 100;
   static const int64_t TTL_PERIODIC_DELAY = 5*1000*1000; //5s
@@ -257,11 +264,12 @@ private:
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t DEFAULT_TABLET_PAIR_SIZE = 1024;
   static const int64_t DEFAULT_PARAM_BUCKET_SIZE = 200;
+  static const int64_t TTL_NORMAL_TIME_THRESHOLD = 3*1000*1000; // 3s
+  common::ObArenaAllocator allocator_;
   uint64_t tenant_id_;
   ObTTLTenantInfo local_tenant_task_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   common::ObMySQLProxy *sql_proxy_;
-  common::ObArenaAllocator allocator_;
   bool is_inited_;
   bool is_timer_start_;
   int64_t periodic_delay_;
@@ -273,6 +281,7 @@ private:
   int64_t local_schema_version_;
   bool has_start_;
   bool is_paused_;
+  volatile int64_t dag_ref_cnt_; // ttl dag ref count for current ls
 };
 
 } // end namespace table

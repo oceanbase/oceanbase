@@ -37,7 +37,7 @@ ObTableTTLDeleteTask::ObTableTTLDeleteTask():
     ObITask(ObITaskType::TASK_TYPE_TTL_DELETE),
     is_inited_(false),
     param_(),
-    info_(NULL),
+    info_(),
     allocator_(ObMemAttr(MTL_ID(), "TTLDelTaskCtx")),
     rowkey_(),
     ttl_tablet_mgr_(NULL),
@@ -75,7 +75,8 @@ int ObTableTTLDeleteTask::init(ObTenantTabletTTLMgr *ttl_tablet_mgr,
       LOG_WARN("fail to init credential", KR(ret));
     } else {
       param_ = ttl_para;
-      info_ = &ttl_info;
+      info_ = ttl_info;
+      info_.err_code_ = OB_SUCCESS;
       ttl_tablet_mgr_ = ttl_tablet_mgr;
       is_inited_ = true;
     }
@@ -119,6 +120,12 @@ int ObTableTTLDeleteTask::process()
     LOG_WARN("not init", K(ret));
   } else {
     bool need_stop = false;
+    // pre-check to quick cancel/suspend current task in case of tenant ttl state changed
+    // since it maybe wait in dag queue for too long
+    if (OB_FAIL(ttl_tablet_mgr_->report_task_status(info_, param_, need_stop, false))) {
+      LOG_WARN("fail to report ttl task status", KR(ret));
+    }
+    // explicit cover retcode
     while(!need_stop) {
       lib::ContextParam param;
       param.set_mem_attr(MTL_ID(), "TTLDeleteMemCtx", ObCtxIds::DEFAULT_CTX_ID)
@@ -129,13 +136,15 @@ int ObTableTTLDeleteTask::process()
             LOG_WARN("fail to process one", KR(ret));
           }
         }
-        if (OB_FAIL(ttl_tablet_mgr_->report_task_status(const_cast<ObTTLTaskInfo&>(*info_), param_, need_stop))) {
+        // explicit cover retcode
+        if (OB_FAIL(ttl_tablet_mgr_->report_task_status(info_, param_, need_stop))) {
           LOG_WARN("fail to report ttl task status", KR(ret));
         }
         allocator_.reuse();
       }
     }
   }
+  ttl_tablet_mgr_->dec_dag_ref();
   return ret;
 }
 
@@ -150,8 +159,8 @@ int ObTableTTLDeleteTask::process_one()
   ObTableApiSpec *scan_spec = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
-  ObTableTTLOperation ttl_operation(info_->tenant_id_,
-                                    info_->table_id_,
+  ObTableTTLOperation ttl_operation(info_.tenant_id_,
+                                    info_.table_id_,
                                     param_,
                                     PER_TASK_DEL_ROWS,
                                     rowkey_);
@@ -207,15 +216,15 @@ int ObTableTTLDeleteTask::process_one()
     ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
   }
 
-  info_->max_version_del_cnt_ += result.get_max_version_del_row();
-  info_->ttl_del_cnt_ += result.get_ttl_del_row();
-  info_->scan_cnt_ += result.get_scan_row();
-  info_->err_code_ = ret;
-  info_->row_key_ = result.get_end_rowkey();
+  info_.max_version_del_cnt_ += result.get_max_version_del_row();
+  info_.ttl_del_cnt_ += result.get_ttl_del_row();
+  info_.scan_cnt_ += result.get_scan_row();
+  info_.err_code_ = ret;
+  info_.row_key_ = result.get_end_rowkey();
   if (OB_SUCC(ret) && result.get_del_row() < PER_TASK_DEL_ROWS) {
     ret = OB_ITER_END; // finsh task
-    info_->err_code_ = ret;
-    LOG_DEBUG("finish delete", KR(ret), KPC_(info));
+    info_.err_code_ = ret;
+    LOG_DEBUG("finish delete", KR(ret), K_(info));
   }
   int64_t cost = ObTimeUtil::current_time() - start_time;
   LOG_DEBUG("finish process one", KR(ret), K(cost));
