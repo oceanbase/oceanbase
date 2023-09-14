@@ -472,6 +472,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObConfigPublishSchemaModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigPublishSchemaModeChecker() {}
+  virtual ~ObConfigPublishSchemaModeChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigPublishSchemaModeChecker);
+};
+
 // config item container
 class ObConfigStringKey
 {

@@ -26388,7 +26388,16 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
       schema_info.set_schema_version(schema_version);
     }
 
-    LOG_INFO("try to notify refresh schema", K(schema_version), K(local_schema_info), K(schema_info));
+    bool is_async = false;
+    if (OB_INVALID_TENANT_ID != schema_info.get_tenant_id()) {
+      omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(
+                                             schema_info.get_tenant_id()));
+      if (tenant_config.is_valid()) {
+        is_async = (0 == tenant_config->_publish_schema_mode.case_compare(PUBLISH_SCHEMA_MODE_ASYNC));
+      }
+    }
+
+    LOG_INFO("try to notify refresh schema", K(is_async), K(schema_version), K(local_schema_info), K(schema_info));
     const int64_t rpc_timeout = GCONF.rpc_timeout;
     int64_t timeout = 0;
     FOREACH_X(s, server_list, OB_SUCC(ret)) {
@@ -26414,6 +26423,9 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
           timeout = std::min(THIS_WORKER.get_timeout_remain(), rpc_timeout);
         }
         arg.force_refresh_ = found;
+        if (!arg.force_refresh_) {
+          arg.is_async_ = is_async;
+        }
         // overwrite ret
         if (FAILEDx(proxy.call(*s, timeout, arg))) {
           LOG_WARN("send switch schema rpc failed", KR(ret),

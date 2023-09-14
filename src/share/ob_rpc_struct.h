@@ -4379,10 +4379,17 @@ struct ObSwitchSchemaArg
 {
   OB_UNIS_VERSION(1);
 public:
-  explicit ObSwitchSchemaArg() : schema_info_(), force_refresh_(false) {}
-  explicit ObSwitchSchemaArg(const share::schema::ObRefreshSchemaInfo &schema_info,
-                             bool force_refresh)
-          : schema_info_(schema_info), force_refresh_(force_refresh) {}
+  explicit ObSwitchSchemaArg()
+    : schema_info_(),
+      force_refresh_(false),
+      is_async_(false) {}
+  explicit ObSwitchSchemaArg(
+       const share::schema::ObRefreshSchemaInfo &schema_info,
+       const bool force_refresh,
+       const bool is_async)
+    : schema_info_(schema_info),
+      force_refresh_(force_refresh),
+      is_async_(is_async) {}
   ~ObSwitchSchemaArg() {}
   void reset();
   bool is_valid() const { return schema_info_.get_schema_version() > 0; }
@@ -4391,6 +4398,7 @@ public:
 
   share::schema::ObRefreshSchemaInfo schema_info_;
   bool force_refresh_;
+  bool is_async_;
 };
 
 struct ObLSTabletPair final

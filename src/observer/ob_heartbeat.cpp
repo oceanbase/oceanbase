@@ -256,7 +256,9 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
       }
     }
     // even try reload schema failed, we should continue do following things
-    int schema_ret = schema_updater_.try_reload_schema(lease_response.refresh_schema_info_);
+    const bool set_received_schema_version = false;
+    int schema_ret = schema_updater_.try_reload_schema(lease_response.refresh_schema_info_,
+                                                       set_received_schema_version);
 
     if (OB_SUCCESS != schema_ret) {
       LOG_WARN("try reload schema failed", "schema_version", lease_response.schema_version_,

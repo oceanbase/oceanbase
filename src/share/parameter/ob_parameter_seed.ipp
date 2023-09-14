@@ -138,6 +138,12 @@ DEF_TIME(schema_history_expire_time, OB_CLUSTER_PARAMETER, "7d", "[1m, 30d]",
          "with default 7days. Range: [1h, 30d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(_publish_schema_mode, OB_TENANT_PARAMETER, "BEST_EFFORT",
+                     common::ObConfigPublishSchemaModeChecker,
+                     "specify the inspection of schema synchronous status after ddl transaction commits"
+                     "values: BEST_EFFORT, ASYNC",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(default_compress_func, OB_CLUSTER_PARAMETER, "zstd_1.3.8",
                      common::ObConfigCompressFuncChecker,
                      "default compress function name for create new table, "

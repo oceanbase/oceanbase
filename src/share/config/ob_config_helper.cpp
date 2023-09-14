@@ -31,6 +31,7 @@
 #include "src/observer/ob_server.h"
 #include "share/table/ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
+#include "share/schema/ob_schema_struct.h"
 namespace oceanbase
 {
 using namespace share;
@@ -378,6 +379,12 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
 {
   common::ObTTLDutyDuration duty_duration;
   return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
+}
+
+bool ObConfigPublishSchemaModeChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare(PUBLISH_SCHEMA_MODE_BEST_EFFORT)
+         || 0 == t.case_compare(PUBLISH_SCHEMA_MODE_ASYNC);
 }
 
 bool ObConfigMemoryLimitChecker::check(const ObConfigItem &t) const

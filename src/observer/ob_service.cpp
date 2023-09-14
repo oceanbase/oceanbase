@@ -1305,13 +1305,12 @@ int ObService::switch_schema(
   } else if (OB_UNLIKELY(schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument",  KR(ret), K(schema_version));
-  //FIXME:(yanmu.ztl)
-  // As a temporary solution to reduce schema error after execute ddl,
-  // try the best to refresh schema in cluster synchronously.
-  //} else if (!arg.force_refresh_) {
-  //  if (OB_FAIL(schema_updater_.try_reload_schema(schema_info))) {
-  //    LOG_WARN("reload schema failed", K(schema_info), K(ret));
-  //  }
+  } else if (arg.is_async_) {
+    const bool set_received_schema_version = true;
+    if (OB_FAIL(schema_updater_.try_reload_schema(
+        schema_info, set_received_schema_version))) {
+      LOG_WARN("reload schema failed", KR(ret), K(schema_info));
+    }
   } else {
     ObSEArray<uint64_t, 1> tenant_ids;
     ObMultiVersionSchemaService *schema_service = gctx_.schema_service_;
@@ -1328,25 +1327,6 @@ int ObService::switch_schema(
     } else if (OB_FAIL(ObShareUtil::get_abs_timeout(GCONF.rpc_timeout, abs_timeout))) {
       LOG_WARN("fail to get abs timeout", KR(ret), "default_timeout", static_cast<int64_t>(GCONF.rpc_timeout));
     } else {
-      /*
-      bool need_retry = arg.force_refresh_; // sync refresh schema should retry until timeout
-      do {
-        int tmp_ret = OB_SUCCESS;
-        if (ObTimeUtility::current_time() >= abs_timeout) {
-          ret = OB_TIMEOUT;
-          LOG_WARN("already timeout", KR(ret), K(abs_timeout));
-        } else if (OB_TMP_FAIL(schema_service->refresh_and_add_schema(tenant_ids))) {
-          LOG_WARN("fail to refresh schema", KR(tmp_ret), K(schema_info), K(tenant_ids));
-          if (need_retry) {
-            ob_usleep(100 * 1000L); // 100ms
-          } else {
-            ret = tmp_ret;
-          }
-        } else {
-          break;
-        }
-      } while (OB_SUCC(ret));
-      */
       // To set the received_schema_version period in advance,
       // let refresh_schema can execute before analyze_dependencies logic;
       int64_t LEFT_TIME = 200 * 1000;// 200ms
@@ -1781,7 +1761,9 @@ int ObService::wait_master_key_in_sync(
     LOG_WARN("fail to convert tenant max key version", KR(ret), K(wms_in_sync_arg));
   } else {
     ObRefreshSchemaInfo schema_info;
-    if (OB_FAIL(schema_updater_.try_reload_schema(schema_info))) {
+    const bool set_received_schema_version = false;
+    if (OB_FAIL(schema_updater_.try_reload_schema(
+        schema_info, set_received_schema_version))) {
       LOG_WARN("fail to try reload schema", KR(ret));
     } else if (OB_FAIL(trigger_tenant_config(wms_in_sync_arg))) {
       LOG_WARN("fail to got versions", KR(ret));

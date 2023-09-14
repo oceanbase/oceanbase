@@ -103,7 +103,8 @@ public:
   void stop();
   void wait();
 
-  int try_reload_schema(const share::schema::ObRefreshSchemaInfo &schema_info);
+  int try_reload_schema(const share::schema::ObRefreshSchemaInfo &schema_info,
+                        const bool set_received_schema_version);
   int try_release_schema();
   int async_refresh_schema(
       const uint64_t tenant_id,

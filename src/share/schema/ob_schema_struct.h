@@ -146,6 +146,9 @@ static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
 static const int64_t SCHEMA_MID_MALLOC_BLOCK_SIZE = 256;
 static const int64_t SCHEMA_BIG_MALLOC_BLOCK_SIZE = 1024;
 
+static const char* PUBLISH_SCHEMA_MODE_BEST_EFFORT = "BEST_EFFORT";
+static const char* PUBLISH_SCHEMA_MODE_ASYNC   = "ASYNC";
+
 //-------enum defenition
 enum ObTableLoadType
 {
