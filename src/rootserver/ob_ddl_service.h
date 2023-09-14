@@ -144,8 +144,7 @@ public:
                               const share::schema::ObTableSchema &orig_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-                              share::schema::ObTableSchema &index_schema,
-                              const common::ObString *ddl_stmt_str);
+                              share::schema::ObTableSchema &index_schema);
   // check whether the foreign key related table is executing offline ddl, creating index, and constrtaint task.
   // And ddl should be refused if the foreign key related table is executing above ddl.
   int check_fk_related_table_ddl(
@@ -158,7 +157,6 @@ public:
       share::schema::ObTableSchema &index_schema);
   int create_global_inner_expr_index(
       ObMySQLTransaction &trans,
-      const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &new_table_schema,
       common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,

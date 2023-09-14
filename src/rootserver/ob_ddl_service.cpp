@@ -478,8 +478,7 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                           const ObTableSchema &orig_table_schema,
                                           ObTableSchema &new_table_schema,
                                           ObIArray<ObColumnSchemaV2*> &new_columns,
-                                          ObTableSchema &index_schema,
-                                          const ObString *ddl_stmt_str)
+                                          ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -528,7 +527,8 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                                    trans))) {
         LOG_WARN("alter table options failed", K(ret), K(new_table_schema));
       } else if (OB_FAIL(ddl_operator.create_table(
-              index_schema, trans, ddl_stmt_str, true, false))) {
+              index_schema, trans, nullptr/*ddl_stmt_str*/, true, false))) {
+        // record the create index operation when index enables rather than schema generates.
         LOG_WARN("failed to create index schema", K(ret));
       }
     }
@@ -570,7 +570,6 @@ int ObDDLService::create_global_index(
 
 int ObDDLService::create_global_inner_expr_index(
     ObMySQLTransaction &trans,
-    const obrpc::ObCreateIndexArg &arg,
     const share::schema::ObTableSchema &orig_table_schema,
     share::schema::ObTableSchema &new_table_schema,
     common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
@@ -580,8 +579,7 @@ int ObDDLService::create_global_inner_expr_index(
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(create_inner_expr_index(trans, orig_table_schema,
-          new_table_schema, new_columns, index_schema,
-          &arg.ddl_stmt_str_))) {
+          new_table_schema, new_columns, index_schema))) {
     LOG_WARN("fail to create inner expr index", K(ret));
   }
   return ret;

@@ -306,7 +306,7 @@ int ObIndexBuilder::do_create_global_index(
         }
       } else {
         if (OB_FAIL(ddl_service_.create_global_inner_expr_index(
-              trans, new_arg, table_schema, new_table_schema, gen_columns, index_schema))) {
+              trans, table_schema, new_table_schema, gen_columns, index_schema))) {
           LOG_WARN("fail to create global inner expr index", K(ret));
         }
       }
@@ -488,8 +488,7 @@ int ObIndexBuilder::do_create_local_index(
                                                          table_schema,
                                                          new_table_schema,
                                                          gen_columns,
-                                                         index_schema,
-                                                         &my_arg.ddl_stmt_str_))) {
+                                                         index_schema))) {
           LOG_WARN("fail to create inner expr index", K(ret));
         }
       }
