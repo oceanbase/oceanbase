@@ -254,10 +254,8 @@ int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString 
       if (OB_ISNULL(set_node = parse_tree->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("set node is NULL", K(ret));
-      } else if (OB_UNLIKELY(T_VAR_VAL != set_node->type_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("set_node->type_ must be T_VAR_VAL", K(ret), K(set_node->type_));
-      } else if (1 == set_node->value_) { // global var
+      } else if (T_VAR_VAL == set_node->type_ &&
+                 1 == set_node->value_) { // global var
         has_global_variable = true;
       }
     }
