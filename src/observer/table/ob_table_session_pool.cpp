@@ -232,10 +232,7 @@ int ObTableApiSessPoolMgr::ObTableApiSessEliminationTask::run_retire_sess_task()
   if (OB_ISNULL(sess_pool_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sess_pool_mgr_ is null", K(ret));
-  } else if (OB_ISNULL(sess_pool_mgr_->pool_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session pool is null", K(ret));
-  } else if (sess_pool_mgr_->pool_->retire_session_node()) {
+  } else if (OB_NOT_NULL(sess_pool_mgr_->pool_) && OB_FAIL(sess_pool_mgr_->pool_->retire_session_node())) {
     LOG_WARN("fail to retire session node", K(ret));
   }
 
@@ -251,11 +248,8 @@ int ObTableApiSessPoolMgr::ObTableApiSessEliminationTask::run_recycle_retired_se
 
   if (OB_ISNULL(sess_pool_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sess_pool_mgr_ not inited", K(ret));
-  } else if (OB_ISNULL(sess_pool_mgr_->pool_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session pool is null", K(ret));
-  } else if (OB_FAIL(sess_pool_mgr_->pool_->evict_retired_sess())) {
+    LOG_WARN("sess_pool_mgr_ is null", K(ret));
+  } else if (OB_NOT_NULL(sess_pool_mgr_->pool_) && OB_FAIL(sess_pool_mgr_->pool_->evict_retired_sess())) {
     LOG_WARN("fail to evict retired sess", K(ret));
   }
 
