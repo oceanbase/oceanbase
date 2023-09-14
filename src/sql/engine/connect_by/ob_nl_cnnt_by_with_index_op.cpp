@@ -342,7 +342,14 @@ int ObNLConnectByWithIndexOp::prepare_rescan_params()
 int ObNLConnectByWithIndexOp::read_pump_func_going()
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(!MY_SPEC.rescan_params_.empty())) {
+  if (OB_FAIL(set_level_as_param(connect_by_pump_.get_current_level()))) {
+    /* LEVEL is allowed to be a dynamic param, so it needs to be set before
+     * preparing rescan params.
+     * set_level_as_param is currently repeatedly called in multiple places,
+     * which does not make sense and can be optimized later.
+     */
+    LOG_WARN("failed to set current level", K(ret));
+  } else if (OB_LIKELY(!MY_SPEC.rescan_params_.empty())) {
     if (OB_FAIL(prepare_rescan_params())) {
       LOG_WARN("failed to prepare rescan params", K(ret));
     } else if (OB_FAIL(right_->rescan())) {

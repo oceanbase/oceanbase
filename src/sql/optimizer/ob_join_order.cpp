@@ -10571,7 +10571,9 @@ public:
     if (OB_ISNULL(old_expr) || OB_ISNULL(left_table_set_) || OB_ISNULL(copier_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("params are invalid", K(ret), K(old_expr), K(left_table_set_));
-    } else if (!old_expr->get_relation_ids().overlap(*left_table_set_)) {
+    } else if (!old_expr->get_relation_ids().overlap(*left_table_set_) &&
+               !old_expr->has_flag(CNT_LEVEL) &&
+               !old_expr->has_flag(CNT_PRIOR)) {
       new_expr = old_expr;
     } else if (old_expr->is_query_ref_expr()) {
       // only function table subquery expr may come into here
@@ -10612,8 +10614,10 @@ public:
       new_expr = new_query_ref;
     } else if (copier_->is_existed(old_expr)) {
       // do nothing
-    } else if (old_expr->is_column_ref_expr() &&
-               old_expr->get_relation_ids().is_subset(*left_table_set_)) {
+    } else if ((old_expr->is_column_ref_expr() &&
+                old_expr->get_relation_ids().is_subset(*left_table_set_))
+               || old_expr->has_flag(IS_LEVEL)
+               || old_expr->has_flag(IS_PRIOR)) {
       new_expr = old_expr;
       if (OB_FAIL(ObRawExprUtils::create_new_exec_param(query_ctx_,
                                                         expr_factory,
@@ -13565,12 +13569,10 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(qual), K(ret));
     // can not push down expr with subquery
-    } else if (qual->has_flag(CNT_PSEUDO_COLUMN) ||
-               qual->has_flag(CNT_PRIOR) ||
-               qual->has_flag(CNT_ROWNUM)) {
+    } else if (qual->has_flag(CNT_ROWNUM)) {
       if (force_inner_nl && qual->has_flag(CNT_SUB_QUERY)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("can not push down special qual", KPC(qual), K(ret));
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "join condition contains rownum and subquery");
       }
     } else if (T_OP_NE == qual->get_expr_type() &&
                !force_inner_nl) {
