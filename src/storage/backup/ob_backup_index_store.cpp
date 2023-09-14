@@ -518,7 +518,7 @@ int ObBackupMetaIndexStore::find_index_lower_bound_(
         LOG_WARN("meta key do not exist", K(meta_key), K(index_list));
       } else {
         index = *iter;
-        LOG_INFO("found key succeed", K(meta_key), K(index_list), K(index));
+        LOG_DEBUG("found key succeed", K(meta_key), K(index_list), K(index));
       }
     } else {
       ret = OB_ENTRY_NOT_EXIST;
