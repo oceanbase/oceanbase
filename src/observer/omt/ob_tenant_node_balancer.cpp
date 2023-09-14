@@ -35,6 +35,9 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 using namespace oceanbase::obsys;
 using namespace oceanbase::lib;
@@ -192,6 +195,14 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
       ret = OB_SUCCESS;
       LOG_INFO("succ to create new user tenant", KR(ret), K(unit), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     }
+#ifdef OB_BUILD_TDE_SECURITY
+    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+      ObRootKey root_key;
+      if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id, root_key, true))) {
+        LOG_WARN("failed to get root key", K(ret));
+      }
+    }
+#endif
     // create meta tenant
     if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
       if (OB_FAIL(check_new_tenant(meta_tenant_unit, create_tenant_timeout_ts))) {

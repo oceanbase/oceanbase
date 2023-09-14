@@ -10573,10 +10573,26 @@ int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
   ObZone empty_zone;
   ObArray<ObAddr> active_server_list;
   ObArray<ObAddr> inactive_server_list;
-  if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list,
-                                               inactive_server_list))) {
+  const ObSimpleTenantSchema *simple_tenant = NULL;
+  ObSchemaGetterGuard guard;
+  const uint64_t tenant_id = arg.tenant_id_;
+  bool enable_default = false;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_serviece_ is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get sys schema guard", KR(ret));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, simple_tenant))) {
+    LOG_WARN("fail to get simple tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_NOT_NULL(simple_tenant) && simple_tenant->is_normal()) {
+    enable_default = true;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list,
+                                                      inactive_server_list))) {
     LOG_WARN("get alive servers failed", K(ret));
-  } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result))) {
+  } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result,
+                                                   enable_default))) {
     LOG_WARN("failed to notify root key");
   }
   return ret;

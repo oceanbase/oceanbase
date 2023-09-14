@@ -1926,14 +1926,6 @@ public:
   const uint64_t tenant_id, obrpc::RootKeyType &key_type,
   common::ObString &key_value,
   common::ObIAllocator &allocator);
-  static int get_root_key_from_obs(
-             const uint64_t &cluster_id,
-             obrpc::ObSrvRpcProxy &rpc_proxy,
-             const obrpc::ObRootKeyArg &arg,
-             const common::ObIArray<common::ObAddr> &addrs,
-             obrpc::RootKeyType &key_type,
-             common::ObString &key_value,
-             common::ObIAllocator &allocator);
   int standby_create_root_key(
              const uint64_t tenant_id,
              const obrpc::ObCreateTenantArg &arg,
@@ -1946,7 +1938,10 @@ public:
              obrpc::ObSrvRpcProxy &rpc_proxy,
              const obrpc::ObRootKeyArg &arg,
              const common::ObIArray<common::ObAddr> &addrs,
-             obrpc::ObRootKeyResult &result);
+             obrpc::ObRootKeyResult &result,
+             const bool enable_default = true,
+             const uint64_t &cluster_id = OB_INVALID_CLUSTER_ID,
+             common::ObIAllocator *allocator = NULL);
 #endif
 private:
   int handle_security_audit_for_stmt(const obrpc::ObSecurityAuditArg &arg,
