@@ -6295,6 +6295,8 @@ def_table_schema(
 
 # 481 : __all_import_stmt_exec_history
 # 482 : __all_tablet_reorganize_history
+# 483 : __all_storage_ha_error_diagnose
+# 484 : __all_storage_ha_perf_diagnose
 
 #
 # 余留位置
@@ -12966,6 +12968,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12430: __all_virtual_column_group_mapping
 # 12431: __all_virtual_column_group_history
 # 12432: __all_virtual_column_gorup_mapping_history
+# 12433: __all_virtual_storage_ha_error_diagnose
+# 12434: __all_virtual_storage_ha_perf_diagnose
 #
 # 余留位置
 #
