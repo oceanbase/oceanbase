@@ -39,9 +39,12 @@ public:
   const static int64_t LOOP_INTERVAL = 100 * 1000;                            // 100ms
   const static int64_t KEEP_ALIVE_PRINT_INFO_INTERVAL = 5 * 60 * 1000 * 1000; // 5min
   const static int64_t TX_GC_INTERVAL = 5 * 1000 * 1000;                     // 5s
-  const static int64_t TX_RETAIN_CTX_GC_INTERVAL = 5 * 1000 * 1000;           // 5s
+  const static int64_t TX_RETAIN_CTX_GC_INTERVAL = 1 * 1000 * 1000;           // 1s
+  const static int64_t TX_RETAIN_CTX_ADVANCE_CHECKPOINT_INTERVAL = 5 * 1000 * 1000;           // 5s
 public:
-  ObTxLoopWorker() { reset(); }
+  ObTxLoopWorker() : tx_gc_(TX_GC_INTERVAL),
+                     retain_tx_gc_(TX_RETAIN_CTX_GC_INTERVAL),
+                     advance_checkpoint_(TX_RETAIN_CTX_ADVANCE_CHECKPOINT_INTERVAL) {}
   ~ObTxLoopWorker() {}
   static int mtl_init(ObTxLoopWorker *&ka);
   int init();
@@ -55,15 +58,17 @@ public:
   virtual void run1();
 
 private:
-  int scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx);
+  int scan_all_ls_();
   void do_keep_alive_(ObLS *ls, const share::SCN &min_start_scn, MinStartScnStatus status); // 100ms
   void do_tx_gc_(ObLS *ls, share::SCN &min_start_scn, MinStartScnStatus &status);     // 15s
   void update_max_commit_ts_();
-  void do_retain_ctx_gc_(ObLS * ls);  // 15s
+  void do_retain_ctx_gc_(ObLS *ls);
+  void do_advance_retain_ctx_gc_(ObLS *ls);
 
 private:
-  int64_t last_tx_gc_ts_;
-  int64_t last_retain_ctx_gc_ts_;
+  ObTimeInterval tx_gc_;
+  ObTimeInterval retain_tx_gc_;
+  ObTimeInterval advance_checkpoint_;
 };
 
 
