@@ -11345,7 +11345,7 @@ int ObPLResolver::resolve_udf_without_brackets(
   OX (access_ident.set_pl_udf());
   OZ (expr_factory_.create_raw_expr(T_FUN_UDF, udf_expr), K(q_name));
   CK (OB_NOT_NULL(udf_expr));
-  OX (udf_expr->set_func_name(q_name.col_name_));
+  OX (udf_expr->set_func_name(access_ident.access_name_));
   OX (udf_info.ref_expr_ = udf_expr);
   OX (udf_info.udf_name_ = access_ident.access_name_);
   OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast),
