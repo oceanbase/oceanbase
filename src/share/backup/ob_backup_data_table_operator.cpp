@@ -2215,6 +2215,50 @@ int ObBackupLSTaskOperator::update_max_tablet_checkpoint_scn(
  *--------------------------__all_backup_skipped_tablet------------------------------
  */
 
+int ObBackupSkippedTabletOperator::batch_move_skip_tablet(
+    common::ObMySQLProxy &proxy, const uint64_t tenant_id, const int64_t task_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id) || task_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(task_id));
+  } else {
+    ObSqlString sql;
+    const int64_t DELETE_BATCH_NUM = 1024;
+    int64_t affected_rows = 0;
+    ObMySQLTransaction trans;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.start(&proxy, get_exec_tenant_id(tenant_id)))) {
+        LOG_WARN("failed to start trans", K(ret));
+      } else if (OB_FAIL(sql.assign_fmt(
+          "insert into %s select * from %s where %s=%lu and %s=%lu order by turn_id, retry_id, tablet_id limit %ld",
+          OB_ALL_BACKUP_SKIPPED_TABLET_HISTORY_TNAME, OB_ALL_BACKUP_SKIPPED_TABLET_TNAME,
+          OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id, DELETE_BATCH_NUM))) {
+        LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
+      } else if (OB_FAIL(trans.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+        LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
+      } else if (0 == affected_rows) {
+        break;
+      } else if (OB_FALSE_IT(sql.reset())) {
+      } else if (OB_FAIL(sql.assign_fmt(
+          "delete from %s where %s=%lu and %s=%lu order by turn_id, retry_id, tablet_id limit %ld",
+          OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id, DELETE_BATCH_NUM))) {
+        LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
+      } else if (OB_FAIL(trans.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+        LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
+      }
+      if (trans.is_started()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("failed to end trans", K(ret), K(tmp_ret));
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupSkippedTabletOperator::get_skip_tablet(
     common::ObISQLClient &proxy, 
     const bool need_lock,

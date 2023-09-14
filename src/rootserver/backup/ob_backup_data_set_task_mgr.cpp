@@ -1707,23 +1707,33 @@ int ObBackupSetTaskMgr::do_backup_completing_log_(ObArray<ObBackupLSTaskAttr> &l
   return ret;
 }
 
-int ObBackupSetTaskMgr::do_clean_up(ObMySQLTransaction &trans)
+int ObBackupSetTaskMgr::do_clean_up()
 {
   int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[DATA_BACKUP]not init", K(ret));
   } else if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("[DATA_BACKUP]failed to check lease", K(ret));
+  } else if (OB_FAIL(ObBackupSkippedTabletOperator::batch_move_skip_tablet(*sql_proxy_, set_task_attr_.tenant_id_, set_task_attr_.task_id_))) {
+    LOG_WARN("[DATA_BACKUP]failed to move skip tablet", K(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(set_task_attr_.tenant_id_)))) {
+    LOG_WARN("failed to start trans", K(ret));
   } else if (OB_FAIL(ObBackupLSTaskInfoOperator::move_ls_task_info_to_his(trans, set_task_attr_.task_id_, 
       set_task_attr_.tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to move task to history", K(ret), K(set_task_attr_));
-  } else if (OB_FAIL(ObBackupSkippedTabletOperator::move_skip_tablet_to_his(trans, set_task_attr_.tenant_id_, set_task_attr_.task_id_))) {
-    LOG_WARN("[DATA_BACKUP]failed to move skip tablet to history", K(ret));
   } else if (OB_FAIL(ObBackupLSTaskOperator::move_ls_to_his(trans, set_task_attr_.tenant_id_, set_task_attr_.job_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to move ls to history", K(ret), K(set_task_attr_));
   } else if (OB_FAIL(ObBackupTaskOperator::move_task_to_his(trans, set_task_attr_.tenant_id_, set_task_attr_.job_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to move task to history", K(ret), K(set_task_attr_));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", K(ret), K(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
   }
   return ret;
 }

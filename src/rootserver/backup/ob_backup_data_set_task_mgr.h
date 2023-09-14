@@ -43,7 +43,7 @@ public:
            ObMultiVersionSchemaService &schema_service,
            ObBackupDataService &backup_service);
   int process();
-  int do_clean_up(ObMySQLTransaction &trans);
+  int do_clean_up();
   int deal_failed_set_task(ObMySQLTransaction &trans);
   share::ObBackupStatus::Status get_status() const { return set_task_attr_.status_.status_; }
   TO_STRING_KV(K_(meta_tenant_id), K_(set_task_attr));
