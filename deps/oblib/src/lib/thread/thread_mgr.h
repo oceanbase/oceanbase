@@ -1046,7 +1046,7 @@ public:
   }
   void destroy_tg(int tg_id, bool is_exist = false);
 private:
-  static constexpr int MAX_ID = 12288;
+  static constexpr int MAX_ID = 122880;
   common::ObLatchMutex lock_;
   ABitSet bs_;
   char bs_buf_[ABitSet::buf_len(MAX_ID)];
