@@ -1352,7 +1352,7 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
           drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
           drop_index_arg.is_add_to_scheduler_ = false;
-          drop_index_arg.is_hidden_         = index_schema->is_user_hidden_table();
+          drop_index_arg.is_hidden_         = data_table_schema->is_user_hidden_table(); // just use to fetch data table schema.
           drop_index_arg.is_in_recyclebin_  = index_schema->is_in_recyclebin();
           drop_index_arg.is_inner_          = true;
           drop_index_arg.task_id_ = task_id_;
