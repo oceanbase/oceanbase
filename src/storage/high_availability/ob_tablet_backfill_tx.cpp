@@ -974,9 +974,7 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
                                   tablet_merge_ctx_.merged_sstable_.get_end_scn());
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ls->update_tablet_table_store(
-        tablet_id_, param, new_tablet_handle))) {
+    if (OB_FAIL(ls->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(param));
     } else if (is_mini_merge(tablet_merge_ctx_.param_.merge_type_)) {
       if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(tablet_merge_ctx_.scn_range_.end_scn_))) {

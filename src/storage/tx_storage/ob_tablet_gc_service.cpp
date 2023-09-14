@@ -398,7 +398,9 @@ int ObTabletGCHandler::check_tablet_need_gc_(
       need_gc = true;
     }
   } else {
-  // for create tablet abort
+    // for create tablet abort
+    const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
+    const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     ObTabletCreateDeleteMdsUserData data;
     bool mds_table_not_null = false;
     bool is_finish = false;
@@ -409,9 +411,9 @@ int ObTabletGCHandler::check_tablet_need_gc_(
         ret = OB_SUCCESS;
         if (mds_table_not_null) {
           need_gc = true;
-          STORAGE_LOG(INFO, "create tablet abort, need gc", KPC(tablet));
+          STORAGE_LOG(INFO, "create tablet abort, need gc", K(ret), K(ls_id), K(tablet_id), KP(tablet));
         } else {
-          STORAGE_LOG(INFO, "tablet_status is not commit", KR(ret), KPC(tablet));
+          STORAGE_LOG(INFO, "tablet_status is not commit", K(ret), K(ls_id), K(tablet_id), KP(tablet));
         }
       } else {
         STORAGE_LOG(WARN, "failed to get CreateDeleteMdsUserData", KR(ret), KPC(tablet));
@@ -649,24 +651,26 @@ int ObTabletGCHandler::get_max_tablet_transfer_scn(
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tablet gc handler is not inited", KR(ret));
   } else {
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    common::ObTabletID tablet_id;
-    ObTabletMapKey key;
-    key.ls_id_ = ls_->get_ls_id();
     ObTabletCreateDeleteMdsUserData mds_data;
-    ObTabletHandle tablet_handle;
-    const WashTabletPriority priority = WashTabletPriority::WTP_LOW;
+    ObTablet *tablet = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < deleted_tablets.count(); i++) {
       mds_data.reset();
-      const ObTabletHandle &tablet_handle = deleted_tablets.at(i);
-      if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(
-          share::SCN::max_scn(), mds_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+      tablet = deleted_tablets.at(i).get_obj();
+      if (OB_ISNULL(tablet)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet is null", K(ret), K(i), "tablet_handle", deleted_tablets.at(i));
+      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(),
+          mds_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
         if (OB_EMPTY_RESULT == ret) {
           ret = OB_SUCCESS;
-          LOG_INFO("create tablet abort, need gc", K(tablet_id));
+          LOG_INFO("create tablet abort, need gc", K(ret),
+              "ls_id", tablet->get_tablet_meta().ls_id_,
+              "tablet_id", tablet->get_tablet_meta().tablet_id_);
           continue;
         } else {
-          LOG_WARN("failed to get mds table", KR(ret), K(tablet_handle));
+          LOG_WARN("failed to get mds table", KR(ret),
+              "ls_id", tablet->get_tablet_meta().ls_id_,
+              "tablet_id", tablet->get_tablet_meta().tablet_id_);
         }
       } else if (share::SCN::invalid_scn() == mds_data.transfer_scn_) {
         // do nothing

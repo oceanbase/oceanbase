@@ -18,6 +18,7 @@
 #include "lib/utility/serialization.h"
 #include "share/scn.h"
 #include "share/schema/ob_table_schema.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
 namespace oceanbase

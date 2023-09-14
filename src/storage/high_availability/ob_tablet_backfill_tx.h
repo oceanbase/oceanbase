@@ -19,7 +19,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_ha_dag.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
-#include "storage/memtable/ob_multi_source_data.h"
 
 namespace oceanbase
 {

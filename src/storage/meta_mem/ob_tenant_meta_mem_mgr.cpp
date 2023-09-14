@@ -504,9 +504,9 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
     int64_t tablets_mem_limit = 0;
     ObMallocAllocator *alloc = ObMallocAllocator::get_instance();
     if (OB_NOT_NULL(alloc)) {
-      auto ta = alloc->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
-      if (OB_NOT_NULL(ta)) {
-        tablets_mem_limit = ta->get_limit();
+      const ObTenantCtxAllocatorGuard &ag = alloc->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
+      if (OB_NOT_NULL(ag)) {
+        tablets_mem_limit = ag->get_limit();
       }
     }
 
@@ -844,7 +844,7 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
     } else if (OB_ISNULL(tablet = tablet_ptr->old_version_chain_)) { // skip
     } else {
-      // since the last tablet may not be the oldest, we traverse the wholo chain
+      // since the last tablet may not be the oldest, we traverse the whole chain
       while (OB_SUCC(ret) && OB_NOT_NULL(tablet)) {
         if (OB_FAIL(get_min_end_scn_from_single_tablet(tablet, true/*is_old*/, ls_checkpoint, min_end_scn_from_old))) {
           LOG_WARN("fail to get min end scn from old tablet", K(ret), KP(tablet));

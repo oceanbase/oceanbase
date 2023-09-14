@@ -748,7 +748,7 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablets_(
     const ObTXStartTransferInInfo &tx_start_transfer_in_info,
     const bool for_replay)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLSService *ls_service = nullptr;
@@ -911,7 +911,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
     const bool for_replay,
     const ObTXStartTransferInInfo &tx_start_transfer_in_info)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLSHandle src_ls_handle;
@@ -967,7 +967,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablet_(
     const ObMigrationTabletParam &tablet_meta,
     ObLS *src_ls)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -1025,7 +1025,7 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
     const ObTXStartTransferInInfo &tx_start_transfer_in_info,
     mds::BufferCtx &ctx)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLSHandle dest_ls_handle;

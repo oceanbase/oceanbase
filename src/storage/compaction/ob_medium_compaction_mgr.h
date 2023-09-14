@@ -37,7 +37,7 @@ public:
   ~ObTabletMediumCompactionInfoRecorder();
   int init(
       const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id,
       const int64_t max_saved_version,
       logservice::ObLogHandler *log_handler);
   virtual void destroy() override;
@@ -77,7 +77,7 @@ private:
   bool is_inited_;
   bool ignore_medium_;
   share::ObLSID ls_id_;
-  ObTabletID tablet_id_;
+  common::ObTabletID tablet_id_;
   storage::ObTabletHandle *tablet_handle_ptr_;
   ObMediumCompactionInfo *medium_info_;
   common::ObIAllocator *allocator_;

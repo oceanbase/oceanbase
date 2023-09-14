@@ -167,11 +167,6 @@ int ObTabletCreateMdsHelper::on_replay(
   int ret = OB_SUCCESS;
   ObBatchCreateTabletArg arg;
   int64_t pos = 0;
-  common::ObSArray<ObTabletID> tablet_id_array;
-  const ObLSID &ls_id = arg.id_;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  share::SCN tablet_change_checkpoint_scn;
 
   if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0) || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -344,8 +339,6 @@ int ObTabletCreateMdsHelper::create_tablets(
 {
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); ++i) {
     const ObCreateTabletInfo &info = arg.tablets_.at(i);
@@ -640,7 +633,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
     mds::BufferCtx &ctx,
     common::ObIArray<common::ObTabletID> &tablet_id_array)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
@@ -732,7 +725,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
     mds::BufferCtx &ctx,
     common::ObIArray<common::ObTabletID> &tablet_id_array)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
@@ -802,7 +795,7 @@ int ObTabletCreateMdsHelper::build_hidden_tablets(
     mds::BufferCtx &ctx,
     common::ObIArray<common::ObTabletID> &tablet_id_array)
 {
-  MDS_TG(500_ms);
+  MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &data_tablet_id = info.data_tablet_id_;

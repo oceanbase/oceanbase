@@ -82,6 +82,7 @@ int ObMdsTableMergeTask::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(mds_merge_dag_));
   } else {
+    ctx->start_time_ = ObTimeUtility::fast_current_time();
     int tmp_ret = OB_SUCCESS;
     ObLS *ls = nullptr;
     ObTablet *tablet = nullptr;

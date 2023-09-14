@@ -17,6 +17,7 @@
 #include "lib/ob_replica_define.h"
 #include "common/ob_store_range.h"
 #include "common/ob_member_list.h"
+#include "share/scn.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
@@ -25,10 +26,6 @@
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
-#include "share/scn.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
-#include "storage/tablet/ob_tablet_binding_info.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 

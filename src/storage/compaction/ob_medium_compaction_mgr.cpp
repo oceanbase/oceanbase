@@ -188,9 +188,12 @@ void ObTabletMediumCompactionInfoRecorder::free_allocated_info()
   if (OB_NOT_NULL(allocator_)) {
     if (OB_NOT_NULL(logcb_ptr_)) {
       logcb_ptr_->~ObStorageCLogCb();
+
       tablet_handle_ptr_->reset();
       tablet_handle_ptr_->~ObTabletHandle();
-      mds_ctx_->~MdsCtx();
+
+      mds_ctx_->mds::MdsCtx::~MdsCtx();
+
       allocator_->free(logcb_ptr_);
       logcb_ptr_ = nullptr;
       tablet_handle_ptr_ = nullptr;
