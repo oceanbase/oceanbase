@@ -915,7 +915,7 @@ int ObCrossClusterTabletChecksumValidator::validate_cross_cluster_checksum(
       LOG_WARN("fail to check if all tablet checksum exist", KR(ret), K_(tenant_id), K(frozen_scn));
     } else if (!is_all_tablet_checksum_exist_) {
       // check whether waiting all tablet checksum has timed out
-      bool is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
+      is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
       if (OB_UNLIKELY(is_wait_tablet_checksum_timeout)) {
         bool is_match = true;
         if (OB_FAIL(ObServiceEpochProxy::check_service_epoch(*sql_proxy_, tenant_id_,
