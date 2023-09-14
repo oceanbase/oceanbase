@@ -158,9 +158,10 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
         LOG_WARN("failed to register dblink conn pool to current session", K(ret));
       } else if (in_xa_trascaction_ && lib::is_oracle_mode() &&
                  OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
-        LOG_WARN("failed to set dblink connection to session", K(my_session), K(sessid_), K(ret));
+        LOG_WARN("failed to set dblink connection to session", K(in_xa_trascaction_), K(my_session), K(sessid_), K(ret));
       } else {
-        LOG_TRACE("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
+        in_xa_trascaction_ = true; //to tell link scan op don't release dblink_conn_
+        LOG_TRACE("link op get connection from dblink pool", K(in_xa_trascaction_), KP(dblink_conn_), K(lbt()));
       }
     } else {
       dblink_conn_ = dblink_conn;

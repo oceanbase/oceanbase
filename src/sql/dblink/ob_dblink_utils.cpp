@@ -560,6 +560,7 @@ int ObDblinkCtxInSession::get_dblink_conn(uint64_t dblink_id, common::sqlclient:
     ret = OB_ERR_DBLINK_SESSION_KILLED;
     LOG_WARN("connection is invalid", K(ret), K(dblink_conn->usable()), KP(dblink_conn));
   }
+  LOG_TRACE("session get a dblink connection", K(ret), K(dblink_id), KP(dblink_conn), K(session_info_->get_sessid()), K(lbt()));
   return ret;
 }
 
@@ -574,7 +575,7 @@ int ObDblinkCtxInSession::set_dblink_conn(common::sqlclient::ObISQLConnection *d
   } else if (OB_FAIL(add_var_to_array_no_dup(dblink_conn_holder_array_, reinterpret_cast<int64_t>(dblink_conn)))) {
     LOG_WARN("session faild to hold a dblink connection", KP(dblink_conn), K(session_info_->get_sessid()), K(ret));
   } else {
-    LOG_WARN("session succ to hold a dblink connection", KP(dblink_conn), K(session_info_->get_sessid()), K(ret));
+    LOG_TRACE("session succ to hold a dblink connection", KP(dblink_conn), K(session_info_->get_sessid()), K(ret), K(lbt()));
   }
   return ret;
 }
