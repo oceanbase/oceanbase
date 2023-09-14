@@ -16,6 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "lib/trace/ob_trace.h"
+#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_task_executor.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
@@ -241,10 +242,12 @@ public:
      const uint64_t table_id,
      bool &is_building);
 
+  // To check if any long-time running DDL exists.
   static int check_has_long_running_ddl(
      common::ObMySQLProxy *proxy,
      const uint64_t tenant_id,
      const uint64_t table_id,
+     const share::ObCheckExistedDDLMode check_mode,
      bool &has_long_running_ddl);
 
   static int check_has_conflict_ddl(

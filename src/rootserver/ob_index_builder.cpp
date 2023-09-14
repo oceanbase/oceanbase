@@ -19,6 +19,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "share/ob_ddl_common.h"
 #include "share/ob_debug_sync.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/schema/ob_table_schema.h"
@@ -133,7 +134,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
   } else if (is_db_in_recyclebin) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("Can not drop index of db in recyclebin", K(ret), K(arg));
-  } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema))) {
+  } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema, ObDDLType::DDL_DROP_INDEX))) {
     LOG_WARN("check whether foreign key related table executes ddl failed", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -578,7 +579,7 @@ int ObIndexBuilder::do_create_index(
     LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
     int64_t index_count = table_schema->get_index_tid_count();
     LOG_WARN("too many index for table", K(OB_MAX_INDEX_PER_TABLE), K(index_count), K(ret));
-  } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema))) {
+  } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema, ObDDLType::DDL_CREATE_INDEX))) {
     LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
   } else if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_

@@ -149,7 +149,8 @@ public:
   // check whether the foreign key related table is executing offline ddl, creating index, and constrtaint task.
   // And ddl should be refused if the foreign key related table is executing above ddl.
   int check_fk_related_table_ddl(
-      const share::schema::ObTableSchema &data_table_schema);
+      const share::schema::ObTableSchema &data_table_schema,
+      const share::ObDDLType &ddl_type);
   int create_global_index(
       ObMySQLTransaction &trans,
       const obrpc::ObCreateIndexArg &arg,

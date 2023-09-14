@@ -2739,22 +2739,30 @@ int ObDDLTaskRecordOperator::check_has_long_running_ddl(
     common::ObMySQLProxy *proxy,
     const uint64_t tenant_id,
     const uint64_t table_id,
+    const share::ObCheckExistedDDLMode check_mode,
     bool &has_long_running_ddl)
 {
   int ret = OB_SUCCESS;
   has_long_running_ddl = false;
   if (OB_UNLIKELY(nullptr == proxy || !proxy->is_inited() 
     || OB_INVALID_ID == tenant_id
-    || OB_INVALID_ID == table_id)) {
+    || OB_INVALID_ID == table_id
+    || ObCheckExistedDDLMode::INVALID_DDL_MODE == check_mode)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), KP(proxy), K(tenant_id), K(table_id));
+    LOG_WARN("invalid arg", K(ret), KP(proxy), K(tenant_id), K(table_id), K(check_mode));
   } else {
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = nullptr;
+      const ObDDLType lower_bound_type = (ObCheckExistedDDLMode::ALL_LONG_RUNNING_DDL == check_mode
+                                       || ObCheckExistedDDLMode::SIMPLE_TABLE_RUNNING_DDL == check_mode) ?
+                                          ObDDLType::DDL_INVALID : ObDDLType::DDL_DOUBLE_TABLE_OFFLINE;
+      const ObDDLType upper_bound_type = (ObCheckExistedDDLMode::ALL_LONG_RUNNING_DDL == check_mode
+                                       || ObCheckExistedDDLMode::DOUBLE_TABLE_RUNNING_DDL == check_mode) ?
+                                          ObDDLType::DDL_NORMAL_TYPE : ObDDLType::DDL_DOUBLE_TABLE_OFFLINE;
       if (OB_FAIL(sql_string.assign_fmt(" SELECT * FROM %s "
-          "WHERE object_id = %lu", OB_ALL_DDL_TASK_STATUS_TNAME,
-          table_id))) {
+          "WHERE object_id = %lu AND ddl_type > %d AND ddl_type < %d", OB_ALL_DDL_TASK_STATUS_TNAME,
+          table_id, lower_bound_type, upper_bound_type))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));

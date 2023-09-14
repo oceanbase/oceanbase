@@ -234,6 +234,14 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       ;
 }
 
+enum ObCheckExistedDDLMode
+{
+  INVALID_DDL_MODE          = 0,
+  ALL_LONG_RUNNING_DDL      = 1,
+  SIMPLE_TABLE_RUNNING_DDL  = 2,
+  DOUBLE_TABLE_RUNNING_DDL  = 3
+};
+
 struct ObColumnNameInfo final
 {
 public:

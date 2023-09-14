@@ -11193,7 +11193,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             const ObCreateForeignKeyArg &foreign_key_arg = const_alter_table_arg.foreign_key_arg_list_.at(0);
             int64_t fk_id = OB_INVALID_ID;
             res.schema_version_ = new_table_schema.get_schema_version();
-            if (foreign_key_arg.need_validate_data_
+            if (const_alter_table_arg.foreign_key_checks_
+                && foreign_key_arg.need_validate_data_
                 && ((!foreign_key_arg.is_modify_fk_state_
                   && foreign_key_arg.validate_flag_)
                 || (foreign_key_arg.is_modify_validate_flag_
@@ -11372,7 +11373,10 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     if (OB_SUCC(ret) && (is_long_running_ddl(ddl_type)
       || alter_table_arg.is_alter_indexs_
       || alter_table_arg.alter_constraint_type_!= obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION)) {
-      if (OB_FAIL(check_fk_related_table_ddl(*orig_table_schema))) {
+      // For add fk operation, fk occurs in orig_table_schema after publish schema,
+      // so the routine here can not refuse the add fk operation if related schema executing offline ddl.
+      // Don't worry, add_table_foreign_keys in alter_table_in_trans will refuse it.
+      if (OB_FAIL(check_fk_related_table_ddl(*orig_table_schema, ddl_type))) {
         LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
       }
     }
@@ -11449,23 +11453,26 @@ int ObDDLService::check_is_adding_constraint(const uint64_t tenant_id, const uin
   return ObDDLTaskRecordOperator::check_is_adding_constraint(sql_proxy_, allocator, tenant_id, table_id, is_building);
 }
 
-// check whether the foreign key related table is executing offline ddl, creating index, and executin constrtaint task.
+// check whether the foreign key related table is executing specifing long-running ddl.
 // And ddl should be refused if the foreign key related table is executing above ddl.
 int ObDDLService::check_fk_related_table_ddl(
-    const share::schema::ObTableSchema &data_table_schema)
+    const share::schema::ObTableSchema &data_table_schema,
+    const share::ObDDLType &ddl_type)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = data_table_schema.get_tenant_id();
   ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || share::ObDDLType::DDL_INVALID == ddl_type)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret));
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(ddl_type));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {
     const ObIArray<ObForeignKeyInfo> &foreign_key_infos = data_table_schema.get_foreign_key_infos();
+    const ObCheckExistedDDLMode check_mode = is_double_table_long_running_ddl(ddl_type) ?
+        ObCheckExistedDDLMode::ALL_LONG_RUNNING_DDL : ObCheckExistedDDLMode::DOUBLE_TABLE_RUNNING_DDL;
     for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
       const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
       const uint64_t related_table_id = data_table_schema.get_table_id() == foreign_key_info.parent_table_id_
@@ -11483,14 +11490,17 @@ int ObDDLService::check_fk_related_table_ddl(
         LOG_WARN("unexpected error, related schema is nullptr", K(ret), K(related_table_id), K(foreign_key_info));
       } else if (!related_schema->check_can_do_ddl()) {
         ret = OB_OP_NOT_ALLOW;
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while foreign key related table is executing offline ddl");
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while foreign key related table is executing long running ddl");
       } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_long_running_ddl(sql_proxy_,
                                                                             tenant_id,
                                                                             related_table_id,
+                                                                            check_mode,
                                                                             has_long_running_ddl))) {
         LOG_WARN("check has long running ddl failed", K(ret), K(tenant_id), K(related_table_id));
       } else if (has_long_running_ddl) {
         ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("foreign key related table is executing offline ddl", K(ret), K(check_mode), K(tenant_id),
+          "table_id", data_table_schema.get_table_id(), K(related_table_id));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while there are some long running ddl on foreign key related table");
       }
     }
@@ -13235,7 +13245,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       end_usec = ObTimeUtility::current_time();
       cost_usec = end_usec - start_usec;
       start_usec = end_usec;
-      LOG_INFO("alter_table_in_trans cost: ", K(cost_usec), K(ddl_type));
+      LOG_INFO("alter_table_in_trans cost: ", K(ret), K(cost_usec), K(ddl_type), "ddl_stmt", alter_table_arg.ddl_stmt_str_);
     }
   }
 
