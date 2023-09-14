@@ -3032,7 +3032,9 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
           LOG_WARN("memory is not enough", K(ret), K(tmp_str));
         } else {
           MEMCPY(buf, tmp_str.ptr(), tmp_str.length());
-          running_monitor->opt_stat_gather_stat_.set_stat_refresh_failed_list(buf, tmp_str.length());
+          ObString tmp_failed_list(tmp_str.length(), buf);
+          ObOptStatGatherStatList::instance().update_gather_stat_refresh_failed_list(tmp_failed_list,
+                                                            running_monitor->opt_stat_gather_stat_);
         }
       }
     }
@@ -3990,7 +3992,8 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   //virtual table(not include real agent table) doesn't gather histogram.
-  bool is_vt = is_virtual_table(param.table_id_);
+  bool is_vt = is_virtual_table(param.table_id_) &&
+               !share::is_oracle_mapping_real_virtual_table(param.table_id_);
   bool use_size_auto = false;
   if (0 == param.method_opt_.case_compare("Z") && !is_vt) {
     if (OB_FAIL(set_default_column_params(param.column_params_))) {
@@ -6116,6 +6119,11 @@ int ObDbmsStats::resovle_granularity(ObGranularityType granu_type,
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected granularity type", K(granu_type));
+  }
+  //virtual table only gather global stats.
+  if (OB_SUCC(ret) && is_virtual_table(param.table_id_)) {
+    param.part_stat_param_.reset_gather_stat();
+    param.subpart_stat_param_.reset_gather_stat();
   }
   LOG_TRACE("succeed to parse granularity", K(param.global_stat_param_),
               K(param.part_stat_param_), K(param.subpart_stat_param_));

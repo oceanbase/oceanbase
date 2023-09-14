@@ -47,6 +47,8 @@ public:
   static int estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                           const ObTablePartitionInfo &table_part_info,
                                           ObTableMetaInfo &meta);
+
+  static bool is_retry_ret(int ret);
 private:
 
   static int process_common_estimate_rowcount(ObOptimizerContext &ctx,
@@ -207,8 +209,6 @@ private:
                                common::ObIArray<AccessPath *> &ds_paths,
                                common::ObIArray<AccessPath *> &no_ds_paths,
                                bool &all_path_is_get);
-
-  static bool is_retry_ret(int ret);
 };
 
 }

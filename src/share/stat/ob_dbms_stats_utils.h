@@ -132,6 +132,19 @@ public:
 
   static int64_t get_truncated_str_len(const ObString &str, const ObCollationType cs_type);
 
+  static int get_current_opt_stats(const ObTableStatParam &param,
+                                   ObIArray<ObOptTableStatHandle> &cur_tab_handles,
+                                   ObIArray<ObOptColumnStatHandle> &cur_col_handles);
+
+  static int get_part_ids_and_column_ids(const ObTableStatParam &param,
+                                         ObIArray<int64_t> &part_ids,
+                                         ObIArray<uint64_t> &column_ids);
+
+  static int erase_stat_cache(const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              const ObIArray<int64_t> &part_ids,
+                              const ObIArray<uint64_t> &column_ids);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

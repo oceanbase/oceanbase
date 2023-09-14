@@ -880,5 +880,86 @@ int64_t ObDbmsStatsUtils::get_truncated_str_len(const ObString &str, const ObCol
   return truncated_str_len;
 }
 
+int ObDbmsStatsUtils::get_current_opt_stats(const ObTableStatParam &param,
+                                            ObIArray<ObOptTableStatHandle> &cur_tab_handles,
+                                            ObIArray<ObOptColumnStatHandle> &cur_col_handles)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 4> part_ids;
+  ObSEArray<uint64_t, 4> column_ids;
+  if (OB_FAIL(get_part_ids_and_column_ids(param, part_ids, column_ids))) {
+    LOG_WARN("failed to get part ids and column ids", K(ret));
+  } else if (OB_FAIL(erase_stat_cache(param.tenant_id_, param.table_id_,
+                                                        part_ids, column_ids))) {
+    LOG_WARN("failed to erase stat cache", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(param.tenant_id_,
+                                                                     param.table_id_,
+                                                                     part_ids,
+                                                                     cur_tab_handles))) {
+    LOG_WARN("failed to get table stat", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_column_stat(param.tenant_id_,
+                                                                      param.table_id_,
+                                                                      part_ids,
+                                                                      column_ids,
+                                                                      cur_col_handles))) {
+    LOG_WARN("failed to get column stat", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_part_ids_and_column_ids(const ObTableStatParam &param,
+                                                  ObIArray<int64_t> &part_ids,
+                                                  ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  //get part ids
+  if (param.global_stat_param_.need_modify_) {
+    int64_t part_id = param.global_part_id_;
+    if (OB_FAIL(part_ids.push_back(part_id))) {
+        LOG_WARN("failed to push back", K(ret));
+    } else {/*do nothing*/}
+  }
+
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  //get column ids
+  for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
+    if (OB_FAIL(column_ids.push_back(param.column_params_.at(i).column_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else {/*do nothing*/}
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::erase_stat_cache(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       const ObIArray<int64_t> &part_ids,
+                                       const ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObOptStatManager::get_instance().erase_table_stat(tenant_id, table_id, part_ids))) {
+    LOG_WARN("failed to erase table stats", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().erase_column_stat(tenant_id,
+                                                                        table_id,
+                                                                        part_ids,
+                                                                        column_ids))) {
+    LOG_WARN("failed to erase column stats", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
 }
 }

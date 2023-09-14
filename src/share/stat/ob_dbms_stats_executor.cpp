@@ -812,10 +812,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
   int ret = OB_SUCCESS;
 
   int64_t affected_rows = 0;
-
-  //before write, we need record history stats.
-  ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
-  ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
+  ObSEArray<ObOptTableStatHandle, 4> cur_tab_handles;
+  ObSEArray<ObOptColumnStatHandle, 4> cur_col_handles;
   ObSEArray<ObOptTableStat *, 4>  table_stats;
   ObSEArray<ObOptColumnStat *, 4> column_stats;
   if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
@@ -828,30 +826,24 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
     LOG_WARN("fail to check lock stat", K(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx,
-                                                                         param,
-                                                                         history_tab_handles,
-                                                                         history_col_handles))) {
-    LOG_WARN("failed to get history stat handles", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_current_opt_stats(param,
+                                                             cur_tab_handles,
+                                                             cur_col_handles))) {
+    LOG_WARN("failed to get current opt stats", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::merge_tab_stats(param,
                                                        online_table_stats,
-                                                       history_tab_handles,
+                                                       cur_tab_handles,
                                                        table_stats))) {
-    LOG_WARN("fail to merge tab stats", K(ret), K(history_tab_handles));
+    LOG_WARN("fail to merge tab stats", K(ret), K(cur_tab_handles));
   } else if (OB_FAIL(ObDbmsStatsUtils::merge_col_stats(param,
                                                        online_column_stats,
-                                                       history_col_handles,
+                                                       cur_col_handles,
                                                        column_stats))) {
-    LOG_WARN("fail to merge col stats", K(ret), K(history_col_handles));
+    LOG_WARN("fail to merge col stats", K(ret), K(cur_col_handles));
   } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, table_stats, column_stats,
                                                          false, false, true))) {
     LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
-  } else if (OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
-                                                                 history_tab_handles,
-                                                                 history_col_handles))) {
-    LOG_WARN("failed to batch write history stats", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
-    //update history
     LOG_WARN("failed to update last modified count", K(ret));
   } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), param))) {
     LOG_WARN("fail to update stat cache", K(ret));

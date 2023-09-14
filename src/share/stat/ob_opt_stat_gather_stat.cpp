@@ -184,19 +184,22 @@ int ObOptStatRunningMonitor::add_table_info(common::ObTableStatParam &table_para
                                             double stale_percent)
 {
   int ret = OB_SUCCESS;
+  ObString tmp_db_name;
+  ObString tmp_tab_name;
+  ObString tmp_properties_str;
   if (OB_FAIL(ob_write_string(allocator_,
                               table_param.db_name_,
-                              opt_stat_gather_stat_.get_database_name()))) {
+                              tmp_db_name))) {
     LOG_WARN("failed to write string", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_,
                                      table_param.tab_name_,
-                                     opt_stat_gather_stat_.get_table_name()))) {
+                                     tmp_tab_name))) {
     LOG_WARN("failed to write string", K(ret));
   } else {
     opt_stat_gather_stat_.set_table_id(table_param.table_id_);
-    ObSqlString tmp_properties_str;
+    ObSqlString properties_sql_str;
     char *buf = NULL;
-    if (OB_FAIL(tmp_properties_str.append_fmt("GRANULARITY:%.*s;METHOD_OPT:%.*s;DEGREE:%ld;ESTIMATE_PERCENT:%lf;BLOCK_SAMPLE:%d;STALE_PERCENT:%lf;",
+    if (OB_FAIL(properties_sql_str.append_fmt("GRANULARITY:%.*s;METHOD_OPT:%.*s;DEGREE:%ld;ESTIMATE_PERCENT:%lf;BLOCK_SAMPLE:%d;STALE_PERCENT:%lf;",
                                               table_param.granularity_.length(),
                                               table_param.granularity_.ptr(),
                                               table_param.method_opt_.length(),
@@ -206,12 +209,14 @@ int ObOptStatRunningMonitor::add_table_info(common::ObTableStatParam &table_para
                                               table_param.sample_info_.is_block_sample_,
                                               stale_percent))) {
       LOG_WARN("failed to append fmt", K(ret));
-    } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(tmp_properties_str.length())))) {
+    } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(properties_sql_str.length())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(tmp_properties_str));
+      LOG_WARN("memory is not enough", K(ret), K(properties_sql_str));
     } else {
-      MEMCPY(buf, tmp_properties_str.ptr(), tmp_properties_str.length());
-      opt_stat_gather_stat_.set_properties(buf, static_cast<int32_t>(tmp_properties_str.length()));
+      MEMCPY(buf, properties_sql_str.ptr(), properties_sql_str.length());
+      tmp_properties_str.assign_ptr(buf, static_cast<int32_t>(properties_sql_str.length()));
+      ObOptStatGatherStatList::instance().update_gather_stat_info(tmp_db_name, tmp_tab_name,
+                                                                  tmp_properties_str, opt_stat_gather_stat_);
     }
   }
   return ret;
@@ -299,6 +304,24 @@ int ObOptStatGatherStatList::remove(ObOptStatGatherStat &stat_value)
     LOG_WARN("failed to move stat", K(ret));
   }
   return ret;
+}
+
+void ObOptStatGatherStatList::update_gather_stat_info(ObString &db_name,
+                                                      ObString &tab_name,
+                                                      ObString &properties,
+                                                      ObOptStatGatherStat &stat_value)
+{
+  ObSpinLockGuard guard(lock_);
+  stat_value.set_database_name(db_name.ptr(), db_name.length());
+  stat_value.set_table_name(tab_name.ptr(), tab_name.length());
+  stat_value.set_properties(properties.ptr(), properties.length());
+}
+
+void ObOptStatGatherStatList::update_gather_stat_refresh_failed_list(ObString &failed_list,
+                                                                     ObOptStatGatherStat &stat_value)
+{
+  ObSpinLockGuard guard(lock_);
+  stat_value.set_stat_refresh_failed_list(failed_list.ptr(), failed_list.length());
 }
 
 int ObOptStatGatherStatList::list_to_array(common::ObIAllocator &allocator,

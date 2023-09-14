@@ -215,6 +215,12 @@ public:
   static ObOptStatGatherStatList &instance();
   int push(ObOptStatGatherStat &stat_value);
   int remove(ObOptStatGatherStat &stat_value);
+  void update_gather_stat_info(ObString &db_name,
+                                ObString &tab_name,
+                                ObString &properties,
+                                ObOptStatGatherStat &stat_value);
+  void update_gather_stat_refresh_failed_list(ObString &failed_list,
+                                              ObOptStatGatherStat &stat_value);
   // param[in] tenant_id  if tenant is sys, list all tenant stat, else list target tenant stat
   int list_to_array(common::ObIAllocator &allocator,
                     const uint64_t target_tenant_id,

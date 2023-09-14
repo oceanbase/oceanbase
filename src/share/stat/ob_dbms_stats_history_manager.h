@@ -76,15 +76,6 @@ private:
                                       sqlclient::ObMySQLResult &result,
                                       ObOptColumnStat &stat);
 
-  static int get_part_ids_and_column_ids(const ObTableStatParam &param,
-                                         ObIArray<int64_t> &part_ids,
-                                         ObIArray<uint64_t> &column_ids);
-
-  static int erase_stat_cache(const uint64_t tenant_id,
-                              const uint64_t table_id,
-                              const ObIArray<int64_t> &part_ids,
-                              const ObIArray<uint64_t> &column_ids);
-
   static int get_stats_history_retention(ObExecContext &ctx, int64_t &retention_val);
 
   static int set_col_stat_cs_type(const ObIArray<ObColumnStatParam> &column_params,
