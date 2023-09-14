@@ -61,13 +61,9 @@ private:
   static bool day_over_limit(const ObTime &ob_time);
   static void set_valid_time_floor(ObTime &ob_time);
   static int integer_to_ob_time(const int64_t &date, DateArgType &date_arg_type, ObTime &ob_time);
-  static int integer_to_ob_time(const ObDatum *date_datum, DateArgType &date_arg_type, ObTime &ob_time);
   static int double_to_ob_time(const double &date, DateArgType &date_arg_type, ObTime &ob_time);
-  static int double_to_ob_time(const ObDatum *date_datum, DateArgType &date_arg_type, ObTime &ob_time);
   static int number_to_ob_time(const number::ObNumber &date, DateArgType &date_arg_type, ObTime &ob_time);
-  static int number_to_ob_time(const ObDatum *date_datum, DateArgType &date_arg_type, ObTime &ob_time);
   static int str_to_ob_time(const ObString &date, DateArgType &date_arg_type, ObTime &ob_time);
-  static int str_to_ob_time(const ObDatum *date_datum, DateArgType &date_arg_type, ObTime &ob_time);
   static int datum_to_ob_time(const ObDatum *date_datum,
                               const ObObjType &date_arg_obj_type,
                               DateArgType &date_arg_type,

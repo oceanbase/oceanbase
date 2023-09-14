@@ -243,16 +243,8 @@ int ObExprAlignDate4Cmp::integer_to_ob_time(const int64_t& date,
   return ret;
 }
 
-int ObExprAlignDate4Cmp::integer_to_ob_time(const ObDatum* date_datum, DateArgType& date_arg_type, ObTime& ob_time) {
-  return integer_to_ob_time(date_datum->get_int(), date_arg_type, ob_time);
-}
-
 int ObExprAlignDate4Cmp::double_to_ob_time(const double& date, DateArgType& date_arg_type, ObTime& ob_time) {
   return integer_to_ob_time((int64_t)date, date_arg_type, ob_time);
-}
-
-int ObExprAlignDate4Cmp::double_to_ob_time(const ObDatum* date_datum, DateArgType& date_arg_type, ObTime& ob_time) {
-  return double_to_ob_time(date_datum->get_double(), date_arg_type, ob_time);
 }
 
 int ObExprAlignDate4Cmp::number_to_ob_time(const number::ObNumber& date, DateArgType& date_arg_type, ObTime& ob_time) {
@@ -264,10 +256,6 @@ int ObExprAlignDate4Cmp::number_to_ob_time(const number::ObNumber& date, DateArg
     LOG_WARN("cast integer to ob_time fail.", K(ret), K(date_int));
   }
   return ret;
-}
-
-int ObExprAlignDate4Cmp::number_to_ob_time(const ObDatum* date_datum, DateArgType& date_arg_type, ObTime& ob_time) {
-  return number_to_ob_time(date_datum->get_number(), date_arg_type, ob_time);
 }
 
 int ObExprAlignDate4Cmp::str_to_ob_time(const ObString& date, DateArgType& date_arg_type, ObTime& ob_time) {
@@ -291,17 +279,13 @@ int ObExprAlignDate4Cmp::str_to_ob_time(const ObString& date, DateArgType& date_
   return ret;
 }
 
-int ObExprAlignDate4Cmp::str_to_ob_time(const ObDatum* date_datum, DateArgType& date_arg_type, ObTime& ob_time) {
-  return str_to_ob_time(date_datum->get_string(), date_arg_type, ob_time);
-}
-
 int ObExprAlignDate4Cmp::datum_to_ob_time(const ObDatum* date_datum, const ObObjType& date_arg_obj_type, DateArgType& date_arg_type, ObTime& ob_time)
 {
   int ret = OB_SUCCESS;
   if (date_datum->is_null()) {
     date_arg_type = NULL_DATE;
   } else if (ob_is_string_type(date_arg_obj_type)) {
-    if (OB_FAIL(str_to_ob_time(date_datum, date_arg_type, ob_time))) {
+    if (OB_FAIL(str_to_ob_time(date_datum->get_string(), date_arg_type, ob_time))) {
       LOG_WARN("str_to_ob_time fail.", K(ret), K(date_datum));
     }
   } else {
@@ -314,29 +298,41 @@ int ObExprAlignDate4Cmp::datum_to_ob_time(const ObDatum* date_datum, const ObObj
       case ObSmallIntType:
       case ObMediumIntType:
       case ObInt32Type:
-      case ObIntType:
+      case ObIntType: {
+        if (OB_FAIL(integer_to_ob_time(static_cast<int64_t>(date_datum->get_uint()),
+                                       date_arg_type, ob_time))) {
+          LOG_WARN("integer_to_ob_time fail.", K(ret), K(date_datum));
+        }
+        break;
+      }
       case ObUTinyIntType:
       case ObUSmallIntType:
       case ObUMediumIntType:
       case ObUInt32Type:
       case ObUInt64Type: {
-        if (OB_FAIL(integer_to_ob_time(date_datum, date_arg_type, ob_time))) {
+        if (OB_FAIL(integer_to_ob_time(date_datum->get_int(), date_arg_type, ob_time))) {
           LOG_WARN("integer_to_ob_time fail.", K(ret), K(date_datum));
         }
         break;
       }
       case ObFloatType:
+      case ObUFloatType: {
+        if (OB_FAIL(double_to_ob_time(static_cast<double>(date_datum->get_float()),
+                                      date_arg_type, ob_time))) {
+          LOG_WARN("integer_to_ob_time fail.", K(ret), K(date_datum));
+        }
+        break;
+      }
       case ObDoubleType:
-      case ObUFloatType:
       case ObUDoubleType: {
-        if (OB_FAIL(double_to_ob_time(date_datum, date_arg_type, ob_time))) {
+        if (OB_FAIL(double_to_ob_time(date_datum->get_double(), date_arg_type, ob_time))) {
           LOG_WARN("double_to_ob_time fail.", K(ret), K(date_datum));
         }
         break;
       }
       case ObNumberType:
       case ObUNumberType: {
-        if (OB_FAIL(number_to_ob_time(date_datum, date_arg_type, ob_time))) {
+        if (OB_FAIL(number_to_ob_time(date_datum->get_number(), date_arg_type, ob_time))) {
           LOG_WARN("number_to_ob_time fail.", K(ret), K(date_datum));
         }
         break;
