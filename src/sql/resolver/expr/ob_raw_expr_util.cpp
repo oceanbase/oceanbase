@@ -6208,6 +6208,19 @@ bool ObRawExprUtils::is_same_column_ref(const ObRawExpr *column_ref1, const ObRa
   return bret;
 }
 
+
+ObCollationLevel ObRawExprUtils::get_column_collation_level(const common::ObObjType &type)
+{
+  if (ob_is_string_type(type)
+      || ob_is_enumset_tc(type)
+      || ob_is_json_tc(type)
+      || ob_is_geometry_tc(type)) {
+    return CS_LEVEL_IMPLICIT;
+  } else {
+    return CS_LEVEL_NUMERIC;
+  }
+}
+
 int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObColumnRefRawExpr &column_expr)
 {
   int ret = OB_SUCCESS;
@@ -6228,11 +6241,11 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
       || ob_is_json_tc(column_schema.get_data_type())
       || ob_is_geometry_tc(column_schema.get_data_type())) {
     column_expr.set_collation_type(column_schema.get_collation_type());
-    column_expr.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
     column_expr.set_collation_type(CS_TYPE_BINARY);
-    column_expr.set_collation_level(CS_LEVEL_NUMERIC);
   }
+  // extract set collation level for reuse
+  column_expr.set_collation_level(get_column_collation_level(column_schema.get_data_type()));
 
   if (OB_SUCC(ret)) {
     column_expr.set_accuracy(accuracy);
