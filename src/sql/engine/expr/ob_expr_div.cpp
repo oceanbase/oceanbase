@@ -609,7 +609,7 @@ struct ObNumberDivFunc
             //          const int64_t new_scale2 = ROUND_UP(scale2);
             //          const int64_t calc_scale = ROUND_UP(new_scale1 + new_scale2 + div_pi);
             const int64_t calc_scale = expr.div_calc_scale_;
-            if (calc_scale > 0 && OB_FAIL(result_num.trunc(calc_scale))) {
+            if (calc_scale >= 0 && OB_FAIL(result_num.trunc(calc_scale))) {
               //calc_scale is calc_scale ,not res_scale.
               //trunc with calc_scale and round with res_scale
               LOG_WARN("failed to trunc result number", K(ret), K(result_num), K(calc_scale));
