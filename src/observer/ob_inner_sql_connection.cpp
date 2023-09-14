@@ -1049,6 +1049,7 @@ int ObInnerSQLConnection::start_transaction_inner(
           } else if (OB_FAIL(arg.set_tz_info_wrap(get_session().get_tz_info_wrap()))) {
             LOG_WARN("fail to set tz info wrap", K(ret));
           } else if (FALSE_IT(handler->get_result()->set_conn_id(OB_INVALID_ID))) {
+          } else if (FALSE_IT(handler->get_result()->set_tenant_id(get_session().get_effective_tenant_id()))) {
           } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(resource_server_addr).by(tenant_id).
                              timeout(query_timeout).group_id(group_id_).
                              inner_sql_sync_transmit(

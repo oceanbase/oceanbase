@@ -219,6 +219,11 @@ public:
   int copy_field_columns(const common::ObIArray<common::ObField> &field_columns);
   void reset_field_columns() { field_columns_.reset(); } ;
   const common::ObSArray<common::ObField> &get_field_columns() { return field_columns_; };
+  void set_tenant_id(uint64_t tenant_id)
+  {
+    scanner_.set_tenant_id(tenant_id);
+    allocator_.set_tenant_id(tenant_id);
+  }
 
   void reset()
   {
