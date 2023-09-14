@@ -746,7 +746,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
         CK (OB_NOT_NULL(src_composite = reinterpret_cast<const ObPLComposite *>(param.get_ext())));
         if (OB_FAIL(ret)) {
         } else if (!dst_pl_type.is_collection_type()) {
-          ret = OB_INVALID_ARGUMENT;
+          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
           LOG_WARN("incorrect argument type", K(ret));
         } else {
           const pl::ObPLCollection *src_coll = NULL;
