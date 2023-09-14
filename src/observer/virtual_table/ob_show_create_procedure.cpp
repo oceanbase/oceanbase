@@ -151,24 +151,33 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
         }
         case OB_APP_MIN_COLUMN_ID + 2: {
           // create_routine
-          ObSchemaPrinter schema_printer(*schema_guard_);
-          int64_t pos = 0;
-          if (OB_FAIL(schema_printer.print_routine_definition(effective_tenant_id_,
-                                                              show_procedure_id,
-                                                              routine_def_buf,
-                                                              OB_MAX_VARCHAR_LENGTH,
-                                                              pos,
-                                                              TZ_INFO(session_)))) {
-            SERVER_LOG(WARN, "Generate table definition failed");
-          }
-          if (OB_FAIL(ret)) {
+          bool sql_quote_show_create = true;
+          bool ansi_quotes = false;
+          if (OB_FAIL(session_->get_sql_quote_show_create(sql_quote_show_create))) {
+            SERVER_LOG(WARN, "failed to get sql_quote_show_create", K(ret), K(session_));
+          } else if (FALSE_IT(IS_ANSI_QUOTES(session_->get_sql_mode(), ansi_quotes))) {
             // do nothing
           } else {
-            cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType,
-                                                    routine_def_buf, static_cast<int32_t>(pos));
+            ObSchemaPrinter schema_printer(*schema_guard_, false, sql_quote_show_create, ansi_quotes);
+            int64_t pos = 0;
+            if (OB_FAIL(schema_printer.print_routine_definition(effective_tenant_id_,
+                                                                show_procedure_id,
+                                                                exec_env,
+                                                                routine_def_buf,
+                                                                OB_MAX_VARCHAR_LENGTH,
+                                                                pos,
+                                                                TZ_INFO(session_)))) {
+              SERVER_LOG(WARN, "Generate routine definition failed");
+            }
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else {
+              cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType,
+                                                      routine_def_buf, static_cast<int32_t>(pos));
+            }
+            OX (cur_row_.cells_[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset())));
           }
-          OX (cur_row_.cells_[cell_idx].set_collation_type(
-              ObCharset::get_default_collation(ObCharset::get_default_charset())));
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 3: {

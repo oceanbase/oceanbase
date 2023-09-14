@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+  class ObExecEnv;
+}
 namespace common
 {
 class ObTimeZoneInfo;
@@ -329,7 +333,7 @@ public:
                               const int64_t& buf_len,
                               int64_t& pos,
                               bool is_agent_mode = false) const;
-  int print_routine_definition(const ObRoutineInfo *routine_info,
+  int print_routine_definition_v1(const ObRoutineInfo *routine_info,
                                const ObStmtNodeTree *param_list,
                                const ObStmtNodeTree *return_type,
                                const common::ObString &body,
@@ -340,17 +344,31 @@ public:
                                const common::ObTimeZoneInfo *tz_info) const;
   int print_routine_definition(const uint64_t tenant_id,
                                const uint64_t routine_id,
+                               const sql::ObExecEnv &exec_env,
                                char* buf,
                                const int64_t& buf_len,
                                int64_t& pos,
                                const common::ObTimeZoneInfo *tz_info) const;
+  int print_routine_definition_v2_mysql(const ObRoutineInfo &routine_info,
+                                const ObStmtNodeTree *parse_tree,
+                                const sql::ObExecEnv &exec_env,
+                                char* buf,
+                                const int64_t& buf_len,
+                                int64_t& pos,
+                                const common::ObTimeZoneInfo *tz_info) const;
+  int print_routine_definition_v2_oracle(const ObRoutineInfo &routine_info,
+                                const ObStmtNodeTree *parse_tree,
+                                char* buf,
+                                const int64_t& buf_len,
+                                int64_t& pos,
+                                const common::ObTimeZoneInfo *tz_info) const;
   int print_routine_param_type(const ObRoutineParam *param,
                                const ObStmtNodeTree *param_type,
                                char *buf,
                                const int64_t &buf_len,
                                int64_t &pos,
                                const common::ObTimeZoneInfo *tz_info) const;
-  int print_routine_definition_param(const ObRoutineInfo &routine_info,
+  int print_routine_definition_param_v1(const ObRoutineInfo &routine_info,
                                      const ObStmtNodeTree *param_list,
                                      char* buf,
                                      const int64_t& buf_len,

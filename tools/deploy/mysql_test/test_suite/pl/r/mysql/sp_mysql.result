@@ -783,12 +783,10 @@ comment 'Characteristics procedure test'
   insert into t1 values ("chistics", 1)|
 show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% PROCEDURE `test`.`chistics`
-()
-
-MODIFIES SQL DATA
-COMMENT `Characteristics procedure test`
- insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` PROCEDURE `chistics`()
+    MODIFIES SQL DATA
+    COMMENT 'Characteristics procedure test'
+insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call chistics()|
 select * from t1|
 id	data
@@ -797,13 +795,11 @@ delete from t1|
 alter procedure chistics sql security invoker|
 show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% PROCEDURE `test`.`chistics`
-()
-
-MODIFIES SQL DATA
-INVOKER
-COMMENT `Characteristics procedure test`
- insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` PROCEDURE `chistics`()
+    MODIFIES SQL DATA
+    INVOKER
+    COMMENT 'Characteristics procedure test'
+insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure chistics|
 drop function if exists chistics|
 create function chistics() returns int
@@ -814,13 +810,11 @@ comment 'Characteristics procedure test'
   return 42|
 show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% FUNCTION `test`.`chistics`
-()
- RETURNS int(11)
-DETERMINISTIC
-INVOKER
-COMMENT `Characteristics procedure test`
- return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` FUNCTION `chistics`() RETURNS int(11)
+    DETERMINISTIC
+    INVOKER
+    COMMENT 'Characteristics procedure test'
+return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select chistics()|
 chistics()
 42
@@ -829,14 +823,12 @@ no sql
 comment 'Characteristics function test'|
 show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-chistics	STRICT_ALL_TABLES	CREATE DEFINER = admin@% FUNCTION `test`.`chistics`
-()
- RETURNS int(11)
-NO SQL
-DETERMINISTIC
-INVOKER
-COMMENT `Characteristics function test`
- return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` FUNCTION `chistics`() RETURNS int(11)
+    NO SQL
+    DETERMINISTIC
+    INVOKER
+    COMMENT 'Characteristics function test'
+return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop function chistics|
 set @@sql_mode=@old_mode|
 insert into t1 values ("foo", 1), ("bar", 2), ("zip", 3)|
@@ -1241,11 +1233,9 @@ end while;
 end|
 show create procedure opp|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-opp		CREATE DEFINER = admin@% PROCEDURE `test`.`opp`
-(
- IN `n` bigint(20) unsigned, OUT `pp` tinyint(1)
-)
-READS SQL DATA begin
+opp		CREATE DEFINER = `admin`@`%` PROCEDURE `opp`(n bigint unsigned, out pp bool)
+    READS SQL DATA
+begin
 declare r double;
 declare b, s bigint unsigned default 0;
 set r = sqrt(n);
@@ -1297,13 +1287,10 @@ alter procedure bar comment "3333333333"|
 alter procedure bar|
 show create procedure bar|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bar		CREATE DEFINER = admin@% PROCEDURE `test`.`bar`
-(
- IN `x` char(16), IN `y` int(11)
-)
-MODIFIES SQL DATA
-COMMENT `3333333333`
- insert into test.t1 values (x, y)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bar		CREATE DEFINER = `admin`@`%` PROCEDURE `bar`(x char(16), y int)
+    MODIFIES SQL DATA
+    COMMENT '3333333333'
+insert into test.t1 values (x, y)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show procedure status like 'bar'|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
 test	bar	PROCEDURE	root@localhost	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	3333333333	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
@@ -1876,16 +1863,14 @@ Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client
 test	bug2267_4	FUNCTION	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call bug2267_3()|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug2267_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug2267_1`
-()
- begin
+bug2267_1		CREATE DEFINER = `admin`@`%` PROCEDURE `bug2267_1`()
+begin
 show procedure status where db='test';
 end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call bug2267_4()|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug2267_4		CREATE DEFINER = admin@% FUNCTION `test`.`bug2267_4`
-()
- RETURNS int(11) return 100	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug2267_4		CREATE DEFINER = `admin`@`%` FUNCTION `bug2267_4`() RETURNS int(11)
+return 100	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug2267_1|
 drop procedure bug2267_2|
 drop procedure bug2267_3|
@@ -2091,30 +2076,23 @@ return x || y$
 set @@sql_mode = ''|
 show create procedure bug2564_1|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug2564_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug2564_1`
-()
-
-MODIFIES SQL DATA
-COMMENT `Joe's procedure`
- insert into `t1` values ("foo", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug2564_1		CREATE DEFINER = `admin`@`%` PROCEDURE `bug2564_1`()
+    MODIFIES SQL DATA
+    COMMENT 'Joe's procedure'
+insert into `t1` values ("foo", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug2564_2|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug2564_2	ANSI_QUOTES	CREATE DEFINER = admin@% PROCEDURE `test`.`bug2564_2`
-()
-
-MODIFIES SQL DATA insert into "t1" values ('foo', 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug2564_2	ANSI_QUOTES	CREATE DEFINER = "admin"@"%" PROCEDURE "bug2564_2"()
+    MODIFIES SQL DATA
+insert into "t1" values ('foo', 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create function bug2564_3|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug2564_3		CREATE DEFINER = admin@% FUNCTION `test`.`bug2564_3`
-(
- `x` int(11), `y` int(11)
-) RETURNS int(11) return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug2564_3		CREATE DEFINER = `admin`@`%` FUNCTION `bug2564_3`(x int, y int) RETURNS int(11)
+return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create function bug2564_4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug2564_4	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI	CREATE DEFINER = admin@% FUNCTION `test`.`bug2564_4`
-(
- `x` int(11), `y` int(11)
-) RETURNS int(11) return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug2564_4	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI	CREATE DEFINER = "admin"@"%" FUNCTION "bug2564_4"(x int, y int) RETURNS int(11)
+return x || y	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug2564_1|
 drop procedure bug2564_2|
 drop function bug2564_3|
@@ -3134,23 +3112,20 @@ call bug7088_2()|
 set character set default|
 show create procedure bug6063|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug6063		CREATE DEFINER = admin@% PROCEDURE `test`.`bug6063`
-()
- begin
+bug6063		CREATE DEFINER = `admin`@`%` PROCEDURE `bug6063`()
+begin
 lâbel: begin end;
 label: begin end;
 label1: begin end;
 end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug7088_1|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug7088_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug7088_1`
-()
- label1: begin end label1	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug7088_1		CREATE DEFINER = `admin`@`%` PROCEDURE `bug7088_1`()
+label1: begin end label1	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug7088_2|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug7088_2		CREATE DEFINER = admin@% PROCEDURE `test`.`bug7088_2`
-()
- läbel1: begin end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug7088_2		CREATE DEFINER = `admin`@`%` PROCEDURE `bug7088_2`()
+läbel1: begin end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug6063|
 drop procedure bug7088_1|
 drop procedure bug7088_2|
@@ -4614,24 +4589,20 @@ CREATE FUNCTION mysqltest2.bug16211_f4() RETURNS CHAR(10) CHARSET binary
 RETURN ""|
 SHOW CREATE FUNCTION bug16211_f1|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f1		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f1`
-()
- RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f1		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f1`() RETURNS char(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION bug16211_f2|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f2		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f2`
-()
- RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f2		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f2`() RETURNS binary(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f3|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f3		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f3`
-()
- RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f3		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f3`() RETURNS char(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f4		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f4`
-()
- RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f4		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f4`() RETURNS binary(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f1"|
@@ -4672,24 +4643,20 @@ ERROR 42000: Unknown character set: 'cp1251'
 ALTER DATABASE mysqltest2 CHARACTER SET utf8mb4|
 SHOW CREATE FUNCTION bug16211_f1|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f1		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f1`
-()
- RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f1		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f1`() RETURNS char(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION bug16211_f2|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f2		CREATE DEFINER = admin@% FUNCTION `mysqltest1`.`bug16211_f2`
-()
- RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f2		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f2`() RETURNS binary(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f3|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f3		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f3`
-()
- RETURNS char(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f3		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f3`() RETURNS char(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SHOW CREATE FUNCTION mysqltest2.bug16211_f4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug16211_f4		CREATE DEFINER = admin@% FUNCTION `mysqltest2`.`bug16211_f4`
-()
- RETURNS binary(10) RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug16211_f4		CREATE DEFINER = `admin`@`%` FUNCTION `bug16211_f4`() RETURNS binary(10)
+RETURN ""	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 SELECT dtd_identifier
 FROM INFORMATION_SCHEMA.ROUTINES
 WHERE ROUTINE_SCHEMA = "mysqltest1" AND ROUTINE_NAME = "bug16211_f1"|
@@ -4957,9 +4924,8 @@ drop procedure if exists bug21416|
 create procedure bug21416() show create procedure bug21416|
 call bug21416()|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-bug21416		CREATE DEFINER = admin@% PROCEDURE `test`.`bug21416`
-()
- show create procedure bug21416	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+bug21416		CREATE DEFINER = `admin`@`%` PROCEDURE `bug21416`()
+show create procedure bug21416	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure bug21416|
 DROP PROCEDURE IF EXISTS bug21414|
 CREATE PROCEDURE bug21414() SELECT 1|
@@ -5747,9 +5713,8 @@ drop procedure if exists proc_21513|
 create procedure proc_21513()`my_label`:BEGIN END|
 show create procedure proc_21513|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-proc_21513		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_21513`
-()
- `my_label`:BEGIN END	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+proc_21513		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_21513`()
+`my_label`:BEGIN END	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure proc_21513|
 End of 5.0 tests.
 drop table t1,t2;
@@ -5907,10 +5872,9 @@ end
 $$
 show create procedure proc_25411_a;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-proc_25411_a		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_a`
-()
-
-READS SQL DATA begin
+proc_25411_a		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_25411_a`()
+    READS SQL DATA
+begin
 /* real comment */
 select 1;
 /*! select 2; */
@@ -5931,11 +5895,14 @@ call proc_25411_a();
 5
 show create procedure proc_25411_b;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-proc_25411_b		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_b`
-(
- IN `p1` int(11), IN `p2` int(11), IN `p3` int(11)
+proc_25411_b		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_25411_b`(
+/* real comment */
+/*! p1 int, */
+/*!00000 p2 int */
+/*!99999 ,p3 int */
 )
-READS SQL DATA begin
+    READS SQL DATA
+begin
 select p1, p2;
 end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select name, param_list, body from mysql.proc where name like "%25411%";
@@ -5948,7 +5915,12 @@ select 3;
 /*!00000 select 4; */
 /*!99999 select 5; */
 end
-proc_25411_b	 IN `p1` int(11), IN `p2` int(11), IN `p3` int(11)	begin
+proc_25411_b
+/* real comment */
+/*! p1 int, */
+/*!00000 p2 int */
+/*!99999 ,p3 int */
+	begin
 select p1, p2;
 end
 proc_25411_c		begin
@@ -5962,10 +5934,9 @@ call proc_25411_b(10, 20);
 ERROR 42000: Incorrect number of arguments
 show create procedure proc_25411_c;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-proc_25411_c		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_c`
-()
-
-READS SQL DATA begin
+proc_25411_c		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_25411_c`()
+    READS SQL DATA
+begin
 select 1/*!,2*//*!00000,3*//*!99999,4*/;
 select 1/*! ,2*//*!00000 ,3*//*!99999 ,4*/;
 select 1/*!,2 *//*!00000,3 *//*!99999,4 */;
@@ -5991,10 +5962,9 @@ create procedure proc_26302()
 select 1 /* testing */;
 show create procedure proc_26302;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-proc_26302		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_26302`
-()
-
-READS SQL DATA select 1 /* testing */	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+proc_26302		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_26302`()
+    READS SQL DATA
+select 1 /* testing */	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select ROUTINE_NAME, ROUTINE_DEFINITION from information_schema.ROUTINES
 where ROUTINE_NAME = "proc_26302";
 ROUTINE_NAME	ROUTINE_DEFINITION
@@ -6485,10 +6455,8 @@ Another_very_long_enum_element_identifier
 
 SHOW CREATE FUNCTION f1;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-f1		CREATE DEFINER = admin@% FUNCTION `test`.`f1`
-(
- `p` int(11)
-) RETURNS enum BEGIN
+f1		CREATE DEFINER = `admin`@`%` FUNCTION `f1`(p INT) RETURNS enum
+BEGIN
 CASE p
 WHEN 1 THEN
 RETURN 'Very_long_enum_element_identifier';

@@ -3900,7 +3900,7 @@ int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
   return ret;
 }
 
-int ObSchemaPrinter::print_routine_definition_param(const ObRoutineInfo &routine_info,
+int ObSchemaPrinter::print_routine_definition_param_v1(const ObRoutineInfo &routine_info,
                                                     const ObStmtNodeTree *param_list,
                                                     char* buf,
                                                     const int64_t& buf_len,
@@ -3978,7 +3978,7 @@ int ObSchemaPrinter::print_routine_definition_param(const ObRoutineInfo &routine
   return ret;
 }
 
-int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
+int ObSchemaPrinter::print_routine_definition_v1(const ObRoutineInfo *routine_info,
                                               const ObStmtNodeTree *param_list,
                                               const ObStmtNodeTree *return_type,
                                               const ObString &body,
@@ -4017,7 +4017,7 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
   OZ (databuff_printf(buf, buf_len, pos, "\n"));
   if (OB_SUCC(ret) && routine_info->get_param_count() > 0) {
     OZ (databuff_printf(buf, buf_len, pos, "(\n"));
-    OZ (print_routine_definition_param(*routine_info, param_list, buf, buf_len, pos, tz_info));
+    OZ (print_routine_definition_param_v1(*routine_info, param_list, buf, buf_len, pos, tz_info));
     OZ (databuff_printf(buf, buf_len, pos, "\n)"));
   } else {
     if (lib::is_mysql_mode()) {
@@ -4060,6 +4060,7 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
 int ObSchemaPrinter::print_routine_definition(
     const uint64_t tenant_id,
     const uint64_t routine_id,
+    const sql::ObExecEnv &exec_env,
     char* buf,
     const int64_t& buf_len,
     int64_t& pos,
@@ -4067,13 +4068,82 @@ int ObSchemaPrinter::print_routine_definition(
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
+  bool use_v1 = true;
   OZ (schema_guard_.get_routine_info(tenant_id, routine_id, routine_info), routine_id);
   if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
     ret = OB_ERR_SP_DOES_NOT_EXIST;
     SHARE_SCHEMA_LOG(WARN, "Unknow routine", K(ret), K(routine_id));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObArenaAllocator allocator;
+    ObString routine_stmt;
+    ParseResult parse_result;
+    const ObString &routine_body = routine_info->get_routine_body();
+    CK(!routine_body.empty());
+
+    // TODO: disable Oracle mode for OB-JDBC compatibility, will enable it soon
+    if (OB_FAIL(ret) || lib::is_oracle_mode()) {
+      // do nothing
+    } else if (routine_info->get_routine_body().prefix_match_ci("procedure")
+               || routine_info->get_routine_body().prefix_match_ci("function")) {
+      use_v1 = false;
+
+      pl::ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN, exec_env.get_sql_mode());
+
+      if (lib::is_mysql_mode()) {
+        const char prefix[] = "CREATE\n";
+        int64_t prefix_len = STRLEN(prefix);
+        int64_t buf_sz = prefix_len + routine_body.length();
+        char *stmt_buf = static_cast<char *>(allocator.alloc(buf_sz));
+        if (OB_ISNULL(stmt_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for routine body buffer", K(buf_sz));
+        } else {
+          MEMCPY(stmt_buf, prefix, prefix_len);
+          MEMCPY(stmt_buf + prefix_len, routine_body.ptr(), routine_body.length());
+
+          routine_stmt.assign_ptr(stmt_buf, buf_sz);
+        }
+      } else { // oracle mode
+        routine_stmt = routine_body;
+      }
+      CK(!routine_stmt.empty());
+
+      OZ (parser.parse(routine_stmt, routine_stmt, parse_result, true));
+    }
+
+    if (OB_SUCC(ret) && !use_v1) {
+      if (lib::is_mysql_mode()) { // mysql mode
+        if (OB_FAIL(print_routine_definition_v2_mysql(
+                      *routine_info,
+                      parse_result.result_tree_,
+                      exec_env,
+                      buf,
+                      buf_len,
+                      pos,
+                      tz_info))) {
+          LOG_WARN("failed to print definition for mysql routine", K(*routine_info));
+        }
+      } else { // TODO: oracle mode, never use this branch for now
+        if (OB_FAIL(print_routine_definition_v2_oracle(
+                      *routine_info,
+                      parse_result.result_tree_,
+                      buf,
+                      buf_len,
+                      pos,
+                      tz_info))) {
+          LOG_WARN("failed to print definition for oracle routine", K(*routine_info));
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) || !use_v1) {
+    //do nothing
   } else if (lib::is_mysql_mode()) {
     ObString clause;
-    OZ (print_routine_definition(routine_info, NULL, NULL, routine_info->get_routine_body(), clause, buf, buf_len, pos, tz_info));
+    OZ (print_routine_definition_v1(routine_info, NULL, NULL, routine_info->get_routine_body(), clause, buf, buf_len, pos, tz_info));
   } else { // oracle mode
     ObString routine_body = routine_info->get_routine_body();
     ObString actully_body;
@@ -4123,8 +4193,170 @@ int ObSchemaPrinter::print_routine_definition(
     OX (param_list = routine_tree->children_[1]);
     OX (return_type = (routine_info->is_function() ? routine_tree->children_[2] : NULL));
     CK (!actully_body.empty());
-    OZ (print_routine_definition(routine_info, param_list, return_type, actully_body, routine_clause, buf, buf_len, pos, tz_info));
+    OZ (print_routine_definition_v1(routine_info, param_list, return_type, actully_body, routine_clause, buf, buf_len, pos, tz_info));
   }
+  return ret;
+}
+
+int ObSchemaPrinter::print_routine_definition_v2_mysql(
+    const ObRoutineInfo &routine_info,
+    const ObStmtNodeTree *parse_tree,
+    const ObExecEnv &exec_env,
+    char* buf,
+    const int64_t& buf_len,
+    int64_t& pos,
+    const common::ObTimeZoneInfo *tz_info) const
+{
+  UNUSED(tz_info);
+  int ret = OB_SUCCESS;
+
+  ObString priv_user;
+  ObString user_name;
+  ObString host_name;
+
+  ParseNode *create_node = nullptr;
+  ParseNode *body_node = nullptr;
+
+  bool is_ansi_quote = false;
+  IS_ANSI_QUOTES(exec_env.get_sql_mode(), is_ansi_quote);
+
+  // the quote character is determined by SQL_MODE ANSI_QUOTES of routine creation
+  const char *quote_char = is_ansi_quote ? "\"" : "`";
+
+  // use quote or not is determined by SQL_QUOTE_SHOW_CREATE variable of the SHOW CREATE statement execution
+  const char *quote = sql_quote_show_create_ ? quote_char : "";
+
+  CK (OB_NOT_NULL(parse_tree) && T_STMT_LIST == parse_tree->type_ && 1 == parse_tree->num_child_);
+  OX (create_node = parse_tree->children_[0]);
+  CK (OB_NOT_NULL(create_node));
+  CK (T_SP_CREATE == create_node->type_ || T_SF_CREATE == create_node->type_);
+  OX (body_node = routine_info.is_procedure() ? create_node->children_[4]
+                                              : create_node->children_[5]);
+  CK (OB_NOT_NULL(body_node));
+  CK (OB_NOT_NULL(body_node->raw_text_));
+
+  OX (priv_user = routine_info.get_priv_user());
+  OX (user_name = priv_user.split_on('@'));
+  OX (host_name = priv_user);
+
+  // quote around username is controlled by SQL_QUOTE_SHOW_CREATE variable,
+  // but quote around hostname is always shown, no matter what SQL_QUOTE_SHOW_CREATE is.
+  OZ (databuff_printf(buf, buf_len, pos, "CREATE DEFINER = %s%.*s%s@%s%.*s%s %s ",
+                      quote,
+                      user_name.length(),
+                      user_name.ptr(),
+                      quote,
+                      quote_char,
+                      host_name.length(),
+                      host_name.ptr(),
+                      quote_char,
+                      routine_info.is_procedure() ? "PROCEDURE" : "FUNCTION"));
+
+  OZ (databuff_printf(buf, buf_len, pos, "%s%.*s%s",
+                      quote,
+                      routine_info.get_routine_name().length(),
+                      routine_info.get_routine_name().ptr(),
+                      quote),
+      K(buf), K(buf_len), K(routine_info));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (create_node->children_[2] != nullptr) {
+    const ParseNode &param_node = *create_node->children_[2];
+    OZ (databuff_printf(buf, buf_len, pos, "(%.*s)",
+                        static_cast<int32_t>(param_node.str_len_),
+                        param_node.str_value_),
+        K(buf), K(buf_len), K(routine_info), K(param_node.str_value_), K(param_node.str_len_));
+  } else {
+    OZ (databuff_printf(buf, buf_len, pos, "()"),
+        K(buf), K(buf_len), K(routine_info));
+  }
+
+  if (OB_SUCC(ret) && routine_info.is_function()) {
+    const ObRoutineParam *return_type = nullptr;
+    OZ (databuff_printf(buf, buf_len, pos, " RETURNS"));
+    OX (return_type =
+           static_cast<const ObRoutineParam *>(routine_info.get_ret_info()));
+    OZ (print_routine_param_type(return_type, nullptr, buf, buf_len, pos, tz_info),
+        K(buf), K(buf_len), K(routine_info));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (routine_info.is_no_sql()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\n    NO SQL"));
+    } else if (routine_info.is_reads_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\n    READS SQL DATA"));
+    } else if (routine_info.is_modifies_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\n    MODIFIES SQL DATA"));
+    }
+    OZ (databuff_printf(buf, buf_len, pos, "%s",
+        routine_info.is_deterministic() ? "\n    DETERMINISTIC" : ""));
+    OZ (databuff_printf(buf, buf_len, pos, "%s",
+        routine_info.is_invoker_right() ? "\n    INVOKER" : ""));
+    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info.get_comment())) {
+      OZ (databuff_printf(buf, buf_len, pos, "\n    COMMENT '%.*s'",
+          routine_info.get_comment().length(),
+          routine_info.get_comment().ptr()));
+    }
+  }
+
+  OZ (databuff_printf(buf, buf_len, pos, "\n%.*s",
+                      static_cast<int32_t>(body_node->text_len_),
+                      body_node->raw_text_),
+      K(buf), K(buf_len), K(routine_info), K(body_node->raw_text_), K(body_node->text_len_));
+
+  return ret;
+}
+
+int ObSchemaPrinter::print_routine_definition_v2_oracle(
+    const ObRoutineInfo &routine_info,
+    const ObStmtNodeTree *parse_tree,
+    char* buf,
+    const int64_t& buf_len,
+    int64_t& pos,
+    const common::ObTimeZoneInfo *tz_info) const
+{
+  UNUSED(tz_info);
+  int ret = OB_SUCCESS;
+  const ParseNode *routine_tree = nullptr;
+  ObArenaAllocator allocator;
+  CK (OB_NOT_NULL(parse_tree) && T_STMT_LIST == parse_tree->type_ && 1 == parse_tree->num_child_);
+  CK (OB_NOT_NULL(parse_tree->children_[0]));
+  OX (routine_tree = parse_tree->children_[0]);
+  if (OB_SUCC(ret) && T_SP_PRE_STMTS == routine_tree->type_) {
+    OZ (pl::ObPLResolver::resolve_condition_compile(
+      allocator,
+      NULL,
+      &schema_guard_,
+      NULL,
+      NULL,
+      &(routine_info.get_exec_env()),
+      routine_tree,
+      routine_tree,
+      true /*inner_parse*/));
+  }
+  CK (OB_NOT_NULL(routine_tree));
+  CK (T_SP_SOURCE == routine_tree->type_ || T_SF_SOURCE == routine_tree->type_ || T_SF_AGGREGATE_SOURCE == routine_tree->type_);
+
+  const ObString db_name;
+  const ObDatabaseSchema *db_schema = nullptr;
+  OZ (schema_guard_.get_database_schema(routine_info.get_tenant_id(),
+      routine_info.get_database_id(), db_schema), routine_info);
+  if (OB_SUCC(ret) && OB_ISNULL(db_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    SHARE_SCHEMA_LOG(WARN, "Unknow database", K(ret), K(routine_info.get_database_id()));
+  }
+  OZ (databuff_printf(
+       buf, buf_len, pos, "  CREATE OR REPLACE %s %s \"%.*s\".\"%.*s\" %.*s",
+       routine_info.is_noneditionable() ? "NONEDITIONABLE" : "EDITIONABLE",
+       routine_info.is_procedure() ? "PROCEDURE" : "FUNCTION",
+       db_schema->get_database_name_str().length(),
+       db_schema->get_database_name_str().ptr(),
+       routine_info.get_routine_name().length(),
+       routine_info.get_routine_name().ptr(),
+       static_cast<int32_t>(routine_tree->str_len_),
+       routine_tree->str_value_));
+
   return ret;
 }
 

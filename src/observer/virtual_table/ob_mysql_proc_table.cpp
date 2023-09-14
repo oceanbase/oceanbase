@@ -99,6 +99,19 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
               }
 
               common::ObArenaAllocator local_allocator;
+              ParseNode *create_node = nullptr;
+
+              if (OB_FAIL(ret)) {
+                // do nothing
+              } else if (routine_info->get_routine_body().prefix_match_ci("procedure")
+                         || routine_info->get_routine_body().prefix_match_ci("function")) {
+                if (OB_FAIL(extract_create_node_from_routine_info(
+                              local_allocator, *routine_info, exec_env, create_node))) {
+                  SERVER_LOG(WARN, "failed to extract create node from routine info",
+                             K(ret), K(*routine_info), K(exec_env), K(create_node));
+                }
+              }
+
               for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
                 const uint64_t col_id = output_column_ids_.at(col_idx);
                 switch (col_id) {
@@ -123,26 +136,51 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     break;
                   }
                   case (PARAM_LIST): {
-                    char *param_list_buf = NULL;
-                    int64_t param_list_buf_size = OB_MAX_VARCHAR_LENGTH;
-                    if (OB_UNLIKELY(NULL == (param_list_buf
-                        = static_cast<char *>(local_allocator.alloc(param_list_buf_size))))) {
-                      ret = OB_ALLOCATE_MEMORY_FAILED;
-                      SERVER_LOG(ERROR, "fail to alloc param_list_buf", K(ret));
-                    } else {
-                      ObSchemaPrinter schema_printer(*schema_guard_);
-                      int64_t pos = 0;
-                      if (OB_FAIL(schema_printer.print_routine_definition_param(*routine_info,
-                                                                                NULL,
-                                                                                param_list_buf,
-                                                                                OB_MAX_VARCHAR_LENGTH,
-                                                                                pos,
-                                                                                TZ_INFO(session_)))) {
-                        SERVER_LOG(WARN, "Generate table definition failed");
+                    if (nullptr != create_node) {
+                      if (T_SP_CREATE != create_node->type_ && T_SF_CREATE != create_node->type_ && OB_ISNULL(create_node->children_[2])) {
+                        ret = OB_ERR_UNEXPECTED;
+                        SERVER_LOG(WARN, "unexpected parse node type of routine body", K(create_node->type_));
                       } else {
-                        ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), param_list_buf);
-                        cells[col_idx].set_varchar(value_str);
-                        cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                        ParseNode *param_node = create_node->children_[2];
+                        ObString value_str;
+                        if (param_node != nullptr) {
+                          if (OB_FAIL(ob_write_string(
+                                          *allocator_,
+                                          ObString(min(OB_MAX_VARCHAR_LENGTH, param_node->str_len_),
+                                          param_node->str_value_),
+                                          value_str))) {
+                            SERVER_LOG(WARN, "failed to ob_write_string",
+                                       K(ret),
+                                       K(param_node->str_len_),
+                                       K(param_node->str_value_),
+                                       K(value_str));
+                          }
+                        }
+                        OX (cells[col_idx].set_varchar(value_str));
+                        OX (cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())));
+                      }
+                    } else {
+                      char *param_list_buf = NULL;
+                      int64_t param_list_buf_size = OB_MAX_VARCHAR_LENGTH;
+                      if (OB_UNLIKELY(NULL == (param_list_buf
+                          = static_cast<char *>(allocator_->alloc(param_list_buf_size))))) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        SERVER_LOG(WARN, "fail to alloc param_list_buf", K(ret));
+                      } else {
+                        ObSchemaPrinter schema_printer(*schema_guard_);
+                        int64_t pos = 0;
+                        if (OB_FAIL(schema_printer.print_routine_definition_param_v1(*routine_info,
+                                                                                  NULL,
+                                                                                  param_list_buf,
+                                                                                  OB_MAX_VARCHAR_LENGTH,
+                                                                                  pos,
+                                                                                  TZ_INFO(session_)))) {
+                          SERVER_LOG(WARN, "Generate table definition failed");
+                        } else {
+                          ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), param_list_buf);
+                          cells[col_idx].set_varchar(value_str);
+                          cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                        }
                       }
                     }
                     break;
@@ -151,9 +189,9 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     char *returns_buf = NULL;
                     int64_t returns_buf_size = OB_MAX_VARCHAR_LENGTH;
                     int64_t pos = 0;
-                    if (OB_UNLIKELY(NULL == (returns_buf = static_cast<char *>(local_allocator.alloc(returns_buf_size))))) {
+                    if (OB_UNLIKELY(NULL == (returns_buf = static_cast<char *>(allocator_->alloc(returns_buf_size))))) {
                       ret = OB_ALLOCATE_MEMORY_FAILED;
-                      SERVER_LOG(ERROR, "fail to alloc returns_buf", K(ret));
+                      SERVER_LOG(WARN, "fail to alloc returns_buf", K(ret));
                     } else {
                       if (routine_info->is_function()) {
                         if (OB_FAIL(ob_sql_type_str(returns_buf,
@@ -225,6 +263,36 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
+                  case (BODY):
+                  case (BODY_UTF8): {
+                    if (nullptr != create_node) {
+                      ParseNode *body_node = nullptr;
+                      if (T_SP_CREATE != create_node->type_ && T_SF_CREATE != create_node->type_) {
+                        ret = OB_ERR_UNEXPECTED;
+                        SERVER_LOG(WARN, "unexpected parse node type of routine body", K(create_node->type_));
+                      } else if (FALSE_IT(body_node = create_node->type_ == T_SP_CREATE ? create_node->children_[4] : create_node->children_[5])) {
+                        // do nothing
+                      } else if (OB_ISNULL(body_node) || OB_ISNULL(body_node->raw_text_)) {
+                        ret = OB_ERR_UNEXPECTED;
+                        SERVER_LOG(WARN, "unexpected empty routine body", K(routine_info->get_routine_body()));
+                      } else {
+                        ObString value_str;
+                        if (OB_FAIL(ob_write_string(*allocator_,
+                                                    ObString(min(OB_MAX_VARCHAR_LENGTH, body_node->text_len_), body_node->raw_text_),
+                                                    value_str))) {
+                          SERVER_LOG(WARN, "failed to ob_write_string", K(ret), K(ObString(body_node->text_len_, body_node->raw_text_)));
+                        } else {
+                          cells[col_idx].set_varchar(value_str);
+                          cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                        }
+                      }
+                    } else {
+                      const ObString &body = routine_info->get_routine_body();
+                      cells[col_idx].set_varchar(body);
+                      cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                    }
+                    break;
+                  }
 
 #define COLUMN_SET_WITH_TYPE(COL_NAME, TYPE, VALUE) \
 case (COL_NAME): {    \
@@ -239,11 +307,9 @@ case (COL_NAME): {    \
                   COLUMN_SET_WITH_TYPE(LANGUAGE, varchar, "SQL")
                   COLUMN_SET_WITH_TYPE(IS_DETERMINISTIC, varchar, routine_info->is_deterministic() ? "YES" : "NO")
                   COLUMN_SET_WITH_TYPE(SECURITY_TYPE, varchar, routine_info->is_invoker_right() ? "INVOKER" : "DEFINER")
-                  COLUMN_SET_WITH_TYPE(BODY, varchar, routine_info->get_routine_body())
                   COLUMN_SET_WITH_TYPE(CREATED, timestamp, OB_INVALID_TIMESTAMP)
                   COLUMN_SET_WITH_TYPE(MODIFIED, timestamp, OB_INVALID_TIMESTAMP)
                   COLUMN_SET_WITH_TYPE(COMMENT, varchar, routine_info->get_comment())
-                  COLUMN_SET_WITH_TYPE(BODY_UTF8, varchar, routine_info->get_routine_body())
 
 #undef COLUMN_SET_WITH_TYPE
 
@@ -284,6 +350,48 @@ case (COL_NAME): {    \
   return ret;
 }
 
+int ObMySQLProcTable::extract_create_node_from_routine_info(ObIAllocator &alloc, const ObRoutineInfo &routine_info, const sql::ObExecEnv &exec_env, ParseNode *&create_node) {
+  int ret = OB_SUCCESS;
+
+  ParseResult parse_result;
+  ObString routine_stmt;
+  pl::ObPLParser parser(alloc, CS_TYPE_UTF8MB4_BIN, exec_env.get_sql_mode());
+  const ObString &routine_body = routine_info.get_routine_body();
+  const char prefix[] = "CREATE\n";
+  int64_t prefix_len = STRLEN(prefix);
+  int64_t buf_sz = prefix_len + routine_body.length();
+  char *stmt_buf = static_cast<char *>(alloc.alloc(buf_sz));
+  if (OB_ISNULL(stmt_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SERVER_LOG(WARN, "failed to allocate memory for routine body buffer",
+               K(buf_sz));
+  } else {
+    MEMCPY(stmt_buf, prefix, prefix_len);
+    MEMCPY(stmt_buf + prefix_len, routine_body.ptr(), routine_body.length());
+    routine_stmt.assign_ptr(stmt_buf, buf_sz);
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(parser.parse(routine_stmt, routine_stmt, parse_result, true))) {
+    SERVER_LOG(WARN, "failed to parse mysql routine body",
+               K(ret), K(routine_info), K(routine_body));
+  }
+
+  if OB_SUCC(ret) {
+    if (OB_NOT_NULL(parse_result.result_tree_) &&
+        T_STMT_LIST == parse_result.result_tree_->type_ &&
+        1 == parse_result.result_tree_->num_child_) {
+      create_node = parse_result.result_tree_->children_[0];
+    } else {
+      create_node = nullptr;
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "unexpected parse node of mysql routine body", K(routine_info), K(routine_body), K(parse_result.result_tree_));
+    }
+  }
+
+  return ret;
+}
 }
 }
 
