@@ -1627,6 +1627,7 @@ int ObStorageOssUtil::strtotime(const char *date_time, int64_t &time)
   int ret = OB_SUCCESS;
   time = 0;
   struct tm tm_time;
+  memset(&tm_time, 0, sizeof(struct tm));
   if (OB_ISNULL(date_time)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "strtotime get invalid argument", K(ret), KP(date_time));

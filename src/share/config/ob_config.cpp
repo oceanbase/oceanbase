@@ -714,6 +714,7 @@ bool ObConfigMomentItem::set(const char *str)
 {
   int ret = true;
   struct tm tm_value;
+  memset(&tm_value, 0, sizeof(struct tm));
   if (0 == STRCASECMP(str, "disable")) {
     value_.disable_ = true;
   } else if (OB_ISNULL(strptime(str, "%H:%M", &tm_value))) {

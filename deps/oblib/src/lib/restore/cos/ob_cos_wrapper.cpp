@@ -55,6 +55,7 @@ static int64_t strtotime(const char *date_time)
 {
   int64_t time = 0;
   struct tm tm_time;
+  memset(&tm_time, 0, sizeof(struct tm));
   if (NULL == strptime(date_time, "%a, %d %b %Y %H:%M:%S %Z", &tm_time)) {
     //skip set ret, for compat data formate
     cos_warn_log("[COS]failed to transform time, time=%s\n", date_time);
