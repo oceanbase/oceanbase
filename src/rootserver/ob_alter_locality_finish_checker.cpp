@@ -26,7 +26,7 @@ using namespace common;
 using namespace share;
 namespace rootserver
 {
-OB_SERIALIZE_MEMBER((ObCommitAlterTenantLocalityArg, ObDDLArg), tenant_id_, rs_job_id_, rs_job_check_ret_);
+OB_SERIALIZE_MEMBER((ObCommitAlterTenantLocalityArg, ObDDLArg), tenant_id_);
 
 ObAlterLocalityFinishChecker::ObAlterLocalityFinishChecker(volatile bool &stop)
   : inited_(false),
@@ -103,9 +103,7 @@ int ObAlterLocalityFinishChecker::check()
       DEBUG_SYNC(BEFORE_CHECK_LOCALITY);
       bool alter_locality_finish = false;
       bool meta_alter_locality_finish = false;
-      int check_ret = OB_NEED_WAIT;
       uint64_t tenant_id = OB_INVALID_TENANT_ID;
-      int64_t job_id = 0;
       ObCurTraceId::init(GCONF.self_addr_);
       if (OB_ISNULL(tenant_schemas.at(i)) || OB_ISNULL(GCTX.sql_proxy_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -116,26 +114,17 @@ int ObAlterLocalityFinishChecker::check()
         LOG_WARN("invalid tenant schema", KR(ret), "schema", tenant_schemas.at(i));
       } else if (FALSE_IT(tenant_id = tenant_schemas.at(i)->get_tenant_id())) {
         // shall never be here
-      } else if (is_meta_tenant(tenant_id)
-          || tenant_schemas.at(i)->get_previous_locality_str().empty()) {
+      } else if (is_meta_tenant(tenant_id)) {
         continue;
-      } else if (OB_FAIL(find_rs_job(tenant_id, job_id, *GCTX.sql_proxy_))) {
-        // find the corresponding rs job at first, then check if we can complete it
-        // if we only find the rs job at the committing period,
-        // we do not know whether the job has been changed during checking process
-        // e.g. job 1 is the rs job before checking,
-        //      right after checking, job 2 is created and job 1 is canceled by job 2,
-        //      then committing process will find job 2 and complete job 2 immediately,
-        //      which means, job 2 is completed without checking.
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          FLOG_WARN("[ALTER_TENANT_LOCALITY NOTICE] there exists locality changing without corresponding rs job",
-              KR(ret), KPC(tenant_schemas.at(i)));
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to find rs job", KR(ret), K(tenant_id));
+      } else if (tenant_schemas.at(i)->get_previous_locality_str().empty()) {
+        // two possibilities
+        // 1. we cannot find any inprogress ALTER_TENANT_LOCALITY in __all_rootservice_job
+        // 2. there is an inprogress rs job ALTER_TENANT_LOCALITY, all tasks related to disaster recovery
+        //    (e.g. add missing ls replicas, remove redundant ls replicas) have been finished
+        //    the last thing to do is that check whether ls are balanced and complete the rs job if yes
+        if (OB_FAIL(ObRootUtils::check_and_commit_rs_job(tenant_id, ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY))) {
+          LOG_WARN("fail to check and commit rs job", KR(ret));
         }
-      }
-      if (OB_FAIL(ret)) {
       } else if (OB_SUCCESS != (tmp_ret = ObDRWorker::check_tenant_locality_match(
                          tenant_id,
                          *unit_mgr_,
@@ -150,18 +139,13 @@ int ObAlterLocalityFinishChecker::check()
                          meta_alter_locality_finish))){
         LOG_WARN("fail to check tenant locality match", KR(tmp_ret), "meta_tenant_id",
                  gen_meta_tenant_id(tenant_id), K(meta_alter_locality_finish));
-      } else if (OB_FAIL(ObRootUtils::check_tenant_ls_balance(tenant_id, check_ret))) {
-        LOG_WARN("fail to execute check_tenant_ls_balance", KR(ret), K(tenant_id));
       } else if (alter_locality_finish
-          && OB_NEED_WAIT != check_ret
           && (meta_alter_locality_finish || is_sys_tenant(tenant_id))) {
         DEBUG_SYNC(BEFORE_FINISH_LOCALITY);
         const int64_t timeout = GCONF.internal_sql_execute_timeout;  // 30s default
         rootserver::ObCommitAlterTenantLocalityArg arg;
         arg.tenant_id_ = tenant_id;
         arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
-        arg.rs_job_id_ = job_id;
-        arg.rs_job_check_ret_ = check_ret;
         if (OB_FAIL(check_stop())) {
           LOG_WARN("ObAlterLocalityFinishChecker stopped", KR(ret));
         } else if (OB_SUCCESS != (tmp_ret = common_rpc_proxy_->to(self_).timeout(timeout).commit_alter_tenant_locality(arg))) {
@@ -204,5 +188,6 @@ int ObAlterLocalityFinishChecker::check_stop() const
   }
   return ret;
 }
+
 } // end namespace rootserver
 } // end namespace oceanbase

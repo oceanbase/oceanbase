@@ -74,7 +74,6 @@ private:
     const ObIArray<uint64_t> &unit_group_ids,
     bool &is_finished);
   int commit_tenant_shrink_resource_pool_(const uint64_t tenant_id);
-  int check_and_commit_rs_job_(const uint64_t tenant_id);
 private:
   const volatile bool &is_stop_;
   common::ObMySQLProxy *sql_proxy_;

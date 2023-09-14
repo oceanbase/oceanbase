@@ -171,7 +171,7 @@ public:
       const uint64_t tenant_id,
       const int64_t new_unit_num,
       const common::ObIArray<uint64_t> &unit_group_id_array);
-  int find_alter_resource_tenant_unit_num_rs_job(
+  static int find_alter_resource_tenant_unit_num_rs_job(
     const uint64_t tenant_id,
     int64_t &job_id,
     common::ObISQLClient &sql_proxy);

@@ -133,8 +133,8 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_te
     // or a SHRINK task which has cleared deleting units in __all_unit table
     // check whether this task can be committed (i.e. ls is balanced)
     // if not exists, return OB_SUCCESS
-    if (OB_FAIL(check_and_commit_rs_job_(tenant_id))) {
-      LOG_WARN("fail to execute check_and_commit_rs_job_", KR(ret), K(tenant_id));
+    if (OB_FAIL(ObRootUtils::check_and_commit_rs_job(tenant_id, ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM))) {
+      LOG_WARN("fail to execute check_and_commit_rs_job", KR(ret), K(tenant_id));
     }
   } else {
     //check shrink finish
@@ -274,49 +274,6 @@ int ObShrinkExpandResourcePoolChecker::commit_tenant_shrink_resource_pool_(const
   } else if (OB_FAIL(unit_mgr_->commit_shrink_tenant_resource_pool(tenant_id))) {
     LOG_WARN("fail to shrink resource pool", KR(ret), K(tenant_id));
   } else {} // no more to do
-  return ret;
-}
-
-int ObShrinkExpandResourcePoolChecker::check_and_commit_rs_job_(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t check_job_id = 0;
-  int check_ret = OB_NEED_WAIT;
-  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(unit_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql_proxy_ or unit_mgr_ is null", KR(ret), KP(sql_proxy_), KP(unit_mgr_));
-  } else if (OB_FAIL(unit_mgr_->find_alter_resource_tenant_unit_num_rs_job(tenant_id, check_job_id, *sql_proxy_))) {
-    // find the corresponding rs job at first, then check if we can complete it
-    // if we only find the rs job at the committing period,
-    // we do not know whether the job has been changed during checking process
-    // e.g. job 1 is the rs job before checking,
-    //      right after checking, job 2 is created and job 1 is canceled by job 2,
-    //      then committing process will find job 2 and complete job 2 immediately,
-    //      which means, job 2 is completed without checking.
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to find rs job", KR(ret), K(tenant_id));
-    }
-  } else if (OB_FAIL(ObRootUtils::check_tenant_ls_balance(tenant_id, check_ret))) {
-    LOG_WARN("fail to execute check_tenant_ls_balance", KR(ret), K(tenant_id));
-  } else if (OB_NEED_WAIT != check_ret) {
-    DEBUG_SYNC(BEFORE_FINISH_UNIT_NUM);
-    if (OB_FAIL(check_stop())) {
-      LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
-    } else if (OB_SUCC(RS_JOB_COMPLETE(check_job_id, check_ret, *sql_proxy_))) {
-      FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] complete an inprogress rs job",
-          KR(ret), K(tenant_id), K(check_job_id), K(check_ret));
-    } else {
-      LOG_WARN("fail to complete rs job", KR(ret), K(tenant_id), K(check_job_id), K(check_ret));
-      if (OB_EAGAIN == ret) {
-        FLOG_WARN("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] the specified rs job might has "
-            "been already completed due to a new job or deleted in table manually",
-            KR(ret), K(tenant_id), K(check_job_id), K(check_ret));
-        ret = OB_SUCCESS; // no need to return the error code
-      }
-    }
-  }
   return ret;
 }
 } // end namespace rootserver

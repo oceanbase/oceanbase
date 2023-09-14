@@ -23453,29 +23453,6 @@ int ObDDLService::commit_alter_tenant_locality(
               LOG_WARN("fail to alter meta tenant", KR(ret));
             }
           }
-          int return_code = arg.rs_job_check_ret_;
-          int64_t job_id = arg.rs_job_id_;
-          if (OB_FAIL(ret)) {
-          } else if (OB_SUCC(RS_JOB_COMPLETE(job_id, return_code, trans))) {
-            FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] complete an inprogress rs job", KR(ret),
-                  K(arg), K(return_code));
-          } else {
-            LOG_WARN("fail to complete rs job", KR(ret), K(job_id), K(return_code));
-            if (OB_EAGAIN == ret) {
-              int64_t find_job_id = 0;
-              if (OB_FAIL(ObAlterLocalityFinishChecker::find_rs_job(arg.tenant_id_, find_job_id, trans))) {
-                LOG_WARN("fail to find rs job", KR(ret), K(arg));
-                if (OB_ENTRY_NOT_EXIST == ret) {
-                  FLOG_WARN("[ALTER_TENANT_LOCALITY NOTICE] the specified rs job might has "
-                      "been already deleted in table manually", KR(ret), K(arg), K(return_code));
-                  ret = OB_SUCCESS;
-                }
-              } else {
-                ret = OB_EAGAIN;
-                FLOG_WARN("[ALTER_TENANT_LOCALITY NOTICE] a non-checked rs job cannot be committed", KR(ret), K(arg), K(find_job_id));
-              }
-            }
-          }
         }
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -24817,16 +24794,22 @@ int ObDDLService::record_tenant_locality_event_history(
   if (ALTER_LOCALITY_OP_INVALID == alter_locality_op) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid alter locality op", K(ret), K(alter_locality_op));
-  } else if (ROLLBACK_ALTER_LOCALITY == alter_locality_op) {
+  } else {
     int64_t job_id = 0;
     if (OB_FAIL(ObAlterLocalityFinishChecker::find_rs_job(tenant_schema.get_tenant_id(), job_id, trans))) {
-      LOG_WARN("failed to find rs job", K(ret), "tenant_id", tenant_schema.get_tenant_id());
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to find rs job", K(ret), "tenant_id", tenant_schema.get_tenant_id());
+      }
     } else {
-      ret = RS_JOB_COMPLETE(job_id, OB_CANCELED, trans); // The change task is rolled back, this change failed
+      ret = RS_JOB_COMPLETE(job_id, OB_CANCELED, trans);
       FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] cancel an old inprogress rs job due to rollback", KR(ret),
           "tenant_id", tenant_schema.get_tenant_id(), K(job_id));
     }
-    if (FAILEDx(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, tenant_data_version))) {
+  }
+  if (OB_SUCC(ret) && ROLLBACK_ALTER_LOCALITY == alter_locality_op) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, tenant_data_version))) {
       LOG_WARN("fail to get sys tenant's min data version", KR(ret));
     } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
       job_type = ObRsJobType::JOB_TYPE_ROLLBACK_ALTER_TENANT_LOCALITY;
