@@ -117,6 +117,17 @@ int ObLogService::mtl_init(ObLogService* &logservice)
   return ret;
 }
 
+void ObLogService::mtl_destroy(ObLogService* &logservice)
+{
+  common::ob_delete(logservice);
+  logservice = nullptr;
+  // Free tenant_log_allocator for this tenant after destroy logservice.
+  const int64_t tenant_id = MTL_ID();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(TMA_MGR_INSTANCE.delete_tenant_log_allocator(tenant_id))) {
+    CLOG_LOG(WARN, "delete_tenant_log_allocator failed", K(ret));
+  }
+}
 int ObLogService::start()
 {
   int ret = OB_SUCCESS;

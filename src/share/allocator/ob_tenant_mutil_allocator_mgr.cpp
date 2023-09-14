@@ -28,7 +28,7 @@ int ObTenantMutilAllocatorMgr::init()
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else {
-    for (int64_t i = 0; i < PRESERVED_TENANT_COUNT; ++i) {
+    for (int64_t i = 0; i < ARRAY_SIZE; ++i) {
       tma_array_[i] = NULL;
     }
     is_inited_ = true;
@@ -42,15 +42,31 @@ int ObTenantMutilAllocatorMgr::get_tenant_log_allocator(const uint64_t tenant_id
 {
   int ret = OB_SUCCESS;
   ObTenantMutilAllocator *allocator = NULL;
-  if (OB_FAIL(get_tenant_mutil_allocator(tenant_id, allocator))) {
+  if (OB_FAIL(get_tenant_mutil_allocator_(tenant_id, allocator))) {
   } else {
     out_allocator = allocator;
   }
   return ret;
 }
 
-int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(const uint64_t tenant_id,
-                                                          ObTenantMutilAllocator *&out_allocator)
+int ObTenantMutilAllocatorMgr::delete_tenant_log_allocator(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(delete_tenant_mutil_allocator_(tenant_id))) {
+    OB_LOG(WARN, "delete_tenant_mutil_allocator_ failed", K(ret), K(tenant_id));
+  } else {
+    OB_LOG(INFO, "delete_tenant_mutil_allocator_ success", K(tenant_id));
+  }
+  return ret;
+}
+
+int64_t ObTenantMutilAllocatorMgr::get_slot_(const int64_t tenant_id) const
+{
+  // The first slot by idx==0 won't be used.
+  return (tenant_id % PRESERVED_TENANT_COUNT) + 1;
+}
+int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator_(const uint64_t tenant_id,
+                                                           TMA *&out_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -59,16 +75,23 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(const uint64_t tenant_
   } else if (OB_UNLIKELY(tenant_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
-  } else if (tenant_id < PRESERVED_TENANT_COUNT) {
-    // Don't need lock
-    if (NULL == (out_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
+  } else if (tenant_id <= PRESERVED_TENANT_COUNT) {
+    // Need rlock
+    do {
+      obsys::ObRLockGuard guard(locks_[tenant_id]);
+      out_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]);
+    } while(0);
+
+    if (NULL == out_allocator) {
+      // Need create new allocator
       if (OB_FAIL(create_tenant_mutil_allocator_(tenant_id, out_allocator))) {
         OB_LOG(WARN, "fail to create_tenant_mutil_allocator_", K(ret), K(tenant_id));
       }
     }
   } else {
     // Need lock
-    const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
+    // slot must be > 0.
+    const int64_t slot = get_slot_(tenant_id);
     bool is_need_create = false;
     do {
       // rdlock
@@ -131,13 +154,14 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
                                                               TMA *&out_allocator)
 {
   int ret = OB_SUCCESS;
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(tenant_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
-  } else if (tenant_id < PRESERVED_TENANT_COUNT) {
+  } else if (tenant_id <= PRESERVED_TENANT_COUNT) {
+    // wlock
+    obsys::ObWLockGuard guard(locks_[tenant_id]);
     if (NULL != (out_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
     } else {
       TMA *tmp_tma = NULL;
@@ -154,26 +178,30 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
       }
     }
   } else {
-    const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
-    if (NULL == ATOMIC_LOAD(&tma_array_[slot])) {
-      // slot's head node is NULL, need construct
-      TMA *tmp_tma = NULL;
-      if (OB_FAIL(construct_allocator_(slot, tmp_tma))) {
-        OB_LOG(WARN, "fail to construct_allocator_", K(ret), K(slot));
-      } else if (!ATOMIC_BCAS(&tma_array_[slot], NULL, tmp_tma)) {
-        if (NULL != tmp_tma) {
-          tmp_tma->~TMA();
-          ob_free(tmp_tma);
-        }
-      } else {}
-    }
+    // slot must be > 0.
+    const int64_t slot = get_slot_(tenant_id);
     do {
       // Need lock when modify slog list
       obsys::ObWLockGuard guard(locks_[slot]);
+      if (NULL == ATOMIC_LOAD(&tma_array_[slot])) {
+        // slot's head node is NULL, need construct
+        TMA *tmp_tma = NULL;
+        if (OB_FAIL(construct_allocator_(slot, tmp_tma))) {
+          OB_LOG(WARN, "fail to construct_allocator_", K(ret), K(slot));
+        } else if (!ATOMIC_BCAS(&tma_array_[slot], NULL, tmp_tma)) {
+          if (NULL != tmp_tma) {
+            tmp_tma->~TMA();
+            ob_free(tmp_tma);
+          }
+        } else {}
+      }
+      // create tenant's allocator
       if (OB_SUCC(ret)) {
         bool is_need_create = false;
+        TMA **prev = NULL;
         TMA **cur = &tma_array_[slot];
         while ((NULL != cur) && (NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
+          prev = cur;
           cur = &((*cur)->get_next());
         }
         if (NULL != cur) {
@@ -188,12 +216,68 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
           if (OB_FAIL(construct_allocator_(tenant_id, tmp_tma))) {
             OB_LOG(WARN, "fail to construct_allocator_", K(ret), K(tenant_id));
           } else {
+            OB_ASSERT(NULL != prev);
+            OB_ASSERT(NULL != (*prev));
+            OB_ASSERT(prev != cur);
+            // record cur's value(new next tma ptr)
             TMA *next_allocator = *cur;
-            *cur = tmp_tma;
-            ((*cur)->get_next()) = next_allocator;
+            // set cur to NULL
+            cur = NULL;
+            // Let prev->next_ points to new tma.
+            ((*prev)->get_next()) = tmp_tma;
+            // Let tmp_tma->next_ points to old cur.
+            (tmp_tma->get_next()) = next_allocator;
             out_allocator = tmp_tma;
           }
         }
+      }
+    } while (0);
+  }
+
+  return ret;
+}
+
+int ObTenantMutilAllocatorMgr::delete_tenant_mutil_allocator_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(tenant_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
+  } else if (tenant_id <= PRESERVED_TENANT_COUNT) {
+    // Need wlock
+    obsys::ObWLockGuard guard(locks_[tenant_id]);
+    TMA *tma_allocator = NULL;
+    if (NULL != (tma_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
+      if (NULL != tma_allocator->get_next()) {
+        OB_LOG(INFO, "next_ ptr is not NULL, skip deleting this allocator", K(ret), K(tenant_id));
+      } else {
+        tma_array_[tenant_id] = NULL;
+        tma_allocator->~TMA();
+        ob_free(tma_allocator);
+        tma_allocator = NULL;
+      }
+    }
+  } else {
+    // slot must be > 0.
+    const int64_t slot = get_slot_(tenant_id);
+    do {
+      // wlock
+      obsys::ObWLockGuard guard(locks_[slot]);
+      TMA *prev = NULL;
+      TMA *cur = tma_array_[slot];
+      while ((NULL != cur) && cur->get_tenant_id() < tenant_id) {
+        prev = cur;
+        cur = cur->get_next();
+      }
+      if (NULL != cur && cur->get_tenant_id() == tenant_id) {
+        OB_ASSERT(NULL != prev);
+        OB_ASSERT(prev != cur);
+        prev->get_next() = cur->get_next();
+        cur->get_next() = NULL;
+        ob_free(cur);
+        cur = NULL;
       }
     } while (0);
   }
@@ -206,7 +290,7 @@ ObTenantMutilAllocatorMgr &ObTenantMutilAllocatorMgr::get_instance()
   static ObTenantMutilAllocatorMgr instance_;
   return instance_;
 }
-
+/*
 int ObTenantMutilAllocatorMgr::get_tenant_limit(const uint64_t tenant_id,
                                                 int64_t &limit)
 {
@@ -217,7 +301,7 @@ int ObTenantMutilAllocatorMgr::get_tenant_limit(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(tenant_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(get_tenant_mutil_allocator(tenant_id, allocator))) {
+  } else if (OB_FAIL(get_tenant_mutil_allocator_(tenant_id, allocator))) {
     ret = OB_TENANT_NOT_EXIST;
   } else {
     limit = allocator->get_limit();
@@ -236,7 +320,7 @@ int ObTenantMutilAllocatorMgr::set_tenant_limit(const uint64_t tenant_id,
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(tenant_id <= 0) || OB_UNLIKELY(new_limit <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(get_tenant_mutil_allocator(tenant_id, allocator))) {
+  } else if (OB_FAIL(get_tenant_mutil_allocator_(tenant_id, allocator))) {
   } else if (OB_ISNULL(allocator)) {
     ret = OB_TENANT_NOT_EXIST;
   } else {
@@ -245,6 +329,7 @@ int ObTenantMutilAllocatorMgr::set_tenant_limit(const uint64_t tenant_id,
 
   return ret;
 }
+*/
 int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits &all_tenant_units)
 {
   // Update mem_limit for each tenant, called when the chane unit specifications or
@@ -276,10 +361,10 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits 
       }
       int tmp_ret = OB_SUCCESS;
       ObTenantMutilAllocator *tma= NULL;
-      if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator(tenant_id, tma))) {
-        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tmp_ret), K(tenant_id));
+      if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator_(tenant_id, tma))) {
+        OB_LOG(WARN, "get_tenant_mutil_allocator_ failed", K(tmp_ret), K(tenant_id));
       } else if (NULL == tma) {
-        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
+        OB_LOG(WARN, "get_tenant_mutil_allocator_ failed", K(tenant_id));
       } else {
         tma->set_nway(nway);
         int64_t pre_tma_limit = tma->get_limit();
@@ -294,7 +379,7 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits 
       ObGMemstoreAllocator* memstore_allocator = NULL;
       if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(tenant_id, memstore_allocator))) {
       } else if (OB_ISNULL(memstore_allocator)) {
-        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
+        OB_LOG(WARN, "get_tenant_memstore_allocator failed", K(tenant_id));
       } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {
         OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
       } else {

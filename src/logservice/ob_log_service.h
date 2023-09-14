@@ -86,6 +86,7 @@ public:
   ObLogService();
   virtual ~ObLogService();
   static int mtl_init(ObLogService* &logservice);
+  static void mtl_destroy(ObLogService* &logservice);
   int start();
   void stop();
   void wait();

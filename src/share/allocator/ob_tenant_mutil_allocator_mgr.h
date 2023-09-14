@@ -37,37 +37,36 @@ public:
   ~ObTenantMutilAllocatorMgr()
   {}
   int init();
-  int get_tenant_mutil_allocator(const uint64_t tenant_id,
-                                 ObTenantMutilAllocator *&out_allocator);
+
+  // This interface is used by logservice module only.
   int get_tenant_log_allocator(const uint64_t tenant_id,
                                ObILogAllocator *&out_allocator);
-  int get_tenant_limit(const uint64_t tenant_id, int64_t &limit);
-  int set_tenant_limit(const uint64_t tenant_id, const int64_t new_limit);
-  void *alloc_log_entry_buf(const int64_t size)
-  {
-    return clog_entry_alloc_.alloc(size);
-  }
-  void free_log_entry_buf(void *ptr)
-  {
-    if (NULL != ptr) {
-      clog_entry_alloc_.free(ptr);
-    }
-  }
+  // This interface is used by logservice module only.
+  int delete_tenant_log_allocator(const uint64_t tenant_id);
+  // int get_tenant_limit(const uint64_t tenant_id, int64_t &limit);
+  // int set_tenant_limit(const uint64_t tenant_id, const int64_t new_limit);
   // a tricky interface, ugly but save memory
   int update_tenant_mem_limit(const share::TenantUnits &all_tenant_units);
 public:
   static ObTenantMutilAllocatorMgr &get_instance();
 private:
+  int64_t get_slot_(const int64_t tenant_id) const;
+  int get_tenant_mutil_allocator_(const uint64_t tenant_id, TMA *&out_allocator);
+  int delete_tenant_mutil_allocator_(const uint64_t tenant_id);
   int construct_allocator_(const uint64_t tenant_id,
                            TMA *&out_allocator);
   int create_tenant_mutil_allocator_(const uint64_t tenant_id,
                                      TMA *&out_allocator);
 private:
-  static const uint64_t PRESERVED_TENANT_COUNT = 10000;
+  // The sizeof(TMA) is about 130KB, so if the total number of tenants(including deleted ones)
+  // exceeds 1500, the memory used by TMA_MGR will be at least 65MB.
+  static const uint64_t PRESERVED_TENANT_COUNT = 1500;
+  static const uint64_t ARRAY_SIZE = PRESERVED_TENANT_COUNT + 1;
+
 private:
   bool is_inited_;
-  obsys::ObRWLock locks_[PRESERVED_TENANT_COUNT];
-  ObTenantMutilAllocator *tma_array_[PRESERVED_TENANT_COUNT];
+  obsys::ObRWLock locks_[ARRAY_SIZE];
+  ObTenantMutilAllocator *tma_array_[ARRAY_SIZE];
   ObBlockAllocMgr clog_body_blk_alloc_;
   ObVSliceAlloc clog_entry_alloc_;
 private:
