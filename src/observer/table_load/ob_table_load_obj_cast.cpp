@@ -341,7 +341,7 @@ int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, const share::sch
     } else {
       dst.set_number(expect_type, d, digits);
     }
-  } else if (expect_type == ObDateTimeType && lib::is_oracle_mode()) {
+  } else if (src.get_type_class() == ObStringTC && expect_type == ObDateTimeType && lib::is_oracle_mode()) {
     ObCastMode cast_mode = cast_obj_ctx.cast_ctx_->cast_mode_;
     if (OB_FAIL(string_datetime_oracle(expect_type, cast_ctx, src, dst, cast_mode, time_cvrt))) {
       LOG_WARN("fail to convert string to datetime in oracle mode", KR(ret), K(src),
