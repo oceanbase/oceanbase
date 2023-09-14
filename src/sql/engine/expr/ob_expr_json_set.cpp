@@ -95,8 +95,12 @@ int ObExprJsonSet::set_value(ObJsonBaseVector &hit, ObIJsonBase *&json_doc, ObIJ
           } else {
             ObJsonArray* json_array = (ObJsonArray*)new(array_buf)ObJsonArray(allocator);
             ObJsonNode *j_parent = static_cast<ObJsonNode *>(pos_node)->get_parent();
-            if (OB_FAIL(json_array->array_append(pos_node))
-                || OB_FAIL(json_array->array_append(json_val))) {
+            bool is_idx_from_end = path_last->node_content_.array_cell_.is_index_from_end_;
+            if (!is_idx_from_end && (OB_FAIL(json_array->array_append(pos_node))
+                || OB_FAIL(json_array->array_append(json_val)))) {
+              LOG_WARN("error, array append node failed", K(ret));
+            } else if (is_idx_from_end && (OB_FAIL(json_array->array_append(json_val))
+                || OB_FAIL(json_array->array_append(pos_node)))) {
               LOG_WARN("error, array append node failed", K(ret));
             } else if (OB_ISNULL(j_parent)){
               json_doc = json_array;

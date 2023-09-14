@@ -29,15 +29,15 @@ namespace common {
 
 struct ObJsonBaseCmp {
   bool operator()(const ObIJsonBase *a, const ObIJsonBase *b) {
-    bool is_eq = false;
+    bool is_less = false;
     if (a->is_tree() && b->is_tree()) {
-      is_eq = (a == b);
+      is_less = (a < b);
     } else if (a->is_bin() && b->is_bin()) {
-      is_eq = (a->get_data() == b->get_data());
+      is_less = (a->get_data() < b->get_data());
     } else {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected type", K(OB_ERR_UNEXPECTED), K(*a), K(*b));
     }
-    return is_eq;
+    return is_less;
   }
 };
 
@@ -620,7 +620,7 @@ int ObIJsonBase::find_array_child(ObIAllocator* allocator, ObSeekParentInfo &par
       if (is_lax) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("should be mysql mode!", K(ret), K(only_need_one));
-      }else if (cur_json_type == ObJsonNodeType::J_ARRAY) {
+      } else if (cur_json_type == ObJsonNodeType::J_ARRAY) {
         if (OB_FAIL(find_array_range(allocator, parent_info, cur_node, last_node, path_node,
                                     is_auto_wrap, only_need_one, is_lax, dup, res, sql_var))) {
           LOG_WARN("fail in find array range.", K(ret));
