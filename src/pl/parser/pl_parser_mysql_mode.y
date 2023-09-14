@@ -208,7 +208,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %token <node> USER_NAME
 //*data type keyword*/
 %token TINYINT SMALLINT MEDIUMINT INTEGER BIGINT FLOAT DOUBLE PRECISION NUMBER NUMERIC BIT
-        DATETIME TIMESTAMP TIME DATE YEAR CHARACTER TEXT VARCHAR BINARY VARBINARY UNSIGNED
+        DATETIME TIMESTAMP TIME DATE YEAR CHARACTER TEXT VARCHAR NCHAR NVARCHAR BINARY VARBINARY UNSIGNED
         SIGNED ZEROFILL COLLATE SET CHARSET BOOL BOOLEAN BLOB ENUM TINYTEXT MEDIUMTEXT LONGTEXT TINYBLOB
         MEDIUMBLOB LONGBLOB VARYING
 
@@ -217,7 +217,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       AFTER AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT
       CONSTRAINT_CATALOG CONSTRAINT_NAME CONSTRAINT_ORIGIN CONSTRAINT_SCHEMA CONTAINS COUNT CURSOR_NAME
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
-      MESSAGE_TEXT MYSQL_ERRNO NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
+      MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE
 
 %right END_KEY
@@ -278,6 +278,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <ival> string_length_i opt_string_length_i opt_int_length_i opt_string_length_i_v2
 %type <ival> opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i text_type_i blob_type_i
+%type <ival> nchar_type_i nvarchar_type_i
 %type <node> variable
 %%
 /*****************************************************************************
@@ -1887,6 +1888,20 @@ scalar_data_type:
       $$->int32_values_[0] = $2;
       $$->int32_values_[1] = 0; /* is char */
     }
+  | nchar_type_i opt_string_length_i opt_binary opt_collation
+    {
+      ParseNode *charset_node = NULL;
+      malloc_terminal_node(charset_node, parse_ctx->mem_pool_, T_CHARSET);
+      charset_node->str_value_ = parse_strdup("utf8mb4", parse_ctx->mem_pool_, &(charset_node->str_len_));
+      if (OB_UNLIKELY(NULL == charset_node->str_value_)) {
+        obpl_mysql_yyerror(NULL, parse_ctx, "memory space for string is not enough\n");
+        YYERROR;
+      }
+
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, $1, 3, charset_node, $4, $3);
+      $$->int32_values_[0] = $2;
+      $$->int32_values_[1] = 0; /* is char */
+    }
   /*  | TEXT opt_binary opt_charset opt_collation
   //  {
   //    UNUSED($2);
@@ -1903,6 +1918,20 @@ scalar_data_type:
   | VARCHAR string_length_i opt_binary opt_charset opt_collation
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_VARCHAR, 3, $4, $5, $3);
+      $$->int32_values_[0] = $2;
+      $$->int32_values_[1] = 0; /* is char */
+    }
+  | nvarchar_type_i opt_string_length_i opt_binary opt_collation
+    {
+      ParseNode *charset_node = NULL;
+      malloc_terminal_node(charset_node, parse_ctx->mem_pool_, T_CHARSET);
+      charset_node->str_value_ = parse_strdup("utf8mb4", parse_ctx->mem_pool_, &(charset_node->str_len_));
+      if (OB_UNLIKELY(NULL == charset_node->str_value_)) {
+        obpl_mysql_yyerror(NULL, parse_ctx, "memory space for string is not enough\n");
+        YYERROR;
+      }
+
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, $1, 3, charset_node, $4, $3);
       $$->int32_values_[0] = $2;
       $$->int32_values_[1] = 0; /* is char */
     }
@@ -2037,6 +2066,18 @@ datetime_type_i:
 date_year_type_i:
     DATE        { $$ = T_DATE; }
   | YEAR opt_year_i { $$ = T_YEAR; }
+;
+
+nchar_type_i:
+    NCHAR               { $$ = T_CHAR; }
+  | NATIONAL CHARACTER  { $$ = T_CHAR; }
+;
+
+nvarchar_type_i:
+    NVARCHAR                    { $$ = T_VARCHAR; }
+  | NCHAR VARCHAR               { $$ = T_VARCHAR; }
+  | NATIONAL VARCHAR            { $$ = T_VARCHAR; }
+  | NATIONAL CHARACTER VARYING  { $$ = T_VARCHAR; }
 ;
 
 opt_int_length_i:
