@@ -35,7 +35,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::rootserver;
 
-uint64_t ObCreateTableHelper::MockFkParentTableNameWrapper::hash() const
+uint64_t ObCreateTableHelper::MockFKParentTableNameWrapper::hash() const
 {
   uint64_t hash_ret = 0;
   common::ObCollationType cs_type = ObSchema::get_cs_type_with_cmp_mode(OB_ORIGIN_AND_INSENSITIVE);
@@ -44,13 +44,13 @@ uint64_t ObCreateTableHelper::MockFkParentTableNameWrapper::hash() const
   return hash_ret;
 }
 
-int ObCreateTableHelper::MockFkParentTableNameWrapper::hash(uint64_t &hash_val) const
+int ObCreateTableHelper::MockFKParentTableNameWrapper::hash(uint64_t &hash_val) const
 {
   hash_val = hash();
   return OB_SUCCESS;
 }
 
-bool ObCreateTableHelper::MockFkParentTableNameWrapper::operator==(const MockFkParentTableNameWrapper &rv) const
+bool ObCreateTableHelper::MockFKParentTableNameWrapper::operator==(const MockFKParentTableNameWrapper &rv) const
 {
   return 0 == parent_database_.case_compare(rv.parent_database_)
          && 0 == parent_table_.case_compare(rv.parent_table_);
@@ -1503,7 +1503,7 @@ int ObCreateTableHelper::get_mock_fk_parent_table_info_(
     }
 
     if (OB_SUCC(ret)) {
-      MockFkParentTableNameWrapper name_wrapper(foreign_key_arg.parent_database_,
+      MockFKParentTableNameWrapper name_wrapper(foreign_key_arg.parent_database_,
                                                 foreign_key_arg.parent_table_);
       int hash_ret = new_mock_fk_parent_table_map_.get_refactored(name_wrapper, new_mock_fk_parent_table_schema);
       if (OB_SUCCESS == hash_ret) {

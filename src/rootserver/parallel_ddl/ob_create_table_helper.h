@@ -36,20 +36,20 @@ class ObCreateTableHelper : public ObDDLHelper
 {
 public:
 
-class MockFkParentTableNameWrapper {
+class MockFKParentTableNameWrapper {
 public:
-  MockFkParentTableNameWrapper()
+  MockFKParentTableNameWrapper()
    : parent_database_(),
      parent_table_() {}
-  MockFkParentTableNameWrapper(
+  MockFKParentTableNameWrapper(
      const common::ObString &parent_database,
      const common::ObString &parent_table)
    : parent_database_(parent_database),
      parent_table_(parent_table) {}
-  ~MockFkParentTableNameWrapper() {}
+  ~MockFKParentTableNameWrapper() {}
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
-  bool operator==(const MockFkParentTableNameWrapper &rv) const;
+  bool operator==(const MockFKParentTableNameWrapper &rv) const;
   TO_STRING_KV(K_(parent_database), K_(parent_table));
 private:
   common::ObString parent_database_;
@@ -114,7 +114,7 @@ private:
   // new table schema for data/index/lob tables
   common::ObArray<ObTableSchema> new_tables_;
   common::ObArray<ObMockFKParentTableSchema *> new_mock_fk_parent_tables_;
-  common::hash::ObHashMap<MockFkParentTableNameWrapper, share::schema::ObMockFKParentTableSchema*> new_mock_fk_parent_table_map_;
+  common::hash::ObHashMap<MockFKParentTableNameWrapper, share::schema::ObMockFKParentTableSchema*> new_mock_fk_parent_table_map_;
   common::ObArray<ObSAuditSchema *> new_audits_;
   common::ObArray<ObSequenceSchema *> new_sequences_;
   bool has_index_;

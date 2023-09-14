@@ -1159,7 +1159,14 @@ private:
       const char* name_col_name,
       const ObString &schema_name,
       const bool case_compare,
+      const bool compare_with_collation,
       uint64_t &schema_id);
+
+  bool schema_name_is_equal_(
+       const ObString &src,
+       const ObString &dst,
+       const bool case_compare,
+       const bool compare_with_collation);
 
   int fetch_table_latest_schema_versions_(
       common::ObISQLClient &sql_client,

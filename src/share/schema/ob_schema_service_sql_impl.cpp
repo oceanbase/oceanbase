@@ -9212,6 +9212,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
     const char* name_col_name,
     const ObString &schema_name,
     const bool case_compare,
+    const bool compare_with_collation,
     uint64_t &schema_id)
 {
   int ret = OB_SUCCESS;
@@ -9247,8 +9248,9 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
           EXTRACT_INT_FIELD_MYSQL(*result, id_col_name, tmp_schema_id, uint64_t);
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, name_col_name, tmp_schema_name);
           if (OB_FAIL(ret)) {
-          } else if ((case_compare && 0 == schema_name.case_compare(tmp_schema_name))
-                     || (!case_compare && 0 == schema_name.compare(tmp_schema_name))) {
+          } else if (schema_name_is_equal_(
+                     schema_name, tmp_schema_name,
+                     case_compare, compare_with_collation)) {
             schema_id = tmp_schema_id;
             break;
           }
@@ -9258,6 +9260,30 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
   }
   return ret;
 }
+
+bool ObSchemaServiceSQLImpl::schema_name_is_equal_(
+       const ObString &src,
+       const ObString &dst,
+       const bool case_compare,
+       const bool compare_with_collation)
+{
+  bool bret = false;
+  if (case_compare) {
+    if (compare_with_collation) {
+      bret = (0 == common::ObCharset::strcmp(CS_TYPE_UTF8MB4_GENERAL_CI, src, dst));
+    } else {
+      bret = (0 == src.case_compare(dst));
+    }
+  } else {
+    if (compare_with_collation) {
+      bret = (0 == common::ObCharset::strcmp(CS_TYPE_UTF8MB4_BIN, src, dst));
+    } else {
+      bret = (0 == src.compare(dst));
+    }
+  }
+  return bret;
+}
+
 
 int ObSchemaServiceSQLImpl::get_tablegroup_id(
     common::ObISQLClient &sql_client,
@@ -9269,6 +9295,7 @@ int ObSchemaServiceSQLImpl::get_tablegroup_id(
   ObSqlString sql;
   // here, tablegroup name comparsion is case sensitive.
   const bool case_compare = false;
+  const bool compare_with_collation = false;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   tablegroup_id = OB_INVALID_ID;
@@ -9292,7 +9319,8 @@ int ObSchemaServiceSQLImpl::get_tablegroup_id(
   } else if (OB_FAIL(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "tablegroup_id", "tablegroup_name",
-             tablegroup_name, case_compare, tablegroup_id))) {
+             tablegroup_name, case_compare,
+             compare_with_collation, tablegroup_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(tablegroup_name));
   } else {
@@ -9333,6 +9361,7 @@ int ObSchemaServiceSQLImpl::get_database_id(
     ObSqlString sql;
     const bool case_compare = (0 == database_name.case_compare(OB_SYS_DATABASE_NAME)
                                || OB_ORIGIN_AND_SENSITIVE != name_case_mode);
+    const bool compare_with_collation = true;
     if (OB_FAIL(sql.assign_fmt(
         "SELECT database_id, database_name "
         "FROM %s WHERE tenant_id = 0 AND database_name = '%s'",
@@ -9341,7 +9370,8 @@ int ObSchemaServiceSQLImpl::get_database_id(
     } else if (OB_FAIL(retrieve_schema_id_with_name_(
                sql_client, tenant_id, sql,
                "database_id", "database_name",
-               database_name, case_compare, database_id))) {
+               database_name, case_compare,
+               compare_with_collation, database_id))) {
       LOG_WARN("fail to retrieve schema id with name",
                KR(ret), K(tenant_id), K(database_name), "db_name", db_name);
     } else {
@@ -9451,7 +9481,8 @@ int ObSchemaServiceSQLImpl::get_table_id(
       uint64_t candidate_inner_table_id = OB_INVALID_ID;
       ObTableType candidate_inner_table_type = MAX_TABLE_TYPE;
       int64_t candidate_schema_version = OB_INVALID_VERSION;
-      bool case_compare = (OB_ORIGIN_AND_SENSITIVE != name_case_mode);
+      const bool case_compare = (OB_ORIGIN_AND_SENSITIVE != name_case_mode);
+      const bool compare_with_collation = true;
       while (OB_SUCC(ret)) {
         if (OB_FAIL(result->next())) {
           if (OB_ITER_END == ret) {
@@ -9477,8 +9508,9 @@ int ObSchemaServiceSQLImpl::get_table_id(
             // try fetch inner table id
             if (is_system_table && OB_INVALID_ID == candidate_inner_table_id) { // case 3.3
               bool tmp_case_compare = is_mysql_sys_database_id(database_id) ? true : case_compare;
-              if (((tmp_case_compare && 0 == table_name.case_compare(tmp_table_name))
-                    || (!tmp_case_compare && 0 == table_name.compare(tmp_table_name)))
+              if (schema_name_is_equal_(
+                  table_name, tmp_table_name,
+                  case_compare, compare_with_collation)
                   && 0 == tmp_session_id) {
                 candidate_inner_table_id = tmp_table_id;
                 candidate_inner_table_type = tmp_table_type;
@@ -9486,8 +9518,9 @@ int ObSchemaServiceSQLImpl::get_table_id(
               }
             }
 
-            if ((case_compare && 0 == table_name.case_compare(tmp_table_name))
-                || (!case_compare && 0 == table_name.compare(tmp_table_name))) {
+            if (schema_name_is_equal_(
+                table_name, tmp_table_name,
+                case_compare, compare_with_collation)) {
               table_id = tmp_table_id;
               table_type = tmp_table_type;
               schema_version = tmp_schema_version;
@@ -9527,6 +9560,7 @@ int ObSchemaServiceSQLImpl::get_index_id(
   const char* idx_name = to_cstring(ObHexEscapeSqlStr(index_name, skip_escape, use_oracle_mode));
   bool is_oracle_mode = false;
   bool case_compare = false;
+  const bool compare_with_collation = true;
   index_id = OB_INVALID_ID;
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
@@ -9554,7 +9588,8 @@ int ObSchemaServiceSQLImpl::get_index_id(
   } else if (OB_FAIL(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "table_id", "table_name",
-             index_name, case_compare, index_id))) {
+             index_name, case_compare,
+             compare_with_collation, index_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(database_id),
              K(index_name), "idx_name", idx_name);
@@ -9579,6 +9614,7 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_id(
   ObSqlString sql;
   // here, mock_fk_parent_table_name comparsion is case sensitive.
   const bool case_compare = false;
+  const bool compare_with_collation = false;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   mock_fk_parent_table_id = OB_INVALID_ID;
@@ -9603,7 +9639,8 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_id(
   } else if (OB_FAIL(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "mock_fk_parent_table_id", "mock_fk_parent_table_name",
-             table_name, case_compare, mock_fk_parent_table_id))) {
+             table_name, case_compare,
+             compare_with_collation, mock_fk_parent_table_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(database_id), K(table_name), "tb_name", tb_name);
   } else {
@@ -9625,6 +9662,7 @@ int ObSchemaServiceSQLImpl::get_synonym_id(
   ObSqlString sql;
   // here, synonym name comparsion is case sensitive.
   const bool case_compare = false;
+  const bool compare_with_collation = false;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   synonym_id = OB_INVALID_ID;
@@ -9649,7 +9687,8 @@ int ObSchemaServiceSQLImpl::get_synonym_id(
   } else if (OB_FAIL(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "synonym_id", "synonym_name",
-             synonym_name, case_compare, synonym_id))) {
+             synonym_name, case_compare,
+             compare_with_collation, synonym_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(database_id), K(synonym_name), "syn_name", syn_name);
   } else {
@@ -9711,6 +9750,7 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
     // 1. mysql tenant: case insensitive
     // 2. oracle tenant: case sensitive
     const bool case_compare = !is_oracle_mode;
+    const bool compare_with_collation = true;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
@@ -9733,12 +9773,11 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
           // skip
           // (TODO):for mysql tmp table, it may has risk that constraint name duplicated in one table?
           // here just make the logic same with int ObSchemaMgr::add_constraints_in_table().
-        } else {
-          if ((case_compare && 0 == constraint_name.case_compare(tmp_constraint_name))
-              || (!case_compare && 0 == constraint_name.compare(tmp_constraint_name))) {
-            constraint_id = tmp_constraint_id;
-            break;
-          }
+        } else if (schema_name_is_equal_(
+                   constraint_name, tmp_constraint_name,
+                   case_compare, compare_with_collation)) {
+          constraint_id = tmp_constraint_id;
+          break;
         }
       }
     } // end while
@@ -9803,6 +9842,7 @@ int ObSchemaServiceSQLImpl::get_foreign_key_id(
     // 1. mysql tenant: case insensitive
     // 2. oracle tenant: case sensitive
     const bool case_compare = !is_oracle_mode;
+    const bool compare_with_collation = true;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
@@ -9822,12 +9862,11 @@ int ObSchemaServiceSQLImpl::get_foreign_key_id(
                    || is_index_table(tmp_table_type)
                    || is_aux_lob_table(tmp_table_type)) {
           // skip
-        } else {
-          if ((case_compare && 0 == foreign_key_name.case_compare(tmp_foreign_key_name))
-              || (!case_compare && 0 == foreign_key_name.compare(tmp_foreign_key_name))) {
-            foreign_key_id = tmp_foreign_key_id;
-            break;
-          }
+        } else if (schema_name_is_equal_(
+                   foreign_key_name, tmp_foreign_key_name,
+                   case_compare, compare_with_collation)) {
+          foreign_key_id = tmp_foreign_key_id;
+          break;
         }
       }
     } // end while
@@ -9885,6 +9924,8 @@ int ObSchemaServiceSQLImpl::get_sequence_id(
     uint64_t tmp_sequence_id = OB_INVALID_ID;
     bool tmp_is_system_generated = false;
     ObString tmp_sequence_name;
+    const bool case_compare = false;
+    const bool compare_with_collation = false;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
@@ -9898,7 +9939,9 @@ int ObSchemaServiceSQLImpl::get_sequence_id(
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "sequence_name", tmp_sequence_name);
         EXTRACT_BOOL_FIELD_MYSQL(*result, "is_system_generated", tmp_is_system_generated);
         if (OB_FAIL(ret)) {
-        } else if (0 == sequence_name.compare(tmp_sequence_name)) {
+        } else if (schema_name_is_equal_(
+                   sequence_name, tmp_sequence_name,
+                   case_compare, compare_with_collation)) {
           sequence_id = tmp_sequence_id;
           is_system_generated = tmp_is_system_generated;
           break;
@@ -9928,6 +9971,7 @@ int ObSchemaServiceSQLImpl::get_package_id(
   bool is_oracle_mode = false;
   ObSqlString sql;
   bool case_compare = false;
+  const bool compare_with_collation = true;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   package_id = OB_INVALID_ID;
@@ -9961,7 +10005,8 @@ int ObSchemaServiceSQLImpl::get_package_id(
   } else if (OB_FAIL(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "package_id", "package_name",
-             package_name, case_compare, package_id))) {
+             package_name, case_compare,
+             compare_with_collation, package_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(database_id),
              K(package_name), "pkg_name", pkg_name);
@@ -10023,6 +10068,7 @@ int ObSchemaServiceSQLImpl::get_routine_id(
       LOG_WARN("result is null", KR(ret), K(tenant_id));
     } else {
       const bool case_compare = !is_oracle_mode;
+      const bool compare_with_collation = true;
       uint64_t tmp_routine_id = OB_INVALID_ID;
       ObString tmp_routine_name;
       ObRoutineType tmp_routine_type = INVALID_ROUTINE_TYPE;
@@ -10040,8 +10086,9 @@ int ObSchemaServiceSQLImpl::get_routine_id(
           EXTRACT_INT_FIELD_MYSQL(*result, "routine_type", tmp_routine_type, ObRoutineType);
 
           if (OB_FAIL(ret)) {
-          } else if ((case_compare && 0 == routine_name.case_compare(tmp_routine_name))
-                      || (!case_compare && 0 == routine_name.compare(tmp_routine_name))) {
+          } else if (schema_name_is_equal_(
+                     routine_name, tmp_routine_name,
+                     case_compare, compare_with_collation)) {
             if (OB_FAIL(routine_pairs.push_back(
                 std::make_pair(tmp_routine_id, tmp_routine_type)))) {
               LOG_WARN("fail to push back element",
@@ -10073,6 +10120,7 @@ int ObSchemaServiceSQLImpl::get_udt_id(
   bool is_oracle_mode = false;
   ObSqlString sql;
   bool case_compare = false;
+  const bool compare_with_collation = true;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   udt_id = OB_INVALID_ID;
@@ -10104,7 +10152,8 @@ int ObSchemaServiceSQLImpl::get_udt_id(
   } else if (OB_FAIL(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "type_id", "type_name",
-             udt_name, case_compare, udt_id))) {
+             udt_name, case_compare,
+             compare_with_collation, udt_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(database_id),
              K(package_id), K(udt_name), "tmp_udt_name", tmp_udt_name);
