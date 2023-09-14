@@ -43,8 +43,8 @@ class MyStreamHandle
 public:
   typedef typename obrpc::ObExecutorRpcProxy::SSHandle<pcode> MyHandle;
   typedef common::ObScanner MyResult;
-  explicit MyStreamHandle(const char *label)
-    : result_(label),
+  explicit MyStreamHandle(const char *label, uint64_t tenant_id)
+    : result_(label, NULL, common::ObScanner::DEFAULT_MAX_SERIALIZE_SIZE, tenant_id),
       rc_(common::OB_SUCCESS)
   {
   }
@@ -99,10 +99,10 @@ typedef MyStreamHandle<obrpc::OB_TASK_FETCH_RESULT> FetchResultStreamHandle;
 class RemoteExecuteStreamHandle
 {
 public:
-  RemoteExecuteStreamHandle(const char *label) :
+  RemoteExecuteStreamHandle(const char *label, uint64_t tenant_id) :
     use_remote_protocol_v2_(false),
-    sync_stream_handle_(label),
-    sync_stream_handle_v2_(label)
+    sync_stream_handle_(label, tenant_id),
+    sync_stream_handle_v2_(label, tenant_id)
   {
   }
   ~RemoteExecuteStreamHandle() = default;

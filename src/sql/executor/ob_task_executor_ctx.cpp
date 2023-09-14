@@ -240,7 +240,7 @@ int ObTaskExecutorCtx::reset_and_init_stream_handler()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for RemoteExecuteStreamHandle", K(ret));
     } else {
-      task_resp_handler_ = new (buffer) RemoteExecuteStreamHandle("RemoteExecStream");
+      task_resp_handler_ = new (buffer) RemoteExecuteStreamHandle("RemoteExecStream", MTL_ID());
     }
   }
   return ret;
