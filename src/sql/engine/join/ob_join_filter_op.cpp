@@ -174,13 +174,17 @@ int ObJoinFilterOpInput::init_shared_msgs(
       msg_ptr = nullptr;
       if (OB_FAIL(PX_P2P_DH.alloc_msg(allocator, spec.rf_infos_.at(i).dh_msg_type_, msg_ptr))) {
         LOG_WARN("fail to alloc msg", K(ret));
+      } else if (OB_FAIL(array_ptr->push_back(msg_ptr))) {
+        // push_back failed, must destory the msg immediately
+        // if init or construct_msg_details failed, destory msg after the for loop
+        msg_ptr->destroy();
+        allocator.free(msg_ptr);
+        LOG_WARN("fail to push back array ptr", K(ret));
       } else if (OB_FAIL(msg_ptr->init(spec.rf_infos_.at(i).p2p_datahub_id_,
           px_sequence_id_, 0/*task_id*/, tenant_id, timeout_ts, register_dm_info_))) {
         LOG_WARN("fail to init msg", K(ret));
       } else if (OB_FAIL(construct_msg_details(spec, sqc_proxy, config_, *msg_ptr, sqc_count))) {
         LOG_WARN("fail to construct msg details", K(ret), K(tenant_id));
-      } else if (OB_FAIL(array_ptr->push_back(msg_ptr))) {
-        LOG_WARN("fail to push back array ptr", K(ret));
       }
     }
   }
@@ -189,7 +193,16 @@ int ObJoinFilterOpInput::init_shared_msgs(
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(array_ptr)) {
+    // if failed, destroy all msgs
+    for (int64_t i = 0; i < array_ptr->count(); ++i) {
+      if (OB_NOT_NULL(array_ptr->at(i))) {
+        array_ptr->at(i)->destroy();
+        allocator.free(array_ptr->at(i));
+        array_ptr->at(i) = nullptr;
+      }
+    }
     array_ptr->reset();
+    allocator.free(array_ptr);
     array_ptr = nullptr;
   }
 
@@ -814,6 +827,10 @@ int ObJoinFilterOp::open_join_filter_create()
       if (OB_FAIL(PX_P2P_DH.alloc_msg(allocator, MY_SPEC.rf_infos_.at(i).dh_msg_type_, msg_ptr))) {
         LOG_WARN("fail to alloc msg", K(ret));
       } else if (OB_FAIL(local_rf_msgs_.push_back(msg_ptr))) {
+        // push_back failed, must destory the msg immediately
+        // if init or construct_msg_details failed, destory msg during close
+        msg_ptr->destroy();
+        allocator.free(msg_ptr);
         LOG_WARN("fail to push back msg ptr", K(ret));
       } else if (OB_FAIL(msg_ptr->init(MY_SPEC.rf_infos_.at(i).p2p_datahub_id_,
           filter_input->px_sequence_id_, filter_input->task_id_, tenant_id, timeout_ts, filter_input->register_dm_info_))) {
@@ -824,6 +841,9 @@ int ObJoinFilterOp::open_join_filter_create()
       } else if (OB_FAIL(lucky_devil_champions_.push_back(false))) {
         LOG_WARN("fail to push back flag", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+      IGNORE_RETURN release_local_msg();
     }
   } else if (OB_FAIL(init_shared_msgs_from_input())) {
     LOG_WARN("fail to init shared msgs from input", K(ret));
@@ -902,6 +922,9 @@ int ObJoinFilterOp::init_shared_msgs_from_input()
         LOG_WARN("fail to push back flag", K(ret));
       }
     }
+    if (OB_FAIL(ret)) {
+      IGNORE_RETURN release_local_msg();
+    }
   }
   return ret;
 }
@@ -922,6 +945,12 @@ int ObJoinFilterOp::init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg)
       if (OB_FAIL(PX_P2P_DH.alloc_msg(ctx_.get_allocator(),
           ObP2PDatahubMsgBase::RANGE_FILTER_MSG, range_ptr))) {
         LOG_WARN("fail to alloc msg", K(ret));
+      } else if (OB_FAIL(local_rf_msgs_.push_back(range_ptr))) {
+        // push_back failed, must destory the msg immediately
+        // if init or construct_msg_details failed, destory msg in release_local_msg
+        range_ptr->destroy();
+        ctx_.get_allocator().free(range_ptr);
+        LOG_WARN("fail to push back local rf msgs", K(ret));
       } else if (OB_FAIL(range_ptr->init(msg.get_p2p_datahub_id(),
           msg.get_px_seq_id(), 0/*task_id*/, msg.get_tenant_id(),
           msg.get_timeout_ts(), filter_input->register_dm_info_))) {
@@ -929,8 +958,6 @@ int ObJoinFilterOp::init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg)
       } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC,
           sqc_proxy, filter_input->config_, *range_ptr, msg.get_msg_receive_expect_cnt()))) {
         LOG_WARN("fail to construct msg details", K(ret));
-      } else if (OB_FAIL(local_rf_msgs_.push_back(range_ptr))) {
-        LOG_WARN("fail to push back local rf msgs", K(ret));
       }
       break;
     }
@@ -939,18 +966,19 @@ int ObJoinFilterOp::init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg)
       if (OB_FAIL(PX_P2P_DH.alloc_msg(ctx_.get_allocator(),
           ObP2PDatahubMsgBase::IN_FILTER_MSG, in_ptr))) {
         LOG_WARN("fail to alloc msg", K(ret));
-      } else {
-        ObRFInFilterMsg &in_msg = static_cast<ObRFInFilterMsg &>(*in_ptr);
-        if (OB_FAIL(in_msg.init(msg.get_p2p_datahub_id(),
-          msg.get_px_seq_id(), 0/*task_id*/, msg.get_tenant_id(),
-          msg.get_timeout_ts(), filter_input->register_dm_info_))) {
-          LOG_WARN("fail to init msg", K(ret));
-        } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC,
-          sqc_proxy, filter_input->config_, *in_ptr, msg.get_msg_receive_expect_cnt()))) {
-          LOG_WARN("fail to construct msg details", K(ret));
-        } else if (OB_FAIL(local_rf_msgs_.push_back(in_ptr))) {
-          LOG_WARN("fail to push back local rf msgs", K(ret));
-        }
+      } else if (OB_FAIL(local_rf_msgs_.push_back(in_ptr))) {
+        // push_back failed, must destory the msg immediately
+        // if init or construct_msg_details failed, destory msg in release_local_msg
+        in_ptr->destroy();
+        ctx_.get_allocator().free(in_ptr);
+        LOG_WARN("fail to push back local rf msgs", K(ret));
+      } else if (OB_FAIL(in_ptr->init(msg.get_p2p_datahub_id(),
+        msg.get_px_seq_id(), 0/*task_id*/, msg.get_tenant_id(),
+        msg.get_timeout_ts(), filter_input->register_dm_info_))) {
+        LOG_WARN("fail to init msg", K(ret));
+      } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC,
+        sqc_proxy, filter_input->config_, *in_ptr, msg.get_msg_receive_expect_cnt()))) {
+        LOG_WARN("fail to construct msg details", K(ret));
       }
       break;
     }
@@ -1003,16 +1031,25 @@ int ObJoinFilterOp::release_shared_msg()
   ObJoinFilterOpInput *filter_input = static_cast<ObJoinFilterOpInput*>(input_);
   if (MY_SPEC.is_shared_join_filter() && !MY_SPEC.is_shuffle_) {
     bool need_release = filter_input->check_release();
-    for (int i = 0; need_release && i < shared_rf_msgs_.count(); ++i) {
-      if (OB_NOT_NULL(shared_rf_msgs_.at(i))) {
-        msg = nullptr;
-        ObP2PDhKey key;
-        key.p2p_datahub_id_ =
-        shared_rf_msgs_.at(i)->get_p2p_datahub_id();
-        key.task_id_ = shared_rf_msgs_.at(i)->get_task_id();
-        key.px_sequence_id_ = shared_rf_msgs_.at(i)->get_px_seq_id();
-        PX_P2P_DH.erase_msg(key, msg);
-        shared_rf_msgs_.at(i)->destroy();
+    if (need_release) {
+      // shared_rf_msgs_ may not init succ, so when close,
+      // clear filter_input->share_info_.shared_msgs_ rather than this->shared_rf_msgs_
+      ObArray<ObP2PDatahubMsgBase *> *shared_rf_msgs =
+          reinterpret_cast<ObArray<ObP2PDatahubMsgBase *> *>(
+              filter_input->share_info_.shared_msgs_);
+      if (OB_NOT_NULL(shared_rf_msgs)) {
+        for (int i = 0; i < shared_rf_msgs->count(); ++i) {
+          if (OB_NOT_NULL(shared_rf_msgs->at(i))) {
+            msg = nullptr;
+            ObP2PDhKey key;
+            key.p2p_datahub_id_ =
+            shared_rf_msgs->at(i)->get_p2p_datahub_id();
+            key.task_id_ = shared_rf_msgs->at(i)->get_task_id();
+            key.px_sequence_id_ = shared_rf_msgs->at(i)->get_px_seq_id();
+            PX_P2P_DH.erase_msg(key, msg);
+            shared_rf_msgs->at(i)->destroy();
+          }
+        }
       }
     }
   }

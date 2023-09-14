@@ -87,6 +87,7 @@ public:
       const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
   int rebuild_sqc_access_table_locations();
   void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
+  void destroy_shared_rf_msgs();
 private:
   int setup_loop_proc(ObSqcCtx &sqc_ctx) const;
   int setup_op_input(ObExecContext &ctx,

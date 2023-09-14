@@ -710,6 +710,20 @@ int ObPxSubCoord::try_prealloc_receive_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &s
   return ret;
 }
 
+void ObPxSubCoord::destroy_shared_rf_msgs()
+{
+  for (int i = 0; i < all_shared_rf_msgs_.count(); ++i) {
+    ObArray<ObP2PDatahubMsgBase *> *array_ptr =
+        reinterpret_cast<ObArray<ObP2PDatahubMsgBase *> *>(all_shared_rf_msgs_.at(i));
+    for (int j = 0; OB_NOT_NULL(array_ptr) && j < array_ptr->count(); ++j) {
+      array_ptr->at(j)->destroy();
+    }
+    if (OB_NOT_NULL(array_ptr) && !array_ptr->empty()) {
+      array_ptr->reset();
+    }
+  }
+}
+
 // the last worker will invoke this function
 int ObPxSubCoord::end_process()
 {
@@ -730,16 +744,7 @@ int ObPxSubCoord::end_process()
       LOG_WARN("fail check task finish status", K(ret));
     }
   }
-  for (int i = 0; i < all_shared_rf_msgs_.count(); ++i) {
-    ObArray<ObP2PDatahubMsgBase *> *array_ptr =
-          reinterpret_cast<ObArray<ObP2PDatahubMsgBase *> *>(all_shared_rf_msgs_.at(i));
-    for (int j = 0; OB_NOT_NULL(array_ptr) && j < array_ptr->count(); ++j) {
-      array_ptr->at(j)->destroy();
-    }
-    if (OB_NOT_NULL(array_ptr) && !array_ptr->empty()) {
-      array_ptr->reset();
-    }
-  }
+  void destroy_shared_rf_msgs();
 
   NG_TRACE(tag3);
   LOG_TRACE("exit ObPxSubCoord process", K(ret));

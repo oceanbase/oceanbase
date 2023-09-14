@@ -149,10 +149,16 @@ void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler, int &report_re
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "Get null sqc handler", K(sqc_handler));
   } else if (FALSE_IT(sqc_handler->release(all_released))) {
   } else if (all_released) {
+    IGNORE_RETURN sqc_handler->check_rf_leak();
     IGNORE_RETURN sqc_handler->destroy_sqc(report_ret);
     sqc_handler->reset();
     op_reclaim_free(sqc_handler);
   }
+}
+
+void ObPxSqcHandler::check_rf_leak()
+{
+  IGNORE_RETURN sub_coord_->destroy_shared_rf_msgs();
 }
 
 int ObPxSqcHandler::init()

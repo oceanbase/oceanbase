@@ -37,6 +37,10 @@ class ObPxSQCProxy;
 
 struct ObJoinFilterShareInfo
 {
+  ObJoinFilterShareInfo()
+      : unfinished_count_ptr_(0), ch_provider_ptr_(0), release_ref_ptr_(0), filter_ptr_(0),
+        shared_msgs_(0)
+  {}
   uint64_t unfinished_count_ptr_; // send_filter引用计数, 初始值为worker个数
   uint64_t ch_provider_ptr_; // sqc_proxy, 由于序列化需要, 使用指针表示.
   uint64_t release_ref_ptr_; // 释放内存引用计数, 初始值为worker个数.

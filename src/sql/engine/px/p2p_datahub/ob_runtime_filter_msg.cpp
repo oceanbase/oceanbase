@@ -391,6 +391,10 @@ int ObRFBloomFilterMsg::deep_copy_msg(ObP2PDatahubMsgBase *&new_msg_ptr)
   } else {
     new_msg_ptr = bf_msg;
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(bf_msg)) {
+    bf_msg->destroy();
+    ob_free(bf_msg);
+  }
   return ret;
 }
 
@@ -939,6 +943,10 @@ int ObRFRangeFilterMsg::deep_copy_msg(ObP2PDatahubMsgBase *&new_msg_ptr)
       new_msg_ptr = rf_msg;
     }
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(rf_msg)) {
+    rf_msg->destroy();
+    ob_free(rf_msg);
+  }
   return ret;
 }
 
@@ -1330,6 +1338,10 @@ int ObRFInFilterMsg::deep_copy_msg(ObP2PDatahubMsgBase *&new_msg_ptr)
     if (OB_SUCC(ret)) {
       new_msg_ptr = in_msg;
     }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(in_msg)) {
+    in_msg->destroy();
+    ob_free(in_msg);
   }
   return ret;
 }
