@@ -1827,7 +1827,9 @@ int ObLogPlan::check_join_info(const ObRelIds &left,
   int ret = OB_SUCCESS;
   ObSqlBitSet<> table_ids;
   is_connected = false;
-  if (OB_FAIL(table_ids.except(left, right))) {
+  if (!left.overlap(right)) {
+    //do nothing
+  } else if (OB_FAIL(table_ids.except(left, right))) {
     LOG_WARN("failed to cal except for rel ids", K(ret));
   } else if (table_ids.is_empty()) {
     is_connected = true;
