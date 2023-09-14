@@ -291,6 +291,24 @@ void ObRedoLogGenerator::sync_log_fail(const ObCallbackScope &callbacks)
   }
 }
 
+void ObRedoLogGenerator::print_first_mvcc_callback()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ObTransCallbackMgr::RDLockGuard guard(callback_mgr_->get_rwlock());
+    ObITransCallbackIterator cursor = generate_cursor_ + 1;
+    if (callback_mgr_->end() != cursor) {
+      ObITransCallback *iter = (ObITransCallback *)*cursor;
+      LOG_DBA_WARN(OB_TRANS_LIVE_TOO_MUCH_TIME,
+                   "msg",
+                   "transaction live cost too much time without commit or abort",
+                   KPC(iter));
+    }
+  }
+}
+
 int ObRedoLogGenerator::fill_row_redo(ObITransCallbackIterator &cursor,
                                       ObMutatorWriter &mmw,
                                       RedoDataNode &redo,
@@ -429,4 +447,3 @@ void ObRedoLogGenerator::bug_detect_for_logging_blocked_()
 
 }; // end namespace memtable
 }; // end namespace oceanbase
-

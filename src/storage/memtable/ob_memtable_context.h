@@ -485,6 +485,8 @@ public:
       return trans_mgr_.get_callback_remove_for_fast_commit_count() > 0 ||
              trans_mgr_.get_callback_remove_for_remove_memtable_count() > 0;
   }
+  void print_first_mvcc_callback();
+
 private:
   int do_trans_end(
       const bool commit,

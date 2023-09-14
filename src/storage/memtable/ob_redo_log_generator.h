@@ -88,6 +88,7 @@ public:
   int64_t get_redo_filled_count() const { return redo_filled_cnt_; }
   int64_t get_redo_sync_succ_count() const { return redo_sync_succ_cnt_; }
   int64_t get_redo_sync_fail_count() const { return redo_sync_fail_cnt_; }
+  void print_first_mvcc_callback();
 private:
   int fill_row_redo(ObITransCallbackIterator &cursor,
                     ObMutatorWriter &mmw,

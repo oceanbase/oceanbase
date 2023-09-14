@@ -536,6 +536,7 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
           }
         } else {
           if (now >= ctx_create_time_ + OB_TRANS_WARN_USE_TIME) {
+            print_first_mvcc_callback_();
             tmp_ret = OB_TRANS_LIVE_TOO_MUCH_TIME;
             LOG_DBA_WARN(OB_TRANS_LIVE_TOO_MUCH_TIME,
                     "msg", "transaction live cost too much time without commit or abort",
@@ -8268,6 +8269,11 @@ int ObPartTransCtx::handle_ask_tx_state_for_4377(bool &is_alive)
 
   TRANS_LOG(INFO, "handle ask tx state for 4377", K(ret), KPC(this), K(is_alive));
   return ret;
+}
+
+void ObPartTransCtx::print_first_mvcc_callback_()
+{
+  mt_ctx_.print_first_mvcc_callback();
 }
 
 } // namespace transaction

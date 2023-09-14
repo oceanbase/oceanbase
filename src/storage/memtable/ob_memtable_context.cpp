@@ -1306,5 +1306,10 @@ int ObMemtableCtx::check_tx_mem_size_overflow(bool &is_overflow)
   return ret;
 }
 
+void ObMemtableCtx::print_first_mvcc_callback()
+{
+  log_gen_.print_first_mvcc_callback();
+}
+
 }
 }
