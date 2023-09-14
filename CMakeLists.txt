@@ -184,3 +184,8 @@ elseif (OB_INCLUDE_TOOLS)
 endif()
 
 include(cmake/RPM.cmake)
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/sensitive_test)
+  message(STATUS "will add sensitive_test sub directory")
+  add_subdirectory(sensitive_test)
+endif()
