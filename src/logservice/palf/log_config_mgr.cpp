@@ -437,8 +437,10 @@ int LogConfigMgr::get_alive_member_list_with_arb(
 
 // require rlock of PalfHandleImpl
 int LogConfigMgr::get_log_sync_member_list_for_generate_committed_lsn(
-    ObMemberList &member_list,
-    int64_t &replica_num,
+    ObMemberList &prev_member_list,
+    int64_t &prev_replica_num,
+    ObMemberList &curr_member_list,
+    int64_t &curr_replica_num,
     bool &is_before_barrier,
     LSN &barrier_lsn) const
 {
@@ -451,6 +453,9 @@ int LogConfigMgr::get_log_sync_member_list_for_generate_committed_lsn(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+  } else if (OB_FAIL(curr_member_list.deep_copy(log_ms_meta_.curr_.config_.log_sync_memberlist_))) {
+    PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
+  } else if (FALSE_IT(curr_replica_num = log_ms_meta_.curr_.config_.log_sync_replica_num_)) {
   } else if (OB_UNLIKELY(prev_committed_end_lsn < reconfig_barrier_.prev_end_lsn_ &&
       reconfig_barrier_.prev_end_lsn_.is_valid() &&
       prev_mode_pid == reconfig_barrier_.prev_mode_pid_)) {
@@ -465,16 +470,12 @@ int LogConfigMgr::get_log_sync_member_list_for_generate_committed_lsn(
     // be used only when the reconfir_barrier_.prev_mode_pid_ is equal to current mode
     // proposal_id. That means access mode hasn’t been changed (PALF hasn’t been flashed back)
     // since last reconfiguration.
-    if (OB_FAIL(member_list.deep_copy(log_ms_meta_.prev_.config_.log_sync_memberlist_))) {
+    if (OB_FAIL(prev_member_list.deep_copy(log_ms_meta_.prev_.config_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
     } else {
-      replica_num = log_ms_meta_.prev_.config_.log_sync_replica_num_;
+      prev_replica_num = log_ms_meta_.prev_.config_.log_sync_replica_num_;
     }
-  } else if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.config_.log_sync_memberlist_))) {
-    PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), K_(palf_id), K_(self));
-  } else {
-    replica_num = log_ms_meta_.curr_.config_.log_sync_replica_num_;
-  }
+  } else { }
   return ret;
 }
 
