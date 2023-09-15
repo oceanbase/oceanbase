@@ -6069,9 +6069,11 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
       ObTablet *tablet = nullptr;
       obrpc::ObCopyTabletInfo tablet_info;
       ObTabletCreateDeleteMdsUserData user_data;
+      bool committed_flag = false;
 
       while (OB_SUCC(ret)) {
         tablet_info.reset();
+        committed_flag = false;
         if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
@@ -6082,13 +6084,23 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
         } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
-        } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(
-            share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT))) {
+        } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, committed_flag))) {
+          LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+        } else if (!committed_flag && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
           //TODO(muwei.ym) CAN NOT USE this condition when MDS supports uncommitted transaction
-          LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
-          if (OB_EMPTY_RESULT == ret) {
-            ret = OB_SUCCESS;
-          }
+
+          // why we should skip uncommited transfer in tablet, because if we backup the uncommited transfer in tablet
+          // but the final result of the uncommited transfer in tablet is aborted, which means the tablet has no MDS Table,
+          // and the restore process will create this tablet nontheless, however this aborted tablet should be GC-ed at the end,
+          // because the aborted tablet has no MDS Table, the tablet can not be GC-ed correctly, resulting in the tablet dangling
+          // for details, see issue-51990749
+
+          // we can skip backup uncommited transfer in tablets because we backup ls meta first
+          // if the start transfer in transaction is not commited, the clog_checkpoint_scn recorded
+          // in ls meta will not be advanced, so that even though we skip backup uncommited
+          // transfer in tablet, we can still restore transfer in tablet by replaying clog
+          LOG_WARN("tablet is transfer in but not commited, skip", K(tablet_handle), K(user_data));
+          continue;
         } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_info.param_))) {
           LOG_WARN("failed to build migration tablet param", K(ret));
         } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {

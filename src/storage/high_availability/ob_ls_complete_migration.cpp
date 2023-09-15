@@ -1263,10 +1263,7 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
     } else {
       while (OB_SUCC(ret)) {
-        if (timeout_ctx.is_timeouted()) {
-          ret = OB_WAIT_TABLET_READY_TIMEOUT;
-          LOG_WARN("already timeout", K(ret), KPC(ctx_));
-        } else if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
+        if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
@@ -1649,10 +1646,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
     } else {
       while (OB_SUCC(ret)) {
-        if (timeout_ctx.is_timeouted()) {
-          ret = OB_WAIT_TABLET_READY_TIMEOUT;
-          LOG_WARN("already timeout", K(ret), KPC(ctx_));
-        } else if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
+        if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
