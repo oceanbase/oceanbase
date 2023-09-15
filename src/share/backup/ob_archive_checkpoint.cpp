@@ -93,7 +93,7 @@ int ObDestRoundCheckpointer::checkpoint(const ObTenantArchiveRoundAttr &round_in
   } else if (round_info.checkpoint_scn_ > max_checkpoint_scn_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backwards, checkpoint scn is bigger than limit scn", K(ret), K(round_info), K_(max_checkpoint_scn));
-  } else if (OB_FAIL(count_(summary, counter))) {
+  } else if (OB_FAIL(count_(round_info, summary, counter))) {
     LOG_WARN("failed to to count", K(ret), K(round_info), K(summary));
   } else if (OB_FAIL(gen_new_round_info_(round_info, counter, result.new_round_info_, need_checkpoint))) {
     LOG_WARN("failed to decide next state", K(ret), K(round_info), K(counter), K(summary));
@@ -105,7 +105,10 @@ int ObDestRoundCheckpointer::checkpoint(const ObTenantArchiveRoundAttr &round_in
   return ret;
 }
 
-int ObDestRoundCheckpointer::count_(const ObDestRoundSummary &summary, ObDestRoundCheckpointer::Counter &counter) const
+int ObDestRoundCheckpointer::count_(
+    const ObTenantArchiveRoundAttr &old_round_info,
+    const ObDestRoundSummary &summary,
+    ObDestRoundCheckpointer::Counter &counter) const
 {
   int ret = OB_SUCCESS;
 
@@ -155,9 +158,13 @@ int ObDestRoundCheckpointer::count_(const ObDestRoundSummary &summary, ObDestRou
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (counter.not_start_cnt_ > 0) {
-    counter.max_active_piece_id_ = 0;
+  if (OB_SUCC(ret)) {
+    // adjust scn
+    counter.checkpoint_scn_ = MAX(old_round_info.start_scn_, counter.checkpoint_scn_);
+    counter.max_scn_ = MAX(old_round_info.start_scn_, counter.max_scn_);
+    if (counter.not_start_cnt_ > 0) {
+      counter.max_active_piece_id_ = old_round_info.used_piece_id_;
+    }
   }
 
   LOG_INFO("print count result", K(ret), K(counter));
@@ -190,9 +197,6 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   } else if (old_round_info.state_.is_beginning()) {
     if (counter.not_start_cnt_ > 0) {
       need_checkpoint = false;
-    } else if (next_checkpoint_scn < old_round_info.start_scn_) {
-      need_checkpoint = false;
-    } else if (OB_FALSE_IT(new_round_info.checkpoint_scn_ = next_checkpoint_scn)) {
     } else if (counter.interrupted_cnt_ > 0) {
       ObSqlString comment;
       new_round_info.state_.set_interrupted();
@@ -202,6 +206,9 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
         LOG_WARN("failed to assign comment", K(ret), K(new_round_info), K(counter), K(comment));
       }
       LOG_INFO("switch to INTERRUPTED state", K(ret), K(old_round_info), K(counter), K(new_round_info));
+    } else if (next_checkpoint_scn <= old_round_info.start_scn_) {
+      need_checkpoint = false;
+    } else if (OB_FALSE_IT(new_round_info.checkpoint_scn_ = next_checkpoint_scn)) {
     } else if (counter.doing_cnt_ == actual_count) {
       new_round_info.state_.set_doing();
       LOG_INFO("switch to DOING state", K(old_round_info), K(counter), K(new_round_info));
@@ -404,7 +411,11 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
   } else if (piece_id == max_active_piece_id) {
     piece.piece_info_.checkpoint_scn_ = MIN(new_round_info.checkpoint_scn_, piece.piece_info_.checkpoint_scn_);
     piece.piece_info_.status_.set_active();
-    piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
+    if (piece.piece_info_.checkpoint_scn_ > piece.piece_info_.start_scn_) {
+      piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
+    } else {
+      piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE;
+    }
   } else {
     // piece_id > max_active_piece_id
     piece.piece_info_.status_.set_active();

@@ -104,7 +104,7 @@ private:
 
   bool can_do_checkpoint_(const ObTenantArchiveRoundAttr &round_info) const;
 
-  int count_(const ObDestRoundSummary &summary, Counter &counter) const;
+  int count_(const ObTenantArchiveRoundAttr &old_round_info, const ObDestRoundSummary &summary, Counter &counter) const;
   int gen_new_round_info_(const ObTenantArchiveRoundAttr &old_round_info, const Counter &counter, 
       ObTenantArchiveRoundAttr &new_round_info, bool &need_checkpoint) const;
 

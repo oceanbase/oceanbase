@@ -396,7 +396,7 @@ ObPieceInfoDesc::ObPieceInfoDesc()
 bool ObPieceInfoDesc::is_valid() const
 {
   return 0 <= dest_id_ && OB_START_LOG_ARCHIVE_ROUND_ID < round_id_
-         && 0 < piece_id_ && !filelist_.empty();
+         && 0 < piece_id_;
 }
 
 

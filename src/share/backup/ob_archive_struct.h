@@ -103,6 +103,7 @@ struct ObArchiveRoundState
 
 // current round
 struct ObTenantArchiveHisRoundAttr;
+struct ObTenantArchivePieceAttr;
 // Define dest round table row structure.
 struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
 {
@@ -253,6 +254,8 @@ struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
   int generate_next_round(const int64_t incarnation, const int64_t dest_id,
       const int64_t piece_switch_interval, const ObBackupPathString &path,
       ObTenantArchiveRoundAttr &next_round) const;
+  // Generate first piece of the round with status 'ACTIVE' and file_status 'INCOMPLETE'
+  int generate_first_piece(ObTenantArchivePieceAttr &first_piece) const;
   ObTenantArchiveHisRoundAttr generate_his_round() const;
   // Generate initial round, and set status to 'PREPARE'.
   static int generate_initial_round(const Key &key, const int64_t incarnation,
