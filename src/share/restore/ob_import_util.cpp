@@ -153,3 +153,52 @@ int ObImportTableUtil::get_tenant_name_case_mode(const uint64_t tenant_id, ObNam
   }
   return ret;
 }
+
+int ObImportTableUtil::check_is_recover_table_aux_tenant(
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    const uint64_t tenant_id,
+    bool &is_recover_table_aux_tenant)
+{
+  int ret = OB_SUCCESS;
+  schema::ObSchemaGetterGuard guard;
+  const schema::ObTenantSchema *tenant_schema = nullptr;
+  is_recover_table_aux_tenant = false;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (!is_user_tenant(tenant_id)) { // skip sys tenant and meta tenant
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("failed to get tenant schema guard", K(tenant_id), K(ret));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema must not be nullptr", K(ret));
+  } else if (OB_FAIL(check_is_recover_table_aux_tenant_name(tenant_schema->get_tenant_name_str(),
+                                                            is_recover_table_aux_tenant))) {
+    LOG_WARN("failed to check is recover table aux tenant name", K(ret));
+  }
+  return ret;
+}
+
+int ObImportTableUtil::check_is_recover_table_aux_tenant_name(
+    const ObString &tenant_name,
+    bool &is_recover_table_aux_tenant)
+{
+  int ret = OB_SUCCESS;
+  int64_t timestamp = 0;
+  is_recover_table_aux_tenant = false;
+  char buf[OB_MAX_TENANT_NAME_LENGTH] = "";
+  const ObString AUX_TENANT_NAME_PREFIX("AUX_RECOVER$");
+  if (tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH || tenant_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant name", K(ret), K(tenant_name));
+  } else if (!tenant_name.prefix_match(AUX_TENANT_NAME_PREFIX)) {
+    // not recover table aux tenant, skip
+  } else if (1 != sscanf(tenant_name.ptr(), "AUX_RECOVER$%ld%s", &timestamp, buf)) {
+    // not recover table aux tenant, skip
+  } else {
+    is_recover_table_aux_tenant = true;
+  }
+  return ret;
+}

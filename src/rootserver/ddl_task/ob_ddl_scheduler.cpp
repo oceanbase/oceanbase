@@ -31,6 +31,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
 #include "share/scheduler/ob_sys_task_stat.h"
+#include "share/restore/ob_import_util.h"
 
 namespace oceanbase
 {
@@ -1747,6 +1748,7 @@ int ObDDLScheduler::recover_task()
       int64_t tenant_schema_version = 0;
       int64_t table_task_status = 0;
       int64_t execution_id = -1;
+      bool is_recover_table_aux_tenant = false;
       ObMySQLTransaction trans;
       if (OB_FAIL(schema_service.get_tenant_schema_version(cur_record.tenant_id_, tenant_schema_version))) {
         LOG_WARN("failed to get tenant schema version", K(ret), K(cur_record));
@@ -1755,6 +1757,12 @@ int ObDDLScheduler::recover_task()
       } else if (tenant_schema_version < cur_record.schema_version_) {
         // schema has not publish, by pass now
         LOG_INFO("skip schedule ddl task, because tenant schema version too old", K(tenant_schema_version), K(cur_record));
+      } else if (OB_FAIL(ObImportTableUtil::check_is_recover_table_aux_tenant(schema_service,
+                                                                              cur_record.tenant_id_,
+                                                                              is_recover_table_aux_tenant))) {
+        LOG_WARN("failed to check is recover table aux tenant", K(ret), K(cur_record));
+      } else if (is_recover_table_aux_tenant) {
+        LOG_INFO("tenant is recover table aux tenant, skip schedule ddl task", K(cur_record));
       } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), cur_record.tenant_id_))) {
         LOG_WARN("start transaction failed", K(ret));
       } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans,

@@ -287,9 +287,8 @@ int ObImportTableTaskGenerator::fill_import_task_(
     share::ObImportTableTask &import_task)
 {
   int ret = OB_SUCCESS;
-  if (!table_schema.is_user_table()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("import not user table is not allowed");
+  if (OB_FAIL(check_src_table_schema_(import_job, table_schema, table_item))) {
+    LOG_WARN("failed to check src table schema", K(ret));
   } else if (OB_FAIL(import_task.set_src_database(table_item.database_name_))) {
     LOG_WARN("failed to set src database name", K(ret));
   } else if (OB_FAIL(import_task.set_src_table(table_item.table_name_))) {
@@ -308,6 +307,50 @@ int ObImportTableTaskGenerator::fill_import_task_(
     LOG_WARN("failed to check target schema", K(ret), K(import_task));
   }
 
+  return ret;
+}
+
+int ObImportTableTaskGenerator::check_src_table_schema_(
+    share::ObImportTableJob &import_job,
+    const share::schema::ObTableSchema &table_schema,
+    const share::ObImportTableItem &table_item)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (!table_schema.is_user_table()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("import not user table is not allowed", K(ret), K(table_item));
+    ObImportResult::Comment comment;
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is not user table",
+        table_item.database_name_.length(), table_item.database_name_.ptr(),
+        table_item.table_name_.length(), table_item.table_name_.ptr()))) {
+      LOG_WARN("failed to databuff printf", K(ret));
+    } else {
+      import_job.get_result().set_result(false/*failed*/, comment);
+    }
+  } else if (table_schema.is_in_recyclebin()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("import table in recyclebin is not allowed", K(ret), K(table_item));
+    ObImportResult::Comment comment;
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is in recyclebin",
+        table_item.database_name_.length(), table_item.database_name_.ptr(),
+        table_item.table_name_.length(), table_item.table_name_.ptr()))) {
+      LOG_WARN("failed to databuff printf", K(ret));
+    } else {
+      import_job.get_result().set_result(false/*failed*/, comment);
+    }
+  } else if (table_schema.is_user_hidden_table()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("import hidden user table is not allowed", K(ret), K(table_item));
+    ObImportResult::Comment comment;
+    if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(), "import table %.*s.%.*s is hidden table",
+        table_item.database_name_.length(), table_item.database_name_.ptr(),
+        table_item.table_name_.length(), table_item.table_name_.ptr()))) {
+      LOG_WARN("failed to databuff printf", K(ret));
+    } else {
+      import_job.get_result().set_result(false/*failed*/, comment);
+    }
+  }
   return ret;
 }
 

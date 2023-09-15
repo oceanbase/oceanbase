@@ -17,6 +17,7 @@
 #include <time.h>
 #include "share/ob_errno.h"
 #include "share/restore/ob_import_arg.h"
+#include "share/restore/ob_import_util.h"
 
 
 using namespace oceanbase;
@@ -456,6 +457,23 @@ TEST_F(ImportTableTest, test_namecase_mode)
 
   ASSERT_EQ(OB_SUCCESS, arg.add_remap_database(remap_db1));
   ASSERT_EQ(OB_BACKUP_CONFLICT_VALUE, arg.add_remap_database(remap_db2));
+}
+
+TEST_F(ImportTableTest, test_check_aux_tenant)
+{
+  const ObString tenant_name_1("AUX_RECOVER$1694673215667468");
+  bool is_recover_table_aux_tenant = false;
+  ASSERT_EQ(OB_SUCCESS, ObImportTableUtil::check_is_recover_table_aux_tenant_name(tenant_name_1, is_recover_table_aux_tenant));
+  ASSERT_EQ(true, is_recover_table_aux_tenant);
+  const ObString tenant_name_2("AUX_RECOVER$1694673215667468aaa");
+  ASSERT_EQ(OB_SUCCESS, ObImportTableUtil::check_is_recover_table_aux_tenant_name(tenant_name_2, is_recover_table_aux_tenant));
+  ASSERT_EQ(false, is_recover_table_aux_tenant);
+  const ObString tenant_name_3("AUX_RECOVER1694673215667468aaa");
+  ASSERT_EQ(OB_SUCCESS, ObImportTableUtil::check_is_recover_table_aux_tenant_name(tenant_name_3, is_recover_table_aux_tenant));
+  ASSERT_EQ(false, is_recover_table_aux_tenant);
+  const ObString tenant_name_4("AUX_RECOVER$aaa");
+  ASSERT_EQ(OB_SUCCESS, ObImportTableUtil::check_is_recover_table_aux_tenant_name(tenant_name_4, is_recover_table_aux_tenant));
+  ASSERT_EQ(false, is_recover_table_aux_tenant);
 }
 
 

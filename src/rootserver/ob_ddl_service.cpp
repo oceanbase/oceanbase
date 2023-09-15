@@ -321,16 +321,9 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
   int ret = OB_SUCCESS;
   src_tenant_schema_guard = nullptr;
   dst_tenant_schema_guard = nullptr;
-  bool is_standby = false;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == src_tenant_id || OB_INVALID_TENANT_ID == dst_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(src_tenant_id), K(dst_tenant_id));
-  } else if (src_tenant_id != dst_tenant_id
-    && OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, src_tenant_id, is_standby))) {
-    LOG_WARN("check tenant standby failed", K(ret), K(src_tenant_id), K(dst_tenant_id));
-  } else if (src_tenant_id != dst_tenant_id && !is_standby) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg, src tenant should be standby", K(ret), K(src_tenant_id), K(dst_tenant_id));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(dst_tenant_id, hold_buf_dst_tenant_schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(dst_tenant_id));
   } else if (src_tenant_id == dst_tenant_id) {
