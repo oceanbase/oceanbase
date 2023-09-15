@@ -940,12 +940,12 @@ int ObTenant::try_wait()
   if (-1 == gc_thread_) {
     LOG_WARN("try_wait after wait successfully", K(id_), K(wait_mtl_finished_));
   } else if (0 == gc_thread_) {
+    // it may takes too much time for killing session after remove_tenant, we should recalculate.
+    ATOMIC_STORE(&stopped_, ObTimeUtility::current_time());
     if (0 != (tmp = pthread_create(&gc_thread_, nullptr, wait, this))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant gc thread create failed", K(tmp), K(errno), K(id_));
     } else {
-      // it may takes too much time for killing session after remove_tenant, we should recalculate.
-      ATOMIC_STORE(&stopped_, ObTimeUtility::current_time());
       ret = OB_EAGAIN;
       LOG_INFO("tenant pthread_create gc thread successfully", K(id_), K(gc_thread_));
     }
