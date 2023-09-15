@@ -14,8 +14,6 @@
 #define SRC_SHARE_SCHEDULER_OB_DAG_SCHEDULER_H_
 
 #include "lib/ob_define.h"
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/list/ob_dlink_node.h"
@@ -376,9 +374,6 @@ private:
   typedef common::ObDList<ObITask> TaskList;
   typedef lib::ObLockGuard<ObIDag> ObDagGuard;
   static const int64_t DEFAULT_TASK_NUM = 32;
-  static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
-  static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
-  static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   friend class ObTenantDagScheduler;
   friend class ObITask;
   friend class ObTenantDagWorker;
@@ -388,9 +383,7 @@ private:
   int finish_task(ObITask &task);
   bool is_valid();
   bool is_valid_type() const;
-  int basic_init(const int64_t total = TOTAL_LIMIT,
-           const int64_t hold = HOLD_LIMIT,
-           const int64_t page_size = PAGE_SIZE);
+  int basic_init(ObIAllocator &allocator);
   void reset_task_running_status(ObITask &task, ObITask::ObITaskStatus task_status);
   void reset();
   void clear_task_list();
@@ -407,7 +400,7 @@ private:
   void dec_running_task_cnt() { --running_task_cnt_; }
   int inner_add_child_without_inheritance(ObIDag &child);
 private:
-  common::ObFIFOAllocator allocator_;
+  common::ObIAllocator *allocator_;
   bool is_inited_;
   ObDagType::ObDagTypeEnum type_;
   ObDagPrio::ObDagPrioEnum priority_;
@@ -460,6 +453,7 @@ public:
     ObIDagNet::reset();
   }
   void reset();
+  int basic_init(ObIAllocator &allocator);
   ObDagNetType::ObDagNetTypeEnum get_type() const { return type_; }
   int add_dag_into_dag_net(ObIDag &dag);
   bool check_finished_and_mark_stop();
@@ -481,6 +475,7 @@ public:
   }
   void set_cancel();
   bool is_cancel();
+  bool is_inited();
   virtual int deal_with_cancel()
   {
     return OB_SUCCESS;
@@ -505,7 +500,7 @@ private:
 private:
   bool is_stopped_;
   lib::ObMutex lock_;
-  ObArenaAllocator allocator_; // use to alloc dag in dag_net later
+  common::ObIAllocator *allocator_; // use to alloc dag in dag_net later
   ObDagNetType::ObDagNetTypeEnum type_;
   int64_t add_time_;
   int64_t start_time_;
@@ -772,10 +767,7 @@ public:
   int init(const uint64_t tenant_id,
            const int64_t check_period = DEFAULT_CHECK_PERIOD,
            const int64_t loop_waiting_list_period = LOOP_WAITING_DAG_LIST_INTERVAL,
-           const int64_t dag_limit = DEFAULT_MAX_DAG_NUM,
-           const int64_t total_mem_limit = TOTAL_LIMIT,
-           const int64_t hold_mem_limit = HOLD_LIMIT,
-           const int64_t page_size = PAGE_SIZE);
+           const int64_t dag_limit = DEFAULT_MAX_DAG_NUM);
   int add_dag(ObIDag *dag, const bool emergency = false, const bool check_size_overflow = true);
   int add_dag_net(ObIDagNet *dag_net);
   template<typename T>
@@ -861,9 +853,6 @@ private:
 
   static const int64_t TMP_WEIGHT = 5;
   static const int64_t SCHEDULER_WAIT_TIME_MS = 1000; // 1s
-  static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
-  static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
-  static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t DAG_SIZE_LIMIT = 10 << 12;
   static const int64_t DEFAULT_MAX_DAG_NUM = 15000;
   static const int64_t DEFAULT_MAX_DAG_MAP_CNT = 150000;
@@ -937,6 +926,8 @@ private:
   int try_move_child_to_ready_list(ObIDag &dag);
   void inner_free_dag(ObIDag &dag);
   OB_INLINE int64_t get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio);
+  common::ObIAllocator &get_allocator(const bool is_ha);
+  int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
 
 private:
   bool is_inited_;
@@ -962,8 +953,8 @@ private:
   int64_t scheduled_task_cnts_[ObDagType::DAG_TYPE_MAX]; // interval scheduled dag count
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX];
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];
-  common::ObFIFOAllocator allocator_;
-  common::ObFIFOAllocator ha_allocator_;
+  lib::MemoryContext mem_context_;
+  lib::MemoryContext ha_mem_context_;
   PriorityWorkerList waiting_workers_; // workers waiting for time slice to run
   PriorityWorkerList running_workers_; // running workers
   WorkerList free_workers_; // free workers who have not been assigned to any task
@@ -982,7 +973,7 @@ int ObIDag::alloc_task(T *&task)
   if (IS_NOT_INIT) {
     ret = common::OB_NOT_INIT;
     COMMON_LOG(WARN, "dag is not inited", K(ret));
-  } else if (NULL == (buf = allocator_.alloc(sizeof(T)))) {
+  } else if (NULL == (buf = allocator_->alloc(sizeof(T)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     task = NULL;
     COMMON_LOG(WARN, "failed to alloc task", K(ret));
@@ -1018,13 +1009,13 @@ int ObTenantDagScheduler::alloc_dag(T *&dag)
     COMMON_LOG(WARN, "Dag Object is too large", K(ret), K(sizeof(T)));
   } else {
     T tmp_dag;
-    common::ObFIFOAllocator *allocator = tmp_dag.is_ha_dag() ? &ha_allocator_ : &allocator_;
-    if (NULL == (buf = allocator->alloc(sizeof(T)))) {
+    ObIAllocator &allocator = get_allocator(tmp_dag.is_ha_dag());
+    if (NULL == (buf = allocator.alloc(sizeof(T)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to alloc dag", K(ret));
     } else {
       ObIDag *new_dag = new (buf) T();
-      if (OB_FAIL(new_dag->basic_init())) {
+      if (OB_FAIL(new_dag->basic_init(allocator))) {
         COMMON_LOG(WARN, "failed to init dag", K(ret));
 
         // failed to init, free dag
@@ -1042,13 +1033,9 @@ template<typename T>
 void ObTenantDagScheduler::free_dag_net(T *&dag_net)
 {
   if (OB_NOT_NULL(dag_net)) {
-    const bool ha_dag_net = dag_net->is_ha_dag_net();
+    ObIAllocator &allocator = get_allocator(dag_net->is_ha_dag_net());
     dag_net->~T();
-    if (ha_dag_net) {
-      ha_allocator_.free(dag_net);
-    } else {
-      allocator_.free(dag_net);
-    }
+    allocator.free(dag_net);
     dag_net = nullptr;
   }
 }
@@ -1065,13 +1052,14 @@ int ObTenantDagScheduler::create_and_add_dag_net(const ObIDagInitParam *param)
     COMMON_LOG(WARN, "scheduler is not init", K(ret));
   } else {
     T tmp_dag_net;
-    common::ObFIFOAllocator *allocator =  tmp_dag_net.is_ha_dag_net() ? &ha_allocator_ : &allocator_;
-    if (NULL == (buf = allocator->alloc(sizeof(T)))) {
+    ObIAllocator &allocator = get_allocator(tmp_dag_net.is_ha_dag_net());
+    if (NULL == (buf = allocator.alloc(sizeof(T)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to alloc dag_net", K(ret));
     } else if (FALSE_IT(dag_net = new (buf) T())) {
     } else if (OB_FAIL(dag_net->init_by_param(param))) {
       COMMON_LOG(WARN, "failed to init dag_net", K(ret), KPC(dag_net));
+    } else if (FALSE_IT(dag_net->basic_init(allocator))) {
     } else if (FALSE_IT(dag_net->init_dag_id_())) {
     } else if (OB_FAIL(add_dag_net(dag_net))) {
       if (common::OB_HASH_EXIST == ret) {

@@ -851,13 +851,6 @@ TEST_F(TestDagScheduler, test_init)
 
   // invalid thread cnt
   EXPECT_EQ(OB_INVALID_ARGUMENT, scheduler->init(MTL_ID(), time_slice, time_slice, -1));
-  // invalid dag_limit
-  EXPECT_EQ(OB_INVALID_ARGUMENT, scheduler->init(MTL_ID(), time_slice, time_slice, 0, 0));
-  // invalid total_mem_limit
-  EXPECT_EQ(OB_INVALID_ARGUMENT, scheduler->init(MTL_ID(), time_slice, time_slice, 0, 10, 0));
-  // invalid hold_mem_limit
-  EXPECT_EQ(OB_INVALID_ARGUMENT, scheduler->init(MTL_ID(), time_slice, time_slice, 0, 10, 1024, 0));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, scheduler->init(MTL_ID(), time_slice, time_slice, 0, 10, 1024, 2048));
 
   EXPECT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(),time_slice, time_slice, 100));
   EXPECT_EQ(OB_INIT_TWICE, scheduler->init(MTL_ID()));
