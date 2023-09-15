@@ -25,9 +25,9 @@ namespace common {
 class ObIGeoVisitor;
 
 template <typename T>
-class ObGeomConstIterator : public array::Iterator<common::ObArray<T>, T>
+class ObGeomConstIterator : public array::Iterator<common::ObArray<T, ModulePageAllocator, true>, T>
 {
-  typedef array::Iterator<common::ObArray<T>, T> base_t;
+  typedef array::Iterator<common::ObArray<T, ModulePageAllocator, true>, T> base_t;
   typedef ObGeomConstIterator<T> self_t;
 public:
   typedef typename std::random_access_iterator_tag iterator_category;
@@ -128,7 +128,7 @@ class ObGeomVector
 public:
   typedef T value_type;
   typedef ObGeomConstIterator<T> const_iterator;
-  typedef typename ObArray<T>::iterator iterator;
+  typedef typename ObArray<T, ModulePageAllocator, true>::iterator iterator;
   typedef int64_t size_type;
   typedef const T *const_pointer;
   typedef const T &const_reference;
@@ -168,13 +168,13 @@ public:
   const value_type &operator[](int64_t i) const { return vec_[i]; }
   // iterator
   iterator begin() { return vec_.begin(); }
-  const_iterator begin() const { return const_iterator(&*(const_cast<common::ObArray<T> *>(&vec_))->begin()); }
+  const_iterator begin() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, true> *>(&vec_))->begin()); }
   iterator end() { return vec_.end(); }
-  const_iterator end() const { return const_iterator(&*(const_cast<common::ObArray<T> *>(&vec_))->end()); }
-  // ObArray<T>& get_vec_() const { return vec_; }
+  const_iterator end() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, true> *>(&vec_))->end()); }
+  // ObArray<T, ModulePageAllocator, true>& get_vec_() const { return vec_; }
 
 private:
-  common::ObArray<T> vec_;
+  common::ObArray<T, ModulePageAllocator, true> vec_;
 };
 
 // ObPoint is an abstract class
