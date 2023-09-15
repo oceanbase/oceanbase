@@ -1117,11 +1117,10 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   int64_t str_len = 0;
   CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
   mgr.inc_level();
-  buffer = mgr.acquire();
+  const int64_t buf_len = mgr.acquire(buffer);
   if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    const int64_t buf_len = mgr.get_buffer_len();
     databuff_printf(buffer, buf_len, str_len, "vectorized_rows(%ld)=", index);
     str_len += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + str_len, buf_len - str_len - 1);
     if (str_len >= 0 && str_len < buf_len) {
