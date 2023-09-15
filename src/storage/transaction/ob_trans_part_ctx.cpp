@@ -1758,7 +1758,7 @@ int ObPartTransCtx::on_sync_log_success(
         // Handle the large txn asynchronously and the small txn synchronously.
         // We distinguish the large txn and small txn through whether the redo
         // log count is larger than 1.
-        if (redo_log_no_ > 1) {
+        if (mutator_log_no_ + redo_log_no_ > 1) {
           ret = submit_big_trans_callback_task_(log_type, log_id, timestamp);
         } else {
           if (OB_FAIL(on_sp_commit_(commit, timestamp))) {
@@ -1876,7 +1876,7 @@ int ObPartTransCtx::on_sync_log_success(
         // Handle the large txn asynchronously and the small txn synchronously.
         // We distinguish the large txn and small txn through whether the redo
         // log count is larger than 1
-        if (redo_log_no_ > 1) {
+        if (mutator_log_no_ + redo_log_no_ > 1) {
           ret = submit_big_trans_callback_task_(log_type, log_id, timestamp);
         } else {
           if (OB_FAIL(on_dist_commit_())) {
@@ -1901,7 +1901,7 @@ int ObPartTransCtx::on_sync_log_success(
       } else {
         start_us = ObTimeUtility::fast_current_time();
         // Asynchronous processing of large transactions
-        if (redo_log_no_ > 1) {
+        if (mutator_log_no_ + redo_log_no_ > 1) {
           ret = submit_big_trans_callback_task_(log_type, log_id, timestamp);
         } else {
           // Synchronization of small transactions
