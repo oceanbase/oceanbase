@@ -1159,7 +1159,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
 
   const int64_t cluster_id = GCONF.cluster_id;
   const uint64_t tenant_id = MTL_ID();
-  const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 200 * 1000; //200ms
+  const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 5 * 1000; //5ms
   bool is_all_replica_reach = false;
   bool is_is_majority_reach = false;
   hash::ObHashSet<ObAddr> replica_addr_set;
