@@ -262,12 +262,12 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
                "retry_cnt", location_router.get_retry_cnt(),
                KPC(task_op.get_tablet_loc()));
       if (need_retry &&
-          task_op.get_gi_above_and_rescan() &&
+          task_op.get_inner_rescan() &&
           location_router.get_retry_cnt() > 100) { //hard code retry 100 times.
-        //When das scan under px gi with transfor case, we need to disable das retry.
+        // disable das retry for rescan.
         need_retry = false;
         retry_continue = false;
-        LOG_INFO("[DAS RETRY] The PX task has retried too many times and has exited the DAS retry process");
+        LOG_INFO("[DAS RETRY] The rescan task has retried too many times and has exited the DAS retry process");
       }
       if (need_retry) {
         task_op.in_part_retry_ = true;
