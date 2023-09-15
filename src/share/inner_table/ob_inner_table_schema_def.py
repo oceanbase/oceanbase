@@ -32278,7 +32278,9 @@ def_table_schema(
             43, 'NVARCHAR2',
             44, 'NCHAR',
             45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
-            46, '',
+            46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            47, 'JSON',
+            48, 'SDO_GEOMETRY',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       C.LENGTH AS LENGTH,
