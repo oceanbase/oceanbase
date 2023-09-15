@@ -182,7 +182,7 @@ OB_NOINLINE int ObDataAccessService::execute_dist_das_task(
       LOG_WARN("failed to copy das task", K(ret));
     } else if (task_arg.is_local_task()) {
       if (OB_FAIL(do_local_das_task(das_ref, task_arg))) {
-        LOG_WARN("do local das task failed", K(ret), K(task_arg));
+        LOG_WARN("do local das task failed", K(ret));
       }
     } else if (OB_FAIL(das_ref.acquire_task_execution_resource())) {
       LOG_WARN("failed to acquire execution resource", K(ret));
