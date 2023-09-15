@@ -94,10 +94,17 @@ int ObArchiveScheduler::modify_thread_count_()
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
   const int64_t log_archive_concurrency =
     tenant_config.is_valid() ? tenant_config->log_archive_concurrency : 0L;
-  // if parameter log_archive_concurrency is default zero, set archive_concurrency = max_cpu / 4
+  // if parameter log_archive_concurrency is default zero, set archive_concurrency based on max_cpu,
   // otherwise set archive_concurrency = log_archive_concurrency
   if (0 == log_archive_concurrency) {
-    archive_concurrency = MTL_CPU_COUNT() / 4;
+    const int64_t max_cpu = MTL_CPU_COUNT();
+    if (max_cpu <= 8) {
+      archive_concurrency = max_cpu;
+    } else if (max_cpu <= 32) {
+      archive_concurrency = std::max(max_cpu / 2, 8L);
+    } else {
+      archive_concurrency = std::max(max_cpu / 4, 16L);
+    }
   } else {
     archive_concurrency = log_archive_concurrency;
   }
