@@ -2602,6 +2602,10 @@ int ObGetLSActiveTransCountP::process()
       LOG_WARN("src ls migration status is not none", K(ret), K(migration_status), KPC(ls), K(arg_));
     } else if (OB_FAIL(ls->get_active_tx_count(result_.active_trans_count_))) {
       LOG_WARN("failed to get active trans count", K(ret), KPC(ls), K(arg_));
+    } else if (0 == result_.active_trans_count_) {
+      // do nothing
+    } else if (OB_FAIL(ls->print_all_tx_ctx(1/*print_num*/))) {
+      LOG_WARN("failed to print all tx ctx", K(ret), KPC(ls));
     }
   }
   return ret;
