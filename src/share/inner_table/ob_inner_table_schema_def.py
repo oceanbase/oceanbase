@@ -5864,9 +5864,9 @@ def_table_schema(
     ('ls_group_id', 'int', 'false'),
   ],
 )
-# 460 : __all_tenant_snapshots
+# 460 : __all_tenant_snapshot
 # 461 : __all_tenant_snapshot_ls
-# 462 : __all_tenant_snapshot_ls_meta_table
+# 462 : __all_virtual_tenant_snapshot_ls_replica
 
 # 463 : __all_mlogs
 # 464 : __all_mviews
@@ -6297,6 +6297,9 @@ def_table_schema(
 # 482 : __all_tablet_reorganize_history
 # 483 : __all_storage_ha_error_diagnose
 # 484 : __all_storage_ha_perf_diagnose
+
+# 485 : __all_clone_job
+# 486 : __all_clone_job_history
 
 #
 # 余留位置
@@ -12970,6 +12973,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12432: __all_virtual_column_gorup_mapping_history
 # 12433: __all_virtual_storage_ha_error_diagnose
 # 12434: __all_virtual_storage_ha_perf_diagnose
+
+# 12435: __all_virtual_clone_job
+# 12436: __all_virtual_clone_job_history
+
 #
 # 余留位置
 #
@@ -13238,6 +13245,12 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15302'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
+
+#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15306', all_def_keywords['__all_virtual_tenant_snapshot'])))
+#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15307', all_def_keywords['__all_virtual_tenant_snapshot_ls'])))
+#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15308', all_def_keywords['__all_virtual_tenant_snapshot_ls_replica'])))
+#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15309', all_def_keywords['__all_virtual_clone_job'])))
+#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15310', all_def_keywords['__all_virtual_clone_job_history'])))
 
 #######################################################################
 # oracle agent table index is defined after the System table Index area
