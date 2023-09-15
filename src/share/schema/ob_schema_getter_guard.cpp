@@ -767,8 +767,6 @@ int ObSchemaGetterGuard::get_routine_infos_in_database(const uint64_t tenant_id,
       }
     }
   }
-
-  ;
   return ret;
 }
 
@@ -9140,6 +9138,39 @@ int ObSchemaGetterGuard::deep_copy_index_name_map(
   }
   return ret;
 }
+
+#define GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(SCHEMA, SIMPLE_SCHEMA_TYPE)                       \
+  int ObSchemaGetterGuard::get_simple_##SCHEMA##_schemas_in_database(                                \
+      const uint64_t tenant_id,                                                                      \
+      const uint64_t database_id,                                                                    \
+      common::ObIArray<const SIMPLE_SCHEMA_TYPE*> &schema_array)                                     \
+  {                                                                                                  \
+    int ret = OB_SUCCESS;                                                                            \
+    const ObSchemaMgr *mgr = NULL;                                                                   \
+    schema_array.reset();                                                                            \
+    if (!check_inner_stat()) {                                                                       \
+      ret = OB_INNER_STAT_ERROR;                                                                     \
+      LOG_WARN("inner stat error", KR(ret));                                                         \
+    } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id) {                         \
+      ret = OB_INVALID_ARGUMENT;                                                                     \
+      LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(database_id));                           \
+    } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {                                      \
+      LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));           \
+    } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {                                          \
+      LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));                                   \
+    } else if (OB_FAIL(mgr->SCHEMA##_mgr_.get_##SCHEMA##_schemas_in_database(tenant_id,              \
+        database_id, schema_array))) {                                                               \
+      LOG_WARN("get "#SCHEMA" schemas in database failed", KR(ret), K(tenant_id), K(database_id));   \
+    }                                                                                                \
+    return ret;                                                                                      \
+  }
+
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(udt, ObSimpleUDTSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(outline, ObSimpleOutlineSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(synonym, ObSimpleSynonymSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(package, ObSimplePackageSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(routine, ObSimpleRoutineSchema);
+GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
 
 } //end of namespace schema
 } //end of namespace share

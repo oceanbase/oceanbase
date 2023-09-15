@@ -31,6 +31,8 @@
 #include "sql/resolver/dml/ob_view_table_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server.h"
+#include "share/schema/ob_outline_mgr.h"
+#include "share/schema/ob_udt_mgr.h"
 
 namespace oceanbase
 {
@@ -4668,6 +4670,379 @@ int ObMultiVersionSchemaService::get_tablet_to_table_history(
           }
         }
       } // end for
+    }
+  }
+  return ret;
+}
+
+// cal purge recyclebin need timeout
+int ObMultiVersionSchemaService::cal_purge_need_timeout(
+    const obrpc::ObPurgeRecycleBinArg &purge_recyclebin_arg,
+    int64_t &cal_timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_timeout = 0;
+  int64_t total_purge_count = 0;
+  ObArray<ObRecycleObject> recycle_objs;
+  int64_t purge_num = purge_recyclebin_arg.purge_num_;
+  const uint64_t tenant_id = purge_recyclebin_arg.tenant_id_;
+  const int64_t expire_time = purge_recyclebin_arg.expire_time_;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is NULL", KR(ret));
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is NULL", KR(ret));
+  } else {
+    rootserver::ObDDLOperator ddl_operator(*this, *sql_proxy_);
+    if (OB_FAIL(ddl_operator.fetch_expire_recycle_objects(tenant_id, expire_time, recycle_objs))) {
+      LOG_WARN("fail to get fetch expire recycle objects", KR(ret), K(purge_recyclebin_arg));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < recycle_objs.count() && total_purge_count < purge_num; i++) {
+      const ObRecycleObject &recycle_obj = recycle_objs.at(i);
+      switch(recycle_obj.get_type()) {
+          case ObRecycleObject::VIEW:
+          case ObRecycleObject::TABLE: {
+            int64_t cal_table_timeout = 0;
+            const uint64_t table_id = recycle_obj.get_table_id();
+            if (OB_FAIL(cal_purge_table_timeout_(tenant_id, table_id, cal_table_timeout, total_purge_count))) {
+              LOG_WARN("fail to cal purge table timeout", KR(ret), K(tenant_id), K(table_id));
+            } else {
+              tmp_timeout += cal_table_timeout;
+            }
+            break;
+          }
+          case ObRecycleObject::DATABASE: {
+            int64_t cal_database_timeout = 0;
+            const int64_t database_id = recycle_obj.get_database_id();
+            if (OB_FAIL(cal_purge_database_timeout_(tenant_id, database_id, cal_database_timeout, total_purge_count))) {
+              LOG_WARN("fail to cal purge database timeout", KR(ret));
+            } else {
+              tmp_timeout += cal_database_timeout;
+            }
+            break;
+          }
+          case ObRecycleObject::TRIGGER:
+          case ObRecycleObject::INDEX:
+          case ObRecycleObject::AUX_LOB_META:
+          case ObRecycleObject::AUX_LOB_PIECE:
+          case ObRecycleObject::TENANT:
+          case ObRecycleObject::AUX_VP: {
+            continue;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unknown recycle object type", K(recycle_obj));
+          }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t high_bound_timeout = 0;
+    int64_t low_bound_timeout = 10 * GCONF.rpc_timeout;
+    if (0 == total_purge_count) {
+      cal_timeout = 0;
+    // if this worker or ctxs' timeout not be set, use ddl timeout as high bound value
+    } else if (OB_FAIL(ObShareUtil::get_ctx_timeout(GCONF._ob_ddl_timeout, high_bound_timeout))) {
+      LOG_WARN("fail to set timeout", KR(ret));
+    } else {
+      // to prevent tmp_timeout is too small, use low_bound_timeout to compare
+      tmp_timeout = std::max(low_bound_timeout, tmp_timeout);
+      cal_timeout = std::min(high_bound_timeout, tmp_timeout);
+    }
+  }
+  return ret;
+}
+
+int ObMultiVersionSchemaService::cal_purge_table_timeout_(
+    const uint64_t &tenant_id,
+    const uint64_t &table_id,
+    int64_t &cal_table_timeout,
+    int64_t &total_purge_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_num = 0;
+  cal_table_timeout = 0;
+  ObArray<uint64_t> table_ids;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *orig_table_schema = NULL;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+
+  if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id
+            || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is not invalid", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema_gaurd", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, orig_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(orig_table_schema)) {
+    // ignore
+  } else if (OB_FAIL(orig_table_schema->get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos", KR(ret), K(*orig_table_schema));
+  } else {
+    total_purge_count++;
+    part_num = orig_table_schema->get_all_part_num();
+    ObIndexType index_type = INDEX_TYPE_IS_NOT;
+    ObTableType table_type = MAX_TABLE_TYPE;
+    // get all index table id
+    int64_t index_count = simple_index_infos.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) {
+      index_type = simple_index_infos.at(i).index_type_;
+      table_type = simple_index_infos.at(i).table_type_;
+      if (index_has_tablet(index_type)) {
+        if (OB_FAIL(table_ids.push_back(simple_index_infos.at(i).table_id_))) {
+          LOG_WARN("failed to push index id to index_ids",
+                  KR(ret), K(i), K(simple_index_infos.at(i).table_id_));
+        }
+      }
+    }
+    // get lob table id
+    if (OB_SUCC(ret) && orig_table_schema->has_lob_column()) {
+      uint64_t mtid = orig_table_schema->get_aux_lob_meta_tid();
+      uint64_t ptid = orig_table_schema->get_aux_lob_piece_tid();
+      if (OB_INVALID_ID == mtid || OB_INVALID_ID == ptid) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Expect meta tid and piece tid valid",
+                KR(ret), K(mtid), K(ptid));
+      } else if (OB_FAIL(table_ids.push_back(mtid))) {
+        LOG_WARN("fail to push back lob meta tid", KR(ret), K(mtid));
+      } else if (OB_FAIL(table_ids.push_back(ptid))) {
+        LOG_WARN("fail to push back lob piece tid", KR(ret), K(ptid));
+      }
+    }
+    // get vp table
+    if (OB_SUCC(ret)) {
+      ObSEArray<uint64_t, 16> aux_tid_array; // for aux_vp or aux_lob
+      if (OB_FAIL(orig_table_schema->get_aux_vp_tid_array(aux_tid_array))) {
+        LOG_WARN("get_aux_vp_tid_array failed", K(ret), KPC(orig_table_schema));
+      } else {
+        int64_t array_count = aux_tid_array.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < array_count; i++) {
+          uint64_t table_id = aux_tid_array.at(i);
+          if (OB_FAIL(table_ids.push_back(table_id))) {
+            LOG_WARN("fail to push back vp", KR(ret), K(table_id));
+          }
+        }
+      }
+    }
+    // cal tablet cost
+    if (OB_SUCC(ret) && 0 != table_ids.count()) {
+      const ObSimpleTableSchemaV2 *tmp_table_schema = NULL;
+      const int64_t table_count = table_ids.count();
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_count; ++i) {
+        int64_t table_id = table_ids.at(i);
+        if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, tmp_table_schema))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+        } else if (OB_ISNULL(tmp_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is NULL", KR(ret), K(tenant_id), K(table_id));
+        } else {
+          part_num += tmp_table_schema->get_all_part_num();
+        }
+      }
+    }
+    // has autoinc
+    if (OB_SUCC(ret) && 0 != orig_table_schema->get_autoinc_column_id()) {
+      cal_table_timeout += GCONF.rpc_timeout;
+    }
+    // has sequence
+    if (OB_SUCC(ret) && (orig_table_schema->is_user_table() || orig_table_schema->is_oracle_tmp_table())) {
+      for (ObTableSchema::const_column_iterator iter = orig_table_schema->column_begin();
+          OB_SUCC(ret) && iter != orig_table_schema->column_end(); ++iter) {
+        ObColumnSchemaV2 *column_schema = *iter;
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column schema is NULL", KR(ret), K(tenant_id), K(table_id));
+        } else if (column_schema->is_identity_column()) {
+          cal_table_timeout += GCONF.rpc_timeout;
+        }
+      }
+    }
+    // has rls
+    if (OB_SUCC(ret)) {
+      cal_table_timeout += orig_table_schema->get_rls_policy_ids().count() * GCONF.rpc_timeout;
+      cal_table_timeout += orig_table_schema->get_rls_group_ids().count() * GCONF.rpc_timeout;
+      cal_table_timeout += orig_table_schema->get_rls_context_ids().count() * GCONF.rpc_timeout;
+    }
+    // has audit
+    if (OB_SUCC(ret) && (orig_table_schema->is_user_table() || orig_table_schema->is_external_table())) {
+      ObArray<const ObSAuditSchema *> audits;
+      uint64_t table_id = orig_table_schema->get_table_id();
+      if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id, AUDIT_TABLE, table_id, audits))) {
+        LOG_WARN("fail to get audit schema in owner", KR(ret), K(tenant_id), K(table_id));
+      } else {
+        cal_table_timeout += audits.count() * GCONF.rpc_timeout;
+      }
+    }
+    // has trigger
+    if (OB_SUCC(ret)) {
+      const ObIArray<uint64_t> &trigger_id_list = orig_table_schema->get_trigger_list();
+      cal_table_timeout += trigger_id_list.count() * GCONF.rpc_timeout;
+    }
+    if (OB_SUCC(ret)) {
+      //100 tablet 2s,default 2s
+      cal_table_timeout += (part_num / 100 + part_num % 100 == 0 ? 0 : 1) * GCONF.rpc_timeout;
+    }
+  }
+  return ret;
+}
+
+int ObMultiVersionSchemaService::cal_purge_database_timeout_(
+    const uint64_t &tenant_id,
+    const uint64_t &database_id,
+    int64_t &cal_database_timeout,
+    int64_t &total_purge_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_num = 0;
+  cal_database_timeout = 0;
+  ObSchemaGetterGuard schema_guard;
+  ObArray<ObRecycleObject> recycle_objs;
+  bool need_cal_timeout = true;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id
+            || OB_INVALID_ID == database_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is not valid", KR(ret), K(tenant_id), K(database_id));
+  } else if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id), K(database_id));
+  } else {
+    const ObSimpleDatabaseSchema *database_schema = NULL;
+    if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
+      LOG_WARN("fail to get database schema", KR(ret), K(tenant_id), K(database_id));
+    } else if (OB_ISNULL(database_schema)) {
+      need_cal_timeout = false;
+    }
+  }
+  if (OB_SUCC(ret) && need_cal_timeout) {
+    total_purge_count++;
+    schema_guard.reset();
+    // database itself
+    cal_database_timeout += GCONF.rpc_timeout;
+    // cal table which is already in recyclebin
+    if (OB_FAIL(schema_service_->fetch_recycle_objects_of_db(tenant_id,
+                                                            database_id,
+                                                            *sql_proxy_,
+                                                            recycle_objs))) {
+      LOG_WARN("fetch recycle objects of db failed", KR(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < recycle_objs.count(); ++i) {
+        int64_t tmp_count = 0;
+        int64_t tmp_table_timeout = 0;
+        const ObRecycleObject &recycle_obj = recycle_objs.at(i);
+        const uint64_t table_id = recycle_obj.get_table_id();
+        if (OB_FAIL(cal_purge_table_timeout_(tenant_id, table_id, tmp_table_timeout, tmp_count))) {
+          LOG_WARN("fail to cal purge table timeout", KR(ret), K(tenant_id), K(table_id));
+        } else {
+          cal_database_timeout += tmp_table_timeout;
+        }
+      }
+    }
+    // to prevent schema memory hang, we should use get_tenant_schema_guard to reuse memory
+    // cal delete tables in database
+    if (OB_SUCC(ret)) {
+      ObArray<uint64_t> table_ids;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_table_ids_in_database(tenant_id, database_id, table_ids))) {
+        LOG_WARN("get tables in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        schema_guard.reset();
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+          int64_t tmp_count = 0;
+          int64_t tmp_table_timeout = 0;
+          uint64_t table_id = table_ids.at(i);
+          if (OB_FAIL(cal_purge_table_timeout_(tenant_id, table_id, tmp_table_timeout, tmp_count))) {
+            LOG_WARN("fail to get purge table timeout", KR(ret), K(tenant_id), K(table_id));
+          } else {
+            cal_database_timeout += tmp_table_timeout;
+          }
+        }
+      }
+    }
+    // cal outline
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSimpleOutlineSchema *> outlines;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_simple_outline_schemas_in_database(tenant_id, database_id, outlines))) {
+        LOG_WARN("fail to get outlines in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += outlines.count() * GCONF.rpc_timeout;
+      }
+    }
+    // cal synonyms
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSimpleSynonymSchema *> synonyms;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_simple_synonym_schemas_in_database(tenant_id, database_id, synonyms))) {
+        LOG_WARN("fail to get synonym in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += synonyms.count() * GCONF.rpc_timeout;
+      }
+    }
+    // cal packags
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSimplePackageSchema *> packages;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_simple_package_schemas_in_database(tenant_id, database_id, packages))) {
+        LOG_WARN("fail to get packages in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += packages.count() * GCONF.rpc_timeout;
+      }
+    }
+    // cal routines
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSimpleRoutineSchema *> routines;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_simple_routine_schemas_in_database(tenant_id, database_id, routines))) {
+        LOG_WARN("fail to get routines in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += routines.count() * GCONF.rpc_timeout;
+      }
+    }
+    // cal udts
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSimpleUDTSchema *> udts;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_simple_udt_schemas_in_database(tenant_id, database_id, udts))) {
+        LOG_WARN("fail to get udts in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += udts.count() * GCONF.rpc_timeout;
+      }
+    }
+    // cal sequences
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSequenceSchema *> sequences;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_sequence_infos_in_database(tenant_id, database_id, sequences))) {
+        LOG_WARN("fail to get sequences in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += sequences.count() * GCONF.rpc_timeout;
+      }
+    }
+    // cal mock_fk
+    if (OB_SUCC(ret)) {
+      ObArray<const ObSimpleMockFKParentTableSchema *> mock_fk_parent_table_schemas;
+      if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_simple_mock_fk_parent_table_schemas_in_database(tenant_id, database_id, mock_fk_parent_table_schemas))) {
+        LOG_WARN("fail to get mock_fk_parent_table_schemas in database failed", KR(ret), K(tenant_id), K(database_id));
+      } else {
+        cal_database_timeout += mock_fk_parent_table_schemas.count() * GCONF.rpc_timeout;
+      }
     }
   }
   return ret;

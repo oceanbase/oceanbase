@@ -24,9 +24,14 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_ddl_trans_controller.h"
 #include "share/schema/ob_ddl_epoch.h"
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObPurgeRecycleBinArg;
+}
 class ObSchemaSlot;
 namespace common
 {
@@ -366,7 +371,9 @@ public:
   int get_first_trans_end_schema_version(
       const uint64_t tenant_id,
       int64_t &schema_version);
-
+  int cal_purge_need_timeout(
+      const obrpc::ObPurgeRecycleBinArg &purge_recyclebin_arg,
+      int64_t &cal_timeout);
   ObDDLTransController &get_ddl_trans_controller() { return ddl_trans_controller_; }
   ObDDLEpochMgr &get_ddl_epoch_mgr() { return ddl_epoch_mgr_; }
 //this friend class only for backup
@@ -478,6 +485,15 @@ private:
   int try_gc_allocator_when_add_schema_(const uint64_t tenant_id,
                                         ObSchemaMemMgr *&mem_mgr,
                                         ObSchemaMgrCache *&schema_mgr_cache);
+  int cal_purge_table_timeout_(const uint64_t &tenant_id,
+                               const uint64_t &table_id,
+                               int64_t &cal_table_timeout,
+                               int64_t &total_purge_count);
+  int cal_purge_database_timeout_(const uint64_t &tenant_id,
+                                  const uint64_t &database_id,
+                                  int64_t &cal_database_timeout,
+                                  int64_t &total_purge_count);
+
 private:
   static const int64_t MAX_VERSION_COUNT = 64;
   static const int64_t MAX_VERSION_COUNT_FOR_LIBOBLOG = 6;

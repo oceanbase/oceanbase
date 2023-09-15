@@ -21,6 +21,8 @@
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_routine_info.h"
 #include "share/schema/ob_udt_info.h"
+#include "share/schema/ob_outline_mgr.h"
+#include "share/schema/ob_udt_mgr.h"
 
 namespace oceanbase
 {
@@ -1039,6 +1041,16 @@ public:
 
   int deep_copy_index_name_map(common::ObIAllocator &allocator,
                                ObIndexNameMap &index_name_cache);
+  #define GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)     \
+    int get_simple_##SCHEMA##_schemas_in_database(const uint64_t tenant_id,    \
+                                                  const uint64_t database_id,  \
+                                                  common::ObIArray<const SCHEMA_TYPE *> &schema_array);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(udt, ObSimpleUDTSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(package, ObSimplePackageSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
 private:
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);

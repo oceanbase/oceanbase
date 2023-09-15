@@ -10187,10 +10187,14 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
       arg.exec_tenant_id_ = tenant_id;
       LOG_INFO("start purge recycle objects of tenant", K(arg), K(purge_sum));
       while (OB_SUCC(ret) && in_service() && purge_sum > 0) {
+        int64_t cal_timeout = 0;
         int64_t start_time = ObTimeUtility::current_time();
         arg.purge_num_ = purge_sum > PURGE_EACH_RPC ? PURGE_EACH_RPC : purge_sum;
-        // replcace timeout from hardcode 9s to 10 * GCONF.rpc_timeout
-        if (OB_FAIL(common_proxy_.timeout(10 * GCONF.rpc_timeout).purge_expire_recycle_objects(arg, affected_rows))) {
+        if (OB_FAIL(schema_service_->cal_purge_need_timeout(arg, cal_timeout))) {
+          LOG_WARN("fail to cal purge need timeout", KR(ret), K(arg));
+        } else if (0 == cal_timeout) {
+          purge_sum = 0;
+        } else if (OB_FAIL(common_proxy_.timeout(cal_timeout).purge_expire_recycle_objects(arg, affected_rows))) {
           LOG_WARN("purge reyclebin objects failed", KR(ret),
               K(current_time), K(expire_time), K(affected_rows), K(arg));
         } else {

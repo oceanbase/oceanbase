@@ -41,7 +41,6 @@
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "share/ls/ob_ls_status_operator.h"
-
 namespace oceanbase
 {
 using namespace common;
@@ -898,12 +897,17 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
   } else {
     bool is_tenant_finish = false;
     int64_t total_purge_count = 0;
+    uint64_t tenant_id = purge_recyclebin_arg.tenant_id_;
     while (OB_SUCC(ret) && !is_tenant_finish) {
       //一个租户只purge 10个回收站的对象，防止卡住RS的ddl线程
       //每次返回purge的行数，只有purge数目少于affected_rows
+      int64_t cal_timeout = 0;
       int64_t start_time = ObTimeUtility::current_time();
-      // replace timeout from hardcode 9s to 10 * GCONF.rpc_timeout
-      if (OB_FAIL(common_rpc_proxy->timeout(10 * GCONF.rpc_timeout).purge_expire_recycle_objects(purge_recyclebin_arg, affected_rows))) {
+      if (OB_FAIL(GSCHEMASERVICE.cal_purge_need_timeout(purge_recyclebin_arg, cal_timeout))) {
+        LOG_WARN("fail to cal purge time out", KR(ret), K(tenant_id));
+      } else if (0 == cal_timeout) {
+        is_tenant_finish = true;
+      } else if (OB_FAIL(common_rpc_proxy->timeout(cal_timeout).purge_expire_recycle_objects(purge_recyclebin_arg, affected_rows))) {
         LOG_WARN("purge reyclebin objects failed", K(ret), K(affected_rows), K(purge_recyclebin_arg));
         //如果失败情况下，不需要继续
         is_tenant_finish = false;
