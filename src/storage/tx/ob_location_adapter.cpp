@@ -151,7 +151,12 @@ int ObLocationAdapter::get_leader_(const int64_t cluster_id,
     if (OB_SUCCESS != (tmp_ret = ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
       TRANS_LOG(WARN, "check if ls exist failed", K(tmp_ret), K(ls_id));
       if (OB_TENANT_NOT_EXIST == tmp_ret) {
-        ret = tmp_ret;
+        bool has_dropped = false;
+        if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id, has_dropped))) {
+          TRANS_LOG(WARN, "failed to check tenant has been dropped", K(tmp_ret), K(tenant_id));
+        } else if (has_dropped) {
+          ret = OB_TENANT_HAS_BEEN_DROPPED;
+        }
       }
     } else if (state.is_deleted()) {
       // rewrite ret
@@ -234,7 +239,12 @@ int ObLocationAdapter::nonblock_get(const int64_t cluster_id,
     if (OB_SUCCESS != (tmp_ret = ObLocationService::check_ls_exist(tenant_id, ls_id, state))) {
       TRANS_LOG(WARN, "check if ls exist failed", K(tmp_ret), K(ls_id));
       if (OB_TENANT_NOT_EXIST == tmp_ret) {
-        ret = tmp_ret;
+        bool has_dropped = false;
+        if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id, has_dropped))) {
+          TRANS_LOG(WARN, "failed to check tenant has been dropped", K(tmp_ret), K(tenant_id));
+        } else if (has_dropped) {
+          ret = OB_TENANT_HAS_BEEN_DROPPED;
+        }
       }
     } else if (state.is_deleted()) {
       // rewrite ret
