@@ -46,7 +46,11 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (!ob_is_text_tc(text.get_type()) && !text.is_null()) {
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+    if (!text.is_string_type()) {
+      text.set_calc_type(common::ObVarcharType);
+    }
+  } else if (!ob_is_text_tc(text.get_type()) && !text.is_null()) {
     text.set_calc_type(common::ObVarcharType);
   }
   if (!count.is_null()) {

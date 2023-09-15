@@ -37,7 +37,7 @@ inline int ObExprSpace::calc_result_type1(
   // space is mysql only expr
   CK(lib::is_mysql_mode());
   ObObjType res_type = ObMaxType;
-  if (type1.is_null()) {
+  if (type1.is_null() || (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0)) {
     res_type = ObVarcharType;
   } else if (type1.is_literal()) {
     const ObObj &obj = type1.get_param();
@@ -63,7 +63,11 @@ inline int ObExprSpace::calc_result_type1(
   type.set_collation_level(type1.get_collation_level());
   type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
   if (ObVarcharType == type.get_type()) {
-    type.set_length(MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT);
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+      type.set_length(OB_MAX_VARCHAR_LENGTH);
+    } else {
+      type.set_length(MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT);
+    }
   } else if (ob_is_text_tc(type.get_type())) {
     const int32_t mbmaxlen = 4;
     const int32_t default_text_length =
