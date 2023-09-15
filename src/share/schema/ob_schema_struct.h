@@ -134,6 +134,9 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 // table_flags stored in __all_table.table_flag
 #define CASCADE_RLS_OBJECT_FLAG (INT64_C(1) << 0)
 
+static const char* PUBLISH_SCHEMA_MODE_BEST_EFFORT = "BEST_EFFORT";
+static const char* PUBLISH_SCHEMA_MODE_ASYNC       = "ASYNC";
+
 //-------enum defenition
 enum ObTableLoadType
 {

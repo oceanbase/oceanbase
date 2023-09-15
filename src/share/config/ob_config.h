@@ -149,6 +149,12 @@ public:
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
     return value_str_;
   }
+
+  int case_compare(const char* str) const
+  {
+    ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+    return ObString::make_string(value_str_).case_compare(str);
+  }
   const char *spfile_str() const
   {
     const char *ret = nullptr;
@@ -707,6 +713,11 @@ public:
   {
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
     return ObString::make_string(value_str_);
+  }
+  int case_compare(const char *str) const
+  {
+    ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+    return ObString::make_string(value_str_).case_compare(str);
   }
   int copy(char *buf, const int64_t buf_len); // '\0' will be added
   virtual ObConfigItemType get_config_item_type() const {

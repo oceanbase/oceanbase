@@ -404,7 +404,9 @@ int ObServerSchemaUpdater::process_async_refresh_tasks(
   return ret;
 }
 
-int ObServerSchemaUpdater::try_reload_schema(const ObRefreshSchemaInfo &schema_info)
+int ObServerSchemaUpdater::try_reload_schema(
+    const ObRefreshSchemaInfo &schema_info,
+    const bool set_received_schema_version)
 {
 
   int ret = OB_SUCCESS;
@@ -419,9 +421,10 @@ int ObServerSchemaUpdater::try_reload_schema(const ObRefreshSchemaInfo &schema_i
     // Here, we ignore error since set_tenant_received_broadcast_version() may fail before tenant firstly refresh schema.
     int tmp_ret = OB_SUCCESS;
     if (OB_INVALID_TENANT_ID != schema_info.get_tenant_id()
-        && schema_info.get_schema_version() > 0 ) {
-        // && OB_SUCCESS != (tmp_ret = schema_mgr_->set_tenant_received_broadcast_version(
-          //  schema_info.get_tenant_id(), schema_info.get_schema_version()))) {
+        && schema_info.get_schema_version() > 0
+        && set_received_schema_version
+        && OB_TMP_FAIL(schema_mgr_->set_tenant_received_broadcast_version(
+           schema_info.get_tenant_id(), schema_info.get_schema_version()))) {
       LOG_WARN("fail to set tenant received broadcast version", K(tmp_ret), K(schema_info));
     }
 

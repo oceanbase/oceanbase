@@ -3557,17 +3557,19 @@ void ObSwitchSchemaArg::reset()
 {
   schema_info_.reset();
   force_refresh_ = false;
+  is_async_ = false;
 }
 
 DEF_TO_STRING(ObSwitchSchemaArg)
 {
   int64_t pos = 0;
   J_KV(K_(schema_info),
-       K_(force_refresh));
+       K_(force_refresh),
+       K_(is_async));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObSwitchSchemaArg, schema_info_, force_refresh_);
+OB_SERIALIZE_MEMBER(ObSwitchSchemaArg, schema_info_, force_refresh_, is_async_);
 
 DEF_TO_STRING(ObSwitchLeaderArg)
 {

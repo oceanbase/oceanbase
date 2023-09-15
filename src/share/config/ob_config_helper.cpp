@@ -27,7 +27,7 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "share/ob_encryption_util.h"
 #include "share/ob_resource_limit.h"
-
+#include "share/schema/ob_schema_struct.h"
 namespace oceanbase
 {
 using namespace share;
@@ -338,6 +338,12 @@ bool ObConfigRpcChecksumChecker::check(const ObConfigItem &t) const
 {
   common::ObString tmp_string(t.str());
   return obrpc::get_rpc_checksum_check_level_from_string(tmp_string) != obrpc::ObRpcCheckSumCheckLevel::INVALID ;
+}
+
+bool ObConfigPublishSchemaModeChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare(PUBLISH_SCHEMA_MODE_BEST_EFFORT)
+         || 0 == t.case_compare(PUBLISH_SCHEMA_MODE_ASYNC);
 }
 
 bool ObConfigMemoryLimitChecker::check(const ObConfigItem &t) const

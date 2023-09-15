@@ -2205,8 +2205,9 @@ int ObMultiVersionSchemaService::async_refresh_schema(
     // do nothing
   } else {
     int64_t retry_cnt = 0;
-    int64_t MAX_RETRY_CNT = 1000;
-    const __useconds_t RETRY_IDLE_TIME = 100 * 1000L; // 100ms
+    const __useconds_t RETRY_IDLE_TIME = 10 * 1000L; // 10ms
+    const int64_t MAX_RETRY_CNT = 100 * 1000 * 1000L / RETRY_IDLE_TIME; // 100s at most
+    const int64_t SUBMIT_TASK_FREQUENCE = 2 * 1000 * 1000L / RETRY_IDLE_TIME; // each 2s
     while (OB_SUCC(ret)) {
       if (THIS_WORKER.is_timeout()
           || (INT64_MAX == THIS_WORKER.get_timeout_ts() && retry_cnt >= MAX_RETRY_CNT)) {
@@ -2221,7 +2222,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
         // success
         break;
       } else {
-        if (0 == retry_cnt % 20) {
+        if (0 == retry_cnt % SUBMIT_TASK_FREQUENCE) {
           // try refresh schema each 2s
           {
             bool is_dropped = false;

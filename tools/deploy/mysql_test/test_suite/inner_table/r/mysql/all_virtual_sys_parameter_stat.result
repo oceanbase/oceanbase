@@ -322,6 +322,7 @@ _parallel_server_sleep_time
 _pipelined_table_function_memory_limit
 _print_sample_ppm
 _private_buffer_size
+_publish_schema_mode
 _pushdown_storage_level
 _px_bloom_filter_group_size
 _px_chunklist_count_ratio
