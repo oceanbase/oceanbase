@@ -884,7 +884,7 @@ private:
   int loop_blocking_dag_net_list();
   int loop_running_dag_net_map();
   int finish_task_in_dag(ObITask &task, ObIDag &dag, ObIDagNet *&erase_dag_net);
-  int finish_dag_(const ObIDag::ObDagStatus status, ObIDag &dag, ObIDagNet *&erase_dag_net);
+  int finish_dag_(const ObIDag::ObDagStatus status, ObIDag &dag, ObIDagNet *&erase_dag_net, const bool try_move_child);
   int finish_dag_net(ObIDagNet *dag_net);
   int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
   int deal_with_fail_task(ObITask &task, ObIDag &dag, const int error_code, bool &retry_flag);
