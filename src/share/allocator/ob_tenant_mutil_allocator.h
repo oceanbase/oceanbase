@@ -95,8 +95,8 @@ public:
 
 public:
   explicit ObTenantMutilAllocator(uint64_t tenant_id);
-  ~ObTenantMutilAllocator()
-  {}
+  ~ObTenantMutilAllocator();
+  void destroy();
   // update nway when tenant's max_cpu changed
   void set_nway(const int32_t nway);
   // update limit when tenant's memory_limit changed
