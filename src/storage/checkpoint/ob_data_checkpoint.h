@@ -200,17 +200,12 @@ private:
   // used when new_create_list_ -> active_list and active_list -> frozen_list
   ObCheckpointDList ls_frozen_list_;
 
-  obsys::ObRWLock ls_frozen_list_lock_;
-  obsys::ObRWLock new_create_list_lock_;
-  obsys::ObRWLock active_list_lock_;
-  obsys::ObRWLock prepare_list_lock_;
-
   struct ObCheckpointLock
   {
-    obsys::ObRWLock ls_frozen_list_lock_;
-    obsys::ObRWLock new_create_list_lock_;
-    obsys::ObRWLock active_list_lock_;
-    obsys::ObRWLock prepare_list_lock_;
+    common::SpinRWLock ls_frozen_list_lock_;
+    common::SpinRWLock new_create_list_lock_;
+    common::SpinRWLock active_list_lock_;
+    common::SpinRWLock prepare_list_lock_;
   } lock_;
 
   bool ls_freeze_finished_;
@@ -265,21 +260,28 @@ public:
     }
   }
 
-  static void lock(uint8_t flag, obsys::ObRWLock &lock)
+  static void lock(uint8_t flag, common::SpinRWLock &lock)
   {
-    if (0 != (flag & 0x80)) {
-      lock.wlock()->lock();
-    } else {
-      lock.rlock()->lock();
-    }
+    int ret = OB_SUCCESS;
+    do {
+      if (0 != (flag & 0x80)) {
+        ret = lock.wrlock();
+      } else {
+        ret = lock.rdlock();
+      }
+      if (OB_SUCCESS != ret) {
+        STORAGE_LOG(ERROR, "failed to lock checkpoint lock", KR(ret), K(flag));
+        usleep(100);
+      }
+    } while (OB_SUCCESS != ret);
   }
 
-  static void unlock(uint8_t flag, obsys::ObRWLock &lock)
+  static void unlock(uint8_t flag, common::SpinRWLock &lock)
   {
     if (0 != (flag & 0x80)) {
-      lock.wlock()->unlock();
+      lock.wrunlock();
     } else {
-      lock.rlock()->unlock();
+      lock.rdunlock();
     }
   }
 
