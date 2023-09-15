@@ -242,7 +242,8 @@ public:
                                      ObFastParserResult &fp_result,
                                      bool &can_do_batch,
                                      int64_t &batch_count,
-                                     ObString &first_truncated_sql);
+                                     ObString &first_truncated_sql,
+                                     bool &is_insert_values);
   static int rebuild_raw_params(common::ObIAllocator &allocator,
                                 ObPlanCacheCtx &pc_ctx,
                                 ObFastParserResult &fp_result,

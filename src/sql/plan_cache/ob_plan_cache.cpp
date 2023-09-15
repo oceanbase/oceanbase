@@ -707,6 +707,7 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
       bool can_do_batch_insert = false;
       ObString first_truncated_sql;
       int64_t batch_count = 0;
+      bool is_insert_values = false;
       if (OB_FAIL(ObSqlParameterization::fast_parser(allocator,
                                                     fp_ctx,
                                                     raw_sql,
@@ -717,7 +718,8 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
                                                  fp_result,
                                                  can_do_batch_insert,
                                                  batch_count,
-                                                 first_truncated_sql))) {
+                                                 first_truncated_sql,
+                                                 is_insert_values))) {
         LOG_WARN("fail to do insert optimization", K(ret));
       } else if (can_do_batch_insert) {
         if (OB_FAIL(rebuild_raw_params(allocator,
@@ -745,7 +747,8 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
             LOG_DEBUG("print new fp_result.pc_key_.name_", K(fp_result.pc_key_.name_));
           }
         }
-      } else if (OB_FAIL(ObValuesTableCompression::try_batch_exec_params(allocator, pc_ctx,
+      } else if (!is_insert_values &&
+                 OB_FAIL(ObValuesTableCompression::try_batch_exec_params(allocator, pc_ctx,
                                                       *pc_ctx.sql_ctx_.session_info_, fp_result))) {
         LOG_WARN("failed to check fold params valid", K(ret));
       }
@@ -955,7 +958,8 @@ int ObPlanCache::check_can_do_insert_opt(common::ObIAllocator &allocator,
                                          ObFastParserResult &fp_result,
                                          bool &can_do_batch,
                                          int64_t &batch_count,
-                                         ObString &first_truncated_sql)
+                                         ObString &first_truncated_sql,
+                                         bool &is_insert_values)
 {
   int ret = OB_SUCCESS;
   can_do_batch = false;
@@ -1000,6 +1004,10 @@ int ObPlanCache::check_can_do_insert_opt(common::ObIAllocator &allocator,
       pc_ctx.insert_batch_opt_info_.insert_params_count_ = ins_params_count;
       pc_ctx.insert_batch_opt_info_.update_params_count_ = upd_params_count;
       pc_ctx.insert_batch_opt_info_.sql_delta_length_ = delta_length;
+    }
+    // if batch_count >= 1, then sql is a insert into .. values ()...;
+    if (batch_count >= 1) {
+      is_insert_values = true;
     }
   }
 

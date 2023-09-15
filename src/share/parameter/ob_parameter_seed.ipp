@@ -268,6 +268,9 @@ DEF_INT(_max_malloc_sample_interval, OB_CLUSTER_PARAMETER, "256", "[1, 10000]",
         "which is not less than _min_malloc_sample_interval. "
         "1 means to sample all malloc, Range: [1, 10000]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_values_table_folding, OB_CLUSTER_PARAMETER, "True",
+         "whether enable values statement folds self params",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s",
                       common::ObConfigStaleTimeChecker,

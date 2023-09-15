@@ -251,14 +251,16 @@ int ObValuesTableCompression::try_batch_exec_params(ObIAllocator &allocator,
   ObSEArray<int64_t, 16> raw_pos;
   ObPhysicalPlanCtx *phy_ctx = NULL;
   uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(session_info.get_effective_tenant_id(), data_version))) {
+  if (pc_ctx.sql_ctx_.handle_batched_multi_stmt() ||
+      lib::is_oracle_mode() ||
+      session_info.is_inner() ||
+      session_info.get_is_in_retry() ||
+      fp_result.values_tokens_.empty() ||
+      !GCONF._enable_values_table_folding) {
+    /* do nothing */
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info.get_effective_tenant_id(), data_version))) {
     LOG_WARN("get tenant data version failed", K(ret), K(session_info.get_effective_tenant_id()));
-  } else if (pc_ctx.sql_ctx_.handle_batched_multi_stmt() ||
-             lib::is_oracle_mode() ||
-             session_info.is_inner() ||
-             session_info.get_is_in_retry() ||
-             fp_result.values_tokens_.empty() ||
-             data_version < DATA_VERSION_4_2_1_0 ||
+  } else if (data_version < DATA_VERSION_4_2_1_0 ||
              !is_support_compress_values_table(pc_ctx.raw_sql_)) {
     /* do nothing */
   } else if (OB_ISNULL(phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
