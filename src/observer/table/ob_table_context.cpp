@@ -863,7 +863,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
-  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query(); // select all when query column is empty.
+  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || is_ttl_table_;
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
   // init is_weak_read_,scan_order_
