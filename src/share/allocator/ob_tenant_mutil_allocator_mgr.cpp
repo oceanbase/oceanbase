@@ -252,8 +252,11 @@ int ObTenantMutilAllocatorMgr::delete_tenant_mutil_allocator_(const uint64_t ten
     if (NULL != (tma_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
       if (NULL != tma_allocator->get_next()) {
         OB_LOG(INFO, "next_ ptr is not NULL, skip deleting this allocator", K(ret), K(tenant_id));
+        // Purge cached blocks of this allocator.
+        tma_allocator->try_purge();
       } else {
         tma_array_[tenant_id] = NULL;
+        // destroy tma object
         tma_allocator->~TMA();
         ob_free(tma_allocator);
         tma_allocator = NULL;
@@ -276,6 +279,8 @@ int ObTenantMutilAllocatorMgr::delete_tenant_mutil_allocator_(const uint64_t ten
         OB_ASSERT(prev != cur);
         prev->get_next() = cur->get_next();
         cur->get_next() = NULL;
+        // destroy tma object
+        cur->~TMA();
         ob_free(cur);
         cur = NULL;
       }

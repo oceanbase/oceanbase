@@ -61,6 +61,26 @@ ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
   }
 }
 
+ObTenantMutilAllocator::~ObTenantMutilAllocator()
+{
+  OB_LOG(INFO, "~ObTenantMutilAllocator", K(tenant_id_));
+  destroy();
+}
+
+void ObTenantMutilAllocator::destroy()
+{
+  OB_LOG(INFO, "ObTenantMutilAllocator destroy", K(tenant_id_));
+  clog_ge_alloc_.destroy();
+  log_io_flush_log_task_alloc_.destroy();
+  log_io_truncate_log_task_alloc_.destroy();
+  log_io_flush_meta_task_alloc_.destroy();
+  log_io_truncate_prefix_blocks_task_alloc_.destroy();
+  log_io_flashback_task_alloc_.destroy();
+  log_io_purge_throttling_task_alloc_.destroy();
+  palf_fetch_log_task_alloc_.destroy();
+  replay_log_task_alloc_.destroy();
+}
+
 int ObTenantMutilAllocator::choose_blk_size(int obj_size)
 {
   static const int MIN_SLICE_CNT = 64;
