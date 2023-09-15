@@ -1440,7 +1440,8 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                     ExternalType &type,
                                     uint64_t &parent_id,
                                     int64_t &var_idx,
-                                    const ObString &synonym_name) const
+                                    const ObString &synonym_name,
+                                    const uint64_t cur_db_id) const
 {
   int ret = OB_SUCCESS;
   uint64_t object_id = OB_INVALID_ID;
@@ -1469,13 +1470,14 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
           ObString full_object_name = tmp_name.split_on('@');
           bool exist = false;
           if (!full_object_name.empty()) {
+            ObString obj_name;
+            // object_id is the synonym id
             if (OB_FAIL(schema_guard.get_dblink_id(tenant_id, tmp_name, dblink_id))
                 || OB_INVALID_ID == dblink_id) {
               LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(tmp_name));
-            } else if (OB_FAIL(schema_guard.check_synonym_exist_with_name(tenant_id, object_db_id, synonym_name,
-                                                                          exist, object_id))) {
-              LOG_WARN("check_synonym_exist_with_name failed", K(ret),
-                       K(object_db_id), K(synonym_name), K(object_name));
+            } else if (OB_FAIL(schema_guard.get_object_with_synonym(tenant_id, cur_db_id, synonym_name, object_db_id,
+                                                                    object_id, obj_name, exist, true))) {
+              LOG_WARN("get synonym schema failed", K(ret), K(cur_db_id), K(synonym_name), K(object_name));
             } else if (!exist || OB_INVALID_ID == object_id) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("synonym not exist", K(ret), K(tenant_id), K(object_db_id), K(object_name), K(synonym_name));
@@ -1684,7 +1686,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           schema_checker, synonym_checker,
           tenant_id, db_id, name, object_db_id, object_name, exist));
         if (exist) {
-          OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name));
+          OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
         }
       }
       // 尝试看是不是系统变量的特殊写法，如 set SQL_MODE='ONLY_FULL_GROUP_BY';

@@ -1166,7 +1166,8 @@ public:
                       ExternalType &type,
                       uint64_t &parent_id,
                       int64_t &var_idx,
-                      const ObString &synonym_name) const;
+                      const ObString &synonym_name,
+                      const uint64_t cur_db_id) const;
   int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
                               uint64_t &parent_id, int64_t &var_idx) const;
   int resolve_external_type_by_name(const ObString &db_name,
