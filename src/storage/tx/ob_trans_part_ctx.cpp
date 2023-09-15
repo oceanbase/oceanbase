@@ -2726,10 +2726,22 @@ int ObPartTransCtx::submit_redo_log_(ObTxLogBlock &log_block,
         }
         need_continue = false;
       } else if (OB_ERR_TOO_BIG_ROWSIZE == ret) {
-        TRANS_LOG(WARN, "encounter too big row size error,"
-            "maybe local mutator buf is for optimization", K(ret), K(*this));
+        TRANS_LOG(WARN, "encounter too big row size error, need extend log buffer", K(ret), K(*this));
         return_log_cb_(log_cb);
         log_cb = NULL;
+        const int save_ret = ret;
+        // rewrite ret
+        ret = OB_SUCCESS;
+        if (OB_FAIL(log_block.finish_mutator_buf(redo_log, 0))) {
+          TRANS_LOG(WARN, "finish mutator buf failed", KR(ret), K(*this));
+        } else if (OB_FAIL(log_block.extend_log_buf())) {
+          TRANS_LOG(WARN, "extend log buffer failed", K(ret), K(*this));
+          if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+            ret = save_ret;
+          }
+        } else {
+          TRANS_LOG(INFO, "extend log buffer success", K(*this), K(log_block));
+        }
       } else {
         TRANS_LOG(WARN, "fill redo log failed", KR(ret), K(*this));
         return_log_cb_(log_cb);
@@ -2921,13 +2933,8 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
             TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
           }
         } else if (log_block.get_cb_arg_array().count() == 0) {
-          if (log_block.is_use_local_buf()) {
-            ret = OB_EAGAIN;
-            TRANS_LOG(WARN, "local buf not enough, need retry", KR(ret), K(log_block), K(*this));
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
-          }
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
           return_log_cb_(log_cb);
           log_cb = NULL;
           // acquire ctx ref before submit log
@@ -3235,10 +3242,14 @@ int ObPartTransCtx::submit_commit_log_()
   } else if (OB_FAIL(gen_final_mds_array_(multi_source_data))) {
     TRANS_LOG(WARN, "gen total multi source data failed", KR(ret), K(*this));
   } else {
-    bool use_local_block_buf = local_tx
-          && multi_source_data.count() == 0
-          && mt_ctx_.get_pending_log_size() < ObTxAdaptiveLogBuf::DEFAULT_MIN_LOG_BUF_SIZE / 4; // 512B
-    if (OB_FAIL(log_block.init(replay_hint, log_block_header, use_local_block_buf))) {
+    int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE;
+    if (local_tx &&
+        multi_source_data.count() == 0 &&
+        // 512B
+        mt_ctx_.get_pending_log_size() < ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE / 4) {
+      suggested_buf_size = ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE;
+    }
+    if (OB_FAIL(log_block.init(replay_hint, log_block_header, suggested_buf_size))) {
       TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
     } else if (local_tx) {
       if (!sub_state_.is_info_log_submitted()) {
@@ -3247,20 +3258,6 @@ int ObPartTransCtx::submit_commit_log_()
           TRANS_LOG(WARN, "submit multi source data failed", KR(ret), K(*this));
         } else if (OB_SUCC(submit_redo_commit_info_log_(log_block, has_redo, helper))) {
           // do nothing
-        } else if (use_local_block_buf) {
-          // realloc log buf and retry submit log
-          log_block.reset();
-          ObTxLogBlockHeader tmp_log_block_header(cluster_id_,
-                                                  exec_info_.next_log_entry_no_,
-                                                  trans_id_,
-                                                  exec_info_.scheduler_);
-          if (OB_FAIL(log_block.init(replay_hint, tmp_log_block_header, false /*use_local_block_buf*/))) {
-            TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
-          } else if (OB_FAIL(submit_redo_commit_info_log_(log_block, has_redo, helper))) {
-            TRANS_LOG(WARN, "submit redo commit state log failed", KR(ret), K(*this));
-          } else {
-            // do nothing
-          }
         } else {
           TRANS_LOG(WARN, "submit redo commit state log failed", KR(ret), K(*this));
         }

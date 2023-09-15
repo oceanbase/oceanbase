@@ -1108,14 +1108,21 @@ ObTxLogBlock::ObTxLogBlock()
 
 int ObTxLogBlock::init(const int64_t replay_hint,
                        const ObTxLogBlockHeader &block_header,
-                       const bool use_local_buf)
+                       const int64_t suggested_buf_size)
 {
   int ret = OB_SUCCESS;
+  int64_t buf_size = suggested_buf_size;
+  // for corner test
+  if (IS_CORNER(10000)) {
+    if (suggested_buf_size > ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE) {
+      buf_size = ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE;
+    }
+  }
   if (OB_NOT_NULL(replay_buf_) || !block_header.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(replay_hint), K(*this), K(block_header));
-  } else if (OB_FAIL(fill_buf_.init(use_local_buf))) {
-    TRANS_LOG(WARN, "fill log buffer init error", K(ret), K(replay_hint), K(block_header), K(use_local_buf));
+  } else if (OB_FAIL(fill_buf_.init(buf_size))) {
+    TRANS_LOG(WARN, "fill log buffer init error", K(ret), K(replay_hint), K(block_header), K(buf_size));
   } else {
     len_ = fill_buf_.get_length();
     pos_ = 0;
@@ -1226,7 +1233,7 @@ int ObTxLogBlock::acquire_segment_log_buf(const char *&submit_buf,
   if (OB_ISNULL(big_segment_buf_) || OB_ISNULL(fill_buf_.get_buf())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KPC(big_segment_buf), KPC(this));
-  } else if (OB_ISNULL(big_segment_buf_) || fill_buf_.is_use_local_buf()) {
+  } else if (OB_ISNULL(big_segment_buf_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, " big segment_buf", K(ret), KPC(this));
   } else if (OB_FALSE_IT(tmp_segment_buf = big_segment_buf_)) {
@@ -1416,6 +1423,17 @@ int ObTxLogBlock::finish_mutator_buf(ObTxRedoLog &redo, const int64_t &mutator_s
   } else {
     pos_ = tmp_pos;
     cur_log_type_ = ObTxLogType::UNKNOWN;
+  }
+  return ret;
+}
+
+int ObTxLogBlock::extend_log_buf()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(fill_buf_.extend_and_copy(pos_))) {
+    TRANS_LOG(WARN, "extend clog buffer failed", K(ret));
+  } else {
+    len_ = fill_buf_.get_length();
   }
   return ret;
 }
