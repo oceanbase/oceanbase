@@ -1123,6 +1123,7 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg &other)
     compatible_version_ = other.compatible_version_;
     is_creating_standby_ = other.is_creating_standby_;
     log_restore_source_ = other.log_restore_source_;
+    is_tmp_tenant_for_recover_ = other.is_tmp_tenant_for_recover_;
   }
   return ret;
 }
@@ -1140,6 +1141,7 @@ void ObCreateTenantArg::reset()
   compatible_version_ = 0;
   is_creating_standby_ = false;
   log_restore_source_.reset();
+  is_tmp_tenant_for_recover_ = false;
 }
 
 int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
@@ -1177,7 +1179,8 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(recovery_until_scn),
        K_(compatible_version),
        K_(is_creating_standby),
-       K_(log_restore_source));
+       K_(log_restore_source),
+       K_(is_tmp_tenant_for_recover));
   return pos;
 }
 
@@ -1192,7 +1195,8 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     compatible_version_,
                     recovery_until_scn_,
                     is_creating_standby_,
-                    log_restore_source_);
+                    log_restore_source_,
+                    is_tmp_tenant_for_recover_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {

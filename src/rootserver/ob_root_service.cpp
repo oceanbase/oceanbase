@@ -2705,10 +2705,12 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const ObString &tenant_name = arg.tenant_schema_.get_tenant_name_str();
+  // when recovering table, it needs to create tmp tenant
+  const bool tmp_tenant = arg.is_tmp_tenant_for_recover_;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
+  } else if (!tmp_tenant && OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
     LOG_WARN("since 4.2.1, naming a tenant as all/all_user/all_meta is not supported",
              KR(ret), K(tenant_name));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,

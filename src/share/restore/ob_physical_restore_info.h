@@ -186,6 +186,7 @@ public:
   Property_declare_ObString(kms_encrypt_key)
   Property_declare_ObString(passwd_array)
   Property_declare_int(int64_t, concurrency)
+  Property_declare_int(bool, recover_table)
 
 private:
   //job_id and tenant_id in __all_restore_job primary_key

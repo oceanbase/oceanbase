@@ -297,6 +297,8 @@ int ObRestoreScheduler::fill_create_tenant_arg(
      arg.tenant_schema_.set_compatibility_mode(mode);
      arg.if_not_exist_ = false;
      arg.is_restore_ = true;
+     //  create tmp tenant for recover table
+     arg.is_tmp_tenant_for_recover_ = job.get_recover_table();
      // Physical restore is devided into 2 stages. Recover to 'consistent_scn' which was recorded during
      // data backup first, then to user specified scn.
      arg.recovery_until_scn_ = job.get_consistent_scn();

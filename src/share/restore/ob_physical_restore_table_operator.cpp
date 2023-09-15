@@ -262,6 +262,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compatible);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, concurrency);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -538,6 +539,18 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (name == "recover_table") {
+        int64_t recover_table = 0;
+        if (OB_FAIL(retrieve_int_value(result, recover_table))) {
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "recover_table");
+        } else {
+          job.set_recover_table(recover_table != 0);
+        }
+      }
+    }
+
     if (OB_SUCC(ret)) {
       if (name == "restore_type") {
         uint64_t restore_type = 0;

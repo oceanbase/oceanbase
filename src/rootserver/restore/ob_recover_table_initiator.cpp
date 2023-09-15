@@ -214,6 +214,7 @@ int ObRecoverTableInitiator::insert_sys_job_(
     } else if (OB_FALSE_IT(physical_restore_job.init_restore_key(OB_SYS_TENANT_ID, job_id))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_job_id(job.get_job_id()))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) {
+    } else if (OB_FALSE_IT(physical_restore_job.set_recover_table(true))) {
     } else if (OB_FAIL(ObRestoreUtil::record_physical_restore_job(trans, physical_restore_job))) {
       LOG_WARN("failed to record physical restore job", K(ret));
     }
