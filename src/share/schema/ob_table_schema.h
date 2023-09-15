@@ -1786,6 +1786,7 @@ int ObTableSchema::add_column(const ColumnType &column)
              && OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
     // When deserialize column in physical restore, tenant id is wrong. We need to use lib::is_oracle_mode() to do this check.
     SHARE_SCHEMA_LOG(WARN, "check if_oracle_compat_mode failed", K(ret), K(tenant_id_), K(table_id_));
+    is_oracle_mode = lib::is_oracle_mode();
     ret = OB_SUCCESS;
     SHARE_SCHEMA_LOG(WARN, "replace error code to OB_SUCCESS, because tenant_id is invalid in physical restore",
                      K(ret), K(tenant_id_), K(table_id_), K(is_oracle_mode));
