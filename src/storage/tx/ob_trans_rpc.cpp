@@ -452,7 +452,7 @@ int ObTransRpc::post_msg(const ObLSID &ls_id, ObTxMsg &msg)
   } else if (OB_FAIL(trans_service_->get_location_adapter()->nonblock_get_leader(cluster_id, tenant_id, ls_id, server))) {
     TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(cluster_id), K(ls_id));
     if (ObTxMsgTypeChecker::is_2pc_msg_type(msg.get_msg_type())) {
-      if (OB_LS_IS_DELETED == ret || OB_TENANT_NOT_EXIST == ret) {
+      if (OB_LS_IS_DELETED == ret) {
         int tmp_ret = trans_service_->handle_ls_deleted(msg);
         if (OB_SUCCESS == tmp_ret) {
           ret = OB_SUCCESS;
