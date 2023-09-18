@@ -1,0 +1,10 @@
+# 开关(合法值 yum/wget wget只允许出现与非主流分支 各大主流开发分支请使用yum方式)
+obproxy_switch=yum
+
+# obproxy yum源配置
+obproxy_yum_branch=current
+obproxy_yum_version=4.2.1.0
+obproxy_yum_release=20230712162726.el7
+
+# 配置obproxy url
+wget_url=xxx
