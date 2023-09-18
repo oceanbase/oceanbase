@@ -164,6 +164,37 @@ void ObRecoverTableJobScheduler::sys_process_(share::ObRecoverTableJob &job)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("ready to schedule sys recover table job", K(job));
+  switch(job.get_status()) {
+    case ObRecoverTableStatus::Status::PREPARE: {
+      if (OB_FAIL(sys_prepare_(job))) {
+        LOG_WARN("failed to do sys prepare work", K(ret), K(job));
+      }
+      break;
+    }
+    case ObRecoverTableStatus::Status::RECOVERING: {
+      if (OB_FAIL(recovering_(job))) {
+        LOG_WARN("failed to do sys recovering work", K(ret), K(job));
+      }
+      break;
+    }
+    case ObRecoverTableStatus::Status::COMPLETED:
+    case ObRecoverTableStatus::Status::FAILED: {
+      if (OB_FAIL(sys_finish_(job))) {
+        LOG_WARN("failed to do sys finish work", K(ret), K(job));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_SYS;
+      LOG_WARN("invalid sys recover job status", K(ret), K(job));
+      break;
+    }
+  }
+}
+
+int ObRecoverTableJobScheduler::check_target_tenant_version_(share::ObRecoverTableJob &job)
+{
+  int ret = OB_SUCCESS;
   uint64_t data_version = 0;
   const uint64_t target_tenant_id = job.get_target_tenant_id();
   // check data version
@@ -177,34 +208,19 @@ void ObRecoverTableJobScheduler::sys_process_(share::ObRecoverTableJob &job)
   } else if (data_version < DATA_VERSION_4_2_1_0) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("min data version is smaller than v4.2.1", K(ret), K(target_tenant_id), K(data_version));
-  } else {
-    switch(job.get_status()) {
-      case ObRecoverTableStatus::Status::PREPARE: {
-        if (OB_FAIL(sys_prepare_(job))) {
-          LOG_WARN("failed to do sys prepare work", K(ret), K(job));
-        }
-        break;
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    schema::ObSchemaGetterGuard guard;
+    if (OB_TMP_FAIL(ObImportTableUtil::get_tenant_schema_guard(*schema_service_, job.get_target_tenant_id(), guard))) {
+      if (OB_TENANT_NOT_EXIST == tmp_ret) {
+        ret = tmp_ret;
       }
-      case ObRecoverTableStatus::Status::RECOVERING: {
-        if (OB_FAIL(recovering_(job))) {
-          LOG_WARN("failed to do sys recovering work", K(ret), K(job));
-        }
-        break;
-      }
-      case ObRecoverTableStatus::Status::COMPLETED:
-      case ObRecoverTableStatus::Status::FAILED: {
-        if (OB_FAIL(sys_finish_(job))) {
-          LOG_WARN("failed to do sys finish work", K(ret), K(job));
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_SYS;
-        LOG_WARN("invalid sys recover job status", K(ret), K(job));
-        break;
-      }
+      LOG_WARN("failed to get tenant schema guard", K(tmp_ret));
     }
   }
+  return ret;
 }
 
 int ObRecoverTableJobScheduler::sys_prepare_(share::ObRecoverTableJob &job)
@@ -213,7 +229,9 @@ int ObRecoverTableJobScheduler::sys_prepare_(share::ObRecoverTableJob &job)
   ObRecoverTableJob target_job;
   share::ObRecoverTablePersistHelper helper;
   DEBUG_SYNC(BEFORE_INSERT_UERR_RECOVER_TABLE_JOB);
-  if (OB_FAIL(helper.init(job.get_target_tenant_id()))) {
+  if (OB_FAIL(check_target_tenant_version_(job))) {
+    LOG_WARN("failed to check target tenant version", K(ret));
+  } else if (OB_FAIL(helper.init(job.get_target_tenant_id()))) {
     LOG_WARN("failed to init recover table persist helper", K(ret));
   } else if (OB_FAIL(helper.get_recover_table_job_by_initiator(*sql_proxy_, job, target_job))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
