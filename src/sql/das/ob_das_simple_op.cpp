@@ -240,6 +240,7 @@ int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
     LOG_WARN("prepare das split_multi_ranges task failed", K(ret));
   } else {
     split_ranges_op = static_cast<ObDASSplitRangesOp*>(task_op);
+    split_ranges_op->set_can_part_retry(true);
     if (OB_FAIL(split_ranges_op->init(ranges, expected_task_count))) {
       LOG_WARN("failed to init das split ranges op", K(ret));
     } else if (OB_FAIL(das_ref.execute_all_task())) {
@@ -265,6 +266,7 @@ int ObDASSimpleUtils::get_multi_ranges_cost(ObExecContext &exec_ctx,
     LOG_WARN("prepare das get_multi_ranges_cost task failed", K(ret));
   } else {
     ranges_cost_op = static_cast<ObDASRangesCostOp*>(task_op);
+    ranges_cost_op->set_can_part_retry(true);
     if (OB_FAIL(ranges_cost_op->init(ranges))) {
       LOG_WARN("failed to init das ranges cost op", K(ret));
     } else if (OB_FAIL(das_ref.execute_all_task())) {
