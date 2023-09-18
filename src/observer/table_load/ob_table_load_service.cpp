@@ -308,16 +308,19 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     else if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
     }
     // check if it is a view
     else if (table_schema->is_view_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support view table", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has generated column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has generated column");
     }
     // check if the trigger is enabled
     else if (OB_FAIL(table_schema->check_has_trigger_on_table(schema_guard, trigger_enabled))) {
@@ -325,6 +328,7 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     } else if (trigger_enabled) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with trigger enabled", KR(ret), K(trigger_enabled));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with trigger enabled");
     }
     // check has udt column
     else if (OB_FAIL(ObTableLoadSchema::check_has_udt_column(table_schema, has_udt_column))) {
@@ -332,6 +336,7 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
     } else if (has_udt_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
     }
   }
   return ret;

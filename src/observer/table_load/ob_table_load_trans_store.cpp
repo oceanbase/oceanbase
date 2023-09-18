@@ -455,6 +455,7 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
   if (column_schema->is_always_identity_column()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("direct-load does not support always identity column", KR(ret));
+    FORWARD_USER_ERROR_MSG(ret, "direct-load does not support always identity column");
   } else if (column_schema->is_default_identity_column() && datum.is_null()) {
     ret = OB_ERR_INVALID_NOT_NULL_CONSTRAINT_ON_IDENTITY_COLUMN;
     LOG_WARN("default identity column has null value", KR(ret));

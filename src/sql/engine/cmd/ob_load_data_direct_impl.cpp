@@ -380,6 +380,7 @@ int ObLoadDataDirectImpl::SequentialDataAccessor::init(const DataAccessParam &da
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported load file location", KR(ret), K(data_access_param.file_location_));
+      FORWARD_USER_ERROR_MSG(ret, "not supported load file location");
     }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
@@ -726,6 +727,7 @@ int ObLoadDataDirectImpl::DataReader::get_next_buffer(ObLoadFileBuffer &file_buf
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("direct-load does not support big row", KR(ret), "size",
                    file_buffer.get_data_len());
+          FORWARD_USER_ERROR_MSG(ret, "direct-load does not support big row, row_size = %ld", file_buffer.get_data_len());
         } else if (OB_FAIL(data_trimer_.backup_incomplate_data(file_buffer, complete_len))) {
           LOG_WARN("fail to back up data", KR(ret));
         } else {
@@ -1630,6 +1632,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support ignore rows exceed the first file", KR(ret),
                K(current_line_count), K(execute_param_->ignore_row_num_));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support ignore rows exceed the first file");
     } else if (!handle_->data_buffer_.empty()) {
       handle_->data_buffer_.is_end_file_ = data_reader_.is_end_file();
       handle_->start_line_no_ = handle_->result_.parsed_row_count_ + 1;
@@ -1665,6 +1668,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support big row", KR(ret), "size",
                  handle_->data_buffer_.get_data_length());
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support big row");
       } else {
         total_line_count += current_line_count;
         if (OB_UNLIKELY(total_line_count > ObTableLoadSequenceNo::MAX_DATA_SEQ_NO)){
@@ -1710,6 +1714,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::skip_ignore_rows(int64_t 
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("direct-load does not support big row", KR(ret), "size",
                    data_buffer.get_data_length());
+          FORWARD_USER_ERROR_MSG(ret, "direct-load does not support big row");
         } else {
           data_buffer.advance(complete_len);
           skip_line_count += complete_cnt;
@@ -1852,16 +1857,18 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     }
   }
 
-  if (OB_FAIL(init_execute_param())) {
-    LOG_WARN("fail to init execute param", KR(ret), K(ctx), K(load_stmt));
-  } else if (OB_FAIL(init_execute_context())) {
-    LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
-  } else {
-    LOG_INFO("LOAD DATA init finish", K_(execute_param), "file_path", load_args.file_name_);
-    ObLoadDataStat *job_stat = execute_ctx_.job_stat_;
-    OZ(ob_write_string(job_stat->allocator_, load_args.file_name_, job_stat->file_path_));
-    job_stat->file_column_ = execute_param_.data_access_param_.file_column_num_;
-    job_stat->load_mode_ = static_cast<int64_t>(execute_param_.dup_action_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_execute_param())) {
+      LOG_WARN("fail to init execute param", KR(ret), K(ctx), K(load_stmt));
+    } else if (OB_FAIL(init_execute_context())) {
+      LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
+    } else {
+      LOG_INFO("LOAD DATA init finish", K_(execute_param), "file_path", load_args.file_name_);
+      ObLoadDataStat *job_stat = execute_ctx_.job_stat_;
+      OZ(ob_write_string(job_stat->allocator_, load_args.file_name_, job_stat->file_path_));
+      job_stat->file_column_ = execute_param_.data_access_param_.file_column_num_;
+      job_stat->load_mode_ = static_cast<int64_t>(execute_param_.dup_action_);
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -2107,6 +2114,7 @@ int ObLoadDataDirectImpl::init_store_column_idxs(ObIArray<int64_t> &store_column
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported incomplete column data", KR(ret), K(store_column_idxs),
                K(column_descs), K(field_or_var_list));
+      FORWARD_USER_ERROR_MSG(ret, "not supported incomplete column data");
     }
   }
   return ret;

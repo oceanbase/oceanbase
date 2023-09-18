@@ -18,6 +18,7 @@
 #include "lib/queue/ob_lighty_queue.h"
 #include "share/ob_thread_pool.h"
 #include "lib/allocator/page_arena.h"
+#include "lib/oblog/ob_warning_buffer.h"
 
 namespace oceanbase
 {
@@ -105,6 +106,8 @@ private:
   volatile int state_;
   bool is_inited_;
   lib::ObMutex state_mutex_;
+  common::ObWarningBuffer warning_buffer_;
+  lib::ObMutex wb_mutex_;
 };
 
 }  // namespace observer

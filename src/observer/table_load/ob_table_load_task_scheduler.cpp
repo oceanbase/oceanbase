@@ -199,6 +199,15 @@ void ObTableLoadTaskThreadPoolScheduler::wait()
       thread_pool_.wait();
     }
   }
+
+  for (int i = 0; i < warning_buffer_.get_total_warning_count(); ++i) {
+    const common::ObWarningBuffer::WarningItem &warning_item = *(warning_buffer_.get_warning_item(i));
+    if (ObLogger::USER_WARN == warning_item.log_level_) {
+      FORWARD_USER_WARN(warning_item.code_, warning_item.msg_);
+    } else if (ObLogger::USER_NOTE == warning_item.log_level_) {
+      FORWARD_USER_NOTE(warning_item.code_, warning_item.msg_);
+    }
+  }
 }
 
 void ObTableLoadTaskThreadPoolScheduler::before_running()
@@ -211,6 +220,13 @@ void ObTableLoadTaskThreadPoolScheduler::after_running()
 {
   state_ = STATE_STOPPED;
   clear_all_task();
+  const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+  if (wb != nullptr) {
+    if (wb->get_total_warning_count() > 0) {
+      lib::ObMutexGuard guard(wb_mutex_);
+      warning_buffer_ = *wb;
+    }
+  }
 }
 
 void ObTableLoadTaskThreadPoolScheduler::run(uint64_t thread_idx)
