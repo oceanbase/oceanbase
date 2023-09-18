@@ -225,7 +225,7 @@ int ObTxRetainCtxMgr::push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func, int
 int ObTxRetainCtxMgr::try_gc_retain_ctx(storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  static const int64_t MAX_RUN_US = 300 * 1000;
+  static const int64_t MAX_RUN_US = 500 * 1000;
   ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinWLockGuard guard(retain_ctx_lock_);
   tg.click();
