@@ -61,6 +61,7 @@ private:
   int try_advance_status_(share::ObRecoverTableJob &job, const int err_code);
 
   void sys_process_(share::ObRecoverTableJob &job);
+  int check_target_tenant_version_(share::ObRecoverTableJob &job);
   int sys_prepare_(share::ObRecoverTableJob &job);
   int insert_user_job_(const share::ObRecoverTableJob &job, share::ObRecoverTablePersistHelper &helper);
   int recovering_(share::ObRecoverTableJob &job);
