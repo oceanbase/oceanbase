@@ -3526,6 +3526,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           do {
             ret = OB_SUCCESS;
             // 如果当前cursor已经有spi_result则复用,避免内存占用过多
+            retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update());
             OZ (cursor->prepare_spi_result(ctx, spi_result));
             OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), false));
             OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result->get_scheme_guard())));
@@ -3534,7 +3535,6 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             OZ (spi_result->get_scheme_guard().get_schema_version(OB_SYS_TENANT_ID, sys_version));
             OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
             OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-            OX (retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update()));
             if (OB_FAIL(ret)) {
               // do nothing
             } else if (is_server_cursor) {
@@ -3632,13 +3632,13 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                 spi_result.get_out_params().reset();
                 spi_result.reset_member_for_retry(*session_info);
               }
+              retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update());
               OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result.get_scheme_guard())));
               OX (spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard());
               OZ (spi_result.get_scheme_guard().get_schema_version(session_info->get_effective_tenant_id(), tenant_version));
               OZ (spi_result.get_scheme_guard().get_schema_version(OB_SYS_TENANT_ID, sys_version));
               OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
               OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-              OX (retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update()));
 
               OZ (inner_open(ctx,
                             spi_result.get_allocaor(),
@@ -3787,6 +3787,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
     int64_t retry_cnt = 0;
     do {
       ret = OB_SUCCESS;
+      retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
       OZ (cursor.prepare_spi_result(ctx, spi_result), sql_stmt, ps_sql, exec_params);
       OV (OB_NOT_NULL(spi_result), OB_ERR_UNEXPECTED, sql_stmt, ps_sql, exec_params);
       OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(stmt_type)),
@@ -3796,7 +3797,6 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
       OZ (spi_result->get_scheme_guard().get_schema_version(OB_SYS_TENANT_ID, sys_version));
       OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
       OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-      OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
       OX (spi_result->get_sql_ctx().schema_guard_ = &spi_result->get_scheme_guard());
       if (OB_SUCC(ret)) {
         WITH_CONTEXT(cursor.get_cursor_entity()) {
