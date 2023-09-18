@@ -53,16 +53,13 @@ public:
   ObDBMSSchedJobKey(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
     uint64_t execute_at, uint64_t delay,
-    bool check_job, bool check_new, bool check_new_tenant, bool purge_run_detail = false)
+    bool check_job)
   : tenant_id_(tenant_id),
     is_oracle_tenant_(is_oracle_tenant),
     job_id_(job_id),
     execute_at_(execute_at),
     delay_(delay),
-    check_job_(check_job),
-    check_new_(check_new),
-    check_new_tenant_(check_new_tenant),
-    purge_run_detail_(purge_run_detail) {}
+    check_job_(check_job) {}
 
   virtual ~ObDBMSSchedJobKey() {}
 
@@ -72,10 +69,7 @@ public:
   OB_INLINE uint64_t get_execute_at() const { return execute_at_;}
   OB_INLINE uint64_t get_delay() const { return delay_; }
 
-  OB_INLINE bool is_check() { return check_job_ || check_new_ || check_new_tenant_; }
-  OB_INLINE bool is_check_new() { return check_new_; }
-  OB_INLINE bool is_check_new_tenant() { return check_new_tenant_; }
-  OB_INLINE bool is_purge_run_detail() { return purge_run_detail_; }
+  OB_INLINE bool is_check() { return check_job_; }
 
   OB_INLINE void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   OB_INLINE void set_job_id(uint64_t job_id) { job_id_ = job_id; }
@@ -84,10 +78,6 @@ public:
   OB_INLINE void set_delay(uint64_t delay) { delay_ = delay; }
 
   OB_INLINE void set_check_job(bool check_job) { check_job_ = check_job; }
-  OB_INLINE void set_check_new(bool check_new) { check_new_ = check_new; }
-  OB_INLINE void set_check_new_tenant(bool check_new) { check_new_tenant_ = check_new; }
-  OB_INLINE void set_purge_run_detail(bool purge_run_detail) { purge_run_detail_ = purge_run_detail; }
-
 
   OB_INLINE uint64_t get_adjust_delay() const
   {
@@ -108,22 +98,16 @@ public:
     K_(job_id),
     K_(execute_at),
     K_(delay),
-    K_(check_job),
-    K_(check_new),
-    K_(check_new_tenant),
-    K_(purge_run_detail));
+    K_(check_job));
 
 private:
   uint64_t tenant_id_;
   bool is_oracle_tenant_;
-  uint64_t job_id_; // for check_new, job_id is max job id in current tenant
+  uint64_t job_id_;
   uint64_t execute_at_;
   uint64_t delay_;
 
   bool check_job_; // for check job update ...
-  bool check_new_; // for check new job coming ...
-  bool check_new_tenant_; // for check new tenant ...
-  bool purge_run_detail_; // for purge run detail
 };
 
 class ObDBMSSchedJobTask : public ObTimerTask
@@ -204,21 +188,14 @@ public:
     ObDBMSSchedJobKey *&job_key,
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
     uint64_t execute_at, uint64_t delay,
-    bool check_job = false, bool check_new = false, bool check_new_tenant = false);
+    bool check_job = false);
 
   int server_random_pick(int64_t tenant_id, common::ObString &pick_zone, ObAddr &server);
   int get_execute_addr(ObDBMSSchedJobInfo &job_info, common::ObAddr &execute_addr);
 
-  int register_check_tenant_job();
-  int register_purge_run_detail_job(int64_t tenant_id, bool is_oracle_tenant, ObDBMSSchedJobKey *job_key = NULL);
-  int load_and_register_all_jobs(ObDBMSSchedJobKey *job_key = NULL);
-  int load_and_register_new_jobs(uint64_t tenant_id,
-                                 bool is_oracle_tenant,
-                                 ObDBMSSchedJobKey *job_key = NULL);
-  int register_jobs(uint64_t tenant_id,
-                    bool is_oracle_tenant,
-                    common::ObIArray<ObDBMSSchedJobInfo> &job_infos,
-                    ObDBMSSchedJobKey *job_key = NULL);
+  int check_all_tenants();
+  int check_new_jobs(uint64_t tenant_id, bool is_oracle_tenant);
+  int register_new_jobs(uint64_t tenant_id, bool is_oracle_tenant, ObIArray<ObDBMSSchedJobInfo> &job_infos);
   int register_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJobKey *job_key = NULL, bool ignore_nextdate = false);
 
   int scheduler_job(ObDBMSSchedJobKey *job_key);
