@@ -54,6 +54,7 @@ public:
   }
   // nano second
   static const int64_t TIMESTAMP_PREALLOCATED_RANGE = palf::election::MAX_LEASE_TIME * 1000;
+  static const int64_t PREALLOCATE_RANGE_FOR_SWITHOVER =  2 * TIMESTAMP_PREALLOCATED_RANGE;
   int handle_request(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
   int switch_to_follower_gracefully();
   void switch_to_follower_forcedly();
@@ -61,7 +62,7 @@ public:
   int switch_to_leader();
   int64_t get_limited_id() const { return limited_id_; }
   static SCN get_sts_start_scn(const SCN &max_sys_ls_scn)
-  { return SCN::plus(max_sys_ls_scn, 2 * TIMESTAMP_PREALLOCATED_RANGE); };
+  { return SCN::plus(max_sys_ls_scn, PREALLOCATE_RANGE_FOR_SWITHOVER); };
   void get_virtual_info(int64_t &ts_value, common::ObRole &role, int64_t &proposal_id);
 private:
   ObGtsResponseRpc rpc_;

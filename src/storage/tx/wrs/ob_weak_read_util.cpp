@@ -16,6 +16,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include "storage/tx/ob_ts_mgr.h"
+#include "storage/tx/ob_timestamp_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -53,14 +54,20 @@ int ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id, SCN
   // generating min weak version version should statisfy following constraint
   // 1. not smaller than max_stale_time_for_weak_consistency - DEFAULT_MAX_STALE_BUFFER_TIME
   // 2. not bigger than readable snapshot version
-  int64_t buffer_time = std::max(static_cast<int64_t>(GCONF.weak_read_version_refresh_interval),
-                                static_cast<int64_t>(DEFAULT_MAX_STALE_BUFFER_TIME));
+  int64_t buffer_time = std::max(
+          std::min(static_cast<int64_t>(GCONF.weak_read_version_refresh_interval),
+                   static_cast<int64_t>(DEFAULT_REPLICA_KEEPALIVE_INTERVAL)),
+          static_cast<int64_t>(DEFAULT_MAX_STALE_BUFFER_TIME));
 
   OTC_MGR.read_tenant_config(
       tenant_id,
       oceanbase::omt::ObTenantConfigMgr::default_fallback_tenant_id(),
       /* success */ [buffer_time, &tenant_config_exist, &max_stale_time](const omt::ObTenantConfig &config) mutable {
+      if (MTL_IS_PRIMARY_TENANT()) {
         max_stale_time = config.max_stale_time_for_weak_consistency - buffer_time;
+      } else {
+        max_stale_time = config.max_stale_time_for_weak_consistency + transaction::ObTimestampService::PREALLOCATE_RANGE_FOR_SWITHOVER - buffer_time;
+      }
         tenant_config_exist = true;
       },
       /* failure */ [buffer_time, &tenant_config_exist, &max_stale_time]() mutable {
