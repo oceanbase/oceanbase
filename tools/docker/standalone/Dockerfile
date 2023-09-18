@@ -1,4 +1,4 @@
-FROM openanolis/anolisos:8.8
+FROM openanolis/anolisos
 
 # docker build --build-arg VERSION={VERSION} .
 ARG VERSION

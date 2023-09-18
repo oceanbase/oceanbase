@@ -34,8 +34,11 @@ OceanBase 提供了一个独立部署的测试镜像[oceanbase-ce](https://hub.d
 # 部署最小规格实例
 docker run -p 2881:2881 --name oceanbase-ce -d oceanbase/oceanbase-ce
 
+# 根据当前容器情况部署最小规格的实例
+docker run -p 2881:2881 --name oceanbase-ce -e MODE=slim -e OB_MEMORY_LIMIT=5G -v {init_sql_folder_path}:/root/boot/init.d -d oceanbase/oceanbase-ce
+
 # 根据当前容器情况部署最大规格的实例
-docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=0 -d oceanbase/oceanbase-ce
+docker run -p 2881:2881 --name oceanbase-ce -e MODE=normal -d oceanbase/oceanbase-ce
 ```
 
 启动预计需要 2-5 分钟。执行以下命令，如果返回 `boot success!`，则启动成功。
@@ -71,8 +74,18 @@ mysql -uroot -h127.1 -P2881
 
 | 变量名称 | 默认值 | 描述                                                  |
 | ---------------- | ------------- | ------------------------------------------------------------ |
-| MINI_MODE        | true         | true表示使用mini 模式部署OceanBase数据库实例，仅用来研究学习使用。不适合用于生产或性能测试。 |
+| MODE             | {mini, slim, normal}  | mini或者不赋值变量表示使用mini模式部署OceanBase数据库实例，仅用来研究学习使用。不适合用于生产或性能测试。slim适用于更小的自定义配置，移除obagent，支持自定义的初始化脚本在绑定目录/root/boot/init.d，如果不绑定该目录，docker不会执行该租户的初始化sql。|
 | EXIT_WHILE_ERROR | true          | OceanBase 如果启动失败，是否退出容器。比如初次run镜像失败，或start容器失败，可以将此参数设置为false,那么OB启动失败，也可以进入容器，查看OceanBase的运行日志，然后进行排查。 |
+| OB_CLUSTER_NAME  | obcluster  | oceanbase集群名 |
+| OB_TENANT_NAME   | test       | oceanbase mysql租户名|
+| OB_MEMORY_LIMIT  | 6G         | oceanbase启动memory_limit参数配置 |
+| OB_DATAFILE_SIZE | 5G         | oceanbase启动datafile_size参数配置 |
+| OB_LOG_DISK_SIZE | 5G         | oceanbase启动log_disk_size参数配置 |
+| OB_ROOT_PASSWORD |            | oceanbase启动sys租户的root用户密码配置 |
+| OB_SYSTEM_MEMORY | 1G         | oceanbase启动system_memory参数配置 |
+| OB_TENANT_MINI_CPU      |            | oceanbase租户mini_cpu参数配置 |
+| OB_TENANT_MEMORY_SIZE   |            | oceanbase租户memory_size参数配置 |
+| OB_TENANT_LOG_DISK_SIZE |            | oceanbase租户log_disk_size参数配置 |
 
 ## 运行 Sysbench 脚本
 

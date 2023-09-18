@@ -16,16 +16,14 @@ function is_true() {
   return 0
 }
 
-# return 0 if mini_mode is nil or 'no'/'false'/0
-# 0 means true and 1 for false in bash
-function is_mini_mode() {
-  if test -z ${MINI_MODE}
+function get_mode() {
+  if test -z ${MODE}
   then
-    return 1
+    MODE="MINI"
   fi
-  
-  return `is_true ${MINI_MODE}`
+  MODE=${MODE^^}
 }
+
 
 function exit_while_error() {
   if test -z ${EXIT_WHILE_ERROR}
@@ -47,6 +45,32 @@ function remove_disk_check_logic_in_obd() {
   done
 }
 
+function run_custom_scripts {
+  INIT_SCRIPTS_ROOT="${1}";
+
+  # Check whether parameter has been passed on
+  if [ -z "${INIT_SCRIPTS_ROOT}" ]; then
+    echo "No INIT_SCRIPTS_ROOT passed on, no scripts will be run.";
+    return;
+  fi;
+
+  # Execute custom provided files (only if directory exists and has files in it)
+  if [ -d "${INIT_SCRIPTS_ROOT}" ] && [ -n "$(ls -A "${INIT_SCRIPTS_ROOT}")" ]; then
+    echo -e "Executing user defined scripts..."
+    run_custom_scripts_recursive ${INIT_SCRIPTS_ROOT}
+    echo -e "DONE: Executing user defined scripts.\n"
+  fi;
+}
+
+function run_custom_scripts_recursive {
+  local f
+  for f in "${1}"/*; do
+    echo -e "running ${f} ...";
+    obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < ${f}
+    echo "DONE: running ${f}";
+  done
+}
+
 # We should decide whether the observer's data exists and
 # whether the obd has the information of the cluster
 
@@ -60,20 +84,29 @@ else # nothing here, bootstrap
   echo "generate boot.yaml ..."
   TMPFILE="boot.${STAMP}.yaml"
 
-  if is_mini_mode
-  then
+  get_mode
+  if [ "x${MODE}" == "xMINI" ]; then
     echo "oceanbase-ce docker in mini mode"
+    cp -f boot-mini-tmp.yaml $TMPFILE
+  elif [ "x${MODE}" == "xSLIM" ]; then
+    echo "oceanbase-ce docker in slim mode"
     cp -f boot-mini-tmp.yaml $TMPFILE
   else
     cp -f boot-tmp.yaml $TMPFILE
   fi
 
-  cat obagent.yaml >> $TMPFILE
+  if [ "x${MODE}" != "xSLIM" ]; then
+    cat obagent.yaml >> $TMPFILE
+  fi
 
   sed -i "s|@OB_HOME_PATH@|${OB_HOME_PATH}|g" $TMPFILE
   sed -i "s|@OB_MYSQL_PORT@|${OB_MYSQL_PORT}|g" $TMPFILE
   sed -i "s|@OB_RPC_PORT@|${OB_RPC_PORT}|g" $TMPFILE
   sed -i "s|@OB_CLUSTER_NAME@|${OB_CLUSTER_NAME}|g" $TMPFILE
+  sed -i "s|@OB_MEMORY_LIMIT@|${OB_MEMORY_LIMIT}|g" $TMPFILE
+  sed -i "s|@OB_DATAFILE_SIZE@|${OB_DATAFILE_SIZE}|g" $TMPFILE
+  sed -i "s|@OB_LOG_DISK_SIZE@|${OB_LOG_DISK_SIZE}|g" $TMPFILE
+  sed -i "s|@OB_ROOT_PASSWORD@|${OB_ROOT_PASSWORD}|g" $TMPFILE
 
   [ "${OB_DATA_DIR}" ] && echo "    data_dir: ${OB_DATA_DIR}" >> $TMPFILE
   [ "${OB_REDO_DIR}" ] && echo "    redo_dir: ${OB_REDO_DIR}" >> $TMPFILE
@@ -84,12 +117,27 @@ else # nothing here, bootstrap
   && obd mirror list local
 
   remove_disk_check_logic_in_obd
-  obd devmode enable \
-    && obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE \
-    && obd cluster tenant create "${OB_CLUSTER_NAME}" -n ${OB_TENANT_NAME} \
-    && obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql \
-    && mv -f $TMPFILE ${OB_HOME_PATH}/boot.yaml \
-    && echo "deploy success!"
+  obd devmode enable && obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE;
+
+  create_tenant_cmd="obd cluster tenant create ${OB_CLUSTER_NAME} -n ${OB_TENANT_NAME}"
+  if ! [ -z "${OB_TENANT_MINI_CPU}" ]; then
+    create_tenant_cmd="${create_tenant_cmd} --min-cpu=${OB_TENANT_MINI_CPU}"
+  fi;
+  if ! [ -z "${OB_TENANT_MEMORY_SIZE}" ]; then
+    create_tenant_cmd="${create_tenant_cmd} --memory-size=${OB_TENANT_MEMORY_SIZE}"
+  fi;
+  if ! [ -z "${OB_TENANT_LOG_DISK_SIZE}" ]; then
+    create_tenant_cmd="${create_tenant_cmd} --log-disk-size=${OB_TENANT_LOG_DISK_SIZE}"
+  fi;
+  eval ${create_tenant_cmd}
+
+  if [ "x${MODE}" != "xSLIM" ]; then
+    obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql
+  else
+    run_custom_scripts /root/boot/init.d
+  fi
+
+  mv -f $TMPFILE ${OB_HOME_PATH}/boot.yaml && echo "deploy success!"
 fi
 
 if [ $? -eq 0 ]; then

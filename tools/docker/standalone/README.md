@@ -34,8 +34,11 @@ To start an OceanBase instance, run this command:
 # deploy mini instance
 docker run -p 2881:2881 --name oceanbase-ce -d oceanbase/oceanbase-ce
 
+# deploy an instance of the slim size according to the current container
+docker run -p 2881:2881 --name oceanbase-ce -e MODE=slim -e OB_MEMORY_LIMIT=5G -v {init_sql_folder_path}:/root/boot/init.d -d oceanbase/oceanbase-ce
+
 # deploy an instance of the largest size according to the current container
-docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=0 -d oceanbase/oceanbase-ce
+docker run -p 2881:2881 --name oceanbase-ce -e MODE=normal -d oceanbase/oceanbase-ce
 ```
 
 Two to five minutes are necessary for the boot procedure. To make sure that the boot procedure is successful, run this command:
@@ -69,8 +72,18 @@ This table shows the supported environment variables of the current oceanbase-ce
 
 | Variable name    | Default value | Description                                                  |
 | ---------------- | ------------- | ------------------------------------------------------------ |
-| MINI_MODE        | false         | If ture, will use mini mode to deploy OceanBase Database instance, it should be used only for research/study/evaluation.  DO NOT use it for production or performance testing. |
+| MODE             | {mini, slim, normal} | If it is mini, then the docker use mini mode to deploy OceanBase Database instance, it should be used only for research/study/evaluation.  DO NOT use it for production or performance testing. If it is slim, then the docker can run in a smaller instance. It remove the obagent and can run a self tenant initial sql by yourself in the mount volume /root/boot/init.d. If you do not mount the volume path the docker does not init the tenant sql. |
 | EXIT_WHILE_ERROR | true          | Whether quit the container while start observer failed. If start observer failed, you can not explore the logs as the container will exit. But if you set the EXIT_WHILE_ERROR=false, the container will not exit while observer starting fail and you can use docker exec to debug. |
+| OB_CLUSTER_NAME         | obcluster  | The oceanbase cluster name |
+| OB_TENANT_NAME          | test       | The oceanbase mysql tenant name |
+| OB_MEMORY_LIMIT         | 6G         | The oceanbase cluster memory_limit configuration |
+| OB_DATAFILE_SIZE        | 5G         | The oceanbase cluster datafile_size configuration |
+| OB_LOG_DISK_SIZE        | 5G         | The oceanbase cluster log_disk_size configuration |
+| OB_ROOT_PASSWORD        |            | The oceanbase root user password of sys tenant |
+| OB_SYSTEM_MEMORY        | 1G         | The oceanbase cluster system_memory configuration |
+| OB_TENANT_MINI_CPU      |            | The oceanbase tenant mini_cpu configuration |
+| OB_TENANT_MEMORY_SIZE   |            | The oceanbase tenant memory_size configuration |
+| OB_TENANT_LOG_DISK_SIZE |            | The oceanbase tenant log_disk_size configuration |
 
 ## Run the Sysbench script
 
