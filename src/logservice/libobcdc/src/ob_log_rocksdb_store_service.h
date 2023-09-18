@@ -49,6 +49,7 @@ public:
   virtual int del(const std::string &key);
   virtual int del(void *cf_handle, const std::string &key);
   virtual int del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key);
+  virtual int compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key);
 
   virtual int create_column_family(const std::string& column_family_name,
       void *&cf_handle);
@@ -59,6 +60,7 @@ public:
   virtual int close() override;
   virtual void get_mem_usage(const std::vector<uint64_t> ids,
       const std::vector<void *> cf_handles);
+  virtual int get_mem_usage(void * cf_handle, int64_t &estimate_live_data_size, int64_t &estimate_num_keys);
   OB_INLINE bool is_stopped() const { return ATOMIC_LOAD(&is_stopped_); }
 
 private:

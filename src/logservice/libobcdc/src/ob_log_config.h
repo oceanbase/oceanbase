@@ -575,6 +575,8 @@ public:
   T_DEF_BOOL(enable_lob_data_storage_memory, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
   // lob_data_storage_memory_limit takes effect only when enable_lob_data_storage_memory is true.
   DEF_CAP(lob_data_storage_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "lob data storage memory limit");
+  T_DEF_INT_INFT(lob_data_storage_clean_interval_sec, OB_CLUSTER_PARAMETER, 5, 1,
+                 "lob_data_storage clean task nterval in seconds");
 
 #undef OB_CLUSTER_PARAMETER
 
