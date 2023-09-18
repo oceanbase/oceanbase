@@ -228,7 +228,7 @@ TEST_F(TestXPath, test_ns)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ObPathVarObject ans;
+  ObPathVarObject ans(allocator);
   ObString data_value("ns_str");
   ObDatum* data =
     static_cast<ObDatum*> (allocator.alloc(sizeof(ObDatum)));
@@ -541,7 +541,7 @@ TEST_F(TestXPath, test_seek_element_by_tag) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/book/title";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -632,7 +632,7 @@ TEST_F(TestXPath, test_seek_ellipsis_case) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "//text()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -715,7 +715,7 @@ TEST_F(TestXPath, test_seek_suite_ellipsis) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/descendant-or-self::node()/@name";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -798,7 +798,7 @@ TEST_F(TestXPath, test_seek_suite_case) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/ns1:a/ns2:b/@b1";
   ObString default_ns("ns1");
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -881,7 +881,7 @@ TEST_F(TestXPath, test_seek_suite_filter) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/s/a99[//text() > \"离开\"]";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -964,7 +964,7 @@ TEST_F(TestXPath, test_seek_suite_complex_filter) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/a[//text() >= -100]/node()[self::node()/node() < 3]";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1047,7 +1047,7 @@ TEST_F(TestXPath, test_seek_descendant_or_self_text) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "a/descendant-or-self::text()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1128,7 +1128,7 @@ TEST_F(TestXPath, test_seek_all_element) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/book/*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1186,7 +1186,7 @@ TEST_F(TestXPath, test_seek_ns_element) // to test
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/bbb:book";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1246,7 +1246,7 @@ TEST_F(TestXPath, test_seek_root) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1305,7 +1305,7 @@ TEST_F(TestXPath, test_seek_all_attribute) // to test
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1388,7 +1388,7 @@ TEST_F(TestXPath, test_seek_certain_attribute) // to test
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1473,7 +1473,7 @@ TEST_F(TestXPath, test_seek_ns_attribute) // to test
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/book/@bbb:lang";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1555,7 +1555,7 @@ TEST_F(TestXPath, test_seek_node) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/node()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1614,7 +1614,7 @@ TEST_F(TestXPath, test_seek_text) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/book/text()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1672,7 +1672,7 @@ TEST_F(TestXPath, test_seek_comment) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/comment()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1730,7 +1730,7 @@ TEST_F(TestXPath, test_seek_pi_wildcard) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/processing-instruction()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1788,7 +1788,7 @@ TEST_F(TestXPath, test_seek_certain_pi) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "bookstore/processing-instruction(\"price2\")";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("bbb");
   ret = pass.add("a", &data);
@@ -1847,7 +1847,7 @@ TEST_F(TestXPath, test_seek_default_ns_attribute)
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/ns1:a/ns2:b/@b1";
   ObString default_ns("ns1");
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -1912,7 +1912,7 @@ TEST_F(TestXPath, test_seek_self)
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/root/*/b/*/self::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -1977,7 +1977,7 @@ TEST_F(TestXPath, test_seek_basic_descendant) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/b1/descendant::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2042,7 +2042,7 @@ TEST_F(TestXPath, test_seek_descendant) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/descendant::*/node()/text()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2106,7 +2106,7 @@ TEST_F(TestXPath, test_seek_descendant_or_self) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/descendant-or-self::*/node()/text()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2172,7 +2172,7 @@ TEST_F(TestXPath, test_seek_descendant_self_text) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/descendant-or-self::node()/text()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2236,7 +2236,7 @@ TEST_F(TestXPath, test_seek_user_extract)
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "/Rule/Format";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2300,7 +2300,7 @@ TEST_F(TestXPath, test_seek_parent) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/b2/b22/parent::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2388,7 +2388,7 @@ TEST_F(TestXPath, test_seek_parent_child) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/b2/b22/parent::*/node()";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2455,7 +2455,7 @@ TEST_F(TestXPath, test_seek_ancestor) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/b2/b22/ancestor::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2545,7 +2545,7 @@ TEST_F(TestXPath, test_seek_ancestor_or_self) //tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/*/b/b2/b22/ancestor::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2607,7 +2607,7 @@ TEST_F(TestXPath, test_seek_root_ancestor) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/ancestor::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -2656,7 +2656,7 @@ TEST_F(TestXPath, test_seek_root_parent) // tested
   std::cout<<str0.ptr()<<std::endl;
   ObString str1 = "root/parent::*";
   ObString default_ns;
-  ObPathVarObject pass;
+  ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
