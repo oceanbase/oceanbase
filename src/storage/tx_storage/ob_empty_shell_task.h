@@ -61,20 +61,12 @@ private:
   int check_tablet_deleted_(ObTablet *tablet, bool &is_deleted);
   int get_empty_shell_tablet_ids(common::ObTabletIDArray &empty_shell_tablet_ids, bool &need_retry);
   int update_tablets_to_empty_shell(ObLS *ls, const common::ObIArray<common::ObTabletID> &tablet_ids);
-  // Conditions for a tablet status is transfer_out_deleted to become an empty shell in primary database(1 or 2 or 3):
-  // 1. The node dest_ls where the tablet resides does not exist;
-  // or 2. The migration status of dest_ls is OB_MIGRATION_STATUS_MIGRATE;
-  // or 3. The replay decided scn of dest_ls is greater than the finish_scn of transfer_out_deleted tablet
-  int check_tablet_empty_shell_for_primary_(
-      const ObTablet &tablet,
-      const ObTabletCreateDeleteMdsUserData &user_data,
-      bool &can, bool &need_retry);
   // Conditions for a tablet status is transfer_out_deleted to become an empty shell in standby database(1 or 2 or 3 or 4):
   // 1. Tenant-level replayable scn is greater than the finish_scn of transfer_out_deleted tablet
   // 2. The node dest_ls where the tablet resides does not exist;
   // 3. The migration status of dest_ls is OB_MIGRATION_STATUS_MIGRATE;
   // 4. The replay decided scn of dest_ls is greater than the finish_scn of transfer_out_deleted tablet
-  int check_tablet_empty_shell_for_standby_(
+  int check_tablet_empty_shell_(
       const ObTablet &tablet,
       const ObTabletCreateDeleteMdsUserData &user_data,
       bool &can, bool &need_retry);
