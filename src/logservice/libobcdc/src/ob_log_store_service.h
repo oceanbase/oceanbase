@@ -62,6 +62,7 @@ public:
   virtual int del(const std::string &key) = 0;
   virtual int del(void *cf_handle, const std::string &key) = 0;
   virtual int del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key) = 0;
+  virtual int compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key) = 0;
 
   virtual int create_column_family(const std::string& column_family_name,
       void *&cf_handle) = 0;
@@ -70,6 +71,8 @@ public:
 
   virtual void get_mem_usage(const std::vector<uint64_t> ids,
       const std::vector<void *> cf_handles) = 0;
+  virtual int get_mem_usage(void * cf_handle, int64_t &estimate_live_data_size, int64_t &estimate_num_keys) = 0;
+
 };
 
 }

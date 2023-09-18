@@ -327,6 +327,7 @@ int RocksDbStoreService::del(void *cf_handle, const std::string &key)
 int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key)
 {
   int ret = OB_SUCCESS;
+  int64_t start_ts = get_timestamp();
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
 
   if (OB_ISNULL(column_family_handle)) {
@@ -341,9 +342,42 @@ int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key
     if (!s.ok()) {
       LOG_ERROR("DeleteRange %s from rocksdb failed, error %s", begin_key.c_str(), s.ToString().c_str());
       ret = OB_ERR_UNEXPECTED;
+    } else {
+      // NOTICE invoke this interface lob data clean task interval
+      double time_cost = (get_timestamp() - start_ts)/1000.0;
+      _LOG_INFO("DEL_RANGE time_cost=%.3lfms start_key=%s end_key=%s", time_cost, begin_key.c_str(), end_key.c_str());
     }
   }
 
+  return ret;
+}
+
+int RocksDbStoreService::compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = get_timestamp();
+  rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
+
+  if (OB_ISNULL(column_family_handle)) {
+    LOG_ERROR("column_family_handle is NULL");
+    ret = OB_ERR_UNEXPECTED;
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    rocksdb::Slice begin(begin_key);
+    rocksdb::Slice end(end_key);
+    rocksdb::Status s = m_db_->CompactRange(rocksdb::CompactRangeOptions(), column_family_handle,
+        &begin, &end);
+
+    if (!s.ok()) {
+      LOG_ERROR("CompactRange %s from rocksdb failed, error %s", begin_key.c_str(), s.ToString().c_str());
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      // NOTICE invoke this interface lob data clean task interval
+      double time_cost = (get_timestamp() - start_ts)/1000.0;
+      _LOG_INFO("COMPACT_RANGE time_cost=%.3lfms start_key=%s end_key=%s", time_cost, begin_key.c_str(), end_key.c_str());
+    }
+  }
   return ret;
 }
 
@@ -494,6 +528,27 @@ void RocksDbStoreService::get_mem_usage(const std::vector<uint64_t> ids,
       "block_cache", SIZE_TO_STR(total_block_cache_usage),
       "table_readers", SIZE_TO_STR(total_table_readers_usage),
       "block_cache_pinned", SIZE_TO_STR(total_block_cache_pinned_usage));
+}
+
+int RocksDbStoreService::get_mem_usage(void * cf_handle, int64_t &estimate_live_data_size, int64_t &estimate_num_keys)
+{
+  int ret = OB_SUCCESS;
+  rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
+
+  if (OB_ISNULL(column_family_handle)) {
+    LOG_ERROR("column_family_handle is NULL");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    std::string estimate_live_data_size_str;
+    std::string estimate_num_keys_str;
+
+    m_db_->GetProperty(column_family_handle, "rocksdb.estimate-live-data-size", &estimate_live_data_size_str);
+    m_db_->GetProperty(column_family_handle, "rocksdb.estimate-num-keys", &estimate_num_keys_str);
+
+    c_str_to_int(estimate_live_data_size_str.c_str(), estimate_live_data_size);
+    c_str_to_int(estimate_num_keys_str.c_str(), estimate_num_keys);
+  }
+  return ret;
 }
 
 }

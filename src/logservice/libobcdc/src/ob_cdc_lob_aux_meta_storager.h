@@ -140,7 +140,53 @@ public:
   bool is_task_push_;
 };
 
+struct ObCDCLobAuxMetaDataStatInfo
+{
+  ObCDCLobAuxMetaDataStatInfo() { reset(); }
+  void reset()
+  {
+    last_stat_time_ = 0;
+    get_req_cnt_ = 0;
+    last_get_req_cnt_ = 0;
+    mem_get_req_cnt_ = 0;
+    last_mem_get_req_cnt_ = 0;
+    put_req_cnt_ = 0;
+    last_put_req_cnt_ = 0;
+    mem_put_req_cnt_ = 0;
+    last_mem_put_req_cnt_ = 0;
+    get_data_total_size_ = 0;
+    mem_get_data_total_size_ = 0;
+    put_data_total_size_ = 0;
+    mem_put_data_total_size_ = 0;
+  }
+
+  double calc_rps(const int64_t delta_time, const int64_t req_cnt, const int64_t last_req_cnt);
+  double calc_rate(const int64_t delta_time, const int64_t total_size, const int64_t last_total_size);
+
+  int64_t last_stat_time_;
+
+  int64_t get_req_cnt_;
+  int64_t last_get_req_cnt_;
+  int64_t mem_get_req_cnt_;
+  int64_t last_mem_get_req_cnt_;
+
+  int64_t put_req_cnt_;
+  int64_t last_put_req_cnt_;
+  int64_t mem_put_req_cnt_;
+  int64_t last_mem_put_req_cnt_;
+
+  int64_t get_data_total_size_;
+  int64_t last_get_data_total_size_;
+  int64_t mem_get_data_total_size_;
+  int64_t last_mem_get_data_total_size_;
+  int64_t put_data_total_size_;
+  int64_t last_put_data_total_size_;
+  int64_t mem_put_data_total_size_;
+  int64_t last_mem_put_data_total_size_;
+};
+
 class IObStoreService;
+class ObLogConfig;
 class ObCDCLobAuxMetaStorager
 {
 public:
@@ -169,6 +215,9 @@ public:
   int clean_unused_data(ObCDCLobAuxDataCleanTask *task);
   int get_cf_handle(const uint64_t tenant_id, void *&cf_handle);
 
+  int64_t get_clean_task_interval() const { return clean_task_interval_; }
+  void configure(const ObLogConfig &cfg);
+  void print_stat_info();
 private:
   int del_lob_col_value_(
       const int64_t commit_version,
@@ -238,14 +287,27 @@ private:
   typedef common::ObConcurrentFIFOAllocator LobAuxMetaAllocator;
   static const int64_t LOB_AUX_META_ALLOCATOR_TOTAL_LIMIT = 1 * _G_;
   static const int64_t LOB_AUX_META_ALLOCATOR_HOLD_LIMIT = 32 * _M_;
-  static const int64_t LOB_AUX_META_ALLOCATOR_PAGE_SIZE = 2 * _M_;
+
+  // The page size affects the memory hold by allocator.
+  // If page size is OB_MALLOC_BIG_BLOCK_SIZE(2M), the memory hold by allocator is
+  // eight times as much memory as it is actually used.
+  // If page size is OB_MALLOC_NORMAL_BLOCK_SIZE(8K), the memory hold by allocator is
+  // twice as much memory as it is actually used.
+  // And the memory hold almost equal to what is actually used
+  // when page size is OB_MALLOC_NORMAL_BLOCK_SIZE and one piece lob data is 256K.
+  // So we use OB_MALLOC_NORMAL_BLOCK_SIZE as the page size
+  static const int64_t LOB_AUX_META_ALLOCATOR_PAGE_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
 
   bool is_inited_;
   LobAuxMetaMap lob_aux_meta_map_;
   LobAuxMetaAllocator lob_aux_meta_allocator_;
   IObStoreService *store_service_;
+  int64_t memory_alloced_;
   int64_t memory_limit_;
   bool enable_memory_;
+  int64_t clean_task_interval_;
+
+  ObCDCLobAuxMetaDataStatInfo stat_info_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCDCLobAuxMetaStorager);
 };

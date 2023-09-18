@@ -2161,6 +2161,7 @@ void ObLogInstance::timer_routine()
         print_trans_stat_();
         resource_collector_->print_stat_info();
         reader_->print_stat_info();
+        lob_aux_meta_storager_.print_stat_info();
       }
 
       // Periodic memory recycling
@@ -2308,6 +2309,11 @@ void ObLogInstance::reload_config_()
     // config committer_
     if (OB_NOT_NULL(committer_)) {
       committer_->configure(config);
+    }
+
+    // cofig lob storager
+    if (OB_SUCC(ret)) {
+      lob_aux_meta_storager_.configure(config);
     }
 
     // config rs_server_provider_

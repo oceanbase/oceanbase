@@ -627,19 +627,20 @@ int ObLogResourceCollector::push_lob_data_clean_task_(const uint64_t tenant_id, 
   if (OB_FAIL(lob_aux_meta_storager.get_clean_task(tenant_id, clean_task))){
     LOG_ERROR("lob_aux_meta_storager get_clean_task failed", KR(ret), K(tenant_id));
   } else {
-    bool is_task_push = ATOMIC_LOAD(&clean_task->is_task_push_);
-    if (is_task_push || ! REACH_TIME_INTERVAL(5 * _SEC_)) {
-      LOG_DEBUG("no need push clean task", K(is_task_push), K(tenant_id), K(commit_version));
+    const bool is_task_push = ATOMIC_LOAD(&clean_task->is_task_push_);
+    const int64_t clean_task_interval = lob_aux_meta_storager.get_clean_task_interval();
+    if (is_task_push || ! REACH_TIME_INTERVAL(clean_task_interval)) {
+      LOG_DEBUG("no need push clean task", K(is_task_push), K(tenant_id), K(commit_version), K(clean_task_interval));
     // try set flag by cas, oldv is false, newv is ture
     // expect return oldv (false). if return true, means cas fail, just skip
     } else if (ATOMIC_CAS(&clean_task->is_task_push_, false, true)) {
-      LOG_DEBUG("no need push clean task", K(is_task_push), K(tenant_id), K(commit_version));
+      LOG_DEBUG("no need push clean task", K(is_task_push), K(tenant_id), K(commit_version), K(clean_task_interval));
     } else {
       ATOMIC_STORE(&clean_task->commit_version_, commit_version);
       if (OB_FAIL(push_task_into_queue_(*clean_task))) {
-        LOG_ERROR("push_task_into_queue_ failed", KR(ret), KPC(clean_task));
+        LOG_ERROR("push_task_into_queue_ failed", KR(ret), KPC(clean_task), K(clean_task_interval));
       } else {
-        LOG_INFO("push lob data clean task succ", KPC(clean_task));
+        LOG_INFO("push lob data clean task succ", KPC(clean_task), K(clean_task_interval));
       }
     }
   }
