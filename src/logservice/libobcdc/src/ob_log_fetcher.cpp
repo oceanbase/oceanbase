@@ -951,13 +951,13 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
     }
   }
   else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == ddl_handle_progress)) {
-    LOG_ERROR("get DDL handle progress is invalid", K(ddl_handle_progress), K(ddl_handle_lsn));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get DDL handle progress is invalid", KR(ret), K(ddl_handle_progress), K(ddl_handle_lsn));
   }
   // Then iterate through all the partitions to get the distribution progress of each partition, i.e. the progress of Fetcher's distribution data
   // Note: Here we also get the progress of the DDL distribution, which is only used for printing
   else if (OB_FAIL(ls_fetch_mgr_.for_each_ls(hb_func))) {
-    LOG_ERROR("for each part fetch ctx fail", KR(ret));
+    LOG_WARN("for each part fetch ctx fail", KR(ret));
   } else {
     int64_t data_progress = hb_func.data_progress_;
     // TODO

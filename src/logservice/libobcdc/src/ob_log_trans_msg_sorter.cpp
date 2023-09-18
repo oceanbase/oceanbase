@@ -34,8 +34,8 @@
         ret = (var).func(args); \
         if (err_no == ret) { \
           retry_cnt ++; \
-          if (0 == retry_cnt % 1000) { \
-            LOG_WARN(#func " retry for too many times", KP(&var), K(var), K(retry_cnt)); \
+          if (0 == retry_cnt % 12000) { \
+            LOG_WARN(#func " retry for too many times", K(retry_cnt), KP(&var), K(var)); \
           } \
           /* sleep 5 ms*/ \
           ob_usleep(5 * 1000); \

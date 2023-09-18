@@ -85,7 +85,6 @@ int ObLogMetaDataFetcher::init(
   } else if (OB_FAIL(trans_task_pool_.init(
           &trans_task_pool_alloc_,
           PART_TRANS_TASK_PREALLOC_COUNT,
-          cfg.part_trans_task_page_size,
           true/*allow_dynamic_alloc*/,
           PART_TRANS_TASK_PREALLOC_PAGE_COUNT))) {
     LOG_ERROR("trans_task_pool_ init failed", KR(ret));

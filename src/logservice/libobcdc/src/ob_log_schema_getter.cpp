@@ -485,7 +485,11 @@ int ObLogSchemaGetter::init(common::ObMySQLProxy &mysql_proxy,
 
 void ObLogSchemaGetter::destroy()
 {
+  LOG_INFO("ObCDCSchemaGetter destroy begin");
   inited_ = false;
+  schema_service_.stop();
+  schema_service_.wait();
+  LOG_INFO("ObCDCSchemaGetter destroy succ");
 }
 
 int ObLogSchemaGetter::get_lazy_schema_guard(const uint64_t tenant_id,

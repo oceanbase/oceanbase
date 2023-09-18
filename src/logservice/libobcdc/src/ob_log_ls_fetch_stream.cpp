@@ -163,7 +163,9 @@ int FetchStream::prepare_to_fetch_logs(
 
     // For the fetch log stream task, it should be immediately assigned to a worker thread for processing
     if (OB_FAIL(stream_worker_->dispatch_stream_task(*this, "DispatchServer"))) {
-      LOG_ERROR("dispatch stream task fail", KR(ret));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("dispatch stream task fail", KR(ret));
+      }
     } else {
       // Note: You cannot continue to manipulate this data structure afterwards !
     }
@@ -235,7 +237,9 @@ void FetchStream::process_timer_task()
     LOG_ERROR("invalid stream worker", K(stream_worker_));
     ret = OB_INVALID_ERROR;
   } else if (OB_FAIL(stream_worker_->dispatch_stream_task(*this, "TimerWakeUp"))) {
-    LOG_ERROR("dispatch stream task fail", KR(ret), K(this));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("dispatch stream task fail", KR(ret), K(this));
+    }
   } else {
     ATOMIC_STORE(&end_time, get_timestamp());
     max_dispatch_time = std::max(max_dispatch_time, ATOMIC_LOAD(&end_time) - start_time);
@@ -423,9 +427,11 @@ int FetchStream::dispatch_fetch_task_(LSFetchCtx &task,
       ls_fetch_ctx_->set_not_in_fetching_log();
 
       if (OB_FAIL(stream_worker_->dispatch_fetch_task(task, dispatch_reason_str))) {
-        // Assignment of fetch log tasks
-        LOG_ERROR("dispatch fetch task fail", KR(ret), K(task),
-                  "dispatch_reason", dispatch_reason_str);
+        if (OB_IN_STOP_STATE != ret) {
+          // Assignment of fetch log tasks
+          LOG_ERROR("dispatch fetch task fail", KR(ret), K(task),
+                    "dispatch_reason", dispatch_reason_str);
+        }
       } else {
         // You cannot continue with the task afterwards
       }
@@ -2075,7 +2081,9 @@ int FetchStream::update_fetch_task_state_(KickOutInfo &kick_out_info,
         if (OB_SUCCESS == ret && task->need_update_svr_list()) {
           bool need_print_info = (TCONF.print_ls_server_list_update_info != 0);
           if (OB_FAIL(task->update_svr_list(need_print_info))) {
-            LOG_ERROR("update svr list fail", KR(ret), KPC(task));
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("update svr list fail", KR(ret), KPC(task));
+            }
           }
         }
 

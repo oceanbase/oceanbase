@@ -90,13 +90,13 @@ int RocksDbStoreService::close()
   if (NULL != m_db_) {
     LOG_INFO("closing rocksdb ...");
     mark_stop_flag();
-    usleep(100 * _MSEC_);
+    usleep(5 * _SEC_);
 
     rocksdb::Status status = m_db_->Close();
 
     if (! status.ok()) {
-      _LOG_ERROR("rocksdb close failed, error %s", status.ToString().c_str());
       ret = OB_ERR_UNEXPECTED;
+      _LOG_ERROR("rocksdb close failed, error %s", status.ToString().c_str());
     } else {
       LOG_INFO("rocksdb close succ");
     }
@@ -369,6 +369,10 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
   cf_options.max_write_buffer_number = 9;
   // Column Family's default memtable size is 64M, when the maximum limit is exceeded, memtable -> immutable memtable, increase write_buffer_size, can reduce write amplification
   cf_options.write_buffer_size = rocksdb_write_buffer_size << 20;
+  // config rocksdb compression
+  // supported compress algorithms will print in LOG file
+  // cf_options.compression = rocksdb::CompressionType::kLZ4Compression;
+  // cf_options.bottommost_compression = rocksdb::CompressionType::kZSTD;
 
   if (is_stopped()) {
     ret = OB_IN_STOP_STATE;

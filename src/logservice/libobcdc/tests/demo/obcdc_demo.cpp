@@ -12,6 +12,7 @@
  * obcdc_demo
  */
 
+#include <signal.h>
 #include <iostream>
 #include "include/libobcdc/libobcdc.h"
 #include "include/libobcdc/ob_errno.h"
@@ -24,8 +25,10 @@ typedef IBinlogRecord Record;
 
 #define LOG(msg) \
     do { \
-      std::cout << msg << std::endl; \
+      std::cout << "[OBCDC][DEMO] " << msg << std::endl; \
     } while (0)
+
+volatile bool stop_flag = false;
 
 int create_obcdc_instance(ObCDCFactory &cdc_factory, IObCDCInstance *&obcdc_instance)
 {
@@ -42,6 +45,7 @@ int create_obcdc_instance(ObCDCFactory &cdc_factory, IObCDCInstance *&obcdc_inst
 void destroy_obcdc_instance(ObCDCFactory &cdc_factory, IObCDCInstance *obcdc_instance)
 {
   obcdc_instance->stop();
+  obcdc_instance->destroy();
   cdc_factory.deconstruct(obcdc_instance);
 }
 
@@ -71,6 +75,8 @@ int fetch_next_cdc_record(IObCDCInstance &obcdc_instance, Record *record)
   } else if (NULL == record) {
     ret = OB_ERR_UNEXPECTED;
     LOG("invalid record");
+  } else {
+    LOG("FETCH_RECORD SUCC");
   }
 
   return ret;
@@ -91,9 +97,25 @@ int handle_cdc_record(Record *record)
   return ret;
 }
 
+void handle_signal(int signo)
+{
+  switch (signo)
+  {
+    case SIGTERM:
+    case SIGHUP:
+      LOG("[SIGNAL] obcdc recv SIG TERM, will exit progress");
+      stop_flag = true;
+      break;
+    default:
+      LOG("[SIGNAL] obcdc recv unknown signal, skip");
+      break;
+  }
+}
+
 int main(int argc, char **argv)
 {
   int ret = OB_SUCCESS;
+  signal(SIGTERM, handle_signal);
   ObCDCFactory cdc_factory;
   IObCDCInstance *obcdc_instance = NULL;
 
@@ -106,7 +128,7 @@ int main(int argc, char **argv)
     if (OB_SUCCESS != init_obcdc_instance(*obcdc_instance)) {
       LOG("[ERROR] obcdc_instance init failed");
     } else {
-      while(OB_SUCCESS == ret) {
+      while(OB_SUCCESS == ret && ! stop_flag) {
         Record *record = NULL;
         if (OB_SUCCESS != (ret = fetch_next_cdc_record(*obcdc_instance, record))) {
           if (OB_TIMEOUT == ret) {

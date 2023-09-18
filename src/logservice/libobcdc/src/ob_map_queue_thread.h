@@ -156,7 +156,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::init(const int64_t thread_num, const char 
     }
 
     thread_num_ = thread_num;
-    stop_flag_ = true;
+    stop_flag_ = false;
     inited_ = true;
   }
 
@@ -185,7 +185,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::start()
   if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "not inited");
     ret = OB_NOT_INIT;
-  } else if (stop_flag_) {
+  } else {
     stop_flag_ = false;
 
     for (int64_t index = 0; OB_SUCCESS == ret && index < thread_num_; index++) {
@@ -204,8 +204,8 @@ int ObMapQueueThread<MAX_THREAD_NUM>::start()
 template <int MAX_THREAD_NUM>
 void ObMapQueueThread<MAX_THREAD_NUM>::stop()
 {
+  mark_stop_flag();
   if (inited_) {
-    stop_flag_ = true;
 
     for (int64_t index = 0; index < thread_num_; index++) {
       ThreadConf &tc = tc_[index];
@@ -274,8 +274,8 @@ int ObMapQueueThread<MAX_THREAD_NUM>::pop(const int64_t thread_index, void *&dat
     LIB_LOG(ERROR, "not init");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(thread_index < 0) || OB_UNLIKELY(thread_index >= thread_num_)) {
-    LIB_LOG(ERROR, "invalid thread index", K(thread_index), K(thread_num_));
     ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(ERROR, "invalid thread index", KR(ret), K(thread_index), K(thread_num_));
   } else {
     ret = tc_[thread_index].queue_.pop(data);
   }
@@ -305,7 +305,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::next_task_(const int64_t index, void *&tas
     ret = OB_ERR_UNEXPECTED;
   } else {
     ThreadConf &tc = tc_[index];
-    while (! stop_flag_ && OB_SUCCESS == ret) {
+    while (! is_stoped() && OB_SUCCESS == ret) {
       task = NULL;
 
       if (OB_FAIL(tc.queue_.pop(task))) {
@@ -317,8 +317,8 @@ int ObMapQueueThread<MAX_THREAD_NUM>::next_task_(const int64_t index, void *&tas
           LIB_LOG(ERROR, "pop task from queue fail", KR(ret));
         }
       } else if (OB_ISNULL(task)) {
-        LIB_LOG(ERROR, "pop invalid task", K(task));
         ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(ERROR, "pop invalid task", KR(ret), K(task));
       } else {
         break;
       }
@@ -338,14 +338,14 @@ int ObMapQueueThread<MAX_THREAD_NUM>::push(void *data, const uint64_t hash_val)
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LIB_LOG(ERROR, "not init");
     ret = OB_NOT_INIT;
+    LIB_LOG(ERROR, "not init", KR(ret), K_(inited));
   } else if (OB_UNLIKELY(is_stoped())) {
     ret = OB_IN_STOP_STATE;
     LIB_LOG(INFO, "thread pool is not running", KR(ret), K_(stop_flag));
   } else if (OB_ISNULL(data)) {
-    LIB_LOG(ERROR, "invalid argument", K(data));
     ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(ERROR, "invalid argument", KR(ret), K(data));
   } else {
     int64_t target_index = static_cast<int64_t>(hash_val % thread_num_);
     ThreadConf &tc = tc_[target_index];

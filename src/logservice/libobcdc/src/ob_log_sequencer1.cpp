@@ -73,8 +73,12 @@ ObLogSequencer::ObLogSequencer()
     last_global_checkpoint_(OB_INVALID_TIMESTAMP),
     global_seq_(0),
     br_committer_queue_seq_(0),
-    trans_queue_(),
+    ready_trans_queue_(),
     trans_queue_lock_(),
+    seq_trans_queue_(),
+    checkpoint_cond_(),
+    ready_queue_cond_(),
+    seq_queue_cond_(),
     total_part_trans_task_count_(0),
     ddl_part_trans_task_count_(0),
     dml_part_trans_task_count_(0),
@@ -108,6 +112,7 @@ int ObLogSequencer::init(
     IObLogErrHandler &err_handler)
 {
   int ret = OB_SUCCESS;
+  static const int64_t seq_thread_num = 2;
 
   if (OB_UNLIKELY(inited_)) {
     LOG_ERROR("ObLogSequencer has been initialized");
@@ -118,6 +123,10 @@ int ObLogSequencer::init(
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(SequencerThread::init(thread_num, queue_size))) {
     LOG_ERROR("init sequencer queue thread fail", KR(ret), K(thread_num), K(queue_size));
+  } else if (OB_FAIL(lib::ThreadPool::set_thread_count(seq_thread_num))) {
+    LOG_ERROR("set sequence thread num failed", KR(ret), K(seq_thread_num));
+  } else if (OB_FAIL(seq_trans_queue_.init(queue_size))) {
+    LOG_ERROR("init sequenced_trans_queue failed", KR(ret), K(queue_size));
   } else if (OB_FAIL(schema_inc_replay_.init(false/*is_start_progress*/))) {
     LOG_ERROR("schema_inc_replay_ init failed", KR(ret));
   } else {
@@ -193,7 +202,7 @@ int ObLogSequencer::start()
 void ObLogSequencer::stop()
 {
   if (inited_) {
-    lib::ThreadPool::stop();
+    mark_stop_flag();
     SequencerThread::stop();
     LOG_INFO("stop threads succ", "thread_num", get_thread_num());
   }
@@ -243,82 +252,153 @@ void ObLogSequencer::get_task_count(SeqStatInfo &stat_info)
   stat_info.dml_part_trans_task_count_ = ATOMIC_LOAD(&dml_part_trans_task_count_);
   stat_info.hb_part_trans_task_count_ = ATOMIC_LOAD(&hb_part_trans_task_count_);
   stat_info.queue_part_trans_task_count_ = ATOMIC_LOAD(&queue_part_trans_task_count_);
-  stat_info.sequenced_trans_count_ = trans_queue_.size();
+  stat_info.ready_trans_count_ = ready_trans_queue_.size();
+  stat_info.sequenced_trans_count_ = seq_trans_queue_.get_curr_total();
 }
 
 // A thread is responsible for continually rotating the sequence of transactions that need sequence
 void ObLogSequencer::run1()
 {
-  ObLogTraceIdGuard trace_guard;
-  const int64_t SLEEP_US = 1000;
-  lib::set_thread_name("ObLogSequencerTrans");
   int ret = OB_SUCCESS;
-  bool enable_monitor = false;
-  ObLogTimeMonitor monitor("Sequencer-deal-trans", enable_monitor);
+  const int64_t thread_idx = lib::ThreadPool::get_thread_idx();
+  const int64_t thread_count = lib::ThreadPool::get_thread_count();
 
-  while (OB_SUCC(ret) && ! lib::ThreadPool::has_set_stop()) {
-    // Global checkpoint not updated or initial value, do nothing
-    if (ATOMIC_LOAD(&global_checkpoint_) == ATOMIC_LOAD(&last_global_checkpoint_)) {
-      ob_usleep(SLEEP_US);
-    } else {
-      ObByteLockGuard guard(trans_queue_lock_);
-
-      while (OB_SUCC(ret) && ! trans_queue_.empty() && ! lib::ThreadPool::has_set_stop()) {
-        ObLogTraceIdGuard trace_guard;
-        TrxSortElem top_trx_sort_elem = trans_queue_.top();
-        const int64_t trans_commit_version = top_trx_sort_elem.get_trans_commit_version();
-        monitor.mark_and_get_cost("begin", true);
-
-        if (trans_commit_version <= ATOMIC_LOAD(&global_checkpoint_)) {
-          if (OB_FAIL(handle_to_be_sequenced_trans_(top_trx_sort_elem, lib::ThreadPool::has_set_stop()))) {
-            if (OB_IN_STOP_STATE != ret) {
-              LOG_ERROR("handle_to_be_sequenced_trans_ fail", KR(ret), K(top_trx_sort_elem));
-            }
-          } else {
-            monitor.mark_and_get_cost("end", true);
-            trans_queue_.pop();
-          }
-        } else {
-          break;
-        }
-      } // empty
+  if (thread_count > 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("only expected two thread to handle ready trans",
+        KR(ret), K(thread_count), K(thread_idx));
+  } else if (0 == thread_idx) {
+    lib::set_thread_name("CDC-READY-TX-HANDLER");
+    if (OB_FAIL(push_ready_trans_to_seq_queue_())) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("push_ready_trans_to_seq_queue_ failed", KR(ret));
+      }
     }
-    ob_usleep(SLEEP_US);
-
-    if (REACH_TIME_INTERVAL(PRINT_SEQ_INFO_INTERVAL)) {
-      ISTAT("[OUTPUT]", K(global_checkpoint_), K(last_global_checkpoint_), "checkpoint_delay", NTS_TO_DELAY(global_checkpoint_),
-          K(global_seq_), "size", trans_queue_.size());
+  } else if (1 == thread_idx) {
+    lib::set_thread_name("CDC-SEQ-TX-HANDLER");
+    if (OB_FAIL(handle_trans_in_seq_queue_())) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("handle_trans_in_seq_queue_ failed", KR(ret));
+      }
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpect sequencer thread", KR(ret), K(thread_count), K(thread_idx));
   }
-
   if (OB_SUCC(ret) && lib::ThreadPool::has_set_stop()) {
     ret = OB_IN_STOP_STATE;
   }
 
   // exit on fail
   if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && NULL != err_handler_) {
-    err_handler_->handle_error(ret, "sequencer thread exits, err=%d", ret);
-    ObLogSequencer::stop();
+    err_handler_->handle_error(ret, "sequencer thread(idx=%ld) exits, err=%d", get_thread_idx(), ret);
+    mark_stop_flag();
   }
 }
 
-int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
+int ObLogSequencer::push_ready_trans_to_seq_queue_()
+{
+  int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
+
+  while (OB_SUCC(ret) && ! lib::ThreadPool::has_set_stop()) {
+    bool is_trans_can_be_output = true;
+    if (! ready_trans_queue_.empty()) {
+      // notice the lock scope
+      ObByteLockGuard guard(trans_queue_lock_);
+      TrxSortElem top_trx_sort_elem = ready_trans_queue_.top();
+      const int64_t global_trans_version = top_trx_sort_elem.get_trans_commit_version();
+      TransCtx *trans_ctx = top_trx_sort_elem.get_trans_ctx_host();
+      is_trans_can_be_output = (global_trans_version <= ATOMIC_LOAD(&global_checkpoint_));
+      if (is_trans_can_be_output) {
+        if (OB_FAIL(seq_trans_queue_.push(trans_ctx))) {
+          if (OB_SIZE_OVERFLOW != ret) {
+            LOG_ERROR("push trans_ctx into seq_trans_queue failed", KR(ret));
+            // push failed, signal consumer wakeup
+            seq_queue_cond_.signal();
+          } else {
+            // seq_trans_queue is full, will retry in next round
+            ret = OB_SUCCESS;
+            // wait seq_trans_queue not full
+            seq_queue_cond_.timedwait(DATA_OP_TIMEOUT);
+          }
+        } else {
+          ready_trans_queue_.pop();
+          // push success, signal handle_trans_in_seq_queue_ to consume
+          seq_queue_cond_.signal();
+        }
+      }
+    } else {
+      // wait trans assembled and push into ready_trans_queue
+      ready_queue_cond_.timedwait(DATA_OP_TIMEOUT);
+    }
+    if (!is_trans_can_be_output) {
+      // wait checkpoint advance
+      // can't put into ObByteLockGuard(trans_queue_lock_) in case of deak lock of trans_queue_lock_
+      checkpoint_cond_.timedwait(DATA_OP_TIMEOUT);
+    }
+    if (REACH_TIME_INTERVAL(PRINT_SEQ_INFO_INTERVAL)) {
+      ISTAT("[OUTPUT]", "DELAY", NTS_TO_DELAY(global_checkpoint_),
+          K_(global_checkpoint), K_(last_global_checkpoint), K_(global_seq),
+          "ready_trans_count", ready_trans_queue_.size(),
+          "sequenced_trans_count", seq_trans_queue_.get_curr_total());
+    }
+  } // end while
+
+  return ret;
+}
+
+int ObLogSequencer::handle_trans_in_seq_queue_()
+{
+  int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
+
+  while (OB_SUCC(ret) && ! lib::ThreadPool::has_set_stop()) {
+    bool seq_queue_is_empty = false;
+    TransCtx *trans_ctx = nullptr;
+    ObLogTraceIdGuard trace_guard;
+    if (OB_FAIL(seq_trans_queue_.pop(trans_ctx))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        seq_queue_is_empty = true;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("pop TransCtx from seq_trans_queue failed", KR(ret));
+      }
+    } else if (OB_FAIL(handle_sequenced_trans_(trans_ctx, lib::ThreadPool::has_set_stop()))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("handle_sequenced_trans_ failed", KR(ret));
+      }
+    }
+    if (seq_queue_is_empty) {
+      // wait data push into seq_trans_queue
+      seq_queue_cond_.timedwait(DATA_OP_TIMEOUT);
+    } else {
+      // consume data in seq_trans_queue, signal producer to push data
+      // or consume failed, signal producer wakeup
+      seq_queue_cond_.signal();
+    }
+  } // end while
+
+  return ret;
+}
+
+int ObLogSequencer::handle_sequenced_trans_(
+    TransCtx *trans_ctx,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   bool enable_monitor = false;
   ObLogTimeMonitor monitor("Sequencer::handle_tobe_sequenced_trans", enable_monitor);
-  TransCtx *trans_ctx = trx_sort_elem.get_trans_ctx_host();
-  const int64_t new_seq = ATOMIC_FAA(&global_seq_, 1);
-  int64_t new_schema_version = 0;
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogSequencer has not been initialized", KR(ret));
   } else if (OB_ISNULL(trans_ctx)) {
-    LOG_ERROR("trans_ctx is NULL", K(trx_sort_elem));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("trans_ctx is NULL", KR(ret));
   } else {
+    const int64_t new_seq = ATOMIC_FAA(&global_seq_, 1);
+    int64_t new_schema_version = 0;
     const int64_t participant_count = trans_ctx->get_ready_participant_count();
     PartTransTask *participant_list = trans_ctx->get_participant_objs();
     const bool is_dml_trans = participant_list->is_dml_trans();
@@ -342,7 +422,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
           K(is_dml_trans), K(local_schema_version), K(new_schema_version));
     // sequence
     } else if (OB_FAIL(trans_ctx->sequence(new_seq, new_schema_version))) {
-      LOG_ERROR("trans_ctx sequence fail", KR(ret), K(trx_sort_elem), K(new_seq), K(new_schema_version));
+      LOG_ERROR("trans_ctx sequence fail", KR(ret), K(new_seq), K(new_schema_version));
     } else {
       monitor.mark_and_get_cost("sequence_done", true);
       if (OB_FAIL(trans_ctx->wait_data_ready(WAIT_TIMEOUT, stop_flag))) {
@@ -385,7 +465,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
       }
     }
 
-    LOG_TRACE("handle_to_be_sequenced_trans_ end", KR(ret), K(trans_id), K(trx_sort_elem));
+    LOG_TRACE("handle_sequenced_trans_ end", KR(ret), K(trans_id), KPC(trans_ctx));
   }
 
   return ret;
@@ -467,6 +547,10 @@ int ObLogSequencer::handle_global_hb_part_trans_task_(PartTransTask &part_trans_
         last_global_checkpoint_ = cur_global_checkpoint;
         // udpate current checkpoint
         ATOMIC_STORE(&global_checkpoint_, global_checkpoint);
+        if (global_checkpoint > cur_global_checkpoint) {
+          // signal push_ready_trans_to_seq_queue_
+          checkpoint_cond_.signal();
+        }
 
         LOG_DEBUG("handle_global_hb_part_trans_task_", K(part_trans_task),
             K(last_global_checkpoint_), K(global_checkpoint_), "delay", NTS_TO_DELAY(global_checkpoint_));
@@ -758,13 +842,18 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
 
     if (OB_SUCC(ret)) {
       TrxSortElem &trx_sort_elem = trans_ctx->get_trx_sort_elem();
-      ObByteLockGuard guard(trans_queue_lock_);
-      trans_queue_.push(trx_sort_elem);
+      {
+        ObByteLockGuard guard(trans_queue_lock_);
+        ready_trans_queue_.push(trx_sort_elem);
+      }
+      // signal push_ready_trans_to_seq_queue_
+      ready_queue_cond_.signal();
 
-      _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=%lu IS_DML=%d",
+      _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=(%lu/%ld) IS_DML=%d",
           tenant_id,
           to_cstring(trx_sort_elem),
-          trans_queue_.size(),
+          ready_trans_queue_.size(),
+          seq_trans_queue_.get_curr_total(),
           is_dml_trans);
     }
   }

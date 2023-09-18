@@ -336,8 +336,9 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
     LOG_ERROR("invalid task", KR(ret), K(task), K(thread_index));
   }
   // If the stream task is currently suspended, the task is put to sleep
-  // DDL tasks are exempt from suspend and require always processing
-  else if (OB_UNLIKELY(is_paused) && ! task->is_sys_log_stream()) {
+  // 1. DDL tasks are exempt from suspend and require always processing
+  // 2. ready rpc(response already return) should always processing
+  else if (OB_UNLIKELY(is_paused) && ! (task->is_sys_log_stream() || task->is_rpc_ready())) {
     LOG_TRACE("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK_ON_PAUSE]", K(task));
 
     if (OB_FAIL(hibernate_stream_task(*task, "PausedFetcher"))) {

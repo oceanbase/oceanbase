@@ -273,7 +273,7 @@ void ObLogStartLSNLocator::run(const int64_t thread_index)
   } else {
     WorkerData &data = worker_data_[thread_index];
 
-    while (! stop_flag_ && OB_SUCCESS == ret) {
+    while (! is_stoped() && OB_SUCCESS == ret) {
       if (OB_FAIL(do_retrieve_(thread_index, data))) {
         LOG_ERROR("retrieve request fail", KR(ret), K(thread_index));
       } else if (! data.has_valid_req()) {
@@ -291,7 +291,7 @@ void ObLogStartLSNLocator::run(const int64_t thread_index)
       }
     }
 
-    if (stop_flag_) {
+    if (is_stoped()) {
       ret = OB_IN_STOP_STATE;
     }
   }
@@ -324,7 +324,7 @@ int ObLogStartLSNLocator::do_retrieve_(const int64_t thread_index, WorkerData &w
   int ret = OB_SUCCESS;
   int64_t batch_count = ATOMIC_LOAD(&g_batch_count);
 
-  for (int64_t cnt = 0; OB_SUCC(ret) && ! stop_flag_ && (cnt < batch_count); ++cnt) {
+  for (int64_t cnt = 0; OB_SUCC(ret) && ! is_stoped() && (cnt < batch_count); ++cnt) {
     StartLSNLocateReq *request = NULL;
     StartLSNLocateReq::SvrItem *item = NULL;
     SvrReq *svr_req = NULL;
@@ -475,7 +475,7 @@ int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
     LOG_ERROR("invalid rpc handle", KR(ret), K(rpc_));
   } else {
     for (int64_t idx = 0, cnt = svr_req_list.count();
-				 ! stop_flag_ && OB_SUCCESS == ret && (idx < cnt); ++idx) {
+				 ! is_stoped() && OB_SUCCESS == ret && (idx < cnt); ++idx) {
       if (OB_ISNULL(svr_req_list.at(idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("svr request is NULL", KR(ret), K(idx), K(cnt), K(svr_req_list));
@@ -486,7 +486,7 @@ int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
         // 1. The number of partitions on a single server may be greater than the maximum number of partitions for a single RPC and needs to be split into multiple requests
         // 2. Each partition request is removed from the request list as soon as it completes, so each request is split into multiple requests, each starting with the first element
         // 3. Partition request completion condition: regardless of success, as long as no breakpoint message is returned, the request is considered completed
-        while (! stop_flag_ && OB_SUCCESS == ret && svr_req.locate_req_list_.count() > 0) {
+        while (! is_stoped() && OB_SUCCESS == ret && svr_req.locate_req_list_.count() > 0) {
           // maximum request count
           int64_t item_cnt_limit = RpcReq::ITEM_CNT_LMT;
           int64_t req_cnt = std::min(svr_req.locate_req_list_.count(), item_cnt_limit);
@@ -495,7 +495,7 @@ int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
           // Note: A separate loop must be used here to ensure that the partition in the retry request is the same "breakpoint partition",
           // if the requested partition is not the same "breakpoint partition" but a new partition is added, the server will have
           // to scan the file from the "head" again and the breakpoint information will be invalid.
-          while (! stop_flag_ && OB_SUCCESS == ret && req_cnt > 0) {
+          while (! is_stoped() && OB_SUCCESS == ret && req_cnt > 0) {
             // Set different trace ids for different requests
             ObLogTraceIdGuard trace_guard;
 
@@ -523,7 +523,7 @@ int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
     }
   }
 
-  if (stop_flag_) {
+  if (is_stoped()) {
 		ret = OB_IN_STOP_STATE;
   }
 
@@ -536,7 +536,7 @@ int ObLogStartLSNLocator::do_direct_request_(WorkerData &data)
   DirectReqList &archive_req_lst = data.archive_req_list_;
   const int64_t lst_cnt = archive_req_lst.count();
   for (int64_t idx = lst_cnt - 1;
-          OB_SUCC(ret) && !stop_flag_ && idx >= 0; --idx) {
+          OB_SUCC(ret) && !is_stoped() && idx >= 0; --idx) {
     LSN start_lsn;
     StartLSNLocateReq *req = archive_req_lst.at(idx);
     if (OB_ISNULL(req)) {
@@ -582,7 +582,7 @@ int ObLogStartLSNLocator::build_request_params_(RpcReq &req,
   int64_t total_cnt = svr_req.locate_req_list_.count();
   req.reset();
 
-  for (int64_t index = 0; OB_SUCC(ret) && ! stop_flag_ && index < req_cnt && index < total_cnt; ++index) {
+  for (int64_t index = 0; OB_SUCC(ret) && ! is_stoped() && index < req_cnt && index < total_cnt; ++index) {
     StartLSNLocateReq *request = svr_req.locate_req_list_.at(index);
     StartLSNLocateReq::SvrItem *svr_item = NULL;
 
@@ -653,7 +653,7 @@ int ObLogStartLSNLocator::do_rpc_and_dispatch_(
 
   if (OB_SUCCESS == ret) {
     // Scanning of arrays in reverse order to support deletion of completed ls requests
-    for (int64_t idx = request_cnt - 1; OB_SUCC(ret) && ! stop_flag_ && idx >= 0; idx--) {
+    for (int64_t idx = request_cnt - 1; OB_SUCC(ret) && ! is_stoped() && idx >= 0; idx--) {
       int ls_err = OB_SUCCESS;
       palf::LSN start_lsn;
       int64_t start_log_tstamp = OB_INVALID_TIMESTAMP;

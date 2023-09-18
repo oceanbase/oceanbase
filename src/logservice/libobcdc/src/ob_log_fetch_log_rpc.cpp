@@ -180,7 +180,9 @@ int FetchLogSRpc::RpcCB::process()
   const common::ObAddr &svr = RpcCBBase::dst_;
 
   if (OB_FAIL(do_process_(rcode, &result))) {
-    LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
+    }
   }
   // Aone:
   // Note: destruct response after asynchronous RPC processing
@@ -200,7 +202,9 @@ void FetchLogSRpc::RpcCB::on_timeout()
       to_cstring(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
+    }
   }
 }
 
@@ -217,7 +221,9 @@ void FetchLogSRpc::RpcCB::on_invalid()
       to_cstring(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
+    }
   }
 }
 
@@ -711,7 +717,9 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
       // Assign log stream fetching tasks as needed
       if (OB_SUCCESS == ret && need_dispatch_stream_task) {
         if (OB_FAIL(stream_worker_->dispatch_stream_task(host_, "RpcCallback"))) {
-          LOG_ERROR("dispatch stream task fail", KR(ret));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("dispatch stream task fail", KR(ret));
+          }
         }
       }
     }
@@ -1111,7 +1119,9 @@ int FetchLogARpc::RpcCB::process()
   const common::ObAddr &svr = RpcCBBase::dst_;
 
   if (OB_FAIL(do_process_(rcode, &result))) {
-    LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
+    }
   }
   // Aone:
   // Note: Active destructe response after asynchronous RPC processing
@@ -1131,7 +1141,9 @@ void FetchLogARpc::RpcCB::on_timeout()
       to_cstring(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr), K_(host));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr), K_(host));
+    }
   }
 }
 
@@ -1148,7 +1160,9 @@ void FetchLogARpc::RpcCB::on_invalid()
       to_cstring(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr), K_(host));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr), K_(host));
+    }
   }
 }
 
@@ -1164,7 +1178,9 @@ int FetchLogARpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLS
   }
   // Processing RPC response results
   else if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
-    LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode), K(rpc_req));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode), K(rpc_req));
+    }
   } else {
     // success
   }

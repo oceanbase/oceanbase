@@ -128,6 +128,9 @@ public:
 
   int64_t get_fetch_task_count() const { return 1; }
 
+  // is rpc response ready
+  bool is_rpc_ready() const { return fetch_log_arpc_.is_rpc_ready(); }
+
   int64_t get_rpc_timeout() const { return g_rpc_timeout; }
 
   int alloc_fetch_log_srpc(FetchLogSRpc *&fetch_log_srpc);

@@ -76,6 +76,7 @@ public:
     const int64_t version = 0, const bool check_name = false);
   int load_from_file(const char *config_file, const int64_t version = 0, const bool check_name = false);
   int dump2file(const char *config_file) const;
+  virtual bool need_print_config(const std::string& config_key) const { return true; }
 private:
   bool inited_;
   static const int64_t OB_MAX_CONFIG_LENGTH = 5 * 1024 * 1024;  // 5M

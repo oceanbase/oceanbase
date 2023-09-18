@@ -145,7 +145,9 @@ void ObLogMysqlProxy::destroy()
   inited_ = false;
 
   connection_pool_.stop();
-  TG_DESTROY(tg_id_);
+  // NOTICE: should not stop and wait timer task cause timer task will cancel in connection_pool_
+  // deconstruct, stop and wait will invoke by cancel in timer task
+  // TG_DESTROY(tg_id_);
 
   cluster_user_[0] = '\0';
   cluster_password_[0] = '\0';

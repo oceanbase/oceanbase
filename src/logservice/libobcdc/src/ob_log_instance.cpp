@@ -57,6 +57,7 @@
 #include "ob_log_start_schema_matcher.h"  // ObLogStartSchemaMatcher
 #include "ob_log_tenant_mgr.h"            // IObLogTenantMgr
 #include "ob_log_rocksdb_store_service.h" // RocksDbStoreService
+#include "ob_cdc_auto_config_mgr.h"       // CDC_CFG_MGR
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
@@ -504,7 +505,7 @@ int ObLogInstance::init_global_kvcache_()
   } else if (OB_FAIL(lib::ObResourceMgr::get_instance().set_cache_washer(ObKVGlobalCache::get_instance()))) {
     LOG_ERROR("Fail to set_cache_washer", KR(ret));
   } else {
-    LOG_INFO("ObKVGlobalCache init succ", "max_cached_size", SIZE_TO_STR(DEFAULT_QUEUE_SIZE));
+    LOG_INFO("ObKVGlobalCache init succ", "max_cached_size", SIZE_TO_STR(DEFAULT_MAX_CACHE_SIZE));
   }
 
   return ret;
@@ -565,13 +566,12 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       LOG_ERROR("init fifo allocator fail", KR(ret));
     } else if (OB_FAIL(trans_task_pool_.init(&trans_task_pool_alloc_,
         TCONF.part_trans_task_prealloc_count,
-        TCONF.part_trans_task_page_size,
         1 == TCONF.part_trans_task_dynamic_alloc,
         TCONF.part_trans_task_prealloc_page_count))) {
       LOG_ERROR("init task pool fail", KR(ret));
     } else if (OB_FAIL(hbase_util_.init())) {
       LOG_ERROR("init hbase_util_ fail", KR(ret));
-    } else if (OB_FAIL(br_queue_.init(DEFAULT_QUEUE_SIZE))) {
+    } else if (OB_FAIL(br_queue_.init(CDC_CFG_MGR.get_br_queue_length()))) {
       LOG_ERROR("init binlog record queue fail", KR(ret));
     } else if (OB_FAIL(init_global_tenant_manager_())) {
       LOG_ERROR("init_global_tenant_manager_ fail", KR(ret));
@@ -641,6 +641,8 @@ int ObLogInstance::dump_config_()
       LOG_INFO("dump config to file succ", K(config_fpath));
     }
   }
+
+  CDC_CFG_MGR.init(TCONF);
 
   return ret;
 }
@@ -727,7 +729,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   ObBackupPathString archive_dest(archive_dest_str);
   const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
   const bool enable_sort_by_seq_no = (1 == TCONF.enable_output_trans_order_by_sql_operation);
-  const int64_t redo_dispatcher_mem_limit = TCONF.redo_dispatcher_memory_limit.get();
+  const int64_t redo_dispatcher_mem_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
   enable_filter_sys_tenant_ = (0 != TCONF.enable_filter_sys_tenant);
 
   drc_message_factory_binlog_record_type_.assign(drc_message_factory_binlog_record_type_str,
@@ -856,7 +858,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
 
   INIT(resource_collector_, ObLogResourceCollector,
-      TCONF.resource_collector_thread_num, TCONF.resource_collector_thread_num_for_br, DEFAULT_QUEUE_SIZE,
+      TCONF.resource_collector_thread_num, TCONF.resource_collector_thread_num_for_br,
+      CDC_CFG_MGR.get_resource_collector_queue_length(),
       br_pool_, trans_ctx_mgr_, meta_manager_, store_service_, err_handler);
 
   INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
@@ -916,25 +919,26 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  INIT(trans_msg_sorter_, ObLogTransMsgSorter, enable_sort_by_seq_no, TCONF.msg_sorter_thread_num, TCONF.msg_sorter_task_count_upper_limit,
-      *trans_stat_mgr_, err_handler);
+  INIT(trans_msg_sorter_, ObLogTransMsgSorter, enable_sort_by_seq_no, TCONF.msg_sorter_thread_num,
+      CDC_CFG_MGR.get_msg_sorter_task_count_upper_limit(), *trans_stat_mgr_, err_handler);
 
   INIT(committer_, ObLogCommitter, start_seq, &br_queue_, resource_collector_,
       br_pool_, trans_ctx_mgr_, trans_stat_mgr_, err_handler);
 
-  INIT(storager_, ObLogStorager, TCONF.storager_thread_num, TCONF.storager_queue_length, *store_service_, *err_handler);
+  INIT(storager_, ObLogStorager, TCONF.storager_thread_num, CDC_CFG_MGR.get_storager_queue_length(), *store_service_, *err_handler);
 
   INIT(batch_buffer_, ObLogBatchBuffer, TCONF.batch_buf_size, TCONF.batch_buf_count, storager_);
 
-  INIT(reader_, ObLogReader, TCONF.reader_thread_num, TCONF.reader_queue_length,
+  INIT(reader_, ObLogReader, TCONF.reader_thread_num, CDC_CFG_MGR.get_reader_queue_length(),
       working_mode_, *store_service_, *err_handler);
 
-  INIT(formatter_, ObLogFormatter, TCONF.formatter_thread_num, DEFAULT_QUEUE_SIZE, working_mode_,
+  INIT(formatter_, ObLogFormatter, TCONF.formatter_thread_num, CDC_CFG_MGR.get_formatter_queue_length(), working_mode_,
       &obj2str_helper_, br_pool_, meta_manager_, schema_getter_, storager_, err_handler,
       skip_dirty_data, enable_hbase_mode, hbase_util_, skip_hbase_mode_put_column_count_not_consistency,
       enable_output_hidden_primary_key);
 
-  INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num, DEFAULT_QUEUE_SIZE, *err_handler);
+  INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num,
+      CDC_CFG_MGR.get_lob_data_merger_queue_length(), *err_handler);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(lob_aux_meta_storager_.init(store_service_))) {
@@ -946,15 +950,15 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison);
 
-  INIT(sequencer_, ObLogSequencer, TCONF.sequencer_thread_num, TCONF.sequencer_queue_length,
+  INIT(sequencer_, ObLogSequencer, TCONF.sequencer_thread_num, CDC_CFG_MGR.get_sequencer_queue_length(),
       *trans_ctx_mgr_, *trans_stat_mgr_, *committer_, *trans_redo_dispatcher_, *trans_msg_sorter_, *err_handler);
 
   INIT(part_trans_parser_, ObLogPartTransParser, br_pool_, meta_manager_, cluster_info.cluster_id_);
 
-  INIT(dml_parser_, ObLogDmlParser, TCONF.dml_parser_thread_num, DEFAULT_QUEUE_SIZE, *formatter_,
+  INIT(dml_parser_, ObLogDmlParser, TCONF.dml_parser_thread_num, CDC_CFG_MGR.get_dml_parser_queue_length(), *formatter_,
       *err_handler, *part_trans_parser_);
 
-  INIT(ddl_parser_, ObLogDdlParser, TCONF.ddl_parser_thread_num, DEFAULT_QUEUE_SIZE, *err_handler,
+  INIT(ddl_parser_, ObLogDdlParser, TCONF.ddl_parser_thread_num, CDC_CFG_MGR.get_auto_queue_length(), *err_handler,
       *part_trans_parser_);
 
   INIT(sys_ls_handler_, ObLogSysLsTaskHandler, ddl_parser_, ddl_processor_, sequencer_, err_handler,
@@ -979,6 +983,10 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(start_tenant_service_())) {
+    LOG_ERROR("start_tenant_service_ failed", KR(ret));
   }
 
   LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
@@ -1303,6 +1311,7 @@ void ObLogInstance::destroy_components_()
   if (is_online_refresh_mode(refresh_mode_)) {
     DESTROY(schema_getter_, ObLogSchemaGetter);
   }
+  DESTROY(meta_manager_, ObLogMetaManager);
   if (! is_online_sql_not_available()) {
     if (is_tenant_sync_mode()) {
       mysql_proxy_.destroy();
@@ -1315,7 +1324,6 @@ void ObLogInstance::destroy_components_()
     }
   }
   DESTROY(resource_collector_, ObLogResourceCollector);
-  DESTROY(meta_manager_, ObLogMetaManager);
   DESTROY(trans_ctx_mgr_, ObLogTransCtxMgr);
   DESTROY(trans_stat_mgr_, ObLogTransStatMgr);
   DESTROY(tenant_mgr_, ObLogTenantMgr);
@@ -1323,7 +1331,8 @@ void ObLogInstance::destroy_components_()
   DESTROY(br_pool_, ObLogBRPool);
   DESTROY(storager_, ObLogStorager);
   DESTROY(reader_, ObLogReader);
-  DESTROY(store_service_, RocksDbStoreService);
+  // NOTICE: should not stop and destroy store_service in case progress core at rocksdb deconstruct
+  // DESTROY(store_service_, RocksDbStoreService);
   if (is_data_dict_refresh_mode(refresh_mode_)) {
     ObLogMetaDataService::get_instance().destroy();
   }
@@ -1436,8 +1445,6 @@ int ObLogInstance::launch()
       LOG_ERROR("start_threads_ fail", KR(ret));
     } else if (OB_FAIL(timezone_info_getter_->start())) {
       LOG_ERROR("start_timezone_info_thread_ fail", KR(ret));
-    } else if (OB_FAIL(start_tenant_service_())) {
-      LOG_ERROR("start_tenant_service_ failed", KR(ret));
     } else {
       is_running_ = true;
       LOG_INFO("launch all components end success");
@@ -1512,6 +1519,7 @@ int ObLogInstance::get_tenant_ids(std::vector<uint64_t> &tenant_ids)
 
 void ObLogInstance::mark_stop_flag(const char *stop_reason)
 {
+  stop_flag_ = true;
   if (inited_) {
     if (OB_ISNULL(stop_reason)) {
       stop_reason = "UNKNOWN";
@@ -1561,11 +1569,11 @@ int ObLogInstance::next_record(IBinlogRecord **record,
   IBinlogRecord *pop_record = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("instance has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("instance has not been initialized", KR(ret));
   } else if (OB_ISNULL(record)) {
-    LOG_ERROR("invalid argument", K(record));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(record));
   } else if (OB_UNLIKELY(OB_SUCCESS != global_errno_)) {
     // In case of global error, the corresponding error code is returned, except for OB_TIMEOUT
     ret = (OB_TIMEOUT == global_errno_) ? OB_IN_STOP_STATE : global_errno_;
@@ -1574,8 +1582,8 @@ int ObLogInstance::next_record(IBinlogRecord **record,
       LOG_ERROR("pop binlog record from br_queue fail", KR(ret));
     }
   } else if (OB_ISNULL(pop_record)) {
-    LOG_ERROR("pop binlog record from br_queue fail", KR(ret), K(pop_record));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("pop binlog record from br_queue fail", KR(ret), K(pop_record));
   } else {
     *record = pop_record;
   }
@@ -1584,16 +1592,16 @@ int ObLogInstance::next_record(IBinlogRecord **record,
     ObLogBR *oblog_br = NULL;
 
     if (OB_ISNULL(record) || OB_ISNULL(*record)) {
-      LOG_ERROR("record is invalid", K(record));
       ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("record is invalid", KR(ret), K(record));
     } else if (OB_ISNULL(oblog_br = reinterpret_cast<ObLogBR *>((*record)->getUserData()))) {
-      LOG_ERROR("get user data fail", "br", *record, K(oblog_br));
       ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get user data fail", KR(ret), "br", *record, K(oblog_br));
     } else {
       int record_type = (*record)->recordType();
-      int64_t timestamp_usec = (*record)->getTimestamp() * 1000000 + (*record)->getRecordUsec();
 
       if (HEARTBEAT == record_type) {
+        int64_t timestamp_usec = (*record)->getTimestamp() * 1000000 + (*record)->getRecordUsec();
         last_heartbeat_timestamp_micro_sec_ =
             std::max(timestamp_usec, last_heartbeat_timestamp_micro_sec_);
       }
@@ -1628,7 +1636,7 @@ int ObLogInstance::next_record(IBinlogRecord **record,
   }
 
   if (OB_SUCC(ret)) {
-    if (! TCONF.enable_verify_mode) {
+    if (0 == TCONF.enable_verify_mode) {
       // do nothing
     } else {
       if (OB_FAIL(verify_dml_unique_id_(*record))) {
@@ -1653,7 +1661,7 @@ int ObLogInstance::verify_ob_trace_id_(IBinlogRecord *br)
   } else if (OB_ISNULL(br)) {
     LOG_ERROR("invalid arguments", K(br));
     ret = OB_INVALID_ARGUMENT;
-  } else if (! TCONF.need_verify_ob_trace_id) {
+  } else if (0 == TCONF.need_verify_ob_trace_id) {
     // do nothing
   } else {
     int record_type = br->recordType();
@@ -2136,6 +2144,11 @@ void ObLogInstance::timer_routine()
 
       // Periodic printing of statistical information
       if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+        _LOG_INFO("OBCDC RUNNING STATUS: [START_TS %s(%ld)][WORK_MODE: %s][META_REFRESH_MODE:%s][LOG_FETCH_MODE:%s]",
+            NTS_TO_STR(start_tstamp_ns_), start_tstamp_ns_,
+            print_working_mode(working_mode_),
+            print_refresh_mode(refresh_mode_),
+            print_fetching_mode(fetching_mode_));
         print_tenant_memory_usage_();
         if (is_online_refresh_mode(refresh_mode_)) {
           schema_getter_->print_stat_info();
@@ -2260,6 +2273,7 @@ void ObLogInstance::reload_config_()
   if (OB_FAIL(config.load_from_file(default_config_fpath))) {
     LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
   } else {
+    CDC_CFG_MGR.configure(config);
     const int64_t max_log_file_count = config.max_log_file_count;
     const bool enable_log_limit = (1 == config.enable_log_limit);
     LOG_INFO("reset log config", "log_level", config.log_level.str(), K(max_log_file_count));
@@ -2328,15 +2342,31 @@ void ObLogInstance::reload_config_()
 
 void ObLogInstance::print_tenant_memory_usage_()
 {
+  int ret = OB_SUCCESS;
   lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
 
   if (OB_ISNULL(mallocator)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "mallocator is NULL, can not print_tenant_memory_usage");
+  } else if (OB_ISNULL(tenant_mgr_)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant_mgr is NULL, can not print_tenant_memory_usage for each tenant");
   } else {
-    mallocator->print_tenant_memory_usage(OB_SYS_TENANT_ID);
-    mallocator->print_tenant_ctx_memory_usage(OB_SYS_TENANT_ID);
+    std::vector<uint64_t> tenant_ids;
+    if (enable_filter_sys_tenant_) {
+      //.print sys tenant memory usage here
+      mallocator->print_tenant_memory_usage(OB_SYS_TENANT_ID);
+      mallocator->print_tenant_ctx_memory_usage(OB_SYS_TENANT_ID);
+    }
     mallocator->print_tenant_memory_usage(OB_SERVER_TENANT_ID);
     mallocator->print_tenant_ctx_memory_usage(OB_SERVER_TENANT_ID);
+
+    if (OB_FAIL(tenant_mgr_->get_all_tenant_ids(tenant_ids))) {
+      LOG_ERROR("get_all_tenant_ids failed", KR(ret));
+    } else {
+      for (auto tenant_id: tenant_ids) {
+        mallocator->print_tenant_memory_usage(tenant_id);
+        mallocator->print_tenant_ctx_memory_usage(tenant_id);
+      }
+    }
   }
 }
 
@@ -2362,19 +2392,21 @@ void ObLogInstance::global_flow_control_()
           K(formatter_), K(sys_ls_handler_), K(resource_collector_));
     } else {
       int64_t part_trans_task_active_count_upper_bound =
-        TCONF.part_trans_task_active_count_upper_bound;
+        CDC_CFG_MGR.get_part_trans_task_active_count_upper_bound();
       int64_t part_trans_task_reusable_count_upper_bound =
-        TCONF.part_trans_task_reusable_count_upper_bound;
+        CDC_CFG_MGR.get_part_trans_task_reusable_count_upper_bound();
       int64_t ready_to_seq_task_upper_bound =
-        TCONF.ready_to_seq_task_upper_bound;
+        CDC_CFG_MGR.get_ready_to_seq_task_upper_bound();
       int64_t storager_task_count_upper_bound =
-        TCONF.storager_task_count_upper_bound;
+        CDC_CFG_MGR.get_storager_task_count_upper_bound();
       int64_t storager_mem_percentage =
-        TCONF.storager_mem_percentage;
+        CDC_CFG_MGR.get_storager_mem_percentage();
       double system_memory_avail_percentage_lower_bound =
         static_cast<double>(TCONF.system_memory_avail_percentage_lower_bound) / 100;
-      int64_t memory_limit = TCONF.memory_limit.get();
-      int64_t redo_mem_limit = TCONF.redo_dispatcher_memory_limit.get();
+      double memory_usage_warn_percent = TCONF.memory_usage_warn_threshold / 100.0;
+      int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
+      int64_t memory_warn_usage = memory_limit * memory_usage_warn_percent;
+      int64_t redo_mem_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
       int64_t redo_mem_usage = trans_redo_dispatcher_->get_dispatched_memory_size();
 
       int64_t total_part_trans_task_count = trans_task_pool_.get_total_count();
@@ -2382,6 +2414,7 @@ void ObLogInstance::global_flow_control_()
       int64_t active_log_entry_task_count = log_entry_task_pool_->get_alloc_count();
       int64_t reusable_part_trans_task_count = 0;
       int64_t ready_to_seq_task_count = 0;
+      int64_t seq_queue_trans_count = 0;
 
       int64_t fetcher_part_trans_task_count = fetcher_->get_part_trans_task_count();
       int64_t dml_parser_part_trans_task_count = 0;
@@ -2401,28 +2434,53 @@ void ObLogInstance::global_flow_control_()
       int64_t system_memory_avail_lower_bound =
         static_cast<int64_t>(static_cast<double>(system_memory_limit) * system_memory_avail_percentage_lower_bound);
       bool need_slow_down_fetcher = false;
+      const bool need_pause_dispatch = need_pause_redo_dispatch();
+      const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+      const bool is_storage_work_mode = is_storage_working_mode(working_mode_);
+      const char *reason = "";
 
-      if (OB_FAIL(get_task_count_(ready_to_seq_task_count, reusable_part_trans_task_count))) {
-        LOG_ERROR("get_task_count fail", KR(ret), K(ready_to_seq_task_count),
+      if (OB_FAIL(get_task_count_(ready_to_seq_task_count, seq_queue_trans_count, reusable_part_trans_task_count))) {
+        LOG_ERROR("get_task_count fail", KR(ret), K(ready_to_seq_task_count), K(seq_queue_trans_count),
             K(reusable_part_trans_task_count));
       } else if (OB_FAIL(dml_parser_->get_log_entry_task_count(dml_parser_part_trans_task_count))) {
         LOG_ERROR("DML parser get_log_entry_task_count fail", KR(ret), K(dml_parser_part_trans_task_count));
       } else {
+        const bool is_seq_queue_not_empty = (seq_queue_trans_count > 0);
         int64_t storager_task_count = 0;
         int64_t storager_log_count = 0;
         storager_->get_task_count(storager_task_count, storager_log_count);
 
         // Use the following policy for global traffic control:
-        // need_slow_down = (active partitioned transaction tasks exceed the upper limit || libobcdc takes up more memory than the upper limit || system free memory is less than a certain percentage)
-        // && (reusable transaction tasks exceeds limit || Parser and Sequencer module cache tasks exceeds limit)
+        // need_slow_down =
+        // (1) (active partitioned transaction tasks exceed the upper limit || liboblog takes up more memory than the upper limit || system free memory is less than a certain percentage)
+        //      && (reusable transaction tasks exceeds limit || Parser and Sequencer module cache tasks exceeds limit || if in storage working mode)
+        // OR
+        // (2) storager task overload with certain threshold
+        // OR
+        // (3) memory is limited and exist trans sequenced but not output
+        // OR
+        // (4) memory_limit touch warn threshold and need_pause_dispatch
         bool condition1 = (active_part_trans_task_count >= part_trans_task_active_count_upper_bound)
-          || (memory_hold >= memory_limit)
+          || touch_memory_warn_limit
           || (system_memory_avail < system_memory_avail_lower_bound);
         bool condition2 = (reusable_part_trans_task_count >= part_trans_task_reusable_count_upper_bound)
           || (ready_to_seq_task_count > ready_to_seq_task_upper_bound);
         bool condition3 = (storager_task_count > storager_task_count_upper_bound) && (memory_hold >= storager_mem_percentage * memory_limit);
 
-        need_slow_down_fetcher = (condition1 && condition2) || (condition3);
+        need_slow_down_fetcher = (condition1 && (condition2 || need_pause_dispatch || is_seq_queue_not_empty)) || condition3;
+        if (need_slow_down_fetcher) {
+          if (condition2) {
+            reason = "MEMORY_LIMIT_AND_REUSABLE_PART_TOO_MUCH";
+          } else if (need_pause_dispatch) {
+            reason = "MEMORY_LIMIT_AND_DISPATCH_PAUSED";
+          } else if (is_seq_queue_not_empty) {
+            reason = "MEMORY_LIMIT_AND_EXIST_TRANS_TO_OUTPUT";
+          } else if (condition3) {
+            reason = "STORAGER_TASK_OVER_THRESHOLD";
+          } else {
+            reason = "MEMORY_LIMIT";
+          }
+        }
 
         // Get the number of active distributed transactions after sequencing, including sequenced, formatted, and committed
         int64_t seq_trans_count =
@@ -2440,13 +2498,13 @@ void ObLogInstance::global_flow_control_()
               "PAUSED=%d MEM=%s/%s "
               "AVAIL_MEM=%s/%s "
               "READY_TO_SEQ=%ld/%ld "
-              "PART_TRANS(TOTAL=%ld,ACTIVE=%ld/%ld,REUSABLE=%ld/%ld) "
+              "PART_TRANS(TOTAL=%ld, ACTIVE=%ld/%ld, REUSABLE=%ld/%ld) "
               "LOG_TASK(ACTIVE=%ld) "
               "STORE(%ld/%ld) "
               "[FETCHER=%ld DML_PARSER=%ld "
               "COMMITER=%ld USER_QUEUE=%ld OUT=%ld RC=%ld] "
-              "DIST_TRANS(SEQ=%ld,COMMITTED=%ld) "
-              "REDO_DISPATCH=%s/%s",
+              "DIST_TRANS(SEQ_QUEUE=%ld, SEQ=%ld, COMMITTED=%ld) "
+              "NEED_PAUSE_DISPATCH=%d REASON=%s",
               need_slow_down_fetcher, current_fetcher_is_paused,
               SIZE_TO_STR(memory_hold), SIZE_TO_STR(memory_limit),
               SIZE_TO_STR(system_memory_avail), SIZE_TO_STR(system_memory_avail_lower_bound),
@@ -2460,8 +2518,8 @@ void ObLogInstance::global_flow_control_()
               committer_ddl_part_trans_task_count + committer_dml_part_trans_task_count,
               br_queue_part_trans_task_count, out_part_trans_task_count,
               resource_collector_part_trans_task_count,
-              seq_trans_count, committed_trans_count,
-              SIZE_TO_STR(redo_mem_usage), SIZE_TO_STR(redo_mem_limit));
+              seq_queue_trans_count, seq_trans_count, committed_trans_count,
+              need_pause_dispatch, reason);
         }
       }
 
@@ -2521,7 +2579,7 @@ void ObLogInstance::dump_pending_trans_info_()
         int64_t total_size = pos;
         char *ptr = buffer;
 
-        while (OB_SUCC(ret) && total_size > 0) {
+        while (OB_SUCC(ret) && total_size > 0 && ! stop_flag_) {
           ssize_t nwrite = 0;
           nwrite = write(fd, ptr, static_cast<int>(total_size));
 
@@ -2600,26 +2658,29 @@ void ObLogInstance::clean_log_()
   }
 }
 
-int64_t ObLogInstance::get_memory_hold_()
+int64_t ObLogInstance::get_memory_hold_() const
 {
   return lib::get_memory_used();
 }
 
-int64_t ObLogInstance::get_memory_avail_()
+int64_t ObLogInstance::get_memory_avail_() const
 {
   return lib::get_memory_avail();
 }
 
-int64_t ObLogInstance::get_memory_limit_()
+int64_t ObLogInstance::get_memory_limit_() const
 {
   return lib::get_memory_limit();
 }
 
-int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
+int ObLogInstance::get_task_count_(
+    int64_t &ready_to_seq_task_count,
+    int64_t &seq_trans_count,
     int64_t &part_trans_task_resuable_count)
 {
   int ret = OB_SUCCESS;
   ready_to_seq_task_count = 0;
+  seq_trans_count = 0;
   part_trans_task_resuable_count = 0;
 
   if (OB_ISNULL(fetcher_) || OB_ISNULL(dml_parser_) || OB_ISNULL(formatter_)
@@ -2655,6 +2716,7 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
 
       // Count the number of partitioned tasks to be ordered
       ready_to_seq_task_count = dml_parser_log_count + formatter_log_count + storager_log_count;
+      seq_trans_count = seq_stat_info.sequenced_trans_count_;
     }
 
     // II. Get the number of reusable tasks for each module
@@ -2696,9 +2758,10 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
         _LOG_INFO("[TASK_COUNT_STAT] [FETCHER] [PART_TRANS_TASK=%ld]", fetcher_part_trans_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [SYS_LS_HANDLE] [PART_TRANS_TASK=%ld]", sys_ls_handle_part_trans_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [STORAGER] [LOG_TASK=%ld/%ld]", storager_task_count, storager_log_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [SEQUENCER] [PART_TRANS_TASK(QUEUE=%ld TOTAL=[%ld][DDL=%ld DML=%ld HB=%ld])] [SEQ_TRANS=%ld]",
-            seq_stat_info.queue_part_trans_task_count_, seq_stat_info.total_part_trans_task_count_, seq_stat_info.ddl_part_trans_task_count_,
-            seq_stat_info.dml_part_trans_task_count_, seq_stat_info.hb_part_trans_task_count_, seq_stat_info.sequenced_trans_count_);
+        _LOG_INFO("[TASK_COUNT_STAT] [SEQUENCER] [PART_TRANS_TASK(QUEUE=%ld TOTAL=[%ld][DDL=%ld DML=%ld HB=%ld])] [TRANS(READY=%ld SEQ=%ld)]",
+            seq_stat_info.queue_part_trans_task_count_, seq_stat_info.total_part_trans_task_count_,
+            seq_stat_info.ddl_part_trans_task_count_, seq_stat_info.dml_part_trans_task_count_, seq_stat_info.hb_part_trans_task_count_,
+            seq_stat_info.ready_trans_count_, seq_stat_info.sequenced_trans_count_);
         _LOG_INFO("[TASK_COUNT_STAT] [READER] [ROW_TASK=%ld]", reader_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [DML_PARSER] [LOG_TASK=%ld]", dml_parser_log_count);
         _LOG_INFO("[TASK_COUNT_STAT] [FORMATTER] [BR=%ld LOG_TASK=%ld LOB_STMT=%ld]", formatter_br_count, formatter_log_count, stmt_in_lob_merger_count);
@@ -3047,6 +3110,81 @@ int ObLogInstance::get_tenant_compat_mode(const uint64_t tenant_id,
   return ret;
 }
 
+// pause disaptch if:
+// 0. user force pause.
+// 1. user queue backlog.
+// 2. resource collector backlog.
+bool ObLogInstance::need_pause_redo_dispatch() const
+{
+  bool current_need_pause = true;
+  static bool last_need_paused = false;
+  if (inited_) {
+    double memory_usage_warn_percent = TCONF.memory_usage_warn_threshold / 100.0;
+    int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
+    int64_t memory_warn_usage = memory_limit * memory_usage_warn_percent;
+    int64_t memory_hold = get_memory_hold_();
+    int64_t redo_dispatch_exceed_ratio = CDC_CFG_MGR.get_redo_dispatched_memory_limit_exceed_ratio();
+    const int64_t redo_memory_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
+    const int64_t rc_br_thread_count = TCONF.resource_collector_thread_num_for_br;
+    const int64_t rc_thread_queue_len = CDC_CFG_MGR.get_resource_collector_queue_length();
+    int64_t resource_collector_part_trans_task_count = 0;
+    int64_t resource_collector_br_count = 0;
+    resource_collector_->get_task_count(resource_collector_part_trans_task_count, resource_collector_br_count);
+    const int64_t user_queue_br_count = br_queue_.get_dml_br_count() + br_queue_.get_ddl_br_count();
+    const bool force_pause_dispatch = (0 != TCONF.pause_dispatch_redo);
+    const int64_t pause_dispatch_threshold = TCONF.pause_redo_dispatch_task_count_threshold;
+    const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+    const bool touch_memory_limit = (memory_hold > memory_limit);
+    double pause_dispatch_percent = pause_dispatch_threshold / 100.0;
+    if (touch_memory_limit) {
+      pause_dispatch_percent = 0;
+      // pause redo dispatch
+    } else if (touch_memory_warn_limit) {
+      pause_dispatch_percent = pause_dispatch_percent * 0.1;
+      // if already touch memory_warn limit, increase probability of redo dispatch flow control
+    }
+    int64_t dispatched_redo_memory = 0;
+    if (OB_NOT_NULL(trans_redo_dispatcher_)) {
+      dispatched_redo_memory = trans_redo_dispatcher_->get_dispatched_memory_size();
+    }
+    const bool is_redo_dispatch_over_exceed = (dispatched_redo_memory >= redo_dispatch_exceed_ratio * redo_memory_limit);
+    const char *reason = "";
+    if (force_pause_dispatch) {
+      current_need_pause = true;
+      reason = "USER_FORCE_PAUSE";
+    } else if (resource_collector_br_count > (rc_br_thread_count * rc_thread_queue_len * pause_dispatch_percent)) {
+      current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
+      reason = "SLOW_RESOURCE_RECYCLING";
+    } else if (user_queue_br_count > (CDC_CFG_MGR.get_br_queue_length() * pause_dispatch_percent)) {
+      current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
+      reason = "SLOW_CONSUMPTION_DOWNSTREAM";
+    } else {
+      current_need_pause = false;
+    }
+    bool is_state_change = (last_need_paused != current_need_pause);
+    bool need_print_state = (is_state_change || current_need_pause) && REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
+    if (need_print_state) {
+      _LOG_INFO("[NEED_PAUSE_REDO_DISPATCH=%d]"
+          "[REASON:%s]"
+          "[REDO_DISPATCH:%s/%s]"
+          "[THRESHOLD:%.2f]"
+          "[QUEUE_DML_BR:%ld]"
+          "[RESOURCE_COLLECTOR:%ld]"
+          "[STATE_CHANGED:%d]",
+          current_need_pause,
+          reason,
+          SIZE_TO_STR(dispatched_redo_memory), SIZE_TO_STR(redo_memory_limit),
+          pause_dispatch_percent,
+          user_queue_br_count,
+          resource_collector_br_count,
+          is_state_change);
+    }
+    if (is_state_change) {
+      last_need_paused = current_need_pause;
+    }
+  }
+  return current_need_pause;
+}
 
 }
 }

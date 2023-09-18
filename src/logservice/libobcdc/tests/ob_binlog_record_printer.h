@@ -40,6 +40,7 @@ public:
   virtual ~IObBinlogRecordPrinter() {}
 
 public:
+  virtual bool need_print_binlog_record() = 0;
   virtual int print_binlog_record(IBinlogRecord *br) = 0;
 };
 
@@ -55,6 +56,8 @@ public:
   virtual ~ObBinlogRecordPrinter();
 
 public:
+  virtual bool need_print_binlog_record()
+  { return enable_print_console_ || heartbeat_file_fd_ > 0 || data_file_fd_ > 0; };
   virtual int print_binlog_record(IBinlogRecord *br);
 
 public:

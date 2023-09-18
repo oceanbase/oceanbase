@@ -120,6 +120,9 @@ private:
   transaction::ObTransID  trans_id_;
   int64_t                 total_part_count_;
   int64_t                 dispatched_part_count_;
+  // is_dispatching_ = false means not dispatch any redo,
+  // will only dispatch one redo for the first round
+  bool                    is_dispatching_;
   // assume PartTransTask that all redo dispatched will be removed from arr while
   // RedoDispatcher::dispatch_part_redo_with_budget
   PartBudgetArray         normal_priority_part_budget_arr_;

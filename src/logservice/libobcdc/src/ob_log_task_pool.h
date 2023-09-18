@@ -98,12 +98,13 @@ public:
   // Should provide allocator, and the size of prealloc task number.
   int init(common::ObIAllocator *task_alloc,
       const int64_t prealloc_pool_size,
-      const int64_t trans_task_page_size,
       const bool allow_dynamic_alloc,
       const int64_t prealloc_page_count)
   {
     int ret = common::OB_SUCCESS;
     const int64_t start_ts = get_timestamp();
+    const int64_t trans_task_page_size = OB_MALLOC_NORMAL_BLOCK_SIZE;
+
     if (OB_UNLIKELY(inited_)) {
       ret = common::OB_INIT_TWICE;
       OBLOG_LOG(WARN, "already init", KR(ret));

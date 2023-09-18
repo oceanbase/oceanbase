@@ -103,7 +103,9 @@ int ObLogFetcherIdlePool::push(LSFetchCtx *task)
     LOG_DEBUG("[STAT] [IDLE_POOL] [DISPATCH_IN]", K(task), KPC(task));
 
     if (OB_FAIL(IdlePoolThread::push(task, task->hash()))) {
-      LOG_ERROR("push task fail", KR(ret), K(task), K(task->hash()));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("push task fail", KR(ret), K(task), K(task->hash()));
+      }
     } else {
       // success
     }
@@ -261,7 +263,9 @@ int ObLogFetcherIdlePool::do_request_(const int64_t thread_index, FetchTaskList 
 
         const char *dispatch_reason = "SvrListReady";
         if (OB_FAIL(stream_worker_->dispatch_fetch_task(*task, dispatch_reason))) {
-          LOG_ERROR("dispatch fetch task fail", KR(ret), KPC(task), K(dispatch_reason));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("dispatch fetch task fail", KR(ret), KPC(task), K(dispatch_reason));
+          }
         } else {
           // You cannot continue to operate the task afterwards
         }
@@ -300,7 +304,9 @@ int ObLogFetcherIdlePool::handle_task_(LSFetchCtx *task, bool &need_dispatch)
       // Requires a successful update of the server list before leaving the idle pool
       if (task->need_update_svr_list()) {
         if (OB_FAIL(task->update_svr_list())) {
-          LOG_ERROR("update server list fail", KR(ret), KPC(task));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("update server list fail", KR(ret), KPC(task));
+          }
         }
       }
       // locate the start LSN

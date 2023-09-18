@@ -202,12 +202,12 @@ int BRQueue::pop_next_br_(ObLogBR *&data, const int64_t timeout)
         LOG_ERROR("pop data from fixed queue fail", KR(ret));
       }
     } else {
+      cond_.signal();
       bool need_accumulate_stat = false;
 
       if (OB_FAIL(do_stat_for_part_trans_task_count_(*data, need_accumulate_stat))) {
         LOG_ERROR("do_stat_for_part_trans_task_count_ fail", KR(ret), K(need_accumulate_stat));
       }
-      cond_.signal();
     }
   }
 

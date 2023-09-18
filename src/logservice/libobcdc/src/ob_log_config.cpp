@@ -100,6 +100,20 @@ int ObLogConfig::format_cluster_url()
   return ret;
 }
 
+bool ObLogConfig::need_print_config(const std::string& config_key) const
+{
+  bool need_print = true;
+
+  if ((0 == config_key.compare("cluster_password"))
+    || (0 == config_key.compare("tenant_password"))
+    || (0 == config_key.compare("archive_dest"))
+    || (0 == config_key.compare("ssl_external_kms_info"))) {
+      need_print = false;
+  }
+
+  return need_print;
+}
+
 void ObLogConfig::print() const
 {
   static const int64_t BUF_SIZE = 1L << 22;
@@ -119,9 +133,11 @@ void ObLogConfig::print() const
         TS_TO_STR(get_timestamp()));
 
     for (int64_t index = 0; index < configs.count(); index++) {
-      (void)databuff_printf(buf, size, pos, "%s [CONFIG] %-45s = %s\n",
-          TS_TO_STR(get_timestamp()), configs.at(index).key_.c_str(),
-          configs.at(index).val_.c_str());
+      if (need_print_config(configs.at(index).key_)) {
+        (void)databuff_printf(buf, size, pos, "%s [CONFIG] %-45s = %s\n",
+            TS_TO_STR(get_timestamp()), configs.at(index).key_.c_str(),
+            configs.at(index).val_.c_str());
+      }
     }
 
     (void)databuff_printf(buf, size, pos,

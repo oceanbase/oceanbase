@@ -22,6 +22,7 @@ target_link_libraries(obcdc_base
 
 ob_set_subtarget(obcdc_object_list common
   libobcdc.cpp
+  ob_cdc_auto_config_mgr.cpp
   ob_cdc_define.cpp
   ob_cdc_tablet_to_table_info.cpp
   ob_cdc_lob_ctx.cpp

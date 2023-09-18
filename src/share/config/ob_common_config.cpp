@@ -147,7 +147,9 @@ int ObBaseConfig::load_from_buffer(const char *config_str, const int64_t config_
         } else {
           (*pp_item)->set_value(value);
           (*pp_item)->set_version(version);
-          _LOG_INFO("load config succ, %s=%s", name, value);
+          if (need_print_config(name)) {
+            _LOG_INFO("load config succ, %s=%s", name, value);
+          }
         }
 
         if (OB_SUCCESS == ret) {

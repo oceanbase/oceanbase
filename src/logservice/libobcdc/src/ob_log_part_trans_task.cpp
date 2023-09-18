@@ -2054,7 +2054,7 @@ int ObLogEntryTask::link_row_list(int64_t &row_ref_cnt)
     if (OB_SUCC(ret)) {
       // Note: First set ref count before set formatted status, to avoid Sortter has get Dml Stmt
       set_row_ref_cnt(redo_node_->get_valid_row_num());
-      row_ref_cnt = row_ref_cnt_;
+      row_ref_cnt = get_row_ref_cnt();
 
       if (OB_FAIL(set_redo_log_formatted())) {
         LOG_ERROR("set_redo_log_formatted fail", KR(ret));

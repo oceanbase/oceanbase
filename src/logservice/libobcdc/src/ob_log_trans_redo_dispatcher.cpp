@@ -18,6 +18,7 @@
 
 #include "ob_log_instance.h"
 #include "ob_log_trans_redo_dispatcher.h"
+#include "ob_cdc_auto_config_mgr.h"
 
 namespace oceanbase
 {
@@ -72,7 +73,7 @@ void ObLogTransRedoDispatcher::destroy()
 
 void ObLogTransRedoDispatcher::configure(const ObLogConfig &config)
 {
-  const int64_t redo_mem_limit = config.redo_dispatcher_memory_limit.get();
+  const int64_t redo_mem_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
   ATOMIC_SET(&redo_memory_limit_, redo_mem_limit);
   LOG_INFO("[CONFIG][REDO_DISPATCHER]", "redo_dispatcher_memory_limit", redo_mem_limit, "to_size", SIZE_TO_STR(redo_mem_limit));
 }
@@ -171,8 +172,10 @@ int ObLogTransRedoDispatcher::dispatch_by_turn_(TransCtx &trans, volatile bool &
         LOG_ERROR("failed to batch dispatch redo", KR(ret), K_(enable_sort_by_seq_no), K(trans), K(stop_flag));
       }
     } else if (!trans_dispatch_ctx_.is_trans_dispatched()) {
-      ob_usleep(100); // sleep 100 us
-      if (OB_UNLIKELY(++retry_cnt % 1000 == 0)) {
+      ob_usleep(200); // sleep 200 us
+      if (OB_UNLIKELY(++retry_cnt % 50000 == 0)) {
+        // print each 5 sec
+        // TODO: simply log content
         LOG_WARN("trans dispatch_by_turn for too many times", KR(ret), K(retry_cnt), K(trans), K_(trans_dispatch_ctx));
       }
     } else {

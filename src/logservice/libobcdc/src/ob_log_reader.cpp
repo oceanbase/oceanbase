@@ -57,13 +57,13 @@ int ObLogReader::init(const int64_t thread_num,
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(inited_)) {
-    LOG_ERROR("ObLogReader has been initialized");
     ret = OB_INIT_TWICE;
+    LOG_ERROR("ObLogReader has been initialized", KR(ret));
   } else if (OB_UNLIKELY(thread_num <= 0)
       || OB_UNLIKELY(queue_size <= 0)
       || OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
-    LOG_ERROR("invalid arguments", K(thread_num), K(queue_size), K(working_mode));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), K(thread_num), K(queue_size), K(working_mode));
   } else if (OB_FAIL(ReaderThread::init(thread_num, queue_size))) {
     LOG_ERROR("init ReaderThread queue thread fail", K(ret), K(thread_num), K(queue_size));
   } else {
@@ -107,8 +107,8 @@ int ObLogReader::start()
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogReader has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogReader has not been initialized", KR(ret));
   } else if (OB_FAIL(ReaderThread::start())) {
     LOG_ERROR("start ReaderThread thread fail", K(ret), "thread_num", get_thread_num());
   } else {
