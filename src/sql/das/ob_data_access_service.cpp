@@ -258,7 +258,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       bool need_retry = false;
       retry_func(das_ref, task_op, need_retry);
       LOG_INFO("[DAS RETRY] check if need tablet level retry",
-               KR(task_op.errcode_), K(need_retry),
+               KR(task_op.errcode_), K(need_retry), K(task_op.task_flag_),
                "retry_cnt", location_router.get_retry_cnt(),
                KPC(task_op.get_tablet_loc()));
       if (need_retry &&

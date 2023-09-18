@@ -608,6 +608,7 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     range_buffer_idx_(0),
     group_size_(0),
     max_group_size_(0),
+    in_rescan_(false),
     global_index_lookup_op_(NULL),
     spat_index_()
 {
@@ -659,6 +660,7 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc)
     scan_op->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
     scan_op->set_can_part_retry(nullptr == tsc_rtdef_.scan_rtdef_.sample_info_
                                 && can_partition_retry());
+    scan_op->set_inner_rescan(in_rescan_);
     tsc_rtdef_.scan_rtdef_.table_loc_->is_reading_ = true;
     if (!MY_SPEC.is_index_global_ && MY_CTDEF.lookup_ctdef_ != nullptr) {
       //is local index lookup, need to set the lookup ctdef to the das scan op
@@ -1496,6 +1498,7 @@ int ObTableScanOp::fill_storage_feedback_info()
 int ObTableScanOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
+  in_rescan_ = true;
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to exec inner rescan");
   } else if (MY_SPEC.is_global_index_back()) {
@@ -1598,7 +1601,6 @@ int ObTableScanOp::local_iter_rescan()
         }
       }
       if (OB_SUCC(ret)) {
-        scan_op->set_inner_rescan(true);
         if (OB_FAIL(cherry_pick_range_by_tablet_id(scan_op))) {
           LOG_WARN("prune query range by partition id failed", K(ret));
         } else if (OB_FAIL(init_das_group_range(0, group_size_))) {
