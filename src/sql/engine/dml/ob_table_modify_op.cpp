@@ -879,11 +879,11 @@ int ObTableModifyOp::inner_close()
   }
   dml_modify_rows_.clear();
   // Release the hash sets created at fk root ctx for delete distinct checks
-  if (OB_SUCC(ret) && get_exec_ctx().is_fk_root_ctx()) {
+  if (get_exec_ctx().is_fk_root_ctx()) {
     DASDelCtxList& del_ctx_list = get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
     DASDelCtxList::iterator iter = del_ctx_list.begin();
-    for (;  OB_SUCC(ret)&& iter != del_ctx_list.end(); iter++) {
-      DmlRowkeyDistCtx del_ctx = *iter;
+    for (; iter != del_ctx_list.end(); iter++) {
+      DmlRowkeyDistCtx& del_ctx = *iter;
       if (del_ctx.deleted_rows_ != nullptr) {
         del_ctx.deleted_rows_->destroy();
         del_ctx.deleted_rows_ = nullptr;
