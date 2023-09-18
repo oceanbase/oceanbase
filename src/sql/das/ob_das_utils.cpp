@@ -395,7 +395,7 @@ int ObDASUtils::wait_das_retry(int64_t retry_cnt)
                                             ? THIS_WORKER.get_timeout_remain()
                                                 : 10000L * timeout_factor;
   if (sleep_us > 0) {
-    LOG_INFO("will sleep", K(sleep_us), K(THIS_WORKER.get_timeout_remain()));
+    LOG_INFO("[DAS RETRY] will sleep", K(sleep_us), K(THIS_WORKER.get_timeout_remain()));
     THIS_WORKER.sched_wait();
     ob_usleep(static_cast<uint32_t>(sleep_us));
     THIS_WORKER.sched_run();
