@@ -183,7 +183,7 @@ double ObServerConfig::get_sys_tenant_default_min_cpu()
 
 double ObServerConfig::get_sys_tenant_default_max_cpu()
 {
-  double max_cpu = server_cpu_quota_min;
+  double max_cpu = server_cpu_quota_max;
   if (0 == max_cpu) {
     int64_t cpu_count = get_cpu_count();
     if (cpu_count < 8) {
