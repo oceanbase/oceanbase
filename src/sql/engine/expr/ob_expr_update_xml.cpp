@@ -113,7 +113,7 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObIMulModeBase *xml_tree = NULL;
   bool has_namespace_str = false;
   int64_t num_child = expr.arg_cnt_;
-  ObPathVarObject *prefix_ns = NULL;
+  ObPathVarObject prefix_ns(allocator);
   ObString default_ns;
   ObCollationType cs_type = CS_TYPE_INVALID;
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
@@ -161,8 +161,8 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       } else if (xpath_str.empty()) {
         ret = OB_ERR_INVALID_XPATH_EXPRESSION;
         LOG_WARN("xpath is empty", K(ret));
-      } else if (OB_FAIL(update_xml_tree(xml_mem_ctx,  expr.args_[i+1], ctx, xpath_str, default_ns, prefix_ns, xml_tree))) {
-        LOG_WARN("fail to do update in xml tree", K(ret), K(xml_tree), K(xpath_str), K(default_ns), K(prefix_ns), K(i+1));
+      } else if (OB_FAIL(update_xml_tree(xml_mem_ctx,  expr.args_[i+1], ctx, xpath_str, default_ns, &prefix_ns, xml_tree))) {
+        LOG_WARN("fail to do update in xml tree", K(ret), K(xml_tree), K(xpath_str), K(default_ns), K(i+1));
       }
     }
     // set result

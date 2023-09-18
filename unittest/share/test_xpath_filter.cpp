@@ -62,7 +62,7 @@ TEST_F(TestXPathFilter, test_false_function)
     ObString enter_xpath = func_false_enter[i];
     std::cout << enter_xpath.ptr() << std::endl;
     ObString default_ns;
-    ObPathVarObject pass;
+    ObPathVarObject pass(allocator);
     ObDatum data;
     data.set_string("ns2");
     ret = pass.add("h", &data);
@@ -117,7 +117,7 @@ TEST_F(TestXPathFilter, test_function)
     ObString enter_xpath = func_enter[i];
     std::cout << enter_xpath.ptr() << std::endl;
     ObString default_ns;
-    ObPathVarObject pass;
+    ObPathVarObject pass(allocator);
     ObDatum data;
     data.set_string("ns2");
     ret = pass.add("h", &data);
@@ -164,7 +164,7 @@ TEST_F(TestXPathFilter, test_complex_in_predicate)
   ObString enter_xpath = "/tmp/a[/tmp/a = \"xyz\"]";
   std::cout << enter_xpath.ptr() << std::endl;
   ObString default_ns;
-  ObPathVarObject pass;
+    ObPathVarObject pass(allocator);
   ObDatum data;
   data.set_string("ns2");
   ret = pass.add("h", &data);
@@ -414,7 +414,7 @@ TEST_F(TestXPathFilter, test_in_predicate)
     ObString enter_xpath = enter_predicate[i];
     std::cout << enter_xpath.ptr() << std::endl;
     ObString default_ns;
-    ObPathVarObject pass;
+    ObPathVarObject pass(allocator);
     ObDatum data;
     data.set_string("ns2");
     ret = pass.add("h", &data);
@@ -576,7 +576,7 @@ TEST_F(TestXPathFilter, test_false_in_predicate)
     std::cout << "TEST: " << i << std::endl;
     std::cout << enter_xpath.ptr() << std::endl;
     ObString default_ns;
-    ObPathVarObject pass;
+    ObPathVarObject pass(allocator);
     ObDatum data;
     data.set_string("ns2");
     ret = pass.add("h", &data);
@@ -635,7 +635,7 @@ TEST_F(TestXPathFilter, test_equal_compare)
     ObString enter_xpath = enter_compare[i];
     std::cout << enter_xpath.ptr() << std::endl;
     ObString default_ns;
-    ObPathVarObject pass;
+    ObPathVarObject pass(allocator);
     ObDatum data;
     data.set_string("ns2");
     ret = pass.add("h", &data);

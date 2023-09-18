@@ -98,7 +98,7 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
   ObIMulModeBase *xml_doc = NULL;
   ObPathExprIter xpath_iter(&allocator);
   ObString default_ns;
-  ObPathVarObject *prefix_ns = NULL;
+  ObPathVarObject prefix_ns(allocator);
   ObNodeMemType expect_type = ObNodeMemType::BINARY_TYPE;
   ObString xml_res;
   ObCollationType cs_type = CS_TYPE_INVALID;
@@ -132,7 +132,7 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, xml_datum, cs_type, expect_type, xml_doc))) {
     LOG_WARN("fail to parse xml doc", K(ret));
-  } else if (OB_FAIL(extract_xpath_result(xml_mem_ctx, xpath_str, default_ns, xml_doc, prefix_ns, xml_res))) {
+  } else if (OB_FAIL(extract_xpath_result(xml_mem_ctx, xpath_str, default_ns, xml_doc, &prefix_ns, xml_res))) {
     LOG_WARN("fail to extract xpath result", K(ret), K(xpath_str));
   } else if (xml_res.empty()) {
     res.set_null();
