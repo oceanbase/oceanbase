@@ -8487,8 +8487,6 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant when restore_concurrency is 0");
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(arg.tenant_name_))) {
     LOG_WARN("unsupported tenant name", KR(ret), "tenant_name", arg.tenant_name_);
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-        "since 4.2.1, the tenant name in lists [all,all_meta,all_user] (including the one with quotes) is");
   } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
                      OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get sys tenant's schema guard", KR(ret));
