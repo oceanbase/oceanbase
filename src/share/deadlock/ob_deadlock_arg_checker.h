@@ -64,7 +64,7 @@ inline int check_args(const HEAD &head, const Args &...rest)
   int ret = OB_SUCCESS;
   if (!check_args(head)) {
     ret = OB_INVALID_ARGUMENT;
-    DETECT_LOG(ERROR, "arg invalid");
+    DETECT_LOG(WARN, "arg invalid");
   } else {
     ret = check_args(rest...);
   }
