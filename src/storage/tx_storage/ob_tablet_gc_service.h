@@ -31,6 +31,14 @@ namespace checkpoint
 {
 #define TABLET_PERSIST                  0x01  /* tablet persist trigger */
 #define TABLET_GC                       0x02  /* tablet gc trigger */
+
+enum TabletGCStatus
+{
+  NOT_NEED_GC = 0,
+  NEED_GC_AFTER_MDS_PERSIST = 1,
+  NEED_GC_IMMEDIATELY = 2
+};
+
 class ObTabletGCHandler
 {
   friend class ObTabletGCService;
@@ -67,10 +75,11 @@ public:
       const share::SCN &decided_scn);
   int check_tablet_need_gc_(
       ObTabletHandle &tablet_handle,
-      bool &need_gc,
+      TabletGCStatus &need_gc,
       bool &need_retry,
       const share::SCN &decided_scn);
   int get_unpersist_tablet_ids(common::ObIArray<ObTabletHandle> &deleted_tablets,
+      common::ObIArray<ObTabletHandle> &immediately_deleted_tablets,
       common::ObTabletIDArray &unpersist_tablet_ids,
       const bool only_persist,
       bool &need_retry,
