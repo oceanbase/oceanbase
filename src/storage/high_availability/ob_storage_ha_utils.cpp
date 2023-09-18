@@ -315,6 +315,19 @@ int ObStorageHAUtils::get_readable_scn_(share::SCN &readable_scn)
   return ret;
 }
 
+int ObStorageHAUtils::check_is_primary_tenant(const uint64_t tenant_id, bool &is_primary_tenant)
+{
+  int ret = OB_SUCCESS;
+  is_primary_tenant = false;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check is primary tenant", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(GCTX.sql_proxy_, tenant_id, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;

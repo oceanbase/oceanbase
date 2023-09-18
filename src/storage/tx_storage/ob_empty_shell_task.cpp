@@ -239,15 +239,13 @@ int ObTabletEmptyShellHandler::check_can_become_empty_shell_(const ObTablet &tab
     } else {
       STORAGE_LOG(WARN, "failed to get latest tablet status", K(ret), "tablet_meta", tablet.get_tablet_meta());
     }
-  } else if (MTL_IS_PRIMARY_TENANT() && OB_FAIL(check_tablet_empty_shell_for_primary_(tablet, user_data, can, need_retry))) {
-    STORAGE_LOG(WARN, "failed to check tablet can become empty shell for primary", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
-  } else if (!MTL_IS_PRIMARY_TENANT() && OB_FAIL(check_tablet_empty_shell_for_standby_(tablet, user_data, can, need_retry))) {
-    STORAGE_LOG(WARN, "failed to check tablet can become empty shell for standby", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
+  } else if (OB_FAIL(check_tablet_empty_shell_(tablet, user_data, can, need_retry))) {
+    STORAGE_LOG(WARN, "failed to check tablet empty shell", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
   }
   return ret;
 }
 
-int ObTabletEmptyShellHandler::check_tablet_empty_shell_for_standby_(
+int ObTabletEmptyShellHandler::check_tablet_empty_shell_(
     const ObTablet &tablet,
     const ObTabletCreateDeleteMdsUserData &user_data,
     bool &can,
@@ -268,7 +266,7 @@ int ObTabletEmptyShellHandler::check_tablet_empty_shell_for_standby_(
     STORAGE_LOG(WARN, "tenant info is null", K(ret), K(user_data));
   } else if (OB_FAIL(info->get_readable_scn(readable_scn))) {
     STORAGE_LOG(WARN, "failed to get readable scn", K(ret), K(readable_scn), K(user_data));
-  } else if (MTL_IS_PRIMARY_TENANT() || !readable_scn.is_valid()) {
+  } else if (!readable_scn.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "The tenant is belong to the primary database or readable_scn is invalid",
         K(ret), K(readable_scn), K(user_data));
@@ -286,31 +284,6 @@ int ObTabletEmptyShellHandler::check_tablet_empty_shell_for_standby_(
         STORAGE_LOG(INFO, "readable_scn is smaller than finish_scn",
           "ls_id", ls_->get_ls_id(), K(tablet_id), K(readable_scn), K(user_data), KPC(info));
       }
-    }
-  }
-  return ret;
-}
-
-int ObTabletEmptyShellHandler::check_tablet_empty_shell_for_primary_(
-    const ObTablet &tablet,
-    const ObTabletCreateDeleteMdsUserData &user_data,
-    bool &can,
-    bool &need_retry)
-{
-  int ret = OB_SUCCESS;
-  const ObTabletStatus &tablet_status = user_data.tablet_status_;
-  if (!user_data.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(user_data));
-  } else if (!MTL_IS_PRIMARY_TENANT()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "The tenant does not belong to the primary database", K(ret), K(user_data));
-  } else if (ObTabletStatus::DELETED == tablet_status) {
-    can = true;
-    STORAGE_LOG(INFO, "tablet_status is deleted in primary", K(ret), "ls_id", ls_->get_ls_id(), K(user_data));
-  } else if (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status) {
-    if (OB_FAIL(check_transfer_out_deleted_tablet_(tablet, user_data, can, need_retry))) {
-      STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), "ls_id", ls_->get_ls_id(), K(user_data));
     }
   }
   return ret;
