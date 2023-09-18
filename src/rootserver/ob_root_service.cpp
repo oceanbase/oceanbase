@@ -2709,10 +2709,7 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
-    LOG_WARN("since 4.2.1, naming a tenant as all/all_user/all_meta is not supported",
-             KR(ret), K(tenant_name));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "since 4.2.1, naming a tenant as all/all_user/all_meta is");
+    LOG_WARN("unsupported tenant name", KR(ret), K(tenant_name));
   } else if (OB_FAIL(ddl_service_.create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", KR(ret), K(arg));
     if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
@@ -2788,10 +2785,7 @@ int ObRootService::flashback_tenant(const ObFlashBackTenantArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(arg), K(ret));
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(arg.new_tenant_name_))) {
-    LOG_WARN("since 4.2.1, renaming a tenant to all/all_user/all_meta is not supported",
-             KR(ret), "new_tenant_name", arg.new_tenant_name_);
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "since 4.2.1, renaming a tenant to all/all_user/all_meta is");
+    LOG_WARN("unsupported tenant name", KR(ret), "new_tenant_name", arg.new_tenant_name_);
   } else if (OB_FAIL(ddl_service_.flashback_tenant(arg))) {
     LOG_WARN("failed to flash back tenant", K(ret));
   }
@@ -2826,10 +2820,7 @@ int ObRootService::modify_tenant(const ObModifyTenantArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(arg.new_tenant_name_))) {
-    LOG_WARN("since 4.2.1, renaming a tenant to all/all_user/all_meta is not supported",
-             KR(ret), "new_tenant_name", arg.new_tenant_name_);
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "since 4.2.1, renaming a tenant to all/all_user/all_meta is");
+    LOG_WARN("unsupported tenant name", KR(ret), "new_tenant_name", arg.new_tenant_name_);
   } else if (OB_FAIL(ddl_service_.modify_tenant(arg))) {
     LOG_WARN("ddl service modify tenant failed", K(arg), K(ret));
   } else {
@@ -8493,10 +8484,9 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     LOG_WARN("restore tenant when restore_concurrency is 0 not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant when restore_concurrency is 0");
   } else if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(arg.tenant_name_))) {
-    LOG_WARN("since 4.2.1, naming a tenant as all/all_user/all_meta is not supported",
-             KR(ret), "tenant_name", arg.tenant_name_);
+    LOG_WARN("unsupported tenant name", KR(ret), "tenant_name", arg.tenant_name_);
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "since 4.2.1, naming a tenant as all/all_user/all_meta is");
+        "since 4.2.1, the tenant name in lists [all,all_meta,all_user] (including the one with quotes) is");
   } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
                      OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get sys tenant's schema guard", KR(ret));

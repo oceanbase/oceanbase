@@ -23,8 +23,9 @@ namespace oceanbase
 namespace sql
 {
 enum FreezeAllUserOrMeta {
-  FREEZE_ALL_USER = 0x01,
-  FREEZE_ALL_META = 0x02
+  FREEZE_ALL = 0x01,
+  FREEZE_ALL_USER = 0x02,
+  FREEZE_ALL_META = 0x04
 };
 
 class ObFreezeStmt : public ObSystemCmdStmt
@@ -50,6 +51,8 @@ public:
 
   bool is_major_freeze() const { return major_freeze_; }
   void set_major_freeze(bool major_freeze) { major_freeze_ = major_freeze; }
+  bool is_freeze_all() const { return 0 != (freeze_all_flag_ & FREEZE_ALL); }
+  void set_freeze_all() { freeze_all_flag_ |= FREEZE_ALL; }
   bool is_freeze_all_user() const { return 0 != (freeze_all_flag_ & FREEZE_ALL_USER); }
   void set_freeze_all_user() { freeze_all_flag_ |= FREEZE_ALL_USER; }
   bool is_freeze_all_meta() const { return 0 != (freeze_all_flag_ & FREEZE_ALL_META); }

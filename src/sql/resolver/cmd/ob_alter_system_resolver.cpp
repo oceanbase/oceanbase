@@ -548,7 +548,9 @@ int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
                          "all/all_user/all_meta in combination with other names is");
         } else {
-          if (affect_all || affect_all_user) {
+          if (affect_all) {
+            freeze_stmt->set_freeze_all();
+          } else if (affect_all_user) {
             freeze_stmt->set_freeze_all_user();
           } else {
             freeze_stmt->set_freeze_all_meta();
@@ -660,7 +662,9 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
         LOG_USER_ERROR(OB_NOT_SUPPORTED,
                        "all/all_user/all_meta in combination with other names is");
       } else {
-        if (affect_all || affect_all_user) {
+        if (affect_all) {
+          freeze_stmt->set_freeze_all();
+        } else if (affect_all_user) {
           freeze_stmt->set_freeze_all_user();
         } else {
           freeze_stmt->set_freeze_all_meta();
@@ -1545,7 +1549,9 @@ int ObAdminMergeResolver::resolve(const ParseNode &parse_tree)
                 LOG_USER_ERROR(OB_NOT_SUPPORTED,
                                "all/all_user/all_meta in combination with other names is");
               } else {
-                if (affect_all || affect_all_user) {
+                if (affect_all) {
+                  stmt->get_rpc_arg().affect_all_ = true;
+                } else if (affect_all_user) {
                   stmt->get_rpc_arg().affect_all_user_ = true;
                 } else {
                   stmt->get_rpc_arg().affect_all_meta_ = true;
@@ -2482,7 +2488,9 @@ int ObClearMergeErrorResolver::resolve(const ParseNode &parse_tree)
                 LOG_USER_ERROR(OB_NOT_SUPPORTED,
                                "all/all_user/all_meta in combination with other names is");
               } else {
-                if (affect_all || affect_all_user) {
+                if (affect_all) {
+                  stmt->get_rpc_arg().affect_all_ = true;
+                } else if (affect_all_user) {
                   stmt->get_rpc_arg().affect_all_user_ = true;
                 } else {
                   stmt->get_rpc_arg().affect_all_meta_ = true;
@@ -2772,10 +2780,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       } else {
         const ObString &tenant_name = stmt->get_rpc_arg().tenant_name_;
         if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
-          LOG_WARN("since 4.2.1, naming a tenant as all/all_user/all_meta is not supported",
-                   KR(ret), K(tenant_name));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "since 4.2.1, naming a tenant as all/all_user/all_meta is");
+          LOG_WARN("unsupported tenant name", KR(ret), K(tenant_name));
         } else if (OB_NOT_NULL(parse_tree.children_[1])) {
           if (session_info_->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
             ret = OB_NOT_SUPPORTED;
