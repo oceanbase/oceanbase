@@ -24,8 +24,8 @@ TG_DEF(PartSerMigRetryQt, PartSerMigRetryQt, THREAD_POOL, 1)
 //       (!lib::is_mini_mode() ? OB_MAX_PARTITION_NUM_PER_SERVER : OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER) * 2)
 // TG_DEF(PartSerLargeCb, PartSerLargeCb, QUEUE_THREAD, ThreadCountPair(storage::ObCallbackQueueThread::QUEUE_THREAD_NUM, storage::ObCallbackQueueThread::MINI_MODE_QUEUE_THREAD_NUM),
 //       (!lib::is_mini_mode() ? OB_MAX_PARTITION_NUM_PER_SERVER : OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER) * 2)
-TG_DEF(ReplayEngine, ReplayEngine, QUEUE_THREAD, ThreadCountPair(sysconf(_SC_NPROCESSORS_ONLN), 2),
-       !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
+// TG_DEF(ReplayEngine, ReplayEngine, QUEUE_THREAD, ThreadCountPair(sysconf(_SC_NPROCESSORS_ONLN), 2),
+//        !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
 TG_DEF(TransMigrate, TransMigrate, QUEUE_THREAD, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS(24), 1), 10000)
 TG_DEF(StandbyTimestampService, StandbyTimestampService, THREAD_POOL, 1)
 TG_DEF(WeakReadService, WeakRdSrv, THREAD_POOL, 1)
@@ -94,10 +94,8 @@ TG_DEF(LogIOTaskCbThreadPool, LogIOCb, QUEUE_THREAD,
        ThreadCountPair(palf::LogIOTaskCbThreadPool::THREAD_NUM,
        palf::LogIOTaskCbThreadPool::MINI_MODE_THREAD_NUM),
        palf::LogIOTaskCbThreadPool::MAX_LOG_IO_CB_TASK_NUM)
-TG_DEF(ReplayService, ReplaySrv, QUEUE_THREAD, 1,
-       !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
-TG_DEF(LogRouteService, LogRouteSrv, QUEUE_THREAD, 1,
-       !lib::is_mini_mode() ? (common::MAX_SERVER_COUNT) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::MAX_SERVER_COUNT) * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
+TG_DEF(ReplayService, ReplaySrv, QUEUE_THREAD, 1, (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
+TG_DEF(LogRouteService, LogRouteSrv, QUEUE_THREAD, 1, (common::MAX_SERVER_COUNT) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(LogRouterTimer, LogRouterTimer, TIMER)
 TG_DEF(LogFetcherLSWorker, LSWorker, MAP_QUEUE_THREAD, ThreadCountPair(4, 1))
 TG_DEF(LogFetcherIdlePool, LSIdlePool, MAP_QUEUE_THREAD, 1)
@@ -108,15 +106,14 @@ TG_DEF(LSFreeze, LSFreeze, QUEUE_THREAD, ThreadCountPair(storage::ObLSFreezeThre
        storage::ObLSFreezeThread::MAX_FREE_TASK_NUM)
 TG_DEF(LSFetchLogEngine, FetchLog, QUEUE_THREAD,
        ThreadCountPair(palf::FetchLogEngine::FETCH_LOG_THREAD_COUNT, palf::FetchLogEngine::MINI_MODE_FETCH_LOG_THREAD_COUNT),
-       !lib::is_mini_mode() ? palf::FetchLogEngine::FETCH_LOG_TASK_MAX_COUNT_PER_LS * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : palf::FetchLogEngine::FETCH_LOG_TASK_MAX_COUNT_PER_LS * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
+       palf::FetchLogEngine::FETCH_LOG_TASK_MAX_COUNT_PER_LS * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(DagScheduler, DagScheduler, THREAD_POOL, 1)
 TG_DEF(DagWorker, DagWorker, THREAD_POOL, 1)
 TG_DEF(RCService, RCSrv, QUEUE_THREAD,
        ThreadCountPair(logservice::ObRoleChangeService::MAX_THREAD_NUM,
        logservice::ObRoleChangeService::MAX_THREAD_NUM),
        logservice::ObRoleChangeService::MAX_RC_EVENT_TASK)
-TG_DEF(ApplyService, ApplySrv, QUEUE_THREAD, 1,
-       !lib::is_mini_mode() ? (common::APPLY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::APPLY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
+TG_DEF(ApplyService, ApplySrv, QUEUE_THREAD, 1, (common::APPLY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(GlobalCtxTimer, GlobalCtxTimer, TIMER)
 TG_DEF(StorageLogWriter, StorageLogWriter, THREAD_POOL, 1)
 TG_DEF(ReplayProcessStat, ReplayProcessStat, TIMER)

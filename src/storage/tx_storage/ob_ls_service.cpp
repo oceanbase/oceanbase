@@ -281,12 +281,19 @@ int ObLSService::start()
 int ObLSService::check_tenant_ls_num_()
 {
   int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   const int64_t normal_ls_count = ls_map_.get_ls_count();
   const int64_t removeing_ls_count = ATOMIC_LOAD(&safe_ls_destroy_task_cnt_);
   const int64_t tenant_memory = lib::get_tenant_memory_limit(MTL_ID());
-  const int64_t tenant_max_ls_limit = (tenant_memory > SMALL_TENANT_MEMORY_LIMIT ?
-                                       OB_MAX_LS_NUM_PER_TENANT_PER_SERVER :
-                                       OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT);
+  int64_t tenant_max_ls_limit = OB_MAX(tenant_memory - SMALL_TENANT_MEMORY_LIMIT, 0) / TENANT_MEMORY_PER_LS_NEED +
+                                 OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT;
+  // the max ls limit should not greater than OB_MAX_LS_NUM_PER_TENANT_PER_SERVER
+  tenant_max_ls_limit = OB_MIN(tenant_max_ls_limit, OB_MAX_LS_NUM_PER_TENANT_PER_SERVER);
+  // the config priority is higher than the calculate result.
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    tenant_max_ls_limit = (tenant_config->_max_ls_cnt_per_server != 0 ?
+                           tenant_config->_max_ls_cnt_per_server : tenant_max_ls_limit);
+  }
   if (normal_ls_count + removeing_ls_count + 1 > tenant_max_ls_limit) {
     ret = OB_TOO_MANY_TENANT_LS;
     LOG_WARN("too many ls of a tenant", K(ret), K(normal_ls_count), K(removeing_ls_count),

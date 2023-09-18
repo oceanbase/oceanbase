@@ -448,14 +448,12 @@ const int64_t OB_MAX_SERVER_SESSION_CNT = 32767;
 const int64_t OB_MAX_SERVER_TENANT_CNT = 1000;
 const int64_t OB_RECYCLE_MACRO_BLOCK_DURATION = 10 * 60 * 1000 * 1000LL; // 10 minutes
 const int64_t OB_MINOR_FREEZE_TEAM_UP_INTERVAL = 2 * 60 * 60 * 1000 * 1000L; // 2 hours
-const int64_t OB_MAX_PARTITION_NUM_PER_SERVER = 500000; // Version 3.1 is limited to 50w
-const int64_t OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER = 10000;
 // for define
-const int64_t OB_MAX_LS_NUM_PER_TENANT_PER_SERVER = 100;
-const int64_t OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER = 10;
-const int64_t OB_MAX_PG_NUM_PER_SERVER = 10000; // The total number of PG single servers 2.x version is first limited to 1w
-const int64_t OB_MAX_SA_PARTITION_NUM_PER_SERVER = 500000; // stand alone partition single server 3.1 version is limited to 50w
-const int64_t OB_MAX_PG_PARTITION_COUNT_PER_PG = 100000; // The maximum number of partitions in a single PG is limited to 10w
+const int64_t OB_MAX_SPECIAL_LS_NUM = 1 + 1; // 1 for broadcast ls and 1 for sys ls
+const int64_t OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET = 1024; // the maximum of _max_ls_cnt_per_server
+const int64_t OB_MAX_LS_NUM_PER_TENANT_PER_SERVER = (10 * (OB_MAX_SPECIAL_LS_NUM + OB_MAX_MEMBER_NUMBER) > OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET ?
+                                                     OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET : 10 * (OB_MAX_SPECIAL_LS_NUM + OB_MAX_MEMBER_NUMBER)); // magnification is 10x
+const int64_t OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT = 8;   // the tenant that smaller than 4G will be limit to 8
 const int64_t OB_MAX_TIME = 3020399000000;
 // Max add partition member timeout.
 // Used to make sure no member added after lease expired + %OB_MAX_ADD_MEMBER_TIMEOUT

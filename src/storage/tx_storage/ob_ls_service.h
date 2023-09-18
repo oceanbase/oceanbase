@@ -47,8 +47,8 @@ struct ObLSMeta;
 class ObLSService
 {
   static const int64_t DEFAULT_LOCK_TIMEOUT = 60_s;
-  static const int64_t SMALL_TENANT_MEMORY_LIMIT = 5 * 1024 * 1024 * 1024L; // 5G
-  static const int64_t OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT = 8;
+  static const int64_t SMALL_TENANT_MEMORY_LIMIT = 4 * 1024 * 1024 * 1024L; // 4G
+  static const int64_t TENANT_MEMORY_PER_LS_NEED = 200 * 1024 * 1024L; // 200MB
 public:
   ObLSService();
   ~ObLSService();
