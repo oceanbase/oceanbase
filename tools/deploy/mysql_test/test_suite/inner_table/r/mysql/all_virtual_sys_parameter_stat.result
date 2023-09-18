@@ -311,6 +311,7 @@ _log_writer_parallelism
 _ls_gc_wait_readonly_tx_time
 _ls_migration_wait_completing_timeout
 _max_elr_dependent_trx_count
+_max_ls_cnt_per_server
 _max_malloc_sample_interval
 _max_rpc_packet_size
 _max_schema_slot_num

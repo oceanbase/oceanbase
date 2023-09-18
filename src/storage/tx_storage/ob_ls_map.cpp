@@ -215,12 +215,7 @@ int ObLSMap::add_ls(
 
     if (OB_ISNULL(curr)) {
       int64_t cnt = ATOMIC_AAF(&ls_cnt_, 1);
-      if (cnt > OB_MAX_LS_NUM_PER_TENANT_PER_SERVER) {
-        ATOMIC_DEC(&ls_cnt_);
-        ret = OB_TOO_MANY_TENANT_LS;
-        LOG_WARN("too many lss of a tenant", K(ret), K(cnt),
-                 LITERAL_K(OB_MAX_LS_NUM_PER_TENANT_PER_SERVER));
-      } else if (OB_FAIL(ls.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD))) {
+      if (OB_FAIL(ls.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD))) {
         ATOMIC_DEC(&ls_cnt_);
         LOG_WARN("ls inc ref fail", K(ret), K(ls_id));
       } else {

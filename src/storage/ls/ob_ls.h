@@ -168,6 +168,7 @@ struct DiagnoseInfo
 class ObIComponentFactory;
 enum class ObInnerLSStatus;
 
+// sizeof(ObLS): 77248
 class ObLS : public common::ObLink
 {
 public:
