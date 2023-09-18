@@ -94,6 +94,10 @@ private:
       const share::ObImportTableItem &table_item,
       const share::ObImportTableItem &remap_table_item,
       share::ObImportTableTask &import_task);
+  int check_src_table_schema_(
+      share::ObImportTableJob &import_job,
+      const share::schema::ObTableSchema &table_schema,
+      const share::ObImportTableItem &table_item);
   int fill_common_para_(
     const share::ObImportTableJob &import_job,
     const share::schema::ObTableSchema &table_schema,

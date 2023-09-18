@@ -215,6 +215,17 @@ int ObImportTableJobScheduler::gen_import_table_task_(share::ObImportTableJob &j
       int tmp_ret = OB_SUCCESS;
       ObImportTableJobStatus next_status(ObImportTableJobStatus::IMPORT_FINISH);
       job.set_end_ts(ObTimeUtility::current_time());
+
+      if (!job.get_result().is_comment_setted()) {
+        share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
+        ObImportResult result;
+        if (OB_TMP_FAIL(result.set_result(ret, trace_id, GCONF.self_addr_))) {
+          LOG_WARN("failed to set result", K(ret));
+        } else {
+          job.set_result(result);
+        }
+      }
+
       if (OB_TMP_FAIL(advance_status_(*sql_proxy_, job, next_status))) {
         LOG_WARN("failed to advance status", K(ret));
       }

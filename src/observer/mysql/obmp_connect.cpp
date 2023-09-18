@@ -533,6 +533,12 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         tenant_name_ = ObString::make_string(OB_SYS_TENANT_NAME);
         OB_LOG(INFO, "no tenant name set, use default tenant name", K_(tenant_name));
       }
+
+      if (OB_NOT_NULL(tenant_name_.find('$'))) {
+        ret = OB_ERR_INVALID_TENANT_NAME;
+        LOG_WARN("invalid tenant name. “$” is not allowed in tenant name.", K(ret), K_(tenant_name));
+      }
+
       //在oracle租户下需要转换db_name和user_name,处理双引号和大小写
       //在mysql租户下不会作任何处理,只简单拷贝下~
       if (OB_SUCC(ret)) {

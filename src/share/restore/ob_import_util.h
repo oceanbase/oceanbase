@@ -33,6 +33,9 @@ static int check_tablegroup_exist(share::schema::ObMultiVersionSchemaService &sc
 static int check_tablespace_exist(share::schema::ObMultiVersionSchemaService &schema_service,
     uint64_t tenant_id, const ObString &tablespace, bool &is_exist);
 static int get_tenant_name_case_mode(const uint64_t tenant_id, ObNameCaseMode &name_case_mode);
+static int check_is_recover_table_aux_tenant(
+    share::schema::ObMultiVersionSchemaService &schema_service, const uint64_t tenant_id, bool &is_recover_table_aux_tenant);
+static int check_is_recover_table_aux_tenant_name(const ObString &tenant_name, bool &is_recover_table_aux_tenant);
 };
 
 }
