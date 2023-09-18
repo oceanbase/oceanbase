@@ -38,32 +38,12 @@ jobs:
         key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
         path: deps/3rd
         enableCrossOsArchive: true
-
-    - name: Cache build
-      id: cache-build
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-build
-      with:
-        key: ${{ runner.os }}-${{ env.cache-name }}-${{ matrix.image }}-el7.x86_64-${{ github.ref_name }}
-        path: ~/.ccache
-        enableCrossOsArchive: false
-        restore-keys: |
-          ${{ runner.os }}-${{ env.cache-name }}-${{ matrix.image }}-el7.x86_64
     
     - name: Build init
-      if: steps.cache-deps.outputs.cache-hit != 'true'
       run: bash build.sh init
       
     - name: Build project
       shell: bash
       run: |
-        rm -rf build_debug
-        export CCACHE_LOGFILE=$PWD/ccache.log
-        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -z
-        bash build.sh debug -DOB_USE_CCACHE=ON
-        cd build_debug && make -j4 && cd -
-        deps/3rd/usr/local/oceanbase/devtools/bin/ccache -s
-        
-    - if: ${{ runner.debug }}
-      run: cat $PWD/ccache.log
+        bash build.sh debug
+        cd build_debug && make -j4
