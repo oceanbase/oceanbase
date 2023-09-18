@@ -123,6 +123,9 @@ public:
 
   int64_t get_fetch_task_count() const { return 1; }
 
+  // is rpc response ready
+  bool is_rpc_ready() const { return fetch_log_arpc_.is_rpc_ready(); }
+
 public:
   static void configure(const ObLogConfig & config);
 

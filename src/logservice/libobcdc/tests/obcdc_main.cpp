@@ -17,6 +17,7 @@
 #include "obcdc_main.h"
 #include "ob_log_instance.h"    // ObLogInstance
 #include "share/ob_time_zone_info_manager.h"              // FETCH_TZ_INFO_SQL
+#include "ob_log_trans_ctx.h"
 
 #include <stdio.h>        // fprintf
 #include <getopt.h>       // getopt_long
@@ -129,7 +130,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
 
   // option variables
   int opt = -1;
-  const char *opt_string = "iIvcdD:f:hH:oVt:rR:OxmT:Pp:";
+  const char *opt_string = "iIvcdD:f:hH:oVt:rR:OxmT:Pp:s";
   struct option long_opts[] =
   {
     {"print_dml_checksum", 0, NULL, 'c'},
@@ -153,6 +154,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
     {"output_br_detail", 0, NULL, 'i'},
     {"output_br_special_detail", 0, NULL, 'I'},
     {"parse_timezone_info", 0, NULL, 'p'},
+    {"delay_release", 0, NULL, 's'},
     {0, 0, 0, 0}
   };
 
@@ -253,6 +255,11 @@ int ObLogMain::parse_args_(int argc, char **argv)
         break;
       }
 
+      case 's': {
+        delay_release_ = true;
+        break;
+      }
+
       case 'I': {
         // output special detail info of binlog record, default off
         // Such as, ObTraceInfo
@@ -344,6 +351,9 @@ int ObLogMain::start()
       if (OB_FAIL(instance->init_with_start_tstamp_usec(config_file_, start_timestamp_usec_, handle_error))) {
         LOG_ERROR("init oblog fail", K(ret), K_(config_file), K_(start_timestamp_usec), KP(handle_error));
       } else {
+        _LOG_INFO("sizeof TransCtx: %lu", sizeof(TransCtx));
+        _LOG_INFO("sizeof PartTransTask: %lu", sizeof(PartTransTask));
+        _LOG_INFO("sizeof LogEntryTask: %lu", sizeof(ObLogEntryTask));
         // do nothing
       }
 
@@ -378,7 +388,7 @@ void ObLogMain::run()
 {
   if (inited_ && NULL != obcdc_instance_) {
     int ret = OB_SUCCESS;
-    int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time() + run_time_us_;
+    int64_t end_time = get_timestamp() + run_time_us_;
 
     while (OB_SUCCESS == ret && ! stop_flag_) {
       IBinlogRecord *br = NULL;
@@ -386,17 +396,23 @@ void ObLogMain::run()
 
       if (OB_SUCC(ret)) {
         if (OB_FAIL(verify_record_info_(br))) {
-          LOG_ERROR("verify_record_info_ fail", K(ret), K(br));
+          LOG_ERROR("verify_record_info_ fail", KR(ret), K(br));
+        } else if (br_printer_.need_print_binlog_record()) {
+          // output binlog record
+          if (OB_FAIL(br_printer_.print_binlog_record(br))) {
+            LOG_ERROR("print_binlog_record fail", KR(ret));
+          }
         }
-        // output binlog record
-        else if (OB_FAIL(br_printer_.print_binlog_record(br))) {
-          LOG_ERROR("print_binlog_record fail", K(ret));
-        } else {
+        if (OB_SUCC(ret)) {
+          if (OB_UNLIKELY(delay_release_)) {
+            static const int64_t delay_release_time = 200; // 200 us, output 5K RPS at most
+            usleep(delay_release_time);
+          }
           obcdc_instance_->release_record(br);
           br = NULL;
         }
       } else if (OB_TIMEOUT == ret) {
-        int64_t left_time = end_time - ::oceanbase::common::ObTimeUtility::current_time();
+        int64_t left_time = end_time - get_timestamp();
         if (run_time_us_ > 0 && left_time <= 0) {
           ret = OB_TIMEOUT;
         } else {
@@ -410,7 +426,7 @@ void ObLogMain::run()
         stop_flag_ = true;
         ret = OB_SUCCESS;
       } else {
-        LOG_ERROR("next_record fail", K(ret));
+        LOG_ERROR("next_record fail", KR(ret));
       }
     }
   }
@@ -429,14 +445,14 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
   ObLogBR *oblog_br = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogMain has not inited");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogMain has not inited", KR(ret));
   } else if (OB_ISNULL(br)) {
-    LOG_ERROR("br is null");
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("br is null", KR(ret));
   } else if (OB_ISNULL(oblog_br = reinterpret_cast<ObLogBR *>(br->getUserData()))) {
-    LOG_ERROR("get user data fail", K(br), K(oblog_br));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("get user data fail", KR(ret), K(br), K(oblog_br));
   } else {
     // heartbeat, updtae last_heartbeat_timestamp_usec_
     int64_t checkpoint_timestamp_usec = OB_INVALID_TIMESTAMP;

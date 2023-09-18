@@ -747,8 +747,7 @@ int ObLogSysTableHelper::init(SvrProvider &svr_provider,
       || OB_ISNULL(mysql_user)
       || OB_ISNULL(mysql_password)
       || OB_ISNULL(mysql_db)) {
-    LOG_ERROR("invalid arguments", K(access_systable_helper_thread_num), K(mysql_user),
-        K(mysql_password), K(mysql_db));
+    LOG_ERROR("invalid arguments", K(access_systable_helper_thread_num), K(mysql_user), K(mysql_db));
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t max_thread_num = access_systable_helper_thread_num;
@@ -785,7 +784,7 @@ int ObLogSysTableHelper::init(SvrProvider &svr_provider,
       thread_counter_ = 0;
       inited_ = true;
 
-      LOG_INFO("init systable helper succ", K(mysql_user_), K(mysql_password_), K(mysql_db_),
+      LOG_INFO("init systable helper succ", K(mysql_user_), K(mysql_db_),
           K(access_systable_helper_thread_num));
     }
   }
@@ -1502,7 +1501,7 @@ int ObLogSysTableHelper::change_to_next_server_(const int64_t svr_idx, ObLogMySQ
     }
   } else if (OB_FAIL(conn_config.reset(svr, mysql_user_, mysql_password_, mysql_db_,
       mysql_connect_timeout_sec, mysql_query_timeout_sec))) {
-    LOG_ERROR("reset mysql config fail", KR(ret), K(svr), K(mysql_user_), K(mysql_password_),
+    LOG_ERROR("reset mysql config fail", KR(ret), K(svr), K(mysql_user_),
         K(mysql_db_), K(mysql_connect_timeout_sec), K(mysql_query_timeout_sec));
   } else {
     LOG_INFO("connect to next mysql server", "cur_server", conn.get_server(),

@@ -193,7 +193,9 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
     LOG_DEBUG("[STAT] [STREAM_WORKER] [RECYCLE_FETCH_TASK]", "task", &task, K(task));
 
     if (OB_FAIL(dead_pool_->push(&task))) {
-      LOG_DEBUG("push task into dead pool fail", KR(ret), K(task));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_DEBUG("push task into dead pool fail", KR(ret), K(task));
+      }
     }
   } else if (is_integrated_fetching_mode(task.get_fetching_mode())) {
     ObAddr request_svr;
@@ -240,7 +242,9 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
             "dispatch to idle pool", "task", &task, K(task));
 
         if (OB_FAIL(idle_pool_->push(&task))) {
-          LOG_ERROR("push into idle pool fail", KR(ret), K(task));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("push into idle pool fail", KR(ret), K(task));
+          }
         }
       } else {
         LOG_DEBUG("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] dispatch to next server",
@@ -286,7 +290,9 @@ int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
 
     // Rotating the task of fetching log streams to work threads
     if (OB_FAIL(StreamWorkerThread::push(&task, hash_val))) {
-      LOG_ERROR("push stream task into thread queue fail", KR(ret));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("push stream task into thread queue fail", KR(ret));
+      }
     }
   }
   return ret;
@@ -331,8 +337,9 @@ int ObLSWorker::handle(void *data,
     ret = OB_INVALID_ARGUMENT;
   }
   // If the stream task is currently suspended, the task is put to sleep
-  // DDL tasks are exempt from suspend and require always processing
-  else if (OB_UNLIKELY(is_paused) && ! task->is_sys_log_stream()) {
+  // 1. DDL tasks are exempt from suspend and require always processing
+  // 2. ready rpc(response already return) should always processing
+  else if (OB_UNLIKELY(is_paused) && ! (task->is_sys_log_stream() || task->is_rpc_ready())) {
     LOG_DEBUG("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK_ON_PAUSE]", K(task));
 
     if (OB_FAIL(hibernate_stream_task(*task, "PausedFetcher"))) {

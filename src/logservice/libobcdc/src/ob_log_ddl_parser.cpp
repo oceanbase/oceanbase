@@ -124,7 +124,7 @@ int ObLogDdlParser::push(PartTransTask &task, const int64_t timeout)
     LOG_INFO("DDL parser has been stoped");
     ret = OB_IN_STOP_STATE;
   } else if (OB_FAIL(DdlParserThread::push(&task, push_hash, timeout))) {
-    if (OB_TIMEOUT != ret) {
+    if (OB_TIMEOUT != ret && OB_IN_STOP_STATE != ret) {
       LOG_ERROR("push task into DDL queue thread fail", KR(ret), K(task), K(push_hash));
     }
   } else {

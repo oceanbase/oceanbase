@@ -100,7 +100,9 @@ int ObLogFetcherDeadPool::push(LSFetchCtx *task)
     LOG_DEBUG("[STAT] [DEAD_POOL] [DISPATCH_IN]", K(task), KPC(task));
 
     if (OB_FAIL(DeadPoolThread::push(task, task->hash()))) {
-      LOG_ERROR("push task fail", KR(ret), K(task), K(task->hash()));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("push task fail", KR(ret), K(task), K(task->hash()));
+      }
     } else {
       // 成功
     }

@@ -74,6 +74,7 @@ public:
   static ObLogConfig &get_instance();
 
 public:
+  virtual bool need_print_config(const std::string& config_key) const override;
   void print() const;
   int load_from_map(const ConfigMap& configs,
       const int64_t version = 0,
@@ -100,15 +101,16 @@ public:
   DEF_INT(dml_parser_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "DML parser thread number");
   DEF_INT(ddl_parser_thread_num, OB_CLUSTER_PARAMETER, "1", "[1,]", "DDL parser thread number");
   DEF_INT(sequencer_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "sequencer thread number");
-  DEF_INT(sequencer_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "sequencer queue length");
+  DEF_INT(sequencer_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "sequencer queue length");
   DEF_INT(formatter_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "formatter thread number");
   DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "2", "[1,]", "lob data merger thread number");
   DEF_CAP(batch_buf_size, OB_CLUSTER_PARAMETER, "20MB", "[2MB,]", "batch buf size");
   DEF_INT(batch_buf_count, OB_CLUSTER_PARAMETER, "10", "[5,]", "batch buf count");
   DEF_INT(storager_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "storager thread number");
-  DEF_INT(storager_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "storager queue length");
+  DEF_INT(storager_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "storager queue length");
   DEF_INT(reader_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "reader thread number");
-  DEF_INT(reader_queue_length, OB_CLUSTER_PARAMETER, "102400", "[1,]", "reader queue length");
+  DEF_INT(reader_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "reader queue length");
+  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0, ]", "user_binlog_record queue length");
   DEF_INT(cached_schema_version_count, OB_CLUSTER_PARAMETER, "32", "[1,]", "cached schema version count");
   DEF_INT(history_schema_version_count, OB_CLUSTER_PARAMETER, "16", "[1,]", "history schema version count");
   DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "resource collector thread number");
@@ -117,19 +119,18 @@ public:
   DEF_INT(instance_index, OB_CLUSTER_PARAMETER, "0", "[0,]", "store instance index, start from 0");
   DEF_INT(part_trans_task_prealloc_count, OB_CLUSTER_PARAMETER, "300000", "[1,]",
       "part trans task pre-alloc count");
-  DEF_INT(part_trans_task_active_count_upper_bound, OB_CLUSTER_PARAMETER, "200000", "[1,]",
+  DEF_INT(part_trans_task_active_count_upper_bound, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "active part trans task count upper bound");
-  DEF_INT(storager_task_count_upper_bound, OB_CLUSTER_PARAMETER, "1000", "[1,]",
+  DEF_INT(storager_task_count_upper_bound, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "storager task count upper bound");
-  DEF_INT(storager_mem_percentage, OB_CLUSTER_PARAMETER, "2", "[1,]",
+  DEF_INT(storager_mem_percentage, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "storager memory percentage");
-  T_DEF_BOOL(skip_recycle_data, OB_CLUSTER_PARAMETER, 0, "0:not_skip, 1:skip")
-  DEF_INT(part_trans_task_reusable_count_upper_bound, OB_CLUSTER_PARAMETER, "10240", "[1,]",
+  T_DEF_BOOL(skip_recycle_data, OB_CLUSTER_PARAMETER, 0, "0:not_skip, 1:skip");
+  DEF_INT(part_trans_task_reusable_count_upper_bound, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "reusable parti trans task count upper bound");
-  DEF_INT(ready_to_seq_task_upper_bound, OB_CLUSTER_PARAMETER, "20000", "[1,]",
+  DEF_INT(ready_to_seq_task_upper_bound, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "ready to sequencer task count upper bound");
   DEF_INT(part_trans_task_dynamic_alloc, OB_CLUSTER_PARAMETER, "1", "[0,1]", "part trans task dynamic alloc");
-  DEF_CAP(part_trans_task_page_size, OB_CLUSTER_PARAMETER, "8KB", "[1B,]", "part trans task page size");
   DEF_INT(part_trans_task_prealloc_page_count, OB_CLUSTER_PARAMETER, "20000", "[1,]",
       "part trans task prealloc page count");
   // Log_level=INFO in the startup scenario, and then optimize the schema to WARN afterwards
@@ -169,7 +170,7 @@ public:
 
   DEF_INT(log_entry_task_prealloc_count, OB_CLUSTER_PARAMETER, "100000", "[1,]", "log entry task pre-alloc count");
 
-  DEF_INT(binlog_record_prealloc_count, OB_CLUSTER_PARAMETER, "100000", "[1,]", "binlog record pre-alloc count");
+  DEF_INT(binlog_record_prealloc_count, OB_CLUSTER_PARAMETER, "200000", "[1,]", "binlog record pre-alloc count");
 
   DEF_STR(store_service_path, OB_CLUSTER_PARAMETER, "./storage", "store sevice path");
 
@@ -310,7 +311,7 @@ public:
   T_DEF_INT_INFT(fetch_log_rpc_timeout_sec, OB_CLUSTER_PARAMETER, 15, 1, "fetch log rpc timeout in seconds");
 
   // Upper limit of progress difference between partitions, in seconds
-  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 300, 1, "dml progress limit in seconds");
+  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 30, 1, "dml progress limit in seconds");
 
   // The Sys Tenant is not filtered by default
   T_DEF_BOOL(enable_filter_sys_tenant, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
@@ -321,7 +322,7 @@ public:
   // A means of fault tolerance for LDG
   T_DEF_BOOL(enable_continue_use_cache_server_list, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
-  T_DEF_INT_INFT(progress_limit_sec_for_ddl, OB_CLUSTER_PARAMETER, 3600, 1, "ddl progress limit in seconds");
+  T_DEF_INT_INFT(progress_limit_sec_for_ddl, OB_CLUSTER_PARAMETER, 60, 1, "ddl progress limit in seconds");
 
   // LS fetch progress update timeout in seconds
   // If the logs are not fetched after a certain period of time, the stream will be cut
@@ -344,6 +345,8 @@ public:
 
   // pause fetcher
   T_DEF_BOOL(pause_fetcher, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  // pause dispatch redo
+  T_DEF_BOOL(pause_dispatch_redo, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
   // Maximum number of tasks supported by the timer
   T_DEF_INT_INFT(timer_task_count_upper_limit, OB_CLUSTER_PARAMETER, 1024, 1, "max timer task count");
@@ -403,15 +406,17 @@ public:
   // Not on by default (participatn-by-participant output)
   T_DEF_BOOL(enable_output_trans_order_by_sql_operation, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
   // redo dispatcher memory limit
-  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "64M", "[0M,]", "redo dispatcher memory limit");
-  DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "1M", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
+  DEF_CAP(redo_dispatcher_memory_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "redo dispatcher memory limit");
   // redo diepatcher memory limit ratio for output br by sql operation(compare with redo_dispatcher_memory_limit)
-  T_DEF_INT_INFT(redo_dispatched_memory_limit_exceed_ratio, OB_CLUSTER_PARAMETER, 2, 1,
+  T_DEF_INT_INFT(redo_dispatched_memory_limit_exceed_ratio, OB_CLUSTER_PARAMETER, 0, 0,
       "redo_dispatcher_memory_limit ratio for output by sql operation order");
+  DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "0KB", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
+  T_DEF_INT(pause_redo_dispatch_task_count_threshold, OB_CLUSTER_PARAMETER, 80, 0, 100, "task cound percent threshold for pause redo dispatch");
+  T_DEF_INT(memory_usage_warn_threshold, OB_CLUSTER_PARAMETER, 85, 10, 100, "memory usage wan threshold, may pause fetch while reach the threshold");
   // sorter thread num
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
-  T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 200000, 1, "trans msg sorter thread num");
+  T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 0, 0, "trans msg sorter task count per thread");
 
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios

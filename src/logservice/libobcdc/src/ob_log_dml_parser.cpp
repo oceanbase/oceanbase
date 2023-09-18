@@ -136,7 +136,7 @@ int ObLogDmlParser::push(ObLogEntryTask &task, const int64_t timeout)
     const uint64_t hash_value = ATOMIC_FAA(&round_value_, 1);
 
     if (OB_FAIL(DmlParserThread::push(&task, hash_value, timeout))) {
-      if (OB_TIMEOUT != ret) {
+      if (OB_TIMEOUT != ret && OB_IN_STOP_STATE != ret) {
         LOG_ERROR("push task into DML queue thread fail", KR(ret), K(task));
       }
     } else {

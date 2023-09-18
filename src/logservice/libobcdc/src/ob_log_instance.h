@@ -155,7 +155,7 @@ public:
   int32_t get_log_level() const;
   const char *get_log_file() const;
   void set_disable_redirect_log(const bool flag) { disable_redirect_log_ = flag; }
-  bool is_running() { return is_running_; }
+  OB_INLINE bool is_running() const { return is_running_; }
   static void print_version();
   int set_assign_log_dir(const char *log_dir, const int64_t log_dir_len);
 
@@ -183,6 +183,8 @@ public:
       int64_t &start_schema_version);
   // 3.  set start global trans version
   int set_start_global_trans_version(const int64_t start_global_trans_version);
+  // check need pause when consume or resource collector backlog
+  bool need_pause_redo_dispatch() const;
 
   // online sql not available only when using data_dict and fetch_log directly from backup.
   OB_INLINE bool is_online_sql_not_available() const
@@ -229,13 +231,15 @@ private:
   // 3. init sql_proxy
   int init_sql_provider_();
   // Get the total amount of memory occupied by libobcdc
-  int64_t get_memory_hold_();
+  int64_t get_memory_hold_() const;
   // Get system free memory
-  int64_t get_memory_avail_();
+  int64_t get_memory_avail_() const;
   // Get system memory limit
-  int64_t get_memory_limit_();
+  int64_t get_memory_limit_() const;
   // Get the number of tasks to be processed
-  int get_task_count_(int64_t &ready_to_seq_task_count,
+  int get_task_count_(
+      int64_t &ready_to_seq_task_count,
+      int64_t &seq_trans_count,
       int64_t &part_trans_task_resuable_count);
 
   // next record

@@ -18,6 +18,7 @@
 #include "ob_log_config.h"              // TCONF
 #include "ob_log_instance.h"            // TCTX
 #include "ob_log_trans_msg_sorter.h"    // IObLogTransMsgSorter
+#include "ob_cdc_auto_config_mgr.h"     // CDC_CFG_MGR
 
 namespace oceanbase
 {
@@ -28,6 +29,7 @@ TransDispatchCtx::TransDispatchCtx() :
   trans_id_(),
   total_part_count_(0),
   dispatched_part_count_(0),
+  is_dispatching_(false),
   normal_priority_part_budget_arr_(),
   high_priority_part_budget_arr_()
 {}
@@ -39,6 +41,7 @@ int TransDispatchCtx::init(TransCtx &trans)
   trans_id_ = trans.get_trans_id();
   total_part_count_ = trans.get_ready_participant_count();
   PartTransTask *part_trans_task = trans.get_participant_objs();
+  is_dispatching_ = false;
 
   while(OB_SUCC(ret) && OB_NOT_NULL(part_trans_task)) {
     PartTransTask *next_part_trans = part_trans_task->next_task();
@@ -59,6 +62,7 @@ void TransDispatchCtx::reset()
   trans_id_.reset();
   total_part_count_ = 0;
   dispatched_part_count_ = 0;
+  is_dispatching_ = false;
   normal_priority_part_budget_arr_.reset();
   high_priority_part_budget_arr_.reset();
 }
@@ -83,6 +87,7 @@ int TransDispatchCtx::reblance_budget(
       const int64_t total_count = get_total_need_reblance_part_cnt_();
       const int64_t memory_limit_ratio_for_output_by_sql_operaiton =
           TCONF.redo_dispatched_memory_limit_exceed_ratio;
+      // won't use this cause OBCDC will dispatch more if detect skew part and budget is 0;
 
       if (total_count <= 0) {
         ret = OB_ERR_UNEXPECTED;
@@ -93,7 +98,7 @@ int TransDispatchCtx::reblance_budget(
 
         // all part should dispatch at least one redo, so budget_value should + 1 in case of budget is 0
         int64_t dispatch_budget = total_budget > 0 ? total_budget : 0;
-        const int64_t average_budget = current_used_memory >= redo_memory_limit * memory_limit_ratio_for_output_by_sql_operaiton ?
+        const int64_t average_budget = current_used_memory >= redo_memory_limit ?
             0 : (dispatch_budget / total_count) + 1;
         set_normal_priority_budget_(average_budget);
         LOG_DEBUG("reblance budget result:", K(total_budget), K(total_count), K(average_budget));
@@ -111,18 +116,36 @@ int64_t TransDispatchCtx::get_total_need_reblance_part_cnt_() const
 
 void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget)
 {
+  const static int64_t PRINT_STAT_INTERVAL = 10 * _SEC_;
+  const bool need_pause = TCTX.need_pause_redo_dispatch();
+  IObLogTransMsgSorter *msg_sorter = TCTX.trans_msg_sorter_;
+  const bool is_new_trans_can_dispatch = (! is_dispatching_ && average_budget > 0 && !need_pause);
+
   for(int64_t i = 0; i < normal_priority_part_budget_arr_.count(); i++) {
     PartTransDispatchBudget &budget = normal_priority_part_budget_arr_[i];
     PartTransTask *part_trans_task = budget.part_trans_task_;
     const static int64_t PRINT_STAT_INTERVAL = 10 * _SEC_;
-    IObLogTransMsgSorter *msg_sorter = TCTX.trans_msg_sorter_;
 
-    if (average_budget <= 0
+    if (is_new_trans_can_dispatch) {
+      // only dispatch 1 redo for each part of trans for the first round dispatch
+      budget.reset_budget(1);
+    } else if (need_pause || ! is_dispatching_) {
+      if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
+        LOG_INFO("[NOTICE][REDO_DISPATCH][PAUSE]",
+            K(budget),
+            K(average_budget),
+            K_(is_dispatching),
+            "trans_id", part_trans_task->get_trans_id(),
+            "tls_id", part_trans_task->get_tls_id(),
+            "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);
+      }
+      budget.reset_budget(0);
+    } else if (average_budget <= 0
         && OB_NOT_NULL(part_trans_task)
         && OB_NOT_NULL(msg_sorter)
         && (part_trans_task->get_trans_id() == msg_sorter->get_cur_sort_trans_id()) // wait last trans handled in sorter
         && part_trans_task->is_dispatched_redo_be_sorted()) {
-      const int64_t extra_redo_dispatch_size = TCONF.extra_redo_dispatch_memory_size;
+      const int64_t extra_redo_dispatch_size = CDC_CFG_MGR.get_extra_redo_dispatch_memory_size();
 
       if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
         LOG_INFO("[NOTICE][REDO_DISPATCH][DATA_SKEW] budget usedup but dispatched_redo all sorted, use extra_redo budget",
@@ -137,6 +160,9 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
     } else {
       budget.reset_budget(average_budget);
     }
+  }
+  if (is_new_trans_can_dispatch) {
+    is_dispatching_ = true;
   }
 }
 

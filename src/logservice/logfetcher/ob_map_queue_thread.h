@@ -83,7 +83,7 @@ public:
   void destroy();
   int start();
   void stop();
-  void mark_stop_flag() { ATOMIC_STORE(&stop_flag_, false); }
+  void mark_stop_flag() { ATOMIC_STORE(&stop_flag_, true); }
   bool is_stoped() const { return ATOMIC_LOAD(&stop_flag_); }
   int64_t get_thread_num() const { return thread_num_; }
 
@@ -156,7 +156,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::init(const int64_t thread_num, const char 
     }
 
     thread_num_ = thread_num;
-    stop_flag_ = true;
+    stop_flag_ = false;
     inited_ = true;
   }
 
@@ -185,7 +185,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::start()
   if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "not inited");
     ret = OB_NOT_INIT;
-  } else if (stop_flag_) {
+  } else {
     stop_flag_ = false;
 
     for (int64_t index = 0; OB_SUCCESS == ret && index < thread_num_; index++) {
@@ -204,8 +204,8 @@ int ObMapQueueThread<MAX_THREAD_NUM>::start()
 template <int MAX_THREAD_NUM>
 void ObMapQueueThread<MAX_THREAD_NUM>::stop()
 {
+  mark_stop_flag();
   if (inited_) {
-    stop_flag_ = true;
 
     for (int64_t index = 0; index < thread_num_; index++) {
       ThreadConf &tc = tc_[index];
@@ -245,7 +245,7 @@ void ObMapQueueThread<MAX_THREAD_NUM>::run(const int64_t thread_index)
     LIB_LOG(ERROR, "invalid thread index", K(thread_index), K(thread_num_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    while (! stop_flag_ && OB_SUCCESS == ret) {
+    while (! is_stoped() && OB_SUCCESS == ret) {
       void *task = NULL;
 
       if (OB_FAIL(next_task_(thread_index, task))) {
@@ -305,7 +305,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::next_task_(const int64_t index, void *&tas
     ret = OB_ERR_UNEXPECTED;
   } else {
     ThreadConf &tc = tc_[index];
-    while (! stop_flag_ && OB_SUCCESS == ret) {
+    while (! is_stoped() && OB_SUCCESS == ret) {
       task = NULL;
 
       if (OB_FAIL(tc.queue_.pop(task))) {
@@ -324,7 +324,7 @@ int ObMapQueueThread<MAX_THREAD_NUM>::next_task_(const int64_t index, void *&tas
       }
     }
 
-    if (stop_flag_) {
+    if (is_stoped()) {
       ret = OB_IN_STOP_STATE;
     }
   }

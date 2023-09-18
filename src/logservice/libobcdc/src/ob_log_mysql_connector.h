@@ -114,7 +114,6 @@ struct MySQLConnConfig
 
   TO_STRING_KV(K_(svr),
                K_(mysql_user),
-               K_(mysql_password),
                K_(mysql_db),
                K_(mysql_connect_timeout_sec),
                K_(mysql_query_timeout_sec));

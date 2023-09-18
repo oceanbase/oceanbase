@@ -226,11 +226,11 @@ int ObLogFormatter::push(IStmtTask *stmt_task, volatile bool &stop_flag)
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(stmt_task)) {
-    LOG_ERROR("invalid arguments", K(stmt_task));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(stmt_task), KR(ret));
   } else {
     // Ensure that all stmt of ObLogEntryTask are pushed to the same queue
     const uint64_t hash_value = ATOMIC_FAA(&round_value_, 1);
@@ -297,8 +297,8 @@ int ObLogFormatter::get_task_count(
   stmt_in_lob_merger_count = 0;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("parser has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("parser has not been initialized", KR(ret));
   } else if (OB_FAIL(get_total_task_num(br_count))) {
     LOG_ERROR("get_total_task_num fail", KR(ret), K(br_count));
   } else {
@@ -424,17 +424,17 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(
   PartTransTask *part_trans_task = NULL;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(stmt_task)) {
-    LOG_ERROR("invalid arguments", K(stmt_task));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), K(stmt_task));
   } else if (OB_ISNULL(log_entry_task = &(stmt_task->get_redo_log_entry_task()))) {
-    LOG_ERROR("log_entry_task is NULL", KPC(stmt_task));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("log_entry_task is NULL", KR(ret), KPC(stmt_task));
   } else if (OB_ISNULL(part_trans_task = static_cast<PartTransTask*>(log_entry_task->get_host()))) {
-    LOG_ERROR("part_trans_task is NULL", K(log_entry_task));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("part_trans_task is NULL", KR(ret), K(log_entry_task));
   } else if (stmt_task->is_callback()) {
     // Binlog record must have been generated before when is callback
     br = stmt_task->get_binlog_record();
@@ -443,8 +443,8 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(
     if (OB_FAIL(br_pool_->alloc(br, log_entry_task, stmt_task))) {
       LOG_ERROR("alloc binlog record from pool fail", KR(ret), K(stmt_task));
     } else if (OB_ISNULL(br)) {
-      LOG_ERROR("alloc binlog record fail", K(br));
       ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("alloc binlog record fail", KR(ret), K(br));
     } else {
       // select ... for update to record DF_LOCK log to prevent loss of row lock information on the
       // standby machine in the event of a master/standby switchover, no synchronization required
@@ -1063,14 +1063,14 @@ int ObLogFormatter::build_row_value_(
   ObTimeZoneInfoWrap *tz_info_wrap = nullptr;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(rv) || OB_ISNULL(stmt_task) || OB_ISNULL(simple_table_schema)) {
-    LOG_ERROR("invalid argument", K(rv), K(stmt_task), K(simple_table_schema));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(rv), K(stmt_task), K(simple_table_schema));
   } else if (OB_ISNULL(meta_manager_)) {
-    LOG_ERROR("meta_manager_ is null", K(meta_manager_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("meta_manager_ is null", KR(ret), K(meta_manager_));
   } else if (OB_FAIL(meta_manager_->get_table_schema_meta(
         simple_table_schema->get_schema_version(),
         simple_table_schema->get_tenant_id(),
@@ -1082,8 +1082,8 @@ int ObLogFormatter::build_row_value_(
         "table_id", simple_table_schema->get_table_id(),
         "table_name", simple_table_schema->get_table_name(), KPC(tb_schema_info));
   } else if (OB_ISNULL(tb_schema_info)) {
-    LOG_ERROR("tb_schema_info is null", K(tb_schema_info));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tb_schema_info is null", KR(ret), K(tb_schema_info));
   } else if (OB_ISNULL(tz_info_getter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tz_info_getter is nullptr", KR(ret), K(tz_info_getter));
@@ -1242,14 +1242,14 @@ int ObLogFormatter::fill_normal_cols_(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(rv) || OB_ISNULL(simple_table_schema)) {
-    LOG_ERROR("invalid argument", K(rv), K(simple_table_schema));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(rv), K(simple_table_schema));
   } else if (OB_ISNULL(meta_manager_)) {
-    LOG_ERROR("meta_manager_ is null", K(meta_manager_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("meta_manager_ is null", KR(ret), K(meta_manager_));
   } else {
     const int64_t column_count = rv->column_num_;
     ColValue *cv = cv_list.head_;
@@ -1377,14 +1377,14 @@ int ObLogFormatter::fill_rowkey_cols_(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(rv) || OB_ISNULL(simple_table_schema)) {
-    LOG_ERROR("invalid argument", K(rv), K(simple_table_schema));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(rv), K(simple_table_schema), KR(ret));
   } else if (OB_ISNULL(meta_manager_)) {
-    LOG_ERROR("meta_manager_ is null", K(meta_manager_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("meta_manager_ is null", KR(ret), K_(meta_manager));
   } else {
     ColValue *cv_node = rowkey_cols.head_;
     int64_t rowkey_count = rowkey_cols.num_;
@@ -1396,8 +1396,8 @@ int ObLogFormatter::fill_rowkey_cols_(
         OB_SUCC(ret) && rowkey_index < rowkey_count;
         rowkey_index++, cv_node = cv_node->next_) {
       if (OB_ISNULL(cv_node)) {
-        LOG_ERROR("column value node is NULL", K(rowkey_index), K(rowkey_count), K(cv_node));
         ret = OB_INVALID_DATA;
+        LOG_ERROR("column value node is NULL", KR(ret), K(rowkey_index), K(rowkey_count), K(cv_node));
       } else if (OB_FAIL(tb_schema_info.get_column_schema_info_for_rowkey(rowkey_index, column_schema_info))) {
         LOG_ERROR("get_column_schema_info_for_rowkey failed", KR(ret),
             "table_id", simple_table_schema->get_table_id(),
@@ -1439,14 +1439,14 @@ int ObLogFormatter::fill_orig_default_value_(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(rv) || OB_ISNULL(simple_table_schema)) {
-    LOG_ERROR("invalid argument", K(rv), K(simple_table_schema));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(rv), K(simple_table_schema));
   } else if (OB_ISNULL(meta_manager_)) {
-    LOG_ERROR("meta_manager_ is null", K(meta_manager_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("meta_manager_ is null", KR(ret), K(meta_manager_));
   } else {
     int64_t column_count = rv->column_num_;
     int64_t table_schema_version = simple_table_schema->get_schema_version();
@@ -1539,8 +1539,8 @@ int ObLogFormatter::set_src_category_(IBinlogRecord *br_data,
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(br_data) || OB_ISNULL(rv)) {
-    LOG_ERROR("invalid argument", K(br_data), K(rv));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(br_data), K(rv));
   } else {
     int src_category = SRC_NO;
 
@@ -1573,18 +1573,18 @@ int ObLogFormatter::build_binlog_record_(
   const uint64_t table_id = simple_table_schema->get_table_id();
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(br) || OB_ISNULL(rv) || OB_ISNULL(simple_table_schema)) {
-    LOG_ERROR("invalid argument", K(br), K(rv), K(simple_table_schema));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(br), K(rv), K(simple_table_schema));
   } else if (OB_ISNULL(br_data = br->get_data())) {
-    LOG_ERROR("binlog record data is invalid", K(br));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("binlog record data is invalid", KR(ret), K(br));
   } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
         K(rv->new_column_array_), K(rv->old_column_array_));
-    ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(is_hbase_mode_put_(table_id, dml_flag, rv->column_num_, new_column_cnt,
           rv->contain_old_column_, is_hbase_mode_put))) {
     LOG_ERROR("is_hbase_mode_put_ fail", KR(ret), K(table_id), K(dml_flag),
@@ -1666,8 +1666,8 @@ int ObLogFormatter::is_hbase_mode_put_(const uint64_t table_id,
 
   if (enable_hbase_mode_) {
     if (OB_ISNULL(hbase_util_)) {
-      LOG_ERROR("hbase_util_ is null", K(hbase_util_));
       ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("hbase_util_ is null", KR(ret), K(hbase_util_));
     } else if (OB_FAIL(hbase_util_->is_hbase_table(table_id, is_hbase_table))) {
       LOG_ERROR("ObLogHbaseUtil is_hbase_table fail", KR(ret), K(table_id), K(is_hbase_table));
     } else if (is_hbase_table && ObDmlFlag::DF_UPDATE == dml_flag && false == contain_old_column) {
@@ -1704,8 +1704,8 @@ int ObLogFormatter::format_dml_delete_(IBinlogRecord *br_data, const RowValue *r
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(br_data) || OB_ISNULL(row_value)) {
-    LOG_ERROR("invalid argument", K(br_data), K(row_value));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(br_data), K(row_value));
   } else {
     for (int64_t i = 0; OB_SUCCESS == ret && i < row_value->column_num_; i++) {
       // Handling primary key values
@@ -1716,8 +1716,8 @@ int ObLogFormatter::format_dml_delete_(IBinlogRecord *br_data, const RowValue *r
         ObString *str = row_value->new_columns_[i];
 
         if (OB_ISNULL(str)) {
-          LOG_ERROR("rowkey column is NULL, unexcepted error", K(i), K(row_value->column_num_));
           ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("rowkey column is NULL, unexcepted error", KR(ret), K(i), K(row_value->column_num_));
         } else {
           br_data->putOld(str->ptr(), str->length());
         }
@@ -1759,8 +1759,8 @@ int ObLogFormatter::format_dml_insert_(IBinlogRecord *br_data, const RowValue *r
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(br_data) || OB_ISNULL(row_value)) {
-    LOG_ERROR("invalid argument", K(br_data), K(row_value));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(br_data), K(row_value));
   } else {
     for (int64_t i = 0; OB_SUCCESS == ret && i < row_value->column_num_; i++) {
       if (!row_value->is_changed_[i]) {
@@ -1797,8 +1797,8 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(br_data) || OB_ISNULL(row_value)) {
-    LOG_ERROR("invalid argument", K(br_data), K(row_value));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(br_data), K(row_value));
   } else {
     for (int i = 0; OB_SUCCESS == ret && i < row_value->column_num_; i++) {
       if (! row_value->is_changed_[i]) {
@@ -1889,8 +1889,8 @@ int ObLogFormatter::get_schema_with_online_schema_(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(schema_getter_) || OB_UNLIKELY(version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), KP_(schema_getter), K(version));

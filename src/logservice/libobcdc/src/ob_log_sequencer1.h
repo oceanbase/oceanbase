@@ -60,6 +60,7 @@ public:
       dml_part_trans_task_count_ = 0;
       hb_part_trans_task_count_ = 0;
       queue_part_trans_task_count_ = 0;
+      ready_trans_count_ = 0;
       sequenced_trans_count_ = 0;
     }
     int64_t total_part_trans_task_count_ CACHE_ALIGNED;
@@ -67,6 +68,7 @@ public:
     int64_t dml_part_trans_task_count_ CACHE_ALIGNED;
     int64_t hb_part_trans_task_count_ CACHE_ALIGNED;
     int64_t queue_part_trans_task_count_ CACHE_ALIGNED;
+    int64_t ready_trans_count_ CACHE_ALIGNED;
     int64_t sequenced_trans_count_ CACHE_ALIGNED;
   };
 
@@ -112,7 +114,10 @@ public:
 public:
   int start();
   void stop();
-  void mark_stop_flag() { SequencerThread::mark_stop_flag(); }
+  void mark_stop_flag() {
+    SequencerThread::mark_stop_flag();
+    lib::ThreadPool::stop();
+  }
   int push(PartTransTask *task, volatile bool &stop_flag);
   void get_task_count(SeqStatInfo &stat_info);
   int64_t get_thread_num() const { return SequencerThread::get_thread_num(); }
@@ -136,11 +141,16 @@ private:
   static const int64_t WAIT_TIMEOUT = 10 * _SEC_;
   typedef libobcdc::TransCtxSortElement TrxSortElem;
   typedef libobcdc::TransCtxSortElement::TransCtxCmp TrxCmp;
-  typedef std::priority_queue<TrxSortElem, std::vector<TrxSortElem>, TrxCmp> TransQueue;
+  typedef std::priority_queue<TrxSortElem, std::vector<TrxSortElem>, TrxCmp> ReadyTransQueue;
+  typedef ObFixedQueue<TransCtx> SeqTransQueue;
 
 private:
   void run1() final;
-  int handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
+  // try push trans into seq_trans_queue which trans_version is less than checkpoint
+  int push_ready_trans_to_seq_queue_();
+  int handle_trans_in_seq_queue_();
+  int handle_sequenced_trans_(
+      TransCtx *trans_ctx,
       volatile bool &stop_flag);
   int handle_global_hb_part_trans_task_(PartTransTask &part_trans_task,
       volatile bool &stop_flag);
@@ -209,8 +219,14 @@ private:
   int64_t                   last_global_checkpoint_ CACHE_ALIGNED;
   uint64_t                  global_seq_ CACHE_ALIGNED;
   uint64_t                  br_committer_queue_seq_ CACHE_ALIGNED;
-  TransQueue                trans_queue_;
+  // Store assembled distributed transactions
+  ReadyTransQueue           ready_trans_queue_;
   common::ObByteLock        trans_queue_lock_;
+  // Store transactions that can be outputted (trans commit_version greater than the global checkpoint).
+  SeqTransQueue             seq_trans_queue_;
+  common::ObCond            checkpoint_cond_;
+  common::ObCond            ready_queue_cond_;
+  common::ObCond            seq_queue_cond_;
 
   // Counting the number of partitioned tasks owned by Sequencer
   int64_t                   total_part_trans_task_count_ CACHE_ALIGNED;

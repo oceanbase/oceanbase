@@ -71,7 +71,7 @@ TEST(ObLogTransTaskPool, Init)
 
   ObLogTransTaskPool<MockTransTask> pool;
 
-  int ret = pool.init(&fifo, part_trans_task_prealloc_count, page_size, true, prealloc_page_count);
+  int ret = pool.init(&fifo, part_trans_task_prealloc_count, true, prealloc_page_count);
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 
@@ -85,7 +85,7 @@ TEST(ObLogTransTaskPool, Function1)
 
   ObLogTransTaskPool<MockTransTask> pool;
 
-  int ret = pool.init(&fifo, 1024 * 8, 1024, true, 1024);
+  int ret = pool.init(&fifo, 1024 * 8, true, 1024);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   MockTransTask **tasks = new MockTransTask*[task_cnt];
@@ -118,7 +118,7 @@ TEST(ObLogTransTaskPool, Function2)
 
   ObLogTransTaskPool<MockTransTask> pool;
 
-  int ret = pool.init(&fifo, 1024 * 8, 1024, true, 1024);
+  int ret = pool.init(&fifo, 1024 * 8, true, 1024);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   MockTransTask **tasks = new MockTransTask*[task_cnt];

@@ -83,6 +83,7 @@ int ObLogStorager::init(const int64_t thread_num,
 
 void ObLogStorager::destroy()
 {
+  stop();
   if (inited_) {
     LOG_INFO("store_service destroy begin");
     StoragerThread::destroy();
@@ -118,6 +119,7 @@ int ObLogStorager::start()
 
 void ObLogStorager::stop()
 {
+  mark_stop_flag();
   if (inited_) {
     StoragerThread::stop();
     LOG_INFO("stop storager threads succ", "thread_num", get_thread_num());
@@ -130,11 +132,14 @@ int ObLogStorager::submit(IObLogBatchBufTask *task)
   const int64_t timeout = 1000000;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogStorager has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogStorager has not been initialized", KR(ret));
   } else if (OB_UNLIKELY(! task->is_valid())) {
-    LOG_ERROR("invalid arguments", KPC(task));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), KPC(task));
+  } else if (OB_UNLIKELY(is_stoped())) {
+    ret = OB_IN_STOP_STATE;
+    LOG_INFO("obcdc storager is in stop state", KR(ret));
   } else {
     int64_t sub_task_count = task->get_subtask_count();
     uint64_t hash_value = ATOMIC_FAA(&round_value_, 1);
@@ -189,6 +194,9 @@ int ObLogStorager::handle(void *data, const int64_t thread_index, volatile bool 
   } else if (OB_ISNULL(task) || OB_UNLIKELY(! task->is_valid())) {
     LOG_ERROR("invalid arguments", KPC(task));
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_UNLIKELY(is_stoped())) {
+    ret = OB_IN_STOP_STATE;
+    LOG_INFO("obcdc storager is in stop state", KR(ret));
   } else {
     int64_t sub_task_count = task->get_subtask_count();
 
@@ -361,7 +369,7 @@ void ObLogStorager::print_task_count_()
   int ret = OB_SUCCESS;
   int64_t total_thread_num = get_thread_num();
 
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < total_thread_num; ++idx) {
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < total_thread_num && ! is_stoped(); ++idx) {
     int64_t task_count = 0;
     if (OB_FAIL(get_task_num(idx, task_count))) {
       LOG_ERROR("get_task_num fail", K(ret));

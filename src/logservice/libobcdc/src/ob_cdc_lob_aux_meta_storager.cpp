@@ -197,9 +197,9 @@ int ObCDCLobAuxMetaStorager::memory_put_(
     memcpy(alloc_lob_data, lob_data, lob_data_len);
     LobAuxMetaValue value(static_cast<char *>(alloc_lob_data), lob_data_len);
     if (OB_FAIL(lob_aux_meta_map_.insert(key, value))) {
-      LOG_ERROR("lob_aux_meta_map_ insert failed", KR(ret), KCSTRING(key_type), K(key), K(lob_data), K(lob_data_len));
+      LOG_ERROR("[OBCDC][LOB_AUX][PUT][MEM] lob_aux_meta_map_ insert failed", KR(ret), KCSTRING(key_type), K(key), K(lob_data), K(lob_data_len));
     } else {
-      LOG_DEBUG("lob_aux_meta_map_ insert succ", KCSTRING(key_type), K(key), K(value));
+      LOG_DEBUG("[OBCDC][LOB_AUX][PUT][MEM] lob_aux_meta_map_ insert succ", KCSTRING(key_type), K(key), K(value));
     }
   }
   return ret;
@@ -220,10 +220,10 @@ int ObCDCLobAuxMetaStorager::disk_put_(
     LOG_ERROR("get key_str fail", KR(ret), KCSTRING(key_type), K(key));
   } else if (OB_FAIL(store_service_->put(cf_handle, key_str, ObSlice(lob_data, lob_data_len)))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("store_service_ put fail", KR(ret), KCSTRING(key_type), K(key), KCSTRING(key_str.c_str()), K(lob_data_len));
+      LOG_ERROR("[OBCDC][LOB_AUX][PUT][DISK] store_service_ put fail", KR(ret), KCSTRING(key_type), K(key), KCSTRING(key_str.c_str()), K(lob_data_len));
     }
   } else {
-    LOG_DEBUG("store_service_ insert succ", KCSTRING(key_type), K(key), KCSTRING(key_str.c_str()), K(lob_data_len));
+    LOG_DEBUG("[OBCDC][LOB_AUX][PUT][DISK] store_service_ insert succ", KCSTRING(key_type), K(key), KCSTRING(key_str.c_str()), K(lob_data_len));
   }
   return ret;
 }
@@ -267,9 +267,9 @@ int ObCDCLobAuxMetaStorager::memory_get_(
   LobAuxMetaValue value;
   if (OB_FAIL(lob_aux_meta_map_.get(key, value))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_ERROR("lob_aux_meta_map_ get failed", KR(ret), K(key));
+      LOG_ERROR("[OBCDC][LOB_AUX][GET][MEM] lob_aux_meta_map_ get failed", KR(ret), K(key));
     } else if (REACH_TIME_INTERVAL(10 * _SEC_)) {
-      LOG_WARN("lob_aux_meta_map_ get not exist, need retry", KR(ret), K(key));
+      LOG_WARN("[OBCDC][LOB_AUX][GET][MEM] lob_aux_meta_map_ get not exist, need retry", KR(ret), K(key));
     }
   } else {
     lob_data = value.lob_data_;
@@ -295,9 +295,9 @@ int ObCDCLobAuxMetaStorager::disk_get_(
     LOG_ERROR("get key_str fail", KR(ret), K(key));
   } else if (OB_FAIL(store_service_->get(cf_handle, key_str, value))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_ERROR("get failed", KR(ret), K(key));
+      LOG_ERROR("[OBCDC][LOB_AUX][GET][DISK] get failed", KR(ret), K(key));
     } else if (REACH_TIME_INTERVAL(10 * _SEC_)) {
-      LOG_WARN("get not exist, need retry", KR(ret), K(key));
+      LOG_WARN("[OBCDC][LOB_AUX][GET][DISK] get not exist, need retry", KR(ret), K(key));
     }
   } else if (value.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -336,7 +336,7 @@ int ObCDCLobAuxMetaStorager::del(
 
   while (OB_SUCC(ret) && ! stop_flag && cur_lob_data_get_ctx) {
     if (OB_FAIL(del_lob_col_value_(commit_version, tenant_id, trans_id, aux_lob_meta_tid, *cur_lob_data_get_ctx, stop_flag))) {
-      LOG_ERROR("del_lob_col_value_ failed", KR(ret), K(tenant_id), K(trans_id), K(aux_lob_meta_tid));
+      LOG_ERROR("[OBCDC][LOB_AUX][DEL][COL] del_lob_col_value_ failed", KR(ret), K(tenant_id), K(trans_id), K(aux_lob_meta_tid));
     } else {
       cur_lob_data_get_ctx = cur_lob_data_get_ctx->get_next();
     }
@@ -473,11 +473,11 @@ int ObCDCLobAuxMetaStorager::memory_del_(const uint64_t tenant_id, const int64_t
   int ret = OB_SUCCESS;
   LobAuxMetaDataPurger lob_aux_meata_purger(*this, tenant_id, commit_version);
   if (OB_FAIL(lob_aux_meta_map_.remove_if(lob_aux_meata_purger))) {
-    LOG_ERROR("lob_aux_meta_map_ remove_if failed", KR(ret), K(tenant_id), K(commit_version));
+    LOG_ERROR("[OBCDC][LOB_AUX][CLEAN_TASK][MEM] lob_aux_meta_map_ remove_if failed", KR(ret), K(tenant_id), K(commit_version));
   } else {
-    LOG_INFO("ObCDCLobAuxMetaStorager del", K(tenant_id), K(commit_version), "purge_count",
+    LOG_INFO("[OBCDC][LOB_AUX][CLEAN_TASK][MEM] ObCDCLobAuxMetaStorager del", K(tenant_id), K(commit_version), "purge_count",
         lob_aux_meata_purger.purge_count_, "map_count", lob_aux_meta_map_.count(),
-        "memory_used", lob_aux_meta_allocator_.allocated());
+        "memory_used", SIZE_TO_STR(lob_aux_meta_allocator_.allocated()));
   }
   return ret;
 }
@@ -494,11 +494,11 @@ int ObCDCLobAuxMetaStorager::disk_del_(void* cf_family, const int64_t commit_ver
   end_key.append("_}");
   if (OB_FAIL(store_service_->del_range(cf_family, begin_key, end_key))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("store_service_ del fail", KR(ret), "begin_key", begin_key.c_str(),
+      LOG_ERROR("[OBCDC][LOB_AUX][CLEAN_TASK][DISK] store_service_ del fail", KR(ret), "begin_key", begin_key.c_str(),
           "end_key", end_key.c_str(), K(commit_version));
     }
   } else {
-    LOG_INFO("store_service_ del_range succ", K(commit_version), KCSTRING(end_key.c_str()));
+    LOG_INFO("[OBCDC][LOB_AUX][CLEAN_TASK][DISK] store_service_ del_range succ", K(commit_version), KCSTRING(end_key.c_str()));
   }
   return ret;
 }

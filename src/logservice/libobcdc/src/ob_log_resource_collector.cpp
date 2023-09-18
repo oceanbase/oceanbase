@@ -392,6 +392,8 @@ int ObLogResourceCollector::revert_participants_(const int64_t thread_index,
 int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task)
 {
   int ret = OB_SUCCESS;
+  const static int64_t PUSH_TASK_TIMEOUT_WAIT_TIME = 1 * _MSEC_;
+  const static int64_t PUSH_TASK_TIMEOUT_PRINT_INTERVAL = 10 * _SEC_;
   static uint64_t part_trans_task_push_seq = 0;
   static uint64_t br_push_seq = 0;
   uint64_t hash_value = 0;
@@ -419,11 +421,15 @@ int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task
   while (OB_SUCC(ret) && ! RCThread::is_stoped()) {
     ret = RCThread::push(&task, hash_value, DATA_OP_TIMEOUT);
 
-    if (OB_TIMEOUT != ret) {
-      break;
-    } else {
-      // When timeout, need to retry
+    // retry if OB_TIMEOUT and break for other ret code
+    if (OB_UNLIKELY(OB_TIMEOUT == ret)) {
+      if (TC_REACH_TIME_INTERVAL(PUSH_TASK_TIMEOUT_PRINT_INTERVAL)) {
+        LOG_INFO("push task into RC Thread timeout, retrying", KR(ret));
+      }
+      usleep(PUSH_TASK_TIMEOUT_WAIT_TIME);
       ret = OB_SUCCESS;
+    } else {
+      break;
     }
   }
   // Note: After a task is pushed to the queue, it may be recycled quickly and the task cannot be accessed later

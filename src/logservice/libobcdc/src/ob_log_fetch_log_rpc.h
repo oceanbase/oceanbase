@@ -250,6 +250,7 @@ public:
 
   int64_t get_flying_request_count();
   void print_flying_request_list();
+  bool is_rpc_ready() const { return State::READY == state_; }
 
 private:
   int alloc_rpc_request_(const share::ObLSID &ls_id,
