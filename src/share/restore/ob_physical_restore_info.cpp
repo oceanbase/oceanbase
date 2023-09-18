@@ -260,7 +260,8 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(concurrency),
     K_(passwd_array),
     K_(multi_restore_path_list),
-    K_(white_list)
+    K_(white_list),
+    K_(recover_table)
   );
   J_OBJ_END();
   return pos;
@@ -288,6 +289,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     compatible_ = other.compatible_;
     kms_encrypt_ = other.kms_encrypt_;
     concurrency_ = other.concurrency_;
+    recover_table_ = other.recover_table_;
 
     if (FAILEDx(deep_copy_ob_string(allocator_, other.comment_, comment_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
@@ -362,6 +364,7 @@ void ObPhysicalRestoreJob::reset()
   kms_dest_.reset();
   kms_encrypt_key_.reset();
   concurrency_ = 0;
+  recover_table_ = false;
 
 
   passwd_array_.reset();

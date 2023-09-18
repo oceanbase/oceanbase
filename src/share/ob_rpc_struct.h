@@ -510,7 +510,7 @@ public:
     : ObDDLArg(), tenant_schema_(), pool_list_(), if_not_exist_(false),
       sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID), is_restore_(false),
       palf_base_info_(), compatible_version_(0), recovery_until_scn_(share::SCN::min_scn()),
-      is_creating_standby_(false), log_restore_source_() {}
+      is_creating_standby_(false), log_restore_source_(), is_tmp_tenant_for_recover_(false) {}
   virtual ~ObCreateTenantArg() {};
   bool is_valid() const;
   int check_valid() const;
@@ -538,6 +538,7 @@ public:
   share::SCN recovery_until_scn_;
   bool is_creating_standby_;
   common::ObString log_restore_source_; // for create standby tenant
+  bool is_tmp_tenant_for_recover_; //tmp tenant for recover table
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg
