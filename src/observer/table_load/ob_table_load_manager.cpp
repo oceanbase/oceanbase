@@ -109,18 +109,19 @@ int ObTableLoadManager::remove_table_ctx(const ObTableLoadUniqueKey &key,
       bool is_erased = false;
       obsys::ObWLockGuard guard(rwlock_);
       if (OB_FAIL(table_ctx_map_.erase_if(key, erase_if_equal, is_erased))) {
-        if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+        if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
           LOG_WARN("fail to erase refactored", KR(ret), K(key));
         } else {
           ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("table ctx not exist in manager", KR(ret), K(key), KPC(table_ctx));
         }
       } else if (OB_UNLIKELY(!is_erased)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected table ctx", KR(ret), KPC(table_ctx));
+        LOG_WARN("unexpected table ctx not in manager", KR(ret), K(key), KPC(table_ctx));
       }
       // try remove table ctx index
       else if (OB_FAIL(table_ctx_index_map_.erase_if(table_id, erase_if_equal, is_erased))) {
-        if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+        if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
           LOG_WARN("fail to get refactored", KR(ret), K(table_id));
         } else {
           ret = OB_SUCCESS;
