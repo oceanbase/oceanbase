@@ -14654,7 +14654,9 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
   bool need_sync_schema_version = false;
   SCN frozen_scn = SCN::min_scn();
   bool is_add_identity_column = false;
-  hidden_table_schema.set_in_offline_ddl_white_list(orig_table_schema.check_can_do_ddl()); // allow offline ddl execute if there's no offline ddl doing
+  const bool in_offline_ddl_white_list = orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id() ?
+    true : orig_table_schema.check_can_do_ddl();
+  hidden_table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list); // allow offline ddl execute if there's no offline ddl doing
   if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root service is null", KR(ret));
