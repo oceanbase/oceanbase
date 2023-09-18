@@ -44,6 +44,7 @@ int ObDirectLoadControlPreBeginExecutor::check_args()
 int ObDirectLoadControlPreBeginExecutor::process()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("table load control pre begin", K_(arg));
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
   }
@@ -127,6 +128,7 @@ int ObDirectLoadControlConfirmBeginExecutor::check_args()
 int ObDirectLoadControlConfirmBeginExecutor::process()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("table load control confirm begin", K_(arg));
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
   }
@@ -171,6 +173,7 @@ int ObDirectLoadControlPreMergeExecutor::check_args()
 int ObDirectLoadControlPreMergeExecutor::process()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("table load control pre merge", K_(arg));
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
   }
@@ -209,6 +212,7 @@ int ObDirectLoadControlStartMergeExecutor::check_args()
 int ObDirectLoadControlStartMergeExecutor::process()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("table load control start merge", K_(arg));
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
   }
@@ -247,6 +251,7 @@ int ObDirectLoadControlCommitExecutor::check_args()
 int ObDirectLoadControlCommitExecutor::process()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("table load control commit", K_(arg));
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
   }
@@ -287,6 +292,7 @@ int ObDirectLoadControlAbortExecutor::check_args()
 int ObDirectLoadControlAbortExecutor::process()
 {
   int ret = OB_SUCCESS;
+  LOG_INFO("table load control abort", K_(arg));
   ObTableLoadTableCtx *table_ctx = nullptr;
   ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
   if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
