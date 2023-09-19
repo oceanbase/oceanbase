@@ -170,6 +170,13 @@ ObImportTableTaskStatus ObImportTableTaskStatus::get_next_status(const int err_c
     }                                                                      \
   }
 
+#define FILL_HEX_STR_COLUMN(COLUMN_NAME) \
+if (OB_SUCC(ret)) {                     \
+  if (OB_FAIL((dml.add_column(#COLUMN_NAME, ObHexEscapeSqlStr(COLUMN_NAME##_))))) { \
+    LOG_WARN("failed to add column", K(ret));                            \
+  }                                                                      \
+}
+
 
 void ObImportTableTask::reset()
 {
@@ -383,15 +390,15 @@ int ObImportTableTask::fill_dml(share::ObDMLSqlSplicer &dml) const
   }
   FILL_INT_COLUMN(job_id)
   FILL_INT_COLUMN(src_tenant_id)
-  FILL_STR_COLUMN(src_tablespace)
-  FILL_STR_COLUMN(src_tablegroup)
-  FILL_STR_COLUMN(src_database)
-  FILL_STR_COLUMN(src_table)
-  FILL_STR_COLUMN(src_partition)
-  FILL_STR_COLUMN(target_tablespace)
-  FILL_STR_COLUMN(target_tablegroup)
-  FILL_STR_COLUMN(target_database)
-  FILL_STR_COLUMN(target_table)
+  FILL_HEX_STR_COLUMN(src_tablespace)
+  FILL_HEX_STR_COLUMN(src_tablegroup)
+  FILL_HEX_STR_COLUMN(src_database)
+  FILL_HEX_STR_COLUMN(src_table)
+  FILL_HEX_STR_COLUMN(src_partition)
+  FILL_HEX_STR_COLUMN(target_tablespace)
+  FILL_HEX_STR_COLUMN(target_tablegroup)
+  FILL_HEX_STR_COLUMN(target_database)
+  FILL_HEX_STR_COLUMN(target_table)
   FILL_INT_COLUMN(table_column)
   FILL_INT_COLUMN(start_ts)
   FILL_INT_COLUMN(completion_ts)
@@ -719,6 +726,8 @@ int ObImportTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column("import_all", import_all))) {
     LOG_WARN("failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, result_.get_comment()))) {
+    LOG_WARN("failed to add column", K(ret));
   }
   FILL_INT_COLUMN(initiator_tenant_id)
   FILL_INT_COLUMN(initiator_job_id)
@@ -736,8 +745,6 @@ int ObImportTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
 
   if (OB_SUCC(ret) && status_.is_finish()) {
     if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_result_str()))) {
-      LOG_WARN("failed to add column", K(ret));
-    } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, result_.get_comment()))) {
       LOG_WARN("failed to add column", K(ret));
     }
   }
@@ -848,6 +855,7 @@ int ObImportTableJob::assign(const ObImportTableJob &that)
     set_total_bytes(that.get_total_bytes());
     set_finished_bytes(that.get_finished_bytes());
     set_failed_bytes(that.get_failed_bytes());
+    set_result(that.get_result());
   }
   return ret;
 }
@@ -1383,3 +1391,4 @@ int ObRecoverTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
 #undef FILL_INT_COLUMN
 #undef FILL_UINT_COLUMN
 #undef FILL_STR_COLUMN
+#undef FILL_HEX_STR_COLUMN

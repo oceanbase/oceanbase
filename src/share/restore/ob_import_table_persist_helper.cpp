@@ -284,6 +284,19 @@ int ObImportTableJobPersistHelper::report_import_job_statistics(
   return ret;
 }
 
+int ObImportTableJobPersistHelper::report_statistics(common::ObISQLClient &proxy, const ObImportTableJob &job) const
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObImportTableTaskPersistHelper not init", K(ret));
+  } else if (OB_FAIL(table_op_.update_row(proxy, job, affected_rows))) {
+    LOG_WARN("failed to update row", K(ret), K(job));
+  }
+  return ret;
+}
+
 ObImportTableTaskPersistHelper::ObImportTableTaskPersistHelper()
   : is_inited_(false), tenant_id_(), table_op_()
 {

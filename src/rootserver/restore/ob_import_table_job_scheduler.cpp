@@ -307,9 +307,31 @@ int ObImportTableJobScheduler::do_after_import_all_table_(share::ObImportTableJo
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::ObImportTableTask> import_tasks;
+  ObImportTableJobStatus next_status = ObImportTableJobStatus::get_next_status(job.get_status());
   if (OB_FAIL(get_import_table_tasks_(job, import_tasks))) {
     LOG_WARN("failed to get import table tasks", K(ret), K(job));
+  } else if (!next_status.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid import job status", K(ret), K(next_status));
+  } else if (OB_FAIL(update_statistic_(import_tasks, job))) {
+    LOG_WARN("failed to update statistic", K(ret));
+  } else if (OB_FAIL(advance_status_(*sql_proxy_, job, next_status))) {
+    LOG_WARN("failed to advance to next status", K(ret));
+  } else {
+    LOG_INFO("[IMPORT_TABLE]importing table finished", K(import_tasks), K(next_status));
+    ROOTSERVICE_EVENT_ADD("import_table", "import table task finish",
+                          "tenant_id", job.get_tenant_id(),
+                          "job_id", job.get_job_id(),
+                          "succeed_import_table_count", job.get_finished_table_count(),
+                          "failed_import_table_count", job.get_failed_table_count());
   }
+  return ret;
+}
+
+int ObImportTableJobScheduler::update_statistic_(
+    common::ObIArray<share::ObImportTableTask> &import_tasks, share::ObImportTableJob &job)
+{
+  int ret = OB_SUCCESS;
   int64_t succeed_task_cnt = 0;
   int64_t failed_task_cnt = 0;
   ObImportResult::Comment comment;
@@ -320,34 +342,26 @@ int ObImportTableJobScheduler::do_after_import_all_table_(share::ObImportTableJo
       succeed_task_cnt++;
     } else {
       failed_task_cnt++;
-      if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(), pos,
-          "%s%s%.*s", failed_task_cnt == 1 ? "import failed table list: " : "",
-          failed_task_cnt == 1 ? "" : ",",
-          task.get_src_table().length(), task.get_src_table().ptr()))) {
-        if (OB_SIZE_OVERFLOW == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to databuff_printf", K(ret));
-        }
-      }
+    }
+  }
+  ObImportResult result;
+
+  if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(), pos,
+    "import succeed table count: %ld, failed table count: %ld", succeed_task_cnt, failed_task_cnt))) {
+    if (OB_SIZE_OVERFLOW == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to databuff_printf", K(ret));
     }
   }
 
-  ObImportTableJobStatus next_status = ObImportTableJobStatus::get_next_status(job.get_status());
-  job.get_result().set_result(true, comment);
-  if (OB_FAIL(ret)) {
-  } else if (!next_status.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid import job status", K(ret), K(next_status));
-  } else if (OB_FAIL(advance_status_(*sql_proxy_, job, next_status))) {
-    LOG_WARN("failed to advance to next status", K(ret));
-  } else {
-    LOG_INFO("[IMPORT_TABLE]importing table finished", K(import_tasks), K(next_status));
-    ROOTSERVICE_EVENT_ADD("import_table", "import table task finish",
-                          "tenant_id", job.get_tenant_id(),
-                          "job_id", job.get_job_id(),
-                          "succeed_import_table_count", succeed_task_cnt,
-                          "failed_import_table_count", failed_task_cnt);
+  result.set_result(true, comment);
+  job.set_result(result);
+  job.set_finished_table_count(succeed_task_cnt);
+  job.set_failed_table_count(failed_task_cnt);
+
+  if (FAILEDx(job_helper_.report_statistics(*sql_proxy_, job))) {
+    LOG_WARN("failed to report statistics", K(ret));
   }
   return ret;
 }

@@ -45,6 +45,7 @@ public:
   int get_import_table_job_by_initiator(common::ObISQLClient &proxy,
       const uint64_t initiator_tenant_id, const uint64_t initiator_job_id, ObImportTableJob &job) const;
   int force_cancel_import_job(common::ObISQLClient &proxy) const;
+  int report_statistics(common::ObISQLClient &proxy, const ObImportTableJob &job) const;
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObImportTableJobPersistHelper);
