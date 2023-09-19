@@ -571,9 +571,6 @@ int ObAccessService::check_write_allowed_(
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id), K_(tenant_id));
-  } else if (OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, dml_param.timeout_,
-      share::SCN::max_scn(), ctx_guard))) {
-    LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id));
   } else {
     // TODO: this may confuse user, because of txn timeout won't notify user proactively
     int64_t lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());
@@ -588,12 +585,19 @@ int ObAccessService::check_write_allowed_(
                                       is_try_lock,
                                       lock_expired_ts))) {
       LOG_WARN("get lock param failed", K(ret), K(lock_id));
-    } else if (!dml_param.is_direct_insert()
+    } // When locking the table, the tablet is not detected to be deleted.
+    else if (!dml_param.is_direct_insert()
         && OB_FAIL(ls->lock(ctx_guard.get_store_ctx(), lock_param))) {
       LOG_WARN("lock tablet failed", K(ret), K(lock_param));
     } else {
       // do nothing
     }
+  }
+  // After locking the table, it can prevent the tablet from being deleted.
+  // It is necessary to obtain the tablet handle after locking the table to avoid operating the deleted tablet.
+  if (OB_SUCC(ret) && OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, dml_param.timeout_,
+      share::SCN::max_scn(), ctx_guard))) {
+    LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id));
   }
   if (OB_FAIL(ret)) {
     ctx_guard.reset();
