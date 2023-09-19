@@ -528,7 +528,8 @@ public:
                                     common::ObIAllocator &allocator,
                                     const ObColumnRefRawExpr &col_expr,
                                     ObRawExpr *&expr,
-                                    const ObSQLSessionInfo *session_info);
+                                    const ObSQLSessionInfo *session_info,
+                                    bool is_generated_column = false);
   static int build_column_conv_expr(const ObSQLSessionInfo *session_info,
                                     ObRawExprFactory &expr_factory,
                                     const common::ObObjType &type,
@@ -538,7 +539,8 @@ public:
                                     const common::ObString *column_conv_info,
                                     const common::ObIArray<common::ObString> *type_infos,
                                     ObRawExpr *&expr,
-                                    bool is_in_pl = false);
+                                    bool is_in_pl = false,
+                                    bool is_generated_column = false);
   static int build_var_int_expr(ObRawExprFactory &expr_factory,
                                 ObConstRawExpr *&expr);
   static int build_default_expr(ObRawExprFactory &expr_factory,

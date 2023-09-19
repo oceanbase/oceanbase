@@ -275,17 +275,9 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
-        bool is_ddl = const_cast<sql::ObSQLSessionInfo *>(type_ctx.get_session())->get_ddl_info().is_ddl();
-        if (!is_ddl) {
-          type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
-                                  type_ctx.get_raw_expr()->get_extra() |
-                                  CM_COLUMN_CONVERT |
-                                  CM_CHARSET_CONVERT_IGNORE_ERR);
-        } else {
-          type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
-                                  type_ctx.get_raw_expr()->get_extra() |
-                                  CM_COLUMN_CONVERT );
-        }
+        type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
+                               type_ctx.get_raw_expr()->get_extra() |
+                               CM_COLUMN_CONVERT);
         types[4].set_calc_meta(type);
       }
     }
