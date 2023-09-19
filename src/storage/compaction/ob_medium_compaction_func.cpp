@@ -271,6 +271,8 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_for_leader(
     }
 #endif
     ret = schedule_next_medium_primary_cluster(major_snapshot, schedule_stat);
+  } else {
+    LOG_TRACE("not leader", K(ret), K(role), K(ls_.get_ls_id()));
   }
   return ret;
 }
@@ -338,8 +340,8 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
   } else if (OB_ISNULL(medium_info_list_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is unexpected null", K(ret), KPC(this), KPC_(medium_info_list));
-  } else if (!medium_info_list_->could_schedule_next_round()) { // check medium list int mds_table
-    // do nothing
+  } else if (!medium_info_list_->could_schedule_next_round(last_major->get_snapshot_version())) {
+    // check medium list int mds_table
   } else if (OB_FAIL(get_adaptive_reason(schedule_major_snapshot, adaptive_merge_reason))) {
     LOG_WARN("failed to get adaptive reason", KR(ret), K(schedule_major_snapshot));
   } else if (adaptive_merge_reason > ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE) {
