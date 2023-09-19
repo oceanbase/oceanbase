@@ -17,6 +17,11 @@ source /etc/os-release || exit 1
 PNAME=${PRETTY_NAME:-"${NAME} ${VERSION}"}
 PNAME="${PNAME} (${OS_ARCH})"
 
+function compat_centos9() {
+  echo_log "[NOTICE] '$PNAME' is compatible with CentOS 9, use el9 dependencies list"
+  OS_RELEASE=9
+}
+
 function compat_centos8() {
   echo_log "[NOTICE] '$PNAME' is compatible with CentOS 8, use el8 dependencies list"
   OS_RELEASE=8
@@ -58,6 +63,7 @@ function get_os_release() {
         version_ge "7.0" && compat_centos7 && return
         ;;
       ubuntu)
+        version_ge "22.04" && compat_centos9 && return
         version_ge "16.04" && compat_centos7 && return
         ;;
       centos)
@@ -101,6 +107,7 @@ function get_os_release() {
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
       ubuntu)
+        version_ge "22.04" && compat_centos9 && return
         version_ge "16.04" && compat_centos7 && return
         ;;
     esac
