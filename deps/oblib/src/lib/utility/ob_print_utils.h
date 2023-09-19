@@ -151,16 +151,18 @@ public:
   static const int MIN_SIZE = 12 * 1024;
   struct BufNode
   {
-    char buf_[MIN_SIZE];
-    int64_t level_;
-    struct BufNode *next_;
+    BufNode() : pre_(NULL), pos_(0) {}
+    ~BufNode() {}
+    char buf_[BUF_SIZE];
+    struct BufNode *pre_;
+    int64_t pos_;
   };
   struct BufList
   {
     BufList() : head_(nullptr) {}
     BufNode *head_;
   };
-  CStringBufMgr() : list_(), level_(-1), pos_(0) {}
+  CStringBufMgr() : list_(), level_(-1), pos_(0), curr_(NULL) {}
   ~CStringBufMgr() {}
   static CStringBufMgr &get_thread_local_instance()
   {
@@ -176,45 +178,47 @@ public:
       if (MIN_SIZE > BUF_SIZE - pos_) {
         pos_ = 0;
       }
+    } else if (NULL != curr_) {
+      curr_->pos_ += pos;
+      if (MIN_SIZE > BUF_SIZE - curr_->pos_) {
+        curr_->pos_ = 0;
+      }
+      BufNode *outer_layer = curr_->pre_;
+      curr_->pre_ = list_.head_;
+      list_.head_ = curr_;
+      curr_ = outer_layer;
     }
   }
-  int64_t get_buffer_len()
+  int64_t acquire(char *&buffer)
   {
-    return 0 == level_ ? (BUF_SIZE - pos_) : MIN_SIZE;
-  }
-  char *acquire()
-  {
-    char *buffer = NULL;
+    int64_t buf_len = 0;
     if (0 == level_) {
       buffer = local_buf_ + pos_;
+      buf_len = BUF_SIZE - pos_;
     } else {
       BufNode *node = NULL;
       node = list_.head_;
-      while (NULL != node) {
-        if (node->level_ > level_) {
-          node->level_ = level_;
-          break;
-        } else {
-          node = node->next_;
-        }
-      }
-      if ((NULL == node) && (NULL != (node = OB_NEW(BufNode, ObModIds::OB_THREAD_BUFFER)))) {
-        node->level_ = level_;
-        node->next_ = list_.head_;
-        list_.head_ = node;
-      }
       if (NULL != node) {
-        buffer = node->buf_;
+        list_.head_ = node->pre_;
+      }
+      if ((NULL != node)
+        || (NULL != (node = OB_NEW(BufNode, ObModIds::OB_THREAD_BUFFER)))) {
+        buffer = node->buf_ + node->pos_;
+        node->pre_ = curr_;
+        curr_ = node;
+        buf_len = BUF_SIZE - node->pos_;
+      } else {
+        buffer = NULL;
       }
     }
-    return buffer;
+    return buf_len;
   }
   void try_clear_list()
   {
     if (0 == level_) {
       while (NULL != list_.head_) {
         BufNode *node = list_.head_;
-        list_.head_ = node->next_;
+        list_.head_ = node->pre_;
         OB_DELETE(BufNode, ObModIds::OB_THREAD_BUFFER, node);
       }
     }
@@ -224,6 +228,7 @@ private:
   BufList list_;
   int64_t level_;
   int64_t pos_;
+  BufNode *curr_;
 };
 
 template <typename T>
@@ -233,11 +238,10 @@ const char *to_cstring(const T &obj, FalseType)
   int64_t str_len = 0;
   CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
   mgr.inc_level();
-  buffer = mgr.acquire();
+  const int64_t buf_len = mgr.acquire(buffer);
   if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    const int64_t buf_len = mgr.get_buffer_len();
     str_len = to_string(obj, buffer, buf_len -1);
     if (str_len >= 0 && str_len < buf_len) {
       buffer[str_len] = '\0';
