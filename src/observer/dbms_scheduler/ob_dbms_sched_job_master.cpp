@@ -562,7 +562,7 @@ int ObDBMSSchedJobMaster::check_all_tenants()
   } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
     LOG_WARN("fail to get all tenant ids", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+    for (int64_t i = 0; i < tenant_ids.count(); ++i) {
       const ObTenantSchema *tenant_schema = NULL;
       OZ (schema_guard.get_tenant_info(tenant_ids.at(i), tenant_schema));
       CK (OB_NOT_NULL(tenant_schema));
@@ -577,6 +577,7 @@ int ObDBMSSchedJobMaster::check_all_tenants()
         }
         OZ (check_new_jobs(tenant_ids.at(i), tenant_schema->is_oracle_tenant()));
       }
+      ret = OB_SUCCESS; // one tenant failed should not affect other
     }
   }
   LOG_INFO("check all tenants", K(ret));
