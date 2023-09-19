@@ -228,6 +228,12 @@ ObTenantTabletScheduler::~ObTenantTabletScheduler()
 
 void ObTenantTabletScheduler::destroy()
 {
+  if (IS_INIT) {
+    reset();
+  }
+}
+void ObTenantTabletScheduler::reset()
+{
   stop();
   wait();
   TG_DESTROY(merge_loop_tg_id_);
@@ -290,7 +296,9 @@ int ObTenantTabletScheduler::init()
     schedule_tablet_batch_size_ = schedule_batch_size;
     is_inited_ = true;
   }
-
+  if (!is_inited_) {
+    reset();
+  }
   return ret;
 }
 

@@ -204,6 +204,7 @@ public:
   int init();
   int start();
   void destroy();
+  void reset();
   void stop();
   void wait();
   bool is_stop() const { return is_stop_; }

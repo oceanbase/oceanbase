@@ -319,6 +319,7 @@ public:
   void wait();
   void stop();
   void destroy();
+  void reset();
 
   int report_stat(
       const ObTabletStat &stat,

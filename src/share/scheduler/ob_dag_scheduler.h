@@ -898,7 +898,7 @@ private:
   bool try_switch(ObTenantDagWorker &worker);
   int try_switch(ObTenantDagWorker &worker, const int64_t src_prio, const int64_t dest_prio, bool &need_pause);
   void pause_worker(ObTenantDagWorker &worker, const int64_t priority);
-  void dump_dag_status();
+  void dump_dag_status(const bool force_dump = false);
   int check_need_load_shedding(const int64_t priority, const bool for_schedule, bool &need_shedding);
   void update_work_thread_num();
   int move_dag_to_list_(

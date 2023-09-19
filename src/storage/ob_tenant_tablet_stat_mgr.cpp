@@ -533,6 +533,9 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
   } else {
     is_inited_ = true;
   }
+  if (!is_inited_) {
+    reset();
+  }
   return ret;
 }
 
@@ -558,6 +561,13 @@ void ObTenantTabletStatMgr::stop()
 }
 
 void ObTenantTabletStatMgr::destroy()
+{
+  if (IS_INIT) {
+    reset();
+  }
+}
+
+void ObTenantTabletStatMgr::reset()
 {
   stop();
   wait();

@@ -1704,7 +1704,7 @@ void ObTenantDagScheduler::reset()
   WEAK_BARRIER();
   int tmp_ret = OB_SUCCESS;
   int64_t abort_dag_cnt = 0;
-  dump_dag_status();
+  dump_dag_status(true);
   for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
     for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
       ObIDag *head = dag_list_[j].get_head(i);
@@ -1947,9 +1947,9 @@ int ObTenantDagScheduler::add_dag(
   return ret;
 }
 
-void ObTenantDagScheduler::dump_dag_status()
+void ObTenantDagScheduler::dump_dag_status(const bool force_dump/*false*/)
 {
-  if (REACH_TENANT_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
+  if (force_dump || REACH_TENANT_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
     int64_t scheduled_task_cnt = 0;
     int64_t running_task[ObDagPrio::DAG_PRIO_MAX];
     int64_t low_limits[ObDagPrio::DAG_PRIO_MAX];
