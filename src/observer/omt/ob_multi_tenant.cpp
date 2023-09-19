@@ -683,14 +683,26 @@ int ObMultiTenant::create_hidden_sys_tenant()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  omt::ObTenant *tenant;
   ObTenantMeta meta;
-
   if (OB_FAIL(construct_meta_for_hidden_sys(meta))) {
     LOG_ERROR("fail to construct meta", K(ret));
-  } else if (OB_FAIL(create_tenant(meta, true/* write_slog*/))) {
-    LOG_ERROR("create hidden sys tenant failed", K(ret));
+  } else {
+    if (OB_FAIL(get_tenant(tenant_id, tenant))) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(create_tenant(meta, true/* write_slog */))) {
+        LOG_ERROR("create hidden sys tenant failed", K(ret));
+      }
+      LOG_INFO("finish create hidden sys", KR(ret));
+    } else if(tenant->is_hidden()){
+      if (OB_SUCC(ret) && !(meta.unit_ == tenant->get_unit())) {
+        if (OB_FAIL(GCTX.omt_->update_tenant_unit_no_lock(meta.unit_))) {
+          LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
+        }
+      }
+      LOG_INFO("sys tenant has been created, no need create hidden sys");
+    }
   }
-
   return ret;
 }
 
