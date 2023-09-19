@@ -75,6 +75,7 @@ public:
   ~ObTableQuerySyncSession();
 
   void set_result_iterator(table::ObTableQueryResultIterator* iter);
+  table::ObTableQueryResultIterator *get_result_iter() { return result_iterator_; };
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
