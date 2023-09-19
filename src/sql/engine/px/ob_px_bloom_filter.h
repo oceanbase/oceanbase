@@ -59,7 +59,8 @@ OB_UNIS_VERSION_V(1);
 public:
   ObPxBloomFilter();
   virtual ~ObPxBloomFilter() {};
-  int init(int64_t data_length, common::ObIAllocator &allocator, int64_t tenant_id, double fpp = 0.01);
+  int init(int64_t data_length, common::ObIAllocator &allocator, int64_t tenant_id,
+           double fpp = 0.01, int64_t max_filter_size = 2147483648 /*2G*/);
   int init(const ObPxBloomFilter *filter);
   void reset_filter();
   inline int might_contain(uint64_t hash, bool &is_match) {
@@ -101,11 +102,13 @@ private:
   bool set(uint64_t block_begin, uint64_t index);
   void calc_num_of_hash_func();
   void calc_num_of_bits();
+  void align_max_bit_count(int64_t max_filter_size);
   int might_contain_nonsimd(uint64_t hash, bool &is_match);
   int might_contain_simd(uint64_t hash, bool &is_match);
 
 private:
   int64_t data_length_;          //原始数据长度
+  int64_t max_bit_count_;        // max filter size, default 2GB, so the max bit count = 17179869184;
   int64_t bits_count_;           //filter的位个数
   double  fpp_;                  //误判率
   int64_t hash_func_count_;      //哈希函数个数
