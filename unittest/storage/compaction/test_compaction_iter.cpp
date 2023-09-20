@@ -139,13 +139,9 @@ void TestCompactionIter::test_iter(
     ASSERT_EQ(loop_cnt, iter_cnt / max_batch_tablet_cnt + (iter_cnt % max_batch_tablet_cnt != 0));
   } else if (error_tablet_idx < 0 || error_tablet_idx >= tablet_cnt_per_ls) {
     // no errno
-  } else if (OB_TABLET_NOT_EXIST == input_errno) {
+  } else {
     // for this errno, just skip this tablet
     ASSERT_EQ(iter_cnt, ls_cnt * (tablet_cnt_per_ls - 1));
-    ASSERT_EQ(loop_cnt, iter_cnt / max_batch_tablet_cnt + (iter_cnt % max_batch_tablet_cnt != 0));
-  } else {
-    // for this errno, just skip cur ls, reset tablet won't be scheduled
-    ASSERT_EQ(iter_cnt, ls_cnt * error_tablet_idx);
     ASSERT_EQ(loop_cnt, iter_cnt / max_batch_tablet_cnt + (iter_cnt % max_batch_tablet_cnt != 0));
   }
 }

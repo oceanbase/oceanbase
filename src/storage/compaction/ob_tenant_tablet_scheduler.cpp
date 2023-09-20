@@ -1677,7 +1677,7 @@ int ObCompactionScheduleIterator::get_next_ls(ObLSHandle &ls_handle)
     ++ls_idx_;
     ls_tablet_svr_ = nullptr;
     tablet_ids_.reuse();
-    LOG_TRACE("tablet iter end", K(ret), K(ls_idx_), K(tablet_idx_), "tablet_cnt", tablet_ids_.count());
+    LOG_TRACE("tablet iter end", K(ret), K(ls_idx_), K(tablet_idx_), "tablet_cnt", tablet_ids_.count(), K_(ls_ids));
   }
   do {
      if (finish_cur_batch_) {
@@ -1688,10 +1688,11 @@ int ObCompactionScheduleIterator::get_next_ls(ObLSHandle &ls_handle)
     } else if (OB_FAIL(get_cur_ls_handle(ls_handle))) {
       if (OB_LS_NOT_EXIST == ret) {
         LOG_TRACE("ls not exist", K(ret), K(ls_idx_), K(ls_ids_[ls_idx_]));
-        skip_cur_ls();
       } else {
         LOG_WARN("failed to get ls", K(ret), K(ls_idx_), K(ls_ids_[ls_idx_]));
+        ret = OB_LS_NOT_EXIST;
       }
+       skip_cur_ls();
     } else {
       ls_tablet_svr_ = ls_handle.get_ls()->get_tablet_svr();
     }
@@ -1745,11 +1746,11 @@ int ObCompactionScheduleIterator::get_next_tablet(ObTabletHandle &tablet_handle)
       } else {
         const common::ObTabletID &tablet_id = tablet_ids_.at(tablet_idx_);
         if (OB_FAIL(get_tablet_handle(tablet_id, tablet_handle))) {
-          if (OB_TABLET_NOT_EXIST == ret) {
-            tablet_idx_++;
-          } else {
+          if (OB_TABLET_NOT_EXIST != ret) {
             LOG_WARN("fail to get tablet", K(ret), K(tablet_idx_), K(tablet_id));
+            ret = OB_TABLET_NOT_EXIST;
           }
+          tablet_idx_++;
         } else {
           tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
           tablet_idx_++;
