@@ -225,7 +225,8 @@ int ObJoinFilterOpInput::construct_msg_details(
       if (OB_FAIL(bf_msg.bloom_filter_.init(spec.filter_len_,
           bf_msg.get_allocator(),
           bf_msg.get_tenant_id(),
-          config.bloom_filter_ratio_))) {
+          config.bloom_filter_ratio_,
+          config.runtime_bloom_filter_max_size_))) {
         LOG_WARN("failed to init bloom filter", K(ret));
       } else if (!spec.is_shared_join_filter() || !spec.is_shuffle_) {
         bf_msg.set_msg_expect_cnt(1);
