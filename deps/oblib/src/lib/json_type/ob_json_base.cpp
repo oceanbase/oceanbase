@@ -31,9 +31,9 @@ struct ObJsonBaseCmp {
   bool operator()(const ObIJsonBase *a, const ObIJsonBase *b) {
     bool is_eq = false;
     if (a->is_tree() && b->is_tree()) {
-      is_eq = (a == b);
+      is_eq = (a < b);
     } else if (a->is_bin() && b->is_bin()) {
-      is_eq = (a->get_data() == b->get_data());
+      is_eq = (a->get_data() < b->get_data());
     } else {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected type", K(OB_ERR_UNEXPECTED), K(*a), K(*b));
     }
