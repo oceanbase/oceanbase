@@ -102,6 +102,7 @@ private:
   static const int64_t MAP_BUCKET_NUM = 1024;
   bool is_inited_;
   bool is_synced_;
+  bool need_renew_location_;
   uint64_t src_tenant_id_;
   uint64_t dst_tenant_id_;
   ObSEArray<ObTabletID, 1> orig_src_tablet_ids_;
