@@ -960,7 +960,7 @@ int ObInKeyPart::get_obj_cmp_funcs(ObIArray<obj_cmp_func> &cmp_funcs)
   return ret;
 }
 
-// TODO: can be optimized by hash join algorithm, see ObKeyPart::intersect_two_in_keys, @zhenglailei.zll
+// TODO: can be optimized by hash join algorithm, see ObKeyPart::intersect_two_in_keys
 int ObKeyPart::union_in_dup_vals(ObKeyPart *other, bool &is_unioned)
 {
   int ret = OB_SUCCESS;
