@@ -956,8 +956,6 @@ int ObTablet::init_empty_shell(
   const ObTablet &old_tablet)
 {
   int ret = OB_SUCCESS;
-  bool is_commited;
-  const mds::MdsDumpKV *kv = nullptr;
   ObTabletCreateDeleteMdsUserData user_data;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -5967,11 +5965,24 @@ int ObTablet::check_tablet_status_for_read_all_committed()
   const ObLSID &ls_id = get_tablet_meta().ls_id_;
   ObTabletCreateDeleteMdsUserData user_data;
   // first make sure tablet is in any committed state
-  // then check if it is a empty shell
+  // then check if it is empty shell
   if (OB_FAIL(get_tablet_status(share::SCN::max_scn(), user_data, 0/*timeout*/))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+      bool is_committed = false;
+      if (OB_FAIL(get_latest_tablet_status(user_data, is_committed))) {
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_TABLET_NOT_EXIST;
+          LOG_WARN("tablet creation has no been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
+        }
+      } else if (!is_committed) {
+        if (transaction::ObTransVersion::INVALID_TRANS_VERSION == user_data.create_commit_version_) {
+          ret = OB_TABLET_NOT_EXIST;
+          LOG_WARN("create commit version is invalid", K(ret), K(ls_id), K(tablet_id), K(user_data));
+        }
+      }
     } else {
       LOG_WARN("failed to get tablet status", K(ret), K(ls_id), K(tablet_id));
     }
