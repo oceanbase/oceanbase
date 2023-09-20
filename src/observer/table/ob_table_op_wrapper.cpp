@@ -362,6 +362,7 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
     LOG_WARN("fail to close row iterator", K(tmp_ret));
     ret = COVER_SUCC(tmp_ret);
   }
+  ObTableQueryUtils::destroy_result_iterator(result_iter);
 
   return ret;
 }
