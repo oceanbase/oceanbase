@@ -229,6 +229,7 @@ int ObTransformerImpl::do_transform_dblink_write(ObDMLStmt *&stmt, bool &trans_h
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
   } else {
+    OPT_TRACE_TITLE("start transform dblink write");
     ObTransformDBlink trans(ctx_);
     trans.set_transformer_type(PROCESS_DBLINK);
     trans.set_transform_for_write(true);
@@ -253,6 +254,7 @@ int ObTransformerImpl::do_transform_dblink_read(ObDMLStmt *&stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
   } else {
+    OPT_TRACE_TITLE("start transform dblink read");
     ObTransformDBlink trans(ctx_);
     trans.set_transformer_type(PROCESS_DBLINK);
     trans.set_transform_for_write(false);

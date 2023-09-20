@@ -48,9 +48,11 @@ int ObTransformDBlink::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent_stmt
       if (OB_FAIL(formalize_link_table(stmt))) {
         LOG_WARN("failed to formalize link table", K(ret));
       }
-    } else if ((!stmt->is_dml_write_stmt() || stmt->is_merge_stmt()) &&
-        OB_FAIL(pack_link_table(stmt, trans_happened))) {
+    } else if (OB_FAIL(pack_link_table(stmt, trans_happened))) {
       LOG_WARN("failed to pack link table", K(ret));
+    } else if (OB_UNLIKELY(stmt->is_dml_write_stmt() && stmt->is_dblink_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected dblink stmt", KPC(stmt));
     } else {
       LOG_TRACE("succeed to pack link table", K(ret));
     }
@@ -555,7 +557,8 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (stmt->is_hierarchical_query() || stmt->is_unpivot_select() ||
-             (stmt->is_select_stmt() && sel_stmt->has_select_into())) {
+             (stmt->is_select_stmt() && sel_stmt->has_select_into()) ||
+             stmt->is_dml_write_stmt()) {
     all_table_from_one_dblink = false;
   } else if (has_invalid_link_expr(*stmt, has_special_expr)) {
     LOG_WARN("failed to check stmt has invalid link expr", K(ret));
