@@ -319,7 +319,7 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
   INIT_SUCC(ret);
   ObDatum *json_datum = nullptr;
   ObExpr *json_arg = expr;
-  bool is_bool_data_type = json_arg->is_boolean_;
+  bool is_bool_data_type = (json_arg->is_boolean_ || json_arg->datum_meta_.type_ == ObTinyIntType);
 
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret), K(json_arg->datum_meta_));
