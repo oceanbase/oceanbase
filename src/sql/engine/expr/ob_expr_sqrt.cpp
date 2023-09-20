@@ -98,6 +98,7 @@ int calc_sqrt_expr_mysql_in_batch(const ObExpr &expr,
         } else {
           res_datums[i].set_double(std::sqrt(arg_datums.at(i)->get_double()));
         }
+        eval_flag.set(i);
       }
     }
   }
@@ -158,6 +159,7 @@ int calc_sqrt_expr_oracle_double_in_batch_impl(const ObExpr &expr,
         } else {
           res_datums[i].set_float(std::sqrt(arg->get_float()));
         }
+        eval_flag.set(i);
       }
     }
   } else if (std::is_same<T, double>::value) {
@@ -171,6 +173,7 @@ int calc_sqrt_expr_oracle_double_in_batch_impl(const ObExpr &expr,
         } else {
           res_datums[i].set_double(std::sqrt(arg->get_double()));
         }
+        eval_flag.set(i);
       }
     }
   }
@@ -254,6 +257,7 @@ int calc_sqrt_expr_oracle_number_in_batch(const ObExpr &expr,
           }
           temp_allocator.free();
         }
+        eval_flag.set(i);
       }
     }
   }
