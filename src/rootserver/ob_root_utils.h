@@ -651,8 +651,10 @@ public:
     ObIArray<ObZone> &orig_first_primary_zone,
     ObIArray<ObZone> &new_first_primary_zone,
     bool &is_changed);
-  static int check_and_commit_rs_job(const uint64_t tenant_id, const ObRsJobType rs_job_type);
-  static int find_rs_job(const uint64_t tenant_id, const ObRsJobType rs_job_type, int64_t &rs_job_id);
+  static int check_ls_balance_and_commit_rs_job(
+      const uint64_t tenant_id,
+      const int64_t rs_job_id,
+      const ObRsJobType rs_job_type);
 
   template<class T>
       static int check_left_f_in_primary_zone(ObZoneManager &zone_mgr,

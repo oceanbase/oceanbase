@@ -19,6 +19,7 @@
 #include "rootserver/ob_disaster_recovery_worker.h"  // for ObDRWorker LocalityMap
 #include "rootserver/ob_disaster_recovery_info.h"    // for DRLSInfo
 #include "share/schema/ob_schema_mgr.h"              // for SimpleTenantSchema
+#include "rootserver/ob_root_service.h"
 
 namespace oceanbase
 {
@@ -80,6 +81,7 @@ int ObAlterLocalityFinishChecker::check()
   ObArray<const ObSimpleTenantSchema *> tenant_schemas;
   LOG_INFO("start to check alter locality finish");
   //STEP 0: previous check
+  int64_t rs_job_id = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAlterLocalityFinishChecker not init", KR(ret));
@@ -103,6 +105,7 @@ int ObAlterLocalityFinishChecker::check()
       DEBUG_SYNC(BEFORE_CHECK_LOCALITY);
       bool alter_locality_finish = false;
       bool meta_alter_locality_finish = false;
+      bool is_previous_locality_empty = true;
       uint64_t tenant_id = OB_INVALID_TENANT_ID;
       ObCurTraceId::init(GCONF.self_addr_);
       if (OB_ISNULL(tenant_schemas.at(i)) || OB_ISNULL(GCTX.sql_proxy_)) {
@@ -116,16 +119,25 @@ int ObAlterLocalityFinishChecker::check()
         // shall never be here
       } else if (is_meta_tenant(tenant_id)) {
         continue;
-      } else if (tenant_schemas.at(i)->get_previous_locality_str().empty()) {
-        // two possibilities
-        // 1. we cannot find any inprogress ALTER_TENANT_LOCALITY in __all_rootservice_job
-        // 2. there is an inprogress rs job ALTER_TENANT_LOCALITY, all tasks related to disaster recovery
-        //    (e.g. add missing ls replicas, remove redundant ls replicas) have been finished
-        //    the last thing to do is that check whether ls are balanced and complete the rs job if yes
-        if (OB_FAIL(ObRootUtils::check_and_commit_rs_job(tenant_id, ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY))) {
-          LOG_WARN("fail to check and commit rs job", KR(ret));
+      } else if (OB_TMP_FAIL(find_rs_job(tenant_id, rs_job_id, *GCTX.sql_proxy_))) {
+        if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+          tmp_ret = OB_SUCCESS;
+          rs_job_id = 0;
+        } else {
+          LOG_WARN("fail to find rs job", KR(ret), KR(tmp_ret), K(tenant_id), K(rs_job_id));
         }
-      } else if (OB_SUCCESS != (tmp_ret = ObDRWorker::check_tenant_locality_match(
+      }
+      if (OB_FAIL(ret) || OB_SUCCESS != tmp_ret) {
+      } else if (OB_TMP_FAIL(check_tenant_previous_locality_(tenant_id, is_previous_locality_empty))) {
+        LOG_WARN("fail to execute check_tenant_previous_locality_", KR(ret), K(tenant_id));
+      } else if (is_previous_locality_empty) {
+        if (0 != rs_job_id && OB_TMP_FAIL(ObRootUtils::check_ls_balance_and_commit_rs_job(
+            tenant_id,
+            rs_job_id,
+            ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY))) {
+          LOG_WARN("fail to execute check_ls_balance_and_commit_rs_job", KR(ret), K(tenant_id), K(rs_job_id));
+        }
+      }  else if (OB_SUCCESS != (tmp_ret = ObDRWorker::check_tenant_locality_match(
                          tenant_id,
                          *unit_mgr_,
                          *zone_mgr_,
@@ -185,6 +197,31 @@ int ObAlterLocalityFinishChecker::check_stop() const
   if (stop_) {
     ret = OB_CANCELED;
     LOG_WARN("ObAlterLocalityFinishChecker stopped", KR(ret), K(stop_));
+  }
+  return ret;
+}
+
+int ObAlterLocalityFinishChecker::check_tenant_previous_locality_(
+    const uint64_t tenant_id,
+    bool &is_previous_locality_empty)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard tenant_schema_guard;
+  const ObTenantSchema *tenant_schema = NULL;
+  ObRootService *root_service = GCTX.root_service_;
+  is_previous_locality_empty= true;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_service is null", KR(ret), KP(root_service));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, tenant_schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_schema is null", KR(ret), KP(tenant_schema));
+  } else {
+    is_previous_locality_empty = tenant_schema->get_previous_locality_str().empty();
   }
   return ret;
 }
