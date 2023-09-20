@@ -66,6 +66,17 @@ ObSpatialIndexLookupOp::~ObSpatialIndexLookupOp()
   sorter_.~ObExternalSort();
 }
 
+int ObSpatialIndexLookupOp::revert_iter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLocalIndexLookupOp::revert_iter())) {
+    LOG_WARN("revert local index lookup iter from spatial fail.", K(ret));
+  }
+  sorter_.clean_up();
+  sorter_.~ObExternalSort();
+  return ret;
+}
+
 int ObSpatialIndexLookupOp::reset_lookup_state()
 {
   is_inited_ = false;

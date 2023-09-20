@@ -50,6 +50,8 @@ public:
   int reset_lookup_state();
   int filter_by_mbr(const ObObj &mbr_obj, bool &pass_through);
   int get_next_row();
+  int revert_iter();
+
 private:
   int process_data_table_rowkey();
   int save_rowkeys();
