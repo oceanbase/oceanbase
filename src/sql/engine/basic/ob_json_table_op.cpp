@@ -762,14 +762,18 @@ int JtFuncHelpler::cast_to_number(common::ObIAllocator *allocator,
 int JtFuncHelpler::cast_to_bit(ObIJsonBase *j_base, uint64_t &val, common::ObAccuracy &accuracy)
 {
   INIT_SUCC(ret);
-
+  int64_t int_val;
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
-  } else if (OB_FAIL(j_base->to_bit(val))) {
-    LOG_WARN("fail get bit from json", K(ret));
-  } else if (OB_FAIL(bit_length_check(accuracy, val))) {
-    LOG_WARN("fail to check bit range", K(ret));
+  } else if (OB_FAIL(j_base->to_int(int_val))) {
+    ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+    LOG_WARN("fail get int from json", K(ret));
+  } else {
+    val = static_cast<uint64_t>(int_val);
+    if (OB_FAIL(bit_length_check(accuracy, val))) {
+      LOG_WARN("fail to check bit range", K(ret));
+    }
   }
 
   return ret;
@@ -1051,7 +1055,7 @@ int JtFuncHelpler::cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNo
             LOG_WARN("failed to set error val.", K(tmp_ret));
           }
         } else {
-          res.set_bit(out_val);
+          res.set_uint(out_val);
         }
         break;
       }
