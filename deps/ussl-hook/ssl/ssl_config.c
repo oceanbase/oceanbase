@@ -813,9 +813,10 @@ ssize_t writev_regard_ssl(int fildes, const struct iovec *iov, int iovcnt)
       wbytes = 0;
       for (i = 0; (i < iovcnt) && (0 == ret); i++) {
         ERR_clear_error();
-        int ret = 0;
         n = SSL_write(ssl, iov[i].iov_base, iov[i].iov_len);
-        if (n <= 0) {
+        if (n > 0) {
+          wbytes += n;
+        } else {
           int ssl_error = SSL_get_error(ssl, n);
           if (SSL_ERROR_WANT_WRITE == ssl_error) {
             errno = EAGAIN;
@@ -827,10 +828,21 @@ ssize_t writev_regard_ssl(int fildes, const struct iovec *iov, int iovcnt)
             ussl_log_error("SSL_write failed, fd:%d, reason:%s", fildes,
                           ERR_error_string(ERR_get_error(), NULL));
           }
+          // errno: EIO, need destroy connection
+          // errno: EAGAIN:
+          // (1) wbytes larger than 0 (means already send some data successfully), just return wbytes
+          // (2) wbytes equal to zero (means send the first iov), wbytes equals to n (-1 means socket buffer
+          // temporarily unwritable, 0 means need destroy connection)
+          if (EIO == errno) {
+            wbytes = -1;
+          } else if (EAGAIN == errno) {
+            if (wbytes > 0) {
+            } else {
+              wbytes += n;
+            }
+          }
           ret = ENODATA;
-          continue;
         }
-        wbytes += n;
       }
     }
   }
