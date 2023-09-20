@@ -834,7 +834,11 @@ public:
     in_forall_ = false;
     save_exception_ = false;
     forall_rollback_ = false;
-    cursor_flag_ = CURSOR_FLAG_UNDEF;
+    if (is_session_cursor()) {
+      cursor_flag_ = SESSION_CURSOR;
+    } else {
+      cursor_flag_ = CURSOR_FLAG_UNDEF;
+    }
     // ref_count_ = 0; // 这个不要清零，因为oracle在close之后，它的ref count还是保留的
     is_scrollable_ = false;
     last_execute_time_ = 0;
