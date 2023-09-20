@@ -2272,73 +2272,38 @@ int ObRootUtils::is_first_priority_primary_zone_changed(
   return ret;
 }
 
-int ObRootUtils::check_and_commit_rs_job(const uint64_t tenant_id, const ObRsJobType rs_job_type)
+int ObRootUtils::check_ls_balance_and_commit_rs_job(
+    const uint64_t tenant_id,
+    const int64_t rs_job_id,
+    const ObRsJobType rs_job_type)
 {
   int ret = OB_SUCCESS;
-  int64_t rs_job_id = 0;
   int check_ret = OB_NEED_WAIT;
   const char* rs_job_type_str = NULL;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_UNLIKELY(!ObRsJobTableOperator::is_valid_job_type(rs_job_type)
-      || NULL == (rs_job_type_str = ObRsJobTableOperator::get_job_type_str(rs_job_type)))) {
+      || NULL == (rs_job_type_str = ObRsJobTableOperator::get_job_type_str(rs_job_type))
+      || rs_job_id < 1)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid job type", KR(ret), K(rs_job_type), KP(rs_job_type_str));
-  } else if (OB_FAIL(find_rs_job(tenant_id, rs_job_type, rs_job_id))) {
-    // find the corresponding rs job at first, then check if we can complete it
-    // if we only find the rs job at the committing period,
-    // we do not know whether the job has been changed during checking process
-    // e.g. job 1 is the rs job before checking,
-    //      right after checking, job 2 is created and job 1 is canceled by job 2,
-    //      then committing process will find job 2 and complete job 2 immediately,
-    //      which means, job 2 is completed without checking.
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to find rs job", KR(ret), K(tenant_id), K(rs_job_type), K(rs_job_type_str));
-    }
+    LOG_WARN("invalid job type", KR(ret), K(rs_job_type), KP(rs_job_type_str), K(rs_job_id));
   } else if (OB_FAIL(ObRootUtils::check_tenant_ls_balance(tenant_id, check_ret))) {
     LOG_WARN("fail to execute check_tenant_ls_balance", KR(ret), K(tenant_id));
   } else if (OB_NEED_WAIT != check_ret) {
+    DEBUG_SYNC(BEFORE_FINISH_UNIT_NUM);
     if (OB_SUCC(RS_JOB_COMPLETE(rs_job_id, check_ret, *GCTX.sql_proxy_))) {
-      FLOG_INFO("[CHECK_AND_COMMIT_RS_JOB NOTICE] complete an inprogress rs job",
+      FLOG_INFO("[COMMIT_RS_JOB NOTICE] complete an inprogress rs job",
           KR(ret), K(tenant_id), K(rs_job_id), K(check_ret), K(rs_job_type), K(rs_job_type_str));
     } else {
       LOG_WARN("fail to complete rs job", KR(ret), K(tenant_id), K(rs_job_id), K(check_ret),
           K(rs_job_type), K(rs_job_type_str));
       if (OB_EAGAIN == ret) {
-        FLOG_WARN("[CHECK_AND_COMMIT_RS_JOB NOTICE] the specified rs job might has "
+        FLOG_WARN("[COMMIT_RS_JOB NOTICE] the specified rs job might has "
             "been already completed due to a new job or deleted in table manually",
             KR(ret), K(tenant_id), K(rs_job_id), K(check_ret), K(rs_job_type), K(rs_job_type_str));
         ret = OB_SUCCESS; // no need to return the error code
       }
-    }
-  }
-  return ret;
-}
-int ObRootUtils::find_rs_job(const uint64_t tenant_id, const ObRsJobType rs_job_type, int64_t &rs_job_id)
-{
-  int ret = OB_SUCCESS;
-  rs_job_id = 0;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ObRsJobTableOperator::is_valid_job_type(rs_job_type))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(rs_job_type));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else  {
-    switch (rs_job_type) {
-      case ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY:
-        ret = ObAlterLocalityFinishChecker::find_rs_job(tenant_id, rs_job_id, *GCTX.sql_proxy_);
-        break;
-      case ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM:
-        ret = ObUnitManager::find_alter_resource_tenant_unit_num_rs_job(tenant_id, rs_job_id, *GCTX.sql_proxy_);
-        break;
-      default: ret = OB_NOT_SUPPORTED;
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("fail to find rs job", KR(ret), K(tenant_id), K(rs_job_type));
     }
   }
   return ret;

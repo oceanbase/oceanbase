@@ -68,6 +68,7 @@ public:
 private:
   //check whether this checker is stopped
   virtual int check_stop() const override;
+  virtual int check_tenant_previous_locality_(const uint64_t tenant_id, bool &is_previous_locality_empty);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

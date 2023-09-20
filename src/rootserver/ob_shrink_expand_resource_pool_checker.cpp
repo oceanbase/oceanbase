@@ -108,6 +108,7 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_te
   ObArray<uint64_t> pool_ids;
   bool in_shrinking = true;
   bool is_finished = true;
+  int64_t rs_job_id = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
@@ -124,17 +125,27 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_te
   } else if (OB_UNLIKELY(0 == pool_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get tenant resource pool", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(unit_mgr_->check_pool_in_shrinking(pool_ids.at(0), in_shrinking))) {
+  } else if (OB_FAIL(unit_mgr_->find_alter_resource_tenant_unit_num_rs_job(tenant_id, rs_job_id, *sql_proxy_))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      rs_job_id = 0;
+    } else {
+      LOG_WARN("fail to find rs job", KR(ret), K(tenant_id), K(rs_job_id));
+    }
+  }
+  if (FAILEDx(unit_mgr_->check_pool_in_shrinking(pool_ids.at(0), in_shrinking))) {
     LOG_WARN("failed to check resource pool in shrink", KR(ret), K(pool_ids));
   } else if (!in_shrinking) {
-    // check if there exists ALTER_RESOURCE_TENANT_UNIT_NUM rs job
-    // if exists
     // not in_shrinking means that the rs job created by a EXPAND task
     // or a SHRINK task which has cleared deleting units in __all_unit table
     // check whether this task can be committed (i.e. ls is balanced)
     // if not exists, return OB_SUCCESS
-    if (OB_FAIL(ObRootUtils::check_and_commit_rs_job(tenant_id, ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM))) {
-      LOG_WARN("fail to execute check_and_commit_rs_job", KR(ret), K(tenant_id));
+    if (0 != rs_job_id
+            && OB_FAIL(ObRootUtils::check_ls_balance_and_commit_rs_job(
+        tenant_id,
+        rs_job_id,
+        ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM))) {
+      LOG_WARN("fail to execute check_ls_balance_and_commit_rs_job", KR(ret), K(tenant_id));
     }
   } else {
     //check shrink finish
