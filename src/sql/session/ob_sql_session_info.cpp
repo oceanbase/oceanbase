@@ -199,7 +199,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       vport_(0),
       in_bytes_(0),
       out_bytes_(0),
-      current_dblink_sequence_id_(0)
+      current_dblink_sequence_id_(0),
+      client_non_standard_(false)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -369,6 +370,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
     ObBasicSessionInfo::reset(skip_sys_var);
     txn_free_route_ctx_.reset();
+    client_non_standard_ = false;
   }
   gtt_session_scope_unique_id_ = 0;
   gtt_trans_scope_unique_id_ = 0;

@@ -1940,6 +1940,7 @@ int ObMPConnect::verify_identify(ObSMConnection &conn, ObSQLSessionInfo &session
     session.set_tenant(tenant_name_, tenant_id);
     session.set_proxy_cap_flags(conn.proxy_cap_flags_);
     session.set_login_tenant_id(tenant_id);
+    session.set_client_non_standard(common::OB_CLIENT_NON_STANDARD == conn.client_type_ ? true : false);
     // Check tenant after set tenant session is necessary!
     // Because if another client is deleting this tenant while the
     // session doesn't has been contructed completely, omt
