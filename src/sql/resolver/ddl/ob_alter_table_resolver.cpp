@@ -4608,7 +4608,7 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
         // convert to xml binary
         ObXmlDocument *xml_doc = NULL;
         ObMulModeMemCtx* mem_ctx = nullptr;
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLCodeGen"));
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
         if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(allocator_, mem_ctx))) {
           LOG_WARN("fail to create tree memory context", K(ret));
         } else if (OB_FAIL(ObXmlParserUtils::parse_document_text(mem_ctx,

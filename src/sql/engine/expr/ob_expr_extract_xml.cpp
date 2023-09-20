@@ -101,7 +101,7 @@ int ObExprExtractXml::eval_extract_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   // eval arg
 
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLCodeGen"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;

@@ -103,7 +103,7 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
   ObString xml_res;
   ObCollationType cs_type = CS_TYPE_INVALID;
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLCodeGen"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;

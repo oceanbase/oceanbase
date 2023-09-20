@@ -29,6 +29,7 @@ namespace oceanbase
 {
 namespace sql
 {
+typedef PageArena<ObObj, ModulePageAllocator> ElementObjCacheStatArena;
 class
 ObExprXmlElement : public ObFuncExprOperator
 {
@@ -55,7 +56,7 @@ private:
                                    ObString &str);
   static int construct_element(ObMulModeMemCtx* mem_ctx,
                                 const ObString &name,
-                                ObVector<ObObj> &value_vec,
+                                ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
                                 const ObIJsonBase *attr,
                                 ObXmlElement *&element,
                                 bool &validity);
@@ -63,12 +64,12 @@ private:
                                  const ObIJsonBase *attr,
                                  ObXmlElement *&element);
   static int construct_element_children(ObMulModeMemCtx* mem_ctx,
-                                        ObVector<ObObj> &value_vec,
+                                        ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
                                         ObXmlElement *&element,
                                         ObXmlElement *valid_ele);
   static int construct_value_array(ObIAllocator &allocator,
                                     const ObString &value,
-                                    ObVector<ObObj> &res_value);
+                                    ObVector<ObObj, ElementObjCacheStatArena> &res_value);
 #endif
   DISALLOW_COPY_AND_ASSIGN(ObExprXmlElement);
 };

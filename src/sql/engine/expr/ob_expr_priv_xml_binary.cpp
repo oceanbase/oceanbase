@@ -112,7 +112,7 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
                         ? expr.args_[1]->obj_meta_.get_type()
                         : ObLongTextType;
     ObMulModeMemCtx* mem_ctx = nullptr;
-    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLCodeGen"));
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
     if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_allocator, mem_ctx))) {
       LOG_WARN("fail to create tree memory context", K(ret));
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,

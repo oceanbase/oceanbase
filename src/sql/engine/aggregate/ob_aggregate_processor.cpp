@@ -6699,7 +6699,7 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
 
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "XMLCodeGen"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_ISNULL(eval_ctx_.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;

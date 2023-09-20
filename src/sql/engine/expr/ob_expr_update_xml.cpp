@@ -119,7 +119,7 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
   bool input_is_doc = false;
   ObMulModeNodeType node_type = M_MAX_TYPE;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLCodeGen"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
