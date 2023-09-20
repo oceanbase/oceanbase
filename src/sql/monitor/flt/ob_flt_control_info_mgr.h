@@ -186,8 +186,10 @@ namespace sql
 
   struct ObFLTResetSessOp {
   public:
-    explicit ObFLTResetSessOp() {}
+    explicit ObFLTResetSessOp(uint64_t tenant_id) : tenant_id_(tenant_id){}
     bool operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo *sess_info);
+  private:
+    uint64_t tenant_id_;
   };
 } // namespace sql
 } // namespace oceanbase
