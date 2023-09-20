@@ -4292,7 +4292,7 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(append_array_no_dup(get_startup_exprs(), new_startup_exprs))) {
+      if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(get_startup_exprs(), new_startup_exprs))) {
         LOG_WARN("failed to add startup exprs", K(ret));
       } else {
         //exchange out上面的startup filter保留，用于控制当前dfo提前终止

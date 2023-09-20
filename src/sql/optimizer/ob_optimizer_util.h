@@ -297,6 +297,8 @@ public:
                               const EqualSets &equal_sets,
                               int64_t &idx);
 
+  static int append_exprs_no_dup(ObIArray<ObRawExpr *> &dst, const ObIArray<ObRawExpr *> &src);
+
   static int find_stmt_expr_direction(const ObDMLStmt &stmt,
                                       const common::ObIArray<ObRawExpr*> &exprs,
                                       const EqualSets &equal_sets,

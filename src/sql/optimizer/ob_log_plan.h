@@ -1344,6 +1344,8 @@ public:
 
   common::ObIArray<ObRawExpr *> &get_new_or_quals() { return new_or_quals_; }
 
+  int construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op);
+
 protected:
   virtual int generate_normal_raw_plan() = 0;
   virtual int generate_dblink_raw_plan();
