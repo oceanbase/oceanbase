@@ -55,6 +55,7 @@ private:
   int deal_with_import_table_task_(share::ObImportTableJob &job);
   int process_import_table_task_(share::ObImportTableTask &task);
   int do_after_import_all_table_(share::ObImportTableJob &job);
+  int update_statistic_(common::ObIArray<share::ObImportTableTask> &import_tasks, share::ObImportTableJob &job);
   int canceling_(share::ObImportTableJob &job);
   int finish_(const share::ObImportTableJob &job);
   int persist_import_table_task_(common::ObMySQLTransaction &trans, const share::ObImportTableTask &task);
