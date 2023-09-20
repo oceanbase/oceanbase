@@ -32,7 +32,7 @@ static const int8_t DAYS_OF_MON[2][12 + 1] = {
 #define IS_LEAP_YEAR(y) ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)
 
 ObExprAlignDate4Cmp::ObExprAlignDate4Cmp(common::ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_ALIGN_DATE4CMP, N_ALIGN_DATE4CMP, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ALIGN_DATE4CMP, N_ALIGN_DATE4CMP, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
