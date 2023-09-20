@@ -696,7 +696,7 @@ int ObTabletTableStore::calculate_read_tables(
     if (OB_FAIL(iterator.add_table(meta_major_tables_.at(0)))) {
       LOG_WARN("failed to add meta major table to iterator", K(ret), K(meta_major_tables_));
     }
-  } else if (!is_major_sstable_empty()) {
+  } else if (!is_major_sstable_empty(tablet)) {
     if (!major_tables_.empty()) {
       for (int64_t i = major_tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
         if (major_tables_[i]->get_snapshot_version() <= snapshot_version) {
@@ -764,7 +764,7 @@ int ObTabletTableStore::calculate_read_tables(
     }
   } else { // not find base table
     if (!allow_no_ready_read) {
-      if (is_major_sstable_empty()) {
+      if (is_major_sstable_empty(tablet)) {
         ret = OB_REPLICA_NOT_READABLE;
         LOG_WARN("no base table, not allow no ready read, tablet is not readable",
                  K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
@@ -905,7 +905,7 @@ int ObTabletTableStore::get_read_tables(
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot_version));
-  } else if (OB_UNLIKELY(is_major_sstable_empty() && minor_tables_.empty() && allow_no_ready_read)) {
+  } else if (OB_UNLIKELY(is_major_sstable_empty(tablet) && minor_tables_.empty() && allow_no_ready_read)) {
     if (memtables_.empty()) {
       LOG_INFO("no table in table store, cannot read", K(ret), K(*this));
     } else if (OB_FAIL(iterator.add_tables(memtables_))) {
@@ -1434,6 +1434,12 @@ int ObTabletTableStore::build_meta_major_table(
   return ret;
 }
 
+bool ObTabletTableStore::is_major_sstable_empty(const ObTablet &tablet) const
+{
+  return major_tables_.empty()
+    && !tablet.get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min(); // ddl logic major sstable require commit scn valid
+}
+
 int ObTabletTableStore::get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const
 {
   int ret = OB_SUCCESS;
@@ -1586,7 +1592,7 @@ int ObTabletTableStore::check_ready_for_read(const ObTablet &tablet)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KPC(this));
-  } else if (is_major_sstable_empty()) {
+  } else if (is_major_sstable_empty(tablet)) {
     LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
     LOG_WARN("failed to check continuous of tables", K(ret));

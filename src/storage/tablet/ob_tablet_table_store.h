@@ -295,7 +295,7 @@ private:
       const ObTablet &tablet,
       const ObUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
-  bool is_major_sstable_empty() const { return major_tables_.empty() && ddl_mem_sstables_.empty() && ddl_sstables_.empty(); }
+  bool is_major_sstable_empty(const ObTablet &tablet) const;
   int get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const;
 
   int inner_replace_sstables(
