@@ -708,6 +708,55 @@ TEST_F(TestTabletStatusCache, get_read_all_committed_tablet)
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 }
 
+TEST_F(TestTabletStatusCache, read_all_committed)
+{
+  int ret = OB_SUCCESS;
+
+  // create tablet
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  const ObTabletMapKey key(LS_ID, tablet_id);
+  ObTabletHandle tablet_handle;
+  ret = create_tablet(tablet_id, tablet_handle, ObTabletStatus::MAX, share::SCN::invalid_scn());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTablet *tablet = tablet_handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
+
+  // disable cache
+  {
+    SpinWLockGuard guard(tablet->mds_cache_lock_);
+    tablet->tablet_status_cache_.reset();
+  }
+
+  // get tablet
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+    ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION);
+  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+
+  ObTabletCreateDeleteMdsUserData user_data;
+  share::SCN min_scn;
+  min_scn.set_min();
+  share::SCN commit_scn;
+
+  // create not committed
+  user_data.tablet_status_ = ObTabletStatus::NORMAL;
+  user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+
+  mds::MdsCtx ctx1(mds::MdsWriter(transaction::ObTransID(123)));
+  ret = tablet->set(user_data, ctx1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+    ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+
+  // commit
+  commit_scn = share::SCN::plus(min_scn, 100);
+  ctx1.single_log_commit(commit_scn, commit_scn);
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+    ObMDSGetTabletMode::READ_ALL_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
 // TODO(@bowen.gbw): refactor test cases to cover all scene
 /*
 TEST_F(TestTabletStatusCache, transfer_src_ls_read_all_committed)
