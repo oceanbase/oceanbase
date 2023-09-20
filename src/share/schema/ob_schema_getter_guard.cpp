@@ -1779,7 +1779,11 @@ int ObSchemaGetterGuard::get_database_id(uint64_t tenant_id,
                                             simple_database))) {
         LOG_WARN("get simple database failed", KR(ret), K(tenant_id), K(database_name));
       } else if (NULL == simple_database) {
-        LOG_INFO("database not exist", K(tenant_id), K(database_name));
+        if (0 == database_name.case_compare(OB_INFORMATION_SCHEMA_NAME)) {
+          database_id = OB_INFORMATION_SCHEMA_ID;
+        } else {
+          LOG_INFO("database not exist", K(tenant_id), K(database_name));
+        }
       } else {
         database_id = simple_database->get_database_id();
       }
