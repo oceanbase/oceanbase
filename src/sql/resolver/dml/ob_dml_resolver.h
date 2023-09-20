@@ -613,6 +613,7 @@ protected:
                             ObIArray<ObQualifiedName> &columns,
                             ObIArray<ObRawExpr*> &real_exprs,
                             ObRawExpr *&expr);
+  int collect_schema_version(ObRawExpr *expr);
   int resolve_geo_mbr_column();
   int build_prefix_index_compare_expr(ObRawExpr &column_expr,
                                       ObRawExpr *prefix_expr,
