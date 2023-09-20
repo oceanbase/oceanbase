@@ -1283,7 +1283,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           } else {
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_ENGINES;
             GEN_SQL_STEP_1(ObShowSqlSet::SHOW_ENGINES);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_ENGINES, OB_SYS_DATABASE_NAME, OB_ALL_VIRTUAL_ENGINE_TNAME);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_ENGINES, OB_INFORMATION_SCHEMA_NAME, OB_ENGINES_TNAME);
           }
         }();
         break;
@@ -1304,7 +1304,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       case T_SHOW_QUERY_RESPONSE_TIME: {
         if (is_oracle_mode) {
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show engines in oracle mode is");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show query response time in oracle mode is");
         } else if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));

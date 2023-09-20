@@ -360,7 +360,7 @@ int ObInnerTableSchema::v_sql_monitor_statname_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       NULL CON_ID,       ID,       GROUP_ID,       NAME,       DESCRIPTION,       TYPE,       0 FLAGS     FROM oceanbase.__all_virtual_sql_monitor_statname )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(NULL AS UNSIGNED) AS CON_ID,       ID,       GROUP_ID,       NAME,       DESCRIPTION,       TYPE,       0 FLAGS     FROM oceanbase.__all_virtual_sql_monitor_statname )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -13455,7 +13455,7 @@ def_table_schema(
          DATABASE_NAME AS SCHEMA_NAME,
          b.charset AS DEFAULT_CHARACTER_SET_NAME,
          b.collation AS DEFAULT_COLLATION_NAME,
-         NULL AS SQL_PATH,
+         CAST(NULL AS CHAR(512)) as SQL_PATH,
          'NO' as DEFAULT_ENCRYPTION
   FROM oceanbase.__all_database a inner join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type
   WHERE a.tenant_id = 0
@@ -13751,9 +13751,10 @@ def_table_schema(
                          when a.table_type in (0, 2) then 'SYSTEM TABLE'
                          when a.table_type = 4 then 'VIEW'
                          else 'BASE TABLE' end as char(64)) as TABLE_TYPE,
-                    cast(NULL as char(64)) as ENGINE,
+                    cast(case when a.table_type in (0,3,5,6,7,11,12,13) then 'InnoDB'
+                        else 'MEMORY' end as char(64)) as ENGINE,
                     cast(NULL as unsigned) as VERSION,
-                    cast(NULL as char(10)) as ROW_FORMAT,
+                    cast(a.store_format as char(10)) as ROW_FORMAT,
                     cast( coalesce(ts.row_cnt,0) as unsigned) as TABLE_ROWS,
                     cast( coalesce(ts.avg_row_len,0) as unsigned) as AVG_ROW_LENGTH,
                     cast( coalesce(ts.data_size,0) as unsigned) as DATA_LENGTH,
@@ -13779,7 +13780,8 @@ def_table_schema(
                            c.table_type,
                            usec_to_time(d.schema_version) as gmt_create,
                            usec_to_time(c.schema_version) as gmt_modified,
-                           c.comment
+                           c.comment,
+                           c.store_format
                     from oceanbase.__all_virtual_core_all_table c
                     join oceanbase.__all_virtual_core_all_table d
                       on c.tenant_id = d.tenant_id and d.table_name = '__all_core_table'
@@ -13793,7 +13795,8 @@ def_table_schema(
                            table_type,
                            gmt_create,
                            gmt_modified,
-                           comment
+                           comment,
+                           store_format
                     from oceanbase.__all_table) a
                     join oceanbase.__all_database b
                     on a.database_id = b.database_id
@@ -13893,10 +13896,10 @@ def_table_schema(
                     a.table_name as TABLE_NAME,
                     b.column_name as COLUMN_NAME,
                     b.rowkey_position as ORDINAL_POSITION,
-                    NULL as POSITION_IN_UNIQUE_CONSTRAINT,
-                    NULL as REFERENCED_TABLE_SCHEMA,
-                    NULL as REFERENCED_TABLE_NAME,
-                    NULL as REFERENCED_COLUMN_NAME
+                    CAST(NULL AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
+                    CAST(NULL AS CHAR(64)) as REFERENCED_TABLE_SCHEMA,
+                    CAST(NULL AS CHAR(64)) as REFERENCED_TABLE_NAME,
+                    CAST(NULL AS CHAR(64)) as REFERENCED_COLUMN_NAME
                     from oceanbase.__all_table a
                     join oceanbase.__all_column b
                       on a.tenant_id = b.tenant_id and a.table_id = b.table_id
@@ -13919,10 +13922,10 @@ def_table_schema(
                     c.table_name as TABLE_NAME,
                     b.column_name as COLUMN_NAME,
                     b.index_position as ORDINAL_POSITION,
-                    NULL as POSITION_IN_UNIQUE_CONSTRAINT,
-                    NULL as REFERENCED_TABLE_SCHEMA,
-                    NULL as REFERENCED_TABLE_NAME,
-                    NULL as REFERENCED_COLUMN_NAME
+                    CAST(NULL AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
+                    CAST(NULL AS CHAR(64)) as REFERENCED_TABLE_SCHEMA,
+                    CAST(NULL AS CHAR(64)) as REFERENCED_TABLE_NAME,
+                    CAST(NULL AS CHAR(64)) as REFERENCED_COLUMN_NAME
                     from oceanbase.__all_table a
                     join oceanbase.__all_column b
                       on a.tenant_id = b.tenant_id and a.table_id = b.table_id
@@ -13946,7 +13949,7 @@ def_table_schema(
                     t.table_name as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
-                    NULL as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
                     d2.database_name as REFERENCED_TABLE_SCHEMA,
                     t2.table_name as REFERENCED_TABLE_NAME,
                     c2.column_name as REFERENCED_COLUMN_NAME
@@ -13977,7 +13980,7 @@ def_table_schema(
                     t.table_name as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
-                    NULL as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
                     d.database_name as REFERENCED_TABLE_SCHEMA,
                     t2.mock_fk_parent_table_name as REFERENCED_TABLE_NAME,
                     c2.parent_column_name as REFERENCED_COLUMN_NAME
@@ -14017,7 +14020,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT CAST('OceanBase' as CHAR(64)) as ENGINE,
+    SELECT CAST('InnoDB' as CHAR(64)) as ENGINE,
            CAST('YES' AS CHAR(8)) as SUPPORT,
            CAST('Supports transactions' as CHAR(80)) as COMMENT,
            CAST('YES' as CHAR(3)) as TRANSACTIONS,
@@ -14187,7 +14190,7 @@ def_table_schema(
          average_wait as AVERAGE_WAIT,
          max_wait as MAX_WAIT,
          time_waited_micro as TIME_WAITED_MICRO,
-         null as CPU,
+         cast(null as UNSIGNED) as CPU,
          event_id as EVENT_ID,
          wait_class_id as WAIT_CLASS_ID,
          `wait_class#` as `WAIT_CLASS#`,
@@ -14403,7 +14406,7 @@ def_table_schema(
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
   view_definition = """
-  SELECT * FROM OCEANBASE.GV$SESSION_EVENT
+  SELECT  * FROM OCEANBASE.GV$SESSION_EVENT
   WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15108,88 +15111,88 @@ def_table_schema(
           SELECT
           TENANT_ID as CON_ID,
           REQUEST_ID,
-          NULL `KEY`,
-          NULL STATUS,
+          CAST(NULL as UNSIGNED) AS `KEY`,
+          CAST(NULL AS CHAR(19)) as STATUS,
           SVR_IP,
           SVR_PORT,
           TRACE_ID,
           DB_TIME,
           USER_IO_WAIT_TIME,
-          NULL OTHER_WAIT_TIME,
+          CAST(NULL AS UNSIGNED) AS OTHER_WAIT_TIME,
           FIRST_REFRESH_TIME,
           LAST_REFRESH_TIME,
           FIRST_CHANGE_TIME,
           LAST_CHANGE_TIME,
-          NULL REFRESH_COUNT,
-          NULL SID,
+          CAST(NULL AS UNSIGNED) AS REFRESH_COUNT,
+          CAST(NULL AS UNSIGNED) AS SID,
           THREAD_ID  PROCESS_NAME,
-          NULL SQL_ID,
-          NULL SQL_EXEC_START,
-          NULL SQL_EXEC_ID,
-          NULL SQL_PLAN_HASH_VALUE,
-          NULL SQL_CHILD_ADDRESS,
-          NULL PLAN_PARENT_ID,
+          CAST(NULL AS CHAR(32)) AS SQL_ID,
+          CAST(NULL AS UNSIGNED) AS SQL_EXEC_START,
+          CAST(NULL AS UNSIGNED) AS SQL_EXEC_ID,
+          CAST(NULL AS UNSIGNED) AS SQL_PLAN_HASH_VALUE,
+          CAST(NULL AS BINARY(8)) AS SQL_CHILD_ADDRESS,
+          CAST(NULL AS UNSIGNED) AS PLAN_PARENT_ID,
           PLAN_LINE_ID,
           PLAN_OPERATION,
-          NULL PLAN_OPTIONS,
-          NULL PLAN_OBJECT_OWNER,
-          NULL PLAN_OBJECT_NAME,
-          NULL PLAN_OBJECT_TYPE,
+          CAST(NULL AS CHAR(30)) PLAN_OPTIONS,
+          CAST(NULL AS CHAR(128)) PLAN_OBJECT_OWNER,
+          CAST(NULL AS CHAR(128)) PLAN_OBJECT_NAME,
+          CAST(NULL AS CHAR(80)) PLAN_OBJECT_TYPE,
           PLAN_DEPTH,
-          NULL PLAN_POSITION,
-          NULL PLAN_COST,
-          NULL PLAN_CARDINALITY,
-          NULL PLAN_BYTES,
-          NULL PLAN_TIME,
-          NULL PLAN_PARTITION_START,
-          NULL PLAN_PARTITION_STOP,
-          NULL PLAN_CPU_COST,
-          NULL PLAN_IO_COST,
-          NULL PLAN_TEMP_SPACE,
+          CAST( NULL AS UNSIGNED) AS PLAN_POSITION,
+          CAST( NULL AS UNSIGNED) AS PLAN_COST,
+          CAST( NULL AS UNSIGNED) AS PLAN_CARDINALITY,
+          CAST( NULL AS UNSIGNED) AS PLAN_BYTES,
+          CAST( NULL AS UNSIGNED) AS PLAN_TIME,
+          CAST( NULL AS UNSIGNED) AS PLAN_PARTITION_START,
+          CAST( NULL AS UNSIGNED) AS PLAN_PARTITION_STOP,
+          CAST( NULL AS UNSIGNED) AS PLAN_CPU_COST,
+          CAST( NULL AS UNSIGNED) AS PLAN_IO_COST,
+          CAST( NULL AS UNSIGNED) AS PLAN_TEMP_SPACE,
           STARTS,
           OUTPUT_ROWS,
-          NULL IO_INTERCONNECT_BYTES,
-          NULL PHYSICAL_READ_REQUESTS,
-          NULL PHYSICAL_READ_BYTES,
-          NULL PHYSICAL_WRITE_REQUESTS,
-          NULL PHYSICAL_WRITE_BYTES,
-          NULL WORKAREA_MEM,
-          NULL WORKAREA_MAX_MEM,
-          NULL WORKAREA_TEMPSEG,
-          NULL WORKAREA_MAX_TEMPSEG,
-          NULL OTHERSTAT_GROUP_ID,
+          CAST( NULL AS UNSIGNED) AS IO_INTERCONNECT_BYTES,
+          CAST( NULL AS UNSIGNED) AS PHYSICAL_READ_REQUESTS,
+          CAST( NULL AS UNSIGNED) AS PHYSICAL_READ_BYTES,
+          CAST( NULL AS UNSIGNED) AS PHYSICAL_WRITE_REQUESTS,
+          CAST( NULL AS UNSIGNED) AS PHYSICAL_WRITE_BYTES,
+          CAST( NULL AS UNSIGNED) AS WORKAREA_MEM,
+          CAST( NULL AS UNSIGNED) AS WORKAREA_MAX_MEM,
+          CAST( NULL AS UNSIGNED) AS WORKAREA_TEMPSEG,
+          CAST( NULL AS UNSIGNED) AS WORKAREA_MAX_TEMPSEG,
+          CAST( NULL AS UNSIGNED) AS OTHERSTAT_GROUP_ID,
           OTHERSTAT_1_ID,
-          NULL OTHERSTAT_1_TYPE,
+          CAST(NULL AS UNSIGNED) AS OTHERSTAT_1_TYPE,
           OTHERSTAT_1_VALUE,
           OTHERSTAT_2_ID,
-          NULL OTHERSTAT_2_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_2_TYPE,
           OTHERSTAT_2_VALUE,
           OTHERSTAT_3_ID,
-          NULL OTHERSTAT_3_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_3_TYPE,
           OTHERSTAT_3_VALUE,
           OTHERSTAT_4_ID,
-          NULL OTHERSTAT_4_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_4_TYPE,
           OTHERSTAT_4_VALUE,
           OTHERSTAT_5_ID,
-          NULL OTHERSTAT_5_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_5_TYPE,
           OTHERSTAT_5_VALUE,
           OTHERSTAT_6_ID,
-          NULL OTHERSTAT_6_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_6_TYPE,
           OTHERSTAT_6_VALUE,
           OTHERSTAT_7_ID,
-          NULL OTHERSTAT_7_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_7_TYPE,
           OTHERSTAT_7_VALUE,
           OTHERSTAT_8_ID,
-          NULL OTHERSTAT_8_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_8_TYPE,
           OTHERSTAT_8_VALUE,
           OTHERSTAT_9_ID,
-          NULL OTHERSTAT_9_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_9_TYPE,
           OTHERSTAT_9_VALUE,
           OTHERSTAT_10_ID,
-          NULL OTHERSTAT_10_TYPE,
+          CAST(NULL AS UNSIGNED) OTHERSTAT_10_TYPE,
           OTHERSTAT_10_VALUE,
-          NULL OTHER_XML,
-          NULL PLAN_OPERATION_INACTIVE,
+          CAST(NULL AS CHAR(255)) AS OTHER_XML,
+          CAST(NULL AS UNSIGNED) AS PLAN_OPERATION_INACTIVE,
           OUTPUT_BATCHES,
           SKIPPED_ROWS_COUNT
         FROM oceanbase.__all_virtual_sql_plan_monitor
@@ -15208,7 +15211,7 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-    SELECT * FROM OCEANBASE.GV$SQL_PLAN_MONITOR
+    SELECT  *  FROM OCEANBASE.GV$SQL_PLAN_MONITOR
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -16390,7 +16393,7 @@ def_table_schema(
     normal_columns = [],
     view_definition = """
     SELECT
-      NULL CON_ID,
+      CAST(NULL AS UNSIGNED) AS CON_ID,
       ID,
       GROUP_ID,
       NAME,
