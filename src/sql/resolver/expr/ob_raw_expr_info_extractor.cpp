@@ -288,10 +288,6 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
       if (OB_FAIL(expr.add_flag(IS_IN))) {
         LOG_WARN("failed to add flag IS_IN", K(ret));
       }
-    } else if (expr.get_expr_type() == T_OP_OR) {
-      if (OB_FAIL(expr.add_flag(IS_OR))) {
-        LOG_WARN("failed to add flag IS_OR", K(ret));
-      }
     } else if (expr.get_expr_type() == T_OP_ASSIGN) {
       if (OB_FAIL(expr.add_flag(IS_ASSIGN_EXPR))) {
         LOG_WARN("failed to add flag IS_ASSIGN_EXPR", K(ret));
@@ -318,6 +314,11 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
         }
       }
     } else {}
+  }
+  if (OB_SUCC(ret) && expr.get_expr_type() == T_OP_OR) {
+    if (OB_FAIL(expr.add_flag(IS_OR))) {
+      LOG_WARN("failed to add flag IS_OR", K(ret));
+    }
   }
   if (OB_SUCC(ret) && OB_FAIL(visit_subquery_node(expr))) {
     LOG_WARN("visit subquery node failed", K(ret));

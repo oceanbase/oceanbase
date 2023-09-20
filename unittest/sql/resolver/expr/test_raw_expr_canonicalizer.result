@@ -1416,8 +1416,10 @@ not a between 1 and 100
     }
   },
   "expr_info": [
+    "IS_OR",
     "IS_CONST_EXPR",
-    "CNT_CONST"
+    "CNT_CONST",
+    "CNT_OR"
   ],
   "rel_id": [
   ],
