@@ -412,7 +412,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init server startup task handler failed", KR(ret));
     } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
       LOG_ERROR("init server checkpoint slog handler failed", KR(ret));
-    } else if (FALSE_IT(common::occam::ObThreadHungDetector::get_instance())) {
+    } else if (OB_FAIL(common::occam::ObThreadHungDetector::get_instance().init())) {
+      LOG_ERROR("init sObThreadHungDetector failed", KR(ret));
     } else if (OB_FAIL(palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
       LOG_ERROR("init election module failed", KR(ret));
     } else if (OB_FAIL(init_multi_tenant())) {
