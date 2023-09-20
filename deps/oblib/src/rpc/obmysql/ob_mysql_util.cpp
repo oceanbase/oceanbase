@@ -1084,7 +1084,7 @@ int ObMySQLUtil::sql_utd_cell_str(uint64_t tenant_id, char *buf, const int64_t l
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_ORACLE_XML
-  lib::ObMemAttr mem_attr(tenant_id, "XMLCodeGen");
+  lib::ObMemAttr mem_attr(tenant_id, "XMLModule");
   lib::ObMallocHookAttrGuard malloc_guard(mem_attr);
   ObArenaAllocator allocator(mem_attr);
   ObMulModeNodeType node_type = M_MAX_TYPE;

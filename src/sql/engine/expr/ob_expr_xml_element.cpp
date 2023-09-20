@@ -110,7 +110,8 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObString name_tag;
   int need_escape = 0;
   int is_name = 0;
-  ObVector<ObObj> value_vec;
+
+  ObVector<ObObj, ElementObjCacheStatArena> value_vec;
   const ObIJsonBase *attr_json = NULL;
   ObString binary_str;
   ObString blob_locator;
@@ -118,7 +119,7 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObXmlElement *element = NULL;
   ObXmlDocument *res_doc = NULL;
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLCodeGen"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -291,7 +292,7 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return ret;
 }
 
-int ObExprXmlElement::construct_value_array(ObIAllocator &allocator, const ObString &value, ObVector<ObObj> &res_value)
+int ObExprXmlElement::construct_value_array(ObIAllocator &allocator, const ObString &value, ObVector<ObObj, ElementObjCacheStatArena> &res_value)
 {
   INIT_SUCC(ret);
   if (value.empty()) {
@@ -365,7 +366,7 @@ int ObExprXmlElement::construct_attribute(ObMulModeMemCtx* mem_ctx, const ObIJso
 }
 
 int ObExprXmlElement::construct_element_children(ObMulModeMemCtx* mem_ctx,
-                                                 ObVector<ObObj> &value_vec,
+                                                 ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
                                                  ObXmlElement *&element,
                                                  ObXmlElement *valid_ele)
 {
@@ -422,7 +423,7 @@ int ObExprXmlElement::construct_element_children(ObMulModeMemCtx* mem_ctx,
 
 int ObExprXmlElement::construct_element(ObMulModeMemCtx* mem_ctx,
                                         const ObString &name,
-                                        ObVector<ObObj> &value_vec,
+                                        ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
                                         const ObIJsonBase *attr,
                                         ObXmlElement *&element,
                                         bool &validity)
