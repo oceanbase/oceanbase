@@ -4933,7 +4933,11 @@ int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, i
           OZ (cursor_close_impl(ctx, cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
         }
       } else {
-        LOG_DEBUG("spi process return ref cursor, cursor not open");
+        // cursor maybe closed already
+        if (-1 == addend) {
+          OX (cursor_info->dec_ref_count());
+        }
+        LOG_DEBUG("spi process return ref cursor, cursor not open", K(cursor_info->get_ref_count()));
       }
     }
   } else {
