@@ -212,6 +212,7 @@ int ObRecoverTableInitiator::insert_sys_job_(
     if (FAILEDx(RS_JOB_CREATE_EXT(job_id, RESTORE_TENANT, trans, "sql_text", "restore aux tenant"))) {
       LOG_WARN("failed to get job id", K(ret));
     } else if (OB_FALSE_IT(physical_restore_job.init_restore_key(OB_SYS_TENANT_ID, job_id))) {
+    } else if (OB_FALSE_IT(physical_restore_job.set_restore_start_ts(ObTimeUtility::current_time()))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_job_id(job.get_job_id()))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_recover_table(true))) {

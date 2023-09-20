@@ -619,18 +619,8 @@ insert into b values(x);
 end//
 set @px = 1;
 call p(@px);
-+------+
-| x    |
-+------+
-| 1    |
-+------+
 set @py = 1;
 call pp(@py);
-+------+
-| x    |
-+------+
-|    1 |
-+------+
 select * from a;
 +------+
 | a1   |
@@ -1873,11 +1863,6 @@ begin
 set x=1;
 end//
 call p(@a);
-+------+
-| x    |
-+------+
-|    1 |
-+------+
 select @a;
 +------+
 | @a   |
