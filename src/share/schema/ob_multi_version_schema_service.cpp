@@ -4801,7 +4801,7 @@ int ObMultiVersionSchemaService::cal_purge_table_timeout_(
       }
     }
     // get lob table id
-    if (OB_SUCC(ret) && orig_table_schema->has_lob_column()) {
+    if (OB_SUCC(ret) && orig_table_schema->has_lob_aux_table()) {
       uint64_t mtid = orig_table_schema->get_aux_lob_meta_tid();
       uint64_t ptid = orig_table_schema->get_aux_lob_piece_tid();
       if (OB_INVALID_ID == mtid || OB_INVALID_ID == ptid) {
