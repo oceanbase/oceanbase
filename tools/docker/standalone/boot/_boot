@@ -104,6 +104,7 @@ else # nothing here, bootstrap
   sed -i "s|@OB_RPC_PORT@|${OB_RPC_PORT}|g" $TMPFILE
   sed -i "s|@OB_CLUSTER_NAME@|${OB_CLUSTER_NAME}|g" $TMPFILE
   sed -i "s|@OB_MEMORY_LIMIT@|${OB_MEMORY_LIMIT}|g" $TMPFILE
+  sed -i "s|@OB_SYSTEM_MEMORY@|${OB_SYSTEM_MEMORY}|g" $TMPFILE
   sed -i "s|@OB_DATAFILE_SIZE@|${OB_DATAFILE_SIZE}|g" $TMPFILE
   sed -i "s|@OB_LOG_DISK_SIZE@|${OB_LOG_DISK_SIZE}|g" $TMPFILE
   sed -i "s|@OB_ROOT_PASSWORD@|${OB_ROOT_PASSWORD}|g" $TMPFILE
