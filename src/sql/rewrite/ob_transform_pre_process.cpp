@@ -5850,7 +5850,7 @@ int ObTransformPreProcess::replace_cast_expr_align_date4cmp(ObRawExprFactory &ex
       } else if (ObExprAlignDate4Cmp::is_align_date4cmp_support_obj_type(cast_child->get_data_type())) {
         // create a new align_date4cmp_expr to replace const_expr
         ObSysFunRawExpr *align_date4cmp_expr = NULL;
-        if (OB_FAIL(expr_factory.create_raw_expr(T_ALIGN_DATE4CMP, align_date4cmp_expr))) {
+        if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_ALIGN_DATE4CMP, align_date4cmp_expr))) {
           LOG_WARN("create align_date4cmp_expr fail.", K(ret), K(align_date4cmp_expr));
         } else if (OB_ISNULL(align_date4cmp_expr)) {
           ret = OB_ERR_UNEXPECTED;
