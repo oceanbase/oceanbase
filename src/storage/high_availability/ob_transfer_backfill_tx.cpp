@@ -1601,32 +1601,6 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
   return ret;
 }
 
-int ObTransferReplaceTableTask::check_tablet_after_replace_(ObLS *ls, const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
-  ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
-  if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet));
-  } else if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
-    LOG_WARN("fetch table store fail", K(ret), KPC(tablet));
-  } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()
-             && wrapper.get_member()->get_major_sstables().empty()) {
-    // In case of restore, if restore status is FULL, major sstable must be exist after replace.
-    ret = OB_INVALID_TABLE_STORE;
-    LOG_WARN("tablet should be exist major sstable", K(ret), KPC(tablet));
-  } else if (tablet->get_tablet_meta().has_transfer_table()) {
-    ret = OB_TRANSFER_SYS_ERROR;
-    LOG_WARN("replace should be exist transfer table", K(ret), K(tablet->get_tablet_meta()));
-  }
-
-  return ret;
-}
-
 int ObTransferReplaceTableTask::transfer_replace_tables_(
     ObLS *ls,
     const ObTabletBackfillInfo &tablet_info,
@@ -1684,8 +1658,6 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
 
     if (FAILEDx(ls->build_ha_tablet_new_table_store(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));
-    } else if (OB_FAIL(check_tablet_after_replace_(ls, tablet_info.tablet_id_))) {
-      LOG_WARN("failed to check tablet after replace", K(ret), K(param), K(tablet_info));
     } else {
       LOG_INFO("[TRANSFER_BACKFILL]succ transfer replace tables", K(ret), K(param), K(tablet_info), KPC_(ctx));
     }

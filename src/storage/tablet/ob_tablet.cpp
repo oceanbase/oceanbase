@@ -609,6 +609,31 @@ int ObTablet::init_for_defragment(
   return ret;
 }
 
+int ObTablet::handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  if (!param.is_valid() || !param.is_transfer_replace_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(param));
+  } else if (OB_FAIL(tablet_meta_.reset_transfer_table())) {
+    LOG_WARN("failed to set finish tansfer replace", K(ret), K(tablet_meta_), K(param));
+  } else if (OB_FAIL(tablet_meta_.ha_status_.set_restore_status(param.restore_status_))) {
+    LOG_WARN("failed to set tablet restore status", K(ret), "restore_status", param.restore_status_);
+  } else if (OB_FAIL(fetch_table_store(wrapper))) {
+    LOG_WARN("failed to fetch table store", K(ret), "tablet_id", tablet_meta_.tablet_id_);
+  } else if (tablet_meta_.ha_status_.is_restore_status_full()
+      && wrapper.get_member()->get_major_sstables().empty()) {
+    // In case of restore, if restore status is FULL, major sstable must be exist after replace.
+    ret = OB_INVALID_TABLE_STORE;
+    LOG_WARN("tablet should be exist major sstable", K(ret), "tablet_id", tablet_meta_.tablet_id_);
+  } else if (tablet_meta_.has_transfer_table()) {
+    ret = OB_TRANSFER_SYS_ERROR;
+    LOG_WARN("transfer table should not exist", K(ret), K_(tablet_meta));
+  }
+  return ret;
+}
+
 int ObTablet::init_for_sstable_replace(
     common::ObArenaAllocator &allocator,
     const ObBatchUpdateTableStoreParam &param,
@@ -616,7 +641,6 @@ int ObTablet::init_for_sstable_replace(
 {
   int ret = OB_SUCCESS;
   allocator_ = &allocator;
-  SCN max_clog_checkpoint_scn;
   common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
@@ -637,8 +661,6 @@ int ObTablet::init_for_sstable_replace(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
-  } else if (param.is_transfer_replace_ && OB_FAIL(param.get_max_clog_checkpoint_scn(max_clog_checkpoint_scn))) {
-    LOG_WARN("failed to get max clog checkpoint ts", K(ret), K(param));
   } else if (OB_FAIL(old_tablet.load_storage_schema(tmp_arena_allocator, old_storage_schema))) {
     LOG_WARN("failed to load storage schema", K(ret), K(old_tablet));
   } else if (OB_FAIL(old_tablet.fetch_table_store(old_table_store_wrapper))) {
@@ -675,10 +697,8 @@ int ObTablet::init_for_sstable_replace(
     LOG_WARN("failed to check medium list", K(ret), K(param), K(old_tablet));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
-  } else if (param.is_transfer_replace_ && OB_FAIL(tablet_meta_.reset_transfer_table())) {
-    LOG_WARN("failed to set finish tansfer replace", K(ret), K(tablet_meta_), K(param));
-  } else if (param.is_transfer_replace_ && OB_FAIL(tablet_meta_.ha_status_.set_restore_status(param.restore_status_))) {
-    LOG_WARN("failed to set tablet restore status", K(ret));
+  } else if (param.is_transfer_replace_ && OB_FAIL(handle_transfer_replace_(param))) {
+    LOG_WARN("failed to handle transfer replace", K(ret), K(param));
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));

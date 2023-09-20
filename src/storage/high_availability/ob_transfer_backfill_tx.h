@@ -235,7 +235,6 @@ private:
       const ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
       const ObTablet *dest_tablet,
       bool &need_fill_minor);
-  int check_tablet_after_replace_(ObLS *ls, const common::ObTabletID &tablet_id);
   int fill_empty_minor_sstable(
       ObTablet *tablet,
       bool need_fill_minor,
