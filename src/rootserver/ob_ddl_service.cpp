@@ -2750,12 +2750,16 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::ENCRYPTION: {
-          new_table_schema.set_encryption_str(alter_table_schema.get_encryption_str());
+          if (OB_FAIL(new_table_schema.set_encryption_str(alter_table_schema.get_encryption_str()))) {
+            LOG_WARN("fail to set encryption_str", K(ret), K(alter_table_schema.get_encryption_str()));
+          }
           break;
         }
         case ObAlterTableArg::TABLESPACE_ID: {
           new_table_schema.set_tablespace_id(alter_table_schema.get_tablespace_id());
-          new_table_schema.set_encryption_str(alter_table_schema.get_encryption_str());
+          if (OB_FAIL(new_table_schema.set_encryption_str(alter_table_schema.get_encryption_str()))) {
+            LOG_WARN("fail to set encryption_str", K(ret), K(alter_table_schema.get_encryption_str()));
+          }
           break;
         }
         case ObAlterTableArg::TTL_DEFINITION: {
@@ -15385,6 +15389,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
             } else if (OB_FAIL(generate_tablet_id(new_index_schema))) {
               LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(new_index_schema));
             } else {
+              bool is_exist = false;
               new_index_schema.set_max_used_column_id(max(
                   new_index_schema.get_max_used_column_id(), hidden_table_schema.get_max_used_column_id()));
               new_index_schema.set_table_id(new_idx_tid);
@@ -15393,7 +15398,13 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
               new_index_schema.set_tenant_id(hidden_table_schema.get_tenant_id());
               new_index_schema.set_database_id(hidden_table_schema.get_database_id());
               new_index_schema.set_table_state_flag(target_flag);
-              bool is_exist = false;
+              if (is_recover_restore_table) {
+                if (OB_FAIL(new_index_schema.set_encryption_str(hidden_table_schema.get_encryption_str()))) {
+                  LOG_WARN("set encryption str failed", K(ret), K(hidden_table_schema.get_encryption_str()));
+                } else {
+                  new_index_schema.set_tablespace_id(hidden_table_schema.get_tablespace_id());
+                }
+              }
               if (OB_FAIL(ret)) {
               } else if (OB_FAIL(dest_schema_guard.check_table_exist(new_index_schema.get_tenant_id(),
                                                                 new_index_schema.get_database_id(),
