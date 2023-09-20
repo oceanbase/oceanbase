@@ -5176,6 +5176,8 @@ int ObLSTabletService::delete_row_in_tablet(
     LOG_WARN("check old row legitimacy failed", K(row));
   } else if (OB_FAIL(process_old_row_lob_col(tablet_handle, run_ctx, tbl_row))) {
     LOG_WARN("failed to process old row lob col", K(ret), K(tbl_row));
+  } else if (OB_FAIL(delete_lob_tablet_rows(run_ctx, tablet_handle, tbl_row, row))) {
+    LOG_WARN("failed to delete lob rows.", K(ret), K(tbl_row), K(row));
   } else if (!dml_param.is_total_quantity_log_) {
     if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
         ctx, *run_ctx.col_descs_, tbl_row, dml_param.encrypt_meta_))) {
@@ -5183,8 +5185,6 @@ int ObLSTabletService::delete_row_in_tablet(
         LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(tbl_row));
       }
     }
-  } else if (OB_FAIL(delete_lob_tablet_rows(run_ctx, tablet_handle, tbl_row, row))) {
-    LOG_WARN("failed to delete lob rows.", K(ret), K(tbl_row), K(row));
   } else {
     update_idx.reset(); // update_idx is a dummy param here
     new_tbl_row.reset();
