@@ -530,8 +530,12 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
         int64_t cell_ts = -cell.get_timestamp(); // obhtable timestamp is nagative in ms
         if ((cell_rowkey != cur_rowkey_) || (cell_qualifier != cur_qualifier_)) {
           cur_version_ = 1;
-          cur_rowkey_ = cell_rowkey;
-          cur_qualifier_ = cell_qualifier;
+          allocator_.reuse();
+          if (OB_FAIL(ob_write_string(allocator_, cell_rowkey, cur_rowkey_))) {
+            LOG_WARN("fail to copy cell rowkey", KR(ret), K(cell_rowkey));
+          } else if (OB_FAIL(ob_write_string(allocator_, cell_qualifier, cur_qualifier_))) {
+            LOG_WARN("fail to copy cell qualifier", KR(ret), K(cell_qualifier));
+          }
         } else {
           cur_version_++;
         }
@@ -625,27 +629,45 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_ro
       result.scan_rows_ = ttl_row_iter.scan_cnt_;
     }
   }
+
   if (OB_SUCC(ret)) {
-    ObRowkey row_key;
+    int64_t rowkey_cnt = ttl_row_iter.rowkey_cell_ids_.count();
     if (OB_NOT_NULL(ttl_row_iter.last_row_)) {
-      if (ttl_row_iter.last_row_->get_count() < ttl_row_iter.get_rowkey_column_cnt()) {
+      int64_t row_cell_cnt = ttl_row_iter.last_row_->get_count();
+      if (row_cell_cnt < rowkey_cnt) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected rowkey column count", K(ttl_row_iter.last_row_->get_count()), K(ttl_row_iter.get_rowkey_column_cnt()));
+        LOG_WARN("unexpected rowkey column count", KR(ret), K(row_cell_cnt), K(rowkey_cnt));
       } else {
         rowkey_allocator_.reuse();
-        row_key.assign(ttl_row_iter.last_row_->cells_, ttl_row_iter.get_rowkey_column_cnt());
-        if (OB_FAIL(row_key.deep_copy(rowkey_, rowkey_allocator_))) {
-          LOG_WARN("fail to deep copy rowkey", KR(ret));
+        ObObj *rowkey_buf = nullptr;
+        common::ObIArray<uint64_t> &row_cell_ids = ttl_row_iter.rowkey_cell_ids_;
+        if (OB_ISNULL(rowkey_buf = static_cast<ObObj*>(rowkey_allocator_.alloc(sizeof(ObObj) * rowkey_cnt)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc cells buffer", K(ret), K(rowkey_cnt));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
+            int64_t cell_idx = row_cell_ids.at(i);
+            if (cell_idx >= row_cell_cnt || cell_idx < 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cell ids", KR(ret), K(cell_idx), K(row_cell_cnt));
+            } else if (OB_FAIL(ob_write_obj(rowkey_allocator_, ttl_row_iter.last_row_->cells_[cell_idx], rowkey_buf[i]))) {
+              LOG_WARN("fail to copy obj", KR(ret), K(cell_idx), KPC(ttl_row_iter.last_row_->cells_));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            rowkey_.assign(rowkey_buf, rowkey_cnt);
+          }
         }
       }
     }
 
-    if (OB_SUCC(ret) && row_key.is_valid()) {
-      uint64_t buf_len = row_key.get_serialize_size();
+    if (OB_SUCC(ret) && rowkey_.is_valid()) {
+      uint64_t buf_len = rowkey_.get_serialize_size();
       char *buf = static_cast<char *>(allocator_.alloc(buf_len));
       int64_t pos = 0;
-      if (OB_FAIL(row_key.serialize(buf, buf_len, pos))) {
-        LOG_WARN("fail to serialize", K(ret), K(buf_len), K(pos), K(row_key));
+      if (OB_FAIL(rowkey_.serialize(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize", K(ret), K(buf_len), K(pos), K_(rowkey));
       } else {
         result.end_rowkey_.assign_ptr(buf, buf_len);
       }
