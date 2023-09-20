@@ -198,10 +198,17 @@ int ObMicroBlockBufferHelper::check_micro_block_checksum(
     }
     if (OB_SUCC(ret)) {
       if (checksum != new_checksum) {
-        print_micro_block_row(micro_reader);
         ret = OB_CHECKSUM_ERROR; // ignore print error code
         LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "micro block checksum is not equal", K(new_checksum),
             K(checksum), K(ret), KPC(data_store_desc_));
+      }
+#ifdef ERRSIM
+  if (data_store_desc_->encoding_enabled()) {
+    ret = OB_E(EventTable::EN_BUILD_DATA_MICRO_BLOCK) ret;
+  }
+#endif
+      if (OB_UNLIKELY(OB_CHECKSUM_ERROR == ret)) {
+        print_micro_block_row(micro_reader);
       }
     }
   }
