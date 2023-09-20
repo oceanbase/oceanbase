@@ -521,6 +521,7 @@ int ObDBMSSchedTableOperator::calc_execute_at(
       delay = 0;
     } else {
       LOG_WARN("job maybe missed, ignore it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
+      OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"));
       delay = -1;
     }
   } else {
