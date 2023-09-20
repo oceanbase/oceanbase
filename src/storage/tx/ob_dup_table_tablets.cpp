@@ -1947,7 +1947,9 @@ int ObLSDupTabletsMgr::alloc_extra_free_tablet_set_()
   return ret;
 }
 
-int ObLSDupTabletsMgr::get_free_tablet_set(DupTabletChangeMap *&free_set, const uint64_t target_id)
+int ObLSDupTabletsMgr::get_free_tablet_set(DupTabletChangeMap *&free_set,
+                                           const bool force_alloc,
+                                           const uint64_t target_id)
 {
 
   int ret = OB_SUCCESS;
@@ -1975,7 +1977,8 @@ int ObLSDupTabletsMgr::get_free_tablet_set(DupTabletChangeMap *&free_set, const 
     if (last_no_free_set_time_ < 0) {
       last_no_free_set_time_ = ObTimeUtility::fast_current_time();
     }
-    if (extra_free_set_alloc_count_ < MAX_FREE_SET_COUNT - RESERVED_FREE_SET_COUNT
+
+    if (force_alloc || extra_free_set_alloc_count_ < MAX_FREE_SET_COUNT - RESERVED_FREE_SET_COUNT
         || ObTimeUtility::fast_current_time() - last_no_free_set_time_ >= 3 * 1000 * 1000) {
       if (OB_FAIL(alloc_extra_free_tablet_set_())) {
         DUP_TABLE_LOG(WARN, "alloc extra free tablet set failed", K(ret));
@@ -2031,13 +2034,14 @@ int ObLSDupTabletsMgr::get_target_tablet_set_(const DupTabletSetCommonHeader &ta
 {
   int ret = OB_SUCCESS;
   const uint64_t unique_id = target_common_header.get_unique_id();
+  const bool force_alloc = !target_common_header.no_specail_op();
 
   if (target_set != nullptr) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(target_common_header), KPC(target_set));
   } else if (unique_id == DupTabletSetCommonHeader::INVALID_UNIQUE_ID) {
     if (target_common_header.is_free()) {
-      if (OB_FAIL(get_free_tablet_set(target_set, unique_id))) {
+      if (OB_FAIL(get_free_tablet_set(target_set, force_alloc, unique_id))) {
         DUP_TABLE_LOG(WARN, "get free tablet set failed", K(ret));
       }
     } else if (target_common_header.is_old_set()) {
@@ -2051,7 +2055,7 @@ int ObLSDupTabletsMgr::get_target_tablet_set_(const DupTabletSetCommonHeader &ta
     } else if (target_common_header.is_new_set()) {
 
       if (OB_ISNULL(changing_new_set_)) {
-        if (OB_FAIL(get_free_tablet_set(changing_new_set_))) {
+        if (OB_FAIL(get_free_tablet_set(changing_new_set_, force_alloc))) {
           DUP_TABLE_LOG(WARN, "get free tablet set failed", K(ret));
         } else {
 
@@ -2121,7 +2125,8 @@ int ObLSDupTabletsMgr::get_target_tablet_set_(const DupTabletSetCommonHeader &ta
     // K(target_common_header),K(target_common_header.is_new_set()),K(target_common_header.is_old_set()),K(target_common_header.is_readable_set()));
     if (OB_SUCC(ret) && OB_ISNULL(target_set)) {
       if (construct_target_set && !target_common_header.is_old_set()) {
-        if (OB_FAIL(get_free_tablet_set(target_set, target_common_header.get_unique_id()))) {
+        if (OB_FAIL(get_free_tablet_set(target_set, force_alloc,
+                                        target_common_header.get_unique_id()))) {
           DUP_TABLE_LOG(WARN, "get free tablet set failed", K(ret), KPC(target_set),
                         K(target_common_header), K(need_confirm_new_queue_.get_size()),
                         K(readable_tablets_list_.get_size()), KPC(removing_old_set_));
@@ -2322,6 +2327,7 @@ int ObLSDupTabletsMgr::construct_empty_block_confirm_task_(const int64_t trx_ref
 
   DupTabletSetCommonHeader empty_new_common_header;
   empty_new_common_header.set_invalid_unique_id();
+  empty_new_common_header.set_op_of_block_confirming();
   empty_new_common_header.set_free();
   uint64_t block_confirm_uid = DupTabletSetCommonHeader::INVALID_UNIQUE_ID;
 
@@ -2380,6 +2386,7 @@ int ObLSDupTabletsMgr::construct_clean_confirming_set_task_()
 
   DupTabletSetCommonHeader clean_confirming_common_header;
   clean_confirming_common_header.set_invalid_unique_id();
+  clean_confirming_common_header.set_op_of_clean_data_confirming_set();
   clean_confirming_common_header.set_free();
   uint64_t clean_confirming_uid = DupTabletSetCommonHeader::INVALID_UNIQUE_ID;
 
@@ -2438,6 +2445,7 @@ int ObLSDupTabletsMgr::construct_clean_all_readable_set_task_()
 
   DupTabletSetCommonHeader clean_readable_common_header;
   clean_readable_common_header.set_invalid_unique_id();
+  clean_readable_common_header.set_op_of_clean_all_readable_set();
   clean_readable_common_header.set_free();
   uint64_t clean_readable_uid = DupTabletSetCommonHeader::INVALID_UNIQUE_ID;
 
