@@ -6329,7 +6329,7 @@ bool ObTableSchema::has_lob_column() const
 {
   bool bool_ret = false;
 
-  bool_ret = (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID);
+  bool_ret = has_lob_aux_table();
   for (int64_t i = 0; !bool_ret && i < column_cnt_; ++i) {
     ObColumnSchemaV2& col = *column_array_[i];
     if (is_lob_storage(col.get_data_type())) {

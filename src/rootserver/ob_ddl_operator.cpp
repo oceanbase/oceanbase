@@ -3588,10 +3588,10 @@ int ObDDLOperator::update_aux_table(
       }
     } else if (table_type == AUX_LOB_META) {
       lob_meta_table_id = new_table_schema.get_aux_lob_meta_tid();
-      N = new_table_schema.has_lob_column() ? 1 : 0;
+      N = new_table_schema.has_lob_aux_table() ? 1 : 0;
     } else if (table_type == AUX_LOB_PIECE) {
       lob_piece_table_id = new_table_schema.get_aux_lob_piece_tid();
-      N = new_table_schema.has_lob_column() ? 1 : 0;
+      N = new_table_schema.has_lob_aux_table() ? 1 : 0;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid table type", K(ret), K(table_type));
