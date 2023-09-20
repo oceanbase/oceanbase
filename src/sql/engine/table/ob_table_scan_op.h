@@ -540,6 +540,7 @@ protected:
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
+  bool in_rescan_;
   ObGlobalIndexLookupOpImpl *global_index_lookup_op_;
   ObSpatialIndexCache spat_index_;
  };
