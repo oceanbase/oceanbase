@@ -28,6 +28,7 @@
 #include "ob_opt_selectivity.h"
 #include "ob_log_operator_factory.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -603,6 +604,8 @@ int ObLogGroupBy::compute_fd_item_set()
     if (get_stmt()->is_select_stmt() && OB_FAIL(create_fd_item_from_select_list(fd_item_set))) {
       LOG_WARN("failed to create fd item from select list", K(ret));
     }
+  } else if (!ObTransformUtils::need_compute_fd_item_set(group_exprs_)) {
+    //do nothing
   } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(
       fd_item,
       true,
@@ -635,18 +638,19 @@ int ObLogGroupBy::create_fd_item_from_select_list(ObFdItemSet *fd_item_set)
     LOG_WARN("get unexpect parameter", K(ret), K(fd_item_set), K(my_plan_), K(get_stmt()));
   } else if (OB_FAIL(static_cast<const ObSelectStmt *>(get_stmt())->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-    ObSEArray<ObRawExpr *, 1> value_exprs;
-    if (OB_FAIL(value_exprs.push_back(select_exprs.at(i)))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
-                                                                            true,
-                                                                            value_exprs,
-                                                                            get_table_set()))) {
-      LOG_WARN("failed to create fd item", K(ret));
-    } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
-      LOG_WARN("failed to push back fd item", K(ret));
+  } else if (ObTransformUtils::need_compute_fd_item_set(select_exprs)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
+      ObSEArray<ObRawExpr *, 1> value_exprs;
+      if (OB_FAIL(value_exprs.push_back(select_exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
+                                                                              true,
+                                                                              value_exprs,
+                                                                              get_table_set()))) {
+        LOG_WARN("failed to create fd item", K(ret));
+      } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
+        LOG_WARN("failed to push back fd item", K(ret));
+      }
     }
   }
   return ret;

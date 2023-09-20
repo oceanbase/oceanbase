@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase::common;
 
@@ -127,6 +128,8 @@ int ObLogExprValues::compute_fd_item_set()
       LOG_WARN("failed to get select exprs", K(ret));
     } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {
       LOG_WARN("failed to create fd item set", K(ret));
+    } else if (!ObTransformUtils::need_compute_fd_item_set(select_exprs)) {
+      //do nothing
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
         ObSEArray<ObRawExpr *, 1> value_exprs;

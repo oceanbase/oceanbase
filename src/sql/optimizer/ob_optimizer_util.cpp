@@ -3401,22 +3401,24 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
         contain_not_null = true;
       }
     }
-    if (OB_SUCC(ret) && all_columns_used && unique_exprs.count() > 0) {
-      ObTableFdItem *fd_item = NULL;
-      if (OB_FAIL(fd_factory.create_table_fd_item(fd_item, true, unique_exprs, tables))) {
-        LOG_WARN("failed to create fd item", K(ret));
-      } else if (all_not_null ||
-                 (lib::is_oracle_mode() && contain_not_null) ||
-                 index_schema->get_table_id() == table->ref_id_) {
-        // 1. 在oracle中, unique index (c1,c2) 允许存在多个 (null, null), 但不允许存在多个 (1, null),
-        //    因此oracle模式下只要unique index中有一列是not null的, 该index中就不存在重复的值
-        // 2. the primary index must be unique even if a partition table may have a nullable part-key
-        //    wihch is a part of the primary key.
-        if (OB_FAIL(fd_item_set.push_back(fd_item))) {
+    if (OB_SUCC(ret) && ObTransformUtils::need_compute_fd_item_set(unique_exprs)) {
+      if (OB_SUCC(ret) && all_columns_used && unique_exprs.count() > 0) {
+        ObTableFdItem *fd_item = NULL;
+        if (OB_FAIL(fd_factory.create_table_fd_item(fd_item, true, unique_exprs, tables))) {
+          LOG_WARN("failed to create fd item", K(ret));
+        } else if (all_not_null ||
+                  (lib::is_oracle_mode() && contain_not_null) ||
+                  index_schema->get_table_id() == table->ref_id_) {
+          // 1. 在oracle中, unique index (c1,c2) 允许存在多个 (null, null), 但不允许存在多个 (1, null),
+          //    因此oracle模式下只要unique index中有一列是not null的, 该index中就不存在重复的值
+          // 2. the primary index must be unique even if a partition table may have a nullable part-key
+          //    wihch is a part of the primary key.
+          if (OB_FAIL(fd_item_set.push_back(fd_item))) {
+            LOG_WARN("failed to push back fd item", K(ret));
+          }
+        } else if (OB_FAIL(candi_fd_item_set.push_back(fd_item))) {
           LOG_WARN("failed to push back fd item", K(ret));
         }
-      } else if (OB_FAIL(candi_fd_item_set.push_back(fd_item))) {
-        LOG_WARN("failed to push back fd item", K(ret));
       }
     }
   }

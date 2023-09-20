@@ -208,18 +208,20 @@ int ObLogSet::compute_fd_item_set()
     LOG_WARN("failed to create fd item set", K(ret));
   } else if (OB_FAIL(get_set_exprs(select_exprs))) {
     LOG_WARN("failed to get set exprs", K(ret));
+  } else if (!ObTransformUtils::need_compute_fd_item_set(select_exprs)) {
+    //do nothing
   } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_expr_fd_item(
-                                                      fd_item,
-                                                      true,
-                                                      select_exprs,
-                                                      select_exprs))) {
+                                                        fd_item,
+                                                        true,
+                                                        select_exprs,
+                                                        select_exprs))) {
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
   } else if ((ObSelectStmt::INTERSECT == set_op_ || ObSelectStmt::EXCEPT == set_op_) &&
-             OB_FAIL(append(*fd_item_set, left_child->get_fd_item_set()))) {
+            OB_FAIL(append(*fd_item_set, left_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (ObSelectStmt::INTERSECT == set_op_ &&
-             OB_FAIL(append(*fd_item_set, right_child->get_fd_item_set()))) {
+            OB_FAIL(append(*fd_item_set, right_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
     LOG_WARN("falied to deduce fd item set", K(ret));

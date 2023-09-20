@@ -23,6 +23,7 @@
 #include "ob_optimizer_util.h"
 #include "ob_opt_selectivity.h"
 #include "common/ob_smart_call.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -250,7 +251,9 @@ int ObLogDistinct::compute_fd_item_set()
     LOG_WARN("failed to create fd item set", K(ret));
   } else if (OB_FAIL(fd_item_set->assign(child->get_fd_item_set()))) {
     LOG_WARN("failed to assign fd item set", K(ret));
-  } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
+  } else if (!ObTransformUtils::need_compute_fd_item_set(distinct_exprs_)) {
+    //do nothing
+  }else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
                                                                           true,
                                                                           distinct_exprs_,
                                                                           get_table_set()))) {
