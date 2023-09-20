@@ -176,7 +176,7 @@ int MdsUnit<K, V>::for_each_node_on_row(OP &&op) const
 
 template <typename K, typename V>
 template <typename OP>
-int MdsUnit<K, V>::for_each_row(OP &&op)// node maybe recycled in this function
+int MdsUnit<K, V>::for_each_row(FowEachRowAction action_type, OP &&op)// node maybe recycled in this function
 {
   #define PRINT_WRAPPER KR(ret)
   int ret = OB_SUCCESS;
@@ -184,17 +184,24 @@ int MdsUnit<K, V>::for_each_row(OP &&op)// node maybe recycled in this function
   MdsWLockGuard lg(lock_);
   CLICK();
   multi_row_list_.for_each_node_from_head_to_tail_until_true(
-    [&op, &ret, this](const KvPair<K, Row<K, V>> &kv_row) mutable {
+    [action_type, &op, &ret, this](const KvPair<K, Row<K, V>> &kv_row) mutable {
       MDS_TG(1_ms);
       const K *p_k = &kv_row.k_;
       const Row<K, V> &row = kv_row.v_;
       if (MDS_FAIL(op(row))) {
         MDS_LOG_SCAN(WARN, "fail to scan row", KPC(p_k));
       }
-      if (row.sorted_list_.empty()) {// if this row is recycled, just delete it
-        KvPair<K, Row<K, V>> *p_kv = &const_cast<KvPair<K, Row<K, V>> &>(kv_row);
-        multi_row_list_.del(p_kv);
-        MdsFactory::destroy(p_kv);
+      // CAUTIONS: not every path scan need recycle empty row, or maybe result some problem unexpected, for example:
+      // CALCULATE_REC_SCN operation will lock rows inner op, but will not release locks after op executed done.
+      // (to resolve replay out of order problem, if repaly concurrent happened with calculate rec_scn, without lock's protection, will finally get a wrong rec_scn)
+      // but destroy mds_row will add row's lock inner destruction, which will resulting deadlock in same thread.
+      // so only operations logic behaves like gc should recycle empty row.
+      if (FowEachRowAction::RECYCLE == action_type || FowEachRowAction::RESET == action_type) {
+        if (row.sorted_list_.empty()) {// if this row is recycled, just delete it
+          KvPair<K, Row<K, V>> *p_kv = &const_cast<KvPair<K, Row<K, V>> &>(kv_row);
+          multi_row_list_.del(p_kv);
+          MdsFactory::destroy(p_kv);
+        }
       }
       return OB_SUCCESS != ret;// keep scanning until meet failure
   });
@@ -760,7 +767,8 @@ int MdsUnit<DummyKey, V>::for_each_node_on_row(OP &&op) const {
 
 template <typename V>
 template <typename OP>
-int MdsUnit<DummyKey, V>::for_each_row(OP &&op) const {
+int MdsUnit<DummyKey, V>::for_each_row(FowEachRowAction action_type, OP &&op) const {
+  UNUSED(action_type);
   #define PRINT_WRAPPER KR(ret)
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);

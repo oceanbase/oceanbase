@@ -944,9 +944,9 @@ int MdsTableImpl<MdsTableType>::calculate_flush_scn_and_need_dumped_nodes_cnt_(s
     if (OB_SUCC(ret)) {
       RecalculateFlushScnCauseOnlySuppportDumpCommittedNodeOP op1(do_flush_scn);// recalculate flush scn
       CountUnDumpdedNodesBelowDoFlushScn op2(need_dumped_nodes_cnt, do_flush_scn);// count nodes need dump
-      if (MDS_FAIL(for_each_scan_row(op1))) {
+      if (MDS_FAIL(for_each_scan_row(FowEachRowAction::CALCUALTE_FLUSH_SCN, op1))) {
         MDS_LOG_FLUSH(WARN, "for each to calculate flush scn failed");
-      } else if (MDS_FAIL(for_each_scan_row(op2))) {
+      } else if (MDS_FAIL(for_each_scan_row(FowEachRowAction::COUNT_NODES_BEFLOW_FLUSH_SCN, op2))) {
         MDS_LOG_FLUSH(WARN, "for each to count undumped nodes failed");
       }
     }
@@ -1082,7 +1082,7 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
     do {
       need_retry = false;
       CalculateRecScnOp op(flush_scn);
-      if (MDS_FAIL(for_each_scan_row(op))) {// lock all rows failed, retry until lock all rows success
+      if (MDS_FAIL(for_each_scan_row(FowEachRowAction::CALCULATE_REC_SCN, op))) {// lock all rows failed, retry until lock all rows success
         need_retry = true;
         MDS_LOG_FLUSH(WARN, "fail to do on flush");// record row lock guard may failed, cause lock guard array may meet extended failed cause memory not enough, but retry will make it success
       } else {
@@ -1350,9 +1350,9 @@ int MdsTableImpl<MdsTableType>::is_locked_by_others(const Key &key,
 
 template <typename MdsTableType>
 template <typename SCAN_OP>
-int MdsTableImpl<MdsTableType>::for_each_scan_row(SCAN_OP &&op)
+int MdsTableImpl<MdsTableType>::for_each_scan_row(FowEachRowAction action_type, SCAN_OP &&op)
 {// add lock on unit
-  ForEachUnitScanRowHelper<SCAN_OP> for_each_op(op);
+  ForEachUnitScanRowHelper<SCAN_OP> for_each_op(action_type, op);
   return unit_tuple_.for_each(for_each_op);
 }
 
@@ -1415,7 +1415,7 @@ int MdsTableImpl<MdsTableType>::try_recycle(const share::SCN recycle_scn)
       // do nothing
     } else {
       RecycleNodeOp op(do_inner_recycle_scn);
-      if (OB_FAIL(for_each_scan_row(op))) {
+      if (OB_FAIL(for_each_scan_row(FowEachRowAction::RECYCLE, op))) {
         MDS_LOG_GC(ERROR, "fail to do recycle");
       } else {
         last_inner_recycled_scn_ = do_inner_recycle_scn;
@@ -1462,7 +1462,7 @@ int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
   MDS_TG(100_ms);
   MdsWLockGuard lg(lock_);
   ForcelyReleaseAllNodeOp op(reason);
-  if (OB_FAIL(for_each_scan_row(op))) {
+  if (OB_FAIL(for_each_scan_row(FowEachRowAction::RESET, op))) {
     MDS_LOG_GC(ERROR, "fail to do reset");
   } else {
     debug_info_.last_reset_ts_ = ObClockGenerator::getCurrentTime();

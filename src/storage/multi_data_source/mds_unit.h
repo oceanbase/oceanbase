@@ -112,7 +112,7 @@ public:
   template <typename OP>
   int for_each_node_on_row(OP &&op) const;
   template <typename OP>
-  int for_each_row(OP &&op);
+  int for_each_row(FowEachRowAction action_type, OP &&op);
   void lock() const { lock_.wrlock(); }
   void unlock() const { lock_.unlock(); }
   int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array, const int64_t unit_id) const;
@@ -184,7 +184,7 @@ public:
   template <typename OP>
   int for_each_node_on_row(OP &&op) const;
   template <typename OP>
-  int for_each_row(OP &&op) const;
+  int for_each_row(FowEachRowAction action_type, OP &&op) const;
   void lock() const { lock_.wrlock(); }
   void unlock() const { lock_.unlock(); }
   int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array, const int64_t unit_id) const;
