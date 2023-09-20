@@ -3090,6 +3090,19 @@ CURRENT_USER
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_CURRENT_USER, 1, NULL);
 }
+| relation_name '.' CURRENT_USER '(' ')'
+{
+  ParseNode *name_node = NULL;
+  ParseNode *function = NULL;
+  ParseNode *sub_obj_access_ref = NULL;
+  ParseNode *udf_node = NULL;
+  make_name_node(name_node, result->malloc_pool_, "current_user");
+  malloc_non_terminal_node(function, result->malloc_pool_, T_FUN_SYS, 2, name_node, NULL);
+  malloc_non_terminal_node(sub_obj_access_ref, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, function, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, $1, sub_obj_access_ref);
+  malloc_non_terminal_node(udf_node, result->malloc_pool_, T_FUN_UDF, 4, $3, NULL, $1, NULL);
+  store_pl_ref_object_symbol(udf_node, result, REF_FUNC);
+}
 ;
 
 cur_date_func:
