@@ -518,7 +518,9 @@ int ObAdminClearMergeError::execute(const obrpc::ObAdminMergeArg &arg)
                  KR(ret), "affect_all", arg.affect_all_, "affect_all_user",
                  arg.affect_all_user_, "affect_all_meta", arg.affect_all_meta_);
       } else {
-        if (arg.affect_all_ || arg.affect_all_user_) {
+        if (arg.affect_all_) {
+          param.need_all_ = true;
+        } else if (arg.affect_all_user_) {
           param.need_all_user_ = true;
         } else {
           param.need_all_meta_ = true;
@@ -597,7 +599,9 @@ int ObAdminMerge::execute(const obrpc::ObAdminMergeArg &arg)
                      KR(ret), "affect_all", arg.affect_all_, "affect_all_user",
                      arg.affect_all_user_, "affect_all_meta", arg.affect_all_meta_);
           } else {
-            if (arg.affect_all_ || arg.affect_all_user_) {
+            if (arg.affect_all_) {
+              param.need_all_ = true;
+            } else if (arg.affect_all_user_) {
               param.need_all_user_ = true;
             } else {
               param.need_all_meta_ = true;
@@ -623,7 +627,9 @@ int ObAdminMerge::execute(const obrpc::ObAdminMergeArg &arg)
                      KR(ret), "affect_all", arg.affect_all_, "affect_all_user",
                      arg.affect_all_user_, "affect_all_meta", arg.affect_all_meta_);
           } else {
-            if (arg.affect_all_ || arg.affect_all_user_) {
+            if (arg.affect_all_) {
+              param.need_all_ = true;
+            } else if (arg.affect_all_user_) {
               param.need_all_user_ = true;
             } else {
               param.need_all_meta_ = true;
@@ -820,36 +826,47 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
           } else {
             ci = *ci_ptr;
             share::schema::ObSchemaGetterGuard schema_guard;
+            const char *const NAME_ALL = "all";
+            const char *const NAME_ALL_USER = "all_user";
+            const char *const NAME_ALL_META = "all_meta";
             if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, schema_guard))) {
               LOG_WARN("get_schema_guard failed", KR(ret));
             } else if (OB_SYS_TENANT_ID == item->exec_tenant_id_ &&
-                      (item->tenant_name_ == ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1>("all") ||
-                       item->tenant_name_ == ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1>("all_user"))) {
+                      (0 == item->tenant_name_.str().case_compare(NAME_ALL) ||
+                       0 == item->tenant_name_.str().case_compare(NAME_ALL_USER) ||
+                       0 == item->tenant_name_.str().case_compare(NAME_ALL_META))) {
               common::ObArray<uint64_t> tenant_ids;
               if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
                 LOG_WARN("get_tenant_ids failed", KR(ret));
               } else {
-                for (const uint64_t tenant_id: tenant_ids) {
-                  if (is_user_tenant(tenant_id) &&
-                      OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
-                    LOG_WARN("add tenant_id failed", K(tenant_id), KR(ret));
-                    break;
+                using FUNC_TYPE = bool (*) (const uint64_t);
+                FUNC_TYPE condition_func = nullptr;
+                if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
+                  if (0 == item->tenant_name_.str().case_compare(NAME_ALL_USER) ||
+                      0 == item->tenant_name_.str().case_compare(NAME_ALL_META)) {
+                    ret = OB_NOT_SUPPORTED;
+                    LOG_WARN("all_user/all_meta are not supported when min_cluster_version is less than 4.2.1.0",
+                             KR(ret), "tenant_name", item->tenant_name_);
+                  } else {
+                    condition_func = is_not_virtual_tenant_id;
                   }
-                } // for
-              }
-            } else if (OB_SYS_TENANT_ID == item->exec_tenant_id_ &&
-                       item->tenant_name_ == ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1>("all_meta")) {
-              common::ObArray<uint64_t> tenant_ids;
-              if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
-                LOG_WARN("get_tenant_ids failed", KR(ret));
-              } else {
-                for (const uint64_t tenant_id: tenant_ids) {
-                  if (is_meta_tenant(tenant_id) &&
-                      OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
-                    LOG_WARN("add tenant_id failed", K(tenant_id), KR(ret));
-                    break;
+                } else {
+                  if (0 == item->tenant_name_.str().case_compare(NAME_ALL) ||
+                      0 == item->tenant_name_.str().case_compare(NAME_ALL_USER)) {
+                    condition_func = is_user_tenant;
+                  } else {
+                    condition_func = is_meta_tenant;
                   }
-                } // for
+                }
+                if (OB_SUCC(ret) && (nullptr != condition_func)) {
+                  for (const uint64_t tenant_id: tenant_ids) {
+                    if (condition_func(tenant_id) &&
+                        OB_FAIL(item->tenant_ids_.push_back(tenant_id))) {
+                      LOG_WARN("add tenant_id failed", K(tenant_id), KR(ret));
+                      break;
+                    }
+                  } // for
+                }
               }
             } else if (OB_SYS_TENANT_ID == item->exec_tenant_id_
                        && item->tenant_name_ == ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1>("seed")) {

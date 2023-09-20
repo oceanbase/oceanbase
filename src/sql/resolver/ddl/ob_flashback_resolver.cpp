@@ -399,10 +399,7 @@ int ObFlashBackTenantResolver::resolve(const ParseNode &parser_tree)
         new_tenant_name.assign_ptr(new_tenant_node->str_value_,
                                    static_cast<int32_t>(new_tenant_node->str_len_));
         if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(new_tenant_name))) {
-          LOG_WARN("since 4.2.1, renaming a tenant to all/all_user/all_meta is not supported",
-                   KR(ret), K(new_tenant_name));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "since 4.2.1, renaming a tenant to all/all_user/all_meta is");
+          LOG_WARN("unsupported tenant name", KR(ret), K(new_tenant_name));
         } else {
           flashback_tenant_stmt->set_new_tenant_name(new_tenant_name);
         }

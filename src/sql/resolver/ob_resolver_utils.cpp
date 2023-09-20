@@ -8054,11 +8054,22 @@ int ObResolverUtils::check_encryption_name(ObString &encryption_name, bool &need
 int ObResolverUtils::check_not_supported_tenant_name(const ObString &tenant_name)
 {
   int ret = OB_SUCCESS;
-  if (0 == tenant_name.case_compare("all") ||
-      0 == tenant_name.case_compare("all_user") ||
-      0 == tenant_name.case_compare("all_meta") ||
-      OB_NOT_NULL(tenant_name.find('$'))) {
+  if (OB_NOT_NULL(tenant_name.find('$'))) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "since 4.2.1, manually creating a tenant name containing '$' is");
+  }
+  if (OB_SUCC(ret)) {
+    const char *const forbid_list[] = {"all", "all_user", "all_meta"};
+    int64_t list_len = ARRAYSIZEOF(forbid_list);
+    for (int64_t i = 0; OB_SUCC(ret) && (i < list_len); ++i) {
+      if (0 == tenant_name.case_compare(forbid_list[i])) {
+        ret = OB_NOT_SUPPORTED;
+        char err_info[128] = {'\0'};
+        snprintf(err_info, sizeof(err_info), "since 4.2.1, using \"%s\" (case insensitive) "
+            "as a tenant name is", forbid_list[i]);
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_info);
+      }
+    }
   }
   return ret;
 }

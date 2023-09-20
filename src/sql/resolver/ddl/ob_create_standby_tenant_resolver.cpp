@@ -83,10 +83,7 @@ int ObCreateStandbyTenantResolver::resolve(const ParseNode &parse_tree)
     } else {
       const ObString &tenant_name = mystmt->get_create_tenant_arg().tenant_schema_.get_tenant_name_str();
       if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
-        LOG_WARN("since 4.2.1, naming a tenant as all/all_user/all_meta is not supported",
-                 KR(ret), K(tenant_name));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "since 4.2.1, naming a tenant as all/all_user/all_meta is");
+        LOG_WARN("unsupported tenant name", KR(ret), K(tenant_name));
       }
     }
   }
