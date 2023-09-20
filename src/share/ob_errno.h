@@ -866,6 +866,7 @@ constexpr int OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT = -5510;
 constexpr int OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS = -5511;
 constexpr int OB_ERR_FK_COLUMN_NOT_NULL = -5512;
 constexpr int OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN = -5513;
+constexpr int OB_JSON_PROCESSING_ERROR = -5514;
 constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
@@ -2826,6 +2827,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS__USER_ERROR_MSG "Explicit column default is not supported for modifying views"
 #define OB_ERR_FK_COLUMN_NOT_NULL__USER_ERROR_MSG "Column \'%s\' cannot be NOT NULL: needed in a foreign key constraint \'%s\' SET NULL"
 #define OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN__USER_ERROR_MSG " Cannot define foreign key with ON DELETE SET NULL clause on a generated column"
+#define OB_JSON_PROCESSING_ERROR__USER_ERROR_MSG " JSON processing error"
 #define OB_ERR_TABLE_WITHOUT_ALIAS__USER_ERROR_MSG "Every table function must have an alias"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
@@ -4955,6 +4957,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS__ORA_USER_ERROR_MSG "ORA-32575: Explicit column default is not supported for modifying views"
 #define OB_ERR_FK_COLUMN_NOT_NULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5512, Column \'%s\' cannot be NOT NULL: needed in a foreign key constraint \'%s\' SET NULL"
 #define OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN__ORA_USER_ERROR_MSG "ORA-54036: cannot define referential constraint with ON DELETE SET NULL clause on virtual column"
+#define OB_JSON_PROCESSING_ERROR__ORA_USER_ERROR_MSG "ORA-40444:  JSON processing error"
 #define OB_ERR_TABLE_WITHOUT_ALIAS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5515, Every table function must have an alias"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
@@ -6047,7 +6050,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2125];
+extern int g_all_ob_errnos[2126];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
