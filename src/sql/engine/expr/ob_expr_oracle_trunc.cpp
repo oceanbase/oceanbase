@@ -129,9 +129,19 @@ int ObExprOracleTrunc::calc_result_typeN(ObExprResType &type,
     if (OB_FAIL(ObExprResultTypeUtil::get_round_result_type(result_type, params[0].get_type()))) {
       LOG_WARN("fail to get_round_result_type", K(ret), K(params[0].get_type()));
     } else {
-      if (!lib::is_oracle_mode() && ObDateTimeTC == params[0].get_type_class()) {
+      if (!lib::is_oracle_mode()) {
         //for mysql mode
-        result_type = ObDateTimeType;
+        if (ObDateTimeTC == params[0].get_type_class()) {
+          result_type = ObDateTimeType;
+        } else if (ObIntTC == params[0].get_type_class() || ObUIntTC == params[0].get_type_class()) {
+          result_type = ObNumberType;
+        }
+        if (params_count <= 1 && ObNumberType != result_type && ObFloatType != result_type && ObDoubleType != result_type &&
+            ObDateTimeType != result_type) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("unsupported type for ora_trunc", K(ret), K(result_type), K(params[0].get_type()));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calculate result type for ora_trunc");
+        }
       }
       if (ObDateTimeType == result_type) {
         type.set_scale(DEFAULT_SCALE_FOR_DATE);
