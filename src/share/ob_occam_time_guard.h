@@ -68,8 +68,13 @@ public:
   static constexpr int64_t MAX_THREAD_NUM = 1LL << POW_OF_2;// 4096
   static constexpr int64_t MAX_THREAD_NUM_MASK = MAX_THREAD_NUM - 1;
 private:
-  ObThreadHungDetector() : back_thread_(nullptr)
+  ObThreadHungDetector() : back_thread_(nullptr) {}
+  ~ObThreadHungDetector()
   {
+    destroy();
+  }
+public:
+  int init() {
     int ret = OB_SUCCESS;
     back_thread_ = (occam::ObOccamThread*)ob_malloc(sizeof(occam::ObOccamThread), "OccamTimeGuard");
     if (back_thread_ == nullptr) {
@@ -108,12 +113,8 @@ private:
         OCCAM_LOG(ERROR, "init back thread failed");
       }
     }
+    return ret;
   }
-  ~ObThreadHungDetector()
-  {
-    destroy();
-  }
-public:
   void stop()
   {
     if (back_thread_ != nullptr) {
