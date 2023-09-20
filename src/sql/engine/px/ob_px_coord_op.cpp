@@ -359,8 +359,6 @@ int ObPxCoordOp::inner_open()
     LOG_WARN("init operator context failed", K(ret));
   } else if (OB_FAIL(coord_info_.init())) {
     LOG_WARN("fail to init coord info", K(ret));
-  } else if (FALSE_IT(px_sequence_id_ = GCTX.sql_engine_->get_px_sequence_id())) {
-    LOG_WARN("fail to get px sequence id", K(ret));
   } else if (OB_FAIL(register_interrupt())) {
     LOG_WARN("fail to register interrupt", K(ret));
   } else if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()
@@ -896,6 +894,7 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
 int ObPxCoordOp::register_interrupt()
 {
   int ret = OB_SUCCESS;
+  px_sequence_id_ = GCTX.sql_engine_->get_px_sequence_id();
   ObInterruptUtil::generate_query_interrupt_id((uint32_t)GCTX.server_id_,
       px_sequence_id_,
       interrupt_id_);
