@@ -39,6 +39,7 @@
 #include "ob_log_callback.h"                        // ObILogCallback
 #include "ob_cdc_lob_ctx.h"                         // ObLobDataOutRowCtxList
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
+#include "lib/allocator/ob_lf_fifo_allocator.h"     // ObConcurrentFIFOAllocator
 #include "ob_log_safe_arena.h"
 
 namespace oceanbase
@@ -635,7 +636,7 @@ typedef LightyList<IStmtTask> StmtList;
 class ObLogEntryTask
 {
 public:
-  ObLogEntryTask();
+  ObLogEntryTask(PartTransTask &host);
   virtual ~ObLogEntryTask();
   void reset();
   bool is_valid() const;
@@ -772,6 +773,8 @@ public:
 
 public:
   void reset();
+
+  int init_log_entry_task_allocator();
 
   /// The initialisation process of a transaction task is divided into four stages.
   /// where: the DML transaction task processing process, where the maintenance of the completion status is completed, and the disassembly, maintenance and distribution of the task.
@@ -1140,6 +1143,7 @@ public:
   int check_for_ddl_trans(
       bool &is_not_barrier,
       ObSchemaOperationType &op_type) const;
+  ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; };
 
   TO_STRING_KV(
       "state", serve_state_,
@@ -1321,6 +1325,7 @@ private:
   // trace_id/trace_info/part_trans_info_str_/participant_
   // MutatorRow(DDL)/DdlStmtTask
   ObSmallArena            allocator_;
+  ObLfFIFOAllocator       log_entry_task_base_allocator_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(PartTransTask);

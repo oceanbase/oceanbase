@@ -131,7 +131,6 @@ int ObCDCTimeZoneInfoGetter::init(
     mysql_proxy_ = &mysql_proxy;
     systable_helper_ = &systable_helper;
     err_handler_ = &err_handler;
-    allocator_.set_nway(NWAY);
     inited_ = true;
 
     LOG_INFO("init timezone info getter succ",

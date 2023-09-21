@@ -56,6 +56,7 @@ void ObCDCAutoConfigMgr::reset()
 void ObCDCAutoConfigMgr::init(const ObLogConfig &config)
 {
   init_queue_length_(config);
+  init_initial_config_(config);
   refresh_dynamic_config_(config);
   LOG_INFO("init ObCDCAutoConfigMgr succ");
 }
@@ -96,17 +97,24 @@ void ObCDCAutoConfigMgr::init_queue_length_(const ObLogConfig &config)
   REFRESH_NUM_FIELD_WITH_CONFIG(reader_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.reader_queue_length.get());
 }
 
+void ObCDCAutoConfigMgr::init_initial_config_(const ObLogConfig &config)
+{
+  const int64_t factor = factor_;
+  const int64_t part_trans_task_prealloc_count = (1 << (factor_ - 11)) * 20000;
+  REFRESH_NUM_FIELD_WITH_CONFIG(part_trans_task_prealloc_count, part_trans_task_prealloc_count, config.part_trans_task_prealloc_count.get());
+}
+
 void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
 {
   refresh_factor_(config);
   const static int64_t DEFAULT_STORAGER_MEM_PERCENT = 1;
   const static int64_t DEFAULT_STORAGER_TASK_UPPER_BOUND = 100;
   const int64_t redo_dispatcher_limit = (1 << (factor_ - 11)) * 32 * _M_;
-  const int64_t auto_part_trans_task_upper_bound = 2000 * (factor_ - 1);
+  const int64_t auto_part_trans_task_upper_bound = (1 << (factor_ - 11)) * 20000;
   const int64_t active_part_trans_task_upper_bound = auto_part_trans_task_upper_bound;
   const int64_t reusable_part_trans_task_upper_bound = auto_part_trans_task_upper_bound;
   const int64_t ready_to_seq_task_upper_bound = auto_part_trans_task_upper_bound;
-  const int64_t extra_redo_dispatch_memory_size = 1 * _K_ + (1 << (factor_ - 11)) * (factor_ - 11)  * _M_;
+  const int64_t extra_redo_dispatch_memory_size = 1 * _K_ + (1 << (factor_ - 9)) * (factor_ - 11)  * _M_;
   const int64_t redo_dispatch_exceed_ratio = factor_ <= 12 ? 1 : (1 << (factor_ - 13));
 
   REFRESH_NUM_FIELD_WITH_CONFIG(redo_dispatcher_memory_limit, redo_dispatcher_limit, config.redo_dispatcher_memory_limit.get());

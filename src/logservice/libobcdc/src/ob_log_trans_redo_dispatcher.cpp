@@ -408,7 +408,7 @@ int ObLogTransRedoDispatcher::dispatch_redo_(PartTransTask &part_trans, DmlRedoL
 }
 
 // alloc an ObLogEntryTask as redo_read_task
-int ObLogTransRedoDispatcher::alloc_task_for_redo_(const PartTransTask &part_task,
+int ObLogTransRedoDispatcher::alloc_task_for_redo_(PartTransTask &part_task,
     DmlRedoLogNode &redo_node,
     ObLogEntryTask *&log_entry_task)
 {
@@ -417,7 +417,7 @@ int ObLogTransRedoDispatcher::alloc_task_for_redo_(const PartTransTask &part_tas
   if (OB_UNLIKELY(OB_ISNULL(TCTX.log_entry_task_pool_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log_entry_task_pool is null!", KR(ret));
-  } else if (OB_FAIL(TCTX.log_entry_task_pool_->alloc(log_entry_task, (void *)&part_task))) {
+  } else if (OB_FAIL(TCTX.log_entry_task_pool_->alloc(log_entry_task, part_task))) {
     LOG_ERROR("log_entry_task_pool_ alloc fail", KR(ret), KPC(log_entry_task), K(part_task));
   } else if (OB_ISNULL(log_entry_task)) {
     ret = OB_ERR_UNEXPECTED;

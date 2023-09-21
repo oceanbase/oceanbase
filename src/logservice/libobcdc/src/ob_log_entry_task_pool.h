@@ -15,7 +15,7 @@
 #ifndef OCEANBASE_SRC_LIBOBLOG_OB_LOG_ENTRY_TASK_POOL_
 #define OCEANBASE_SRC_LIBOBLOG_OB_LOG_ENTRY_TASK_POOL_
 
-#include "lib/objectpool/ob_small_obj_pool.h"   // ObSmallObjPool
+#include "lib/allocator/ob_slice_alloc.h"       // ObSliceAlloc
 #include "ob_log_part_trans_task.h"             // ObLogEntryTask
 
 namespace oceanbase
@@ -28,11 +28,13 @@ public:
   virtual ~IObLogEntryTaskPool() {}
 
 public:
-  virtual int alloc(ObLogEntryTask *&task,
-      void *host) = 0;
+  virtual int alloc(
+      ObLogEntryTask *&task,
+      PartTransTask &host) = 0;
   virtual void free(ObLogEntryTask *task) = 0;
   virtual int64_t get_alloc_count() const = 0;
-  virtual void print_stat_info() const = 0;
+  virtual void print_stat_info() = 0;
+  virtual void try_purge_pool() = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////////
@@ -40,26 +42,29 @@ public:
 // ObLogEntryTaskPool
 class ObLogEntryTaskPool : public IObLogEntryTaskPool
 {
-  typedef common::ObSmallObjPool<ObLogEntryTask> LogEntryTaskPool;
-
+  typedef ObBlockAllocMgr BlockAlloc;
 public:
   ObLogEntryTaskPool();
   virtual ~ObLogEntryTaskPool();
 
 public:
-  int alloc(ObLogEntryTask *&log_entry_task,
-      void *host);
-  void free(ObLogEntryTask *log_entry_task);
-  int64_t get_alloc_count() const;
-  void print_stat_info() const;
+  int alloc(
+      ObLogEntryTask *&log_entry_task,
+      PartTransTask &host) override;
+  void free(ObLogEntryTask *log_entry_task) override;
+  int64_t get_alloc_count() const override;
+  void print_stat_info() override;
+  void try_purge_pool() override;
 
 public:
   int init(const int64_t fixed_task_count);
   void destroy();
 
 private:
-  bool             inited_;
-  LogEntryTaskPool pool_;
+  bool              inited_;
+  int64_t           alloc_cnt_;
+  BlockAlloc        block_alloc_;
+  ObSliceAlloc      allocator_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogEntryTaskPool);

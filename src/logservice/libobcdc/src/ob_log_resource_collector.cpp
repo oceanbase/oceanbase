@@ -80,7 +80,7 @@ int ObLogResourceCollector::init(const int64_t thread_num,
     ret = OB_INIT_TWICE;
   } else if (OB_UNLIKELY(thread_num <= 0)
       || OB_UNLIKELY(thread_num_for_br <= 0)
-      || OB_UNLIKELY(thread_num_for_br >= thread_num)
+      || OB_UNLIKELY(thread_num_for_br + 1 >= thread_num)
       || OB_UNLIKELY(queue_size <= 0)
       || OB_ISNULL(br_pool)
       || OB_ISNULL(trans_ctx_mgr)
@@ -398,9 +398,12 @@ int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task
   static uint64_t br_push_seq = 0;
   uint64_t hash_value = 0;
 
+  // thread [0] for LOB_DATA_CLEAN_TASK
+  // thread [1, br_thread_num] for BR_TASK
+  // thread [br_thread_num + 1, thread_num] for PART_TRANS_TASK
   if (task.is_part_trans_task()) {
     hash_value = ATOMIC_FAA(&part_trans_task_push_seq, 1);
-    hash_value = (hash_value % (RCThread::get_thread_num() - br_thread_num_)) + br_thread_num_;
+    hash_value = (hash_value % (RCThread::get_thread_num() - br_thread_num_ - 1)) + br_thread_num_ + 1;
 
     PartTransTask *part_trans_task = static_cast<PartTransTask *>(&task);
 
@@ -414,8 +417,11 @@ int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task
     (void)ATOMIC_AAF(&br_count_, 1);
 
     hash_value = ATOMIC_FAA(&br_push_seq, 1);
-    hash_value = hash_value % br_thread_num_;
-  } else {}
+    hash_value = (hash_value % br_thread_num_) + 1;
+  } else {
+    // LOB_DATA_CLEAN_TASK, use thread 0
+    // hash_value = 0
+  }
 
   // push to thread queue, asynchronous recycling
   while (OB_SUCC(ret) && ! RCThread::is_stoped()) {

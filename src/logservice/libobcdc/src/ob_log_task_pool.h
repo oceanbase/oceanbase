@@ -67,7 +67,7 @@ class ObLogTransTaskPool
   typedef common::QLink PoolElemType;
   typedef common::ObFixedQueue<void> PagePool;
 
-  static const int64_t LARGE_ALLOCATOR_PAGE_SIZE = (1LL << 22);     // 4M
+  static const int64_t LARGE_ALLOCATOR_PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;     // 2M - 17KB
   static const int64_t LARGE_ALLOCATOR_TOTAL_LIMIT = (1LL << 37);   // 127G
   static const int64_t LARGE_ALLOCATOR_HOLD_LIMIT = (1LL << 26);    // 64M
 
