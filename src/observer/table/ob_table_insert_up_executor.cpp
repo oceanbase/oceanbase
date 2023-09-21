@@ -27,14 +27,22 @@ int ObTableApiInsertUpExecutor::generate_insert_up_rtdef(const ObTableInsUpdCtDe
                                                          ObTableInsUpdRtDef &rtdef)
 {
   int ret = OB_SUCCESS;
+  bool use_put = false;
 
   if (OB_FAIL(generate_ins_rtdef(ctdef.ins_ctdef_, rtdef.ins_rtdef_))) {
     LOG_WARN("fail to generate insert rtdef", K(ret));
   } else if (OB_FAIL(generate_upd_rtdef(ctdef.upd_ctdef_,
                                         rtdef.upd_rtdef_))) {
     LOG_WARN("fail to generate update rtdef", K(ret));
+  } else if (OB_FAIL(tb_ctx_.check_insert_up_can_use_put(use_put))) {
+    LOG_WARN("fail to check insert up use put", K(ret));
   } else {
     rtdef.ins_rtdef_.das_rtdef_.table_loc_->is_writing_ = true;
+    rtdef.ins_rtdef_.das_rtdef_.use_put_ = use_put;
+  }
+
+  if (!use_put) {
+    set_need_fetch_conflict();
   }
 
   return ret;
@@ -587,8 +595,6 @@ int ObTableApiInsertUpExecutor::get_next_row()
   while (OB_SUCC(ret) && !is_iter_end) {
     int64_t insert_rows = 0;
     transaction::ObTxSEQ savepoint_no;
-    // must set conflict_row fetch flag
-    set_need_fetch_conflict();
     if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(exec_ctx_, savepoint_no))) {
       LOG_WARN("fail to create save_point", K(ret));
     } else if (OB_FAIL(try_insert_row(is_iter_end, insert_rows))) {

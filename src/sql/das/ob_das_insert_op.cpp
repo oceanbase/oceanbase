@@ -53,13 +53,24 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
   dml_param_.direct_insert_task_id_ = rtdef.direct_insert_task_id_;
-  if (OB_FAIL(as->insert_rows(ls_id,
-                              tablet_id,
-                              *tx_desc_,
-                              dml_param_,
-                              ctdef.column_ids_,
-                              &iter,
-                              affected_rows))) {
+  if (rtdef.use_put_) {
+    ret = as->put_rows(ls_id,
+                       tablet_id,
+                       *tx_desc_,
+                       dml_param_,
+                       ctdef.column_ids_,
+                       &iter,
+                       affected_rows);
+  } else {
+    ret = as->insert_rows(ls_id,
+                          tablet_id,
+                          *tx_desc_,
+                          dml_param_,
+                          ctdef.column_ids_,
+                          &iter,
+                          affected_rows);
+  }
+  if (OB_FAIL(ret)) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("insert rows to access service failed", K(ret));
     }

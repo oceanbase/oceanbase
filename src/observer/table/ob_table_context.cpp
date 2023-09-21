@@ -1145,5 +1145,44 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
   return ret;
 }
 
+/*
+  check insert up operation can use put implement or not
+  1. can not have any index.
+  2. all column must be filled.
+*/
+int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
+{
+  int ret = OB_SUCCESS;
+  use_put = true;
+
+  if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
+    use_put = false;
+  } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid operation type", K(ret), K_(operation_type));
+  } else if (is_htable()) { // htable has no index and alway full filled.
+    use_put = true;
+  } else if (!related_index_ids_.empty()) { // has index, can not use put
+    use_put = false;
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table schema is null", K(ret));
+  } else {
+    bool is_all_columns_filled = false;
+    if (OB_ISNULL(entity_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("entity is null", K(ret));
+    } else if (FALSE_IT(is_all_columns_filled = table_schema_->get_column_count()
+        - table_schema_->get_rowkey_column_num() <= entity_->get_properties_count())) { // all columns are filled
+    } else if (is_all_columns_filled) {
+      use_put = true;
+    } else { // some columns are missing
+      use_put = false;
+    }
+  }
+
+  return ret;
+}
+
 }  // namespace table
 }  // namespace oceanbase

@@ -229,6 +229,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
       LOG_WARN("fail to close row iter", K(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
     }
+    ObTableQueryUtils::destroy_result_iterator(result_iter);
 
     LOG_DEBUG("last result", K(ret), "row_count", result_.get_row_count());
     NG_TRACE_EXT(tag1, OB_ID(return_rows), result_count, OB_ID(arg2), result_row_count_);

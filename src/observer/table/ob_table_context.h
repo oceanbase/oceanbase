@@ -220,7 +220,6 @@ public:
   OB_INLINE void set_operation_type(const ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   // for htable
   OB_INLINE void set_batch_operation(const ObTableBatchOperation *batch_op) { batch_op_ = batch_op; }
-
 public:
   // 初始化common部分(不包括expr_info_, exec_ctx_, all_exprs_)
   int init_common(ObTableApiCredential &credential,
@@ -254,6 +253,7 @@ public:
   int init_trans(transaction::ObTxDesc *trans_desc,
                  const transaction::ObTxReadSnapshot &tx_snapshot);
   int init_das_context(ObDASCtx &das_ctx);
+  int check_insert_up_can_use_put(bool &use_put);
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
