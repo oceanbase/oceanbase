@@ -832,7 +832,9 @@ int ObAccessPathEstimation::reset_skip_scan_info(ObCostTableScanInfo &est_cost_i
                                                              filter_sel,
                                                              all_predicate_sel))) {
     LOG_WARN("failed to calculate selectivity", K(est_cost_info.postfix_filters_), K(ret));
-  } else {
+  } else if (OptSkipScanState::SS_HINT_ENABLE != use_skip_scan) {
+    // TODO: only for bug fix of
+    // Here should be optimized later.
     est_cost_info.ss_ranges_.reuse();
     est_cost_info.ss_postfix_range_filters_.reuse();
     est_cost_info.ss_prefix_ndv_ = 1.0;
