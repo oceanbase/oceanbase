@@ -197,7 +197,7 @@ int ObTxBigSegmentBuf::split_one_part(char *part_buf,
       }
     }
 
-    TRANS_LOG(INFO, "init part header for split_one_part", K(ret), K(part_header), KPC(this));
+    TRANS_LOG(DEBUG, "init part header for split_one_part", K(ret), K(part_header), KPC(this));
 
     tmp_pos = part_buf_pos;
     if (OB_FAIL(part_header.serialize(part_buf, part_buf_len, tmp_pos))) {
@@ -269,7 +269,7 @@ int ObTxBigSegmentBuf::collect_one_part(const char *part_buf,
     }
   }
 
-  TRANS_LOG(INFO, "try to init big segment for deserialize", K(ret), K(part_header), KPC(this));
+  TRANS_LOG(DEBUG, "try to init big segment for deserialize", K(ret), K(part_header), KPC(this));
 
   if (OB_FAIL(ret)) {
     // do nothing

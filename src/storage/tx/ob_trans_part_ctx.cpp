@@ -6937,7 +6937,7 @@ int ObPartTransCtx::dup_table_before_preapre_(const share::SCN &before_prepare_v
   }
 
   if (OB_SUCC(ret)) {
-    DUP_TABLE_LOG(INFO, "set dup_table before prepare version successfully", K(ret),
+    TRANS_LOG(INFO, "set dup_table before prepare version successfully", K(ret),
                   K(before_prepare_version), K(before_replay), KPC(this));
   }
 

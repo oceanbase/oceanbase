@@ -625,7 +625,7 @@ public:
                                     bool &is_dup_table,
                                     const share::SCN &from_scn,
                                     const share::SCN &to_scn);
-  int gc_dup_tablets(const int64_t gc_ts, const int64_t max_task_interval);
+  int gc_tmporary_dup_tablets(const int64_t gc_ts, const int64_t max_task_interval);
   // new gc methods
   int scan_readable_set_for_gc();
 
@@ -654,7 +654,8 @@ public:
                         const share::SCN &scn,
                         const bool for_replay,
                         const DupTabletSetIDArray &unique_id_array,
-                        bool &modify_readable_set);
+                        bool &modify_readable_set,
+                        const int64_t start_sync_time);
 
   int try_to_confirm_tablets(const share::SCN &confirm_scn);
   // bool need_log_tablets();
@@ -899,6 +900,9 @@ private:
   int64_t gc_start_time_;
   int64_t last_no_free_set_time_;
   int64_t extra_free_set_alloc_count_;
+
+  int64_t last_readable_sync_succ_time_;
+  share::SCN last_readable_log_entry_scn_;
 
   char *tablet_set_diag_info_log_buf_;
   char *tablet_id_diag_info_log_buf_;

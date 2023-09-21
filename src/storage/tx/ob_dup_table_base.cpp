@@ -573,12 +573,12 @@ int ObDupTableLogOperator::submit_log_entry()
                       K(type_array), K(logging_lease_addrs_), K(logging_tablet_set_ids_),
                       K(logging_scn_), K(logging_lsn_));
       } else {
-        DUP_TABLE_LOG(INFO, "submit log entry successfully", K(ret), K(ls_id_), K(max_ser_size),
+        DUP_TABLE_LOG(DEBUG, "submit log entry successfully", K(ret), K(ls_id_), K(max_ser_size),
                       K(type_array), K(logging_lease_addrs_), K(logging_tablet_set_ids_),
                       K(logging_scn_), K(logging_lsn_));
       }
     } else {
-      DUP_TABLE_LOG(INFO, "no need submit log entry", K(ret), K(ls_id_), K(max_ser_size),
+      DUP_TABLE_LOG(DEBUG, "no need submit log entry", K(ret), K(ls_id_), K(max_ser_size),
                     K(type_array));
     }
 
@@ -694,12 +694,13 @@ int ObDupTableLogOperator::on_failure()
   LOG_OPERATOR_INIT_CHECK
 
   if (OB_SUCC(ret)) {
+    int64_t start_sync_time =ObTimeUtility::fast_current_time();
     if (OB_FAIL(lease_mgr_ptr_->lease_log_synced(false /*sync_result*/, logging_scn_,
                                                  false /*for_replay*/, logging_lease_addrs_))) {
       DUP_TABLE_LOG(WARN, "lease mgr on_success failed", K(ret));
     } else if (OB_FAIL(tablet_mgr_ptr_->tablet_log_synced(
                    false /*sync_result*/, logging_scn_, false /*for_replay*/,
-                   logging_tablet_set_ids_, modify_readable))) {
+                   logging_tablet_set_ids_, modify_readable, start_sync_time))) {
       DUP_TABLE_LOG(ERROR, "tablets mgr on_failure failed", K(ret), K(logging_scn_),
                     K(logging_lease_addrs_), K(logging_tablet_set_ids_), K(modify_readable));
     } else {
@@ -739,8 +740,7 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
   bool modify_readable = false;
   bool contain_all_readable = false;
   int64_t logging_readable_cnt = 0;
-  const int64_t all_readable_set_cnt
-                 = tablet_mgr_ptr_->get_readable_tablet_set_count();
+  const int64_t all_readable_set_cnt = tablet_mgr_ptr_->get_readable_tablet_set_count();
   ObDupTableLSCheckpoint::ObLSDupTableMeta tmp_dup_ls_meta;
 
   if (OB_SUCC(ret)) {
@@ -764,24 +764,50 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
     }
   }
 
+  int64_t start_sync_time = ObTimeUtility::fast_current_time();
+  int64_t lease_log_sync_cost_time, tablet_log_sync_cost_time, ckpt_update_cost_time;
+  lease_log_sync_cost_time = tablet_log_sync_cost_time = ckpt_update_cost_time = start_sync_time;
+
   if (OB_SUCC(ret)) {
 
     if (OB_FAIL(lease_mgr_ptr_->lease_log_synced(
             true /*sync_result*/, logging_scn_, for_replay /*for_replay*/, logging_lease_addrs_))) {
       DUP_TABLE_LOG(WARN, "apply lease_log failed", K(ret), K(logging_scn_),
                     K(logging_lease_addrs_));
+    } else if (OB_FALSE_IT(lease_log_sync_cost_time =
+                               ObTimeUtility::fast_current_time() - start_sync_time)) {
+
     } else if (OB_FAIL(tablet_mgr_ptr_->tablet_log_synced(
                    true /*sync_result*/, logging_scn_, for_replay /*for_replay*/,
-                   logging_tablet_set_ids_, modify_readable))) {
+                   logging_tablet_set_ids_, modify_readable, start_sync_time))) {
       DUP_TABLE_LOG(WARN, "apply tablet_log failed", K(ret), K(logging_scn_),
                     K(logging_tablet_set_ids_));
+    } else if (OB_FALSE_IT(tablet_log_sync_cost_time = ObTimeUtility::fast_current_time()
+                                                       - start_sync_time
+                                                       - lease_log_sync_cost_time)) {
+
     } else if (OB_FAIL(dup_ls_ckpt_->update_ckpt_after_lease_log_synced(
                    logging_lease_addrs_, logging_scn_, modify_readable /*modify_readable_sets*/,
                    contain_all_readable /*contain_all_readable*/, for_replay /*for_replay*/))) {
       DUP_TABLE_LOG(WARN, "update lease log ckpt failed", K(ret), KPC(dup_ls_ckpt_));
+    } else if (OB_FALSE_IT(ckpt_update_cost_time = ObTimeUtility::fast_current_time()
+                                                   - start_sync_time - lease_log_sync_cost_time
+                                                   - tablet_log_sync_cost_time)) {
     } else {
       reuse();
     }
+  }
+
+  if (lease_log_sync_cost_time + tablet_log_sync_cost_time + ckpt_update_cost_time > 500 * 1000) {
+    DUP_TABLE_LOG(INFO, "sync log succ cost too much time", K(ret), K(logging_scn_),
+                  K(logging_lease_addrs_.count()), K(logging_tablet_set_ids_.count()), K(stat_log_),
+                  K(start_sync_time), K(lease_log_sync_cost_time), K(tablet_log_sync_cost_time),
+                  K(ckpt_update_cost_time));
+  }
+
+  if (OB_NOT_NULL(interface_stat_ptr_)) {
+    interface_stat_ptr_->dup_table_lease_log_sync_total_time_ += lease_log_sync_cost_time;
+    interface_stat_ptr_->dup_table_tablet_log_sync_total_time_ += tablet_log_sync_cost_time;
   }
 
   return ret;
@@ -838,7 +864,7 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
       if (OB_FALSE_IT(max_ser_size += max_stat_log.get_serialize_size())) {
         // do nothing
       } else if (max_ser_size > 0
-                 && OB_FAIL(type_array.push_back(DupTableLogEntryType::DuptableStatLog))) {
+                 && OB_FAIL(type_array.push_back(DupTableLogEntryType::DupTableStatLog))) {
         DUP_TABLE_LOG(WARN, "push back log entry_type failed", K(ret));
       }
     }
@@ -848,6 +874,7 @@ int ObDupTableLogOperator::prepare_serialize_log_entry_(int64_t &max_ser_size,
       tmp_entry_header.entry_type_ = DupTableLogEntryType::MAX;
       int64_t entry_log_size = 0;
 
+      //depend on the size of type_array
       int64_t entry_header_size = type_array.count()
                                   * (tmp_entry_header.get_serialize_size()
                                      + serialization::encoded_length_i64(entry_log_size));
@@ -878,7 +905,7 @@ int ObDupTableLogOperator::serialize_log_entry_(const int64_t max_ser_size,
     const DupTableLogEntryType &entry_type = type_array[i];
     if (entry_type != DupTableLogEntryType::LeaseListLog
         && entry_type != DupTableLogEntryType::TabletChangeLog
-        && entry_type != DupTableLogEntryType::DuptableStatLog) {
+        && entry_type != DupTableLogEntryType::DupTableStatLog) {
       ret = OB_INVALID_ARGUMENT;
       DUP_TABLE_LOG(WARN, "invalid arguments", K(ret), K(entry_type));
     } else {
@@ -910,7 +937,7 @@ int ObDupTableLogOperator::serialize_log_entry_(const int64_t max_ser_size,
           }
           break;
         }
-        case DupTableLogEntryType::DuptableStatLog: {
+        case DupTableLogEntryType::DupTableStatLog: {
           DupTableStatLog stat_log;
           stat_log.lease_addr_cnt_ = logging_lease_addrs_.count();
           stat_log.leader_readable_cnt_ = tablet_mgr_ptr_->get_readable_tablet_set_count();
@@ -953,6 +980,8 @@ int ObDupTableLogOperator::deserialize_log_entry_()
 {
   int ret = OB_SUCCESS;
 
+  common::ObTimeGuard timeguard("deserialize_log_entry", 500 * 1000);
+
   int64_t data_pos = 0;
 
   data_pos = big_segment_buf_.get_deserialize_buf_pos();
@@ -994,7 +1023,7 @@ int ObDupTableLogOperator::deserialize_log_entry_()
         }
         break;
       }
-      case DupTableLogEntryType::DuptableStatLog: {
+      case DupTableLogEntryType::DupTableStatLog: {
         if (OB_FAIL(stat_log_.deserialize(big_segment_buf_.get_deserialize_buf(),
                                           data_pos + log_entry_size, data_pos))) {
           DUP_TABLE_LOG(WARN, "deserialize stat log failed", K(ret), K(data_pos));
@@ -1008,9 +1037,11 @@ int ObDupTableLogOperator::deserialize_log_entry_()
       }
       }
 
+      timeguard.click(get_entry_type_str(entry_header.entry_type_));
       if (OB_SUCC(ret) && data_pos < after_header_pos + log_entry_size) {
-        DUP_TABLE_LOG(INFO, "try to deserialize a new version dup_table log in older observer", K(ret), K(data_pos),
-                      K(after_header_pos), K(log_entry_size), K(entry_header));
+        DUP_TABLE_LOG(INFO, "try to deserialize a new version dup_table log in older observer",
+                      K(ret), K(data_pos), K(segment_buf_len), K(after_header_pos),
+                      K(log_entry_size), K(entry_header));
         data_pos = after_header_pos + log_entry_size;
       }
     }
@@ -1021,10 +1052,16 @@ int ObDupTableLogOperator::deserialize_log_entry_()
       DUP_TABLE_LOG(WARN, "set deserialize pos failed", K(ret), K(after_header_pos),
                     K(log_entry_size), K(big_segment_buf_));
     }
-    DUP_TABLE_LOG(DEBUG, "deser log succ", K(ret), K(data_pos), K(after_header_pos),
-                  K(log_entry_size));
-  } else {
-    DUP_TABLE_LOG(WARN, "deser log failed", K(ret), K(data_pos));
+  }
+
+  int64_t time_diff = timeguard.get_diff();
+  if (time_diff > 500 * 1000) {
+    DUP_TABLE_LOG(INFO, "deserialize dup table log entry cost too much time", K(ret),
+                  K(logging_scn_), K(logging_lease_addrs_.count()),
+                  K(logging_tablet_set_ids_.count()), K(stat_log_), K(timeguard));
+  }
+  if (OB_NOT_NULL(interface_stat_ptr_)) {
+    interface_stat_ptr_->dup_table_log_deser_total_time_ += time_diff;
   }
 
   return ret;
@@ -1074,6 +1111,11 @@ int ObDupTableLogOperator::retry_submit_log_block_()
     } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, gts_base_scn, false, this,
                                             logging_lsn_, logging_scn_))) {
       DUP_TABLE_LOG(WARN, "append block failed", K(ret), K(ls_id_));
+    } else {
+      if (OB_NOT_NULL(interface_stat_ptr_)) {
+        interface_stat_ptr_->dup_table_log_entry_cnt_ += 1;
+        interface_stat_ptr_->dup_table_log_entry_total_size_ += block_buf_pos;
+      }
     }
   }
 
