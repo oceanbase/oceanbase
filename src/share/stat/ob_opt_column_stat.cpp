@@ -438,6 +438,19 @@ int ObOptColumnStat::merge_min_max(ObObj &cur, const ObObj &other, bool is_cmp_m
   return ret;
 }
 
+ObOptColumnStat *ObOptColumnStat::malloc_new_column_stat(common::ObIAllocator &allocator)
+{
+  ObOptColumnStat *new_col_stat = OB_NEWx(ObOptColumnStat, (&allocator), allocator);
+  if (new_col_stat != NULL) {
+    if (OB_ISNULL(new_col_stat->get_llc_bitmap())) {
+      new_col_stat->~ObOptColumnStat();
+      allocator.free(new_col_stat);
+      new_col_stat = NULL;
+    }
+  }
+  return new_col_stat;
+}
+
 OB_DEF_SERIALIZE(ObOptColumnStat) {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -495,8 +508,13 @@ OB_DEF_DESERIALIZE(ObOptColumnStat) {
               avg_length_,
               object_type_);
   if (llc_bitmap_size_ !=0 && data_len - pos >= llc_bitmap_size_) {
-    memcpy(llc_bitmap_, buf + pos, llc_bitmap_size_);
-    pos += llc_bitmap_size_;
+    if (OB_ISNULL(llc_bitmap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(llc_bitmap_), K(llc_bitmap_size_), K(data_len), K(pos));
+    } else {
+      memcpy(llc_bitmap_, buf + pos, llc_bitmap_size_);
+      pos += llc_bitmap_size_;
+    }
   }
   OB_UNIS_DECODE(total_col_len_);
   return ret;

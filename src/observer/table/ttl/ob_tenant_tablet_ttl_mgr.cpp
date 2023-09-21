@@ -162,10 +162,17 @@ void ObTenantTabletTTLMgr::stop()
 {
   int ret = OB_SUCCESS;
   FLOG_INFO("tenant_tablet_ttl_mgr: begin to stop", K_(tenant_id), KPC_(ls));
-  common::ObSpinLockGuard guard(lock_);
   if (is_timer_start_) {
+    // ensure TG_STOP which will acuiqre timer monitor lock
+    // before acquire ObTenantTabletTTLMgr's lock_ to avoid lock deadlock
+    // because the lock order of timer task is:
+    // 1) acquire timer monitor lock
+    // 2) acquire ObTenantTabletTTLMgr's lock_
     TG_STOP(tg_id_);
     is_timer_start_ = false;
+    common::ObSpinLockGuard guard(lock_);
+    // set is_paused_ to true to ensure after stop, not new TTL dag task will be generate,
+    // i.e., dag_ref won't increase anymore
     is_paused_ = true;
   }
   FLOG_INFO("tenant_tablet_ttl_mgr: finish to stop", K(ret), K_(is_timer_start), K_(tenant_id), KPC_(ls));

@@ -61,7 +61,6 @@ int ObDbmsStatsUtils::init_col_stats(ObIAllocator &allocator,
                                      ObIArray<ObOptColumnStat*> &col_stats)
 {
   int ret = OB_SUCCESS;
-  void *ptr = NULL;
   if (OB_UNLIKELY(col_cnt <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error, expected specify column cnt is great 0", K(ret), K(col_cnt));
@@ -70,11 +69,9 @@ int ObDbmsStatsUtils::init_col_stats(ObIAllocator &allocator,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       ObOptColumnStat *&col_stat = col_stats.at(i);
-      if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptColumnStat)))) {
+      if (OB_ISNULL(col_stat = ObOptColumnStat::malloc_new_column_stat(allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("memory is not enough", K(ret), K(ptr));
-      } else {
-        col_stat = new (ptr) ObOptColumnStat(allocator);
+        LOG_WARN("memory is not enough", K(ret), K(col_stat));
       }
     }
   }
