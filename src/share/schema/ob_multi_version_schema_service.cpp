@@ -4722,11 +4722,15 @@ int ObMultiVersionSchemaService::cal_purge_need_timeout(
             }
             break;
           }
+          case ObRecycleObject::TENANT: {
+            tmp_timeout += GCONF.rpc_timeout;
+            total_purge_count++;
+            break;
+          }
           case ObRecycleObject::TRIGGER:
           case ObRecycleObject::INDEX:
           case ObRecycleObject::AUX_LOB_META:
           case ObRecycleObject::AUX_LOB_PIECE:
-          case ObRecycleObject::TENANT:
           case ObRecycleObject::AUX_VP: {
             continue;
           }
