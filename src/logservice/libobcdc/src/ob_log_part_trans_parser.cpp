@@ -181,7 +181,7 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, volatile bool
     ObLogTenant *tenant = NULL;
     ObLogTenantGuard guard;
     // just declear here
-    ObLogEntryTask invalid_redo_log_entry_task;
+    ObLogEntryTask invalid_redo_log_entry_task(task);
 
     // DDL data/non-PG partitioned data need to be deserialized in whole rows, not filtered
     // otherwise need to get tenant structure and perform filtering
@@ -763,7 +763,7 @@ int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
     PartTransTask &part_trans_task)
 {
   int ret = OB_SUCCESS;
-  ObLogEntryTask invalid_log_entry_task;
+  ObLogEntryTask invalid_log_entry_task(part_trans_task);
   // For DDL Lob Aux meta: DmlStmtTask needs to allocate memory based on PartTransTask
   DmlStmtTask *stmt_task = static_cast<DmlStmtTask *>(part_trans_task.alloc(sizeof(DmlStmtTask)));
   ObCDCGlobalInfo &globl_info = TCTX.global_info_;

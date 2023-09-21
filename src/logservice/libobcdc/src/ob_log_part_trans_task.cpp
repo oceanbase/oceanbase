@@ -1777,8 +1777,8 @@ void DdlStmtTask::reset()
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-ObLogEntryTask::ObLogEntryTask() :
-    host_(NULL),
+ObLogEntryTask::ObLogEntryTask(PartTransTask &host) :
+    host_(&host),
     participant_(NULL),
     tls_id_(),
     trans_id_(),
@@ -1787,7 +1787,7 @@ ObLogEntryTask::ObLogEntryTask() :
     stmt_list_(),
     formatted_stmt_num_(0),
     row_ref_cnt_(0),
-    arena_allocator_("LogEntryTask", OB_MALLOC_MIDDLE_BLOCK_SIZE)
+    arena_allocator_(host.get_log_entry_task_base_allocator(), "LogEntryTask", host.get_tenant_id())
 {
 }
 
@@ -2183,7 +2183,8 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
-    allocator_()
+    allocator_(),
+    log_entry_task_base_allocator_()
 {
 }
 
@@ -2319,6 +2320,23 @@ void PartTransTask::reset()
   output_br_count_by_turn_ = 0;
   // reuse memory
   allocator_.reset();
+  log_entry_task_base_allocator_.destroy();
+}
+
+int PartTransTask::init_log_entry_task_allocator()
+{
+  int ret = OB_SUCCESS;
+  lib::ObMemAttr attr(tls_id_.get_tenant_id(), "LogEntryTaskBas");
+  const int64_t cache_block_count = 4; // nway for vslice_alloc
+
+  if (OB_FAIL(log_entry_task_base_allocator_.init(
+      OB_MALLOC_MIDDLE_BLOCK_SIZE,
+      attr,
+      cache_block_count))) {
+    LOG_ERROR("init log_entry_task_base_allocator_ failed", KR(ret), KPC(this));
+  }
+
+  return ret;
 }
 
 int PartTransTask::push_redo_log(

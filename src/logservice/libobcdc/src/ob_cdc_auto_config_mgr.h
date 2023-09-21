@@ -37,6 +37,8 @@ private:
 private:
   void refresh_factor_(const ObLogConfig &config);
   void init_queue_length_(const ObLogConfig &config);
+  // should invoke after init_queue_length_ to ensure factor_ is valid
+  void init_initial_config_(const ObLogConfig &config);
   void refresh_dynamic_config_(const ObLogConfig &config);
   int64_t get_log2_(int64_t value);
 private:
@@ -52,9 +54,10 @@ private:
 // | factor                            | 11    | 12    | 13    | 14    | 15    | 17    |
 // | auto_queue_length                 | 256   | 512   | 1024  | 2048  | 4096  | 16384 |
 // | br_queue_length                   | 8192  | 16384 | 32768 | 65536 | 10W   | 10W   |
-// | auto_part_trans_task_upper_bound  | 20K   | 22K   | 24K   | 26K   | 28K   | 32K   |
+// | part_trans_task_prealloc_count    | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
+// | auto_part_trans_task_upper_bound  | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
 // | redo_dispatcher_memory_limit      | 32M   | 64M   | 128M  | 256M  | 512M  | 2G    |
-// | extra_redo_dispatch_memory_size   | 1K    | 2M    | 8M    | 24M   | 64M   | 256M  |
+// | extra_redo_dispatch_memory_size   | 1K    | 8M    | 32M   | 96M   | 256M  | 1.5G  |
 // | redo_dispatch_exceed_ratio        | 1     | 1     | 1     | 2     | 4     | 16    |
   int64_t factor_;
 DEFINE_FIELD_WITH_GETTER(int64_t, br_queue_length);
@@ -69,6 +72,9 @@ DEFINE_FIELD_WITH_GETTER(int64_t, msg_sorter_task_count_upper_limit);
 DEFINE_FIELD_WITH_GETTER(int64_t, resource_collector_queue_length);
 DEFINE_FIELD_WITH_GETTER(int64_t, formatter_queue_length);
 DEFINE_FIELD_WITH_GETTER(int64_t, dml_parser_queue_length);
+
+// initial-value can't change after init
+DEFINE_FIELD_WITH_GETTER(int64_t, part_trans_task_prealloc_count);
 
 // flow controll
 DEFINE_FIELD_WITH_GETTER(int64_t, memory_limit);

@@ -190,7 +190,6 @@ private:
 
 private:
   static const int64_t TENANT_TZ_INFO_VALUE_SIZE = sizeof(ObCDCTenantTimeZoneInfo);
-  static const int NWAY = 4;
   static const int MAP_BUCKET_NUM = 4;
 private:
   bool                  inited_;

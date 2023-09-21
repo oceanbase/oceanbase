@@ -546,6 +546,8 @@ int PartTransDispatcher::alloc_task(const PartTransID &part_trans_id, PartTransT
     task->revert();
     task = NULL;
     LOG_ERROR("insert part trans task fail", KR(ret), K(part_trans_id));
+  } else if (OB_FAIL(task->init_log_entry_task_allocator())) {
+    LOG_ERROR("init log_entry_task base allocator failed", KR(ret), KPC(task));
   } else {
     task->set_trans_id(part_trans_id.get_tx_id());
     // This task is only in MAP, not in QUEUE

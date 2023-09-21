@@ -560,12 +560,14 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       LOG_ERROR("check config fail", KR(ret));
     } else if (OB_FAIL(dump_config_())) {
       LOG_ERROR("dump_config_ fail", KR(ret));
-    } else if (OB_FAIL(trans_task_pool_alloc_.init(TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
+    } else if (OB_FAIL(trans_task_pool_alloc_.init(
+        TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
         TASK_POOL_ALLOCATOR_HOLD_LIMIT,
         TASK_POOL_ALLOCATOR_PAGE_SIZE))) {
       LOG_ERROR("init fifo allocator fail", KR(ret));
-    } else if (OB_FAIL(trans_task_pool_.init(&trans_task_pool_alloc_,
-        TCONF.part_trans_task_prealloc_count,
+    } else if (OB_FAIL(trans_task_pool_.init(
+        &trans_task_pool_alloc_,
+        CDC_CFG_MGR.get_part_trans_task_prealloc_count(),
         1 == TCONF.part_trans_task_dynamic_alloc,
         TCONF.part_trans_task_prealloc_page_count))) {
       LOG_ERROR("init task pool fail", KR(ret));
@@ -744,6 +746,13 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     LOG_INFO("set working mode", K(working_mode_str), K(working_mode_), "working_mode", print_working_mode(working_mode_));
   }
 
+  // init ObClockGenerator
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(common::ObClockGenerator::init())) {
+      LOG_ERROR("failed to init ob clock generator", KR(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(! is_refresh_mode_valid(refresh_mode))) {
       ret = OB_INVALID_CONFIG;
@@ -837,13 +846,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_observer_version_valid_())) {
       LOG_ERROR("check_observer_version_valid_ fail", KR(ret));
-    }
-  }
-
-  // init ObClockGenerator
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(common::ObClockGenerator::init())) {
-      LOG_ERROR("failed to init ob clock generator", KR(ret));
     }
   }
 
@@ -2474,6 +2476,7 @@ void ObLogInstance::global_flow_control_()
         bool condition3 = (storager_task_count > storager_task_count_upper_bound) && (memory_hold >= storager_mem_percentage * memory_limit);
 
         need_slow_down_fetcher = (condition1 && (condition2 || need_pause_dispatch || is_seq_queue_not_empty)) || condition3;
+
         if (need_slow_down_fetcher) {
           if (condition2) {
             reason = "MEMORY_LIMIT_AND_REUSABLE_PART_TOO_MUCH";

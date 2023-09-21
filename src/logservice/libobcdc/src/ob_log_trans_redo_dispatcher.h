@@ -104,7 +104,7 @@ private:
   // dispatch redo, part_budget should not be null if dispatch by turn
   int dispatch_redo_(PartTransTask &part_trans, DmlRedoLogNode &redo_node, volatile bool &stop_flag);
   // alloc an ObLogEntryTask as redo_read_task
-  int alloc_task_for_redo_(const PartTransTask &part_task,
+  int alloc_task_for_redo_(PartTransTask &part_task,
       DmlRedoLogNode &redo_node,
       ObLogEntryTask *&log_entry_task);
   // push redo_read_task(ObLogEntryTask) to ObLogRedoReader

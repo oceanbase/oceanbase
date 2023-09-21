@@ -109,7 +109,7 @@ class ObLogTransCtxMgr : public IObLogTransCtxMgr
   };
 
 public:
-  static const int64_t BLOCK_SIZE = 1 << 24;
+  static const int64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE; // 64KB - 128
   static const int64_t PRINT_STATE_INTERVAL = 10 * 1000 * 1000;
   typedef ObEasyHazardMap<TenantTransID, TransCtx> TransCtxMap;
 

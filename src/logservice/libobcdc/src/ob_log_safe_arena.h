@@ -33,6 +33,19 @@ public:
       int64_t ctx_id = 0) :
       arena_(label, page_size, tenant_id, ctx_id),
       lock_() {}
+
+  ObCdcSafeArena(
+    ObIAllocator &base_allocator,
+    const lib::ObLabel &label = ObModIds::OB_MODULE_PAGE_ALLOCATOR,
+    int64_t tenant_id = OB_SERVER_TENANT_ID,
+    const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
+    int64_t ctx_id = 0) :
+    arena_(base_allocator, page_size)
+  {
+    ObMemAttr attr(tenant_id, label, ctx_id);
+    arena_.set_attr(attr);
+  }
+
   virtual ~ObCdcSafeArena() {}
   virtual void *alloc(const int64_t size) override
   {
