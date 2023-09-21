@@ -288,8 +288,10 @@ int ObNLConnectByOp::inner_open()
               true /* enable dump */, 0))) {
       LOG_WARN("init chunk row store failed", K(ret));
     } else {
-      connect_by_pump_.set_allocator(mem_context_->get_malloc_allocator());
-      connect_by_pump_.datum_store_.set_allocator(mem_context_->get_malloc_allocator());
+      ObIAllocator &alloc = mem_context_->get_malloc_allocator();
+      connect_by_pump_.set_allocator(alloc);
+      connect_by_pump_.datum_store_.set_allocator(alloc);
+      connect_by_pump_.pump_stack_.set_block_allocator(ModulePageAllocator(alloc, "CnntArrays"));
     }
   }
   return ret;
