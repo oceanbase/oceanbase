@@ -770,6 +770,8 @@ int ObImportTableTaskScheduler::construct_import_table_schema_(
     } else if (OB_ISNULL(schema)) {
       ret = OB_TABLESPACE_NOT_EXIST;
       LOG_WARN("tablespace must not be null", K(ret), KPC_(import_task));
+    } else if (OB_FAIL(target_table_schema.set_encryption_str(schema->get_encryption_name()))) {
+      LOG_WARN("failed to set encryption str", K(ret));
     } else {
       target_table_schema.set_tablespace_id(schema->get_tablespace_id());
     }

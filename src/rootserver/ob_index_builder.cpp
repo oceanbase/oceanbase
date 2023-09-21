@@ -880,7 +880,9 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
       schema.set_store_format(data_schema.get_store_format());
       schema.set_storage_format_version(data_schema.get_storage_format_version());
       schema.set_tablespace_id(arg.index_schema_.get_tablespace_id());
-      schema.set_encryption_str(arg.index_schema_.get_encryption_str());
+      if (OB_FAIL(schema.set_encryption_str(arg.index_schema_.get_encryption_str()))) {
+        LOG_WARN("fail to set set_encryption_str", K(ret), K(arg));
+      }
 
       if (data_schema.get_max_used_column_id() > schema.get_max_used_column_id()) {
         schema.set_max_used_column_id(data_schema.get_max_used_column_id());
@@ -889,7 +891,8 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
       schema.set_autoinc_column_id(0);
       schema.set_progressive_merge_num(data_schema.get_progressive_merge_num());
       schema.set_progressive_merge_round(data_schema.get_progressive_merge_round());
-      if (OB_FAIL(schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
         LOG_WARN("set_compress_func_name failed", K(data_schema));
       } else if (OB_INVALID_ID != schema.get_tablespace_id()) {
         if (OB_FAIL(schema_guard.get_tablespace_schema(
