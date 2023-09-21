@@ -129,7 +129,11 @@ int ObNLConnectByWithIndexOp::inner_open()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null memory entity returned", K(ret));
     } else {
-      connect_by_pump_.set_allocator(mem_context_->get_malloc_allocator());
+      ObIAllocator &alloc = mem_context_->get_malloc_allocator();
+      connect_by_pump_.set_allocator(alloc);
+      connect_by_pump_.pump_stack_.set_block_allocator(ModulePageAllocator(alloc, "CnntArrays"));
+      connect_by_pump_.path_stack_.set_block_allocator(ModulePageAllocator(alloc, "CnntArrays"));
+      connect_by_pump_.sort_stack_.set_block_allocator(ModulePageAllocator(alloc, "CnntArrays"));
     }
   }
   return ret;
