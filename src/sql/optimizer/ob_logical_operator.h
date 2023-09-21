@@ -829,6 +829,11 @@ public:
     return parent_;
   }
 
+  inline const ObLogicalOperator *get_parent() const
+  {
+    return parent_;
+  }
+
   int get_parent(ObLogicalOperator *root, ObLogicalOperator *&parent);
   /**
    * 目前优化器使用两阶段来生成计划:
@@ -1022,7 +1027,7 @@ public:
     id_ = id;
   }
 
-  inline uint64_t get_op_id() { return op_id_; }
+  inline uint64_t get_op_id() const { return op_id_; }
   inline void set_op_id(uint64_t op_id) { op_id_ = op_id; }
   inline bool is_partition_wise() const { return is_partition_wise_; }
   inline void set_is_partition_wise(bool is_partition_wise)

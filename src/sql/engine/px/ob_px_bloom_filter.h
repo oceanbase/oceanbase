@@ -130,6 +130,8 @@ public:
 DISALLOW_COPY_AND_ASSIGN(ObPxBloomFilter);
 };
 
+class ObLogJoinFilter;
+
 struct ObPxBFStaticInfo
 {
   OB_UNIS_VERSION(1);
@@ -138,12 +140,12 @@ public:
   : is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID),
     filter_id_(common::OB_INVALID_ID), server_id_(common::OB_INVALID_ID),
     is_shared_(false), skip_subpart_(false),
-    p2p_dh_id_(OB_INVALID_ID), is_shuffle_(false)
+    p2p_dh_id_(OB_INVALID_ID), is_shuffle_(false), log_join_filter_create_op_(nullptr)
   {}
   int init(int64_t tenant_id, int64_t filter_id,
            int64_t server_id, bool is_shared,
            bool skip_subpart, int64_t p2p_dh_id,
-           bool is_shuffle);
+           bool is_shuffle, ObLogJoinFilter *log_join_filter_create_op);
   bool is_inited_;
   int64_t tenant_id_;
   int64_t filter_id_;
@@ -155,6 +157,7 @@ public:
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(filter_id_),
               K(server_id_), K(is_shared_), K(skip_subpart_),
               K(is_shuffle_), K(p2p_dh_id_));
+  ObLogJoinFilter *log_join_filter_create_op_; // not need to serialize, only used in optimizor
 };
 
 class ObPXBloomFilterHashWrapper

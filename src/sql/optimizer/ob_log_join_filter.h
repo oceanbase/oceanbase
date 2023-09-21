@@ -30,8 +30,9 @@ public:
   ObLogJoinFilter(ObLogPlan &plan) :
   ObLogicalOperator(plan), is_create_(false),
       filter_id_(common::OB_INVALID_ID),
-      filter_len_(0), join_exprs_(),
-      is_use_filter_shuffle_(false),
+      filter_len_(0), paired_join_filter_(nullptr),
+      join_exprs_(), is_use_filter_shuffle_(false),
+      join_filter_cmp_funcs_(),
       join_filter_exprs_(),
       join_filter_types_(),
       p2p_sequence_ids_(),
@@ -60,6 +61,8 @@ public:
     }
   }
   inline int64_t get_filter_length() const { return filter_len_; }
+  inline void set_paired_join_filter(ObLogicalOperator *paired_join_filter) { paired_join_filter_ = paired_join_filter; }
+  inline ObLogicalOperator *get_paired_join_filter() const { return paired_join_filter_; }
   inline void set_is_use_filter_shuffle(bool flag) { is_use_filter_shuffle_ = flag; }
   inline bool is_use_filter_shuffle() { return is_use_filter_shuffle_; }
   inline bool is_partition_filter() const
@@ -109,6 +112,9 @@ private:
   bool is_create_;   //判断是否是create算子
   int64_t filter_id_; //设置filter_id
   int64_t filter_len_; //设置filter长度
+  // if this is a join filter create op, the paired_join_filter_ is join filter use op, vice versa
+  // if this is a partition join filter create op, the paired_join_filter_ is partition filter gi
+  ObLogicalOperator *paired_join_filter_;
   //equal join condition expr
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_exprs_;
   bool is_use_filter_shuffle_; // 标记use端filter是否有shuffle

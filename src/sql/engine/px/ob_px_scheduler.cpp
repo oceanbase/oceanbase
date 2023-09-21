@@ -727,11 +727,20 @@ int RuntimeFilterDependencyInfo::describe_dependency(ObDfo *root_dfo)
   for (int64_t i = 0; i < rf_create_ops_.count() && OB_SUCC(ret); ++i) {
     const ObJoinFilterSpec *create_op = static_cast<const ObJoinFilterSpec *>(rf_create_ops_.at(i));
     for (int64_t j = 0; j < rf_use_ops_.count() && OB_SUCC(ret); ++j) {
-      const ObJoinFilterSpec *use_op = static_cast<const ObJoinFilterSpec *>(rf_use_ops_.at(j));
-      if (create_op->get_filter_id() == use_op->get_filter_id()) {
+      int64_t use_filter_id = common::OB_INVALID_ID;
+      if (IS_PX_GI(rf_use_ops_.at(j)->get_type())) {
+        const ObGranuleIteratorSpec *use_op =
+            static_cast<const ObGranuleIteratorSpec *>(rf_use_ops_.at(j));
+        use_filter_id = use_op->bf_info_.filter_id_;
+      } else {
+        const ObJoinFilterSpec *use_op = static_cast<const ObJoinFilterSpec *>(rf_use_ops_.at(j));
+        use_filter_id = use_op->get_filter_id();
+      }
+      if (create_op->get_filter_id() == use_filter_id) {
         const ObOpSpec *ancestor_op = nullptr;
         ObDfo *op_dfo = nullptr;;
-        if (OB_FAIL(LowestCommonAncestorFinder::find_op_common_ancestor(create_op, use_op, ancestor_op))) {
+        if (OB_FAIL(LowestCommonAncestorFinder::find_op_common_ancestor(
+            create_op, rf_use_ops_.at(j), ancestor_op))) {
           LOG_WARN("failed to find op common ancestor");
         } else if (OB_ISNULL(ancestor_op)) {
           ret = OB_ERR_UNEXPECTED;

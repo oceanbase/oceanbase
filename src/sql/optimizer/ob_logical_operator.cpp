@@ -4034,6 +4034,8 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         } else {
           gi_op->set_tablet_id_expr(tablet_id_expr);
           gi_op->set_join_filter_info(table_scan->get_join_filter_info());
+          ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
+          jf_create_op->set_paired_join_filter(gi_op);
           gi_op->add_flag(GI_USE_PARTITION_FILTER);
         }
       } else if (LOG_GROUP_BY == get_type()) {
@@ -4768,7 +4770,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
           join_filter_create->is_shared_join_filter(),
           info.skip_subpart_,
           join_filter_create->get_p2p_sequence_ids().at(0),
-          right_has_exchange));
+          right_has_exchange, join_filter_create));
       scan_op->set_join_filter_info(bf_info);
       scan_op->set_part_join_filter_created(true);
       filter_id++;
@@ -4821,6 +4823,8 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       } else {
         join_filter_create = static_cast<ObLogJoinFilter *>(filter_create);
         join_filter_use = static_cast<ObLogJoinFilter *>(filter_use);
+        join_filter_create->set_paired_join_filter(join_filter_use);
+        join_filter_use->set_paired_join_filter(join_filter_create);
         join_filter_create->set_is_create_filter(true);
         join_filter_use->set_is_create_filter(false);
         join_filter_create->set_filter_id(filter_id);
