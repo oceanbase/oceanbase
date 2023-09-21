@@ -1903,7 +1903,7 @@ int ObTransferHandler::do_with_aborted_status_(
   if (OB_FAIL(ret)) {
     if (can_retry_(task_info, ret)) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
         if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, tmp_round, task_info))) {
           LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(retry_count_), K(task_info));
         }
