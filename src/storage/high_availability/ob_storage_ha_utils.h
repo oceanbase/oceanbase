@@ -45,6 +45,7 @@ public:
   static int get_readable_scn_with_retry(share::SCN &readable_scn);
   static int64_t get_rpc_timeout();
   static int check_is_primary_tenant(const uint64_t tenant_id, bool &is_primary_tenant);
+  static int check_disk_space();
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
