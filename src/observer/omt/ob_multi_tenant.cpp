@@ -2269,7 +2269,7 @@ void ObMultiTenant::run1()
     }
     ob_usleep(TIME_SLICE_PERIOD);
 
-    if (REACH_TIME_INTERVAL(30000000L)) {  // every 30s
+    if (REACH_TIME_INTERVAL(10000000L)) {  // every 10s
       SpinRLockGuard guard(lock_);
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (!OB_ISNULL(*it)) {

@@ -1304,12 +1304,13 @@ void ObGarbageCollector::run1()
         (void)execute_gc_(gc_candidates);
         seq_++;
       }
-      // safe destroy task
-      (void) safe_destroy_handler_.handle();
     } else {
       CLOG_LOG(INFO, "Garbage Collector is not running, waiting for ObServerCheckpointSlogHandler",
                K(seq_), K(gc_interval));
     }
+    // safe destroy handler keep running even if ObServerCheckpointSlogHandler is not started,
+    // because ls still need to be safe destroy when observer fail to start.
+    (void) safe_destroy_handler_.handle();
     ob_usleep(gc_interval);
   }
 }
