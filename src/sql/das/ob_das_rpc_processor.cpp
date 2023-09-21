@@ -119,6 +119,10 @@ int ObDASBaseAccessP<pcode>::process()
           (void)task_resp.store_warning_msg(*wb);
         }
       }
+      if (OB_FAIL(ret) && OB_NOT_NULL(op_result)) {
+        // accessing failed das task result is undefined behavior.
+        op_result->reuse();
+      }
       //因为end_task还有可能失败，需要通过RPC将end_task的返回值带回到scheduler上
       int tmp_ret = task_op->end_das_task();
       if (OB_SUCCESS != tmp_ret) {
