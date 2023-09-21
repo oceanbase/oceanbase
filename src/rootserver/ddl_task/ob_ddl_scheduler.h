@@ -65,6 +65,8 @@ public:
   int modify_task(const ObDDLTaskKey &task_key, F &&op);
   template<typename F>
   int modify_task(const ObDDLTaskID &task_id, F &&op);
+  template<typename F>
+  int get_task(const ObDDLTaskKey &task_key, F &&op);
   int update_task_copy_deps_setting(const ObDDLTaskID &task_id,
                                     const bool is_copy_constraints,
                                     const bool is_copy_indexes,
@@ -72,6 +74,7 @@ public:
                                     const bool is_copy_foreign_keys,
                                     const bool is_ignore_errors);
   int update_task_process_schedulable(const ObDDLTaskID &task_id);
+  int update_task_ret_code(const ObDDLTaskID &task_id, const int ret_code);
   int abort_task(const ObDDLTaskID &task_id);
   int64_t get_task_cnt() const { return task_list_.get_size(); }
   void destroy();
@@ -198,6 +201,21 @@ public:
   virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) override;
   virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
                                       ObDDLTaskQueue &ddl_task_queue) override;
+};
+
+class ObUpdateSSTableCompleteStatusCallback : public ObRedefCallback
+{
+public:
+  ObUpdateSSTableCompleteStatusCallback()
+    : ret_code_(OB_SUCCESS)
+  {}
+  ~ObUpdateSSTableCompleteStatusCallback() = default;
+  virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) override;
+  virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
+                                      ObDDLTaskQueue &ddl_task_queue) override;
+  int set_ret_code(const int ret_code);
+private:
+  int ret_code_;
 };
 
 /*
