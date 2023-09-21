@@ -21,6 +21,7 @@
 #include "observer/ob_server_struct.h"
 #include "logservice/leader_coordinator/ob_failure_detector.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data.h"
+#include "logservice/ob_garbage_collector.h"
 
 namespace oceanbase
 {
@@ -319,12 +320,12 @@ bool LockForReadFunctor::recheck()
 int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
 {
   int ret = OB_ERR_SHARED_LOCK_CONFLICT;
+  const int64_t MAX_RETRY_CNT = 1000;
   const int64_t MAX_SLEEP_US = 1000;
   ObMvccAccessCtx &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
   int64_t lock_expire_ts = acc_ctx.eval_lock_expire_ts();
-  // check lock_for_read blocked or not every 1ms * 100 = 100ms
+  // check lock_for_read blocked or not every 1ms * 1000 = 1s
   int64_t retry_cnt = 0;
-  const int64_t MAX_RETRY_CNT = 100;
 
   const int32_t state = ATOMIC_LOAD(&tx_data.state_);
 
@@ -352,12 +353,44 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
           ob_usleep((i < MAX_SLEEP_US ? i : MAX_SLEEP_US));
         }
         if (retry_cnt == MAX_RETRY_CNT) {
-          retry_cnt = 0;
-          logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
+          int tmp_ret = OB_SUCCESS;
+
+          // Opt1: Check the failure detector for clog disk full
+          logservice::coordinator::ObFailureDetector *detector =
+            MTL(logservice::coordinator::ObFailureDetector *);
           if (NULL != detector && detector->is_clog_disk_has_fatal_error()) {
             ret = OB_IO_ERROR;
             TRANS_LOG(ERROR, "unexpected io error", K(ret), K(tx_data), KPC(tx_cc_ctx), KPC(this));
           }
+
+          // Opt2: Check the gc handler for log sync status
+          logservice::ObGCHandler *gc_handler = NULL;
+          ObLSService *ls_service = MTL(ObLSService *);
+          ObLSHandle ls_handle;
+          ObLS *ls = NULL;
+          if (OB_FAIL(ret)) {
+            // pass
+          } else if (NULL == ls_service) {
+            tmp_ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(ERROR, "fail to get ls service", K(tmp_ret), KPC(this));
+          } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id_,
+                                                    ls_handle,
+                                                    ObLSGetMod::TRANS_MOD))) {
+            TRANS_LOG(WARN, "fail to get ls handle", K(tmp_ret), KPC(this));
+          } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+            tmp_ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "ls not exist", K(tmp_ret), KPC(this));
+          } else if (OB_ISNULL(gc_handler = ls->get_gc_handler())) {
+            tmp_ret = OB_ERR_UNEXPECTED;
+            CLOG_LOG(ERROR, "gc_handler is NULL", K(tmp_ret), KPC(this));
+          } else if (gc_handler->is_log_sync_stopped()) {
+            ret = OB_REPLICA_NOT_READABLE;
+            TRANS_LOG(WARN, "log sync has been stopped, so we need giveup retry",
+                      K(ret), KPC(this));
+          }
+
+          // reset the counter
+          retry_cnt = 0;
         }
       }
     }
