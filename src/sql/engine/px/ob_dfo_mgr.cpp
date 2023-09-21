@@ -518,6 +518,8 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
           gi_spec->bf_info_.p2p_dh_id_,
           node))) {
         LOG_WARN("fail to set p2p dh id to map", K(ret));
+      } else if (OB_FAIL(px_coord_info.rf_dpd_info_.rf_use_ops_.push_back(phy_op))) {
+        LOG_WARN("failed to push back parition filter gi op");
       } else {
         parent_dfo->set_need_p2p_info(true);
       }

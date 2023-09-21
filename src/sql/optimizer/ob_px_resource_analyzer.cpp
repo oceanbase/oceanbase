@@ -72,6 +72,42 @@ int SchedOrderGenerator::generate(
 // ===================================================================================
 
 
+int LogRuntimeFilterDependencyInfo::describe_dependency(DfoInfo *root_dfo)
+{
+  int ret = OB_SUCCESS;
+  // for each rf create op, find its pair rf use op,
+  // then get the lowest common ancestor of them, mark force_bushy of the dfo which the ancestor belongs to.
+  for (int64_t i = 0; i < rf_create_ops_.count() && OB_SUCC(ret); ++i) {
+    const ObLogJoinFilter *create_op = static_cast<const ObLogJoinFilter *>(rf_create_ops_.at(i));
+    const ObLogicalOperator *use_op = create_op->get_paired_join_filter();
+    if (OB_ISNULL(use_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("use_op is null");
+    } else {
+      const ObLogicalOperator *ancestor_op = nullptr;
+      DfoInfo *op_dfo = nullptr;;
+      if (OB_FAIL(LogLowestCommonAncestorFinder::find_op_common_ancestor(create_op, use_op, ancestor_op))) {
+        LOG_WARN("failed to find op common ancestor");
+      } else if (OB_ISNULL(ancestor_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("op common ancestor not found");
+      } else if (OB_FAIL(LogLowestCommonAncestorFinder::get_op_dfo(ancestor_op, root_dfo, op_dfo))) {
+        LOG_WARN("failed to find op common ancestor");
+      } else if (OB_ISNULL(op_dfo)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the dfo of ancestor_op not found");
+      } else {
+        // Once the DFO which the ancestor belongs to has set the flag "force_bushy",
+        // the DfoTreeNormalizer will not attempt to transform a right-deep DFO tree
+        // into a left-deep DFO tree. Consequently, the "join filter create" operator
+        // can be scheduled earlier than the "join filter use" operator.
+        op_dfo->set_force_bushy(true);
+      }
+    }
+  }
+  return ret;
+}
+
 
 int DfoInfo::add_child(DfoInfo *child)
 {
@@ -255,20 +291,17 @@ int ObPxResourceAnalyzer::do_split(
       LOG_WARN("fail create qc for rescan op", K(ret));
     }
   } else {
-    if (OB_SUCC(ret)) {
-      if (log_op_def::LOG_JOIN_FILTER == root_op.get_type()) {
-        if (OB_NOT_NULL(parent_dfo)) {
-          ObLogJoinFilter &log_join_filter = static_cast<ObLogJoinFilter &>(root_op);
-          if (log_join_filter.is_create_filter() && !parent_dfo->force_bushy()) {
-            parent_dfo->force_bushy_ = true;
-          }
-        }
+    if (OB_FAIL(ret)) {
+    } else if (log_op_def::LOG_JOIN_FILTER == root_op.get_type()) {
+      ObLogJoinFilter &log_join_filter = static_cast<ObLogJoinFilter &>(root_op);
+      if (log_join_filter.is_create_filter()
+          && OB_FAIL(px_info.rf_dpd_info_.rf_create_ops_.push_back(&root_op))) {
+        LOG_WARN("failed to push_back log join filter create", K(ret));
       }
-    }
-    if (log_op_def::LOG_EXCHANGE == root_op.get_type() &&
-        static_cast<const ObLogExchange&>(root_op).is_px_producer()) {
+    } else if (log_op_def::LOG_EXCHANGE == root_op.get_type()
+               && static_cast<const ObLogExchange &>(root_op).is_px_producer()) {
       DfoInfo *dfo = nullptr;
-      if (OB_FAIL(create_dfo(dfo,  static_cast<const ObLogExchange&>(root_op).get_parallel()))) {
+      if (OB_FAIL(create_dfo(dfo, root_op))) {
         LOG_WARN("fail create dfo", K(ret));
       } else {
         if (OB_FAIL(dfo->location_addr_.create(hash::cal_next_prime(10), "PxResourceBucket", "PxResourceNode"))) {
@@ -324,9 +357,10 @@ int ObPxResourceAnalyzer::do_split(
   return ret;
 }
 
-int ObPxResourceAnalyzer::create_dfo(DfoInfo *&dfo, int64_t dop)
+int ObPxResourceAnalyzer::create_dfo(DfoInfo *&dfo, ObLogicalOperator &root_op)
 {
   int ret = OB_SUCCESS;
+  int64_t dop = static_cast<const ObLogExchange&>(root_op).get_parallel();
   void *mem_ptr = dfo_allocator_.alloc(sizeof(DfoInfo));
   if (OB_ISNULL(mem_ptr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -335,6 +369,7 @@ int ObPxResourceAnalyzer::create_dfo(DfoInfo *&dfo, int64_t dop)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Null ptr unexpected", KP(mem_ptr), K(ret));
   } else {
+    dfo->set_root_op(&root_op);
     dfo->set_dop(dop);
   }
   return ret;
@@ -428,7 +463,9 @@ int ObPxResourceAnalyzer::walk_through_px_trees(
     int64_t group_count = 0;
     thread_map.clear();
     group_map.clear();
-    if (OB_FAIL(walk_through_dfo_tree(px_info, thread_count, group_count, thread_map, group_map))) {
+    if (OB_FAIL(px_info.rf_dpd_info_.describe_dependency(px_info.root_dfo_))) {
+      LOG_WARN("failed to describe dependency");
+    } else if (OB_FAIL(walk_through_dfo_tree(px_info, thread_count, group_count, thread_map, group_map))) {
       LOG_WARN("fail calc px thread group count", K(i), "total", px_trees.count(), K(ret));
     } else if (OB_ISNULL(px_info.root_op_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -711,6 +748,82 @@ int ObPxResourceAnalyzer::update_max_thead_group_info(
       OB_SUCC(ret) && it != current_group_map.end(); ++it) {
     if (OB_FAIL(update_parallel_map_one_addr(max_parallel_group_map, it->first, it->second, false))) {
       LOG_WARN("update parallel map one addr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int LogLowestCommonAncestorFinder::find_op_common_ancestor(
+    const ObLogicalOperator *left, const ObLogicalOperator *right, const ObLogicalOperator *&ancestor)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObLogicalOperator *, 32> ancestors;
+
+  const ObLogicalOperator *parent = left;
+  while (OB_NOT_NULL(parent) && OB_SUCC(ret)) {
+    if (OB_FAIL(ancestors.push_back(parent))) {
+      LOG_WARN("failed to push back");
+    } else {
+      parent = parent->get_parent();
+    }
+  }
+
+  parent = right;
+  bool find = false;
+  while (OB_NOT_NULL(parent) && OB_SUCC(ret) && !find) {
+    for (int64_t i = 0; i < ancestors.count() && OB_SUCC(ret); ++i) {
+      if (parent == ancestors.at(i)) {
+        find = true;
+        ancestor = parent;
+        break;
+      }
+    }
+    parent = parent->get_parent();
+  }
+  return ret;
+}
+int LogLowestCommonAncestorFinder::get_op_dfo(const ObLogicalOperator *op, DfoInfo *root_dfo, DfoInfo *&op_dfo)
+{
+  int ret = OB_SUCCESS;
+  const ObLogicalOperator *parent = op;
+  const ObLogicalOperator *dfo_root_op = nullptr;
+  while (OB_NOT_NULL(parent) && OB_SUCC(ret)) {
+    if (log_op_def::LOG_EXCHANGE == parent->get_type() &&
+        static_cast<const ObLogExchange&>(*parent).is_px_producer()) {
+      dfo_root_op = parent;
+      break;
+    } else {
+      parent = parent->get_parent();
+    }
+  }
+  DfoInfo *dfo = nullptr;
+  bool find = false;
+
+  ObSEArray<DfoInfo *, 16> dfo_queue;
+  int64_t cur_que_front = 0;
+  if (OB_FAIL(dfo_queue.push_back(root_dfo))) {
+    LOG_WARN("failed to push back");
+  }
+
+  while (cur_que_front < dfo_queue.count() && !find && OB_SUCC(ret)) {
+    int64_t cur_que_size = dfo_queue.count() - cur_que_front;
+    for (int64_t i = 0; i < cur_que_size && OB_SUCC(ret); ++i) {
+      dfo = dfo_queue.at(cur_que_front);
+      if (dfo->get_root_op() == dfo_root_op) {
+        op_dfo = dfo;
+        find = true;
+        break;
+      } else {
+        // push child into the queue
+        for (int64_t child_idx = 0; OB_SUCC(ret) && child_idx < dfo->get_child_count(); ++child_idx) {
+          if (OB_FAIL(dfo_queue.push_back(dfo->child_dfos_.at(child_idx)))) {
+            LOG_WARN("failed to push back child dfo");
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        cur_que_front++;
+      }
     }
   }
   return ret;

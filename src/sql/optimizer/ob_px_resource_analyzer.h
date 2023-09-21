@@ -43,7 +43,8 @@ struct DfoInfo {
     status_(DfoStatus::INIT),
     dop_(0),
     location_addr_(),
-    force_bushy_(false)
+    force_bushy_(false),
+    root_op_(nullptr)
   {}
   DfoInfo *parent_;
   DfoInfo *depend_sibling_;
@@ -52,6 +53,7 @@ struct DfoInfo {
   int64_t dop_;
   ObHashSet<ObAddr> location_addr_;
   bool force_bushy_;
+  ObLogicalOperator *root_op_;
 
   void reset()
   {
@@ -61,7 +63,11 @@ struct DfoInfo {
     child_dfos_.reset();
     location_addr_.destroy();
   }
-  bool force_bushy() { return force_bushy_; }
+
+  inline void set_root_op(ObLogicalOperator *root_op) { root_op_ = root_op;}
+  inline ObLogicalOperator *get_root_op() { return root_op_;}
+  inline void set_force_bushy(bool flag) { force_bushy_ = flag; }
+  inline bool force_bushy() { return force_bushy_; }
   bool has_sibling() const { return nullptr != depend_sibling_; }
   void set_depend_sibling(DfoInfo *sibling) { depend_sibling_ = sibling; }
   inline bool has_child() const { return child_dfos_.count() > 0; }
@@ -96,12 +102,30 @@ struct DfoInfo {
   TO_STRING_KV(K_(status), K_(dop));
 };
 
+struct LogRuntimeFilterDependencyInfo
+{
+public:
+  LogRuntimeFilterDependencyInfo() : rf_create_ops_() {}
+  ~LogRuntimeFilterDependencyInfo() = default;
+  void destroy()
+  {
+    rf_create_ops_.reset();
+  }
+  inline bool is_empty() const {
+    return rf_create_ops_.empty();
+  }
+  int describe_dependency(DfoInfo *root_dfo);
+public:
+  ObTMArray<const ObLogicalOperator *> rf_create_ops_;
+};
+
 class ObLogExchange;
 struct PxInfo {
   PxInfo() : root_op_(nullptr), root_dfo_(nullptr), threads_(0),
-             acc_threads_(0) {}
+             acc_threads_(0), rf_dpd_info_() {}
   PxInfo(ObLogExchange *root_op, DfoInfo *root_dfo)
-      : root_op_(root_op), root_dfo_(root_dfo), threads_(0), acc_threads_(0) {}
+      : root_op_(root_op), root_dfo_(root_dfo), threads_(0), acc_threads_(0), rf_dpd_info_()
+  {}
   void reset_dfo()
   {
     if (OB_NOT_NULL(root_dfo_)) {
@@ -113,6 +137,7 @@ struct PxInfo {
   DfoInfo *root_dfo_;
   int64_t threads_; // 记录当前 PX 需要的线程组数
   int64_t acc_threads_; // 记录当前 PX 计划以及它下面的嵌套 PX 计划线程组数之和
+  LogRuntimeFilterDependencyInfo rf_dpd_info_;
   TO_STRING_KV(K_(threads), K_(acc_threads));
 };
 
@@ -159,6 +184,7 @@ private:
       ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
       ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
   int create_dfo(DfoInfo *&dfo, int64_t dop);
+  int create_dfo(DfoInfo *&dfo, ObLogicalOperator &root_op);
   int get_dfo_addr_set(const ObLogicalOperator &root_op, ObHashSet<ObAddr> &addr_set);
   int px_tree_append(ObHashMap<ObAddr, int64_t> &max_parallel_count,
                      ObHashMap<ObAddr, int64_t> &parallel_count);
@@ -279,6 +305,15 @@ int DfoTreeNormalizer<T>::normalize(T &root)
   }
   return ret;
 }
+
+class LogLowestCommonAncestorFinder
+{
+public:
+  // for optimizer
+  static int find_op_common_ancestor(
+      const ObLogicalOperator *left, const ObLogicalOperator *right, const ObLogicalOperator *&ancestor);
+  static int get_op_dfo(const ObLogicalOperator *op, DfoInfo *root_dfo, DfoInfo *&op_dfo);
+};
 
 }/* ns sql */
 }/* ns oceanbase */

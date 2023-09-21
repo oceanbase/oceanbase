@@ -482,7 +482,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxBloomFilter)
 int ObPxBFStaticInfo::init(int64_t tenant_id, int64_t filter_id,
     int64_t server_id, bool is_shared,
     bool skip_subpart, int64_t p2p_dh_id,
-    bool is_shuffle)
+    bool is_shuffle, ObLogJoinFilter *log_join_filter_create_op)
 {
   int ret = OB_SUCCESS;
   if (is_inited_){
@@ -496,6 +496,7 @@ int ObPxBFStaticInfo::init(int64_t tenant_id, int64_t filter_id,
     skip_subpart_ = skip_subpart;
     p2p_dh_id_ = p2p_dh_id;
     is_shuffle_ = is_shuffle;
+    log_join_filter_create_op_ = log_join_filter_create_op;
     is_inited_ = true;
   }
   return ret;
