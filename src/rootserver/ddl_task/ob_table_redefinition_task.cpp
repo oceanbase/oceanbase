@@ -781,8 +781,6 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   const ObTableSchema *table_schema = nullptr;
   bool use_heap_table_ddl_plan = false;
   ObDDLTaskStatus new_status = next_task_status;
-  // FIXME YIREN, recover restore table ddl need to sync stats.
-  const bool need_sync_stats = DDL_TABLE_RESTORE != task_type_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -814,7 +812,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     } else {
       LOG_WARN("sync auto increment position failed", K(ret), K(object_id_), K(target_object_id_));
     }
-  } else if (need_sync_stats && OB_FAIL(sync_stats_info())) {
+  } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
   } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(dst_tenant_id_, target_object_id_, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));

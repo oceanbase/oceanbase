@@ -160,7 +160,6 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
                  OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
         LOG_WARN("failed to set dblink connection to session", K(in_xa_trascaction_), K(my_session), K(sessid_), K(ret));
       } else {
-        in_xa_trascaction_ = true; //to tell link scan op don't release dblink_conn_
         LOG_TRACE("link op get connection from dblink pool", K(in_xa_trascaction_), KP(dblink_conn_), K(lbt()));
       }
     } else {
@@ -253,10 +252,15 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       obj_print_params.need_cast_expr_ = true;
       obj_print_params.print_const_expr_type_ = true;
       while (OB_SUCC(ret) && link_stmt_pos == saved_stmt_pos) {
+        if (128 > (stmt_buf_len_ - link_stmt_pos) && // ensure all params has sufficient mem to print as literal sql, avoiding lose precision
+             OB_FAIL(extend_stmt_buf())) {
+          LOG_WARN("failed to extend stmt buf", K(ret));
+        }
         //Previously, the format parameter of the print sql literal function was NULL.
         //In the procedure scenario, when dblink reverse spell trunc(date type), it will treat the date type as a string,
         //so correct formatting parameter obj_print_params need to be given.
-        if (OB_FAIL(param.print_sql_literal(stmt_buf_, stmt_buf_len_, link_stmt_pos, obj_print_params))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(param.print_sql_literal(stmt_buf_, stmt_buf_len_, link_stmt_pos, obj_print_params))) {
           if (ret == OB_SIZE_OVERFLOW) {
             ret = OB_SUCCESS;
             if (OB_FAIL(extend_stmt_buf())) {
@@ -287,9 +291,15 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
   } else if (link_stmt_pos >= stmt_buf_len_ && OB_FAIL(extend_stmt_buf(link_stmt_pos + 1))) {
       LOG_WARN("failed to extend stmt buf", K(ret), K(link_stmt_pos), K(stmt_buf_len_));
   } else {
-    stmt_buf_[link_stmt_pos++] = 0;
-    LOG_DEBUG("succ to combine link sql", K(stmt_buf_), K(link_stmt_pos));
-    if (DBLINK_DRV_OB == link_type_) {
+    if (link_stmt_pos + 1 >= stmt_buf_len_ && OB_FAIL(extend_stmt_buf())) {
+      LOG_WARN("failed to extend stmt buf", K(ret));
+    } else {
+      stmt_buf_[link_stmt_pos++] = 0;
+      LOG_DEBUG("succ to combine link sql", K(stmt_buf_), K(link_stmt_pos));
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (DBLINK_DRV_OB == link_type_) {
       snprintf(stmt_buf_, head_comment_length_, head_comment_fmt_, next_sql_req_level_);
       // after snprint only head_comment_length_ - 1 byte was printed by head comment
       // pos of head_comment_length_ - 1 is '\0', need filled as ' '
@@ -315,8 +325,8 @@ int ObLinkOp::extend_stmt_buf(int64_t need_size)
 {
   int ret = OB_SUCCESS;
   int64_t alloc_size = (need_size > stmt_buf_len_) ?
-                         (need_size / STMT_BUF_BLOCK + 1) * STMT_BUF_BLOCK :
-                         stmt_buf_len_ + STMT_BUF_BLOCK;
+                        (need_size / STMT_BUF_BLOCK + 1) * STMT_BUF_BLOCK :
+                        stmt_buf_len_ + STMT_BUF_BLOCK;
   char *alloc_buf = static_cast<char *>(allocator_.alloc(alloc_size));
   if (OB_ISNULL(alloc_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
