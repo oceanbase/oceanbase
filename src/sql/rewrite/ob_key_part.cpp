@@ -930,7 +930,7 @@ int ObInKeyPart::remove_in_dup_vals()
   return ret;
 }
 
-// TODO: can be optimized by hash join algorithm, see ObKeyPart::intersect_two_in_keys, @zhenglailei.zll
+// TODO: can be optimized by hash join algorithm, see ObKeyPart::intersect_two_in_keys
 int ObKeyPart::union_in_dup_vals(ObKeyPart *other, bool &is_unioned)
 {
   int ret = OB_SUCCESS;
