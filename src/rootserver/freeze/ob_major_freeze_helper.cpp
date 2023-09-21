@@ -113,8 +113,8 @@ int ObMajorFreezeHelper::get_freeze_info(
         }
       }
       // Skip major freeze for standby tenants and thus avoid OB_MAJOR_FREEZE_NOT_ALLOW incurred by
-      // standby tenants, only when launching major freeze on more than one tenant or all_user.
-      else if (tenant_info.is_standby() && ((info_cnt > 1) || param.freeze_all_user_)) {
+      // standby tenants, only when launching major freeze on more than one tenant or all_user or all.
+      else if (tenant_info.is_standby() && ((info_cnt > 1) || param.freeze_all_user_ || param.freeze_all_)) {
         LOG_INFO("skip major freeze for standby tenant", K(tenant_info));
         const char *warn_buf = "standby tenant sync freeze info from primary tenant, not allowed to launch major freeze";
         int tmp_ret = OB_SUCCESS;
