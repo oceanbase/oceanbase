@@ -4330,9 +4330,12 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     plan_added = (OB_SUCCESS == ret);
 
     if (is_batch_exec) {
-      // 只有完整的插入了计划，才做batch优化执行，否则都认为需要回退成单行逐行执行
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to add batch_execute_plan", K(ret));
+      // Batch optimization cannot continue for errors other than OB_SQL_PC_PLAN_DUPLICATE.
+      if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("this plan has been added by others, need not add again", K(phy_plan));
+      } else if (OB_FAIL(ret)) {
+        LOG_WARN("some unexpected error occured", K(ret));
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
       } else {
         pc_ctx.sql_ctx_.self_add_plan_ = true;

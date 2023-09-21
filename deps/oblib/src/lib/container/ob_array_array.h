@@ -204,7 +204,7 @@ int ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reserv
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(capacity <= 0)) {
+  if (OB_UNLIKELY(capacity < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument to reserve array array", K(ret), K(capacity));
   } else if (capacity <= capacity_) {
