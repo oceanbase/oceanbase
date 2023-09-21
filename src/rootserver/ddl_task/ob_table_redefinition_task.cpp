@@ -189,6 +189,7 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
       case ObDDLType::DDL_DIRECT_LOAD:
       case ObDDLType::DDL_DIRECT_LOAD_INSERT: {
         complete_sstable_job_ret_code_ = ret_code;
+        ret_code_ = ret_code;
         LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
         break;
       }

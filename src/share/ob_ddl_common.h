@@ -220,6 +220,11 @@ static inline bool is_long_running_ddl(const ObDDLType type)
   return is_simple_table_long_running_ddl(type) || is_double_table_long_running_ddl(type);
 }
 
+static inline bool is_direct_load_task(const ObDDLType type)
+{
+  return DDL_DIRECT_LOAD == type || DDL_DIRECT_LOAD_INSERT == type;
+}
+
 static inline bool is_invalid_ddl_type(const ObDDLType type)
 {
   return DDL_INVALID == type;
