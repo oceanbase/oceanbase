@@ -2033,7 +2033,7 @@ int ObDDLRedefinitionTask::get_child_task_ids(char *buf, int64_t len)
 }
 
 ObSyncTabletAutoincSeqCtx::ObSyncTabletAutoincSeqCtx()
-  : is_inited_(false), is_synced_(false), src_tenant_id_(OB_INVALID_ID), dst_tenant_id_(OB_INVALID_ID), orig_src_tablet_ids_(),
+  : is_inited_(false), is_synced_(false), need_renew_location_(false), src_tenant_id_(OB_INVALID_ID), dst_tenant_id_(OB_INVALID_ID), orig_src_tablet_ids_(),
     src_tablet_ids_(), dest_tablet_ids_(), autoinc_params_()
 {}
 
@@ -2093,6 +2093,9 @@ int ObSyncTabletAutoincSeqCtx::sync()
         is_synced_ = true;
       }
     }
+  }
+  if (OB_LS_NOT_EXIST == ret || is_location_service_renew_error(ret)) {
+    need_renew_location_ = true;
   }
   return ret;
 }
@@ -2180,7 +2183,7 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
                                                          target_tenant_id,
                                                          tmp_autoinc_params,
                                                          rpc_timeout,
-                                                         force_renew,
+                                                         need_renew_location_,
                                                          true/*by src tablet*/,
                                                          ls_to_tablet_map))) {
         LOG_WARN("failed to build ls to tabmap", K(ret));
@@ -2190,7 +2193,7 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
                                          target_tenant_id,
                                          autoinc_params_,
                                          rpc_timeout,
-                                         force_renew,
+                                         need_renew_location_,
                                          false/*by src tablet*/,
                                          ls_to_tablet_map))) {
         LOG_WARN("failed to build ls to tabmap", K(ret));
