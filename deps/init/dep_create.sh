@@ -70,6 +70,10 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+      almalinux)
+        version_ge "9.0" && compat_centos9 && return
+        version_ge "8.0" && compat_centos8 && return
+        ;;
       debian)
         version_ge "9" && compat_centos7 && return
         ;;
