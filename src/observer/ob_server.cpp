@@ -880,10 +880,10 @@ int ObServer::start()
       FLOG_INFO("success to start log pool");
     }
 
-    if (FAILEDx(try_create_hidden_sys())) {
-      LOG_ERROR("fail to create hidden sys tenant", KR(ret));
+    if (FAILEDx(try_update_hidden_sys())) {
+      LOG_ERROR("fail to update hidden sys tenant", KR(ret));
     } else {
-      FLOG_INFO("success to create hidden sys tenant");
+      FLOG_INFO("success to update hidden sys tenant");
     }
 
     if (FAILEDx(weak_read_service_.start())) {
@@ -1088,12 +1088,24 @@ int ObServer::start()
 }
 
 // try create hidden sys tenant must after ObServerCheckpointSlogHandler start,
-// no need create if real sys has been replayed out from slog.
-int ObServer::try_create_hidden_sys()
+// update hidden sys tenant unit if it exists
+int ObServer::try_update_hidden_sys()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(multi_tenant_.create_hidden_sys_tenant())) {
-    LOG_ERROR("fail to create hidden sys tenant", KR(ret));
+  const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  omt::ObTenant *tenant = nullptr;
+  if (OB_FAIL(multi_tenant_.get_tenant(tenant_id, tenant))) {
+    if (OB_TENANT_NOT_IN_SERVER == ret) { // only when adding a new server
+      ret = OB_SUCCESS;
+      if (OB_FAIL(multi_tenant_.create_hidden_sys_tenant())) {
+        LOG_ERROR("fail to create hidden sys tenant", KR(ret));
+      }
+      LOG_INFO("finish create hidden sys", KR(ret));
+    } else {
+      LOG_ERROR("fail to get tenant", KR(ret));
+    }
+  } else if (OB_FAIL(multi_tenant_.update_hidden_sys_tenant())) {
+    LOG_WARN("fail to update hidden sys tenant unit", KR(ret));
   }
   return ret;
 }

@@ -103,6 +103,8 @@ int ObConfigManager::reload_config()
     LOG_WARN("reload config for mysql login thread count failed", K(ret));
   } else if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
     LOG_WARN("reload config for tde encrypt engine fail", K(ret));
+  } else if (OB_FAIL(GCTX.omt_->update_hidden_sys_tenant())) {
+    LOG_WARN("update hidden sys tenant failed", K(ret));
   }
   return ret;
 }

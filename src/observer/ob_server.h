@@ -297,7 +297,7 @@ private:
   int set_running_mode();
   void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
-  int try_create_hidden_sys();
+  int try_update_hidden_sys();
   int parse_mode();
 
   // ------------------------------- arb server start ------------------------------------
