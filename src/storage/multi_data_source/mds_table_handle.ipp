@@ -164,7 +164,7 @@ int MdsTableHandle::set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us)
     if (OB_FAIL(p_mds_table_base_->set(unit_id,
                                        (void*)&dummy_key,
                                        (void*)&data,
-                                       std::is_rvalue_reference<T>::value,
+                                       std::is_rvalue_reference<decltype(data)>::value,
                                        ctx,
                                        lock_timeout_us))) {
       MDS_LOG(WARN, "fail to call set", KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us));
