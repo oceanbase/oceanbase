@@ -161,16 +161,15 @@ int ObPxSqcAsyncProxy::wait_all() {
   // 1. 在有效时间内获得足够多并且正确的callback结果
   // 2. 超时，ret = OB_TIMEOUT
   // 3. retry一个rpc失败
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_PX_MSG);
   while (return_cb_count_ < sqcs_.count() && OB_SUCC(ret)) {
 
     ObThreadCondGuard guard(cond_);
     // wait for timeout or until notified.
     cond_.wait_us(500);
 
-    if ((phy_plan_ctx_->get_timeout_timestamp() -
-         ObTimeUtility::current_time()) < 0) {
-      // 超过查询计划的timeout，满足退出条件2
-      ret = OB_TIMEOUT;
+    if (OB_FAIL(exec_ctx_.fast_check_status())) {
+      LOG_WARN("check status failed", K(ret));
     }
 
     ARRAY_FOREACH_X(callbacks_, idx, count, OB_SUCC(ret)) {

@@ -416,7 +416,6 @@ int ObTenantCheckpointSlogHandler::replay_old_checkpoint(const ObTenantSuperBloc
 int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
-  ObTenantStorageCheckpointReader tenant_storage_ckpt_reader;
   const MacroBlockId &ls_meta_entry = super_block.ls_meta_entry_;
   ObLinkedMacroBlockItemReader ls_ckpt_reader;
   ObSArray<MacroBlockId> tablet_block_list;

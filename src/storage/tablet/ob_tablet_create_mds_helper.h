@@ -78,7 +78,7 @@ public:
       mds::BufferCtx &ctx);
   static int check_create_new_tablets(const int64_t inc_tablet_cnt, const bool is_soft_limit = false);
 private:
-  static int check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg, const bool is_replay = false);
+  static int check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg);
   static int check_create_arg(
       const obrpc::ObBatchCreateTabletArg &arg,
       bool &valid);

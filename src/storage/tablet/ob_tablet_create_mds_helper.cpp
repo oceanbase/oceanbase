@@ -105,7 +105,7 @@ int ObTabletCreateMdsHelper::on_register(
   } else if (arg.is_old_mds_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, arg is old mds", K(ret), K(arg));
-  } else if (CLICK_FAIL(check_create_new_tablets(arg, false/*is_replay*/))) {
+  } else if (CLICK_FAIL(check_create_new_tablets(arg))) {
     LOG_WARN("failed to check crate new tablets", K(ret), "arg", PRETTY_ARG(arg));
   } else if (CLICK_FAIL(register_process(arg, ctx))) {
     LOG_WARN("fail to register_process", K(ret), "arg", PRETTY_ARG(arg));
@@ -182,7 +182,7 @@ int ObTabletCreateMdsHelper::on_replay(
     // Should not fail the replay process when tablet count excceed recommended value
     // Only print ERROR log to notice user scale up the unit memory
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
+    if (OB_TMP_FAIL(check_create_new_tablets(arg))) {
       if (OB_TOO_MANY_PARTITIONS_ERROR == tmp_ret) {
         LOG_ERROR("tablet count is too big, consider scale up the unit memory", K(tmp_ret));
       } else {
@@ -242,7 +242,7 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const int64_t inc_tablet_c
   return ret;
 }
 
-int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg, const bool is_replay)
+int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg)
 {
   int ret = OB_SUCCESS;
   bool skip_check = !arg.need_check_tablet_cnt_;
@@ -257,31 +257,13 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreate
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (skip_check) {
-  } else if (is_truncate) {
-    bool need_wait = false;
-    const int64_t timeout = THIS_WORKER.get_timeout_remain();
-    const int64_t start_time = ObTimeUtility::fast_current_time();
-    do {
-      if (need_wait) {
-        ob_usleep(1000 * 1000L); // sleep 1s
-      }
-      need_wait = false;
-      if (ObTimeUtility::fast_current_time() - start_time >= timeout) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("too many partitions, retry timeout", K(ret));
-        break;
-      } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(), true/*is_soft_limit*/))) {
-        if (OB_TOO_MANY_PARTITIONS_ERROR != ret) {
-          LOG_WARN("fail to check create new tablets", K(ret));
-        } else {
-          need_wait = true;
-        }
-      }
-    } while (need_wait && !is_replay); /* only retry for on_register truncate */
-  } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count()))) {
-    LOG_WARN("fail to create new tablets", K(ret));
+  if (OB_FAIL(ret) || skip_check) {
+  } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(), is_truncate/*is_soft_limit*/))) {
+    if (is_truncate && OB_TOO_MANY_PARTITIONS_ERROR == ret) {
+      ret = OB_EAGAIN; // do not retry here within trx_ctx_lock, rely on multi-source data trx retrying
+    } else {
+      LOG_WARN("fail to create new tablets", K(ret));
+    }
   }
   return ret;
 }
