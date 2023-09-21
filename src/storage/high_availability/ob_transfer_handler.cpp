@@ -475,6 +475,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
+    } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
+      LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
+    } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
+      LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
     } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx, succ_block_tx))) {
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
     } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
@@ -916,10 +920,6 @@ int ObTransferHandler::do_trans_transfer_start_(
     LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
   } else if (OB_FAIL(do_tx_start_transfer_in_(task_info, start_scn, tablet_meta_list, timeout_ctx, trans))) {
     LOG_WARN("failed to do tx start transfer in", K(ret), K(task_info), K(start_scn), K(tablet_meta_list));
-  } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
-    LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
-  } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
-    LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
   } else if (OB_FAIL(update_transfer_status_(task_info, next_status, start_scn, OB_SUCCESS, trans))) {
     LOG_WARN("failed to update transfer status", K(ret), K(task_info));
   }
@@ -1059,7 +1059,7 @@ int ObTransferHandler::do_tx_start_transfer_out_(
           transaction::ObTxDataSourceType::START_TRANSFER_OUT, buf, buf_len, flag))) {
         LOG_WARN("failed to register multi data source", K(ret), K(task_info));
       } else {
-        LOG_INFO("[TRANSFER] success register start transfer out", "cost", ObTimeUtil::current_time() - start_ts);
+        LOG_INFO("[TRANSFER_BLOCK_TX] success register start transfer out", "cost", ObTimeUtil::current_time() - start_ts);
       }
 #ifdef ERRSIM
       ObTransferEventRecorder::record_transfer_task_event(
@@ -1119,7 +1119,7 @@ int ObTransferHandler::get_start_transfer_out_scn_(
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("succeed get start transfer scn",
+      LOG_INFO("[TRANSFER_BLOCK_TX] succeed get start transfer scn",
           K(start_scn), "cost", ObTimeUtil::current_time() - start_ts);
     }
 
@@ -1214,7 +1214,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
   int ret = OB_SUCCESS;
   common::ObMemberList member_list;
   ObArray<ObAddr> member_addr_list;
-  const ObTransferWaitEventType event_type = ObTransferWaitEventType::WAIT_LS_REPLAY_PASS_START_SCN;
+  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1226,8 +1226,10 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
     LOG_WARN("failed to get src ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
-  } else if (OB_FAIL(wait_ls_replay_event_(task_info, event_type, member_addr_list, start_scn, timeout_ctx))) {
-    LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(event_type), K(member_list), K(start_scn));
+  } else if (OB_FAIL(wait_ls_replay_event_(task_info, member_addr_list, start_scn, timeout_ctx))) {
+    LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(member_list), K(start_scn));
+  } else {
+    LOG_INFO("[TRANSFER_BLOCK_TX] wait src ls repaly to start scn", "cost", ObTimeUtil::current_time() - start_ts);
   }
 
   DEBUG_SYNC(AFTER_START_TRANSFER_WAIT_REPLAY_TO_START_SCN);
@@ -1248,7 +1250,6 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
   int ret = OB_SUCCESS;
   common::ObMemberList member_list;
   ObArray<ObAddr> member_addr_list;
-  const ObTransferWaitEventType event_type = ObTransferWaitEventType::PRECHECK_LS_REPLAY_SCN;
   share::SCN check_scn;
   ObTimeoutCtx timeout_ctx;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -1272,8 +1273,8 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
   } else if (OB_FAIL(get_max_decided_scn_(task_info.tenant_id_, task_info.src_ls_id_, check_scn))) {
     LOG_WARN("failed to get max decided scn", K(ret), K(task_info));
-  } else if (OB_FAIL(wait_ls_replay_event_(task_info, event_type, member_addr_list, check_scn, timeout_ctx))) {
-    LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(event_type), K(member_list), K(check_scn));
+  } else if (OB_FAIL(wait_ls_replay_event_(task_info, member_addr_list, check_scn, timeout_ctx))) {
+    LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(member_list), K(check_scn));
   }
   return ret;
 }
@@ -1309,7 +1310,6 @@ int ObTransferHandler::get_max_decided_scn_(
 
 int ObTransferHandler::wait_ls_replay_event_(
     const share::ObTransferTaskInfo &task_info,
-    const ObTransferWaitEventType &event_type,
     const common::ObArray<ObAddr> &member_addr_list,
     const share::SCN &check_scn,
     ObTimeoutCtx &timeout_ctx)
@@ -1339,8 +1339,8 @@ int ObTransferHandler::wait_ls_replay_event_(
           ObStorageHASrcInfo src_info;
           src_info.cluster_id_ = GCONF.cluster_id;
           src_info.src_addr_ = replica_addr;
-          if (OB_TMP_FAIL(inner_get_scn_for_wait_event_(task_info, src_info, event_type, replica_scn))) {
-            LOG_WARN("failed to inner get scn for wait event", K(tmp_ret), K(event_type));
+          if (OB_TMP_FAIL(inner_get_scn_for_wait_event_(task_info, src_info, replica_scn))) {
+            LOG_WARN("failed to inner get scn for wait event", K(tmp_ret), K(src_info));
           } else if (replica_scn >= check_scn) {
             if (OB_FAIL(replica_addr_set.set_refactored(replica_addr))) {
               LOG_WARN("failed to set replica into hash set", K(ret), K(replica_addr));
@@ -1374,28 +1374,17 @@ int ObTransferHandler::wait_ls_replay_event_(
 int ObTransferHandler::inner_get_scn_for_wait_event_(
     const share::ObTransferTaskInfo &task_info,
     const ObStorageHASrcInfo &src_info,
-    const ObTransferWaitEventType &wait_event,
     share::SCN &replica_scn)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = task_info.tenant_id_;
+  const share::ObLSID &src_ls_id = task_info.src_ls_id_;
+
   if (OB_ISNULL(storage_rpc_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage rpc should not be null", K(ret));
-  } else if (ObTransferWaitEventType::WAIT_LS_REPLAY_PASS_START_SCN == wait_event) {
-    const share::ObLSID &src_ls_id = task_info.src_ls_id_;
-    if (OB_FAIL(storage_rpc_->get_transfer_start_scn(tenant_id, src_info,
-          src_ls_id, task_info.tablet_list_, replica_scn))) {
-      LOG_WARN("failed to get transfer start scn", K(ret), K(task_info), K(src_info));
-    }
-  } else if (ObTransferWaitEventType::PRECHECK_LS_REPLAY_SCN == wait_event) {
-    const share::ObLSID &src_ls_id = task_info.src_ls_id_;
-    if (OB_FAIL(storage_rpc_->fetch_ls_replay_scn(tenant_id, src_info, src_ls_id, replica_scn))) {
-      LOG_WARN("failed to fetch ls replay scn", K(ret), K(tenant_id), K(src_info));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid wait event type", K(ret), K(wait_event));
+  } else if (OB_FAIL(storage_rpc_->fetch_ls_replay_scn(tenant_id, src_info, src_ls_id, replica_scn))) {
+    LOG_WARN("failed to fetch ls replay scn", K(ret), K(tenant_id), K(src_info));
   }
   return ret;
 }
@@ -1407,6 +1396,7 @@ int ObTransferHandler::get_transfer_tablets_meta_(
   int ret = OB_SUCCESS;
   tablet_meta_list.reset();
   obrpc::ObCopyTabletInfo tablet_info;
+  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1427,6 +1417,8 @@ int ObTransferHandler::get_transfer_tablets_meta_(
         LOG_WARN("failed to push tablet info into array", K(ret), K(tablet_info));
       }
     }
+
+    LOG_INFO("[TRANSFER_BLOCK_TX] get transfer tablets meta", K(ret), "cost", ObTimeUtil::current_time() - start_ts);
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -1494,6 +1486,7 @@ int ObTransferHandler::do_tx_start_transfer_in_(
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_BUF_LEN = 1.5 * 1024 * 1024; // 1.5M
+  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1550,8 +1543,8 @@ int ObTransferHandler::do_tx_start_transfer_in_(
     }
 #endif
 
+    LOG_INFO("[TRANSFER_BLOCK_TX] do tx start transfer in", K(ret), "cost", ObTimeUtil::current_time() - start_ts);
     DEBUG_SYNC(AFTER_START_TRANSFER_IN);
-
   }
   return ret;
 }
@@ -1664,7 +1657,7 @@ int ObTransferHandler::lock_tablet_on_dest_ls_for_table_lock_(
       task_info.table_lock_tablet_list_))) {
     LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
   } else {
-    LOG_INFO("[TRANSFER]success lock tablet on dest ls for table lock", "cost", ObTimeUtil::current_time() - start_ts);
+    LOG_INFO("[TRANSFER] success lock tablet on dest ls for table lock", "cost", ObTimeUtil::current_time() - start_ts);
   }
 
   return ret;
