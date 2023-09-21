@@ -67,7 +67,7 @@ void ObOptOSGColumnStat::reset()
 ObOptOSGColumnStat* ObOptOSGColumnStat::create_new_osg_col_stat(common::ObIAllocator &allocator)
 {
   ObOptOSGColumnStat *new_osg_col_stat = OB_NEWx(ObOptOSGColumnStat, (&allocator), allocator);
-  ObOptColumnStat *new_col_stat = OB_NEWx(ObOptColumnStat, (&allocator), allocator);
+  ObOptColumnStat *new_col_stat = ObOptColumnStat::malloc_new_column_stat(allocator);
   if (OB_NOT_NULL(new_osg_col_stat) && OB_NOT_NULL(new_col_stat)) {
     new_osg_col_stat->col_stat_ = new_col_stat;
   } else {

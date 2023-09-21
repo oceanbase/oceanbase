@@ -319,7 +319,7 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
     } else if (OB_ISNULL(col_stat_handle.stat_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(col_stat_handle.stat_), K(ret));
-    } else if (OB_ISNULL(col_stat = OB_NEWx(ObOptColumnStat, alloc, (*alloc)))) {
+    } else if (OB_ISNULL(col_stat = ObOptColumnStat::malloc_new_column_stat(*alloc))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create column stat", K(ret));
     } else if (OB_FAIL(col_stat->deep_copy(*col_stat_handle.stat_))) {
@@ -656,11 +656,10 @@ int ObDbmsStatsExecutor::init_opt_stat(ObIAllocator &allocator,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
     ObOptColumnStat *&col_stat = stat.column_stats_.at(i);
-    if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptColumnStat)))) {
+    if (OB_ISNULL(col_stat = ObOptColumnStat::malloc_new_column_stat(allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
-      col_stat = new (ptr) ObOptColumnStat(allocator);
       col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_: -1);
       col_stat->set_partition_id(part_info.part_id_);
       col_stat->set_stat_level(extra.type_);
