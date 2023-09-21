@@ -134,7 +134,8 @@ ObGeoType ObGeoTypeUtil::get_geo_type_by_name(ObString &name)
     geo_type = ObGeoType::MULTILINESTRING;
   } else if (0 == name.case_compare("multipolygon")) {
     geo_type = ObGeoType::MULTIPOLYGON;
-  } else if (0 == name.case_compare("geometrycollection")) {
+  } else if (0 == name.case_compare("geometrycollection")
+             || 0 == name.case_compare("geomcollection")) {
     geo_type = ObGeoType::GEOMETRYCOLLECTION;
   } else if (0 == name.case_compare("geometry")) {
     geo_type = ObGeoType::GEOMETRY;
