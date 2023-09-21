@@ -147,7 +147,8 @@ int ObExprAlignDate4Cmp::eval_align_date4cmp(const ObExpr &expr, ObEvalCtx &ctx,
         const bool is_valid_time = true;
         if (OB_FAIL(set_res(res, ob_time, res_type, is_valid_time, offset,
                             is_zero_on_warn, is_no_zero_date, is_warn_on_fail))) {
-          LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type));
+          LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type),
+                                    K(date_arg_type), K(is_valid_time));
         }
         break;
       }
@@ -159,7 +160,8 @@ int ObExprAlignDate4Cmp::eval_align_date4cmp(const ObExpr &expr, ObEvalCtx &ctx,
         if (cmp_type == T_OP_EQ || cmp_type == T_OP_NSEQ || cmp_type == T_OP_NE) {
           if (OB_FAIL(set_res(res, ob_time, res_type, is_valid_time, offset,
                               is_zero_on_warn, is_no_zero_date, is_warn_on_fail))) {
-            LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type));
+            LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type),
+                                      K(date_arg_type), K(is_valid_time));
           }
         } else {
           if (day_over_limit(ob_time)) {
@@ -168,11 +170,13 @@ int ObExprAlignDate4Cmp::eval_align_date4cmp(const ObExpr &expr, ObEvalCtx &ctx,
             is_valid_time = true;
             if (OB_FAIL(set_res(res, ob_time, res_type, is_valid_time, offset,
                                 is_zero_on_warn, is_no_zero_date, is_warn_on_fail))) {
-              LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type));
+              LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type),
+                                        K(date_arg_type), K(is_valid_time));
             }
           } else if (OB_FAIL(set_res(res, ob_time, res_type, is_valid_time, offset,
                                      is_zero_on_warn, is_no_zero_date, is_warn_on_fail))) {
-            LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type));
+            LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type),
+                                      K(date_arg_type), K(is_valid_time));
           }
         }
         break;
@@ -181,7 +185,8 @@ int ObExprAlignDate4Cmp::eval_align_date4cmp(const ObExpr &expr, ObEvalCtx &ctx,
         const bool is_valid_time = false;
         if (OB_FAIL(set_res(res, ob_time, res_type, is_valid_time, offset,
                             is_zero_on_warn, is_no_zero_date, is_warn_on_fail))) {
-          LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type));
+          LOG_WARN("set_res fail.", K(ret), K(ob_time), K(res_type),
+                                        K(date_arg_type), K(is_valid_time));
         }
         break;
       }
@@ -220,7 +225,9 @@ void ObExprAlignDate4Cmp::set_valid_time_floor(ObTime &ob_time)
 bool ObExprAlignDate4Cmp::day_over_limit(const ObTime &ob_time)
 {
   bool res = true;
-  if(IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])) {
+  if (ob_time.parts_[DT_MON] < 1 || ob_time.parts_[DT_MON] > 12) {
+    res = false;
+  } else if(IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])) {
     res = ob_time.parts_[DT_MDAY] > DAYS_OF_MON[1][ob_time.parts_[DT_MON]];
   } else {
     res = ob_time.parts_[DT_MDAY] > DAYS_OF_MON[0][ob_time.parts_[DT_MON]];
