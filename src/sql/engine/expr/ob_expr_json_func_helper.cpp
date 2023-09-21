@@ -314,7 +314,8 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
                                            ObIJsonBase*& j_base,
                                            bool is_format_json,
                                            bool is_strict,
-                                           bool is_bin)
+                                           bool is_bin,
+                                           bool is_absent_null)
 {
   INIT_SUCC(ret);
   ObDatum *json_datum = nullptr;
@@ -323,6 +324,8 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
 
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret), K(json_arg->datum_meta_));
+  } else if ((json_datum->is_null() || ob_is_null(json_arg->obj_meta_.get_type()))
+             && is_absent_null) {
   } else if (OB_FAIL(oracle_datum2_json_val(json_datum,
                                             json_arg->obj_meta_,
                                             allocator,

@@ -2045,6 +2045,8 @@ int ObCheckStartTransferTabletsP::process()
       ret = OB_DISK_ERROR;
       STORAGE_LOG(ERROR, "observer has disk error, cannot restore", KR(ret),
           "disk_health_status", device_health_status_to_str(dhs), K(disk_abnormal_time));
+    } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
+      LOG_WARN("failed to check disk space", K(ret), K(arg_));
     } else if (OB_FAIL(check_start_transfer_out_tablets_())) {
       LOG_WARN("failed to check start transfer out tablets", K(ret), K(arg_));
     } else if (OB_FAIL(check_start_transfer_in_tablets_())) {

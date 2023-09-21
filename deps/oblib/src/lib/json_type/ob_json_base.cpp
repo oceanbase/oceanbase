@@ -5441,7 +5441,7 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
       } else {
         ObString str = str_data.string();
         ObTimeConvertCtx cvrt_ctx(NULL, false);
-        if (lib::is_oracle_mode() && !OB_ISNULL(cvrt_ctx_t)) {
+        if (lib::is_oracle_mode() && OB_NOT_NULL(cvrt_ctx_t)) {
           ObTimeConvertCtx cvrt_ctx(cvrt_ctx_t->tz_info_, cvrt_ctx_t->oracle_nls_format_, false);
           if (OB_FAIL(ObTimeConverter::str_to_date_oracle(str, cvrt_ctx, datetime))) {
             LOG_WARN("oracle fail to cast string to date", K(ret), K(str));
@@ -5463,7 +5463,7 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
       } else {
         ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
         ObTimeConvertCtx cvrt_ctx(NULL, false);
-        if (lib::is_oracle_mode() && !OB_ISNULL(cvrt_ctx_t)) {
+        if (lib::is_oracle_mode() && OB_NOT_NULL(cvrt_ctx_t)) {
           ObTimeConvertCtx cvrt_ctx(cvrt_ctx_t->tz_info_, cvrt_ctx_t->oracle_nls_format_, false);
           if (OB_FAIL(ObTimeConverter::str_to_date_oracle(str, cvrt_ctx, datetime))) {
             LOG_WARN("oracle fail to cast string to date", K(ret), K(str));

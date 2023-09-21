@@ -98,7 +98,7 @@ public:
                                     bool format_json = false, bool is_strict = false, bool is_bin = false);
 
   static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
-                                ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false);
+                                ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false, bool is_absent_null = false);
  
   /*
   replace json_old with json_new in json_doc

@@ -330,6 +330,16 @@ int ObStorageHAUtils::check_is_primary_tenant(const uint64_t tenant_id, bool &is
   return ret;
 }
 
+int ObStorageHAUtils::check_disk_space()
+{
+  int ret = OB_SUCCESS;
+  const int64_t required_size = 0;
+  if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
+    LOG_WARN("failed to check is disk full, cannot transfer in", K(ret));
+  }
+  return ret;
+}
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;

@@ -958,6 +958,8 @@ int ObStartCompleteMigrationTask::process()
     LOG_WARN("failed to check all tablet ready", K(ret), KPC(ctx_));
   } else if (OB_FAIL(wait_log_replay_to_max_minor_end_scn_())) {
     LOG_WARN("failed to wait log replay to max minor end scn", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::check_disk_space())) {
+    LOG_WARN("failed to check disk space", K(ret), KPC(ctx_));
   } else if (OB_FAIL(update_ls_migration_status_hold_())) {
     LOG_WARN("failed to update ls migration status hold", K(ret), KPC(ctx_));
   } else if (OB_FAIL(change_member_list_with_retry_())) {

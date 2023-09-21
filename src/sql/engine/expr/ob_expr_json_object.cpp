@@ -332,7 +332,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
       bool is_format_json = format_type > 0;
 
       if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
-                    arg_value, ctx, &temp_allocator, j_val, is_format_json, is_strict, false))) {
+                    arg_value, ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent))) {
         LOG_WARN("failed to get json value node.", K(ret), K(value_data_type), K(i));
       } else {
         bool is_key_already_exist = (j_obj.get_value(key) != nullptr);
@@ -340,7 +340,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
         if (is_key_already_exist && is_key_unique) {
           ret = OB_ERR_DUPLICATE_KEY;
           LOG_WARN("Found duplicate key inserted before!", K(key), K(ret));
-        } else if (is_null_absent && j_val->json_type() == ObJsonNodeType::J_NULL) {
+        } else if (OB_ISNULL(j_val)) {
         } else if (OB_FAIL(j_obj.add(key, static_cast<ObJsonNode*>(j_val), false, false, is_overwrite))) {
           LOG_WARN("failed to get json value node.", K(ret), K(val_type));
         }
