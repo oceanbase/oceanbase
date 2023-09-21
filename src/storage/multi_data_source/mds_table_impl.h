@@ -226,10 +226,8 @@ public:
   int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op, const int64_t mds_construct_sequence, const bool for_flush);
   TO_STRING_KV(KP(this), K_(ls_id), K_(tablet_id), K_(flushing_scn),
                K_(rec_scn), K_(last_inner_recycled_scn), K_(total_node_cnt), K_(construct_sequence), K_(debug_info));
-  // template <typename SCAN_OP>
-  // int for_each_scan_node(SCAN_OP &&op);
   template <typename SCAN_OP>
-  int for_each_scan_row(SCAN_OP &&op);
+  int for_each_scan_row(FowEachRowAction action_type, SCAN_OP &&op);
   MdsTableType &unit_tuple() { return unit_tuple_; }
 private:// helper define
   struct ForEachUnitFillVirtualInfoHelper {
@@ -261,11 +259,12 @@ private:// helper define
   };
   template <typename SCAN_OP>
   struct ForEachUnitScanRowHelper {
-    ForEachUnitScanRowHelper(SCAN_OP &op) : op_(op) {}
+    ForEachUnitScanRowHelper(FowEachRowAction action, SCAN_OP &op) : op_(op), action_type_(action) {}
     template <typename K, typename V>
-    int operator()(MdsUnit<K, V> &unit) { return unit.for_each_row(op_); }
+    int operator()(MdsUnit<K, V> &unit) { return unit.for_each_row(action_type_, op_); }
   private:
     SCAN_OP &op_;
+    FowEachRowAction action_type_;
   };
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
   int for_each_to_dump_node_(DUMP_OP &&op, share::SCN &flushing_scn, const bool for_flush) {

@@ -38,6 +38,14 @@ enum class NodePosition {
   POSITION_END,
 };
 
+enum class FowEachRowAction {
+  CALCUALTE_FLUSH_SCN,
+  COUNT_NODES_BEFLOW_FLUSH_SCN,
+  CALCULATE_REC_SCN,
+  RECYCLE,
+  RESET,
+};
+
 inline const char *obj_to_string(NodePosition pos) {
   const char *ret = "UNKNOWN";
   switch (pos) {
