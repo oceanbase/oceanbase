@@ -160,7 +160,7 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
 
 bool ObPartitionMergePolicy::is_sstable_count_not_safe(const int64_t minor_table_cnt)
 {
-  return minor_table_cnt >= MAX_SSTABLE_CNT_IN_STORAGE;
+  return minor_table_cnt + 1 /*major_sstable*/ >= MAX_SSTABLE_CNT_IN_STORAGE;
 }
 
 int ObPartitionMergePolicy::get_mini_merge_tables(

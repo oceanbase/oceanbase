@@ -141,7 +141,7 @@ void ObTenantTabletScheduler::MediumLoopTask::runTimerTask()
   int ret = OB_SUCCESS;
   int64_t cost_ts = ObTimeUtility::fast_current_time();
   ObCurTraceId::init(GCONF.self_addr_);
-  if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+  if (OB_UNLIKELY(!ObServerCheckpointSlogHandler::get_instance().is_started())) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
       LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
     }
@@ -1396,7 +1396,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
       LOG_WARN("failed to read medium info list", K(tmp_ret), K(tablet_id));
     } else if (medium_list->need_check_finish()) { // need check finished
       if (OB_TMP_FAIL(func.check_medium_finish(ls_locality))) {
-        LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id));
+        LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id), KPC(medium_list));
       } else if (FALSE_IT(check_medium_finish = true)) {
       } else if (FALSE_IT(func.get_tablet_handle(new_handle))) {
       } else if (ObTimeUtility::current_time_ns()
