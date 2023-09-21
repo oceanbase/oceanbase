@@ -27,7 +27,11 @@ ObTableScanRange::ObTableScanRange()
     allocator_(nullptr),
     status_(EMPTY),
     is_inited_(false)
-{}
+{
+  rowkeys_.set_attr(ObMemAttr(MTL_ID(), "TScanRowkeys"));
+  ranges_.set_attr(ObMemAttr(MTL_ID(), "TScanRanges"));
+  skip_scan_ranges_.set_attr(ObMemAttr(MTL_ID(), "TScanSSRanges"));
+}
 
 void ObTableScanRange::reset()
 {
