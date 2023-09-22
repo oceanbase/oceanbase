@@ -319,12 +319,13 @@ public:
     PREPARE = 0,
     RECOVERING = 1,
     RESTORE_AUX_TENANT = 2,
-    PRECHECK_IMPORT = 3,
-    GEN_IMPORT_JOB = 4,
-    IMPORTING = 5,
-    CANCELING = 6,
-    COMPLETED = 7,
-    FAILED = 8,
+    ACTIVE_AUX_TENANT = 3,
+    PRECHECK_IMPORT = 4,
+    GEN_IMPORT_JOB = 5,
+    IMPORTING = 6,
+    CANCELING = 7,
+    COMPLETED = 8,
+    FAILED = 9,
     MAX_STATUS
   };
 public:
