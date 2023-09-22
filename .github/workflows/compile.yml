@@ -64,4 +64,3 @@ jobs:
       run: |
         bash build.sh debug
         cd build_debug && make -j4
-    
