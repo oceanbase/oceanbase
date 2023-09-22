@@ -909,6 +909,7 @@ public:
       const char *extension);
   int set(const char *root_path, const char *storage_info);
   int set(const char *root_path, const ObBackupStorageInfo *storage_info);
+  int set_without_decryption(const common::ObString &backup_dest);
   void reset();
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
