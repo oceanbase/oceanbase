@@ -7664,6 +7664,7 @@ int ObServerBalancer::ResourceSum::append_resource(
   resource_sum_.cpu_ += resource.cpu_;
   resource_sum_.mem_total_ += resource.mem_total_;
   resource_sum_.disk_total_ += resource.disk_total_;
+  resource_sum_.log_disk_total_ += resource.log_disk_total_;
   return ret;
 }
 
@@ -7674,6 +7675,7 @@ int ObServerBalancer::ResourceSum::append_resource(
   resource_sum_.cpu_ += resource.resource_sum_.cpu_;
   resource_sum_.mem_total_ += resource.resource_sum_.mem_total_;
   resource_sum_.disk_total_ += resource.resource_sum_.disk_total_;
+  resource_sum_.log_disk_total_ += resource.resource_sum_.log_disk_total_;
   return ret;
 }
 
