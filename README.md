@@ -60,7 +60,7 @@ English | [中文版](README_CN.md)
      
      OceanBase Database is highly compatible with MySQL, which ensures that zero or few modification is needed for migration.
 
-- **Cost Effeciency**
+- **Cost Efficiency**
 
     The cutting-edge compression technology saves 70%-90% of storage costs without compromising performance. The multi-tenancy architecture achieves higher resource utilization.
 
