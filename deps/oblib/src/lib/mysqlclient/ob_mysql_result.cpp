@@ -81,7 +81,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
   int16_t tmp_precision = precision;
   int16_t tmp_scale = scale;
   int32_t tmp_length = length;
-  int64_t mbmaxlen = 0;
+  int64_t mbminlen = 0;
   LOG_DEBUG("dblink pull meta", K(precision), K(scale), K(length), K(ret), K(ob_type));
   // format precision from others to oceanbase
   if (!lib::is_oracle_mode()) {
@@ -118,10 +118,10 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       }
       case ObCharType:
       case ObVarcharType: {
-        if (OB_FAIL(common::ObCharset::get_mbmaxlen_by_coll(meta_cs_type, mbmaxlen))) {
-          LOG_WARN("fail to get mbmaxlen", K(meta_cs_type), K(ret));
+        if (OB_FAIL(common::ObCharset::get_mbminlen_by_coll(meta_cs_type, mbminlen))) {
+          LOG_WARN("fail to get mbminlen", K(meta_cs_type), K(ret));
         } else {
-          length /= mbmaxlen;
+          length /= mbminlen;
           precision = -1;
           scale = -1;
         }
