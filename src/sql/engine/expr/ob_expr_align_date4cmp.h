@@ -59,8 +59,10 @@ private:
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprAlignDate4Cmp);
 
-  static bool day_over_limit(const ObTime &ob_time);
+  static bool is_day_over_limit(const ObTime &ob_time);
+  static int32_t get_day_over_limit(const ObTime &ob_time);
   static void set_valid_time_floor(ObTime &ob_time);
+  static void push_back_n_days(ObTime &ob_time, int32_t offset);
   static DateArgType validate_time(ObTime &ob_time);
   static int integer_to_ob_time(const int64_t &date, DateArgType &date_arg_type, ObTime &ob_time);
   static int double_to_ob_time(const double &date, DateArgType &date_arg_type, ObTime &ob_time);
