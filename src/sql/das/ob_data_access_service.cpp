@@ -267,7 +267,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
                KPC(loc_meta), KPC(tablet_loc));
       if (need_retry &&
           task_op.get_inner_rescan() &&
-          location_router.get_total_retry_cnt() > 100) { //hard code retry 100 times.
+          location_router.get_total_retry_cnt() + location_router.get_cur_retry_cnt() > 100) { //hard code retry 100 times.
         // disable das retry for rescan.
         need_retry = false;
         retry_continue = false;

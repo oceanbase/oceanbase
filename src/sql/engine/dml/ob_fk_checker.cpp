@@ -204,7 +204,13 @@ int ObForeignKeyChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc)
   else if (OB_FAIL(ObSQLUtils::clear_evaluated_flag(clear_exprs_, eval_ctx_))) {
     LOG_WARN("fail to clear rowkey flag", K(ret), K(checker_ctdef_.part_id_dep_exprs_));
   } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(part_id_expr, eval_ctx_, partition_id, tablet_id))) {
-    LOG_WARN("fail to calc part id", K(ret), KPC(part_id_expr));
+    if (OB_NO_PARTITION_FOR_GIVEN_VALUE == ret) {
+      //NOTE: no partition means no referenced value in parent table, change the ret_code to OB_ERR_NO_REFERENCED_ROW
+      ret = OB_ERR_NO_REFERENCED_ROW;
+      LOG_WARN("No referenced value in parent table and no partition for given value", K(ret));
+    } else {
+      LOG_WARN("fail to calc part id", K(ret), KPC(part_id_expr));
+    }
   } else if (OB_FAIL(DAS_CTX(das_ref_.get_exec_ctx()).extended_tablet_loc(*table_loc_, tablet_id, tablet_loc))) {
     LOG_WARN("extended tablet loc failed", K(ret));
   }
