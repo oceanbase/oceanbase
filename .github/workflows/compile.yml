@@ -44,8 +44,8 @@ jobs:
       shell: bash
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin libncurses5
+        sudo apt-get update
+        sudo apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin libncurses5
 
     - name: Cache deps
       id: cache-deps
