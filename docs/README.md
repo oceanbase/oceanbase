@@ -20,6 +20,6 @@ At present, the guide is composed of the following parts:
 
 ## User documents
 
-This guide does _not_ contains user documents.
+This guide does _not_ contain user documents.
 
 For user documents, please refer to [oceanbase-doc](https://github.com/oceanbase/oceanbase-doc).
