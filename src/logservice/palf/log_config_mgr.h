@@ -406,8 +406,10 @@ public:
   //    return OB_SUCCESS if success
   //    else return other errno
   virtual int get_log_sync_member_list_for_generate_committed_lsn(
-      ObMemberList &member_list,
-      int64_t &replica_num,
+      ObMemberList &prev_member_list,
+      int64_t &prev_replica_num,
+      ObMemberList &curr_member_list,
+      int64_t &curr_replica_num,
       bool &is_before_barrier,
       LSN &barrier_lsn) const;
   virtual int get_arbitration_member(common::ObMember &arb_member) const;
@@ -498,11 +500,12 @@ public:
     SpinLockGuard guard(lock_);
     int64_t pos = 0;
     J_OBJ_START();
-    J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
-      K_(log_ms_meta), K_(checking_barrier), K_(reconfig_barrier), K_(persistent_config_version), \
-      K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
-      K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \
-      K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                \
+    J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),              \
+      K_(log_ms_meta), K_(running_args), K_(state), K_(checking_barrier), K_(reconfig_barrier),       \
+      K_(persistent_config_version), K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list), \
+      K_(last_submit_config_log_time_us), K_(need_change_config_bkgd), K_(bkgd_config_version),       \
+      K_(region), K_(paxos_member_region_map),                                                        \
+      K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                 \
       K_(last_submit_register_req_time_us), K_(children), K_(last_submit_keepalive_time_us), KP(this));
     J_OBJ_END();
     return pos;
