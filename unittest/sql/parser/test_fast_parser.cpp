@@ -189,7 +189,7 @@ int TestFastParser::parse(const ObString &sql)
 {
   ObSQLMode mode = SMO_DEFAULT;
   ParseResult parse_result;
-  ObCollationType connection_collation = CS_TYPE_UTF8MB4_GENERAL_CI;
+  ObCharsets4Parser charsets4parser;
   if (lib::is_oracle_mode()) {
     parse_result.sql_mode_ = (DEFAULT_ORACLE_MODE | SMO_ORACLE);
     mode = (DEFAULT_ORACLE_MODE | SMO_ORACLE);
@@ -197,14 +197,14 @@ int TestFastParser::parse(const ObString &sql)
     parse_result.sql_mode_ = DEFAULT_MYSQL_MODE;
     mode = DEFAULT_MYSQL_MODE;
   }
-  ObParser parser(allocator_, mode, connection_collation);
+  ObParser parser(allocator_, mode, charsets4parser);
   MEMSET(&parse_result, 0, sizeof(parse_result));
   int ret1 = parser.parse(sql, parse_result, FP_MODE);
   int64_t param_num = 0;
   char *no_param_sql_ptr = NULL;
   int64_t no_param_sql_len = 0;
   ParamList *p_list = NULL; 
-  FPContext fp_ctx(connection_collation);
+  FPContext fp_ctx(charsets4parser);
   fp_ctx.enable_batched_multi_stmt_ = false;
   fp_ctx.is_udr_mode_ = false;
   int ret2 = ObFastParser::parse(sql, fp_ctx, allocator_,

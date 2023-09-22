@@ -124,6 +124,7 @@ int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) 
       parse_result.is_for_trigger_ = (1 == _parse_ctx->is_for_trigger_);
       parse_result.question_mark_ctx_ = _parse_ctx->question_mark_ctx_;
       parse_result.charset_info_ = _parse_ctx->charset_info_;
+      parse_result.charset_info_oracle_db_ = _parse_ctx->charset_info_oracle_db_;
       parse_result.is_not_utf8_connection_ = _parse_ctx->is_not_utf8_connection_;
       parse_result.connection_collation_ = _parse_ctx->connection_collation_;
       parse_result.sql_mode_ = _parse_ctx->scanner_ctx_.sql_mode_;
@@ -2598,6 +2599,7 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
     //将pl_parser的question_mark_size赋值给sql_parser，使得parser sql的question mark能够接着pl_parser的index
     parse_result.question_mark_ctx_ = parse_ctx->question_mark_ctx_;
     parse_result.charset_info_ = parse_ctx->charset_info_;
+    parse_result.charset_info_oracle_db_ = parse_ctx->charset_info_oracle_db_;
     parse_result.is_not_utf8_connection_ = parse_ctx->is_not_utf8_connection_;
     parse_result.connection_collation_ = parse_ctx->connection_collation_;
     parse_result.sql_mode_ = parse_ctx->scanner_ctx_.sql_mode_;

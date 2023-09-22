@@ -236,7 +236,7 @@ int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString 
   ObArenaAllocator allocator;
   ParseResult parse_result;
   ParseMode parse_mode = STD_MODE;
-  ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+  ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
   if (sql.empty()) {
   } else if (OB_FAIL(parser.parse(sql,
                             parse_result,
@@ -2095,7 +2095,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(sql), K(secondary_namespace), K(ret));
   } else {
-    ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+    ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
     ParseResult parse_result;
     if (OB_FAIL(parser.prepare_parse(sql, static_cast<void*>(secondary_namespace), parse_result))) {
       LOG_WARN("Generate syntax tree failed", K(sql), K(ret));

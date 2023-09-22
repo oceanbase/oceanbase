@@ -520,6 +520,7 @@ public:
   enum CONVERT_FLAG : int64_t {
     COPY_STRING_ON_SAME_CHARSET = 1<<0,
     REPLACE_UNKNOWN_CHARACTER = 1<<1,
+    REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET = 1<<2,
   };
   static int charset_convert(ObIAllocator &alloc,
                              const ObString &in,

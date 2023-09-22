@@ -20,10 +20,10 @@ class ObUDRAnalyzer
 public:
   ObUDRAnalyzer(common::ObIAllocator &allocator,
                 ObSQLMode mode,
-                common::ObCollationType conn_collation)
+                ObCharsets4Parser charsets4parser)
     : allocator_(allocator),
       sql_mode_(mode),
-      connection_collation_(conn_collation)
+      charsets4parser_(charsets4parser)
   {}
   static bool check_is_allow_stmt_type(stmt::StmtType stmt_type);
   int parse_and_check(const common::ObString &pattern,
@@ -64,7 +64,7 @@ private:
 private:
   common::ObIAllocator &allocator_;
   ObSQLMode sql_mode_;
-  common::ObCollationType connection_collation_;
+  ObCharsets4Parser charsets4parser_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDRAnalyzer);
 };

@@ -215,16 +215,16 @@ public:
                                     common::ObIArray<ObWinFunRawExpr*> &win_exprs,
                                     common::ObIArray<ObUDFInfo> &udf_info);
   static int parse_default_expr_from_str(const common::ObString &expr_str,
-                                         common::ObCollationType expr_str_cs_type,
+                                         ObCharsets4Parser expr_str_cs_type,
                                          common::ObIAllocator &allocator,
                                          const ParseNode *&node);
   static int parse_expr_list_node_from_str(const common::ObString &expr_str,
-                                           common::ObCollationType expr_str_cs_type,
+                                           ObCharsets4Parser expr_str_cs_type,
                                            common::ObIAllocator &allocator,
                                            const ParseNode *&node,
                                            const ObSQLMode &sql_mode);
   static int parse_expr_node_from_str(const common::ObString &expr_str,
-                                      common::ObCollationType expr_str_cs_type,
+                                      ObCharsets4Parser expr_str_cs_type,
                                       common::ObIAllocator &allocator,
                                       const ParseNode *&node,
                                       const ObSQLMode &sql_mode = 0);

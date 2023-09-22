@@ -276,18 +276,24 @@ begin
 end /
 
 -- create_tenant_by_memory_limit: 根据memory_limit创建租户
-drop procedure if exists create_tenant_by_memory_resource;/
-create procedure create_tenant_by_memory_resource(tenant_name varchar(64), compat_mode varchar(10))
+drop procedure if exists create_tenant_by_memory_resource_with_arg;/
+create procedure create_tenant_by_memory_resource_with_arg(tenant_name varchar(64), compat_mode varchar(10), arg_list varchar(64))
 begin
   declare mem bigint;
   select memory_limit from GV$OB_SERVERS limit 1 into mem;
   if (mem < 8589934592) then
-    call oceanbase.create_tenant_with_arg(tenant_name, compat_mode, '1c1g', '');
+    call oceanbase.create_tenant_with_arg(tenant_name, compat_mode, '1c1g', arg_list);
   elseif (mem < 17179869184) then
-    call oceanbase.create_tenant_with_arg(tenant_name, compat_mode, '2c2g', '');
+    call oceanbase.create_tenant_with_arg(tenant_name, compat_mode, '2c2g', arg_list);
   else
-    call oceanbase.create_tenant_with_arg(tenant_name, compat_mode, '2c4g', '');
+    call oceanbase.create_tenant_with_arg(tenant_name, compat_mode, '2c4g', arg_list);
   end if;
+end /
+
+drop procedure if exists create_tenant_by_memory_resource;/
+create procedure create_tenant_by_memory_resource(tenant_name varchar(64), compat_mode varchar(10))
+begin
+  call create_tenant_by_memory_resource_with_arg(tenant_name, compat_mode, '');
 end /
 
 -- adjust_sys_resource: 根据memory_limit调整sys租户规格

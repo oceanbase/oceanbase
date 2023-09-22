@@ -98,7 +98,7 @@ int ObMPStmtPrepare::multiple_query_check(ObSQLSessionInfo &session,
   if (OB_UNLIKELY(1 == session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS)) {
     ObSEArray<ObString, 1> queries;
     ObParser parser(THIS_WORKER.get_allocator(),
-                    session.get_sql_mode(), session.get_local_collation_connection());
+                    session.get_sql_mode(), session.get_charsets4parser());
     bool parse_fail = false;
     ObMPParseStat parse_stat;
     force_sync_resp = true;

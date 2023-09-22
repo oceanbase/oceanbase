@@ -66,6 +66,7 @@ typedef struct _ObParseCtx
   int comp_mode_;
   bool is_not_utf8_connection_;
   const struct ObCharsetInfo *charset_info_;
+  const struct ObCharsetInfo *charset_info_oracle_db_;
   int64_t last_escape_check_pos_;  //解析quoted string时的一个临时变量，处理连接gbk字符集时遇到的转义字符问题
   int connection_collation_;
   bool mysql_compatible_comment_; //whether the parser is parsing "/*! xxxx */"

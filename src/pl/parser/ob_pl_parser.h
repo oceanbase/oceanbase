@@ -16,6 +16,7 @@
 #include "pl/parser/parse_stmt_node.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_trigger_info.h"
+#include "sql/parser/ob_parser_utils.h"
 
 namespace oceanbase
 {
@@ -34,9 +35,9 @@ namespace pl
 class ObPLParser
 {
 public:
-  ObPLParser(common::ObIAllocator &allocator, common::ObCollationType conn_collation, ObSQLMode sql_mode = 0)
+  ObPLParser(common::ObIAllocator &allocator, sql::ObCharsets4Parser charsets4parser, ObSQLMode sql_mode = 0)
     : allocator_(allocator),
-      connection_collation_(conn_collation),
+      charsets4parser_(charsets4parser),
       sql_mode_(sql_mode)
   {}
   int fast_parse(const ObString &stmt_block,
@@ -71,7 +72,7 @@ private:
                                   share::schema::ObSchemaGetterGuard *schema_guard);
 private:
   common::ObIAllocator &allocator_;
-  common::ObCollationType connection_collation_;
+  sql::ObCharsets4Parser charsets4parser_;
   ObSQLMode sql_mode_;
 };
 }  // namespace pl

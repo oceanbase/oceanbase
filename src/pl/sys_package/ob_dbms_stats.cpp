@@ -4183,7 +4183,7 @@ int ObDbmsStats::parse_method_opt(sql::ObExecContext &ctx,
   } else {
     ObParser parser(*allocator,
                     ctx.get_my_session()->get_sql_mode(),
-                    ctx.get_my_session()->get_local_collation_connection());
+                    ctx.get_my_session()->get_charsets4parser());
     ParseMode parse_mode = DYNAMIC_SQL_MODE;
     ParseResult parse_result;
     const ParseNode *for_stmt = NULL;

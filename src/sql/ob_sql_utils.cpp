@@ -1888,7 +1888,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
     //快速参数化后带？的sql
     ObString no_param_sql;
     ParseResult parse_result;
-    ObParser parser(allocator, session->get_sql_mode(), session->get_local_collation_connection());
+    ObParser parser(allocator, session->get_sql_mode(), session->get_charsets4parser());
     ObSEArray<ObPCParam *, OB_PC_SPECIAL_PARAM_COUNT> special_params;
     ObString param_sql;
     ParamStore params( (ObWrapperAllocator(allocator)) );
@@ -1984,7 +1984,7 @@ int ObSQLUtils::filter_hint_in_query_sql(ObIAllocator &allocator,
                                          ObString &param_sql)
 {
   int ret = OB_SUCCESS;
-  ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+  ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
   ParseResult parse_result;
   if (OB_FAIL(parser.parse(sql, parse_result, FP_NO_PARAMERIZE_AND_FILTER_HINT_MODE))) {
     SQL_PC_LOG(WARN, "fail to parse query while filter hint", K(ret));

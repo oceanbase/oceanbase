@@ -219,7 +219,7 @@ int ObMPQuery::process()
         bool force_sync_resp = false;
         need_response_error = false;
         ObParser parser(THIS_WORKER.get_sql_arena_allocator(),
-                        session.get_sql_mode(), session.get_local_collation_connection());
+                        session.get_sql_mode(), session.get_charsets4parser());
         //为了性能优化考虑，减少数组长度，降低无用元素的构造和析构开销
         ObSEArray<ObString, 1> queries;
         ObSEArray<ObString, 1> ins_queries;

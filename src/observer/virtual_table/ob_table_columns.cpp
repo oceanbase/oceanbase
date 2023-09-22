@@ -902,7 +902,7 @@ int ObTableColumns::resolve_view_definition(
     } else {
       ParseResult parse_result;
       ObParser parser(*allocator, session->get_sql_mode(),
-                      session->get_local_collation_connection());
+                      session->get_charsets4parser());
       if (OB_FAIL(parser.parse(select_sql.string(), parse_result))) {
         LOG_WARN("parse view definition failed", K(select_sql), K(ret));
       } else {

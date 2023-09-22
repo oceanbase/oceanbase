@@ -5144,7 +5144,7 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       ObString view_def;
 
       ObParser parser(*params_.allocator_, session_info_->get_sql_mode(),
-                      session_info_->get_local_collation_connection());
+                      session_info_->get_charsets4parser());
       if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
                               *params_.allocator_,
                               session_info_->get_local_collation_connection(),
@@ -8461,7 +8461,7 @@ int ObDMLResolver::check_table_exist_or_not(uint64_t tenant_id,
     if (OB_SUCC(ret)) {
       if (!is_exist) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_INFO("table not exist", K(tenant_id), K(database_id), K(table_name), K(ret));
+        LOG_INFO("table not exist", K(tenant_id), K(database_id), K(table_name), KPHEX(table_name.ptr(), table_name.length()), K(ret));
       }
     }
   }
