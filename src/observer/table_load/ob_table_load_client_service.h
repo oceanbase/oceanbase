@@ -46,16 +46,17 @@ public:
   static int remove_task(ObTableLoadClientTask *client_task);
   static int get_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *&client_task);
   static int get_task(const ObTableLoadKey &key, ObTableLoadClientTask *&client_task);
+  static int exist_task(const ObTableLoadUniqueKey &key, bool &is_exist);
   static int commit_task(ObTableLoadClientTask *client_task);
   static int abort_task(ObTableLoadClientTask *client_task);
-  static int wait_task_finish(ObTableLoadClientTask *client_task,
-                              table::ObTableLoadClientStatus client_status);
+  static int wait_task_finish(const ObTableLoadUniqueKey &key);
 
   int add_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int remove_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int get_all_client_task(common::ObIArray<ObTableLoadClientTask *> &client_task_array);
   int get_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *&client_task);
   int get_client_task_by_table_id(uint64_t table_id, ObTableLoadClientTask *&client_task);
+  int exist_client_task(const ObTableLoadUniqueKey &key, bool &is_exist);
   int64_t get_client_task_count() const;
   void purge_client_task();
 
