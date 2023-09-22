@@ -357,18 +357,38 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
         LOG_WARN("fail to pack json result", K(ret), K(raw_bin));
       }
     } else {
+
+      ObString temp_str;
+      ObString result_str;
+
       if (OB_FAIL(string_buffer.reserve(j_obj.get_serialize_size()))) {
         LOG_WARN("fail to reserve string.", K(ret), K(j_obj.get_serialize_size()));
       } else if (OB_FAIL(j_base->print(string_buffer, false, false))) {
         LOG_WARN("fail to transform to string.", K(ret), K(string_buffer.length()));
-      } else if (dst_type == ObVarcharType && string_buffer.length()  > dst_len) {
+      } else {
+        ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+        ObCollationType dst_cs_type = expr.obj_meta_.get_collation_type();
+        temp_str = string_buffer.string();
+        result_str = temp_str;
+
+        if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(in_cs_type,
+                                                                    dst_cs_type,
+                                                                    &temp_allocator,
+                                                                    temp_str,
+                                                                    result_str))) {
+          LOG_WARN("fail to convert string result", K(ret));
+        }
+      }
+
+
+      if (dst_type == ObVarcharType && result_str.length()  > dst_len) {
         char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
         if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
           LOG_WARN("dst_len fail to string.", K(ret));
         }
         ret = OB_OPERATE_OVERFLOW;
         LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_object");
-      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, string_buffer.string()))) {
+      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, result_str))) {
         LOG_WARN("fail to pack json result", K(ret));
       }
     }

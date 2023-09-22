@@ -220,7 +220,17 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
       } else if (OB_FAIL(j_arr.print(string_buffer, true, false))) {
         LOG_WARN("failed: get json string text", K(ret));
       } else {
-        res_string.assign_ptr(string_buffer.ptr(), string_buffer.length());
+        ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+        ObCollationType dst_cs_type = expr.obj_meta_.get_collation_type();
+        ObString temp_str = string_buffer.string();
+
+        if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(in_cs_type,
+                                                                    dst_cs_type,
+                                                                    &temp_allocator,
+                                                                    temp_str,
+                                                                    res_string))) {
+          LOG_WARN("fail to convert string result", K(ret));
+        }
       }
     }
 

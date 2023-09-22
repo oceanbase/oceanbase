@@ -535,6 +535,72 @@ int ObJsonExprHelper::oracle_datum2_json_val(const ObDatum *json_datum,
   return ret;
 }
 
+int ObJsonExprHelper::convert_string_collation_type(ObCollationType in_cs_type,
+                                                    ObCollationType dst_cs_type,
+                                                    ObIAllocator* allocator,
+                                                    ObString &in_str,
+                                                    ObString &out_str)
+{
+  INIT_SUCC(ret);
+
+  bool is_need_convert = ((CS_TYPE_BINARY == dst_cs_type)
+          || (ObCharset::charset_type_by_coll(in_cs_type) != ObCharset::charset_type_by_coll(dst_cs_type)));
+
+  if (is_need_convert) {
+    if (CS_TYPE_BINARY != in_cs_type && CS_TYPE_BINARY != dst_cs_type
+        && (ObCharset::charset_type_by_coll(in_cs_type) != ObCharset::charset_type_by_coll(dst_cs_type))) {
+      char *buf = nullptr;
+      int64_t buf_len = (in_str.length() == 0 ? 1 : in_str.length()) * ObCharset::CharConvertFactorNum;
+      uint32_t result_len = 0;
+
+      if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator->alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret), K(buf_len));
+      } else if (OB_FAIL(ObCharset::charset_convert(in_cs_type,
+                                                    in_str.ptr(),
+                                                    in_str.length(),
+                                                    dst_cs_type,
+                                                    buf,
+                                                    buf_len,
+                                                    result_len))) {
+        LOG_WARN("charset convert failed", K(ret));
+      } else {
+        out_str.assign_ptr(buf, result_len);
+      }
+    } else {
+      if (CS_TYPE_BINARY == in_cs_type || CS_TYPE_BINARY == dst_cs_type) {
+        // just copy string when in_cs_type or out_cs_type is binary
+        const ObCharsetInfo *cs = NULL;
+        int64_t align_offset = 0;
+        if (CS_TYPE_BINARY == in_cs_type && (NULL != (cs = ObCharset::get_charset(dst_cs_type)))) {
+          if (cs->mbminlen > 0 && in_str.length() % cs->mbminlen != 0) {
+            align_offset = cs->mbminlen - in_str.length() % cs->mbminlen;
+          }
+        }
+        int64_t len = align_offset + in_str.length();
+        char *buf = nullptr;
+
+        if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(len));
+        } else {
+          MEMMOVE(buf + align_offset, in_str.ptr(), len - align_offset);
+          MEMSET(buf, 0, align_offset);
+          out_str.assign_ptr(buf, len);
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("same charset should not be here, just use cast_eval_arg", K(ret),
+                  K(in_cs_type), K(dst_cs_type), K(in_cs_type), K(dst_cs_type));
+      }
+    }
+  } else {
+    out_str = in_str;
+  }
+
+  return ret;
+}
+
 int ObJsonExprHelper::json_base_replace(ObIJsonBase *json_old, ObIJsonBase *json_new,
                                         ObIJsonBase *&json_doc)
 {
