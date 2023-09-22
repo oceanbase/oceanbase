@@ -54,24 +54,20 @@ int ObPLCompiler::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                   K(ret), K(tenant_id), K(dep_schema_objs.at(i)));
       } else if (OB_INVALID_VERSION == new_version ||
                  new_version != dep_schema_objs.at(i).version_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)));
+        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)), K(new_version));
       }
     } else {
       const ObSimpleTableSchemaV2 *table_schema = nullptr;
       if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(),
                                                       dep_schema_objs.at(i).object_id_,
                                                       table_schema))) {
-        LOG_WARN("failed to get table schema",
-                K(ret), K(dep_schema_objs.at(i)));
+        LOG_WARN("failed to get table schema", K(ret), K(dep_schema_objs.at(i)));
       } else if (nullptr == table_schema) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get an unexpected null table schema", K(ret));
+        LOG_WARN("get an unexpected null table schema", K(dep_schema_objs.at(i).object_id_));
       } else if (table_schema->is_index_table()) {
         // do nothing
       } else if (table_schema->get_schema_version() != dep_schema_objs.at(i).version_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)));
+        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)), K(table_schema->get_schema_version()));
       }
     }
   }

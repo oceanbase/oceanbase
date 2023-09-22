@@ -3316,6 +3316,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
 
   OX (exec_ctx_bak_.backup(*ctx_.exec_ctx_));
   OX (ctx_.exec_ctx_->set_physical_plan_ctx(&get_physical_plan_ctx()));
+  OX (ctx_.exec_ctx_->get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *ctx_.exec_ctx_->get_my_session()));
   OX (need_reset_physical_plan_ = true);
   if (OB_SUCC(ret) && func_.get_expr_op_size() > 0)  {
     OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size(), ctx_.allocator_));
