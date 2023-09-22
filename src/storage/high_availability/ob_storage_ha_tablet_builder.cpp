@@ -152,6 +152,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
   ObICopyTabletInfoReader *reader = nullptr;
   obrpc::ObCopyTabletInfo tablet_info;
   const int overwrite = 1;
+  const bool need_check_tablet_limit = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -173,7 +174,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
         }
       } else if (OB_FAIL(modified_tablet_info_(tablet_info))) {
         LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
-      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, ls))) {
+      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
       }
 #ifdef ERRSIM
@@ -196,6 +197,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
 }
 
 int ObStorageHATabletsBuilder::create_all_tablets(
+    const bool need_check_tablet_limit,
     ObICopyLSViewInfoReader *reader,
     common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
     common::ObIArray<common::ObTabletID> &data_tablet_id_list,
@@ -231,7 +233,7 @@ int ObStorageHATabletsBuilder::create_all_tablets(
         }
       } else if (OB_FAIL(modified_tablet_info_(tablet_info))) {
         LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
-      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, ls))) {
+      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
       } else if (tablet_info.tablet_id_.is_ls_inner_tablet()) {
         if (OB_FAIL(sys_tablet_id_list.push_back(tablet_info.tablet_id_))) {
@@ -275,6 +277,7 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
   obrpc::ObCopyTabletInfo tablet_info;
   const int overwrite = 1;
   ObCopyTabletSimpleInfo tablet_simple_info;
+  const bool need_check_tablet_limit = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -296,7 +299,7 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
         }
       } else if (OB_FAIL(modified_tablet_info_(tablet_info))) {
         LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
-      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, ls))) {
+      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
       } else {
         tablet_simple_info.tablet_id_ = tablet_info.tablet_id_;
@@ -320,6 +323,7 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObICopyTabletInfoReader *reader = nullptr;
+  const bool need_check_tablet_limit = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -389,7 +393,7 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
         } else {
           LOG_INFO("update tablet restore status to UNDEFINED", K(tablet_info));
         }
-      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, ls))) {
+      } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
       } else {
         LOG_INFO("success to replace PENDING tablet with a newer meta", K(tablet_id));
@@ -511,6 +515,7 @@ void ObStorageHATabletsBuilder::free_tablet_info_reader_(ObICopyTabletInfoReader
 
 int ObStorageHATabletsBuilder::create_or_update_tablet_(
     const obrpc::ObCopyTabletInfo &tablet_info,
+    const bool need_check_tablet_limit,
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
@@ -532,7 +537,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == tablet_info.status_ && tablet_info.tablet_id_.is_ls_inner_tablet()) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("src ls inner tablet is not exist, src ls is maybe deleted", K(ret), K(tablet_info));
-  } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL))) {
+  } else if (need_check_tablet_limit && OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL))) {
     LOG_WARN("failed to check create new tablet", K(ret), K(tablet_info));
   } else if (OB_FAIL(hold_local_reuse_sstable_(tablet_info.tablet_id_, local_tablet_hdl, major_tables, storage_schema, medium_info_list, allocator))) {
     LOG_WARN("failed to hold local reuse sstable", K(ret), K(tablet_info));
