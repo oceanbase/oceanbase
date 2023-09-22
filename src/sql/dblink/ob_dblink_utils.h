@@ -164,7 +164,7 @@ private:
   int64_t sys_var_reverse_info_buf_size_;
   common::ObArenaAllocator arena_alloc_;
   ObArray<common::sqlclient::ObCommonServerConnectionPool *> dblink_conn_pool_array_;  //for dblink read to free connection when session drop.
-  ObArray<int64_t> dblink_conn_holder_array_; //for dblink write to hold connection during trasaction.
+  ObArray<int64_t> dblink_conn_holder_array_; //for dblink write to hold connection during transaction.
   ObString last_reverse_info_values_;
 };
 
