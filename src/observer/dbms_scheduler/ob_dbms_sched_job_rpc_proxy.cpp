@@ -31,14 +31,17 @@ namespace obrpc
 OB_SERIALIZE_MEMBER(ObDBMSSchedJobArg, tenant_id_, job_id_, server_addr_, master_addr_, is_oracle_tenant_);
 OB_SERIALIZE_MEMBER(ObDBMSSchedJobResult, tenant_id_, job_id_, server_addr_, status_code_);
 
+static const int64_t DBMS_SCHED_INNER_JOB_CNT = 8;
+
 int ObDBMSSchedJobRpcProxy::run_dbms_sched_job(
   uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, ObAddr server_addr, ObAddr master_addr)
 {
   int ret = OB_SUCCESS;
+  int64_t group_id = job_id <= DBMS_SCHED_INNER_JOB_CNT ? share::OBCG_DBMS_SCHED_INNER_JOB : share::OBCG_DBMS_SCHED_USER_JOB;
   ObDBMSSchedJobArg arg(tenant_id, job_id, server_addr, master_addr, is_oracle_tenant);
   ObRpcAPDBMSSchedJobCB cb;
   CK (arg.is_valid());
-  OZ (this->to(arg.server_addr_).by(arg.tenant_id_).run_dbms_sched_job(arg, &cb), arg);
+  OZ (this->to(arg.server_addr_).by(arg.tenant_id_).group_id(group_id).run_dbms_sched_job(arg, &cb), arg);
   return ret;
 }
 
