@@ -2795,7 +2795,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode* node, ObRawExpr*& e
       // add invalid table bit index, avoid aggregate function expressions are used as filters
       if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
         LOG_WARN("failed to add member", K(ret));
-      } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+      } else if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
@@ -2916,7 +2916,7 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode* node, ObRawE
       }
     }
     if (OB_SUCC(ret)) {
-      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+      if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
@@ -3008,7 +3008,7 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode* node, ObRawEx
       }
     }
     if (OB_SUCC(ret)) {
-      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+      if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
@@ -4915,7 +4915,7 @@ int ObRawExprResolverImpl::process_agg_udf_node(
     // add invalid table bit index, avoid aggregate function expressions are used as filters
     if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
       LOG_WARN("failed to add member", K(ret));
-    } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+    } else if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.del_member(IS_AGG))) {
         LOG_WARN("failed to del member", K(ret));
     } else {
       expr = agg_expr;

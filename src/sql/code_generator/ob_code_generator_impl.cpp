@@ -188,12 +188,13 @@ int ObCodeGeneratorImpl::generate_returning_exprs(
     ARRAY_FOREACH(*returning_exprs, i)
     {
       ObRawExpr* raw_expr = returning_exprs->at(i);
-      if ((raw_expr->get_expr_type() != T_REF_COLUMN) && (raw_expr->get_expr_type() != T_REF_ALIAS_COLUMN)) {
-        raw_expr->clear_flag(IS_COLUMNLIZED);
-      }
       ObSqlExpression* expr = NULL;
       if (OB_ISNULL(raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
+      } else if (raw_expr->get_expr_type() != T_REF_COLUMN
+                 && raw_expr->get_expr_type() != T_REF_ALIAS_COLUMN
+                 && OB_FAIL(raw_expr->clear_flag(IS_COLUMNLIZED))) {
+        LOG_WARN("fail to clear flag", K(ret));
       } else if (OB_FAIL(create_expression(phy_op->get_sql_expression_factory(), expr))) {
       } else if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;

@@ -229,6 +229,10 @@ public:
   {
     return desc_.inited_;
   }
+  int get_init_err() const
+  {
+    return desc_.inited_ ? OB_SUCCESS : desc_.init_errcode_;
+  }
   void clear_all()
   {
     if (!is_valid()) {
@@ -4089,7 +4093,12 @@ public:
       raw_expr->set_allocator(allocator_);
       raw_expr->set_expr_factory(*this);
       raw_expr->set_expr_type(expr_type);
-      if (OB_FAIL(expr_store_.store_obj(raw_expr))) {
+      if (OB_FAIL(raw_expr->get_expr_info().get_init_err()) ||
+          OB_FAIL(raw_expr->get_relation_ids().get_init_err())) {
+        SQL_RESV_LOG(WARN, "failed to init ObSqlBitSet", K(ret));
+        raw_expr->~ExprType();
+        raw_expr = NULL;
+      } else if (OB_FAIL(expr_store_.store_obj(raw_expr))) {
         SQL_RESV_LOG(WARN, "store raw expr failed", K(ret));
         raw_expr->~ExprType();
         raw_expr = NULL;

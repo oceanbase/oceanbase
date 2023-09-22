@@ -1313,9 +1313,10 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr& expr)
       // then it most likely be a const shared expr and need to calculate again
       if (ret == OB_ENTRY_NOT_EXIST && idx == OB_INVALID_INDEX &&
           (expr.has_flag(IS_CONST) || expr.has_flag(IS_CONST_EXPR))) {
-        ret = OB_SUCCESS;
-        expr.clear_flag(IS_COLUMNLIZED);
         LOG_TRACE("need to recalculate const expr", K(expr));
+        if (OB_FAIL(expr.clear_flag(IS_COLUMNLIZED))) {
+          LOG_WARN("failed to clear flag", K(ret));
+        }
       } else if (ret != OB_ENTRY_NOT_EXIST) {
         LOG_WARN("get index failed", K(ret), K(expr), K(idx));
       }
@@ -1521,8 +1522,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
 
               FOREACH(e, columnlized_exprs)
               {
-                if ((*e)->has_flag(IS_COLUMNLIZED)) {
-                  (*e)->clear_flag(IS_COLUMNLIZED);
+                if (OB_FAIL((*e)->clear_flag(IS_COLUMNLIZED))) {
+                  LOG_WARN("failed to clear flag", K(ret));
                 }
               }
             }
@@ -1802,9 +1803,10 @@ int ObExprGeneratorImpl::generate_expr_operator(ObRawExpr& raw_expr, ObExprOpera
   fetcher.op_ = NULL;
   ObItemType type = raw_expr.get_expr_type();
   if (IS_EXPR_OP(type) && !IS_AGGR_FUN(type)) {
-    raw_expr.clear_flag(IS_COLUMNLIZED);
-    // no expr operator for set expr
-    if (!(type > T_OP_SET && type <= T_OP_EXCEPT)) {
+    if (OB_FAIL(raw_expr.clear_flag(IS_COLUMNLIZED))) {
+      LOG_WARN("failed to clear flag", K(ret));
+    } else if (!(type > T_OP_SET && type <= T_OP_EXCEPT)) {
+      // no expr operator for set expr
       OZ(raw_expr.do_visit(*this));
     }
   }
