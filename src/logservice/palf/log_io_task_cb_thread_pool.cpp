@@ -126,6 +126,9 @@ void LogIOTaskCbThreadPool::handle(void *task)
   } else {
     PALF_LOG(TRACE, "LogIOTaskCbThreadPool handle success");
   }
+  if (OB_NOT_NULL(log_io_task)) {
+    log_io_task->free_this(palf_env_impl_);
+  }
 }
 
 int LogIOTaskCbThreadPool::get_tg_id() const
