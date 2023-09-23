@@ -227,11 +227,11 @@ private:
       const int err,
       const share::ObTransferTaskID &task_id,
       const share::ObTransferTaskComment &result_comment);
+  int64_t get_tablet_count_threshold_() const;
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms
   static const int64_t PART_COUNT_IN_A_TRANSFER = 100;
-  static const int64_t TABLET_COUNT_THRESHOLD_IN_A_TRANSFER = 100;
 
   bool is_inited_;
   uint64_t tenant_id_;
