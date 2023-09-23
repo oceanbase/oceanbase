@@ -75,6 +75,7 @@ public:
   void close();
   virtual bool is_closed() const;
   // use user provided the statement
+  int create_statement(ObMySQLStatement &stmt, const char *sql);
   int create_statement(ObMySQLStatement &stmt, const uint64_t tenant_id, const char *sql);
   int prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql);
   int escape(const char *from, const int64_t from_size, char *to,
@@ -88,6 +89,9 @@ public:
   void set_last_error(int err_code);
   int get_last_error(void) const;
 
+  virtual int execute_read(const char *sql, ObISQLClient::ReadResult &res, 
+      bool is_user_sql = false, const common::ObAddr *sql_exec_addr = nullptr) override;
+      
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;

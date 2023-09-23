@@ -143,6 +143,8 @@ public:
            const bool is_oracle_mode = false);
   int destroy(void);
   inline void reset() { destroy(); }
+  virtual int execute_read(const char *sql, common::ObISQLClient::ReadResult &res,
+                           bool is_user_sql = false, const common::ObAddr *sql_exec_addr = nullptr) override;
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;

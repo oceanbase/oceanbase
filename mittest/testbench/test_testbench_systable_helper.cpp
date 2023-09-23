@@ -1,35 +1,25 @@
+#include "test_testbench_config_base.h"
 #include "testbench/ob_testbench_systable_helper.h"
 #include "gtest/gtest.h"
 
 namespace oceanbase {
 namespace unittest {
 
-class TestSystableHelper : public ::testing::Test {
+class TestSystableHelper : public TestConfig {
 public:
-  TestSystableHelper() : mysql_config(), systable_helper() {}
+  TestSystableHelper() : systable_helper() {}
   ~TestSystableHelper() {}
 
   virtual void SetUp();
   virtual void Tear();
 
 public:
-  libobcdc::MySQLConnConfig mysql_config;
   testbench::ObTestbenchSystableHelper systable_helper;
 };
 
 void TestSystableHelper::SetUp() {
-  common::ObAddr addr;
-  const char *host = "127.0.0.1";
-  const int32_t port = 2881;
-  addr.set_ip_addr(host, port);
-  const int64_t sql_conn_timeout_us = 10L * 1000 * 1000;
-  const int64_t sql_query_timeout_us = 10L * 1000 * 1000;
-  const char *user = "root@sys";
-  const char *pass = "";
-  const char *db = "oceanbase";
-  mysql_config.reset(addr, user, pass, db, sql_conn_timeout_us / 1000000L,
-                     sql_query_timeout_us / 1000000L);
-  systable_helper.init_conn(mysql_config);
+  TestConfig::SetUp();
+  ASSERT_EQ(OB_SUCCESS, systable_helper.init_conn(mysql_config));
 }
 
 void TestSystableHelper::Tear() { systable_helper.destroy(); }

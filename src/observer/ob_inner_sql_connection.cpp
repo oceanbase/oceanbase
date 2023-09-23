@@ -1944,6 +1944,14 @@ int ObInnerSQLConnection::execute_read(const uint64_t tenant_id,
   return execute_read(GCONF.cluster_id, tenant_id, sql, res, is_user_sql, sql_exec_addr);
 }
 
+int ObInnerSQLConnection::execute_read(const char* sql,
+                                       ObISQLClient::ReadResult &res,
+                                       bool is_user_sql,
+                                       const common::ObAddr *sql_exec_addr) 
+{
+  return OB_NOT_SUPPORTED;
+}
+
 int ObInnerSQLConnection::execute_read(const int64_t cluster_id,
                                        const uint64_t tenant_id,
                                        const ObString &sql,

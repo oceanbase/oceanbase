@@ -103,7 +103,6 @@ int ObMySQLConnection::init(ObServerConnectionPool *pool)
   return ret;
 }
 
-
 void ObMySQLConnection::set_timeout(const int64_t timeout)
 {
   timeout_ = timeout;
@@ -121,6 +120,15 @@ void ObMySQLConnection::reset()
   error_times_ = 0;
   succ_times_ = 0;
   set_last_error(OB_SUCCESS);
+}
+
+int ObMySQLConnection::create_statement(ObMySQLStatement &stmt, const char *sql) 
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(stmt.init(*this, sql))) {
+    LOG_WARN("fail to init prepared statement", K(ret));
+  }
+  return ret;
 }
 
 int ObMySQLConnection::create_statement(ObMySQLStatement &stmt, const uint64_t tenant_id, const char *sql)
@@ -535,6 +543,34 @@ int ObMySQLConnection::execute_read(const int64_t cluster_id, const uint64_t ten
 {
   UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, sql_exec_addr);
   return OB_NOT_SUPPORTED;
+}
+
+int ObMySQLConnection::execute_read(const char *sql, ObISQLClient::ReadResult &res, bool is_user_sql, 
+    const common::ObAddr *sql_exec_addr) 
+{
+  UNUSED(is_user_sql);
+  UNUSED(sql_exec_addr);
+  int ret = OB_SUCCESS;
+  ObMySQLReadContext *read_ctx = NULL;
+  if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not establised. call connect first", K(ret));
+  } else if (OB_FAIL(res.create_handler(read_ctx))) {
+    LOG_ERROR("create result handler failed", K(ret));
+  } else if (OB_FAIL(create_statement(read_ctx->stmt_, sql))) {
+    LOG_ERROR("create statement failed", KCSTRING(sql), K(ret));
+  } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query(res.is_enable_use_result()))) {
+    ret = get_last_error();
+    const int ER_LOCK_WAIT_TIMEOUT = -1205;
+    if (ER_LOCK_WAIT_TIMEOUT == ret) {
+      LOG_INFO("query failed", K(get_server()), KCSTRING(sql), K(ret));
+    } else {
+      LOG_WARN("query failed", K(get_server()), KCSTRING(sql), K(ret));
+    }
+  } else {
+    LOG_DEBUG("query succeed", K(get_server()), KCSTRING(sql), K(ret));
+  }
+  return ret;
 }
 
 int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,

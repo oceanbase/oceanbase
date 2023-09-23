@@ -6,5 +6,5 @@ endfunction()
 
 ob_mittest_testbench(test_testbench_systable_helper test_testbench_systable_helper.cpp)
 ob_mittest_testbench(test_testbench_server_provider test_testbench_server_provider.cpp)
-# ob_mittest_testbench(test_mysql_connection_pool test_mysql_connection_pool.cpp)
+ob_mittest_testbench(test_mysql_connection_pool test_mysql_connection_pool.cpp)
 # ob_mittest_testbench(test_async_operation test_async_operation.cpp)
