@@ -18,6 +18,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/lock/ob_latch.h"
 #include "lib/net/ob_addr.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase {
 namespace lib {
@@ -126,17 +127,20 @@ public:
   class RpcGuard : public BaseWaitGuard
   {
   public:
-    OB_INLINE explicit RpcGuard(const easy_addr_t& addr)
+    OB_INLINE explicit RpcGuard(const easy_addr_t& addr, obrpc::ObRpcPacketCode pcode)
     {
       IGNORE_RETURN new (&rpc_dest_addr_) ObAddr(addr);
+      pcode_ = pcode;
     }
-    OB_INLINE explicit RpcGuard(const ObAddr& addr)
+    OB_INLINE explicit RpcGuard(const ObAddr& addr, obrpc::ObRpcPacketCode pcode)
     {
       IGNORE_RETURN new (&rpc_dest_addr_) ObAddr(addr);
+      pcode_ = pcode;
     }
     ~RpcGuard()
     {
       rpc_dest_addr_.reset();
+      pcode_ = obrpc::ObRpcPacketCode::OB_INVALID_RPC_CODE;
     }
   };
 
@@ -144,13 +148,14 @@ public:
   static constexpr uint8_t WAIT_IN_TENANT_QUEUE = (1 << 1);
   static constexpr uint8_t WAIT_FOR_IO_EVENT    = (1 << 2);
   static constexpr uint8_t WAIT_FOR_LOCAL_RETRY = (1 << 3); //Statistics of local retry waiting time for dynamically increasing threads.
-  static constexpr uint8_t WAIT_FOR_PX_MSG = (1 << 4);
+  static constexpr uint8_t WAIT_FOR_PX_MSG      = (1 << 4);
   // for thread diagnose, maybe replace it with union later.
   static thread_local int64_t loop_ts_;
   static thread_local pthread_t thread_joined_;
   static thread_local int64_t sleep_us_;
   static thread_local int64_t blocking_ts_;
   static thread_local ObAddr rpc_dest_addr_;
+  static thread_local obrpc::ObRpcPacketCode pcode_;
   static thread_local uint8_t wait_event_;
 private:
   static void* __th_start(void *th);
