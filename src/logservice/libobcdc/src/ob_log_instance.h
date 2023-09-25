@@ -203,6 +203,8 @@ private:
   int check_sync_mode_();
   int init_sys_var_for_generate_column_schema_();
   int init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb);
+  // will check if inited_ then destroy if force_destroy = false
+  void do_destroy_(const bool force_destroy = false);
   int get_pid_();
   int init_self_addr_();
   int init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version);
