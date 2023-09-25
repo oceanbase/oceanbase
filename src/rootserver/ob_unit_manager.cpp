@@ -106,6 +106,15 @@ double ObUnitManager::ObUnitLoad::get_demand(ObResourceType resource_type) const
   return ret;
 }
 
+const char *ObUnitManager::end_migrate_op_type_to_str(const ObUnitManager::EndMigrateOp &t)
+{
+  const char* str = "UNKNOWN";
+  if (EndMigrateOp::COMMIT == t) { str = "COMMIT"; }
+  else if (EndMigrateOp::ABORT == t) { str = "ABORT"; }
+  else if (EndMigrateOp::REVERSE == t) { str = "REVERSE"; }
+  else { str = "NONE"; }
+  return str;
+}
 ////////////////////////////////////////////////////////////////
 ObUnitManager::ObUnitManager(ObServerManager &server_mgr, ObZoneManager &zone_mgr)
 : inited_(false), loaded_(false), proxy_(NULL), server_config_(NULL),
@@ -8439,7 +8448,8 @@ int ObUnitManager::migrate_unit_(const uint64_t unit_id, const ObAddr &dst, cons
           "unit_id", unit->unit_id_,
           "migrate_from_server", unit->migrate_from_server_,
           "server", unit->server_,
-          "tenant_id", pool->tenant_id_);
+          "tenant_id", pool->tenant_id_,
+          "manual_migrate", is_manual ? "YES" : "NO");
     }
   }
   LOG_INFO("finish migrate unit", KR(ret), K(unit_id), K(dst), K(is_manual));
@@ -8725,6 +8735,7 @@ int ObUnitManager::end_migrate_unit(const uint64_t unit_id, const EndMigrateOp e
     } else {
       const ObAddr migrate_from_server = unit->migrate_from_server_;
       const ObAddr unit_server = unit->server_;
+      const bool is_manual = unit->is_manual_migrate();
       ObUnit new_unit = *unit;
       new_unit.is_manual_migrate_ = false;  // clear manual_migrate
       // generate new unit
@@ -8782,10 +8793,11 @@ int ObUnitManager::end_migrate_unit(const uint64_t unit_id, const EndMigrateOp e
         }
         ROOTSERVICE_EVENT_ADD("unit", "finish_migrate_unit",
                               "unit_id", unit_id,
-                              "end_op", end_migrate_op,
+                              "end_op", end_migrate_op_type_to_str(end_migrate_op),
                               "migrate_from_server", migrate_from_server,
                               "server", unit_server,
-                              "tenant_id", tenant_id);
+                              "tenant_id", tenant_id,
+                              "manual_migrate", is_manual ? "YES" : "NO");
 
         // complete the job if exists
         char ip_buf[common::MAX_IP_ADDR_LENGTH];

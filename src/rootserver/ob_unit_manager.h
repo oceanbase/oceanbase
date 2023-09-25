@@ -118,6 +118,8 @@ public:
     REVERSE,
   };
 
+  const char *end_migrate_op_type_to_str(const EndMigrateOp &t);
+
 public:
   ObUnitManager(ObServerManager &server_mgr, ObZoneManager &zone_mgr);
   virtual ~ObUnitManager();
