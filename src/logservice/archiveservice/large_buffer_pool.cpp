@@ -171,14 +171,11 @@ LargeBufferPool::BufferNode::BufferNode(const BufferNode &other)
   assign(other);
 }
 
+// BufferNode is the element of SEArray, and its contents will be transfered by assign function in SEArray reserve,
+// so the buffer_ can not be freed in deconstruct function
 LargeBufferPool::BufferNode::~BufferNode()
 {
-  WLockGuard guard(rwlock_);
-  if (issued_) {
-    // do nothing
-  } else {
-    buffer_.purge();
-  }
+  // do nothing, buffer_ will be freed only with purge function
 }
 
 // maybe optimize lock usage
