@@ -423,6 +423,9 @@ OB_INLINE int ObResultSet::inner_get_next_row(const common::ObNewRow *&row)
     _OB_LOG(ERROR, "phy_plan not init");
     ret = OB_NOT_INIT;
   }
+  //Save the current execution state to determine whether to refresh location
+  //and perform other necessary cleanup operations when the statement exits.
+  DAS_CTX(get_exec_context()).get_location_router().save_cur_exec_status(ret);
 
   return ret;
 }
@@ -938,6 +941,9 @@ int ObResultSet::close(int &client_ret)
   if (OB_SUCCESS != err && err != errcode_ && close_fail_cb_.is_valid()) {
     close_fail_cb_(err, client_ret);
   }
+  //Save the current execution state to determine whether to refresh location
+  //and perform other necessary cleanup operations when the statement exits.
+  DAS_CTX(get_exec_context()).get_location_router().save_cur_exec_status(ret);
   //NG_TRACE_EXT(result_set_close, OB_ID(ret), ret, OB_ID(arg1), prev_ret,
                //OB_ID(arg2), ins_ret, OB_ID(arg3), errcode_, OB_ID(async), async);
   return ret;  // 后面所有的操作都通过callback来完成

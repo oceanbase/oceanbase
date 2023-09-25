@@ -558,6 +558,9 @@ inline void ObResultSet::set_message(const char *message)
 inline void ObResultSet::set_errcode(int code)
 {
   errcode_ = code;
+  //Save the current execution state to determine whether to refresh location
+  //and perform other necessary cleanup operations when the statement exits.
+  DAS_CTX(get_exec_context()).get_location_router().save_cur_exec_status(code);
 }
 
 inline int ObResultSet::add_field_column(const common::ObField &field)
