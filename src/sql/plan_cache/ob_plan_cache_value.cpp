@@ -409,7 +409,7 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
         LOG_WARN("fail to get one params", K(ret));
       } else if (OB_FAIL(pc_ctx.fp_result_.cache_params_->assign(param_store))) {
         LOG_WARN("assign params failed", K(ret), K(param_store));
-      } else if (batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same)) {
+      } else if (OB_FAIL(batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same))) {
         LOG_WARN("fail to match_params_info", K(ret), K(outline_param_idx), KPC(params));
       } else {
         // not match this plan, try match next plan
@@ -428,7 +428,7 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
           LOG_WARN("assign params failed", K(ret), K(param_store));
         } else if (OB_FAIL(phy_ctx->init_datum_param_store())) {
           LOG_WARN("init datum_store failed", K(ret), K(param_store));
-        } else if (batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same)) {
+        } else if (OB_FAIL(batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same))) {
           LOG_WARN("fail to match_params_info", K(ret), K(outline_param_idx), KPC(params));
         } else if (i != 0 && !is_same) {
           ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
@@ -1209,7 +1209,6 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
   bool need_new_planset = true;
   bool is_old_version = false;
   int64_t outline_param_idx = OB_INVALID_INDEX;
-  ObPlanSet *batch_plan_set = nullptr;
   int add_plan_ret = OB_SUCCESS;
   bool is_multi_stmt_batch = pc_ctx.sql_ctx_.is_batch_params_execute();
   //检查在pcv中缓存的该sql涉及的view 及 table的version，
@@ -1263,8 +1262,10 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
       } else {//param info已经匹配
         SQL_PC_LOG(DEBUG, "add plan to plan set");
         need_new_planset = false;
-        batch_plan_set = cur_plan_set;
-        if (OB_FAIL(cur_plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
+        if (is_multi_stmt_batch &&
+            OB_FAIL(match_and_generate_ext_params(cur_plan_set, pc_ctx, outline_param_idx))) {
+          LOG_TRACE("fail to match and generate ext_params", K(ret));
+        } else if (OB_FAIL(cur_plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
           SQL_PC_LOG(TRACE, "failed to add plan", K(ret));
         }
         break;
@@ -1282,13 +1283,15 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
                                       plan_set))) {
         SQL_PC_LOG(WARN, "failed to create new plan set", K(ret));
       } else {
-        batch_plan_set = plan_set;
         plan_set->set_plan_cache_value(this);
         if (OB_FAIL(plan_set->init_new_set(pc_ctx,
                                            plan,
                                            outline_param_idx,
                                            get_pc_malloc()))) {
           LOG_WARN("init new plan set failed", K(ret));
+        } else if (is_multi_stmt_batch &&
+            OB_FAIL(match_and_generate_ext_params(plan_set, pc_ctx, outline_param_idx))) {
+          LOG_TRACE("fail to match and generate ext_params", K(ret));
         } else if (OB_FAIL(plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
           SQL_PC_LOG(TRACE, "failed to add plan to plan set", K(ret));
         } else if (!plan_sets_.add_last(plan_set)) {
@@ -1305,24 +1308,6 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
           plan_set = NULL;
         }
       }
-    }
-  }
-
-  // 添加plan到cache中失败的场景下，需要继续折叠batch参数，因为添加plan失败并不会影响当前plan继续执行
-  if (plan.is_prcr() || plan.is_sfc() || plan.is_pkg() || plan.is_anon()) {
-    // do nothing
-  } else if ((OB_SUCC(ret) || OB_SUCCESS != add_plan_ret) && is_multi_stmt_batch) {
-    int save_ret = ret;
-    if (OB_FAIL(match_and_generate_ext_params(batch_plan_set, pc_ctx, outline_param_idx))) {
-      LOG_TRACE("fail to match and generate ext_params", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-      // 折叠参数的过程中出现了错误
-      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-      LOG_TRACE("can't execute batch optimization", K(ret));
-    } else {
-      // 还原吞掉的错误码
-      ret = save_ret;
     }
   }
   return ret;
