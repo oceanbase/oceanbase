@@ -228,8 +228,8 @@ private:
   int replace_count_const(ObAggFunRawExpr *agg_expr, ObRawExpr *not_null_expr);
 
   int check_can_use_outer_join(TransformParam &param, bool &is_valid);
-
-  int check_subquery_select(ObQueryRefRawExpr &query_ref, bool &is_valid);
+  int check_subquery_select(const ObQueryRefRawExpr &query_ref, bool &is_valid);
+  int check_subquery_orderby(const ObQueryRefRawExpr &query_ref, bool &is_valid);
 
   int check_subquery_select_for_limit_1(ObSelectStmt &subquery, bool &is_valid, ObIArray<ObPCParamEqualInfo>& equal_param_info);
 
