@@ -32,6 +32,7 @@ class ObKeyGenerator
 {
 public:
   static int generate_encrypt_key(char *buf, int64_t len);
+  static int generate_encrypt_key_char(char *buf, int64_t len);
 };
 
 enum ObCipherOpMode {
