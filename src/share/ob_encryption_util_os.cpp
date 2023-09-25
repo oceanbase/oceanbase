@@ -46,6 +46,31 @@ int ObKeyGenerator::generate_encrypt_key(char *buf, int64_t len)
   return ret;
 }
 
+int ObKeyGenerator::generate_encrypt_key_char(char *buf, int64_t len)
+{
+  int ret = OB_SUCCESS;
+  if (len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the buf of len is invalid", K(ret));
+  } else {
+    int i;
+    for (i = 0; i < len; ++i) {
+      switch (common::ObRandom::rand(0, 2)) {
+        case 1:
+        buf[i] = 'A' + common::ObRandom::rand(0, 25);
+        break;
+        case 2:
+        buf[i] = 'a' + common::ObRandom::rand(0, 25);
+        break;
+        default:
+        buf[i] = '0' + common::ObRandom::rand(0, 9);
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 static const EVP_CIPHER *get_evp_cipher(const ObCipherOpMode mode)
 {
   switch (mode)
