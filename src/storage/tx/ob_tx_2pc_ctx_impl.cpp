@@ -251,23 +251,19 @@ int ObPartTransCtx::do_commit()
 int ObPartTransCtx::check_and_response_scheduler_(ObTxState next_phase, int result)
 {
   int ret = OB_SUCCESS;
-  ret = OB_E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
-  if (!is_sub2pc() && OB_FAIL(ret)) {
-    // when error inject, response scheduler delayed to CLEAR state
-    if (ObTxState::CLEAR == next_phase) {
-      if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        TRANS_LOG(INFO, "response scheduler in clear state", K(ret), K(*this));
-      }
-      ret = OB_SUCCESS;
-    } else {
-      TRANS_LOG(INFO, "response scheduler in 2pc", K(ret), K(result), KPC(this));
-      return OB_SUCCESS;
-    }
-  } else {
-    // general path, won't response scheduler in CLEAR state
-    if (ObTxState::CLEAR == next_phase) {
-      return OB_SUCCESS;
-    }
+  // when error inject, response scheduler delayed to CLEAR state
+  int inject_err = OB_E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
+  if (!is_sub2pc()
+      && inject_err != OB_SUCCESS
+      && next_phase != ObTxState::CLEAR
+      && !callback_scheduler_on_clear_) {
+    callback_scheduler_on_clear_ = true;
+    return OB_SUCCESS;
+  }
+
+  if (callback_scheduler_on_clear_ && ObTxState::CLEAR != next_phase) {
+    // delayed, skip other state
+    return OB_SUCCESS;
   }
 
   if (is_sub2pc()) {

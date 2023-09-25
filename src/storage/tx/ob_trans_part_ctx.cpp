@@ -280,6 +280,7 @@ void ObPartTransCtx::default_init_()
   // lock_.reset();
   stc_.reset();
   commit_cb_.reset();
+  callback_scheduler_on_clear_ = false;
   pending_callback_param_ = OB_SUCCESS;
   trans_need_wait_wrap_.reset();
   is_exiting_ = false;
