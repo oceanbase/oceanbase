@@ -703,8 +703,13 @@ int ObJsonObject::rename_key(const common::ObString &old_key, const common::ObSt
     ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                             object_array_.end(), pair, cmp);
     if (low_iter != object_array_.end() && low_iter->get_key() == old_key) { // Found and covered
-      low_iter->set_key(new_key);
-      sort();
+      if (OB_ISNULL(get_value(new_key))) {
+        low_iter->set_key(new_key);
+        sort();
+      } else {
+        ret = OB_ERR_DUPLICATE_KEY;
+        LOG_WARN("duplicated key in object array.", K(ret), K(old_key), K(new_key));
+      }
     } else {
       ret = OB_ERR_JSON_KEY_NOT_FOUND;
       LOG_WARN("JSON key name not found.", K(ret), K(old_key));
