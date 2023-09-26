@@ -158,8 +158,6 @@ delete from t1|
 drop procedure zip|
 drop procedure bar|
 call zap(7, @zap)|
-y
-8
 select @zap|
 @zap
 8
@@ -215,8 +213,6 @@ select @zap|
 @zap
 8
 call incr(@zap)|
-x
-9
 select @zap|
 @zap
 9
@@ -854,8 +850,6 @@ end$
 set @@sql_mode = ''|
 set sql_select_limit = 1|
 call modes(@c1, @c2)|
-c1	c2
-12	3
 set sql_select_limit = default|
 select @c1, @c2|
 @c1	@c2
@@ -1765,8 +1759,6 @@ drop procedure if exists bug1656|
 create procedure bug1656(out p1 int, out p2 int)
 select * from t70 into p1, p1|
 call bug1656(@1, @2)|
-p1	p2
-2	NULL
 select @1, @2|
 @1	@2
 2	NULL
@@ -2014,27 +2006,19 @@ end if;
 end|
 set time_zone='+03:00';
 call bug3426(1000, @i)|
-x
-2
 select @i, from_unixtime(@stamped_time, '%d-%m-%Y %h:%i:%s') as time|
 @i	time
 2	01-01-1970 03:16:40
 call bug3426(NULL, @i)|
-x
-1
 select @i, from_unixtime(@stamped_time, '%d-%m-%Y %h:%i:%s') as time|
 @i	time
 1	01-01-1970 03:00:10
 alter procedure bug3426 sql security invoker|
 call bug3426(NULL, @i)|
-x
-1
 select @i, from_unixtime(@stamped_time, '%d-%m-%Y %h:%i:%s') as time|
 @i	time
 1	01-01-1970 03:00:10
 call bug3426(1000, @i)|
-x
-2
 select @i, from_unixtime(@stamped_time, '%d-%m-%Y %h:%i:%s') as time|
 @i	time
 2	01-01-1970 03:16:40
@@ -2244,8 +2228,6 @@ set y = x;
 end|
 insert into t1 values ("a", 2), ("b", 3)|
 call bug336(@y)|
-y
-5
 select @y|
 @y
 5
@@ -2355,8 +2337,6 @@ end|
 insert into t2 values (null, null, null)|
 set @x = 42|
 call bug4941(@x)|
-x
-NULL
 select @x|
 @x
 NULL
@@ -2771,11 +2751,7 @@ declare v int default 100;
 select v/10;
 end|
 call bug9674_1(@sptmp)|
-arg
-10
 call bug9674_1(@sptmp)|
-arg
-10
 select @sptmp|
 @sptmp
 10
@@ -3325,8 +3301,6 @@ drop procedure if exists bug12849_1|
 create procedure bug12849_1(inout x char) select x into x|
 set @var='a'|
 call bug12849_1(@var)|
-x
-a
 select @var|
 @var
 a
@@ -3338,8 +3312,6 @@ select concat(foo, foo) INTO foo;
 end|
 set @var='abcd'|
 call bug12849_2(@var)|
-foo
-abcdabcd
 select @var|
 @var
 abcdabcd
@@ -3447,8 +3419,6 @@ drop procedure if exists bug12979_1|
 create procedure bug12979_1(inout d decimal(5)) set d = d / 2|
 set @bug12979_user_var = NULL|
 call bug12979_1(@bug12979_user_var)|
-d
-NULL
 drop procedure bug12979_1|
 drop procedure if exists bug12979_2|
 create procedure bug12979_2()
@@ -3582,8 +3552,6 @@ select bug13941('this is a test')|
 bug13941('this is a test')
 questo una prova
 call bug13941(@a)|
-sout
-Local
 select @a|
 @a
 Local
@@ -4381,12 +4349,8 @@ select routine_name,routine_schema from information_schema.routines where
 routine_schema like 'bug18344%'|
 routine_name	routine_schema
 bug18344	bug18344_012345678901
-bug18344	bug18344_012345678901
-bug18344_2	bug18344_012345678901
 bug18344_2	bug18344_012345678901
 bug18344	bug18344_0123456789012
-bug18344	bug18344_0123456789012
-bug18344_2	bug18344_0123456789012
 bug18344_2	bug18344_0123456789012
 drop database bug18344_012345678901|
 drop database bug18344_0123456789012|
@@ -4439,8 +4403,6 @@ bug18589_f1(REPEAT("a", 767))
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 SET @bug18589_v1 = ""|
 CALL bug18589_p1(REPEAT("a", 767), @bug18589_v1)|
-ret
-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 SELECT @bug18589_v1|
 @bug18589_v1
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -4729,20 +4691,16 @@ CALL bug16676_p1('a', @v2, @v3)|
 CHARSET(p1)	COLLATION(p1)
 CHARSET(p2)	COLLATION(p2)
 CHARSET(p3)	COLLATION(p3)
-p2	p3
 utf8mb4	utf8mb4_general_ci
 utf8mb4	utf8mb4_general_ci
 binary	binary
-b	NULL
 CALL bug16676_p2('a', @v2, @v3)|
 CHARSET(p1)	COLLATION(p1)
 CHARSET(p2)	COLLATION(p2)
 CHARSET(p3)	COLLATION(p3)
-p2	p3
 binary	binary
 binary	binary
 binary	binary
-b	NULL
 use test|
 DROP DATABASE mysqltest1|
 drop table if exists t3|
