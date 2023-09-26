@@ -570,7 +570,7 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
         node_type = ObJsonNodeType::J_DATETIME;
         value = datum.get_datetime();
         ob_time.mode_ = DT_TYPE_DATETIME;
-        if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, tz_info, ob_time))) {
+        if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, nullptr, ob_time))) {
           LOG_WARN("datetime transform to ob time failed", K(ret), K(value));
         }
       } else {
