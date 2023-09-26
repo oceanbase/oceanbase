@@ -2170,6 +2170,23 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
     use_skip_scan = OptSkipScanState::SS_UNSET;
   }
 
+  if (OB_SUCC(ret) && OptSkipScanState::SS_DISABLE != use_skip_scan) {
+    // OptColumnMeta for prefix columns may be not added. It's needed to calculate prefix NDV
+    const ObIArray<ColumnItem> &column_items = index_info_entry->get_range_info().get_range_columns();
+    const int64_t ss_offset = query_range->get_skip_scan_offset();
+    const OptSelectivityCtx &ctx = get_plan()->get_selectivity_ctx();
+    OptTableMeta *table_meta = NULL;
+    if (OB_UNLIKELY(column_items.count() < ss_offset) ||
+        OB_ISNULL(table_meta = get_plan()->get_basic_table_metas().get_table_meta_by_table_id(table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected params", K(ret), K(column_items.count()), K(ss_offset), K(table_meta));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ss_offset; ++i) {
+      if (OB_FAIL(table_meta->add_column_meta_no_dup(column_items.at(i).column_id_ , ctx))) {
+        LOG_WARN("failed to add column meta no duplicate", K(ret));
+      }
+    }
+  }
   LOG_TRACE("check use skip scan", K(helper.is_inner_path_),
                           K(hint_force_skip_scan), K(hint_force_no_skip_scan), K(use_skip_scan));
   return ret;

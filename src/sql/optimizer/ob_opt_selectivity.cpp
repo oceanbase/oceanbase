@@ -134,43 +134,70 @@ int OptTableMeta::init(const uint64_t table_id,
   }
   //init column ndv
   for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
-    column_id = column_ids.at(i);
-    int64_t global_ndv = 0;
-    int64_t num_null = 0;
-    bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id);
-    ObGlobalColumnStat stat;
-    if (is_single_pkey) {
-      global_ndv = rows_;
-      num_null = 0;
-    } else if (use_default_stat()) {
-      global_ndv = std::min(rows, 100L);
-      num_null = rows * EST_DEF_COL_NULL_RATIO;
-    } else if (OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(ctx.get_opt_stat_manager()),
-                                      K(ctx.get_session_info()));
-    } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                                   ref_table_id_,
-                                                                   all_used_part_id,
-                                                                   column_id,
-                                                                   all_used_global_parts,
-                                                                   rows,
-                                                                   scale_ratio,
-                                                                   stat))) {
-      LOG_WARN("failed to get column stats", K(ret));
-    } else if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
-      global_ndv = std::min(rows, 100L);
-      num_null = rows * EST_DEF_COL_NULL_RATIO;
-    } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
-      global_ndv = 1;
-      num_null = stat.null_val_;
-    } else {
-      global_ndv = stat.ndv_val_;
-      num_null = stat.null_val_;
+    if (OB_FAIL(init_column_meta(ctx, column_ids.at(i), column_metas_.at(i)))) {
+      LOG_WARN("failed to init column ", K(ret));
     }
-    if (OB_SUCC(ret)) {
-      column_metas_.at(i).init(column_id, global_ndv, num_null, stat.avglen_val_);
-    }
+  }
+  return ret;
+}
+
+int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
+                                   const uint64_t column_id,
+                                   OptColumnMeta &col_meta)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalColumnStat stat;
+  bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id);
+  int64_t global_ndv = 0;
+  int64_t num_null = 0;
+  if (is_single_pkey) {
+    global_ndv = rows_;
+    num_null = 0;
+  } else if (use_default_stat()) {
+    global_ndv = std::min(rows_, 100.0);
+    num_null = rows_ * EST_DEF_COL_NULL_RATIO;
+  } else if (OB_ISNULL(ctx.get_opt_stat_manager()) || OB_ISNULL(ctx.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_opt_stat_manager()),
+                                    K(ctx.get_session_info()));
+  } else if (OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
+                                                                 ref_table_id_,
+                                                                 all_used_parts_,
+                                                                 column_id,
+                                                                 all_used_global_parts_,
+                                                                 rows_,
+                                                                 scale_ratio_,
+                                                                 stat))) {
+    LOG_WARN("failed to get column stats", K(ret));
+  } else if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
+    global_ndv = std::min(rows_, 100.0);
+    num_null = rows_ * EST_DEF_COL_NULL_RATIO;
+  } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
+    global_ndv = 1;
+    num_null = stat.null_val_;
+  } else {
+    global_ndv = stat.ndv_val_;
+    num_null = stat.null_val_;
+  }
+
+  if (OB_SUCC(ret)) {
+    col_meta.init(column_id, global_ndv, num_null, stat.avglen_val_);
+  }
+  return ret;
+}
+
+int OptTableMeta::add_column_meta_no_dup(const uint64_t column_id,
+                                         const OptSelectivityCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  OptColumnMeta *col_meta = NULL;
+  if (NULL != OptTableMeta::get_column_meta(column_id)) {
+    /* do nothing */
+  } else if (OB_ISNULL(col_meta = column_metas_.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate place holder for column meta", K(ret));
+  } else if (OB_FAIL(init_column_meta(ctx, column_id, *col_meta))) {
+    LOG_WARN("failed to init column meta", K(ret));
   }
   return ret;
 }
