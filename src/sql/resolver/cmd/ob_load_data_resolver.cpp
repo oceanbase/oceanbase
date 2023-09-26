@@ -246,6 +246,8 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("load data to the view is not supported", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data to the view is");
+    } else if (OB_FAIL(check_trigger_constraint(tschema))) {
+      LOG_WARN("check trigger constraint failed", K(ret), KPC(tschema));
     } else {
       load_args.table_id_ = tschema->get_table_id();
       load_args.table_name_ = table_name;
@@ -1334,6 +1336,42 @@ int ObLoadDataResolver::resolve_char_node(const ParseNode &node, int32_t &single
   } else {
     ret = OB_WRONG_FIELD_TERMINATORS;
     LOG_WARN("closed str should be a character", K(ret), K(static_cast<int32_t>(node.str_value_[0])));
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)
+      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(session_info_)
+      || OB_ISNULL(schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
+             K(session_info_), K(schema_checker_->get_schema_guard()));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_trigger_list().count(); i++) {
+      const ObTriggerInfo *trg_info = NULL;
+      share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      if (OB_FAIL(schema_guard->get_trigger_info(tenant_id, table_schema->get_trigger_list().at(i), trg_info))) {
+        LOG_WARN("get trigger info failed", K(ret), K(tenant_id), K(table_schema->get_trigger_list().at(i)));
+      } else if (OB_ISNULL(trg_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("trigger info is null", K(ret), K(tenant_id), K(table_schema->get_trigger_list().at(i)));
+      } else if (trg_info->is_enable()
+                 && (trg_info->has_insert_event() || trg_info->has_update_event())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support load data if table has insert or update trigger", K(ret), KPC(trg_info));
+        if (lib::is_oracle_mode()) {
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "if table has enabled insert or update trigger, load data");
+        } else {
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "if table has insert or update trigger, load data");
+        }
+      }
+    }
   }
   return ret;
 }
