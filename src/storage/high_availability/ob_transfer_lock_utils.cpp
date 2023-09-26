@@ -212,6 +212,7 @@ int ObMemberListLockUtils::unlock_ls_member_list(const uint64_t tenant_id, const
 
       if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
         LOG_WARN("failed to end trans", K(tmp_ret), K(ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }
@@ -494,6 +495,7 @@ int ObMemberListLockUtils::insert_lock_info(const uint64_t tenant_id, const shar
     }
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
       LOG_WARN("failed to end trans", K(tmp_ret), K(ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   return ret;
