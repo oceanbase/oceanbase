@@ -954,6 +954,7 @@ int ObTableQueryAndMutateP::try_process()
       scan_spec->destroy_executor(executor);
       tb_ctx_.set_expr_info(nullptr);
     }
+    ObTableQueryUtils::destroy_result_iterator(result_iterator);
   }
 
   bool need_rollback_trans = (OB_SUCCESS != ret);

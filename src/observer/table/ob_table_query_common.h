@@ -30,6 +30,7 @@ public:
                                             ObTableQueryResult &one_result,
                                             const ObTableCtx &tb_ctx,
                                             ObTableQueryResultIterator *&result_iter);
+  static void destroy_result_iterator(ObTableQueryResultIterator *result_iter);
 private:
   static int check_htable_query_args(const ObTableQuery &query, const ObTableCtx &tb_ctx);
 private:
