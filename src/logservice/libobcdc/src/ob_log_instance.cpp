@@ -3157,7 +3157,10 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     const bool touch_memory_limit = (memory_hold > memory_limit);
     double pause_dispatch_percent = pause_dispatch_threshold / 100.0;
     if (touch_memory_limit) {
-      pause_dispatch_percent = 0;
+      const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
+      if (user_queue_br_count > queue_backlog_lowest_tolerance || resource_collector_br_count > queue_backlog_lowest_tolerance) {
+        pause_dispatch_percent = 0;
+      }
       // pause redo dispatch
     } else if (touch_memory_warn_limit) {
       pause_dispatch_percent = pause_dispatch_percent * 0.1;
