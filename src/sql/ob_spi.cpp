@@ -2866,7 +2866,6 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
         // 理论上reopen的时候， cg openfor 的时候，已经close了，保险起见，这儿再close一次
         // OZ (cursor_close_impl(ctx, cursor, true, OB_INVALID_ID, OB_INVALID_ID, true));
         if (cursor->is_session_cursor()) {
-          OZ (session->make_cursor(cursor));
           OX (cursor->set_is_session_cursor());
         } else {
           // local ref cursor, just reset
@@ -4758,7 +4757,11 @@ int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, i
           OZ (cursor_close_impl(ctx, cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
         }
       } else {
-        LOG_DEBUG("spi process return ref cursor, cursor not open");
+        // cursor maybe closed already
+        if (-1 == addend) {
+          OX (cursor_info->dec_ref_count());
+        }
+        LOG_DEBUG("spi process return ref cursor, cursor not open", K(cursor_info->get_ref_count()));
       }
     }
   } else {
