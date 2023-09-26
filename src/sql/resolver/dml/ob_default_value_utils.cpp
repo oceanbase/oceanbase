@@ -329,7 +329,11 @@ int ObDefaultValueUtils::resolve_column_ref_in_insert(const ColumnItem* column, 
 int ObDefaultValueUtils::get_default_type_for_insert(const ColumnItem* column, ObDMLDefaultOp& op)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(column) || OB_ISNULL(column->expr_) || OB_ISNULL(params_) || OB_ISNULL(params_->session_info_)) {
+  ObInsertStmt *insert_stmt = dynamic_cast<ObInsertStmt *>(stmt_);
+  if (OB_ISNULL(insert_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is not insert statement", K(ret));
+  } else if (OB_ISNULL(column) || OB_ISNULL(column->expr_) || OB_ISNULL(params_) || OB_ISNULL(params_->session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KPC(column), K(params_), K(ret));
   } else if (column->expr_->is_generated_column()) {
@@ -346,7 +350,7 @@ int ObDefaultValueUtils::get_default_type_for_insert(const ColumnItem* column, O
     } else {
       // Compatible with mysql, different processing needs to be done according to sql_mode
       // strict mode directly reports an error. non-strict mode takes the default value of the data type
-      if (is_strict_mode(params_->session_info_->get_sql_mode())) {
+      if (is_strict_mode(params_->session_info_->get_sql_mode()) && !insert_stmt->is_ignore()) {
         LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
         ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
         LOG_WARN("Column can not be null", K(column->column_name_), K(ret));

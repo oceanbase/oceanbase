@@ -74,6 +74,8 @@ int ObInsertResolver::resolve(const ParseNode& parse_tree)
     LOG_WARN("invalid session info", K(session_info_));
   } else if (FALSE_IT(session_info_->set_ignore_stmt(NULL != parse_tree.children_[3] ? true : false))) {
     // do nothing
+  } else if (FALSE_IT(insert_stmt->set_ignore(NULL != parse_tree.children_[3] ? true : false))) {
+    // do nothing
   } else if (OB_LIKELY(T_SINGLE_TABLE_INSERT == parse_tree.children_[0]->type_)) {
     if (OB_FAIL(resolve_single_table_insert(*parse_tree.children_[0]))) {
       LOG_WARN("resolve single table insert failed", K(ret));
@@ -105,7 +107,6 @@ int ObInsertResolver::resolve(const ParseNode& parse_tree)
   }
 
   if (OB_SUCC(ret)) {
-    insert_stmt->set_ignore(session_info_->is_ignore_stmt());
     if (insert_stmt->is_replace() && insert_stmt->is_ignore()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace statement with ignore");
