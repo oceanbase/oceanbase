@@ -347,7 +347,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
         LOG_WARN("failed to load system variables", K(ret));
       } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
         OB_LOG(WARN, "failed to update database variables", K(ret));
-      } else if (OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
+      } else if (!database_.empty() && OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
                                                       session->get_database_name(),
                                                       db_id))) {
         OB_LOG(WARN, "failed to get database id", K(ret));
