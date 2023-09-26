@@ -19,7 +19,8 @@ namespace oceanbase
 {
 namespace common
 {
-ObFIFOAllocator::ObFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_ID */)
+ObFIFOAllocator::ObFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_ID */,
+                                 const bool enable_record_stat /*= true */)
     : is_inited_(false),
       allocator_(nullptr),
       page_size_(0),
@@ -29,7 +30,7 @@ ObFIFOAllocator::ObFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_I
       current_using_(nullptr),
       normal_used_(0),
       special_total_(0),
-      lock_(ObLatchIds::OB_FIFO_ALLOCATOR_LOCK)
+      lock_(ObLatchIds::OB_FIFO_ALLOCATOR_LOCK, enable_record_stat)
 {
 }
 

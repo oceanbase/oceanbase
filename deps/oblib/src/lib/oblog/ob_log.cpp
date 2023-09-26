@@ -1389,7 +1389,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 2; // 512M
     log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
     allocator_ = new (log_mem_limiter_ + 1) ObVSliceAlloc();
-    error_allocator_ = new (allocator_ + 1) ObFIFOAllocator();
+    error_allocator_ = new (allocator_ + 1) ObFIFOAllocator(OB_SERVER_TENANT_ID, false);
     if (OB_FAIL(allocator_->init(OB_MALLOC_BIG_BLOCK_SIZE,
                                  *log_mem_limiter_,
                                  SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger",

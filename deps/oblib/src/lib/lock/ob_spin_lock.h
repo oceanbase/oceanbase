@@ -31,7 +31,8 @@ namespace common
 class ObSpinLock
 {
 public:
-  explicit ObSpinLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_LOCK);
+  explicit ObSpinLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_LOCK,
+                      bool enable_record_stat = true);
   ~ObSpinLock();
   int lock();
   int lock(const int64_t timeout_us);
@@ -47,9 +48,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSpinLock);
 };
 
-inline ObSpinLock::ObSpinLock(uint32_t latch_id)
+inline ObSpinLock::ObSpinLock(uint32_t latch_id, bool enable_record_stat)
     : latch_id_(latch_id)
 {
+  latch_.enable_record_stat(enable_record_stat);
 }
 
 inline ObSpinLock::~ObSpinLock()
