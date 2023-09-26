@@ -5289,7 +5289,8 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                 query_range_ctx_->cur_expr_is_precise_ = false;
               }
             }
-            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark() &&
+                cur1->item_next_ == NULL && cur2->item_next_ == NULL) {
               if (OB_FAIL(union_in_with_in(or_list,
                                            cur1, cur2,
                                            exec_ctx,
@@ -5312,7 +5313,8 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
               }
             }
             bool need_remove_normal = false;
-            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark() &&
+                cur1->item_next_ == NULL && cur2->item_next_ == NULL) {
               if (OB_FAIL(union_in_with_normal(cur1, cur2,
                                                exec_ctx,
                                                dtc_params,
@@ -5338,7 +5340,8 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                 query_range_ctx_->cur_expr_is_precise_ = false;
               }
             }
-            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark()) {
+            if (OB_SUCC(ret) && !cur1->is_question_mark() && !cur2->is_question_mark() &&
+                cur1->item_next_ == NULL && cur2->item_next_ == NULL) {
               if (OB_FAIL(union_in_with_normal(cur2, cur1,
                                                exec_ctx,
                                                dtc_params,
@@ -8183,7 +8186,7 @@ int ObQueryRange::is_strict_equal_graph(
       } else { // check align
         if (-1 == max_pos) {
           max_pos = next_pos - 1;
-        } else if (cur_pos != max_pos) {
+        } else if (next_pos - 1 != max_pos) {
           is_strict_equal = false;
         }
       }
