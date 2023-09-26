@@ -3598,7 +3598,9 @@ bool ObSysFunRawExpr::inner_same_as(
   } else if (T_FUN_SYS_RAND == get_expr_type() ||
              T_FUN_SYS_GUID == get_expr_type() ||
              T_OP_GET_USER_VAR == get_expr_type() ||
-             T_OP_GET_SYS_VAR == get_expr_type()) {
+             T_OP_GET_SYS_VAR == get_expr_type() ||
+             (has_flag(IS_STATE_FUNC) && (NULL == check_context ||
+                          (NULL != check_context && check_context->need_check_deterministic_)))) {
   } else if (get_expr_class() == expr.get_expr_class()) {
     //for EXPR_UDF and EXPR_SYS_FUNC
     const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
