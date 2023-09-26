@@ -3819,7 +3819,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
     ObParser parser(allocator, session->get_sql_mode(), session->get_local_collation_connection(), pc_ctx.def_name_ctx_);
     if (OB_FAIL(parser.parse(outlined_stmt, parse_result,
                              pc_ctx.is_rewrite_sql_ ? UDR_SQL_MODE : STD_MODE,
-                             pc_ctx.sql_ctx_.handle_batched_multi_stmt()))) {
+                             pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
+                             false, lib::is_mysql_mode() && NULL != session->get_pl_context()))) {
       LOG_WARN("Generate syntax tree failed", K(outlined_stmt), K(ret));
     } else if ((PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
       && OB_FAIL(construct_param_store_from_parameterized_params(

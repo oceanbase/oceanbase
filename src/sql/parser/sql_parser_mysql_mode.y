@@ -10941,7 +10941,12 @@ INTNUM
 | QUESTIONMARK
 {
   $$ = $1;
-  dup_string($$, result, @1.first_column + 1, @1.last_column);
+  if (result->pl_parse_info_.is_pl_parse_ || result->pl_parse_info_.is_inner_parse_) {
+    dup_string($$, result, @1.first_column + 1, @1.last_column);
+  } else {
+    yyerror(&@1, result, "question mark as condition arg not allowed\n");
+    YYABORT_PARSE_SQL_ERROR;
+  }
 }
 | column_name
 {
