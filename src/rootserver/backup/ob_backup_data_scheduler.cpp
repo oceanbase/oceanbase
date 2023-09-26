@@ -141,7 +141,8 @@ int ObBackupDataScheduler::do_get_need_reload_task_(
       ObBackupLSTaskAttr &ls_task = ls_tasks.at(i);
       ObBackupScheduleTask *task = nullptr;
       bool is_dropped = false;
-      if (OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
+      if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
+          && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
         LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
       } else if (is_dropped) {
         // ls deleted, no need to reload, mark it to finish
