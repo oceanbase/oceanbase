@@ -799,11 +799,12 @@ int ObMySQLConnectionPool::acquire_dblink(const dblink_param_ctx &param_ctx, ObI
     LOG_WARN("fail to acquire dblink", K(ret), K(param_ctx));
   } else if (OB_FAIL(try_connect_dblink(dblink_conn, param_ctx.sql_request_level_))) {
     LOG_WARN("fail to try connect dblink", K(ret), K(param_ctx));
-    int release_ret = release_dblink(dblink_conn);
-    if (release_ret != OB_SUCCESS) {
-      LOG_WARN("fail to release dblink conn", K(release_ret), K(param_ctx));
+    if (OB_NOT_NULL(dblink_conn)) {
+      int tmp_ret = release(dblink_conn, false);
+      if (OB_SUCCESS != tmp_ret)
+      LOG_WARN("failed to release conn", K(ret), K(tmp_ret), K(param_ctx));
+      dblink_conn = NULL;
     }
-    dblink_conn = NULL;
   }
   return ret;
 }
