@@ -118,6 +118,8 @@ private:
                                     const int64_t expected_epoch);
 
   void check_merge_interval_time(const bool is_merging);
+  // add merge time statistics into __all_rootservice_event_history
+  void add_merge_time_stat(const ObUpdateMergeStatusTime &stat, const share::ObGlobalMergeInfo &global_info);
 
 private:
   const static int64_t DEFAULT_IDLE_US = 10 * 1000L * 1000L; // 10s
