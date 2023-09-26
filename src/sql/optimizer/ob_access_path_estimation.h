@@ -42,6 +42,8 @@ public:
   static int estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                           const ObTablePartitionInfo &table_part_info,
                                           ObTableMetaInfo &meta);
+
+  static bool is_retry_ret(int ret);
 private:
 
   static int64_t get_get_range_count(const ObIArray<ObNewRange> &ranges);
@@ -152,8 +154,6 @@ private:
                                                         const ObIArray<ObTabletID> &all_tablet_ids,
                                                         const ObIArray<ObLSID> &all_ls_ids,
                                                         ObTableMetaInfo &meta);
-
-  static bool is_retry_ret(int ret);
 
 };
 

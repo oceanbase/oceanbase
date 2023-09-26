@@ -29,6 +29,7 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "common/ob_smart_call.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "sql/optimizer/ob_access_path_estimation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
