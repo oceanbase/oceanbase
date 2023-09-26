@@ -7191,7 +7191,7 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
           ret = OB_ERR_NO_PRIVILEGE;
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (full_path.length() > secure_file_priv_tmp.length()
-            && full_path[pos] != '/') {
+                   && secure_file_priv_tmp != "/" && full_path[pos] != '/') {
           ret = OB_ERR_NO_PRIVILEGE;
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         }
