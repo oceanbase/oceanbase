@@ -991,8 +991,12 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     LOG_ERROR("start_tenant_service_ failed", KR(ret));
   }
 
-  LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
-      K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
+  if (OB_SUCC(ret)) {
+    LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
+        K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
+  } else {
+    do_destroy_(true/*force_destroy*/);
+  }
 
   return ret;
 }
@@ -1344,10 +1348,16 @@ void ObLogInstance::destroy_components_()
 
 void ObLogInstance::destroy()
 {
+  const bool force_destroy = false;
+  do_destroy_(force_destroy);
+}
+
+void ObLogInstance::do_destroy_(const bool force_destroy)
+{
   do_stop_("DESTROY_OBCDC");
 
-  if (inited_) {
-    LOG_INFO("destroy obcdc begin");
+  if (inited_ || force_destroy) {
+    LOG_INFO("destroy obcdc begin", K(force_destroy));
     inited_ = false;
 
     oblog_major_ = 0;
@@ -2916,15 +2926,16 @@ int ObLogInstance::init_ob_cluster_version_()
     if (min_observer_version < CLUSTER_VERSION_4_1_0_0) {
       // OB 4.0 only support online schema
       refresh_mode_ = RefreshMode::ONLINE;
-    } else if (min_observer_version >= CLUSTER_VERSION_4_1_0_0) {
+    } else if (min_observer_version >= CLUSTER_VERSION_4_2_0_0) {
       // For OB Version greater than 4.1:
       // 1. tenant_sync_mode must use data_dict for OB 4.2
-      // 2. suggest use data_dict for OB 4.1 in case of upgrade to OB 4.2 and transfer may lose
-      // logstream in online_schema mode
+      // 2. suggest use online_schema for OB 4.1
       // 3. use refresh_mode as user configured if skip_ob_version_compat_check
       if ((0 == TCONF.skip_ob_version_compat_check) || is_tenant_sync_mode_) {
         refresh_mode_ = RefreshMode::DATA_DICT;
       }
+    } else {
+      // CLUSTER_VERSION_4_1_0_0 use user specified refresh_mode
     }
   }
 
