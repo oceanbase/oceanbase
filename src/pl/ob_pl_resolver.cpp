@@ -11433,10 +11433,14 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   int ret = OB_SUCCESS;
 
   SET_LOG_CHECK_MODE();
-
+  if (!q_name.dblink_name_.empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("dblink sequence and udf not support in PL", K(ret), K(q_name));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink sequence and udf in PL");
+  }
   OZ (replace_udf_param_expr(q_name, columns, real_exprs));
-
-  if (q_name.is_sys_func()) {
+  if (OB_FAIL(ret)) {
+  } else if (q_name.is_sys_func()) {
     if (OB_FAIL(q_name.access_idents_.at(0).sys_func_expr_->check_param_num())) {
       LOG_WARN("sys func param number not match", K(ret));
     } else {
