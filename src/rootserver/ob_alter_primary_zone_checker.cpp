@@ -134,14 +134,27 @@ int ObAlterPrimaryZoneChecker::create_alter_tenant_primary_zone_rs_job_if_needed
         K(orig_tenant_schema), K(new_first_primary_zone));
   } else {
     // step 2: create a new rs job ALTER_TENANT_PRIMARY_ZONE
-    ret = RS_JOB_CREATE_WITH_RET(
+    const int64_t extra_info_len = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    HEAP_VAR(char[extra_info_len], extra_info) {
+      memset(extra_info, 0, extra_info_len);
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
+              "FROM: '%.*s', TO: '%.*s'", orig_tenant_schema.get_primary_zone().length(),
+              orig_tenant_schema.get_primary_zone().ptr(), new_tenant_schema.get_primary_zone().length(),
+              new_tenant_schema.get_primary_zone().ptr()))) {
+        LOG_WARN("format extra_info failed", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
+      } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(
         new_job_id,
         JOB_TYPE_ALTER_TENANT_PRIMARY_ZONE,
         trans,
         "tenant_id", tenant_id,
         "tenant_name", new_tenant_schema.get_tenant_name(),
         "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-        "extra_info", orig_tenant_schema.get_primary_zone());
+        "extra_info", ObHexEscapeSqlStr(extra_info)))) {
+        LOG_WARN("failed to create new job", KR(ret), K(new_job_id), K(tenant_id),
+            K(extra_info), K(new_tenant_schema), K(arg));
+      }
+    }
     FLOG_INFO("[ALTER_TENANT_PRIMARY_ZONE NOTICE] create a new rs job", KR(ret), K(arg), K(new_job_id));
     if (OB_SUCC(ret) && !is_primary_zone_changed) {
       // step 3: complete the rs job if the first priority primary zone is not changed

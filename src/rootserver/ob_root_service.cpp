@@ -2563,7 +2563,7 @@ int ObRootService::alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("target_tenant_id value unexpected", KR(ret), K(target_tenant_name), K(target_tenant_id));
     } else if (OB_FAIL(unit_manager_.alter_resource_tenant(
-            target_tenant_id, new_unit_num, delete_unit_group_id_array))) {
+            target_tenant_id, new_unit_num, delete_unit_group_id_array, arg.ddl_stmt_str_))) {
       LOG_WARN("fail to alter resource tenant", KR(ret), K(target_tenant_id),
                K(new_unit_num), K(delete_unit_group_id_array));
       if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
