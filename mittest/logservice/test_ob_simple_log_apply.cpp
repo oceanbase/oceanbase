@@ -55,6 +55,10 @@ public:
   {
     ATOMIC_INC(&failure_count_);
   }
+  int replay(ObLogReplayTask *replay_task){
+    UNUSED(replay_task);
+    return OB_SUCCESS;
+  }
   int64_t success_count_;
   int64_t failure_count_;
   common::ObQSync ls_qs_;
