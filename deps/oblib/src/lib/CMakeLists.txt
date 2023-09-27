@@ -268,7 +268,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   allocator/ob_allocator_v2.cpp
   allocator/ob_block_alloc_mgr.cpp
   allocator/ob_concurrent_fifo_allocator.cpp
-  allocator/ob_ctx_parallel_define.cpp
+  allocator/ob_ctx_define.cpp
   allocator/ob_delay_free_allocator.cpp
   allocator/ob_fifo_allocator.cpp
   allocator/ob_hazard_ref.cpp

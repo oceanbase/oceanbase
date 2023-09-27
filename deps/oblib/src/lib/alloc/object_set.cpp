@@ -34,14 +34,15 @@ void __attribute__((weak)) has_unfree_callback(char *info)
   _OB_LOG_RET(ERROR, OB_ERROR, "HAS UNFREE PTR!!! %s", info);
 }
 
-ObjectSet::ObjectSet(__MemoryContext__ *mem_context, const uint32_t ablock_size)
+ObjectSet::ObjectSet(__MemoryContext__ *mem_context, const uint32_t ablock_size,
+  const bool enable_dirty_list)
   : mem_context_(mem_context), locker_(nullptr),
     blk_mgr_(nullptr), blist_(NULL), last_remainder_(NULL),
     bm_(NULL), free_lists_(NULL),
     dirty_list_mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK), dirty_list_(nullptr), dirty_objs_(0),
     alloc_bytes_(0), used_bytes_(0), hold_bytes_(0), allocs_(0),
     normal_alloc_bytes_(0), normal_used_bytes_(0),
-    normal_hold_bytes_(0), ablock_size_(ablock_size),
+    normal_hold_bytes_(0), ablock_size_(ablock_size), enable_dirty_list_(enable_dirty_list),
     cells_per_block_(AllocHelper::cells_per_block(ablock_size))
 {}
 
@@ -58,7 +59,7 @@ AObject *ObjectSet::alloc_object(
 
   const int64_t ctx_id = blk_mgr_->get_ctx_id();
   abort_unless(ctx_id == attr.ctx_id_);
-  if (OB_UNLIKELY(common::ObCtxIds::LIBEASY == ctx_id)) {
+  if (OB_UNLIKELY(enable_dirty_list_)) {
     do_free_dirty_list();
   }
 
@@ -376,7 +377,7 @@ void ObjectSet::free_object(AObject *obj)
 #endif
   const int64_t ctx_id = blk_mgr_->get_ctx_id();
   ObDisableDiagnoseGuard diagnose_disable_guard;
-  if (ctx_id == common::ObCtxIds::LIBEASY) {
+  if (OB_UNLIKELY(enable_dirty_list_)) {
     if (locker_->trylock()) {
       do_free_object(obj);
       do_free_dirty_list();

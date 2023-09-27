@@ -45,7 +45,8 @@ class ObjectSet
 
 public:
   ObjectSet(__MemoryContext__ *mem_context=nullptr,
-            const uint32_t ablock_size=INTACT_NORMAL_AOBJECT_SIZE);
+            const uint32_t ablock_size=INTACT_NORMAL_AOBJECT_SIZE,
+            const bool enable_dirty_list=false);
   ~ObjectSet();
 
   // main interfaces
@@ -119,6 +120,7 @@ private:
   uint64_t normal_hold_bytes_;
 
   uint32_t ablock_size_;
+  bool enable_dirty_list_;
   uint32_t cells_per_block_;
 
   DISALLOW_COPY_AND_ASSIGN(ObjectSet);
