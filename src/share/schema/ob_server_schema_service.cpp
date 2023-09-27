@@ -6044,6 +6044,26 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       } else if (OB_FAIL(schema_service_->get_drop_tenant_infos(sql_client, schema_version, drop_tenant_infos))) {
         LOG_WARN("fail to get drop tenant infos", K(ret), K(schema_version));
       } else {
+        // bugfix: 52326403
+        // Make sure refresh schema status ready before tenant schema is visible.
+        if (!ObSchemaService::g_liboblog_mode_) {
+          bool need_refresh_schema_status = false;
+          for (int64_t i = 0; !need_refresh_schema_status && OB_SUCC(ret) && i < simple_tenants.count(); i++) {
+            const ObSimpleTenantSchema &simple_tenant = simple_tenants.at(i);
+            if (simple_tenant.is_restore()) {
+              need_refresh_schema_status = true;
+            }
+          } // end for
+          if (OB_SUCC(ret) && need_refresh_schema_status) {
+            ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
+            if (OB_ISNULL(schema_status_proxy)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("schema_status_proxy is null", KR(ret));
+            } else if (OB_FAIL(schema_status_proxy->load_refresh_schema_status())) {
+              LOG_WARN("fail to load refresh schema status", KR(ret));
+            }
+          }
+        }
         FOREACH_CNT_X(simple_tenant, simple_tenants, OB_SUCC(ret)) {
           const uint64_t tmp_tenant_id = simple_tenant->get_tenant_id();
           //
