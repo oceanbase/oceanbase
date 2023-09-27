@@ -19,6 +19,7 @@
 #include "sql/rewrite/ob_transform_const_propagate.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
+#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;
@@ -764,11 +765,9 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
       }
       if (OB_SUCC(ret) && equal_info.column_expr_ != NULL && equal_info.const_expr_ != NULL) {
         bool is_valid = false;
-        bool need_not_null_constraint = false;
         if (OB_FAIL(check_const_expr_validity(*child_stmt,
-                                              equal_info.const_expr_,
-                                              is_valid,
-                                              need_not_null_constraint))) {
+                                              equal_info,
+                                              is_valid))) {
           LOG_WARN("failed to check const expr validity", K(ret));
         } else if (!is_valid) {
           if (equal_info.const_expr_->is_static_scalar_const_expr()) {
@@ -788,8 +787,11 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
               }
             }
           }
-        } else if (need_not_null_constraint) {
-          equal_info.need_add_constraint_ = PRE_CALC_RESULT_NOT_NULL;
+        }
+        if (OB_SUCC(ret) && is_valid) {
+          if (OB_FAIL(check_cast_const_expr(equal_info, is_valid))) {
+            LOG_WARN("failed to check need cast constraint", K(ret));
+          }
         }
         if (OB_SUCC(ret) && is_valid) {
           if (OB_FAIL(const_ctx.add_const_info(equal_info))) {
@@ -1147,7 +1149,8 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
       // do nothing
     } else if (expr_const_infos.at(i).mem_equal_) {
       can_replace = true;
-    } else if (OB_FAIL(check_can_replace(cur_expr, parent_exprs, used_in_compare, can_replace))) {
+    } else if (OB_FAIL(ObTransformUtils::check_can_replace(cur_expr, parent_exprs,
+                                                           used_in_compare, can_replace))) {
       LOG_WARN("failed to check can replace", K(ret));
     }
 
@@ -1279,7 +1282,7 @@ int ObTransformConstPropagate::do_remove_const_exec_param(ObRawExpr *&expr,
       trans_happened = true;
       if (OB_FAIL(check_need_cast_when_replace(expr, parent_exprs, need_cast))) {
         LOG_WARN("failed to check need cast", K(ret));
-      } else if (!need_cast || ref_expr->get_result_type() == expr->get_result_type()) {
+      } else if (!need_cast && parent_exprs.count() != 0) {
         expr = ref_expr;
       } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace(*ctx_->expr_factory_,
                                                                 expr,
@@ -1373,13 +1376,28 @@ int ObTransformConstPropagate::check_is_in_or_notin_param(ObIArray<ObRawExpr *> 
 }
 
 int ObTransformConstPropagate::check_const_expr_validity(const ObDMLStmt &stmt,
-                                                         ObRawExpr *const_expr,
-                                                         bool &is_valid,
-                                                         bool &need_add_constraint)
+                                                         ExprConstInfo &const_info,
+                                                         bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_const_expr_not_null(stmt, const_info, is_valid))) {
+    LOG_WARN("failed to check const expr not null", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(check_cast_const_expr(const_info, is_valid))) {
+    LOG_WARN("failed to check cast const expr", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTransformConstPropagate::check_const_expr_not_null(const ObDMLStmt &stmt,
+                                                         ExprConstInfo &const_info,
+                                                         bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  need_add_constraint = false;
+  ObRawExpr *const_expr = const_info.const_expr_;
   if (OB_ISNULL(const_expr) ||
       OB_UNLIKELY(!const_expr->is_const_expr()) ||
       OB_ISNULL(ctx_)) {
@@ -1398,7 +1416,72 @@ int ObTransformConstPropagate::check_const_expr_validity(const ObDMLStmt &stmt,
       LOG_WARN("failed to check expr not null", K(ret));
     } else if (is_not_null) {
       is_valid = true;
-      need_add_constraint = !constraints.empty();
+      if (!constraints.empty()) {
+        const_info.need_add_constraint_ = PRE_CALC_RESULT_NOT_NULL;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
+                                                     bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  bool need_cast = false;
+  bool is_scale_adjust_cast = false;
+  ObObj value;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->session_info_) ||
+      OB_ISNULL(const_info.column_expr_) || OB_ISNULL(const_info.const_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!const_info.const_expr_->is_static_scalar_const_expr()) {
+    is_valid = false;
+  } else if (OB_FAIL(ObRawExprUtils::check_need_cast_expr(const_info.const_expr_->get_result_type(),
+                                                        const_info.column_expr_->get_result_type(),
+                                                        need_cast,
+                                                        is_scale_adjust_cast))) {
+    LOG_WARN("failed to check need cast expr", K(ret));
+  } else if (!need_cast) {
+    // do nothing
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                               const_info.const_expr_,
+                                                               value,
+                                                               is_valid,
+                                                               *ctx_->allocator_))) {
+    LOG_WARN("failed to calc const or caculable expr", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+  } else {
+    const ObObj *dest_val = NULL;
+    const ObExprResType &dst_type = const_info.column_expr_->get_result_type();
+    ObDataTypeCastParams dtc_params = ctx_->session_info_->get_dtc_params();
+    ObCastCtx cast_ctx(ctx_->allocator_,
+                       &dtc_params,
+                       CM_WARN_ON_FAIL,
+                       dst_type.get_collation_type());
+    EXPR_CAST_OBJ_V2(dst_type.get_type(), value, dest_val);
+    ObObjType cmp_type = ObMaxType;
+    int64_t eq_cmp = 0;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to cast obj to dest type", K(ret), K(value), K(dst_type.get_type()));
+    } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
+                                                                      value.get_type(),
+                                                                      dest_val->get_type()))) {
+      LOG_WARN("failed to get compare type", K(ret));
+    } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(eq_cmp,
+                                                                  value,
+                                                                  *dest_val,
+                                                                  cast_ctx,
+                                                                  cmp_type,
+                                                                  dst_type.get_collation_type()))) {
+      LOG_WARN("failed to compare obj value", K(ret));
+    } else if (eq_cmp != 0) {
+      is_valid = false;
+    } else {
+      is_valid = true;
+      // lossless cast constraint contains not null constraint, just overwrite constraint type
+      const_info.need_add_constraint_ = PRE_CALC_LOSSLESS_CAST;
     }
   }
   return ret;
@@ -1446,7 +1529,8 @@ int ObTransformConstPropagate::recursive_check_can_replace_in_select(ObRawExpr *
   } else if (expr == target_expr) {
     if (ignore_all_select_exprs || parent_exprs.empty()) {
       can_replace = false;
-    } else if (OB_FAIL(check_can_replace(expr, parent_exprs, false, can_replace))) {
+    } else if (OB_FAIL(ObTransformUtils::check_can_replace(expr, parent_exprs,
+                                                           false, can_replace))) {
       LOG_WARN("failed to check can replace", K(ret));
     }
   } else if (can_replace && expr->get_param_count() > 0) {
@@ -1467,151 +1551,6 @@ int ObTransformConstPropagate::recursive_check_can_replace_in_select(ObRawExpr *
       parent_exprs.pop_back();
     }
   }
-  return ret;
-}
-
-int ObTransformConstPropagate::check_can_replace(ObRawExpr *expr,
-                                                 ObIArray<ObRawExpr *> &parent_exprs,
-                                                 bool used_in_compare,
-                                                 bool &can_replace)
-{
-  int ret = OB_SUCCESS;
-  can_replace = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parameter", K(ret));
-  } else if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
-    can_replace = true;
-  } else if (expr->get_result_type().get_obj_meta().is_fixed_len_char_type()) {
-    can_replace = false;
-  } else if (ObCharset::is_bin_sort(expr->get_result_type().get_collation_type())) {
-    can_replace = true;
-  } else {
-    bool found_convert = false;
-    for (int i = parent_exprs.count() - 1; OB_SUCC(ret) && !found_convert && i >= 0; --i) {
-      ObRawExpr *cur_expr = parent_exprs.at(i);
-      bool is_bypass = false;
-      if (OB_FAIL(check_is_bypass_string_expr(cur_expr, expr, is_bypass))) {
-        LOG_WARN("failed to check is bypass string expr", K(ret));
-      } else if (is_bypass) {
-        // do nothing
-      } else if (OB_FAIL(check_convert_string_safely(cur_expr, expr, can_replace))) {
-        LOG_WARN("failed to check is convert string expr", K(ret));
-      } else {
-        found_convert = true;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      can_replace = can_replace || (!found_convert && used_in_compare);
-    }
-  }
-  return ret;
-}
-
-// check the expr bypass the string input to output, the expr must satisfy following rules:
-// 1. the param and result are both string type
-// 2. the content of input string is copied to result without modifying
-// to simplify the implementation, this function only check functions in mysql mode
-int ObTransformConstPropagate::check_is_bypass_string_expr(ObRawExpr *expr,
-                                                           ObRawExpr *src_expr,
-                                                           bool &is_bypass)
-{
-  int ret = OB_SUCCESS;
-  is_bypass = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(src_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(expr));
-  } else {
-    const ObExprOperatorType op_type = expr->get_expr_type();
-    if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
-      bool is_safe = false;
-      if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
-        is_bypass = false;
-      } else if (OB_FAIL(check_cast_accuracy(src_expr->get_result_type(),
-                                             expr->get_result_type(),
-                                             is_safe))) {
-        LOG_WARN("failed to check cast accuracy", K(ret));
-      } else {
-        is_bypass = is_safe;
-      }
-    } else {
-      is_bypass = T_OP_CNN == op_type ||
-                  T_FUN_CNN_WS == op_type ||
-                  T_FUN_SYS_LEFT == op_type ||
-                  T_FUN_SYS_LPAD == op_type ||
-                  T_FUN_SYS_RPAD == op_type ||
-                  T_FUN_SYS_LTRIM == op_type ||
-                  T_FUN_SYS_RTRIM == op_type ||
-                  T_FUN_SYS_MID == op_type ||
-                  T_FUN_PAD == op_type ||
-                  T_OP_QUOTE == op_type ||
-                  T_FUN_SYS_REGEXP_REPLACE == op_type ||
-                  T_FUN_SYS_REGEXP_SUBSTR == op_type ||
-                  T_FUN_SYS_REPEAT == op_type ||
-                  T_FUN_SYS_REPLACE == op_type ||
-                  T_FUN_SYS_REVERSE == op_type ||
-                  T_FUN_SYS_RIGHT == op_type ||
-                  T_FUN_SYS_SUBSTR == op_type ||
-                  T_FUN_SYS_TRIM == op_type ||
-                  T_FUN_INNER_TRIM == op_type;
-    }
-  }
-  return ret;
-}
-
-
-// check if the expr result is affected by the collation of param when the expr convert the input
-// string to another, the expr must satisfy one of following rules:
-// 1. the param is string type and result is not string type
-// 2. the content of input string is not just copied to result, such as charset convert, upper
-// to simplify the implementation, this function only check functions in mysql mode
-int ObTransformConstPropagate::check_convert_string_safely(ObRawExpr *expr,
-                                                           ObRawExpr *src_expr,
-                                                           bool &is_safe)
-{
-  int ret = OB_SUCCESS;
-  is_safe = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(src_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(expr));
-  } else {
-    const ObExprOperatorType op_type = expr->get_expr_type();
-    if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
-      if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
-        is_safe = true;
-      } else if (OB_FAIL(check_cast_accuracy(src_expr->get_result_type(),
-                                             expr->get_result_type(),
-                                             is_safe))) {
-        LOG_WARN("failed to check cast accuracy", K(ret));
-      }
-    } else {
-      switch (op_type) {
-        case T_FUN_SYS_INSTR:
-        case T_FUN_SYS_LENGTH:
-        case T_FUN_SYS_LOCATE:
-        case T_FUN_SYS_LOWER:
-        case T_FUN_SYS_STRCMP:
-        case T_FUN_SYS_UPPER:
-          is_safe = true;
-          break;
-        case T_FUN_SYS_HEX:
-          is_safe = false;
-          break;
-        default:
-          is_safe = false;
-          LOG_TRACE("found unknonwn string expr", K(op_type));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformConstPropagate::check_cast_accuracy(const ObExprResType &src_type,
-                                                   const ObExprResType &dst_type,
-                                                   bool &is_safe)
-{
-  int ret = OB_SUCCESS;
-  is_safe = src_type.get_collation_type() == dst_type.get_collation_type();
   return ret;
 }
 
@@ -1756,34 +1695,55 @@ int ObTransformConstPropagate::collect_equal_param_constraints(ObIArray<ExprCons
     } else if (OB_FAIL(append(ctx_->equal_param_constraints_,
                               expr_const_infos.at(i).equal_infos_))) {
       LOG_WARN("failed to append equal param constraint", K(ret));
-    } else if (PRE_CALC_RESULT_NONE == expr_const_infos.at(i).need_add_constraint_) {
-      if (expr_const_infos.at(i).is_complex_const_info_) {
-        if (OB_UNLIKELY(expr_const_infos.at(i).multi_need_add_constraints_.count() !=
-                        expr_const_infos.at(i).multi_const_exprs_.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(expr_const_infos));
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < expr_const_infos.at(i).multi_const_exprs_.count(); ++j) {
-          if (PRE_CALC_RESULT_NONE == expr_const_infos.at(i).multi_need_add_constraints_.at(j)) {
-            //do nothing
-          } else if (PRE_CALC_RESULT_NULL == expr_const_infos.at(i).multi_need_add_constraints_.at(j)) {
-            if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, expr_const_infos.at(i).multi_const_exprs_.at(j)))) {
-              LOG_WARN(" fail to add param null constraint");
-            }
-          } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_,
-                          expr_const_infos.at(i).multi_const_exprs_.at(j)))) {
-            LOG_WARN("failed to add param not null constraint", K(ret));
-          } else {/*do nothing*/}
+    } else if (expr_const_infos.at(i).is_complex_const_info_) {
+      if (OB_UNLIKELY(expr_const_infos.at(i).multi_need_add_constraints_.count() !=
+                      expr_const_infos.at(i).multi_const_exprs_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(expr_const_infos));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < expr_const_infos.at(i).multi_const_exprs_.count(); ++j) {
+        if (OB_FAIL(add_equal_param_constraint(expr_const_infos.at(i).column_expr_,
+                                      expr_const_infos.at(i).multi_const_exprs_.at(j),
+                                      expr_const_infos.at(i).multi_need_add_constraints_.at(j)))) {
+          LOG_WARN("failed to add equal param constraint", K(ret));
         }
       }
-    } else if (PRE_CALC_RESULT_NULL == expr_const_infos.at(i).need_add_constraint_) {
-      if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, expr_const_infos.at(i).const_expr_))) {
-        LOG_WARN(" fail to add param null constraint");
-      }
-    } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(
-                         *ctx_, expr_const_infos.at(i).const_expr_))) {
+    } else if (OB_FAIL(add_equal_param_constraint(expr_const_infos.at(i).column_expr_,
+                                                  expr_const_infos.at(i).const_expr_,
+                                                  expr_const_infos.at(i).need_add_constraint_))) {
+      LOG_WARN("failed to add equal param constraint", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::add_equal_param_constraint(ObRawExpr *column_expr,
+                                                          ObRawExpr *const_expr,
+                                                          PreCalcExprExpectResult expect_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(column_expr) || OB_ISNULL(const_expr) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (PRE_CALC_RESULT_NONE == expect_result) {
+    // do nothing
+  } else if (PRE_CALC_RESULT_NULL == expect_result) {
+    if (OB_FAIL(ObTransformUtils::add_param_null_constraint(*ctx_, const_expr))) {
+      LOG_WARN(" fail to add param null constraint");
+    }
+  } else if (PRE_CALC_RESULT_NOT_NULL == expect_result) {
+    if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, const_expr))) {
       LOG_WARN("failed to add param not null constraint", K(ret));
     }
+  } else if (PRE_CALC_LOSSLESS_CAST == expect_result) {
+    if (OB_FAIL(ObTransformUtils::add_param_lossless_cast_constraint(*ctx_,
+                                                                     const_expr,
+                                                                     column_expr))) {
+      LOG_WARN("failed to add param not null constraint", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expect result type", K(expect_result), K(ret));
   }
   return ret;
 }
@@ -1820,16 +1780,14 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
     }
     if (OB_SUCC(ret) && is_valid) {
       ExprConstInfo new_info;
-      bool need_add_constraint = false;
       new_info.column_expr_ = column_expr;
-      if (OB_FAIL(check_const_expr_validity(*stmt, const_expr, is_valid, need_add_constraint))) {
+      new_info.const_expr_ = const_expr;
+      if (OB_FAIL(check_const_expr_validity(*stmt, new_info, is_valid))) {
         LOG_WARN("failed to check const expr validity", K(ret));
       } else if (!is_valid) {
         // do nothing
       } else {
-        new_info.const_expr_ = const_expr;
         new_info.exclude_expr_ = expr;
-        new_info.need_add_constraint_ = need_add_constraint ? PRE_CALC_RESULT_NOT_NULL : PRE_CALC_RESULT_NONE;
         if (OB_FAIL(const_ctx.add_const_info(new_info))) {
           LOG_WARN("failed to push back", K(ret));
         }
@@ -1861,22 +1819,21 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
       new_info.column_expr_ = l_expr;
       new_info.is_complex_const_info_ = true;
       for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < r_expr->get_param_count(); ++i) {
-        bool need_add_constraint = false;
+        new_info.const_expr_ = r_expr->get_param_expr(i);
         if (OB_ISNULL(r_expr->get_param_expr(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(r_expr));
         } else if (!r_expr->get_param_expr(i)->is_const_expr()) {
           is_valid = false;
         } else if (OB_FAIL(check_const_expr_validity(*stmt,
-                                                     r_expr->get_param_expr(i),
-                                                     is_valid,
-                                                     need_add_constraint))) {
+                                                     new_info,
+                                                     is_valid))) {
           LOG_WARN("failed to check const expr validity", K(ret));
         } else if (!is_valid) {
           /*do nothing*/
         } else if (OB_FAIL(new_info.multi_const_exprs_.push_back(r_expr->get_param_expr(i)))) {
           LOG_WARN("failed to push back", K(ret));
-        } else if (OB_FAIL(new_info.multi_need_add_constraints_.push_back(need_add_constraint ? PRE_CALC_RESULT_NOT_NULL : PRE_CALC_RESULT_NONE))) {
+        } else if (OB_FAIL(new_info.multi_need_add_constraints_.push_back(new_info.need_add_constraint_))) {
           LOG_WARN("failed to push back", K(ret));
         }
       }
@@ -2212,7 +2169,7 @@ int ObTransformConstPropagate::recursive_check_non_column_param_expr_validity(Ob
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(expr), K(ret));
   } else if (expr->is_column_ref_expr()) {
-    if (OB_FAIL(check_can_replace(expr, parent_exprs, true, is_valid))) {
+    if (OB_FAIL(ObTransformUtils::check_can_replace(expr, parent_exprs, true, is_valid))) {
       LOG_WARN("failed to check can replace", K(ret));
     }
   } else if (expr->get_param_count() > 0) {
@@ -2408,7 +2365,8 @@ int ObTransformConstPropagate::generate_pullup_const_info(ObSelectStmt *stmt,
       PullupConstInfo pullup_info;
       pullup_info.column_expr_ = cur_info.column_expr_;
       pullup_info.const_expr_ = cur_info.const_expr_;
-      pullup_info.need_add_constraint_ = cur_info.need_add_constraint_;
+      pullup_info.need_add_constraint_ = cur_info.is_used_ ? cur_info.need_add_constraint_ :
+                                                             PRE_CALC_RESULT_NONE;
       if (OB_FAIL(pullup_info.equal_infos_.assign(cur_info.equal_infos_))) {
         LOG_WARN("failed to assign equal infos", K(ret));
       } else if (OB_FAIL(acquire_pullup_infos(stmt, pullup_const_infos))) {
@@ -2496,6 +2454,7 @@ int ObTransformConstPropagate::collect_from_pullup_const_infos(ObDMLStmt *stmt,
       if (expr == pullup_info.column_expr_) {
         found = true;
         equal_info.const_expr_ = pullup_info.const_expr_;
+        equal_info.need_add_constraint_ = pullup_info.need_add_constraint_;
         if (OB_FAIL(equal_info.equal_infos_.assign(pullup_info.equal_infos_))) {
           LOG_WARN("failed to assign equal infos", K(ret));
         }

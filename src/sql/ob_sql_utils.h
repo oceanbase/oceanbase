@@ -991,7 +991,8 @@ enum PreCalcExprExpectResult {
   PRE_CALC_ERROR,
   PRE_CALC_PRECISE,
   PRE_CALC_NOT_PRECISE,
-  PRE_CALC_ROWID
+  PRE_CALC_ROWID,
+  PRE_CALC_LOSSLESS_CAST, // only used in rewrite, will be converted to cast(expr, type) = expr
 };
 
 struct ObExprConstraint

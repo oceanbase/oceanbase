@@ -1429,6 +1429,10 @@ public:
   static int add_param_null_constraint(ObTransformerCtx &ctx,
                                       ObRawExpr *not_null_expr);
 
+  static int add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
+                                                ObRawExpr *expr,
+                                                const ObRawExpr *dst_expr);
+
   static int calc_expr_value(ObTransformerCtx &ctx, ObRawExpr *expr, bool &is_not_null);
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
@@ -1732,6 +1736,19 @@ public:
                                             ObRawExpr *expr,
                                             ObIArray<ObRawExpr*> &exprs,
                                             bool &trans_happened);
+  static int check_can_replace(ObRawExpr *expr,
+                               ObIArray<ObRawExpr *> &parent_exprs,
+                               bool used_in_compare,
+                               bool &can_replace);
+
+  static int check_pushdown_into_set_valid(ObRawExpr *expr,
+                                           const ObIArray<ObRawExpr *> &set_op_exprs,
+                                           bool &is_valid);
+
+  static int recursive_check_pushdown_into_set_valid(ObRawExpr *expr,
+                                                     const ObIArray<ObRawExpr *> &set_op_exprs,
+                                                     ObIArray<ObRawExpr *> &parent_exprs,
+                                                     bool &is_valid);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1777,6 +1794,13 @@ private:
 
   static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
 
+  static int check_is_bypass_string_expr(const ObRawExpr *expr,
+                                         const ObRawExpr *src_expr,
+                                         bool &is_bypass);
+
+  static int check_convert_string_safely(const ObRawExpr *expr,
+                                         const ObRawExpr *src_expr,
+                                         bool &is_safe);
 };
 
 

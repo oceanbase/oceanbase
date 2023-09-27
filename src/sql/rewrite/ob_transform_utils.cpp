@@ -9232,18 +9232,9 @@ int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < constraints.count(); ++i) {
-      if (constraints.at(i).expect_result_ == PRE_CALC_RESULT_NOT_NULL &&
-          constraints.at(i).pre_calc_expr_ == not_null_expr) {
-        existed = true;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && !existed) {
-      ObExprConstraint cons(not_null_expr, PRE_CALC_RESULT_NOT_NULL);
-      if (OB_FAIL(constraints.push_back(cons))) {
-        LOG_WARN("failed to push back pre calc constraints", K(ret));
-      }
+    ObExprConstraint cons(not_null_expr, PRE_CALC_RESULT_NOT_NULL);
+    if (OB_FAIL(add_var_to_array_no_dup(constraints, cons))) {
+      LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
   }
   return ret;
@@ -9278,19 +9269,41 @@ int ObTransformUtils::add_param_null_constraint(ObTransformerCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.expr_constraints_.count(); ++i) {
-      if (ctx.expr_constraints_.at(i).expect_result_ == PRE_CALC_RESULT_NULL &&
-          ctx.expr_constraints_.at(i).pre_calc_expr_ == null_expr) {
-        existed = true;
-        break;
-      }
+    ObExprConstraint cons(null_expr, PRE_CALC_RESULT_NULL);
+    if (OB_FAIL(add_var_to_array_no_dup(ctx.expr_constraints_, cons))) {
+      LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
-    if (OB_SUCC(ret) && !existed) {
-      ObExprConstraint cons(null_expr, PRE_CALC_RESULT_NULL);
-      if (OB_FAIL(ctx.expr_constraints_.push_back(cons))) {
-        LOG_WARN("failed to push back pre calc constraints", K(ret));
-      }
-    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
+                                                         ObRawExpr *expr,
+                                                         const ObRawExpr *dst_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *cast_expr = expr;
+  ObRawExpr *equal_expr = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(dst_expr) || OB_ISNULL(ctx.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(add_cast_for_replace(*ctx.expr_factory_,
+                                          dst_expr,
+                                          cast_expr,
+                                          ctx.session_info_))) {
+    LOG_WARN("failed to add cast expr", K(ret));
+  } else if (OB_UNLIKELY(cast_expr == expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("must add cast for lossless cast constraint", KPC(dst_expr), KPC(expr), K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx.expr_factory_,
+                                                           ctx.session_info_,
+                                                           T_OP_EQ,
+                                                           equal_expr,
+                                                           cast_expr,
+                                                           expr))) {
+    LOG_WARN("failed to create double op expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(&ctx, equal_expr, true))) {
+    LOG_WARN("failed to add param bool constraint", K(ret));
   }
   return ret;
 }
@@ -9984,20 +9997,10 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
     const PreCalcExprExpectResult expect_result = is_true
         ? PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE
         : PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx->expr_constraints_.count(); ++i) {
-      // todo sean.yyj: use same_as? some bool expr are created by rewrite
-      if (ctx->expr_constraints_.at(i).expect_result_ == expect_result &&
-          ctx->expr_constraints_.at(i).pre_calc_expr_ == bool_expr) {
-        existed = true;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && !existed) {
-      ObExprConstraint cons(bool_expr, expect_result);
-      cons.ignore_const_check_ = ignore_const_check;
-      if (OB_FAIL(ctx->expr_constraints_.push_back(cons))) {
-        LOG_WARN("failed to push back pre calc constraints", K(ret));
-      }
+    ObExprConstraint cons(bool_expr, expect_result);
+    cons.ignore_const_check_ = ignore_const_check;
+    if (OB_FAIL(add_var_to_array_no_dup(ctx->expr_constraints_, cons))) {
+      LOG_WARN("failed to push back pre calc constraints", K(ret));
     }
   }
   return ret;
@@ -12432,6 +12435,160 @@ int ObTransformUtils::convert_preds_vector_to_scalar(ObTransformerCtx &ctx,
   if (OB_SUCC(ret) && need_push && OB_FAIL(exprs.push_back(expr))) {
     /// 不满足上述两个条件, 将该 expr 添加至输出.
     LOG_WARN("failed to push back expr", K(ret));
+  }
+  return ret;
+}
+
+// check whether can convert f(A) to f(B) for any B that satisfied A = B
+// in mysql mode, the collation type of all params is utf8mb4_general_ci
+// we have A := 'a', B1 := 'a ', B2 := 'A', then they satisfied A = B1 and A = B2
+// for F1(A) : concat(A, 'b'), we can not convert F1(A) to F(B1) or F(B2)
+int ObTransformUtils::check_can_replace(ObRawExpr *expr,
+                                        ObIArray<ObRawExpr *> &parent_exprs,
+                                        bool used_in_compare,
+                                        bool &can_replace)
+{
+  int ret = OB_SUCCESS;
+  can_replace = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
+    can_replace = true;
+  } else if (lib::is_oracle_mode() && !expr->get_result_type().is_fixed_len_char_type()) {
+    // oracle compare varchar in binary and no pad
+    can_replace = true;
+  } else {
+    bool found_convert = false;
+    for (int i = parent_exprs.count() - 1; OB_SUCC(ret) && !found_convert && i >= 0; --i) {
+      ObRawExpr *cur_expr = parent_exprs.at(i);
+      bool is_bypass = false;
+      if (OB_FAIL(check_is_bypass_string_expr(cur_expr, expr, is_bypass))) {
+        LOG_WARN("failed to check is bypass string expr", K(ret));
+      } else if (is_bypass) {
+        // do nothing
+      } else if (OB_FAIL(check_convert_string_safely(cur_expr, expr, can_replace))) {
+        LOG_WARN("failed to check is convert string expr", K(ret));
+      } else {
+        found_convert = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      can_replace = can_replace || (!found_convert && used_in_compare);
+    }
+  }
+  return ret;
+}
+
+// check the expr bypass the string input to output, the expr must satisfy following rules:
+// 1. the param and result are both string type
+// 2. the content of input string is copied to result without modifying
+int ObTransformUtils::check_is_bypass_string_expr(const ObRawExpr *expr,
+                                                  const ObRawExpr *src_expr,
+                                                  bool &is_bypass)
+{
+  int ret = OB_SUCCESS;
+  is_bypass = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(src_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else {
+    const ObExprOperatorType op_type = expr->get_expr_type();
+    if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
+      const ObExprResType &src_type = src_expr->get_result_type();
+      const ObExprResType &dst_type = expr->get_result_type();
+      is_bypass = src_type.get_type() == dst_type.get_type() &&
+                  src_type.get_collation_type() == dst_type.get_collation_type();
+    } else {
+      // ATTENTION: this does not work for the uca900 collation in the future
+      is_bypass = T_FUN_SYS_SUBSTR == op_type;
+    }
+  }
+  return ret;
+}
+
+// check if the expr result is affected by the collation of param when the expr convert the input
+// string to another, the expr must satisfy one of following rules:
+// 1. the param is string type and result is not string type
+// 2. the content of input string is not just copied to result, such as charset convert, upper
+// to simplify the implementation, this function only check functions in mysql mode
+int ObTransformUtils::check_convert_string_safely(const ObRawExpr *expr,
+                                                  const ObRawExpr *src_expr,
+                                                  bool &is_safe)
+{
+  int ret = OB_SUCCESS;
+  is_safe = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(src_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else {
+    const ObExprOperatorType op_type = expr->get_expr_type();
+    if (IS_COMPARISON_OP(op_type) || T_OP_LIKE == op_type) {
+      is_safe = true;
+    } else if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
+      if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
+        is_safe = true;
+      }
+    }
+  }
+  return ret;
+}
+
+// insert into t1 values('a'); insert into t2 values('a ');
+// Q1: select * from (select * from t1 intersect select * from t2) v where c1 = 'a';
+// Q2: select * from (select * from t1 intersect select * from t2) v where concat(c1,'a') = 'aa';
+// only predicate in Q1 can be pushdown into set stmt
+// TODO: sean.yyj, concat(c1,'a') = 'aa' can be pushdown into UNION after solved collation level bug
+int ObTransformUtils::check_pushdown_into_set_valid(ObRawExpr *expr,
+                                                    const ObIArray<ObRawExpr *> &set_op_exprs,
+                                                    bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> parent_exprs;
+  if (OB_FAIL(recursive_check_pushdown_into_set_valid(expr,
+                                                      set_op_exprs,
+                                                      parent_exprs,
+                                                      is_valid))) {
+    LOG_WARN("failed to check pullup validity", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::recursive_check_pushdown_into_set_valid(
+    ObRawExpr *expr,
+    const ObIArray<ObRawExpr *> &set_op_exprs,
+    ObIArray<ObRawExpr *> &parent_exprs,
+    bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (!expr->has_flag(CNT_SET_OP)) {
+    // do nothing
+  } else if (ObOptimizerUtil::find_item(set_op_exprs, expr)) {
+    if (OB_FAIL(ObTransformUtils::check_can_replace(expr, parent_exprs, false, is_valid))) {
+      LOG_WARN("failed to check can replace expr", K(ret));
+    }
+  } else if (OB_UNLIKELY(expr->is_set_op_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set op expr", KPC(expr), K(set_op_exprs), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(parent_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+      if (OB_FAIL(SMART_CALL(recursive_check_pushdown_into_set_valid(expr->get_param_expr(i),
+                                                                     set_op_exprs,
+                                                                     parent_exprs,
+                                                                     is_valid)))) {
+        LOG_WARN("failed to check pushdown validity", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        parent_exprs.pop_back();
+      }
+    }
   }
   return ret;
 }

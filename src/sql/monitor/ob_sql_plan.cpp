@@ -837,6 +837,8 @@ int ObSqlPlan::print_constraint_info(char *buf,
       ret = BUF_PRINTF("FALSE");
     } else if (PRE_CALC_RESULT_NO_WILDCARD == info.expect_result_) {
       ret = BUF_PRINTF("NO_WILDCARD");
+    } else if (PRE_CALC_ERROR == info.expect_result_) {
+      ret = BUF_PRINTF("ERROR");
     } else if (PRE_CALC_PRECISE == info.expect_result_) {
       ret = BUF_PRINTF("PRECISE");
     } else if (PRE_CALC_NOT_PRECISE == info.expect_result_) {
