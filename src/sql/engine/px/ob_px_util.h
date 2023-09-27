@@ -443,8 +443,9 @@ public:
   int add_partition(int64_t tablet_id,
       int64_t tablet_idx,
       int64_t worker_cnt,
+      uint64_t tenant_id,
       ObPxTabletInfo &partition_row_info);
-  int do_random(bool use_partition_info, uint64_t tenant_id);
+  int do_random(bool use_partition_info);
   const ObIArray<TabletHashValue> &get_result() { return tablet_hash_values_; }
   static int get_tablet_info(int64_t tablet_id, ObIArray<ObPxTabletInfo> &partitions_info, ObPxTabletInfo &partition_info);
 private:
