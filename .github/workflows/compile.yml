@@ -25,16 +25,13 @@ jobs:
       with:
         key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
         path: deps/3rd
-    
-    - name: Build init
-      run: bash build.sh init
-  
-    - name: Build project
-      shell: bash
-      run: |
-        bash build.sh debug
-        cd build_debug && make -j4
-  
+
+    - name: Build
+      uses: ./.github/workflows/build_base
+      with:
+        save_cache: ${{github.event_name == 'push'}}
+        os: 'centos7'
+
   ubuntu-build:
     runs-on: ubuntu-22.04
     steps:
@@ -55,12 +52,9 @@ jobs:
       with:
         key: ${{ runner.os }}-build-${{ env.cache-name }}-el9.x86_64-${{ hashFiles('deps/init/oceanbase.el9.x86_64.deps') }}
         path: deps/3rd
-    
-    - name: Build init
-      run: bash build.sh init
-      
-    - name: Build project
-      shell: bash
-      run: |
-        bash build.sh debug
-        cd build_debug && make -j4
+
+    - name: Build
+      uses: ./.github/workflows/build_base
+      with:
+        save_cache: ${{github.event_name == 'push'}}
+        os: 'ubuntu22'
