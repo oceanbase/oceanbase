@@ -24,7 +24,7 @@ Outputs & filters:
       force partition granule
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_px*/ * from t1;
 Query Plan
@@ -45,7 +45,7 @@ Outputs & filters:
       force partition granule
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_px parallel(15)*/ * from t1;
 Query Plan
@@ -65,7 +65,7 @@ Outputs & filters:
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+no_use_px */ * from t1;
 Query Plan
@@ -86,7 +86,7 @@ Outputs & filters:
       force partition granule
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+no_use_px use_px*/ * from t1;
 Query Plan
@@ -107,7 +107,7 @@ Outputs & filters:
       force partition granule
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_px no_use_px */ * from t1;
 Query Plan
@@ -128,7 +128,7 @@ Outputs & filters:
       force partition granule
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 
 drop table if exists t7;

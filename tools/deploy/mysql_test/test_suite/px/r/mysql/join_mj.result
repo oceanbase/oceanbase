@@ -99,11 +99,11 @@ Outputs & filters:
       sort_keys([stu.sid, ASC])
   6 - output([stu.cls], [stu.sid], [stu.name]), filter(nil), rowset=256
       access([stu.cls], [stu.sid], [stu.name]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([stu.cls], [stu.sid]), range(MIN,MIN ; MAX,MAX)always true
   7 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
       access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
 select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid = score.sid order by score.sid;
 sid	name	cls	sid	subject	score

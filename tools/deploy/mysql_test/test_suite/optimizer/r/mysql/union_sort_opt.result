@@ -33,11 +33,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
   1 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c1]), range(MIN ; MAX)always true
   2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c1]), range(MIN ; MAX)always true
 select * from t4 union select * from t4;
 +----+------+------+
@@ -69,11 +69,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
   2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ * from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ * from t4 order by 1,2,3;
@@ -106,11 +106,11 @@ Outputs & filters:
   1 - output([UNION([2])], [UNION([1])]), filter(nil), rowset=16
   2 - output([t4.c2], [t4.c3]), filter(nil), rowset=16
       access([t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t4.c2], [t4.c3]), filter(nil), rowset=16
       access([t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 union 
 select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 order by 2,1;
@@ -143,11 +143,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([t4.c3], [t4.c2]), filter(nil), rowset=16
       access([t4.c3], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t4.c3], [t4.c2]), filter(nil), rowset=16
       access([t4.c3], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 union 
 select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 order by 1,2;
@@ -177,11 +177,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
   1 - output([t4.c2], [t4.c3], [t4.c1]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([t4.c2], [t4.c3], [t4.c1]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 union 
 select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 order by 1,2,3;
@@ -211,11 +211,11 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=16
   1 - output([t4.c2]), filter(nil), rowset=16
       access([t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([t4.c2]), filter(nil), rowset=16
       access([t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 order by 1;
@@ -247,11 +247,11 @@ Outputs & filters:
   1 - output([UNION([1])]), filter(nil), rowset=16
   2 - output([t4.c3]), filter(nil), rowset=16
       access([t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t4.c3]), filter(nil), rowset=16
       access([t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 order by 1;
@@ -283,11 +283,11 @@ Outputs & filters:
   1 - output([UNION([1])]), filter(nil), rowset=16
   2 - output([t4.c1]), filter(nil), rowset=16
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t4.c1]), filter(nil), rowset=16
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 order by 1;
@@ -321,13 +321,13 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
   2 - output([x.c3], [x.c1], [x.c2]), filter(nil), rowset=16
       access([x.c1], [x.c3], [x.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.c2], [x.c3], [x.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([y.c3], [y.c2], [y.c1]), filter(nil), rowset=16
       sort_keys([y.c1, ASC])
   4 - output([y.c1], [y.c3], [y.c2]), filter(nil), rowset=16
       access([y.c1], [y.c3], [y.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([y.c2], [y.c3], [y.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(x idx_t4_c2c3) */ c3,c1,c2 from t4 x union  
 select /*+ index(y idx_t4_c2c3) */ c3,c2,c1 from t4 y order by 1,2,3;
@@ -363,13 +363,13 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
   1 - output([t4.c2], [t4.c3], [t4.c1]), filter(nil), rowset=16
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([t4.c3], [t4.c2], [t4.c1]), filter(nil), rowset=16
       sort_keys([t4.c3, ASC], [t4.c2, ASC], [t4.c1, ASC])
   3 - output([t4.c1], [t4.c3], [t4.c2]), filter(nil), rowset=16
       access([t4.c1], [t4.c3], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.c2], [t4.c3], [t4.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 union
 select /*+ index(t4 idx_t4_c2c3) */ c3,c2,c1 from t4 order by 1,2,3;
@@ -427,11 +427,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([t5.c2], [t5.c3]), filter(nil), rowset=16
       access([t5.__pk_increment], [t5.c2], [t5.c3]), partitions(p0)
-      is_index_back=true, is_global_index=false,
+      is_index_back=true, is_global_index=false, 
       range_key([t5.c2], [t5.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
   3 - output([t5.c2], [t5.c3]), filter(nil), rowset=16
       access([t5.__pk_increment], [t5.c2], [t5.c3]), partitions(p0)
-      is_index_back=true, is_global_index=false,
+      is_index_back=true, is_global_index=false, 
       range_key([t5.c2], [t5.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
 select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 union 
 select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 order by 1,2;
@@ -460,11 +460,11 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=16
   1 - output([t5.c2]), filter(nil), rowset=16
       access([t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.c2], [t5.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
   2 - output([t5.c2]), filter(nil), rowset=16
       access([t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.c2], [t5.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
 select /*+ index(t5 idx_t5_c2) */ c2 from t5 union 
 select /*+ index(t5 idx_t5_c2) */ c2  from t5 order by 1;
@@ -515,11 +515,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c1,c2 from t6 union select c1,c2 from t6 order by 1,2;
 +------+------+
@@ -559,11 +559,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   2 - output([t6.c2], [t6.c1]), filter(nil), rowset=256
       access([t6.c2], [t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t6.c2], [t6.c1]), filter(nil), rowset=256
       access([t6.c2], [t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2,c1 from t6 union select c2,c1 from t6 order by 1,2;
 +------+------+
@@ -601,13 +601,13 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([t6.c2], [t6.c1]), filter(nil), rowset=256
       sort_keys([t6.c2, ASC], [t6.c1, ASC])
   3 - output([t6.c2], [t6.c1]), filter(nil), rowset=256
       access([t6.c2], [t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2,c1 from t6 union select c1,c2 from t6 order by 1,2;
 +------+------+
@@ -656,11 +656,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   2 - output([cast(t6.c2, BIGINT(20, 0))], [t6.c1]), filter(nil), rowset=256
       access([t6.c2], [t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([0 + t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select c2,c1 from t6 union select 0+c1,c2 from t6 order by 1,2;
 +------+------+
@@ -708,11 +708,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
   2 - output([cast(t6.c1, BIGINT(20, 0))], [t6.c2], [t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([0 + t6.c1], [t6.c2], [t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.c1], [t6.c2], [t6.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c1,c2,c1,c2 from t6 union select 0+c1,c2,c1,c2 from t6 order by 1,2,3,4;
 +------+------+------+------+
@@ -771,7 +771,7 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
       access([t7.c2], [t7.c1], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   6 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
   7 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
@@ -780,8 +780,8 @@ Outputs & filters:
       force partition granule
   9 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
       access([t7.c2], [t7.c1], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 10,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 10,MIN,MIN,MIN), 
       range_cond([t7.c2 < cast(10, DECIMAL(2, 0))])
 select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
 select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10 order by 1,2,3;
@@ -838,7 +838,7 @@ Outputs & filters:
       force partition granule
   5 - output([yy.c2]), filter(nil), rowset=16
       access([yy.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([yy.c2], [yy.c1], [yy.c3], [yy.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   6 - output([xx.c2], [xx.c1]), filter(nil), rowset=16
       access([xx.c2], [xx.c1])
@@ -850,7 +850,7 @@ Outputs & filters:
       force partition granule
  11 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
       access([t7.c2], [t7.c1], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
  12 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
  13 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
@@ -859,8 +859,8 @@ Outputs & filters:
       force partition granule
  15 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
       access([t7.c2], [t7.c1], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 10,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 10,MIN,MIN,MIN), 
       range_cond([t7.c2 < cast(10, DECIMAL(2, 0))])
 select xx.c2,xx.c1 from 
 (select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
@@ -916,7 +916,7 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
       access([t7.c2], [t7.c1], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   6 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
   7 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
@@ -925,7 +925,7 @@ Outputs & filters:
       force partition granule
   9 - output([t7.c2], [t7.c1], [t7.c3]), filter(nil), rowset=16
       access([t7.c2], [t7.c1], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
 select /*+ index(t7 idx_t7_c2c1) */  c2,c1,c3 from t7 order by 1,2,3;
@@ -971,7 +971,7 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c1]), filter(nil), rowset=16
       access([t7.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   6 - output([t7.c1]), filter(nil), rowset=16
   7 - output([t7.c1]), filter(nil), rowset=16
@@ -980,7 +980,7 @@ Outputs & filters:
       force partition granule
   9 - output([t7.c1]), filter(nil), rowset=16
       access([t7.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 select c1 from t7 union select c1 from t7 order by 1;
 +------+
@@ -1024,7 +1024,7 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), rowset=16
       access([t7.c1], [t7.c2], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   6 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), rowset=16
   7 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), rowset=16
@@ -1033,7 +1033,7 @@ Outputs & filters:
       force partition granule
   9 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), rowset=16
       access([t7.c1], [t7.c2], [t7.c3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.c2], [t7.c1], [t7.c3], [t7.__pk_increment]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 select /*+ index(t7 idx_t7_c2c1) */  c1,c2,c3 from t7 union
 select /*+ index(t7 idx_t7_c2c1) */ c1,c2,c3 from t7 order by 1,2,3;
@@ -1103,13 +1103,13 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c3], [t7.c1], [t7.c2]), filter(nil), rowset=16
       access([t7.c3], [t7.c1], [t7.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t7.c3 < 5])
   6 - output([t72.c1], [t72.c2], [t72.c3]), filter(nil), rowset=16
       access([t72.c3], [t72.c1], [t72.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t72.c3 < 5])
 select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
@@ -1153,13 +1153,13 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c3], [t7.c2], [t7.c1]), filter(nil), rowset=16
       access([t7.c3], [t7.c2], [t7.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t7.c3 < 5])
   6 - output([t72.c3], [t72.c2], [t72.c1]), filter(nil), rowset=16
       access([t72.c3], [t72.c2], [t72.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t72.c3 < 5])
 select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5 union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
@@ -1205,13 +1205,13 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c3], [t7.c1], [t7.c2]), filter(nil), rowset=16
       access([t7.c3], [t7.c1], [t7.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t7.c3 < 5])
   6 - output([t72.c1], [t72.c2], [t72.c3]), filter(nil), rowset=16
       access([t72.c3], [t72.c1], [t72.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t72.c3 < 5])
 select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
@@ -1255,13 +1255,13 @@ Outputs & filters:
       force partition granule
   5 - output([t7.c3], [t7.c2], [t7.c1]), filter(nil), rowset=16
       access([t7.c3], [t7.c2], [t7.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.c3], [t7.c2], [t7.c1], [t7.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t7.c3 < 5])
   6 - output([t72.c3], [t72.c2], [t72.c1]), filter(nil), rowset=16
       access([t72.c3], [t72.c2], [t72.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t72.c3], [t72.c2], [t72.c1], [t72.__pk_increment]), range(NULL,MAX,MAX,MAX ; 5,MIN,MIN,MIN), 
       range_cond([t72.c3 < 5])
 select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5  union 
 select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
@@ -1335,11 +1335,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([test1.c2], [test1.c1]), filter(nil), rowset=16
       access([test1.c2], [test1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test1.c1], [test1.c2], [test1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([test2.d2], [test2.d1]), filter(nil), rowset=16
       access([test2.d2], [test2.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test2.d1], [test2.d2], [test2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2, c1 from test1 union select d2,d1 from test2 order by c2,c1;
 +------+------+
@@ -1372,11 +1372,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   1 - output([test1.c2], [test1.c1]), filter(nil), rowset=16
       access([test1.c2], [test1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test1.c1], [test1.c2], [test1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([test2.d2], [test2.d1]), filter(nil), rowset=16
       access([test2.d2], [test2.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test2.d1], [test2.d2], [test2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2, c1 from test1 union select d2,d1 from test2 order by c1,c2;
 +------+------+
@@ -1412,11 +1412,11 @@ Outputs & filters:
   1 - output([UNION([2])], [UNION([1])]), filter(nil), rowset=16
   2 - output([test1.c2], [test1.c1]), filter(nil), rowset=16
       access([test1.c2], [test1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test1.c1], [test1.c2], [test1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([test2.d2], [test2.d1]), filter(nil), rowset=16
       access([test2.d2], [test2.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test2.d1], [test2.d2], [test2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2, c1 from test1 union select d2,d1 from test2 order by c1 desc,c2 desc;
 +------+------+
@@ -1452,11 +1452,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([1], [test1.c1]), filter(nil), rowset=16
       access([test1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test1.c1], [test1.c2], [test1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([2], [test2.d1]), filter(nil), rowset=16
       access([test2.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test2.d1], [test2.d2], [test2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select 1, c1 from test1 union select 2,d1 from test2 order by 1,2;
 +------+------+
@@ -1487,11 +1487,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([1], [test1.c2]), filter(nil), rowset=16
       access([test1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([cast(test2.d1, BIGINT(20, 0))], [test2.d2]), filter(nil), rowset=16
       access([test2.d1], [test2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test2.__pk_increment]), range(MIN ; MAX)always true
 select 1, c2 from test1 union select d1,d2 from test2 order by 1,2;
 +------+------+
@@ -1525,11 +1525,11 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([test1.c1 % 2], [test1.c2 % 2]), filter(nil), rowset=16
       access([test1.c1], [test1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([test2.d1 % 2], [test2.d2 % 2]), filter(nil), rowset=16
       access([test2.d1], [test2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([test2.__pk_increment]), range(MIN ; MAX)always true
 select mod(c1,2),mod(c2,2) from test1 union select mod(d1,2),mod(d2,2) from test2 order by 1,2;
 +-----------+-----------+
@@ -1595,11 +1595,11 @@ Outputs & filters:
       sort_keys([x1.c2, ASC], [x1.c3, ASC])
   2 - output([x1.c2], [x1.c3]), filter(nil), rowset=16
       access([x1.c2], [x1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([x2.d2], [x2.d3]), filter(nil), rowset=16
       access([x2.d2], [x2.d3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x2.d2], [x2.d3], [x2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2, c3 from x1 union select /*+ index(x2 ix2) */ d2, d3 from x2 order by 1,2;
 +------+------+
@@ -1628,13 +1628,13 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
   2 - output([x2.d3], [x2.d2]), filter(nil), rowset=16
       access([x2.d3], [x2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x2.d2], [x2.d3], [x2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([x1.c3], [x1.c2]), filter(nil), rowset=16
       sort_keys([x1.c2, ASC], [x1.c3, ASC])
   4 - output([x1.c3], [x1.c2]), filter(nil), rowset=16
       access([x1.c3], [x1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x1.__pk_increment]), range(MIN ; MAX)always true
 select c3, c2 from x1 union select /*+ index(x2 ix2) */ d3, d2 from x2 order by 1,2;
 +------+------+
@@ -1706,13 +1706,13 @@ Outputs & filters:
       sort_keys([ts2.c2, DESC], [ts2.c1, ASC]), topn(1)
   3 - output([ts2.c1], [ts2.c2]), filter(nil), rowset=16
       access([ts2.c1], [ts2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([ts2.__pk_increment]), range(MIN ; MAX)always true
   4 - output([ts1.c1], [ts1.c2]), filter(nil), rowset=16
       sort_keys([ts1.c2, DESC], [ts1.c1, ASC])
   5 - output([ts1.c1], [ts1.c2]), filter(nil), rowset=16
       access([ts1.c1], [ts1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([ts1.__pk_increment]), range(MIN ; MAX)always true
 SELECT c1, c2 FROM (
   SELECT c1, c2 FROM ts1
@@ -1753,15 +1753,15 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
   2 - output([t1.C1], [t1.C2], [t1.PK]), filter(nil), rowset=16
       access([t1.PK], [t1.C1], [t1.C2]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t1.PK]), range(MIN ; MAX)always true
   3 - output([t2.C1], [t2.C2], [t2.PK]), filter(nil), rowset=16
       access([t2.PK], [t2.C1], [t2.C2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.PK]), range(MIN ; MAX)always true
   4 - output([t3.C1], [t3.C2], [t3.PK]), filter(nil), rowset=16
       access([t3.PK], [t3.C1], [t3.C2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.PK]), range(MIN ; MAX)always true
 (SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1) UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
 +------+------+----+
@@ -1860,8 +1860,8 @@ Outputs & filters:
        [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter(nil), rowset=16
       access([table2_bigint.pk], [table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20],
        [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([table2_bigint.pk]), range[9727744 ; 9727744], [7826688 ; 7826688], [1657856 ; 1657856], [55039 ; 55039], [50631 ; 50631],
+      is_index_back=false, is_global_index=false, 
+      range_key([table2_bigint.pk]), range[9727744 ; 9727744], [7826688 ; 7826688], [1657856 ; 1657856], [55039 ; 55039], [50631 ; 50631], 
       range_cond([table2_bigint.pk IN (9727744, 7826688, 1657856, 55039, 50631)])
   5 - output([table100_bigint.col_bigint], [table100_bigint.col_bigint_signed], [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0],
        [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6], [table100_bigint.pk]), filter(nil), rowset=16
@@ -1871,11 +1871,11 @@ Outputs & filters:
       sort_keys([table100_bigint.col_bigint_signed, ASC], [table100_bigint.col_decimal_20_0_signed, ASC], [table100_bigint.col_decimal_20_0, ASC], [table100_bigint.pk,
        DESC]), topn(7)
   7 - output([table100_bigint.pk], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed],
-       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), filter([table100_bigint.col_decimal_20_0_signed
+       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), filter([table100_bigint.col_decimal_20_0_signed 
       = cast(ROUND(SIGN(table100_bigint.col_decimal_20_0)), DECIMAL(-1, 0))]), rowset=16
       access([table100_bigint.pk], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed],
        [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true
   8 - output([table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0],
        [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter(nil), rowset=16
@@ -1885,7 +1885,7 @@ Outputs & filters:
        DECIMAL(20, 0)) != cast(99999, DECIMAL(5, 0))]), rowset=16
       access([table2_bigint.pk], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned],
        [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_timestamp_6]), partitions(p0)
-      limit(5), offset(1), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(5), offset(1), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
 SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
        FROM

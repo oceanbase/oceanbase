@@ -25,12 +25,12 @@ Outputs & filters:
       conds([xy_t1.c1 = xy_t2.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1]), filter(nil), rowset=16
   3 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
 +------+------+
@@ -61,13 +61,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1]), filter(nil), rowset=16
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
 +------+------+
@@ -93,11 +93,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
 +------+------+
@@ -126,12 +126,12 @@ Outputs & filters:
       conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+
@@ -166,13 +166,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+
@@ -202,11 +202,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds([xy_t1.c2 > xy_t2.c2])
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+
@@ -239,12 +239,12 @@ Outputs & filters:
       conds([xy_t1.c1 = xy_t2.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1]), filter(nil), rowset=16
   3 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
 +------+------+
@@ -277,13 +277,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1]), filter(nil), rowset=16
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
 +------+------+
@@ -311,11 +311,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
 +------+------+
@@ -346,12 +346,12 @@ Outputs & filters:
       conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+
@@ -380,13 +380,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+
@@ -410,11 +410,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds([xy_t1.c2 > xy_t2.c2])
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+
@@ -441,12 +441,12 @@ Outputs & filters:
       conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_NL(xy_t1, xy_t2)*/ c1, c2, c1, c2  from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+------+------+
@@ -481,13 +481,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_MERGE(xy_t1, xy_t2)*/ c1, c2, c1, c2  from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+------+------+
@@ -517,11 +517,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds([xy_t1.c2 > xy_t2.c2])
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_HASH(xy_t1, xy_t2)*/ c1, c2, c1, c2  from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+------+------+
@@ -552,12 +552,12 @@ Outputs & filters:
       conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_NL(xy_t1, xy_t2)*/  c1, c2, c1, c2 from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+------+------+
@@ -586,13 +586,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_MERGE(xy_t1, xy_t2)*/ c1, c2, c1, c2 from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+------+------+
@@ -616,11 +616,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds([xy_t1.c2 > xy_t2.c2])
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ USE_HASH(xy_t1, xy_t2)*/ c1, c2, c1, c2 from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
 +------+------+------+------+
@@ -654,11 +654,11 @@ Outputs & filters:
       equal_conds([xy_x_t.x1 = xy_y_t.y1]), other_conds([xy_y_t.y2 < xy_x_t.x2])
   1 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
       access([xy_y_t.y2], [xy_y_t.y1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_y_t.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_x_t.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 +------+------------+
@@ -695,13 +695,13 @@ Outputs & filters:
       sort_keys([xy_x_t.x1, ASC])
   2 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_x_t.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_y_t.y1], [xy_y_t.y2]), filter(nil), rowset=256
       sort_keys([xy_y_t.y1, ASC])
   4 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
       access([xy_y_t.y2], [xy_y_t.y1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_y_t.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 +------+------------+
@@ -734,12 +734,12 @@ Outputs & filters:
       conds([xy_y_t.y2 < xy_x_t.x2], [xy_x_t.x1 = xy_y_t.y1]), nl_params_(nil), use_batch=false
   1 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_x_t.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
   3 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
       access([xy_y_t.y2], [xy_y_t.y1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_y_t.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 +------+------------+
@@ -777,11 +777,11 @@ Outputs & filters:
       equal_conds([xy_x_t.x1 = xy_y_t.y1]), other_conds([xy_y_t.y2 < xy_x_t.x2])
   1 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
       access([xy_y_t.y2], [xy_y_t.y1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_y_t.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_x_t.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 +-------------+------------+
@@ -872,13 +872,13 @@ Outputs & filters:
       sort_keys([xy_x_t.x1, ASC])
   2 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_x_t.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_y_t.y1], [xy_y_t.y2]), filter(nil), rowset=256
       sort_keys([xy_y_t.y1, ASC])
   4 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
       access([xy_y_t.y2], [xy_y_t.y1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_y_t.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 +-------------+------------+
@@ -965,12 +965,12 @@ Outputs & filters:
       conds([xy_y_t.y2 < xy_x_t.x2], [xy_x_t.x1 = xy_y_t.y1]), nl_params_(nil), use_batch=false
   1 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_x_t.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
   3 - output([xy_y_t.y2], [xy_y_t.y1]), filter(nil), rowset=256
       access([xy_y_t.y2], [xy_y_t.y1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_y_t.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 +-------------+------------+
@@ -1073,11 +1073,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1144,12 +1144,12 @@ Outputs & filters:
       conds([xy_t2.c1 = xy_t1.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1]), filter(nil), rowset=256
   3 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1215,11 +1215,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1290,13 +1290,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1]), filter(nil), rowset=256
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1362,11 +1362,11 @@ Outputs & filters:
       exec_params_([xy_t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([xy_t2.c1 = :0]), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ no_rewrite */ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1435,11 +1435,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1469,12 +1469,12 @@ Outputs & filters:
       conds([xy_t2.c1 = xy_t1.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1503,11 +1503,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1541,13 +1541,13 @@ Outputs & filters:
       sort_keys([xy_t2.c1, ASC])
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       sort_keys([xy_t1.c1, ASC])
   4 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1579,11 +1579,11 @@ Outputs & filters:
       equal_conds([xy_t4.c1 = xy_t1.c2]), other_conds(nil)
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=256
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -1607,12 +1607,12 @@ Outputs & filters:
       conds(nil), nl_params_([xy_t4.c1(:0)]), use_batch=false
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=16
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
 select /*+ use_nl(xy_t4 xy_t1)*/ * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -1636,11 +1636,11 @@ Outputs & filters:
       equal_conds([xy_t4.c1 = xy_t1.c2]), other_conds(nil)
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=256
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_hash(xy_t4 xy_t1)*/ * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -1668,11 +1668,11 @@ Outputs & filters:
       sort_keys([xy_t4.c1, ASC])
   2 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=256
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_merge(xy_t4 xy_t1)*/ * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -1700,11 +1700,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -1732,12 +1732,12 @@ Outputs & filters:
       conds(nil), nl_params_([xy_t2.c2(:0)]), use_batch=false
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
 select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -1765,11 +1765,11 @@ Outputs & filters:
       equal_conds([xy_t2.c2 = xy_t1.c2]), other_conds(nil)
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -1798,11 +1798,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -1833,11 +1833,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -1932,12 +1932,12 @@ Outputs & filters:
       conds([xy_t2.c1 = xy_t1.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t2.c1]), filter(nil), rowset=256
   3 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2031,11 +2031,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2134,13 +2134,13 @@ Outputs & filters:
       sort_keys([xy_t1.c1, ASC])
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t2.c1]), filter(nil), rowset=256
       sort_keys([xy_t2.c1, ASC])
   4 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2234,11 +2234,11 @@ Outputs & filters:
       exec_params_([xy_t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([xy_t2.c1 = :0]), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ no_rewrite */ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2335,11 +2335,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2363,12 +2363,12 @@ Outputs & filters:
       conds([xy_t2.c1 = xy_t1.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2391,11 +2391,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2423,13 +2423,13 @@ Outputs & filters:
       sort_keys([xy_t2.c1, ASC])
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       sort_keys([xy_t1.c1, ASC])
   4 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2455,11 +2455,11 @@ Outputs & filters:
       equal_conds([xy_t4.c1 = xy_t1.c2]), other_conds(nil)
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=256
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -2481,12 +2481,12 @@ Outputs & filters:
       conds(nil), nl_params_([xy_t4.c1(:0)]), use_batch=false
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=16
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
 select /*+ use_nl(xy_t4 xy_t1)*/ * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -2508,11 +2508,11 @@ Outputs & filters:
       equal_conds([xy_t4.c1 = xy_t1.c2]), other_conds(nil)
   1 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=256
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_hash(xy_t4 xy_t1)*/ * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -2538,11 +2538,11 @@ Outputs & filters:
       sort_keys([xy_t4.c1, ASC])
   2 - output([xy_t4.c1], [xy_t4.c2]), filter(nil), rowset=256
       access([xy_t4.c1], [xy_t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t4.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_merge(xy_t4 xy_t1)*/ * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
 +------+------+
@@ -2568,11 +2568,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -2596,12 +2596,12 @@ Outputs & filters:
       conds(nil), nl_params_([xy_t2.c2(:0)]), use_batch=false
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = xy_t1.c2])
 select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -2625,11 +2625,11 @@ Outputs & filters:
       equal_conds([xy_t2.c2 = xy_t1.c2]), other_conds(nil)
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -2654,11 +2654,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c2], [xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c2], [xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 +------+------+
@@ -2690,17 +2690,17 @@ Outputs & filters:
       equal_conds([xy_t3.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t3.c1]), filter(nil), rowset=256
       access([xy_t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t3.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   4 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
 +---------+---------+
@@ -2728,17 +2728,17 @@ Outputs & filters:
       equal_conds([xy_t3.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t3.c1]), filter(nil), rowset=256
       access([xy_t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t3.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   4 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t3, xy_t1) use_hash(xy_t2, xy_t1)*/ sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
 +---------+---------+
@@ -2765,15 +2765,15 @@ Outputs & filters:
       exec_params_([xy_t1.c1(:0)], [xy_t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter([xy_t3.c1 = :0]), rowset=256
       access([xy_t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t3.__pk_increment]), range(MIN ; MAX)always true
   4 - output([1]), filter([xy_t2.c1 = :1]), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
 +---------+---------+
@@ -2807,15 +2807,15 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c2], [xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   4 - output([xy_t3.c2]), filter(nil), rowset=256
       access([xy_t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t3.c2], [xy_t3.c1], [xy_t3.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   5 - output([xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select sum(c1), sum(c2) from xy_t1 where not exists (select 1 from xy_t3 where c2 = xy_t1.c2) and  exists (select 1 from xy_t2 where c2 = xy_t1.c2);
 +---------+---------+
@@ -2842,17 +2842,17 @@ Outputs & filters:
       exec_params_([xy_t1.c2(:0)], [xy_t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   2 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c2], [xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t3.c2], [xy_t3.c1], [xy_t3.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true,
+      is_index_back=false, is_global_index=false, 
+      range_key([xy_t3.c2], [xy_t3.c1], [xy_t3.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
       range_cond([xy_t3.c2 = :0])
   4 - output([1]), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true,
+      is_index_back=false, is_global_index=false, 
+      range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
       range_cond([xy_t2.c2 = :1])
 select /*+ no_rewrite*/ sum(c1), sum(c2) from xy_t1 where not exists (select 1 from xy_t3 where c2 = xy_t1.c2) and  exists (select 1 from xy_t2 where c2 = xy_t1.c2);
 +---------+---------+
@@ -2878,11 +2878,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -2951,11 +2951,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 3;
 +------+------+
@@ -2983,11 +2983,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 1000;
 +------+------+
@@ -3056,11 +3056,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -3092,11 +3092,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 3;
 +------+------+
@@ -3124,11 +3124,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 1000;
 +------+------+
@@ -3160,11 +3160,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -3261,11 +3261,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1]), filter(nil), rowset=16
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 3;
 +------+------+
@@ -3293,11 +3293,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 1000;
 +------+------+
@@ -3394,11 +3394,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
 +------+------+
@@ -3424,11 +3424,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 3;
 +------+------+
@@ -3454,11 +3454,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=256
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
 select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 1000;
 +------+------+
@@ -3496,11 +3496,11 @@ Outputs & filters:
       equal_conds([xy_t1.c2 = xy_t2.c2]), other_conds([xy_t1.c3 < xy_t2.c3])
   2 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3531,13 +3531,13 @@ Outputs & filters:
       sort_keys([xy_t1.c2, ASC])
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   4 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       sort_keys([xy_t2.c2, ASC])
   5 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3564,12 +3564,12 @@ Outputs & filters:
       conds([xy_t1.c3 < xy_t2.c3], [xy_t1.c2 = xy_t2.c2]), nl_params_(nil), use_batch=false
   2 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   3 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
   4 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3595,11 +3595,11 @@ Outputs & filters:
       exec_params_([xy_t1.c3(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   2 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   3 - output([xy_t2.c2]), filter([:0 < xy_t2.c3]), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3628,11 +3628,11 @@ Outputs & filters:
       equal_conds([xy_t2.c2 = xy_t1.c2]), other_conds([xy_t1.c3 < xy_t2.c3])
   2 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3663,13 +3663,13 @@ Outputs & filters:
       sort_keys([xy_t2.c2, ASC])
   3 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   4 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       sort_keys([xy_t1.c2, ASC])
   5 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3696,12 +3696,12 @@ Outputs & filters:
       conds([xy_t1.c3 < xy_t2.c3], [xy_t2.c2 = xy_t1.c2]), nl_params_(nil), use_batch=false
   2 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
   4 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3727,11 +3727,11 @@ Outputs & filters:
       exec_params_([xy_t2.c3(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   2 - output([xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c2]), filter([xy_t1.c3 < :0]), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -3760,11 +3760,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds([xy_t1.c2 < xy_t2.c2])
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+
@@ -3787,11 +3787,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+
@@ -3813,11 +3813,11 @@ Outputs & filters:
       exec_params_([xy_t2.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1]), filter([xy_t1.c2 < :0]), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+
@@ -3845,11 +3845,11 @@ Outputs & filters:
       equal_conds([xy_t2.c1 = xy_t1.c2]), other_conds([xy_t1.c3 < xy_t2.c3])
   2 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -3874,13 +3874,13 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       sort_keys([xy_t1.c2, ASC])
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -3904,12 +3904,12 @@ Outputs & filters:
       conds([xy_t1.c3 < xy_t2.c3], [xy_t2.c1 = xy_t1.c2]), nl_params_(nil), use_batch=false
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
   3 - output([xy_t1.c3], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -3932,11 +3932,11 @@ Outputs & filters:
       exec_params_([xy_t2.c3(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([xy_t1.c2]), filter([xy_t1.c3 < :0]), rowset=16
       access([xy_t1.c3], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -3965,11 +3965,11 @@ Outputs & filters:
       equal_conds([xy_t1.c2 = xy_t2.c2]), other_conds([xy_t1.c3 < xy_t2.c3])
   2 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4006,13 +4006,13 @@ Outputs & filters:
       sort_keys([xy_t1.c2, ASC])
   3 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   4 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       sort_keys([xy_t2.c2, ASC])
   5 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4045,12 +4045,12 @@ Outputs & filters:
       conds([xy_t1.c2 = xy_t2.c2], [xy_t1.c3 < xy_t2.c3]), nl_params_(nil), use_batch=false
   2 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   3 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
   4 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4082,11 +4082,11 @@ Outputs & filters:
       exec_params_([xy_t1.c2(:0)], [xy_t1.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   2 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   3 - output([1]), filter([:0 = xy_t2.c2], [:1 < xy_t2.c3]), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4121,11 +4121,11 @@ Outputs & filters:
       equal_conds([xy_t1.c2 = xy_t2.c2]), other_conds([xy_t1.c3 < xy_t2.c3])
   2 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4159,13 +4159,13 @@ Outputs & filters:
       sort_keys([xy_t2.c2, ASC])
   3 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   4 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       sort_keys([xy_t1.c2, ASC])
   5 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4195,12 +4195,12 @@ Outputs & filters:
       conds([xy_t1.c2 = xy_t2.c2], [xy_t1.c3 < xy_t2.c3]), nl_params_(nil), use_batch=false
   2 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
   4 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4229,11 +4229,11 @@ Outputs & filters:
       exec_params_([xy_t2.c2(:0)], [xy_t2.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   2 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([1]), filter([xy_t1.c2 = :0], [xy_t1.c3 < :1]), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ no_rewrite*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
 +------+------+
@@ -4265,11 +4265,11 @@ Outputs & filters:
       equal_conds([xy_t1.c1 = xy_t2.c1]), other_conds([xy_t1.c3 < xy_t2.c3])
   2 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([xy_t1.c1], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -4297,11 +4297,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([xy_t1.c1], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -4328,12 +4328,12 @@ Outputs & filters:
       conds(nil), nl_params_([xy_t2.c1(:0)], [xy_t2.c3(:1)]), use_batch=false
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output(nil), filter([xy_t1.c3 < :1]), rowset=16
       access([xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([xy_t1.c1]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([xy_t1.c1]), range(MIN ; MAX), 
       range_cond([xy_t1.c1 = :0])
 select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -4360,12 +4360,12 @@ Outputs & filters:
       exec_params_([xy_t2.c1(:0)], [xy_t2.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([1]), filter([xy_t1.c3 < :1]), rowset=16
       access([GROUP_ID], [xy_t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([xy_t1.c1]), range(MIN ; MAX)always true,
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([xy_t1.c1]), range(MIN ; MAX)always true, 
       range_cond([xy_t1.c1 = :0])
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
 +----+------+
@@ -4401,11 +4401,11 @@ Outputs & filters:
       access([VIEW1.xy_t1.c1])
   3 - output([xy_t1.c1]), filter([xy_t1.c1 > xy_t1.c2]), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
   4 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
 select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+
@@ -4436,13 +4436,13 @@ Outputs & filters:
       equal_conds([VIEW1.xy_t1.c1 = xy_t2.c2]), other_conds(nil)
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([VIEW1.xy_t1.c1]), filter(nil), rowset=16
       access([VIEW1.xy_t1.c1])
   4 - output([xy_t1.c1]), filter([xy_t1.c1 > xy_t1.c2]), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+
@@ -4473,13 +4473,13 @@ Outputs & filters:
       equal_conds([VIEW1.xy_t1.c1 = xy_t2.c2]), other_conds(nil)
   2 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   3 - output([VIEW1.xy_t1.c1]), filter(nil), rowset=16
       access([VIEW1.xy_t1.c1])
   4 - output([xy_t1.c1]), filter([xy_t1.c1 > xy_t1.c2]), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true
 select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+
@@ -4506,12 +4506,12 @@ Outputs & filters:
       exec_params_([xy_t2.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([1]), filter([xy_t1.c1 > xy_t1.c2]), rowset=16
       access([GROUP_ID], [xy_t1.c1], [xy_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([xy_t1.c1]), range(MIN ; MAX)always true,
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([xy_t1.c1]), range(MIN ; MAX)always true, 
       range_cond([xy_t1.c1 = :0])
 select /*+ no_rewrite*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
 +----+------+

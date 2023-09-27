@@ -62,33 +62,33 @@ BEGIN
   DECLARE i1, i2, i3, i4 TINYINT;
   DECLARE u1, u2, u3, u4 TINYINT UNSIGNED;
   DECLARE d1, d2, d3 DECIMAL(64, 2);
-
+ 
   SET i1 = 1e200;
   SET i2 = -1e200;
   SET i3 = 300;
   SET i4 = -300;
-
+ 
   SELECT i1, i2, i3, i4;
 
   SET i1 = 10 * 10 * 10;
   SET i2 = -10 * 10 * 10;
   SET i3 = sign(10 * 10) * 10 * 20;
   SET i4 = sign(-10 * 10) * -10 * 20;
-
+  
   SELECT i1, i2, i3, i4;
 
   SET u1 = 1e200;
   SET u2 = -1e200;
   SET u3 = 300;
   SET u4 = -300;
-
+ 
   SELECT u1, u2, u3, u4;
 
   SET u1 = 10 * 10 * 10;
   SET u2 = -10 * 10 * 10;
   SET u3 = sign(10 * 10) * 10 * 20;
   SET u4 = sign(-10 * 10) * -10 * 20;
-
+  
   SELECT u1, u2, u3, u4;
 
   SET d1 = 1234;
@@ -376,33 +376,33 @@ BEGIN
   DECLARE i1, i2, i3, i4 TINYINT;
   DECLARE u1, u2, u3, u4 TINYINT UNSIGNED;
   DECLARE d1, d2, d3 DECIMAL(64, 2);
-
+ 
   SET i1 = 1e200;
   SET i2 = -1e200;
   SET i3 = 300;
   SET i4 = -300;
-
+ 
   SELECT i1, i2, i3, i4;
 
   SET i1 = 10 * 10 * 10;
   SET i2 = -10 * 10 * 10;
   SET i3 = sign(10 * 10) * 10 * 20;
   SET i4 = sign(-10 * 10) * -10 * 20;
-
+  
   SELECT i1, i2, i3, i4;
 
   SET u1 = 1e200;
   SET u2 = -1e200;
   SET u3 = 300;
   SET u4 = -300;
-
+ 
   SELECT u1, u2, u3, u4;
 
   SET u1 = 10 * 10 * 10;
   SET u2 = -10 * 10 * 10;
   SET u3 = sign(10 * 10) * 10 * 20;
   SET u4 = sign(-10 * 10) * -10 * 20;
-
+  
   SELECT u1, u2, u3, u4;
 
   SET d1 = 1234;
@@ -615,7 +615,7 @@ BEGIN
 
               WHILE i > 0 DO
                 INSERT INTO t1(log_msg) VALUES(CONCAT('p1: case1: case2: loop: i: ', i));
-
+                
                 CASE MOD(i, 2)
                   WHEN 0 THEN
                     INSERT INTO t1(log_msg) VALUES('p1: case1: case2: loop: i is even');
@@ -624,7 +624,7 @@ BEGIN
                   ELSE
                     INSERT INTO t1(log_msg) VALUES('p1: case1: case2: loop: ERROR');
                 END CASE;
-
+                    
                 SET i = i - 1;
               END WHILE;
             END;
@@ -659,7 +659,7 @@ BEGIN
 
               WHILE i > 0 DO
                 INSERT INTO t1(log_msg) VALUES(CONCAT('p1: case4: case5: loop: i: ', i));
-
+                
                 CASE MOD(i, 2)
                   WHEN 0 THEN
                     INSERT INTO t1(log_msg) VALUES('p1: case4: case5: loop: i is even');
@@ -668,7 +668,7 @@ BEGIN
                   ELSE
                     INSERT INTO t1(log_msg) VALUES('p1: case4: case5: loop: ERROR');
                 END CASE;
-
+                    
                 SET i = i - 1;
               END WHILE;
             END;
@@ -867,7 +867,7 @@ BUG#13675
 ##   DROP TABLE t1;
 ## END|
 ## delimiter ;|
-##
+## 
 ## CALL p1(NOW());
 ## CALL p1('test');
 ## DROP PROCEDURE p1;
@@ -1304,30 +1304,30 @@ DROP TABLE t1;
 ## DROP FUNCTION IF EXISTS f1;
 ## --enable_warnings
 ## delimiter |;
-##
+## 
 ## CREATE PROCEDURE p1(arg ENUM('a', 'b'))
 ## BEGIN
 ##   SELECT arg;
 ## END|
-##
+## 
 ## CREATE PROCEDURE p2(arg ENUM('a', 'b'))
 ## BEGIN
 ##   DECLARE var ENUM('c', 'd') DEFAULT arg;
-##
+## 
 ##   SELECT arg, var;
 ## END|
-##
+## 
 ## CREATE FUNCTION f1(arg ENUM('a', 'b')) RETURNS ENUM('c', 'd')
 ## BEGIN
 ##   RETURN arg;
 ## END|
-##
+## 
 ## delimiter ;|
-##
+## 
 ## CALL p1('c');
-##
+## 
 ## CALL p2('a');
-##
+## 
 ## SELECT f1('a');
 ## DROP PROCEDURE p1;
 ## DROP PROCEDURE p2;
@@ -1548,7 +1548,7 @@ CREATE PROCEDURE bug27415_text_test2(entity_id_str_in VARCHAR(255))
 BEGIN
     DECLARE str_remainder VARCHAR(255);
     DECLARE str_remainder2 VARCHAR(255);
-
+ 
     SET str_remainder2 = entity_id_str_in;
     select 'before substr', str_remainder2;
     SET str_remainder = SUBSTRING(str_remainder2, 3);
@@ -1606,7 +1606,7 @@ DROP PROCEDURE bug27415_text_test2|
 
 drop function if exists f1;
 drop table if exists t1;
-create function f1() returns int
+create function f1() returns int 
 begin
  if @a=1 then set @b='abc';
  else set @b=1;

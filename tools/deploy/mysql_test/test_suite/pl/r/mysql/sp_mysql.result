@@ -962,7 +962,7 @@ select id, f1(), f3() from t1 order by id|
 id	f1()	f3()
 a	3	1
 b	3	1
-create function f4() returns double
+create function f4() returns double 
 return (select d from t1, t2 where t1.data = t2.i and t1.id= "b")|
 select f4()|
 f4()
@@ -1450,7 +1450,7 @@ create procedure h_se()
 deterministic
 begin
 -- integrity constraint violation
-declare continue handler for sqlstate '23000'
+declare continue handler for sqlstate '23000' 
 select 'Outer (bad)' as 'h_se';
 begin
 declare continue handler for 1062 -- ER_DUP_ENTRY
@@ -1462,11 +1462,11 @@ create procedure h_ss()
 deterministic
 begin
 -- integrity constraint violation
-declare continue handler for sqlstate '23000'
+declare continue handler for sqlstate '23000' 
 select 'Outer (bad)' as 'h_ss';
 begin
 -- integrity constraint violation
-declare continue handler for sqlstate '23000'
+declare continue handler for sqlstate '23000' 
 select 'Inner (good)' as 'h_ss';
 insert into t3 values (1);
 end;
@@ -1475,7 +1475,7 @@ create procedure h_sn()
 deterministic
 begin
 -- Note: '02000' is more specific than NOT FOUND ;
---       there might be other not found states
+--       there might be other not found states 
 declare continue handler for sqlstate '02000' -- no data
 select 'Outer (bad)' as 'h_sn';
 begin
@@ -1503,7 +1503,7 @@ create procedure h_sx()
 deterministic
 begin
 -- integrity constraint violation
-declare continue handler for sqlstate '23000'
+declare continue handler for sqlstate '23000' 
 select 'Outer (bad)' as 'h_sx';
 begin
 declare continue handler for sqlexception
@@ -1768,7 +1768,7 @@ create table t3(a int)|
 drop procedure if exists bug1862|
 create procedure bug1862()
 begin
-insert into t3 values(2);
+insert into t3 values(2);    
 flush tables;
 end|
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'flush tables' at line 4
@@ -1929,7 +1929,7 @@ insert into t3 values (123456789012)|
 drop procedure if exists bug2780|
 create procedure bug2780()
 begin
-declare exit handler for sqlwarning set @x = 1;
+declare exit handler for sqlwarning set @x = 1; 
 set @x = 0;
 insert into t3 values (123456789012);
 insert into t3 values (0);
@@ -1945,12 +1945,12 @@ s1
 0
 drop procedure bug2780|
 drop table t3|
-create table t3 (
+create table t3 ( 
 OrderID  int not null,
 MarketID int,
 primary key (OrderID)
 )|
-create table t4 (
+create table t4 ( 
 MarketID int not null,
 Market varchar(60),
 Status char(1),
@@ -1962,20 +1962,20 @@ insert t4 (MarketID,Market,Status) values (1,"MarketID One","A")|
 insert t4 (MarketID,Market,Status) values (2,"MarketID Two","A")|
 drop procedure if exists bug2656_1|
 create procedure bug2656_1()
-begin
+begin 
 select
 m.Market
-from  t4 m JOIN t3 o
+from  t4 m JOIN t3 o 
 ON o.MarketID != 1 and o.MarketID = m.MarketID;
 end |
 drop procedure if exists bug2656_2|
 create procedure bug2656_2()
-begin
+begin 
 select
 m.Market
-from
+from  
 t4 m, t3 o
-where
+where       
 m.MarketID != 1 and m.MarketID = o.MarketID;
 end |
 call bug2656_1()|
@@ -2213,7 +2213,7 @@ drop procedure if exists bug4904|
 create procedure bug4904 ()
 begin
 declare continue handler for sqlstate 'HY000' begin end;
-select s1 from t3 union select s2 from t3;
+select s1 from t3 union select s2 from t3; 
 end|
 call bug4904()|
 s1
@@ -2645,20 +2645,20 @@ end|
 create procedure bug9074()
 begin
 declare x1, x2, x3, x4, x5, x6 int default 0;
-begin
-declare continue handler for sqlstate '23000' set x5 = 1;
-insert into t3 values ('a', 'b');
-set x6 = 1;
+begin    
+declare continue handler for sqlstate '23000' set x5 = 1;      
+insert into t3 values ('a', 'b');      
+set x6 = 1;      
 end;
 begin1_label:
 begin
-declare continue handler for sqlstate '23000' set x1 = 1;
-insert into t3 values ('a', 'b');
-set x2 = 1;
+declare continue handler for sqlstate '23000' set x1 = 1;      
+insert into t3 values ('a', 'b');      
+set x2 = 1;      
 begin2_label:
-begin
-declare exit handler for sqlstate '23000' set x3 = 1;
-set x4= 1;
+begin  
+declare exit handler for sqlstate '23000' set x3 = 1;         
+set x4= 1;         
 insert into t3 values ('a','b');
 set x4= 0;
 end begin2_label;
@@ -2822,22 +2822,22 @@ drop function if exists bug9775|
 create function bug9775(v1 char(1)) returns enum('a','b') return v1|
 select bug9775('a'),bug9775('b'),bug9775('c')|
 bug9775('a')	bug9775('b')	bug9775('c')
-a	b
+a	b	
 drop function bug9775|
 create function bug9775(v1 int) returns enum('a','b') return v1|
 select bug9775(1),bug9775(2),bug9775(3)|
 bug9775(1)	bug9775(2)	bug9775(3)
-a	b
+a	b	
 drop function bug9775|
 create function bug9775(v1 char(1)) returns set('a','b') return v1|
 select bug9775('a'),bug9775('b'),bug9775('a,b'),bug9775('c')|
 bug9775('a')	bug9775('b')	bug9775('a,b')	bug9775('c')
-a	b	a
+a	b	a	
 drop function bug9775|
 create function bug9775(v1 int) returns set('a','b') return v1|
 select bug9775(1),bug9775(2),bug9775(3),bug9775(4)|
 bug9775(1)	bug9775(2)	bug9775(3)	bug9775(4)
-a	b	a,b
+a	b	a,b	
 drop function bug9775|
 drop function if exists bug8861|
 create function bug8861(v1 int) returns year return v1|
@@ -2900,12 +2900,12 @@ v
 5
 drop procedure bug5963_1|
 drop table t3|
-create procedure bug5963_2 (cfk_value int)
-begin
-if cfk_value in (select cpk from t3) then
-set @x = 5;
-end if;
-end;
+create procedure bug5963_2 (cfk_value int) 
+begin 
+if cfk_value in (select cpk from t3) then 
+set @x = 5; 
+end if; 
+end; 
 |
 create table t3 (cpk int)|
 insert into t3 values (1)|
@@ -3140,16 +3140,16 @@ drop procedure if exists bug8692|
 create table t3 (c1 varchar(5), c2 char(5), c3 enum('one','two'), c4 text, c5 blob, c6 char(5), c7 varchar(5))|
 insert into t3 values ('', '', '', '', '', '', NULL)|
 create procedure bug8692()
-begin
-declare v1 VARCHAR(10);
-declare v2 VARCHAR(10);
-declare v3 VARCHAR(10);
-declare v4 VARCHAR(10);
-declare v5 VARCHAR(10);
-declare v6 VARCHAR(10);
-declare v7 VARCHAR(10);
-declare c8692 cursor for select c1,c2,c3,c4,c5,c6,c7 from t3;
-open c8692;
+begin 
+declare v1 VARCHAR(10); 
+declare v2 VARCHAR(10); 
+declare v3 VARCHAR(10); 
+declare v4 VARCHAR(10); 
+declare v5 VARCHAR(10); 
+declare v6 VARCHAR(10); 
+declare v7 VARCHAR(10); 
+declare c8692 cursor for select c1,c2,c3,c4,c5,c6,c7 from t3; 
+open c8692; 
 fetch c8692 into v1,v2,v3,v4,v5,v6,v7;
 select v1, v2, v3, v4, v5, v6, v7;
 end|
@@ -3265,7 +3265,7 @@ drop procedure if exists bug12168|
 drop table if exists t3|
 drop procedure if exists bug11333|
 create table t3 (c1 char(128))|
-insert into t3 values
+insert into t3 values 
 ('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')|
 create procedure bug11333(i int)
 begin
@@ -3651,7 +3651,7 @@ create procedure bug10100p(prm int, inout res int)
 begin
 set res = res * prm;
 if prm > 1 then
-call bug10100p(prm - 1, res);
+call bug10100p(prm - 1, res);  
 end if;
 end|
 create procedure bug10100t(prm int)
@@ -4192,7 +4192,7 @@ insert into t3 values
 ( '2005-01-04' ), ( '2005-02-01' ), ( '2005-02-02' )|
 create procedure bug17476(pDateFormat varchar(10))
 select date_format(t3.d, pDateFormat), count(*)
-from t3
+from t3 
 group by date_format(t3.d, pDateFormat)|
 call bug17476('%Y-%m')|
 date_format(t3.d, pDateFormat)	count(*)
@@ -4340,7 +4340,7 @@ use bug18344_0123456789012|
 create procedure bug18344() begin end|
 create procedure bug18344_2() begin end|
 use test|
-select schema_name from information_schema.schemata where
+select schema_name from information_schema.schemata where 
 schema_name like 'bug18344%'|
 schema_name
 bug18344_012345678901
@@ -4354,7 +4354,7 @@ bug18344	bug18344_0123456789012
 bug18344_2	bug18344_0123456789012
 drop database bug18344_012345678901|
 drop database bug18344_0123456789012|
-select schema_name from information_schema.schemata where
+select schema_name from information_schema.schemata where 
 schema_name like 'bug18344%'|
 schema_name
 select routine_name,routine_schema from information_schema.routines where
@@ -4465,7 +4465,7 @@ create database mysqltest1 charset=utf8|
 create database mysqltest2 charset=utf8|
 create procedure mysqltest1.p1()
 begin
--- alters the default collation of database test
+-- alters the default collation of database test 
 alter database character set koi8r;
 end|
 use mysqltest1|
@@ -4941,7 +4941,7 @@ CREATE FUNCTION bug21493(paramMember VARCHAR(15)) RETURNS varchar(45)
 BEGIN
 DECLARE tracks VARCHAR(45);
 SELECT GROUP_CONCAT(Track SEPARATOR ', ') FROM t4
-WHERE Member_ID=paramMember AND Action='Enrolled' AND
+WHERE Member_ID=paramMember AND Action='Enrolled' AND 
 (Track,Action_Date) IN (SELECT Track, MAX(Action_Date) FROM t4
 WHERE Member_ID=paramMember GROUP BY Track) INTO tracks;
 RETURN tracks;
@@ -5264,13 +5264,13 @@ DROP FUNCTION IF EXISTS bug23760_rc_test|
 CREATE TABLE bug23760 (
 id INT NOT NULL AUTO_INCREMENT ,
 num INT NOT NULL ,
-PRIMARY KEY ( id )
+PRIMARY KEY ( id ) 
 )|
 CREATE TABLE bug23760_log (
 id INT NOT NULL AUTO_INCREMENT ,
 reason VARCHAR(50)NULL ,
 ammount INT NOT NULL ,
-PRIMARY KEY ( id )
+PRIMARY KEY ( id ) 
 )|
 CREATE PROCEDURE bug23760_update_log(r Varchar(50), a INT)
 BEGIN
@@ -5634,14 +5634,14 @@ select bug20777(18446744073709551616) as 'upper bounds unsigned bigint + 1';
 ERROR 22003: Out of range value for column
 select bug20777(-1) as 'lower bounds unsigned bigint - 1';
 ERROR 22003: Out of range value for column
-create table examplebug20777 as select
+create table examplebug20777 as select 
 0 as 'i',
 bug20777(9223372036854775806) as '2**63-2',
 bug20777(9223372036854775807) as '2**63-1',
 bug20777(9223372036854775808) as '2**63',
 bug20777(9223372036854775809) as '2**63+1',
 bug20777(18446744073709551614) as '2**64-2',
-bug20777(18446744073709551615) as '2**64-1',
+bug20777(18446744073709551615) as '2**64-1', 
 bug20777(18446744073709551616) as '2**64';
 ERROR 22003: Out of range value for column
 select bug20777(18446744073709551613)+1;
@@ -5873,7 +5873,7 @@ select 3;
 /*!00000 select 4; */
 /*!99999 select 5; */
 end
-proc_25411_b
+proc_25411_b	
 /* real comment */
 /*! p1 int, */
 /*!00000 p2 int */
@@ -6606,7 +6606,7 @@ DROP FUNCTION f3;
 DROP FUNCTION f4;
 DROP TABLE t1;
 #
-# Bug#34197: CREATE PROCEDURE fails when COMMENT truncated in non
+# Bug#34197: CREATE PROCEDURE fails when COMMENT truncated in non 
 #            strict SQL mode
 #
 DROP PROCEDURE IF EXISTS p1;
@@ -6657,7 +6657,7 @@ select * from t1 limit a, b;
 Warnings:
 Warning	5002	Resolve error
 #
-# Try to use data types not allowed in LIMIT
+# Try to use data types not allowed in LIMIT 
 #
 drop procedure p1;
 create procedure p1(p1 date, p2 date) select * from t1 limit p1, p2;
@@ -6727,7 +6727,7 @@ f1()
 NULL
 drop function f1;
 #
-# Try to use data types not allowed in LIMIT
+# Try to use data types not allowed in LIMIT 
 #
 create function f1(p1 date, p2 date)
 returns int
@@ -6815,10 +6815,10 @@ f1(3, 2)
 drop table t1;
 drop procedure p1;
 drop function f1;
-#
-# BUG#11766234: 59299: ASSERT (TABLE_REF->TABLE || TABLE_REF->VIEW)
+# 
+# BUG#11766234: 59299: ASSERT (TABLE_REF->TABLE || TABLE_REF->VIEW) 
 #               FAILS IN SET_FIELD_ITERATOR
-#
+# 
 CREATE TABLE t1 (a INT);
 CREATE TABLE t2 (a INT);
 CREATE VIEW v1 AS SELECT a FROM t2;
@@ -6838,7 +6838,7 @@ DROP PROCEDURE proc;
 # --
 # -- Bug 11765684 - 58674: SP-cache does not detect changes in
 # -- pre-locking list caused by triggers
-# ---
+# --- 
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 DROP TABLE IF EXISTS t3;
@@ -6868,7 +6868,7 @@ DROP PROCEDURE p1;
 # --
 # -- Bug#12652769 - 61470: case operator in stored routine retains old
 # -- value of input parameter
-# ---
+# --- 
 DROP TABLE IF EXISTS t1;
 DROP PROCEDURE IF EXISTS p1;
 CREATE TABLE t1 (s1 CHAR(5) CHARACTER SET utf8);
@@ -6945,10 +6945,10 @@ DROP PROCEDURE IF EXISTS p1;
 DROP PROCEDURE IF EXISTS p2;
 CREATE TABLE t1 (c1 INT);
 INSERT INTO t1 VALUES (1);
-CREATE PROCEDURE p1()
-BEGIN
-DECLARE foo, cnt INT UNSIGNED DEFAULT 1;
-SET foo = (SELECT MIN(c1) FROM t1 LIMIT cnt);
+CREATE PROCEDURE p1() 
+BEGIN 
+DECLARE foo, cnt INT UNSIGNED DEFAULT 1; 
+SET foo = (SELECT MIN(c1) FROM t1 LIMIT cnt); 
 END|
 CREATE PROCEDURE p2()
 BEGIN

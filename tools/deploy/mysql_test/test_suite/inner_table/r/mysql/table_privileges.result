@@ -8,7 +8,7 @@ TABLE_PRIVILEGES	CREATE VIEW `TABLE_PRIVILEGES` AS    SELECT          CAST(CONCA
 desc information_schema.table_privileges;
 Field	Type	Null	Key	Default	Extra
 GRANTEE	varchar(81)	NO			
-TABLE_CATALOG	varchar(512)	NO
+TABLE_CATALOG	varchar(512)	NO			
 TABLE_SCHEMA	varchar(128)	NO			
 TABLE_NAME	varchar(64)	NO			
 PRIVILEGE_TYPE	varchar(64)	NO			

@@ -117,7 +117,7 @@ select /*+index(t1 gkey1)*/ count(*) from t1;
 select /*+index(t1 gkey2)*/ count(*) from t1;
 drop table if exists t1;
 
-###bug
+###bug 
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
@@ -129,7 +129,7 @@ insert into t1 values (1,1,1,1),(2,2,2,2),(3,3,3,3);
 update t1 set d=d+1 where (a,b)>=(1,1) and c=1;
 drop table if exists t1;
 
-####bug
+####bug 
 --disable_warnings
 drop table if exists obright_part;
 --enable_warnings

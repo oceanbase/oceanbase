@@ -375,11 +375,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -442,11 +442,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -497,11 +497,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -556,11 +556,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
 +----+----+
@@ -607,11 +607,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -674,11 +674,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -729,11 +729,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -788,11 +788,11 @@ Outputs & filters:
       merge_directions([ASC])
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
 +----+----+
@@ -838,11 +838,11 @@ Outputs & filters:
       equal_conds([t1.a = t2.a]), other_conds(nil)
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -904,11 +904,11 @@ Outputs & filters:
       equal_conds([t1.a = t2.a]), other_conds(nil)
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -958,11 +958,11 @@ Outputs & filters:
       equal_conds([t1.a = t2.a]), other_conds(nil)
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1016,11 +1016,11 @@ Outputs & filters:
       equal_conds([t1.a = t2.a]), other_conds(nil)
   5 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   6 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1073,13 +1073,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1147,13 +1147,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1209,13 +1209,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1283,13 +1283,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1345,13 +1345,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1419,13 +1419,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1481,13 +1481,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1555,13 +1555,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1617,13 +1617,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1691,13 +1691,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1753,13 +1753,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1827,13 +1827,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -1889,13 +1889,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -1963,13 +1963,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -2025,13 +2025,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -2099,13 +2099,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -2161,13 +2161,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -2235,13 +2235,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -2297,13 +2297,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -2371,13 +2371,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -2433,13 +2433,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -2507,13 +2507,13 @@ Outputs & filters:
       force partition granule
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule, asc
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+
@@ -2569,13 +2569,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 +----+----+
@@ -2643,13 +2643,13 @@ Outputs & filters:
       force partition granule, asc
   7 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a]), range(MIN ; MAX)always true
   8 - output([t2.a]), filter(nil), rowset=256
       affinitize, force partition granule
   9 - output([t2.a]), filter(nil), rowset=256
       access([t2.a]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 +----+----+

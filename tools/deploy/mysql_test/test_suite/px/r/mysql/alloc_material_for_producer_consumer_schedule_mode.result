@@ -47,7 +47,7 @@ Outputs & filters:
   8 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
   9 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  10 - output([VIEW2.t1.c2], [VIEW3.T_FUN_COUNT(*)], [VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.T_FUN_COUNT(*)]), filter(nil), rowset=16
  11 - output([VIEW2.t1.c2], [VIEW3.T_FUN_COUNT(*)], [VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.T_FUN_COUNT(*)]), filter(nil), rowset=16
@@ -123,7 +123,7 @@ Outputs & filters:
  13 - output([b.__pk_increment], [b.c1], [b.c2]), filter(nil), rowset=16
  14 - output([b.__pk_increment], [b.c1], [b.c2]), filter(nil), rowset=16
       access([b.__pk_increment], [b.c1], [b.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       sort_keys([t1.c1, ASC])
@@ -133,7 +133,7 @@ Outputs & filters:
  18 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
  19 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 explain select /*+ use_px parallel(2) use_merge(a b) */ * from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1;
 Query Plan
@@ -176,7 +176,7 @@ Outputs & filters:
   8 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
   9 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  10 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=16
       sort_keys([b.c1, ASC])
@@ -186,5 +186,5 @@ Outputs & filters:
  13 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=16
  14 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=16
       access([b.__pk_increment], [b.c1], [b.c2], [b.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true

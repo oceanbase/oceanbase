@@ -34,7 +34,7 @@ BEGIN
 END|
 DELIMITER ;|
 --echo # should not return valgrind warnings
-### TODO : --error 1305
+### TODO : --error 1305 
 --error 1321
 CALL p3(f2());
 
@@ -55,8 +55,8 @@ BEGIN
 END|
 DELIMITER ;|
 --echo # should not return valgrind warnings
-### TODO : --error 1305
---error 1321
+### TODO : --error 1305 
+--error 1321 
 CALL p3(f2());
 
 DROP SCHEMA testdb;
@@ -72,7 +72,7 @@ BEGIN
 END|
 DELIMITER ;|
 --echo # should not return valgrind warnings
-### TODO : --error 1305
+### TODO : --error 1305 
 --error 1321
 SELECT f2();
 
@@ -91,36 +91,36 @@ USE test;
 ## DROP TRIGGER IF EXISTS tr1;
 ## DROP PROCEDURE IF EXISTS p1;
 ## --enable_warnings
-##
+## 
 ## CREATE TABLE t1 (f1 INTEGER);
 ## CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @aux = 1;
 ## CREATE PROCEDURE p1 () DROP TRIGGER tr1;
-##
+## 
 ## CALL p1 ();
 ## --error ER_TRG_DOES_NOT_EXIST
 ## CALL p1 ();
-##
+## 
 ## DROP TABLE t1;
 ## DROP PROCEDURE p1;
-##
+## 
 ## --echo #
 ## --echo # Bug#50423: Crash on second call of a procedure dropping a trigger
 ## --echo #
-##
+## 
 ## --disable_warnings
 ## DROP TABLE IF EXISTS t1;
 ## DROP TRIGGER IF EXISTS tr1;
 ## DROP PROCEDURE IF EXISTS p1;
 ## --enable_warnings
-##
+## 
 ## CREATE TABLE t1 (f1 INTEGER);
 ## CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @aux = 1;
 ## CREATE PROCEDURE p1 () DROP TRIGGER tr1;
-##
+## 
 ## CALL p1 ();
 ## --error ER_TRG_DOES_NOT_EXIST
 ## CALL p1 ();
-##
+## 
 ## DROP TABLE t1;
 ## DROP PROCEDURE p1;
 
@@ -164,8 +164,8 @@ DROP DATABASE db1;
 DROP DATABASE db2;
 
 --echo #
---echo # Bug#13105873:valgrind warning:possible crash in foreign
---echo # key handling on subsequent create table if not exists
+--echo # Bug#13105873:valgrind warning:possible crash in foreign 
+--echo # key handling on subsequent create table if not exists 
 --echo #
 
 ## oceanbase not support foreign key yet!
@@ -184,7 +184,7 @@ DROP DATABASE db2;
 ## DELIMITER ;$
 ## CALL p1();
 ## --echo # below stmt should not return valgrind warnings
-## CALL p1();
+## CALL p1(); 
 ## DROP DATABASE testdb;
 ## USE test;
 
@@ -237,7 +237,7 @@ CALL TESTP_bug11763507();
 #SHOW CREATE PROCEDURE testp_bug11763507;
 #SHOW CREATE PROCEDURE TESTP_bug11763507;
 
-# INFORMATION SCHEMA
+# INFORMATION SCHEMA 
 SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name LIKE 'testf_bug11763507';
 SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name LIKE 'TESTF_bug11763507';
 

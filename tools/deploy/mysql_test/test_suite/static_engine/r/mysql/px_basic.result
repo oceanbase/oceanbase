@@ -66,7 +66,7 @@ Outputs & filters:
       force partition granule
   3 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
 select * from t3 a ;
 +----+------+
@@ -104,7 +104,7 @@ Outputs & filters:
   3 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=16
   4 - output([a.c1], [a.c2], [a.c2 + 1 + a.c1]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
 select /*+ parallel(2) NO_USE_HASH_AGGREGATION */  a.c1,a.c2+a.c1 from t3 a group by a.c1,a.c2 order by a.c2+1+a.c1;
 +----+-----------+
@@ -152,13 +152,13 @@ Outputs & filters:
   6 - output([a.c1], [a.c2]), filter(nil), rowset=16
   7 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
   8 - output([b.c1]), filter(nil), rowset=16
       affinitize
   9 - output([b.c1]), filter(nil), rowset=16
       access([b.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.c1]), range(MIN ; MAX)always true
 select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2=b.c1 order by a.c1,a.c2;
 +----+------+
@@ -205,12 +205,12 @@ Outputs & filters:
   6 - output([a.c1], [a.c2]), filter(nil), rowset=16
   7 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
   8 - output([b.c1]), filter(nil), rowset=16
   9 - output([b.c1]), filter(nil), rowset=16
       access([b.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.c1]), range(MIN ; MAX)always true
 select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2+2=b.c1+1 order by a.c1,a.c2+2;
 +----+------+
@@ -257,13 +257,13 @@ Outputs & filters:
   6 - output([a.c1], [a.c2]), filter(nil), rowset=16
   7 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
   8 - output([b.c1]), filter(nil), rowset=16
       affinitize
   9 - output([b.c1]), filter(nil), rowset=16
       access([b.c1]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.c1]), range(MIN ; MAX)always true
 select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on abs(a.c2)+2=b.c1 order by a.c1,a.c2+2;
 +----+------+
@@ -314,7 +314,7 @@ Outputs & filters:
       affinitize
   6 - output([b.c2], [b.c1]), filter(nil), rowset=16
       access([b.c2], [b.c1]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   7 - output([a.c1], [a.c2]), filter(nil), rowset=16
   8 - output([a.c1], [a.c2]), filter(nil), rowset=16
@@ -322,7 +322,7 @@ Outputs & filters:
   9 - output([a.c1], [a.c2]), filter(nil), rowset=16
  10 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1=b.c2 order by a.c1,b.c1;
 +------+------+------+------+
@@ -368,12 +368,12 @@ Outputs & filters:
   6 - output([b.c2], [b.c1]), filter(nil), rowset=16
   7 - output([b.c2], [b.c1]), filter(nil), rowset=16
       access([b.c2], [b.c1]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   8 - output([a.c1], [a.c2]), filter(nil), rowset=16
   9 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1+2=b.c2 + 1 order by a.c1,b.c1+2;
 +------+------+------+------+
@@ -423,7 +423,7 @@ Outputs & filters:
   7 - output([a.c1]), filter(nil), rowset=16
   8 - output([a.c1]), filter(nil), rowset=16
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
   9 - output([b.c2]), filter(nil), rowset=16
  10 - output([b.c2]), filter(nil), rowset=16
@@ -431,7 +431,7 @@ Outputs & filters:
  11 - output([b.c2]), filter(nil), rowset=16
  12 - output([b.c2]), filter(nil), rowset=16
       access([b.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.c1]), range(MIN ; MAX)always true
 select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
 +------+---------+

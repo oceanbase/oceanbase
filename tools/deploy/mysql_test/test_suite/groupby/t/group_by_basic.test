@@ -224,7 +224,7 @@ select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 
 
 drop table t1, t2, t3, t4, t5;
 
-##
+## 
 --disable_warnings
 drop table if exists t1, t2;
 drop table if exists `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;
@@ -265,7 +265,7 @@ CREATE TABLE `t1` (
   `c4` decimal(64,11) DEFAULT NULL,
   `c8` int(127) NOT NULL
 );
-
+ 
 create sequence s1 cache 10000000;
 insert into t1 select s1.nextval c1, s1.nextval c2, s1.nextval c3 from table(generator(20000));
 explain basic SELECT t29_25.c1, t29_25.c8
@@ -278,7 +278,7 @@ FROM   (SELECT (SELECT t29_25.c1
         FROM   t1 AS t29_25) AS t29_25
 GROUP  BY t29_25.c1, t29_25.c8
 HAVING Count(t29_25.c4) <> 990;
-
+ 
 create table t2 as SELECT t29_25.c1, t29_25.c8
 FROM   (SELECT (SELECT t29_25.c1
                 FROM   t1 AS t29_25
@@ -289,6 +289,6 @@ FROM   (SELECT (SELECT t29_25.c1
         FROM   t1 AS t29_25) AS t29_25
 GROUP  BY t29_25.c1, t29_25.c8
 HAVING Count(t29_25.c4) <> 990;
-
+ 
 select * from t2 limit 10;
 drop table t1, t2;
