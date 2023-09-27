@@ -22097,7 +22097,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'baixian.zr',
+    owner = 'guoyun.lgy',
     table_name     = 'DBA_OB_OUTLINE_CONCURRENT_HISTORY',
     table_id       = '21273',
     table_type = 'SYSTEM_VIEW',
@@ -47898,7 +47898,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'baixian.zr',
+  owner = 'guoyun.lgy',
   table_name      = 'DBA_OB_OUTLINE_CONCURRENT_HISTORY',
   name_postfix = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
