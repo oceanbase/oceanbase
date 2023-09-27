@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  run_codeql:
     runs-on: ubuntu-22.04
     steps:
     - name: Maximize build space
