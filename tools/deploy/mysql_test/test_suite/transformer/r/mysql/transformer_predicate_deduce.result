@@ -29,7 +29,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 = 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = 2;
 +------+------+
@@ -47,7 +47,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([2 = a.c2], [a.c1 = 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
 +------+------+
@@ -70,7 +70,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(cast(2, INT(11, 0)) + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([2 = a.c2], [a.c1 = 2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set c1 = c2 + 1  where a.c1 = a.c2 and a.c1 = 2;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 = 2;
@@ -87,7 +87,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([2 = a.c2], [a.c1 = 2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 = 2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
@@ -108,7 +108,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([2 = a.c2], [a.c1 = 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
 rollback;
@@ -126,7 +126,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 > 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 > 2;
 +------+------+
@@ -144,7 +144,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 > 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
 +------+------+
@@ -167,7 +167,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 > 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 > 2;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 > 2;
@@ -184,7 +184,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 > 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 > 2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
@@ -205,7 +205,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 > 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
 rollback;
@@ -223,7 +223,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 >= 2;
 +------+------+
@@ -241,7 +241,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
 +------+------+
@@ -264,7 +264,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 >= 2;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 >= 2;
@@ -281,7 +281,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 >= 2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
@@ -302,7 +302,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 >= 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
 rollback;
@@ -320,7 +320,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 < 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 < 2;
 +------+------+
@@ -338,7 +338,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c2 < 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
 +------+------+
@@ -361,7 +361,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c2 < 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 < 2;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 < 2;
@@ -378,7 +378,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c2 < 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 < 2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
@@ -399,7 +399,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c2 < 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
 rollback;
@@ -417,7 +417,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 <= 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 <= 2;
 +------+------+
@@ -435,7 +435,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c2 <= 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
 +------+------+
@@ -458,7 +458,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c2 <= 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 <= 2;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 <= 2;
@@ -475,7 +475,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c2 <= 2], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 <= 2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
@@ -496,7 +496,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c2 <= 2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
 rollback;
@@ -514,7 +514,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 like '2%';
 +------+------+
@@ -532,7 +532,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
 +------+------+
@@ -555,7 +555,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 like '2%';
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 like '2%';
@@ -572,7 +572,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 like '2%';
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
@@ -593,7 +593,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
 rollback;
@@ -611,7 +611,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= 2], [a.c1 <= 3], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
 +------+------+
@@ -629,7 +629,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= 2], [a.c2 <= 3], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
 +------+------+
@@ -652,7 +652,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= 2], [a.c2 <= 3], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 between 2 and 3;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
@@ -669,7 +669,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= 2], [a.c2 <= 3], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
@@ -690,7 +690,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 >= 2], [a.c2 <= 3], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
 rollback;
@@ -708,7 +708,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
 +------+------+
@@ -726,7 +726,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
 +------+------+
@@ -749,7 +749,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 in (2, 3);
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
@@ -766,7 +766,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
@@ -787,7 +787,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
 rollback;
@@ -806,7 +806,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = round(cast(a.c2, BIGINT(-1, 0)))], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
 +------+------+
@@ -824,7 +824,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
 +------+------+
@@ -847,7 +847,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = round(a.c2) and round(a.c1) = 1;
 EXPLAIN delete from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
@@ -864,7 +864,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
 EXPLAIN insert into is_t2 select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
@@ -885,7 +885,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
 rollback;
@@ -903,7 +903,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c1, BIGINT(-1, 0))) = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
 +------+------+
@@ -921,7 +921,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
 +------+------+
@@ -944,7 +944,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(cast(1, INT(11, 0)) + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = a.c2 and round(a.c1) = 1;
 EXPLAIN delete from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
@@ -961,7 +961,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
 EXPLAIN insert into is_t2 select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
@@ -982,7 +982,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
 rollback;
@@ -1005,11 +1005,11 @@ Outputs & filters:
       exec_params_([a.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([b.c1 = 1]), startup_filter([:0 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 +------+------+
@@ -1033,14 +1033,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
   3 - output(nil), filter(nil), rowset=16
       access(nil)
   4 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 +------+------+
@@ -1069,14 +1069,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 EXPLAIN delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -1099,14 +1099,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 EXPLAIN insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -1133,14 +1133,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   3 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output(nil), filter(nil), rowset=16
   5 - output(nil), filter(nil), rowset=16
       access(nil)
   6 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 rollback;
@@ -1162,11 +1162,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 +------+------+
@@ -1188,11 +1188,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 +------+------+
@@ -1219,11 +1219,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 EXPLAIN delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
@@ -1244,11 +1244,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 EXPLAIN insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
@@ -1273,11 +1273,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   3 - output([a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 rollback;
@@ -1299,11 +1299,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), use_batch=false
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
 +------+------+
@@ -1327,14 +1327,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
   3 - output(nil), filter(nil), rowset=16
       access(nil)
   4 - output([1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
 +------+------+
@@ -1363,14 +1363,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 in (select c1 from t2 b where b.c1 = 2);
 EXPLAIN delete from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
@@ -1393,14 +1393,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
@@ -1427,14 +1427,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   3 - output([a.c1], [a.c2]), filter([a.c1 = 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output(nil), filter(nil), rowset=16
   5 - output(nil), filter(nil), rowset=16
       access(nil)
   6 - output([1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
 rollback;
@@ -1451,10 +1451,10 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20, 
       0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
 +----------------+-----------------+---------------------+
@@ -1471,10 +1471,10 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20,
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20, 
       0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select * from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
 +----------------+-----------------+---------------------+
@@ -1499,7 +1499,7 @@ Outputs & filters:
   1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1,
        DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=16
       access([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 update t3 set c1 = 1  where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
 rollback;
@@ -1518,7 +1518,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
 +------+------+
@@ -1536,7 +1536,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
 +------+------+
@@ -1559,7 +1559,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 = a.c2;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
@@ -1576,7 +1576,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
@@ -1597,7 +1597,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
 rollback;
@@ -1615,7 +1615,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 = a.c1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
 +------+------+
@@ -1633,7 +1633,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
 +------+------+
@@ -1656,7 +1656,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c2 = a.c1;
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
@@ -1673,7 +1673,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
@@ -1694,7 +1694,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
 rollback;
@@ -1712,7 +1712,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2], [a.c1 >= a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
 +------+------+
@@ -1730,7 +1730,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
 +------+------+
@@ -1753,7 +1753,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c1 >= a.c2;
 EXPLAIN delete from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
@@ -1770,7 +1770,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
@@ -1791,7 +1791,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
 rollback;
@@ -1809,7 +1809,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2], [a.c2 <= a.c1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
 +------+------+
@@ -1827,7 +1827,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
 +------+------+
@@ -1850,7 +1850,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c2 <= a.c1;
 EXPLAIN delete from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
@@ -1867,7 +1867,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
@@ -1888,7 +1888,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
 rollback;
@@ -1906,7 +1906,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= 1], [a.c1 <= 2], [a.c1 >= 1], [a.c1 <= 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
 +------+------+
@@ -1924,7 +1924,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 >= 1], [a.c1 <= 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
 +------+------+
@@ -1947,7 +1947,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= 1], [a.c1 <= 2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
 EXPLAIN delete from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
@@ -1964,7 +1964,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= 1], [a.c1 <= 2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
 EXPLAIN insert into is_t2 select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
@@ -1985,7 +1985,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 >= 1], [a.c1 <= 2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
 rollback;
@@ -2003,7 +2003,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c1 IN (2, 3)]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
 +------+------+
@@ -2021,7 +2021,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
 +------+------+
@@ -2044,7 +2044,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 in (2, 3) and a.c1 in (2, 3);
 EXPLAIN delete from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
@@ -2061,7 +2061,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
@@ -2082,7 +2082,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
 rollback;
@@ -2100,7 +2100,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [(T_OP_NOT_IN, a.c1, (2, 3))]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
 +------+------+
@@ -2118,7 +2118,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
 +------+------+
@@ -2141,7 +2141,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (2, 3) and a.c1 not in (2, 3);
 EXPLAIN delete from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
@@ -2158,7 +2158,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
@@ -2179,7 +2179,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
 rollback;
@@ -2198,7 +2198,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
 +------+------+
@@ -2216,7 +2216,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
 +------+------+
@@ -2239,7 +2239,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not like '2%';
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
@@ -2256,7 +2256,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
@@ -2277,7 +2277,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
 rollback;
@@ -2295,7 +2295,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
 +------+------+
@@ -2313,7 +2313,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
 +------+------+
@@ -2336,7 +2336,7 @@ Outputs & filters:
       update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not in (2, 3);
 EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
@@ -2353,7 +2353,7 @@ Outputs & filters:
       table_columns([{a: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
   1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [a.c1 = a.c2]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
@@ -2374,7 +2374,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
   2 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [a.c1 = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
 rollback;
@@ -2397,11 +2397,11 @@ Outputs & filters:
       exec_params_([a.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([b.c1 = 1]), startup_filter([:0 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 +------+------+
@@ -2426,14 +2426,14 @@ Outputs & filters:
       conds([a.c1 = 1]), nl_params_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
   3 - output(nil), filter(nil), rowset=16
       access(nil)
   4 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 +------+------+
@@ -2463,14 +2463,14 @@ Outputs & filters:
       conds([a.c1 = 1]), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 EXPLAIN delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -2493,14 +2493,14 @@ Outputs & filters:
       conds([a.c1 = 1]), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 EXPLAIN insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
@@ -2527,14 +2527,14 @@ Outputs & filters:
       conds([a.c1 = 1]), nl_params_(nil), use_batch=false
   3 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output(nil), filter(nil), rowset=16
   5 - output(nil), filter(nil), rowset=16
       access(nil)
   6 - output([1]), filter([b.c1 = 1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
 rollback;
@@ -2556,11 +2556,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([b.c1 = 2]), rowset=16
       access([b.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 +------+------+
@@ -2582,11 +2582,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 +------+------+
@@ -2613,11 +2613,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 EXPLAIN delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
@@ -2638,11 +2638,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 EXPLAIN insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
@@ -2667,11 +2667,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
   3 - output([a.c1], [a.c2]), filter([a.c1 = 2]), startup_filter([:0]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output([1]), filter([2 = b.c1]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
 rollback;
@@ -2693,11 +2693,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1]), filter(nil), rowset=16
       access([b.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite*/* from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
 +------+------+
@@ -2721,14 +2721,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
   3 - output(nil), filter(nil), rowset=16
       access(nil)
   4 - output([1]), filter([b.c1 = 1 OR b.c1 IS NULL]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
 +------+------+
@@ -2757,14 +2757,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 1 OR b.c1 IS NULL]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
 EXPLAIN delete from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
@@ -2787,14 +2787,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=16
   4 - output(nil), filter(nil), rowset=16
       access(nil)
   5 - output([1]), filter([b.c1 = 1 OR b.c1 IS NULL]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
 EXPLAIN insert into is_t2 select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
@@ -2821,14 +2821,14 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   3 - output([a.c1], [a.c2]), filter([a.c1 = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output(nil), filter(nil), rowset=16
   5 - output(nil), filter(nil), rowset=16
       access(nil)
   6 - output([1]), filter([b.c1 = 1 OR b.c1 IS NULL]), rowset=16
       access([b.c1]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 insert into is_t2 select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
 rollback;
@@ -2850,11 +2850,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 IS NOT NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
 +------+------+------+------+------+------+
@@ -2876,11 +2876,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 IS NOT NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
 +------+------+------+------+------+------+
@@ -2904,11 +2904,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 IS NOT NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
 +------+------+------+------+------+------+
@@ -2930,11 +2930,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 IS NOT NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
 +------+------+------+------+------+------+
@@ -2960,13 +2960,13 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 IS NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   2 - output([a.c1], [a.c2]), filter(nil), rowset=16
       sort_keys([a.c1, ASC])
   3 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
 +------+------+------+------+------+------+
@@ -2989,12 +2989,12 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   2 - output([a.c1], [a.c2]), filter(nil), rowset=16
   3 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
 +------+------+------+------+------+------+
@@ -3018,11 +3018,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   2 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
 +------+------+------+------+------+------+
@@ -3044,11 +3044,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   2 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
 +------+------+------+------+------+------+
@@ -3072,11 +3072,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
 +------+------+------+------+------+------+
@@ -3098,11 +3098,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
 +------+------+------+------+------+------+
@@ -3126,11 +3126,11 @@ Outputs & filters:
       equal_conds([a.c1 <=> b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
 +------+------+------+------+------+------+
@@ -3152,11 +3152,11 @@ Outputs & filters:
       equal_conds([a.c1 <=> b.c1]), other_conds(nil)
   1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
 +------+------+------+------+------+------+
@@ -3186,13 +3186,13 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   2 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt2.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt2.c1]), range[1 ; 1], 
       range_cond([tt2.c1 = 1])
 select /*+use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
 +----+------+----+------+
@@ -3216,12 +3216,12 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   2 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt2.c1]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
 +----+------+----+------+
@@ -3250,18 +3250,18 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   3 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt2.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt2.c1]), range[1 ; 1], 
       range_cond([tt2.c1 = 1])
   4 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt3.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt3.c1]), range[1 ; 1], 
       range_cond([tt3.c1 = 1])
 select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3290,16 +3290,16 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   3 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt2.c1]), range(MIN ; MAX)always true
   4 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt3.c1]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3326,20 +3326,20 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   2 - output([tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), rowset=16
       equal_conds([tt2.c1 = tt3.c1]), other_conds(nil)
       merge_directions([ASC])
   3 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt2.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt2.c1]), range[1 ; 1], 
       range_cond([tt2.c1 = 1])
   4 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt3.c1]), range(MIN ; MAX)always true
 select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3368,16 +3368,16 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   3 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt2.c1]), range(MIN ; MAX)always true
   4 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt3.c1]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3406,18 +3406,18 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt3.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt3.c1]), range[1 ; 1], 
       range_cond([tt3.c1 = 1])
   3 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
   4 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt2.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt2.c1]), range[1 ; 1], 
       range_cond([tt2.c1 = 1])
 select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3442,18 +3442,18 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt3.c1]), range(MIN ; MAX)always true
   2 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), rowset=16
       equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
       merge_directions([ASC])
   3 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt1.c1]), range(MIN ; MAX)always true
   4 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt2.c1]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3479,20 +3479,20 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt2.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt2.c1]), range[1 ; 1], 
       range_cond([tt2.c1 = 1])
   2 - output([tt1.c1], [tt1.c2], [tt3.c1], [tt3.c2]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
   3 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt3.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt3.c1]), range[1 ; 1], 
       range_cond([tt3.c1 = 1])
   4 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([tt1.c1]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([tt1.c1]), range[1 ; 1], 
       range_cond([tt1.c1 = 1])
 select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3518,7 +3518,7 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([tt3.c1], [tt3.c2]), filter(nil), rowset=16
       access([tt3.c1], [tt3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt3.c1]), range(MIN ; MAX)always true
   2 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), rowset=16
       sort_keys([tt2.c1, ASC])
@@ -3527,11 +3527,11 @@ Outputs & filters:
       merge_directions([ASC])
   4 - output([tt2.c1], [tt2.c2]), filter(nil), rowset=16
       access([tt2.c1], [tt2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt2.c1]), range(MIN ; MAX)always true
   5 - output([tt1.c1], [tt1.c2]), filter(nil), rowset=16
       access([tt1.c1], [tt1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt1.c1]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
 +----+------+----+------+----+------+
@@ -3595,19 +3595,19 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   6 - output([t1.HLDGDDM]), filter([t1.HLDGDDM = 'A100013208']), rowset=16
       access([t1.HLDGDDM]), partitions(p5)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.HLDKMLB], [t1.HLDTGDM], [t1.HLDGDDM]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   7 - output([t2.PZJZDJYDY], [t2.PZJZQZH]), filter(nil), rowset=16
   8 - output([t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), rowset=16
       access([t2.PZJZQZH], [t2.PZJZDJYDY]), partitions(p5)
-      is_index_back=false, is_global_index=false,
-      range_key([t2.PZJZQZH]), range[A100013208 ; A100013208],
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.PZJZQZH]), range[A100013208 ; A100013208], 
       range_cond([t2.PZJZQZH = 'A100013208'])
   9 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter(nil), rowset=16
       affinitize, force partition granule
  10 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter([t3.PJYSCDM = '01']), rowset=16
       access([t3.PJYJYDY], [t3.PJYSCDM]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
 +------------+------------+-----------+---------+---------+
@@ -3654,7 +3654,7 @@ Outputs & filters:
       (#keys=1, [t1.HLDGDDM]), is_single, dop=1
   8 - output([t1.HLDGDDM]), filter([t1.HLDGDDM = 'A100013208']), rowset=16
       access([t1.HLDGDDM]), partitions(p5)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.HLDKMLB], [t1.HLDTGDM], [t1.HLDGDDM]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   9 - output([t2.PZJZDJYDY], [t2.PZJZQZH]), filter(nil), rowset=16
       sort_keys([t2.PZJZQZH, ASC]), local merge sort
@@ -3662,13 +3662,13 @@ Outputs & filters:
       affinitize, force partition granule
  11 - output([t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), rowset=16
       access([t2.PZJZQZH], [t2.PZJZDJYDY]), partitions(p[0-12])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.PZJZQZH]), range(MIN ; MAX)always true
  12 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter(nil), rowset=16
       affinitize, force partition granule
  13 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter([t3.PJYSCDM = '01']), rowset=16
       access([t3.PJYJYDY], [t3.PJYSCDM]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
 +------------+------------+-----------+---------+---------+
@@ -3678,7 +3678,7 @@ select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzq
 | A100013208 | A100013208 | 20605     | NULL    | NULL    |
 +------------+------------+-----------+---------+---------+
 
-## bug:
+## bug: 
 drop table if exists t1, t2;
 create table t1 (c1 int, c2 int, primary key(c1));
 create table t2 (c1 int, c2 int, primary key(c2));
@@ -3701,24 +3701,24 @@ Outputs & filters:
       conds(nil), nl_params_([A.c1(:0)]), use_batch=true
   2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.c1], [A.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([A.c1]), range[5630905 ; 5631105), 
       range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
   3 - output(nil), filter(nil), rowset=16
       access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([B.c2]), range(MIN ; MAX), 
       range_cond([:0 = B.c2])
 Used Hint:
 -------------------------------------
   /*+
-
+      
   */
 Qb name trace:
 -------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN
+  stmt_id:0, stmt_type:T_EXPLAIN 
   stmt_id:1, SEL$1 > SEL$0208448F
-Outline Data:
+Outline Data: 
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
@@ -3782,24 +3782,24 @@ Outputs & filters:
       conds(nil), nl_params_([A.c1(:0)]), use_batch=true
   2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.__pk_increment], [A.c1], [A.c2]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,false],
-      range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN),
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
       range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
   3 - output(nil), filter(nil), rowset=16
       access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([B.c2], [B.__pk_increment]), range(MIN ; MAX), 
       range_cond([:0 = B.c2])
 Used Hint:
 -------------------------------------
   /*+
-
+      
   */
 Qb name trace:
 -------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN
+  stmt_id:0, stmt_type:T_EXPLAIN 
   stmt_id:1, SEL$1 > SEL$0208448F
-Outline Data:
+Outline Data: 
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
@@ -3876,22 +3876,22 @@ Outputs & filters:
       equal_conds([A.c1 = B.c2]), other_conds(nil)
   6 - output([B.c2]), filter([B.c2 < 5631105], [B.c2 >= 5630905]), rowset=16
       access([B.c2]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([B.__pk_increment]), range(MIN ; MAX)always true
   7 - output([A.c1]), filter([A.c1 >= 5630905], [A.c1 < 5631105], [A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.c1], [A.c2]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false], 
       range_key([A.__pk_increment]), range(MIN ; MAX)always true
 Used Hint:
 -------------------------------------
   /*+
-
+      
   */
 Qb name trace:
 -------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN
+  stmt_id:0, stmt_type:T_EXPLAIN 
   stmt_id:1, SEL$1 > SEL$0208448F
-Outline Data:
+Outline Data: 
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
@@ -3957,7 +3957,7 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([v0.v1]), filter([v0.v1 = cast(cast(-127, VARCHAR(20)), VARCHAR(1048576))]), rowset=16
       access([v0.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([v0.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
   3 - output(nil), filter(nil), rowset=16
@@ -3986,7 +3986,7 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   1 - output([v0.v1]), filter([v0.v1 = cast(cast(-127, VARCHAR(20)), VARCHAR(1048576))]), rowset=16
       access([v0.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([v0.__pk_increment]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
   3 - output(nil), filter(nil), rowset=16
@@ -4023,11 +4023,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   1 - output([t1.c1]), filter([t1.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c1]), filter([t2.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 in (10,20,40);
 +------+------+
@@ -4051,11 +4051,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   1 - output([t1.c1]), filter([t1.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c1]), filter([t2.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 in (10,20,40);
 +------+------+
@@ -4081,17 +4081,17 @@ Outputs & filters:
       equal_conds([t1.c1 = t3.c1]), other_conds(nil)
   1 - output([t3.c1]), filter([t3.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   3 - output([t1.c1]), filter([t1.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.c1]), filter([t2.c1 IN (cast(10, DECIMAL(2, 0)), cast(20, DECIMAL(2, 0)), cast(40, DECIMAL(2, 0)))]), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 in (10,20,40);
 +------+------+
@@ -4117,11 +4117,11 @@ Outputs & filters:
       equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
   1 - output([t3.c2], [t3.c1]), filter([cast(t3.c2, DOUBLE(-1, -1)) IN (cast(10, DOUBLE(-1, -1)), cast(20, DOUBLE(-1, -1)), cast(40, DOUBLE(-1, -1)))]), rowset=16
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 in (10,20,40);
 +------+------+------+------+------+
@@ -4146,11 +4146,11 @@ Outputs & filters:
       equal_conds([t1.c3 = cast(t2.c3, VARCHAR(1048576))]), other_conds(nil)
   1 - output([t2.c3], [t2.c1], [t2.c2]), filter([t2.c3 IN ('a', 'b', 'c')]), rowset=16
       access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c3], [t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c3], [t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1,t2 where t1.c3 = t2.c3 and t2.c3 in ('a','b','c');
 +------+------+------+------+------+------+
@@ -4173,11 +4173,11 @@ Outputs & filters:
   1 - output([t2.c3], [t2.c1], [t2.c2], [cast(t2.c3, VARCHAR(1048576))]), filter([cast(t2.c3, VARCHAR(1048576)) IN (cast('a', VARCHAR(1048576)), cast('b',
        VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=16
       access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c3], [t1.c1], [t1.c2]), filter([t1.c3 IN (cast('a', VARCHAR(1048576)), cast('b', VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=16
       access([t1.c3], [t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1,t2 where t1.c3 = t2.c3 and t1.c3 in ('a','b','c');
 +------+------+------+------+------+------+
@@ -4200,11 +4200,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   1 - output([t1.c1]), filter([t1.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c1]), filter([t2.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t2.c1 <> 20;
 +------+------+
@@ -4230,11 +4230,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   1 - output([t1.c1]), filter([t1.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c1]), filter([t2.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c1 <> 20;
 +------+------+
@@ -4262,17 +4262,17 @@ Outputs & filters:
       equal_conds([t1.c1 = t3.c1]), other_conds(nil)
   1 - output([t3.c1]), filter([t3.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   3 - output([t1.c1]), filter([t1.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.c1]), filter([t2.c1 != cast(20, DECIMAL(2, 0))]), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2,t3 where t1.c1 = t3.c1 and t2.c1 = t3.c1 and t1.c1 <>20;
 +------+------+
@@ -4298,11 +4298,11 @@ Outputs & filters:
       equal_conds([cast(t1.c1, DOUBLE(-1, -1)) = cast(t3.c2, DOUBLE(-1, -1))]), other_conds(nil)
   1 - output([t3.c2], [t3.c1]), filter([cast(t3.c2, DOUBLE(-1, -1)) != cast(20, DOUBLE(-1, -1))]), rowset=16
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1,t3 where t1.c1 = t3.c2 and t3.c2 <> 20;
 +------+------+------+------+------+
@@ -4331,12 +4331,12 @@ Outputs & filters:
       equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
   1 - output([t2.c2], [t2.c1]), filter([(T_OP_BTW, t2.c2, cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=16
       access([t2.c2], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0,
+  2 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, 
       -1)), DOUBLE(-1, -1)))]), rowset=16
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t2.c2 between 10 and cast(100 as float);
 +------+------+
@@ -4362,11 +4362,11 @@ Outputs & filters:
       equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
   1 - output([t3.c2], [t3.c1]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=16
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
       access([t2.c2], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t3.c2 between 10 and cast(100 as float);
 +------+------+
@@ -4394,11 +4394,11 @@ Outputs & filters:
       equal_conds([t1.c2 = t2.c3]), other_conds(nil)
   1 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=16
       access([t2.c3], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t2.c3 like 'a_';
 +------+------+
@@ -4420,11 +4420,11 @@ Outputs & filters:
       equal_conds([t1.c2 = t2.c3]), other_conds(nil)
   1 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=16
       access([t2.c3], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t1.c2 like 'a_';
 +------+------+

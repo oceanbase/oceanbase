@@ -1,6 +1,6 @@
 # owner: linlin.xll
 # owner group: SQL1
-# description:
+# description: 
 #tags: pl
 
 --disable_query_log
@@ -62,3 +62,4 @@ select * from t3 order by f asc|
 drop table t3|
 drop procedure fib|
 set @@max_sp_recursion_depth= 0|
+

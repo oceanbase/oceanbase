@@ -63,7 +63,7 @@ create table tmp (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int,
   index idx_c1_c2_c3(c1, c2 ,c3),
   index idx_c1_c2_c3_c4(c1, c2, c3, c4));
 
-##
+## 
 create table t9 (c1 int primary key, c2 int, c3 int, c4 varchar(100), c5 int,
            index idx_c2_c5    (c2, c5),
            index idx_c2_c3_c5 (c2, c3, c5),
@@ -338,7 +338,7 @@ explain select * from t8 where e = 1 or f = 1 order by b;
 explain select * from t8 where d = 1 order by b;
 
 
-##
+## 
 
 ## part expr 决定路径
 explain select avg(c1) over (partition by c2) from t9 order by c1;

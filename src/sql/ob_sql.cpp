@@ -1458,7 +1458,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
  * params: 当前sql语句的参数列表
  * res: 直接结果集
  */
-// TODO baixian.zr/hr351303, remove is_prepare_protocol and is_dynamic_sql
+// TODO remove is_prepare_protocol and is_dynamic_sql
 int ObSql::handle_pl_execute(const ObString &sql,
                              ObSQLSessionInfo &session,
                              ParamStore &params,
@@ -3706,7 +3706,7 @@ int ObSql::execute_get_plan(ObPlanCache &plan_cache,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
-    // TODO baixian.zr, change pl mode hit cache as text mode.
+    // TODO change pl mode hit cache as text mode.
     ObPsStmtId stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
     guard.init(PS_EXEC_HANDLE);
     if (OB_FAIL(plan_cache.get_ps_plan(guard, stmt_id, pc_ctx))) {

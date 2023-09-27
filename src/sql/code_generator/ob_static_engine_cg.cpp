@@ -3863,7 +3863,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     }
     root = root->and_next_;
   }
-  // TODO @baixian.zr the above optimization is overrided by ObTscCgService::generate_tsc_ctdef before this commit
+  // TODO the above optimization is overrode by ObTscCgService::generate_tsc_ctdef before this commit
   // but after the deep copy of pre_query_range_ is removed in ObTscCgService::generate_tsc_ctdef,
   // error is returned in such sql 'set global x=y', should fix this;
   // spec.tsc_ctdef_.pre_query_range_.set_is_equal_and(is_equal_and);

@@ -124,11 +124,11 @@ Outputs & filters:
       sort_keys([gis_point.x, ASC], [gis_point.y, DESC]), topn( ), prefix_pos( )
     - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
       access([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([gis_point.x], [gis_point.y], [gis_point.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
     - output([gis_point_alias.poi]), filter(nil)
       access([gis_point_alias.poi]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([gis_point_alias.__pk_increment]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([gis_point_alias.__pk_increment]), range(MIN ; MAX), 
       range_cond([gis_point_alias.__pk_increment = :0])
 drop table if exists gis_point;

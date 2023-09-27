@@ -266,7 +266,7 @@ BEGIN
 
               WHILE i > 0 DO
                 INSERT INTO t1(log_msg) VALUES(CONCAT('p1: case1: case2: loop: i: ', i));
-
+                
                 CASE MOD(i, 2)
                   WHEN 0 THEN
                     INSERT INTO t1(log_msg) VALUES('p1: case1: case2: loop: i is even');
@@ -275,7 +275,7 @@ BEGIN
                   ELSE
                     INSERT INTO t1(log_msg) VALUES('p1: case1: case2: loop: ERROR');
                 END CASE;
-
+                    
                 SET i = i - 1;
               END WHILE;
             END;
@@ -310,7 +310,7 @@ BEGIN
 
               WHILE i > 0 DO
                 INSERT INTO t1(log_msg) VALUES(CONCAT('p1: case4: case5: loop: i: ', i));
-
+                
                 CASE MOD(i, 2)
                   WHEN 0 THEN
                     INSERT INTO t1(log_msg) VALUES('p1: case4: case5: loop: i is even');
@@ -319,7 +319,7 @@ BEGIN
                   ELSE
                     INSERT INTO t1(log_msg) VALUES('p1: case4: case5: loop: ERROR');
                 END CASE;
-
+                    
                 SET i = i - 1;
               END WHILE;
             END;
@@ -505,7 +505,7 @@ DROP PROCEDURE p1;
 ##   DROP TABLE t1;
 ## END|
 ## delimiter ;|
-##
+## 
 ## CALL p1(NOW());
 ## CALL p1('test');
 
@@ -741,7 +741,7 @@ CALL p2();
 CALL p3();
 
 --error ER_DATA_TOO_LONG
-CALL p4('aaa');
+CALL p4('aaa'); 
 --error ER_DATA_TOO_LONG
 CALL p5('aa');
 --error ER_WARN_DATA_OUT_OF_RANGE
@@ -1088,30 +1088,30 @@ DROP TABLE t1;
 # Test case.
 #
 ## delimiter |;
-##
+## 
 ## CREATE PROCEDURE p1(arg ENUM('a', 'b'))
 ## BEGIN
 ##   SELECT arg;
 ## END|
-##
+## 
 ## CREATE PROCEDURE p2(arg ENUM('a', 'b'))
 ## BEGIN
 ##   DECLARE var ENUM('c', 'd') DEFAULT arg;
-##
+## 
 ##   SELECT arg, var;
 ## END|
-##
+## 
 ## CREATE FUNCTION f1(arg ENUM('a', 'b')) RETURNS ENUM('c', 'd')
 ## BEGIN
 ##   RETURN arg;
 ## END|
-##
+## 
 ## delimiter ;|
-##
+## 
 ## CALL p1('c');
-##
+## 
 ## CALL p2('a');
-##
+## 
 ## SELECT f1('a');
 
 #
@@ -1430,7 +1430,7 @@ CREATE PROCEDURE bug27415_text_test2(entity_id_str_in VARCHAR(255))
 BEGIN
     DECLARE str_remainder VARCHAR(255);
     DECLARE str_remainder2 VARCHAR(255);
-
+ 
     SET str_remainder2 = entity_id_str_in;
     select 'before substr', str_remainder2;
     SET str_remainder = SUBSTRING(str_remainder2, 3);
@@ -1458,7 +1458,7 @@ drop table if exists t1;
 --enable_warnings
 
 delimiter |;
-create function f1() returns int
+create function f1() returns int 
 begin
  if @a=1 then set @b='abc';
  else set @b=1;

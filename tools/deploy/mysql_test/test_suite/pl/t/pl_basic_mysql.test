@@ -617,7 +617,7 @@ drop table a;
 drop procedure p;
 drop procedure pp;
 
-#case 36
+#case 36 
 create table a(a1 varchar(100));
 insert into a values('a');
 create table b(b1 varchar(100));
@@ -1633,7 +1633,7 @@ create procedure p()
 return 42;//
 delimiter ;//
 
-#case 89
+#case 89 
 set @a=0;
 select @a;
 delimiter //;
@@ -1679,7 +1679,7 @@ create function f(x int) returns int
 begin
   if x>1 then
     return x;
-  else
+  else 
     signal SQLSTATE '01000';
   end if;
 end//
@@ -1722,7 +1722,7 @@ select f(1);
 drop function f;
 
 ### need has return in mysql function
-###
+### 
 
 delimiter //;
 DROP FUNCTION IF EXISTS `fun6`//
@@ -1752,8 +1752,8 @@ SELECT @num//
 DROP FUNCTION IF EXISTS `fun6`//
 delimiter ;//
 
-### label dup
-###
+### label dup 
+### 
 delimiter //;
 --disable_warnings ONCE
 DROP TABLE IF EXISTS result1//
@@ -1812,35 +1812,35 @@ DROP PROCEDURE IF EXISTS `pro_3`//
 delimiter ;//
 
 delimiter //;
-###   ### varchar
-###   ###
+###   ### varchar 
+###   ### 
 ###   DROP TABLE IF EXISTS t2//
 ###   --error 1074
-###   CREATE TABLE t2 (
-###     id INT,
-###     res1 VARCHAR(128),
-###     d1 VARCHAR(16384)
-###   )//
-###   DROP TABLE IF EXISTS t3//
+###   CREATE TABLE t2 ( 
+###     id INT, 
+###     res1 VARCHAR(128), 
+###     d1 VARCHAR(16384) 
+###   )// 
+###   DROP TABLE IF EXISTS t3// 
 ###   --error 1074
-###   CREATE TABLE t3 (
-###     id INT,
-###     res1 VARCHAR(128),
-###     d1 VARCHAR(262145)
+###   CREATE TABLE t3 ( 
+###     id INT, 
+###     res1 VARCHAR(128), 
+###     d1 VARCHAR(262145) 
 ###   )//
 ###   DROP FUNCTION IF EXISTS fun_l//
 ###   --error 1074
 ###   CREATE FUNCTION fun_l() RETURNS VARCHAR(262144)
 ###   BEGIN
-###     DECLARE d1 VARCHAR(262144123456);
+###     DECLARE d1 VARCHAR(262144123456);  
 ###     SET d1='123456789012345678901234567890';
 ###     RETURN '定义长度262144123456的VARCHAR(262144123456)类型的变量';
-###   END//
-###   --error 1305
-###   SELECT fun_l()//
+###   END// 
+###   --error 1305  
+###   SELECT fun_l()// 
 
-### char
-###
+### char 
+### 
 --disable_warnings
  DROP TABLE IF EXISTS t1//
  DROP TABLE IF EXISTS t2//
@@ -1851,7 +1851,7 @@ delimiter //;
    d1 CHAR(255)
  )//
 ### --error 1074
-### TODO:
+### TODO: 
 ### CREATE TABLE t2 (
 ###   id INT,
 ###   res1 VARCHAR(128),
@@ -1879,7 +1879,7 @@ delimiter //;
 
 
 ### varbinary
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (
@@ -1895,41 +1895,41 @@ CREATE TABLE t2 (
 DROP FUNCTION IF EXISTS `fun_l`//
 --error 1074
 CREATE FUNCTION fun_l() RETURNS VARBINARY(65535)
-BEGIN
+BEGIN 
   DECLARE d1 VARBINARY(65536);
   SET d1='123456789012345678901234567890';
-  RETURN '定义长度65536的VARCHAR类型的变量';
-END//
+  RETURN '定义长度65536的VARCHAR类型的变量'; 
+END// 
 
 --error 1305
 SELECT fun_l()//
 
 
 ### number
-###
+### 
 DROP FUNCTION IF EXISTS `fun_l`//
 --error 1426
 CREATE FUNCTION fun_l() RETURNS DEC(65,30)
-BEGIN
-  DECLARE a DEC(66,30);
+BEGIN 
+  DECLARE a DEC(66,30);  
   SET a=123450.1415;
-  RETURN a;
+  RETURN a; 
 END//
---error 1305
+--error 1305 
 SELECT fun_l()//
 DROP FUNCTION IF EXISTS `fun_2`//
 --error 1425
 CREATE FUNCTION fun_2() RETURNS DEC(65,30)
-BEGIN
-  DECLARE a DEC(65,31);
+BEGIN 
+  DECLARE a DEC(65,31);  
   SET a=50.1;
-  RETURN a;
+  RETURN a; 
 END//
---error 1305
+--error 1305 
 SELECT fun_2()//
 
 ### datetime
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t2//
 --error 1426
@@ -1949,7 +1949,7 @@ END//
 SELECT fun_l()//
 
 ### datetime max value insert fail
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t2//
 CREATE TABLE t2 (
@@ -1962,7 +1962,7 @@ CREATE TABLE t2 (
 INSERT INTO t2 VALUES(1,'插入DATETIME类型数据','1000-01-01 00:00:00.123','2000-01-01 00:00:00.123','9999-12-31 23:59:59.999999')//
 DROP PROCEDURE IF EXISTS `pro_1`//
 CREATE PROCEDURE pro_1()
-BEGIN
+BEGIN 
   DECLARE d1 DATETIME DEFAULT '1000-01-01 00:00:00.000000';
   DECLARE d2 DATETIME(0) DEFAULT '2021-07-02 23:59:59.999999';
   DECLARE d3 DATETIME(6) DEFAULT '9999-12-31 23:59:59.999999';
@@ -1973,7 +1973,7 @@ CALL pro_1()//
 SELECT * FROM t2//
 
 ### int
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (
@@ -1995,7 +1995,7 @@ SELECT * FROM t1//
 
 ### commit
 ### rollback
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1
@@ -2062,20 +2062,20 @@ BEGIN
 END//
 
 ### BIT
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1;//
 DROP PROCEDURE IF EXISTS `pro_2`;//
 --error 1439
 CREATE PROCEDURE pro_2()
 BEGIN
-  CREATE TABLE t1 (id INT,a BIT(65));
-  INSERT INTO t1 VALUES(1,b'0');
+  CREATE TABLE t1 (id INT,a BIT(65)); 
+  INSERT INTO t1 VALUES(1,b'0'); 
 END;
 //
 
 ### load data
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (a INT)//
@@ -2089,7 +2089,7 @@ BEGIN
 END//
 
 ### lock
-###
+### 
 --disable_warnings ONCE
 DROP TABLE IF EXISTS t1//
 CREATE TABLE t1 (a INT)//

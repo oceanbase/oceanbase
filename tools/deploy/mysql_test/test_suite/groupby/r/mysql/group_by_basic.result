@@ -445,13 +445,13 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
   2 - output([t29_25.c4], [t29_25.c8]), filter(nil), rowset=256
       access([t29_25.c4], [t29_25.c8]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t29_25.c1]), filter(nil), rowset=256
       sort_keys([t29_25.c1, DESC]), topn(1)
   4 - output([t29_25.c1]), filter(nil), rowset=256
       access([t29_25.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
 create table t2 as SELECT t29_25.c1, t29_25.c8
 FROM   (SELECT (SELECT t29_25.c1

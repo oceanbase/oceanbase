@@ -558,7 +558,7 @@ BEGIN
     IF tmp_i_price > 0 THEN
       SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
       call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
-			 tmp_ol_quantity, tmp_i_price,
+                    	 tmp_ol_quantity, tmp_i_price,
                        tmp_i_name, tmp_i_data,
                        out_d_next_o_id, tmp_ol_amount,
                        tmp_ol_supply_w_id, 4, tmp_s_quantity);
@@ -603,7 +603,7 @@ BEGIN
     THEN
       SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
       call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
-			 tmp_ol_quantity, tmp_i_price,
+                     	 tmp_ol_quantity, tmp_i_price,
                        tmp_i_name, tmp_i_data,
                        out_d_next_o_id, tmp_ol_amount,
                        tmp_ol_supply_w_id, 6, tmp_s_quantity);
@@ -718,7 +718,7 @@ BEGIN
     THEN
       SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
       call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
-		       tmp_ol_quantity, tmp_i_price,
+               	       tmp_ol_quantity, tmp_i_price,
                        tmp_i_name, tmp_i_data,
                        out_d_next_o_id, tmp_ol_amount,
                        tmp_ol_supply_w_id, 11, tmp_s_quantity);
@@ -741,7 +741,7 @@ BEGIN
     THEN
       SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
       call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
-		           tmp_ol_quantity, tmp_i_price,
+           	           tmp_ol_quantity, tmp_i_price,
                        tmp_i_name, tmp_i_data,
                        out_d_next_o_id, tmp_ol_amount,
                        tmp_ol_supply_w_id, 12, tmp_s_quantity);
@@ -821,7 +821,7 @@ BEGIN
 END//
 
 CREATE PROCEDURE order_status (in_c_id INT,
-		                     in_c_w_id INT,
+         	                     in_c_w_id INT,
                                in_c_d_id INT,
                                in_c_last VARCHAR(16))
 BEGIN
@@ -1039,7 +1039,7 @@ BEGIN
   DECLARE  out_w_state VARCHAR(2);
   DECLARE  out_w_zip VARCHAR(9);
   DECLARE  out_w_ytd INTEGER;
-
+  
   DECLARE  out_d_name VARCHAR(10);
   DECLARE  out_d_street_1 VARCHAR(20);
   DECLARE  out_d_street_2 VARCHAR(20);
@@ -1047,7 +1047,7 @@ BEGIN
   DECLARE  out_d_state VARCHAR(2);
   DECLARE  out_d_zip VARCHAR(9);
   DECLARE  out_d_ytd INTEGER;
-
+  
   DECLARE  out_c_id INTEGER;
   DECLARE  out_c_first VARCHAR(16);
   DECLARE  out_c_middle VARCHAR(2);
@@ -1435,3 +1435,6 @@ DROP PROCEDURE new_order;
 DROP PROCEDURE order_status;
 DROP PROCEDURE payment;
 DROP PROCEDURE stock_level;
+
+
+
