@@ -324,6 +324,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
       }
     }
     if (OB_SUCC(ret)) {
+      ObDatum *val_datum = NULL;
       ObString key = json_datum->get_string();
       bool is_null = false;
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, key, is_null))) {
@@ -332,18 +333,20 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
         ObIJsonBase *j_val = NULL;
         uint32_t parse_flag = (strict_type == OB_JSON_ON_STRICT_IMPLICIT) ?
                                 ObJsonParser::JSN_STRICT_FLAG : ObJsonParser::JSN_RELAXED_FLAG;
-        if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val, false, format_type, parse_flag))) {
+        if (OB_UNLIKELY(OB_FAIL(val_expr->eval(ctx, val_datum)))) {
+          LOG_WARN("eval json arg failed", K(ret), K(val_type));
+        } else if (val_datum->is_null() && null_type == OB_JSON_ON_NULL_ABSENT) {
+          ObString key = json_datum->get_string();
+          if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
+            LOG_WARN("duplicate key fail");
+          }
+          // do nothing
+        } else if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val, false, format_type, parse_flag))) {
           ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
         } else if (can_only_be_null && j_val->json_type() != ObJsonNodeType::J_NULL) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-        } else if (j_val->json_type() == ObJsonNodeType::J_NULL && null_type == OB_JSON_ON_NULL_ABSENT) {
-          ObString key = json_datum->get_string();
-          if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
-            LOG_WARN("duplicate key fail");
-          }
-        // do nothing
         } else if (OB_FAIL(check_key_valid(view_key_names, key))) {
           LOG_WARN("duplicate key fail");
         } else if (OB_FAIL(j_base->object_add(key, j_val))) {

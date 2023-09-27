@@ -669,12 +669,15 @@ int JtFuncHelpler::cast_to_number(common::ObIAllocator *allocator,
 int JtFuncHelpler::cast_to_bit(ObIJsonBase *j_base, uint64_t &val)
 {
   INIT_SUCC(ret);
-
+  int64_t int_val;
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
-  } else if (OB_FAIL(j_base->to_bit(val))) {
-    LOG_WARN("fail get bit from json", K(ret));
+  } else if (OB_FAIL(j_base->to_int(int_val))) {
+    ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+    LOG_WARN("fail get int from json", K(ret));
+  } else {
+    val = static_cast<uint64_t>(int_val);
   }
 
   return ret;
@@ -908,7 +911,7 @@ int JtFuncHelpler::cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& c
           LOG_WARN("failed to set error val.", K(tmp_ret));
         }
       } else {
-        res.set_bit(out_val);
+        res.set_uint(out_val);
       }
       break;
     }
@@ -1944,6 +1947,7 @@ int JtScanNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_valu
           }
         } else if (is_cur_end) {
           if (!is_curr_row_valid) {
+            reset_reg_columns(ctx);
             ret = OB_ITER_END;
           }
           is_sub_evaled_ = true;
@@ -2647,10 +2651,20 @@ int ObJsonTableOp::inner_close()
 void ObJsonTableOp::reset_columns()
 {
   for (size_t i = 0; i < col_count_; ++i) {
-     ObExpr* col_expr = jt_ctx_.spec_ptr_->column_exprs_.at(i);
-     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).reset();
-     col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).set_null();
-     col_expr->get_eval_info(*jt_ctx_.eval_ctx_).evaluated_ = true;
+    ObExpr* col_expr = jt_ctx_.spec_ptr_->column_exprs_.at(i);
+    col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).reset();
+    col_expr->locate_datum_for_write(*jt_ctx_.eval_ctx_).set_null();
+    col_expr->get_eval_info(*jt_ctx_.eval_ctx_).evaluated_ = true;
+  }
+}
+
+void JtScanNode::reset_reg_columns(JtScanCtx* ctx)
+{
+  for (size_t i = 0; i < reg_column_count(); ++i) {
+    ObExpr* col_expr = ctx->spec_ptr_->column_exprs_.at(reg_col_node(i)->col_info_.output_column_idx_);
+    col_expr->locate_datum_for_write(*ctx->eval_ctx_).reset();
+    col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+    col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
   }
 }
 

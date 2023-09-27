@@ -4931,6 +4931,7 @@ int ObIJsonBase::to_int(int64_t &value, bool check_range, bool force_convert) co
             ret = OB_ERR_DATA_TRUNCATED;
             LOG_WARN("fail to cast string to int", K(ret), K(length), KCSTRING(start));
           }
+          value = val;
         }
       }
 
@@ -5075,6 +5076,7 @@ int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_rang
             }
           }
         }
+        value = val;
       }
       break;
     }
@@ -5206,6 +5208,7 @@ int ObIJsonBase::to_double(double &value) const
             }
           }
         }
+        value = val;
       }
       break;
     }
@@ -5282,6 +5285,7 @@ int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) co
         } else if (OB_FAIL(num.from(data, length, *allocator))) {
           LOG_WARN("fail to create number from string", K(ret), KP(data));
         }
+        number = num;
         break;
       }
 
@@ -5426,6 +5430,31 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
       break;
     }
 
+    case ObJsonNodeType::J_UINT:
+    case ObJsonNodeType::J_OLONG: {
+      ObArenaAllocator tmp_allocator;
+      ObJsonBuffer str_data(&tmp_allocator);
+      if (OB_FAIL(print(str_data, false))) {
+        LOG_WARN("fail to print string date", K(ret));
+      } else if (OB_ISNULL(str_data.ptr())) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("data is null", K(ret));
+      } else {
+        ObString str = str_data.string();
+        ObTimeConvertCtx cvrt_ctx(NULL, false);
+        if (lib::is_oracle_mode() && OB_NOT_NULL(cvrt_ctx_t)) {
+          ObTimeConvertCtx cvrt_ctx(cvrt_ctx_t->tz_info_, cvrt_ctx_t->oracle_nls_format_, false);
+          if (OB_FAIL(ObTimeConverter::str_to_date_oracle(str, cvrt_ctx, datetime))) {
+            LOG_WARN("oracle fail to cast string to date", K(ret), K(str));
+          }
+        } else {
+          if (OB_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, datetime))) {
+            LOG_WARN("fail to cast string to datetime", K(ret), K(str));
+          }
+        }
+      }
+      break;
+    }
     case ObJsonNodeType::J_STRING: {
       uint64_t length = get_data_length();
       const char *data = get_data();
@@ -5435,7 +5464,7 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
       } else {
         ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
         ObTimeConvertCtx cvrt_ctx(NULL, false);
-        if (lib::is_oracle_mode() && !OB_ISNULL(cvrt_ctx_t)) {
+        if (lib::is_oracle_mode() && OB_NOT_NULL(cvrt_ctx_t)) {
           ObTimeConvertCtx cvrt_ctx(cvrt_ctx_t->tz_info_, cvrt_ctx_t->oracle_nls_format_, false);
           if (OB_FAIL(ObTimeConverter::str_to_date_oracle(str, cvrt_ctx, datetime))) {
             LOG_WARN("oracle fail to cast string to date", K(ret), K(str));

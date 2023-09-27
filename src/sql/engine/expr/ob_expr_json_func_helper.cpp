@@ -1682,7 +1682,7 @@ int ObJsonExprHelper::calc_asciistr_in_expr(const ObString &src,
             } else {
               buf[pos++] = '\\';
             }
-            if (OB_SUCC(ret)) {
+            if (OB_SUCC(ret) && '\\' != wchar) {
               int64_t hex_writtern_bytes = 0;
               if (OB_FAIL(hex_print(temp_buf + i*utf16_minmb_len, utf16_minmb_len,
                                     buf + pos, buf_len - pos, hex_writtern_bytes))) {
