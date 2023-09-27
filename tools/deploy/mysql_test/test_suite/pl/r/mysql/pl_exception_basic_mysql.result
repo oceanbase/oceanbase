@@ -1557,3 +1557,4 @@ select * from b;
 drop table a;
 drop table b;
 drop procedure p;
+

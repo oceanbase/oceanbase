@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_string.h"
+#include "deps/oblib/src/common/ob_field.h"
 
 namespace oceanbase
 {
@@ -60,14 +61,19 @@ public:
 
   virtual int response_result(ObMySQLResultSet &result) = 0;
   virtual int response_query_header(sql::ObResultSet &result,
-                                    bool has_nore_result = false,
-                                    bool need_set_ps_out = false,
-                                    bool is_prexecute = false);
+                            bool has_more_result,
+                            bool need_set_ps_out_flag,
+                            bool need_flush_buffer = false);
   virtual int response_query_result(sql::ObResultSet &result,
                                     bool is_ps_protocol,
                                     bool has_more_result,
                                     bool &can_retry,
                                     int64_t fetch_limit  = common::OB_INVALID_COUNT);
+  int response_query_header(const ColumnsFieldIArray &fields,
+                                    bool has_more_result = false,
+                                    bool need_set_ps_out = false,
+                                    bool ps_cursor_execute = false,
+                                    sql::ObResultSet *result = NULL);
   int convert_string_value_charset(common::ObObj& value, sql::ObResultSet &result);
   int convert_string_value_charset(common::ObObj& value, 
                                    common::ObCharsetType charset_type, 

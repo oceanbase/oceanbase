@@ -179,7 +179,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN t1.col_int = 1 THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256
       access([t1.col_int]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case col_int when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 +-----------------------------------------------------------+
@@ -200,7 +200,7 @@ Outputs & filters:
   0 - output([CASE WHEN cast(t1.col_int, DECIMAL(11, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil),
 rowset=256
       access([t1.col_int]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case col_int when '1' then 'a' when 2 then 'b' else 'c' end from t1;
 +-------------------------------------------------------------+
@@ -220,7 +220,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN t1.col_null = 1 THEN 'a' WHEN t1.col_null = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256
       access([t1.col_null]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case col_null when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 +------------------------------------------------------------+
@@ -340,7 +340,7 @@ Outputs & filters:
   0 - output([CASE WHEN cast(t1.a, VARCHAR(1048576)) = t1.cond1 THEN '1' WHEN cast(t1.a, VARCHAR(1048576)) = cast(t1.cond2, VARCHAR(1048576)) THEN '2' ELSE
 NULL END]), filter(nil), rowset=256
       access([t1.a], [t1.cond1], [t1.cond2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case a when cond1 then '1' when cond2 then '2' end from t1;
 +----------------------------------------------------+
@@ -360,7 +360,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN cast(t1.a, VARCHAR(1048576)) = t1.cond1 THEN 'eq' ELSE 'neq' END]), filter(nil), rowset=256
       access([t1.a], [t1.cond1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case a when cond1 then 'eq' else 'neq' end from t1;
 +--------------------------------------------+
@@ -380,7 +380,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN t1.a = t1.cond2 THEN 'eq' ELSE 'neq' END]), filter(nil), rowset=256
       access([t1.a], [t1.cond2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case a when cond2 then 'eq' else 'neq' end from t1;
 +--------------------------------------------+
@@ -400,7 +400,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN CASE WHEN t1.a = 'cond' THEN 'eq' ELSE 'neq' END = 'eq' THEN 'ok' ELSE 'not ok' END]), filter(nil), rowset=256
       access([t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end from t1;
 +----------------------------------------------------------------------------------------+

@@ -94,7 +94,7 @@ Outputs & filters:
   3 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
   4 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
       access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([stu.sid], [stu.cls], [stu.name]), filter(nil), rowset=256
   6 - output([stu.sid], [stu.cls], [stu.name]), filter(nil), rowset=256
@@ -103,7 +103,7 @@ Outputs & filters:
   8 - output([stu.cls], [stu.sid], [stu.name]), filter(nil), rowset=256
   9 - output([stu.cls], [stu.sid], [stu.name]), filter([stu.sid < 12]), rowset=256
       access([stu.cls], [stu.sid], [stu.name]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([stu.cls], [stu.sid]), range(MIN,MIN ; MAX,MAX)always true
 select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid != score.sid and stu.sid < 12;
 sid	name	cls	sid	subject	score
@@ -161,13 +161,13 @@ Outputs & filters:
   5 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
   6 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
       access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
   7 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
   8 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
       access([teacher.tid], [teacher.subject], [teacher.name]), partitions(p1)
-      is_index_back=false, is_global_index=false,
-      range_key([teacher.tid]), range[1 ; 1],
+      is_index_back=false, is_global_index=false, 
+      range_key([teacher.tid]), range[1 ; 1], 
       range_cond([teacher.tid = 1])
 select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 sid	subject	score	tid	name	subject

@@ -48,7 +48,7 @@ Outputs & filters:
       group([skyline_int.v3]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v3, v4 order by v3;
 Query Plan
@@ -64,7 +64,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select v1, tenant_id from skyline_int group by v4, v3 order by v3;
@@ -81,7 +81,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select v1, tenant_id from skyline_int group by v3, v4, v5 order by v3;
@@ -98,7 +98,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v3, v5, v4 order by v3;
@@ -115,7 +115,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id, v6 from skyline_int group by v3, v5, v4 order by v3;
@@ -132,7 +132,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v4, v3, v5 order by v3;
@@ -149,7 +149,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v4, v5, v3 order by v3;
@@ -166,7 +166,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v5, v3, v4 order by v3;
@@ -183,7 +183,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, tenant_id from skyline_int group by v5, v4, v3 order by v3;
@@ -200,7 +200,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select sum(v1), tenant_id from skyline_int group by v6, v5, v4, v3 having sum(v1) > 100 order by v3;
@@ -217,7 +217,7 @@ Outputs & filters:
       group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), agg_func([T_FUN_SUM(skyline_int.v1)])
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 group by will decide which index to use
@@ -240,11 +240,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c3], [other.c2], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c1 and v2 = c3 group by v3, v4, v2;
@@ -266,12 +266,12 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
   3 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3;
 Query Plan
@@ -292,11 +292,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3, v4;
@@ -318,11 +318,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v4, v3;
@@ -344,11 +344,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3;
@@ -370,11 +370,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c3], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c3], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3 order by c2, c3;
@@ -396,11 +396,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c3], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c3], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c1 and v2 = c2 group by v2, v4;
@@ -422,11 +422,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c3], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c3], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c3], [other.c2], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3;
@@ -448,11 +448,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v5 = c1 group by v3;
@@ -474,11 +474,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c3], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c3], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4;
@@ -500,11 +500,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v4, v3;
@@ -526,11 +526,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c3], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c3], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4, v5;
@@ -553,13 +553,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   3 - output([skyline_int.v5], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1]), filter(nil), rowset=256
       sort_keys([skyline_int.v5, ASC], [skyline_int.v3, ASC], [skyline_int.v4, ASC])
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v5, v4, v3;
@@ -582,13 +582,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   2 - output([other.c1], [other.c3], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c3], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   3 - output([skyline_int.v5], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v1]), filter(nil), rowset=256
       sort_keys([skyline_int.v5, ASC], [skyline_int.v4, ASC], [skyline_int.v3, ASC])
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v3;
@@ -610,11 +610,11 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v4, v3;
 Query Plan
@@ -635,12 +635,12 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4;
 Query Plan
@@ -661,11 +661,11 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   3 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4 order by v4, v5;
@@ -690,11 +690,11 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
@@ -716,12 +716,12 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id, v6 from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
 Query Plan
@@ -746,11 +746,11 @@ rowset=256
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct(v3) from skyline_int join other on v3 = c1 order by v3, v4, v5;
@@ -772,11 +772,11 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   3 - output([skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5;
@@ -801,11 +801,11 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5, v6;
@@ -830,11 +830,11 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v5, v4, v3 from skyline_int join other on v4 = c1 order by v3;
@@ -859,11 +859,11 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v5, v4, v3 from other left join skyline_int on v4 = c1 order by v3;
@@ -888,11 +888,11 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v4, v5, v6 from other left join skyline_int on v4 = c1 and v5 = c2 order by v4, v5, v6;
@@ -917,11 +917,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   3 - output([other.c1], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v4, v5 from skyline_int union select c1, c2, c3 from other;
@@ -938,12 +938,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select v4, v5, v6 from skyline_int intersect select v3, v4, v5 from skyline_int;
 Query Plan
@@ -959,12 +959,12 @@ Outputs & filters:
   0 - output([INTERSECT([1])], [INTERSECT([2])], [INTERSECT([3])]), filter(nil), rowset=256
   1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v4, v5, v6 from skyline_int union select v2, v3, v4 from skyline_int;
@@ -981,12 +981,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 = 100 and v5 = 100 order by v3, v4, v5;
@@ -1000,9 +1000,9 @@ Outputs & filters:
 -------------------------------------
   0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,100,MIN,MIN,MIN
-; 100,100,100,MAX,MAX,MAX),
+; 100,100,100,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 = 100], [skyline_int.v5 = 100])
 explain select v3, v4, v5 from skyline_int where v3 in (100, 200, 300) group by v3, v4, v5 order by v3, v4, v5;
 Query Plan
@@ -1021,7 +1021,7 @@ Outputs & filters:
       distinct([skyline_int.v3], [skyline_int.v4], [skyline_int.v5])
   2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter([skyline_int.v3 IN (100, 200, 300)]), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v4, v5 from skyline_int where v3 in (100, 200, 300) order by v3, v4, v5;
@@ -1041,7 +1041,7 @@ Outputs & filters:
       distinct([skyline_int.v3], [skyline_int.v4], [skyline_int.v5])
   2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter([skyline_int.v3 IN (100, 200, 300)]), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v4, v3, v5;
@@ -1058,9 +1058,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,MAX,MAX,MAX,MAX,MAX),
+; 100,MAX,MAX,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100])
 explain select v4, v5, v6 from skyline_int where v3 = 100 group by v3, v5;
 Query Plan
@@ -1076,7 +1076,7 @@ Outputs & filters:
       group([skyline_int.v5]), agg_func(nil)
   1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter([skyline_int.v3 = 100]), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v5 from skyline_int where v4 = 100;
@@ -1093,7 +1093,7 @@ Outputs & filters:
       distinct([skyline_int.v3], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v5]), filter([skyline_int.v4 = 100]), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v5 from skyline_int where v4 > 100 and v4 < 200;
@@ -1110,9 +1110,9 @@ Outputs & filters:
       distinct([skyline_int.v3], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,MAX,MAX
-; 200,MIN,MIN,MIN,MIN,MIN),
+; 200,MIN,MIN,MIN,MIN,MIN), 
       range_cond([skyline_int.v4 > 100], [skyline_int.v4 < 200])
 explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2;
 Query Plan
@@ -1128,9 +1128,9 @@ Outputs & filters:
       sort_keys([skyline_int.v4, ASC], [skyline_int.v2, ASC]), prefix_pos(1)
   1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,MAX,MAX
-; 200,MIN,MIN,MIN,MIN,MIN),
+; 200,MIN,MIN,MIN,MIN,MIN), 
       range_cond([skyline_int.v4 > 100], [skyline_int.v4 < 200])
 explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2 limit 100;
 Query Plan
@@ -1146,9 +1146,9 @@ Outputs & filters:
       sort_keys([skyline_int.v4, ASC], [skyline_int.v2, ASC]), topn(100), prefix_pos(1)
   1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(100,MAX,MAX,MAX,MAX,MAX
-; 200,MIN,MIN,MIN,MIN,MIN),
+; 200,MIN,MIN,MIN,MIN,MIN), 
       range_cond([skyline_int.v4 > 100], [skyline_int.v4 < 200])
 explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2;
 Query Plan
@@ -1164,7 +1164,7 @@ Outputs & filters:
       group([skyline_int.v4], [skyline_int.v2]), agg_func(nil)
   1 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter([skyline_int.v5 = 100]), rowset=256
       access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2 limit 100;
@@ -1184,7 +1184,7 @@ Outputs & filters:
       group([skyline_int.v4], [skyline_int.v2]), agg_func(nil)
   2 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter([skyline_int.v5 = 100]), rowset=256
       access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3, v4;
@@ -1207,13 +1207,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([other.c1], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   3 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v6], [skyline_int.v5]), filter(nil), rowset=256
       sort_keys([skyline_int.v3, ASC], [skyline_int.v5, ASC])
   4 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v6], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v5], [skyline_int.v6], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3;
@@ -1233,13 +1233,13 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   1 - output([other.c1], [other.c2]), filter(nil), rowset=256
       access([other.c1], [other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   2 - output([skyline_int.v3], [skyline_int.v6], [skyline_int.v5]), filter(nil), rowset=256
       sort_keys([skyline_int.v3, ASC], [skyline_int.v5, ASC])
   3 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5, v6;
@@ -1264,11 +1264,11 @@ Outputs & filters:
       merge_directions([ASC])
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 group by v4, v5;
@@ -1290,12 +1290,12 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select distinct v4, v5 from skyline_int join other where skyline_int.v4 = other.c1;
 Query Plan
@@ -1316,12 +1316,12 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select v4, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5;
 Query Plan
@@ -1339,12 +1339,12 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain (select v4, v5, v6 from skyline_int join other on skyline_int.v4 = other.c1 ) union select c1, c2, c3 from other;
 Query Plan
@@ -1365,16 +1365,16 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), rowset=256
       access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c1]), filter(nil), rowset=256
       access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   4 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select v1, tenant_id from skyline_int group by v2, v3, v4 order by v2, v3, v4, v5;
 Query Plan
@@ -1390,7 +1390,7 @@ Outputs & filters:
       group([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), agg_func(nil)
   1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v2, v3, v4, v5 from skyline_int group by v2, v3, v4;
@@ -1407,7 +1407,7 @@ Outputs & filters:
       group([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), agg_func(nil)
   1 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain (select c1, c2, c3 from other group by c1, c2) union select c1, c2, c3 from other group by c1, c2;
@@ -1424,11 +1424,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
   2 - output([other.c1], [other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c1], [other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select distinct v3, v4, v5 from skyline_int order by v3, v4, v5, v6;
 Query Plan
@@ -1444,7 +1444,7 @@ Outputs & filters:
       distinct([skyline_int.v3], [skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct v3, v4 from skyline_int union select  distinct c2, c3 from other;
@@ -1461,12 +1461,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
   2 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select v3, v4 from skyline_int order by v3, v4 union select  distinct c2, c3 from other order by v3, v4;
 Query Plan
@@ -1482,12 +1482,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
   2 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain (select v3, v4 from skyline_int order by v3, v4) union (select  distinct c2, c3 from other order by c2, c3) order by 1,2;
 Query Plan
@@ -1503,12 +1503,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
   2 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4;
 Query Plan
@@ -1528,13 +1528,13 @@ Outputs & filters:
       conds(nil), nl_params_([skyline_int.v3]), batch_join=true
   2 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
   3 - output(nil), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([other.c2], [other.c1]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([other.c2], [other.c1]), range(MIN ; MAX), 
       range_cond([:0 = other.c2])
 explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4, v5;
 Query Plan
@@ -1554,13 +1554,13 @@ Outputs & filters:
       conds(nil), nl_params_([skyline_int.v3]), batch_join=true
   2 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output(nil), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([other.c2], [other.c1]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([other.c2], [other.c1]), range(MIN ; MAX), 
       range_cond([:0 = other.c2])
 explain select /*use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 and skyline_int.v4 = other.c3 group by v3, v4, v5;
 Query Plan
@@ -1581,12 +1581,12 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   3 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_hash(skyline_int other)*/ v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
 Query Plan
@@ -1606,11 +1606,11 @@ Outputs & filters:
       equal_conds([skyline_int.v3 = other.c2]), other_conds(nil)
   2 - output([other.c2]), filter(nil), rowset=256
       access([other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c1]), range(MIN,MIN ; MAX,MAX)always true
   3 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select /*+use_hash(skyline_int other)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
@@ -1634,11 +1634,11 @@ Outputs & filters:
       equal_conds([skyline_int.v3 = other.c2]), other_conds(nil)
   3 - output([other.c2]), filter(nil), rowset=256
       access([other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c1]), range(MIN,MIN ; MAX,MAX)always true
   4 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN,MIN
 ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select /*+leading(other skyline_int) use_hash(other skyline_int)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 union select c2, c3 from other;
@@ -1658,7 +1658,7 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([other.c2], [other.c3]), filter(nil), rowset=256
       access([other.c2], [other.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC])
@@ -1666,11 +1666,11 @@ Outputs & filters:
       equal_conds([skyline_int.v3 = other.c2]), other_conds(nil)
   4 - output([other.c2]), filter(nil), rowset=256
       access([other.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([other.c2], [other.c1]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always
 true
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v3, v4, v5;
@@ -1687,9 +1687,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,MAX,MAX,MAX,MAX,MAX),
+; 100,MAX,MAX,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 group by v3, v4, v5;
 Query Plan
@@ -1705,9 +1705,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,MIN,MIN
-; 100,MAX,MAX,MAX,MAX,MAX),
+; 100,MAX,MAX,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 >= 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 < 100 group by v3, v4, v5;
 Query Plan
@@ -1723,9 +1723,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,NULL,MAX,MAX,MAX,MAX
-; 100,100,MIN,MIN,MIN,MIN),
+; 100,100,MIN,MIN,MIN,MIN), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 < 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 <= 100 group by v3, v4, v5;
 Query Plan
@@ -1741,9 +1741,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,NULL,MAX,MAX,MAX,MAX
-; 100,100,MAX,MAX,MAX,MAX),
+; 100,100,MAX,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 <= 100])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 < 1000 group by v3, v4, v5;
 Query Plan
@@ -1759,9 +1759,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,1000,MIN,MIN,MIN,MIN),
+; 100,1000,MIN,MIN,MIN,MIN), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100], [skyline_int.v4 < 1000])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 < 1000 group by v3, v4, v5;
 Query Plan
@@ -1777,9 +1777,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,MIN,MIN
-; 100,1000,MIN,MIN,MIN,MIN),
+; 100,1000,MIN,MIN,MIN,MIN), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 >= 100], [skyline_int.v4 < 1000])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 <= 1000 group by v3, v4, v5;
 Query Plan
@@ -1795,9 +1795,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MAX,MAX,MAX,MAX
-; 100,1000,MAX,MAX,MAX,MAX),
+; 100,1000,MAX,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 > 100], [skyline_int.v4 <= 1000])
 explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 <= 1000 group by v3, v4, v5;
 Query Plan
@@ -1813,9 +1813,9 @@ Outputs & filters:
       distinct([skyline_int.v4], [skyline_int.v5])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), rowset=256
       access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(100,100,MIN,MIN,MIN,MIN
-; 100,1000,MAX,MAX,MAX,MAX),
+; 100,1000,MAX,MAX,MAX,MAX), 
       range_cond([skyline_int.v3 = 100], [skyline_int.v4 >= 100], [skyline_int.v4 <= 1000])
 set @@recyclebin = 'off';
 drop database hualong;

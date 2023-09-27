@@ -40,12 +40,12 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
   3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 EXPLAIN select * from t1,t2;
 Query Plan
@@ -63,12 +63,12 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
   3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select * from t1,t2;
 +------+------+------+------+------+------+

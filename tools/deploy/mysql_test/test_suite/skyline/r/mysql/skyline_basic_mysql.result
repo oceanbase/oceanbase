@@ -55,7 +55,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.pk1]), range(MIN,MIN ; MAX,MAX)always true
 explain select b,c from t1;
 Query Plan
@@ -68,7 +68,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select * from t1;
 Query Plan
@@ -81,7 +81,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.pk1]), range(MIN ; MAX)always true
 explain select b from t1 group by b;
 Query Plan
@@ -97,7 +97,7 @@ Outputs & filters:
       distinct([t1.b])
   1 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.pk1]), range(MIN,MIN ; MAX,MAX)always true
 explain select b, c from t1 group by b,c;
 Query Plan
@@ -113,7 +113,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c])
   1 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select a, b, c from t1 group by b,c;
 Query Plan
@@ -129,7 +129,7 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select b, c from t1 group by c,b;
 Query Plan
@@ -145,7 +145,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c])
   1 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select a, b, c from t1 group by c,b;
 Query Plan
@@ -161,7 +161,7 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select * from t1 where b = 100 group by c,b limit 100;
 Query Plan
@@ -180,8 +180,8 @@ Outputs & filters:
       group([t1.c]), agg_func(nil)
   2 - output([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(100,MIN,MIN ; 100,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(100,MIN,MIN ; 100,MAX,MAX), 
       range_cond([t1.b = 100])
 explain select distinct(b) from t1;
 Query Plan
@@ -197,7 +197,7 @@ Outputs & filters:
       distinct([t1.b])
   1 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.pk1]), range(MIN,MIN ; MAX,MAX)always true
 explain select distinct(b),c from t1;
 Query Plan
@@ -213,7 +213,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c])
   1 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select distinct(b),c from t1 where a > 100;
 Query Plan
@@ -229,7 +229,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c])
   1 - output([t1.b], [t1.c]), filter([t1.a > 100]), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct(c),b from t1;
 Query Plan
@@ -245,7 +245,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c])
   1 - output([t1.c], [t1.b]), filter(nil), rowset=256
       access([t1.c], [t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select distinct(c),b, d from t1 where b > 200 limit 100;
 Query Plan
@@ -264,7 +264,7 @@ Outputs & filters:
       distinct([t1.c], [t1.b], [t1.d])
   2 - output([t1.b], [t1.c], [t1.d]), filter([t1.b > 200]), rowset=256
       access([t1.pk1], [t1.b], [t1.c], [t1.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
       range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select b from t1 order by b;
 Query Plan
@@ -277,7 +277,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.pk1]), range(MIN,MIN ; MAX,MAX)always true
 explain select b, c from t1 order by b, c;
 Query Plan
@@ -290,7 +290,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select a, b, c from t1 order by b, c, a;
 Query Plan
@@ -303,7 +303,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c, d from t1 where b in (100, 200) order by b, c, a limit 100;
 Query Plan
@@ -316,8 +316,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), (200,MIN,MIN,MIN ; 200,MAX,MAX,MAX),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), (200,MIN,MIN,MIN ; 200,MAX,MAX,MAX), 
       range_cond([t1.b IN (100, 200)])
 explain select b from t1 where b = 100;
 Query Plan
@@ -330,8 +330,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(100,MIN ; 100,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(100,MIN ; 100,MAX), 
       range_cond([t1.b = 100])
 explain select b, c from t1 where b = 100;
 Query Plan
@@ -344,8 +344,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(100,MIN,MIN ; 100,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(100,MIN,MIN ; 100,MAX,MAX), 
       range_cond([t1.b = 100])
 explain select b, c, a from t1 where b = 100;
 Query Plan
@@ -358,8 +358,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), 
       range_cond([t1.b = 100])
 explain select * from t1 where b = 100 limit 100;
 Query Plan
@@ -372,8 +372,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(100,MIN ; 100,MAX),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(100,MIN ; 100,MAX), 
       range_cond([t1.b = 100])
 explain select b, c from t1 where b = 100 and c = 200;
 Query Plan
@@ -386,8 +386,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(100,200,MIN ; 100,200,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(100,200,MIN ; 100,200,MAX), 
       range_cond([t1.b = 100], [t1.c = 200])
 explain select b, c from t1 where b = 100 or c = 200;
 Query Plan
@@ -400,7 +400,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter([t1.b = 100 OR t1.c = 200]), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select b, c from t1 where b + c = 100;
 Query Plan
@@ -413,7 +413,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter([t1.b + t1.c = 100]), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.pk1]), range(MIN ; MAX)always true
 explain select b from t1 where b in (1, 2, 3);
 Query Plan
@@ -426,8 +426,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(1,MIN ; 1,MAX), (2,MIN ; 2,MAX), (3,MIN ; 3,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(1,MIN ; 1,MAX), (2,MIN ; 2,MAX), (3,MIN ; 3,MAX), 
       range_cond([t1.b IN (1, 2, 3)])
 explain select b, c from t1 where b in (1, 2, 3);
 Query Plan
@@ -440,8 +440,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), 
       range_cond([t1.b IN (1, 2, 3)])
 explain select b, c, a from t1 where b in (1, 2, 3);
 Query Plan
@@ -454,7 +454,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), (3,MIN,MIN,MIN ; 3,MAX,MAX,MAX),
       range_cond([t1.b IN (1, 2, 3)])
 explain select * from t1 where b in (1, 2, 3) limit 100;
@@ -468,8 +468,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(1,MIN ; 1,MAX), (2,MIN ; 2,MAX), (3,MIN ; 3,MAX),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(1,MIN ; 1,MAX), (2,MIN ; 2,MAX), (3,MIN ; 3,MAX), 
       range_cond([t1.b IN (1, 2, 3)])
 explain select b from t1 where b < 100;
 Query Plan
@@ -482,8 +482,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(NULL,MAX ; 100,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(NULL,MAX ; 100,MIN), 
       range_cond([t1.b < 100])
 explain select b, c from t1 where b < 100;
 Query Plan
@@ -496,8 +496,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(NULL,MAX,MAX ; 100,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(NULL,MAX,MAX ; 100,MIN,MIN), 
       range_cond([t1.b < 100])
 explain select b, c, a from t1 where b < 100;
 Query Plan
@@ -510,8 +510,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(NULL,MAX,MAX,MAX ; 100,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(NULL,MAX,MAX,MAX ; 100,MIN,MIN,MIN), 
       range_cond([t1.b < 100])
 explain select * from t1 where b < 100 limit 100;
 Query Plan
@@ -524,8 +524,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(NULL,MAX ; 100,MIN),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(NULL,MAX ; 100,MIN), 
       range_cond([t1.b < 100])
 explain select b from t1 where b > 0 and b < 100;
 Query Plan
@@ -538,8 +538,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b]), filter(nil), rowset=256
       access([t1.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(0,MAX ; 100,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(0,MAX ; 100,MIN), 
       range_cond([t1.b > 0], [t1.b < 100])
 explain select b, c from t1 where b > 0 and b < 100;
 Query Plan
@@ -552,8 +552,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(0,MAX,MAX ; 100,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(0,MAX,MAX ; 100,MIN,MIN), 
       range_cond([t1.b > 0], [t1.b < 100])
 explain select b, c, a from t1 where b > 0 and b < 100;
 Query Plan
@@ -566,8 +566,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(0,MAX,MAX,MAX ; 100,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(0,MAX,MAX,MAX ; 100,MIN,MIN,MIN), 
       range_cond([t1.b > 0], [t1.b < 100])
 explain select * from t1 where b > 0 and b < 100 limit 100;
 Query Plan
@@ -580,8 +580,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.pk1]), range(0,MAX ; 100,MIN),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.pk1]), range(0,MAX ; 100,MIN), 
       range_cond([t1.b > 0], [t1.b < 100])
 explain select b, c from t1 where b = 100 and c > 0 and c < 100;
 Query Plan
@@ -594,8 +594,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(100,0,MAX ; 100,100,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(100,0,MAX ; 100,100,MIN), 
       range_cond([t1.b = 100], [t1.c > 0], [t1.c < 100])
 explain select * from t1 where b = 100 and c > 0 and c < 100 limit 100;
 Query Plan
@@ -608,8 +608,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.c], [t1.a], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.pk1]), range(100,0,MAX ; 100,100,MIN),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(100,0,MAX ; 100,100,MIN), 
       range_cond([t1.b = 100], [t1.c > 0], [t1.c < 100])
 explain select a, b, c from t1 where b = 100 and a > 0 and a < 100 and c > 100;
 Query Plan
@@ -622,8 +622,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter([t1.a > 0], [t1.a < 100]), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,100,MAX,MAX ; 100,MAX,100,MIN),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,100,MAX,MAX ; 100,MAX,100,MIN), 
       range_cond([t1.b = 100], [t1.c > 100], [t1.c > 0])
 explain select a, b, c from t1 where b = 100 and a > 0 and a < 100 and c = 200;
 Query Plan
@@ -636,8 +636,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,200,0,MAX ; 100,200,100,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,200,0,MAX ; 100,200,100,MIN), 
       range_cond([t1.b = 100], [t1.a > 0], [t1.a < 100], [t1.c = 200])
 explain select a, b, c from t1 where b = 100 or c = 100 or a = 100 group by c, b;
 Query Plan
@@ -653,7 +653,7 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   1 - output([t1.b], [t1.c], [t1.a]), filter([(T_OP_OR, t1.b = 100, t1.c = 100, t1.a = 100)]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 where b in (100, 200, 300) or c in (100, 200, 300) or a in (100, 200, 300) group by c, b;
 Query Plan
@@ -669,7 +669,7 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   1 - output([t1.b], [t1.c], [t1.a]), filter([(T_OP_OR, t1.b IN (100, 200, 300), t1.c IN (100, 200, 300), t1.a IN (100, 200, 300))]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 where (b > 100 or b < 200) or (c > 100 or c < 200) or (c > 100 or c < 200) group by c, b;
 Query Plan
@@ -685,7 +685,7 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   1 - output([t1.b], [t1.c], [t1.a]), filter([(T_OP_OR, t1.b > 100, t1.b < 200, t1.c > 100, t1.c < 200)]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c, d from t1 where b = 100 and a > 0 and a < 100 and c = 200 limit 100;
 Query Plan
@@ -698,8 +698,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0)
-      limit(100), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,200,0,MAX ; 100,200,100,MIN),
+      limit(100), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,200,0,MAX ; 100,200,100,MIN), 
       range_cond([t1.b = 100], [t1.a > 0], [t1.a < 100], [t1.c = 200])
 explain select * from t1 join t2 on t1.pk1 = t2.pk2;
 Query Plan
@@ -717,11 +717,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([t2.pk2], [t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.pk2], [t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   2 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=256
       access([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.pk1]), range(MIN ; MAX)always true
 explain select a, b, c from t1 join t2 on t1.b = t2.x;
 Query Plan
@@ -739,11 +739,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([t2.x]), filter(nil), rowset=256
       access([t2.x]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 where t1.b = t2.x;
 Query Plan
@@ -761,11 +761,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([t2.x]), filter(nil), rowset=256
       access([t2.x]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 on t1.b = t2.x and t1.c = t2.y;
 Query Plan
@@ -783,11 +783,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   1 - output([t2.x], [t2.y]), filter(nil), rowset=256
       access([t2.x], [t2.y]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 where t1.b = t2.x and t1.c = t2.y;
 Query Plan
@@ -805,11 +805,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   1 - output([t2.x], [t2.y]), filter(nil), rowset=256
       access([t2.x], [t2.y]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 on t1.b = t2.x and t1.c = t2.y and t1.a = t2.z;
 Query Plan
@@ -827,11 +827,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   1 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 where t1.b = t2.x and t1.c = t2.y and t1.a = t2.z;
 Query Plan
@@ -849,11 +849,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC], [ASC])
   1 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select t.a, t.b, t.c from t1 as t join t1 as tt join t1 as ttt on t.b = tt.c and t.c = tt.a and ttt.c > 100;
 Query Plan
@@ -876,17 +876,17 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([tt.c], [tt.a]), filter(nil), rowset=256
       access([tt.c], [tt.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tt.c], [tt.a], [tt.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   3 - output([t.b], [t.c], [t.a]), filter(nil), rowset=256
       access([t.b], [t.c], [t.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t.b], [t.c], [t.a], [t.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   4 - output(nil), filter(nil), rowset=256
   5 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([ttt.c], [ttt.pk1]), range(100,MAX ; MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([ttt.c], [ttt.pk1]), range(100,MAX ; MAX,MAX), 
       range_cond([ttt.c > 100])
 explain select a, b, c from t1 left join t2 on t1.b = t2.x order by b, c;
 Query Plan
@@ -904,11 +904,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t2.x]), filter(nil), rowset=256
       access([t2.x]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t2 left join t1 on t1.b = t2.x order by b, c;
 Query Plan
@@ -929,11 +929,11 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([t2.x]), filter(nil), rowset=256
       access([t2.x]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   3 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 union select x, y, z from t2;
 Query Plan
@@ -949,11 +949,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 order by c, b, a union select x, y, z from t2;
 Query Plan
@@ -969,11 +969,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.a], [t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select b, c, a from t1 where b > 100 union select x, y, z from t2 where x > 100;
 Query Plan
@@ -989,13 +989,13 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; MAX,MAX,MAX,MAX), 
       range_cond([t1.b > 100])
   2 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(100,MAX,MAX,MAX ; MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(100,MAX,MAX,MAX ; MAX,MAX,MAX,MAX), 
       range_cond([t2.x > 100])
 explain select b, c, a from t1 where b > 100 and b < 200 union select x, y, z from t2 where x > 100 and x < 200;
 Query Plan
@@ -1011,13 +1011,13 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN), 
       range_cond([t1.b > 100], [t1.b < 200])
   2 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN), 
       range_cond([t2.x > 100], [t2.x < 200])
 explain select a, b, c from t1 where b = 100 group by c;
 Query Plan
@@ -1033,8 +1033,8 @@ Outputs & filters:
       group([t1.c]), agg_func(nil)
   1 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), 
       range_cond([t1.b = 100])
 explain select a, b, c from t1 where b > 100 and b < 200 group by c, b;
 Query Plan
@@ -1050,8 +1050,8 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   1 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN), 
       range_cond([t1.b > 100], [t1.b < 200])
 explain select a, b, c from t1 where b > 100 and b < 200 group by c, b having sum(c) > 1000;
 Query Plan
@@ -1067,8 +1067,8 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func([T_FUN_SUM(t1.c)])
   1 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN), 
       range_cond([t1.b > 100], [t1.b < 200])
 explain select distinct a, b, c from t1 where b = 100 order by b;
 Query Plan
@@ -1084,8 +1084,8 @@ Outputs & filters:
       distinct([t1.c], [t1.a])
   1 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), 
       range_cond([t1.b = 100])
 explain select distinct a, b, c from t1 where (b > 100 and b < 200) or (a < 200 and a > 100) order by b desc;
 Query Plan
@@ -1101,7 +1101,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c], [t1.a])
   1 - output([t1.b], [t1.a], [t1.c]), filter([t1.b > 100 AND t1.b < 200 OR t1.a < 200 AND t1.a > 100]), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a, b, c from t1 where b = 100 or c = 200 order by b desc, c desc;
 Query Plan
@@ -1117,7 +1117,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c], [t1.a])
   1 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 100 OR t1.c = 200]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select /*+index(t1 idx_b_c)*/ distinct a, b, c from t1 where b = 100 or c = 200 order by b desc, c desc;
 Query Plan
@@ -1136,7 +1136,7 @@ Outputs & filters:
       sort_keys([t1.b, DESC], [t1.c, DESC], [t1.a, ASC]), prefix_pos(2)
   2 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 100 OR t1.c = 200]), rowset=256
       access([t1.pk1], [t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t1 idx_b_c_a)*/ distinct a, b, c from t1 where b = 100 or c = 200 order by b desc, c desc;
 Query Plan
@@ -1152,7 +1152,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c], [t1.a])
   1 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 100 OR t1.c = 200]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a, b, c from t1 where b in (100, 200) or c in (200, 400) order by b desc, c desc;
 Query Plan
@@ -1168,7 +1168,7 @@ Outputs & filters:
       distinct([t1.b], [t1.c], [t1.a])
   1 - output([t1.b], [t1.c], [t1.a]), filter([t1.b IN (100, 200) OR t1.c IN (200, 400)]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct b, c, a from t1 where b > 100 and b < 200 and c > 100 and a > 100 order by b, c;
 Query Plan
@@ -1184,8 +1184,8 @@ Outputs & filters:
       distinct([t1.b], [t1.c], [t1.a])
   1 - output([t1.b], [t1.c], [t1.a]), filter([t1.c > 100], [t1.a > 100]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MAX,MAX,MAX ; 200,MIN,MIN,MIN), 
       range_cond([t1.b > 100], [t1.b < 200])
 explain select distinct a, b, c from t1 group by c, b order by c;
 Query Plan
@@ -1204,7 +1204,7 @@ Outputs & filters:
       group([t1.b], [t1.c]), agg_func(nil)
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a, b, c from t1 join t2 where t1.b = t2.x and t1.c = t2.y group by c, b order by b, c;
 Query Plan
@@ -1225,11 +1225,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([t2.x], [t2.y]), filter(nil), rowset=256
       access([t2.x], [t2.y]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 on t1.b != t2.x group by c, b;
 Query Plan
@@ -1250,12 +1250,12 @@ Outputs & filters:
       conds([t1.b != t2.x]), nl_params_(nil), batch_join=false
   2 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   3 - output([t2.x]), filter(nil), rowset=256
   4 - output([t2.x]), filter(nil), rowset=256
       access([t2.x]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
 explain select a, b, c from t1 join t2 on t1.b = t2.x and t1.c = t2.y group by c, b;
 Query Plan
@@ -1276,11 +1276,11 @@ Outputs & filters:
       merge_directions([ASC], [ASC])
   2 - output([t2.x], [t2.y]), filter(nil), rowset=256
       access([t2.x], [t2.y]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   3 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 join t2 on t1.b = t2.x order by b, c;
 Query Plan
@@ -1298,11 +1298,11 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=256
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t2.x]), filter(nil), rowset=256
       access([t2.x]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a,b,c from t3 where d in (select pk2 from t2) group by a,b;
 Query Plan
@@ -1324,13 +1324,13 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   3 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=256
       sort_keys([t3.d, ASC])
   4 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a,b,c from t3 where d not in (select pk2 from t2) group by a,b;
 Query Plan
@@ -1350,11 +1350,11 @@ Outputs & filters:
       equal_conds([t3.d = t2.pk2]), other_conds(nil)
   2 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a,b,c from t3 where d in (select pk2 from t2) order by a,b;
 Query Plan
@@ -1376,13 +1376,13 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   3 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=256
       sort_keys([t3.d, ASC])
   4 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a,b,c from t3 where d not in (select pk2 from t2) order by a,b;
 Query Plan
@@ -1402,11 +1402,11 @@ Outputs & filters:
       equal_conds([t3.d = t2.pk2]), other_conds(nil)
   2 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a,b,c from t3 where d in (select pk2 from t2);
 Query Plan
@@ -1428,13 +1428,13 @@ Outputs & filters:
       merge_directions([ASC])
   2 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   3 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=256
       sort_keys([t3.d, ASC])
   4 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a,b,c from t3 where d not in (select pk2 from t2);
 Query Plan
@@ -1454,11 +1454,11 @@ Outputs & filters:
       equal_conds([t3.d = t2.pk2]), other_conds(nil)
   2 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a,b,c from t3 where d in (select pk2 from t2) union select x,y,z from t2;
 Query Plan
@@ -1478,7 +1478,7 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t2.x], [t2.y], [t2.z]), filter(nil), rowset=256
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       sort_keys([t3.a, ASC], [t3.b, ASC], [t3.c, ASC])
@@ -1487,13 +1487,13 @@ Outputs & filters:
       merge_directions([ASC])
   4 - output([t2.pk2]), filter(nil), rowset=256
       access([t2.pk2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX)always true
   5 - output([t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=256
       sort_keys([t3.d, ASC])
   6 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a,b,c from t3 where d > any (select pk2 from t2);
 Query Plan
@@ -1513,12 +1513,12 @@ Outputs & filters:
       conds(nil), nl_params_([t3.d]), batch_join=false
   2 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   3 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t2.pk2]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.pk2]), range(MIN ; MAX), 
       range_cond([:0 > t2.pk2])
 explain select a, b, c from t1 where b = 100 and c < 100 and c > 100 order by c desc limit 0, 100;
 Query Plan
@@ -1531,7 +1531,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter([t1.c < 100], [t1.c > 100], [t1.b = 100]), rowset=256
       access([t1.pk1], [t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=true, is_global_index=false, filter_before_indexback[true,true,true],
+      limit(100), offset(0), is_index_back=true, is_global_index=false, filter_before_indexback[true,true,true], 
       range_key([t1.b], [t1.c], [t1.pk1]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false
 explain select a, b, c from t1 where b = 100 or (b = 200 and c = 300) order by c desc limit 0, 100;
 Query Plan
@@ -1544,7 +1544,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 100 OR t1.b = 200 AND t1.c = 300]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a, b, c from t1 where (b = 200 and c = 300) or (b = 100) order by c desc limit 0, 100;
 Query Plan
@@ -1557,7 +1557,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 200 AND t1.c = 300 OR t1.b = 100]), rowset=256
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a1, a2, b, min(c), max(c) from t4 group by a1, a2, b;
 Query Plan
@@ -1573,7 +1573,7 @@ Outputs & filters:
       group([t4.a1], [t4.a2], [t4.b]), agg_func([T_FUN_MIN(t4.c)], [T_FUN_MAX(t4.c)])
   1 - output([t4.a1], [t4.a2], [t4.b], [t4.c]), filter(nil), rowset=256
       access([t4.a1], [t4.a2], [t4.b], [t4.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.a1], [t4.a2], [t4.b], [t4.c], [t4.__pk_increment]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, pk from t5 where pk = 100 and v1 = 100 order by v1 desc;
 Query Plan
@@ -1586,8 +1586,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 100]), rowset=256
       access([t5.pk], [t5.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t5.pk]), range[100 ; 100],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.pk]), range[100 ; 100], 
       range_cond([t5.pk = 100])
 explain select v1, pk from t5 where pk = 100 and v1 = 200 order by v1 desc;
 Query Plan
@@ -1600,8 +1600,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 200]), rowset=256
       access([t5.pk], [t5.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t5.pk]), range[100 ; 100],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.pk]), range[100 ; 100], 
       range_cond([t5.pk = 100])
 explain select a from t6 where b = 1 order by c desc limit 9;
 Query Plan
@@ -1614,8 +1614,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter(nil), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      limit(9), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      limit(9), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 order by c desc limit 9;
 Query Plan
@@ -1628,8 +1628,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter(nil), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      limit(9), offset(nil), is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      limit(9), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 order by c desc limit 9;
 Query Plan
@@ -1645,8 +1645,8 @@ Outputs & filters:
       sort_keys([t6.c, DESC]), topn(9)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select b, c from t6 where a = 1 order by b, c;
 Query Plan
@@ -1659,7 +1659,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_c)*/ b, c from t6 where a = 1 order by b, c;
 Query Plan
@@ -1672,7 +1672,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.pk], [t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_a_c)*/ b, c from t6 where a = 1 order by b, c;
 Query Plan
@@ -1685,7 +1685,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a from t6 where b = 1 and a = 2 order by c;
 Query Plan
@@ -1698,8 +1698,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter(nil), rowset=256
       access([t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and a = 2 order by c;
 Query Plan
@@ -1712,8 +1712,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter([t6.a = 2]), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and a = 2 order by c;
 Query Plan
@@ -1726,8 +1726,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter(nil), rowset=256
       access([t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
 explain select a from t6 where b = 1 or b = 2 order by a;
 Query Plan
@@ -1743,8 +1743,8 @@ Outputs & filters:
       sort_keys([t6.a, ASC])
   1 - output([t6.a]), filter(nil), rowset=256
       access([t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t6.b = 1 OR t6.b = 2])
 explain select a from t6 where b = 1 and c = 2 order by a;
 Query Plan
@@ -1757,8 +1757,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and c = 2 order by a;
 Query Plan
@@ -1774,8 +1774,8 @@ Outputs & filters:
       sort_keys([t6.a, ASC])
   1 - output([t6.a]), filter(nil), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX), 
       range_cond([t6.b = 1], [t6.c = 2])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and c = 2 order by a;
 Query Plan
@@ -1788,8 +1788,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select a from t6 where b = 1 order by a, c desc;
 Query Plan
@@ -1805,8 +1805,8 @@ Outputs & filters:
       sort_keys([t6.a, ASC], [t6.c, DESC]), prefix_pos(1)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 order by a, c desc;
 Query Plan
@@ -1822,8 +1822,8 @@ Outputs & filters:
       sort_keys([t6.a, ASC], [t6.c, DESC])
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 order by a, c desc;
 Query Plan
@@ -1839,8 +1839,8 @@ Outputs & filters:
       sort_keys([t6.a, ASC], [t6.c, DESC]), prefix_pos(1)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select a from t6 where b > 1 order by c desc;
 Query Plan
@@ -1856,8 +1856,8 @@ Outputs & filters:
       sort_keys([t6.c, DESC])
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MAX,MAX,MAX ; MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MAX,MAX,MAX ; MAX,MAX,MAX,MAX), 
       range_cond([t6.b > 1])
 explain select a from t6 where b = 1 and d = 2 order by e, c, a;
 Query Plan
@@ -1870,8 +1870,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter([t6.d = 2]), rowset=256
       access([t6.d], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select a from t6 where e = 1 and c = 2 order by b, d, a;
 Query Plan
@@ -1884,7 +1884,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_c)*/ a from t6 where e = 1 and c = 2 order by b, d, a;
 Query Plan
@@ -1900,7 +1900,7 @@ Outputs & filters:
       sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
   1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.pk], [t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_e_d_c_a)*/ a from t6 where e = 1 and c = 2 order by b, d, a;
 Query Plan
@@ -1913,7 +1913,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select a from t6 where b = 1 and a > 2 order by c;
 Query Plan
@@ -1929,8 +1929,8 @@ Outputs & filters:
       sort_keys([t6.c, ASC])
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a > 2])
 explain select a from t6 where b = 1 group by c limit 9;
 Query Plan
@@ -1949,8 +1949,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   2 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 group by c limit 9;
 Query Plan
@@ -1969,8 +1969,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   2 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 group by c limit 9;
 Query Plan
@@ -1989,8 +1989,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   2 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select b, c from t6 where a = 1 group by b, c;
 Query Plan
@@ -2006,7 +2006,7 @@ Outputs & filters:
       distinct([t6.b], [t6.c])
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_c)*/ b, c from t6 where a = 1 group by b, c;
 Query Plan
@@ -2022,7 +2022,7 @@ Outputs & filters:
       distinct([t6.b], [t6.c])
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.pk], [t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_a_c)*/ b, c from t6 where a = 1 group by b, c;
 Query Plan
@@ -2038,7 +2038,7 @@ Outputs & filters:
       distinct([t6.b], [t6.c])
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select a from t6 where b = 1 and a = 2 group by c;
 Query Plan
@@ -2054,8 +2054,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and a = 2 group by c;
 Query Plan
@@ -2071,8 +2071,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter([t6.a = 2]), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and a = 2 group by c;
 Query Plan
@@ -2088,8 +2088,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
 explain select a from t6 where b = 1 or b = 2 group by a;
 Query Plan
@@ -2105,8 +2105,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter(nil), rowset=256
       access([t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t6.b = 1 OR t6.b = 2])
 explain select a from t6 where b = 1 and c = 2 group by a;
 Query Plan
@@ -2122,8 +2122,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and c = 2 group by a;
 Query Plan
@@ -2139,8 +2139,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter(nil), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX), 
       range_cond([t6.b = 1], [t6.c = 2])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and c = 2 group by a;
 Query Plan
@@ -2156,8 +2156,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select a from t6 where b = 1 group by a, c;
 Query Plan
@@ -2173,8 +2173,8 @@ Outputs & filters:
       group([t6.a], [t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 group by a, c;
 Query Plan
@@ -2190,8 +2190,8 @@ Outputs & filters:
       group([t6.a], [t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 group by a, c;
 Query Plan
@@ -2207,8 +2207,8 @@ Outputs & filters:
       group([t6.a], [t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select a from t6 where b > 1 group by c desc;
 Query Plan
@@ -2227,8 +2227,8 @@ Outputs & filters:
       sort_keys([t6.c, DESC])
   2 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MAX,MAX,MAX ; MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MAX,MAX,MAX ; MAX,MAX,MAX,MAX), 
       range_cond([t6.b > 1])
 explain select a from t6 where b = 1 and d = 2 group by e, c, a;
 Query Plan
@@ -2244,8 +2244,8 @@ Outputs & filters:
       group([t6.e], [t6.c], [t6.a]), agg_func(nil)
   1 - output([t6.a], [t6.e], [t6.c]), filter([t6.d = 2]), rowset=256
       access([t6.d], [t6.a], [t6.e], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select a from t6 where e = 1 and c = 2 group by b, d, a;
 Query Plan
@@ -2261,7 +2261,7 @@ Outputs & filters:
       group([t6.b], [t6.d], [t6.a]), agg_func(nil)
   1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_c)*/ a from t6 where e = 1 and c = 2 group by b, d, a;
 Query Plan
@@ -2277,7 +2277,7 @@ Outputs & filters:
       group([t6.b], [t6.d], [t6.a]), agg_func(nil)
   1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.pk], [t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_e_d_c_a)*/ a from t6 where e = 1 and c = 2 group by b, d, a;
 Query Plan
@@ -2293,7 +2293,7 @@ Outputs & filters:
       group([t6.b], [t6.d], [t6.a]), agg_func(nil)
   1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select a from t6 where b = 1 and a > 2 group by c;
 Query Plan
@@ -2309,8 +2309,8 @@ Outputs & filters:
       group([t6.c]), agg_func(nil)
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a > 2])
 explain select distinct c from t6 where b = 1 limit 9;
 Query Plan
@@ -2329,8 +2329,8 @@ Outputs & filters:
       distinct([t6.c])
   2 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ distinct c from t6 where b = 1 limit 9;
 Query Plan
@@ -2349,8 +2349,8 @@ Outputs & filters:
       distinct([t6.c])
   2 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ distinct c from t6 where b = 1 limit 9;
 Query Plan
@@ -2369,8 +2369,8 @@ Outputs & filters:
       distinct([t6.c])
   2 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select distinct b, c from t6 where a = 1;
 Query Plan
@@ -2386,7 +2386,7 @@ Outputs & filters:
       distinct([t6.b], [t6.c])
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_c)*/ distinct b, c from t6 where a = 1;
 Query Plan
@@ -2402,7 +2402,7 @@ Outputs & filters:
       distinct([t6.b], [t6.c])
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.pk], [t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_a_c)*/ distinct b, c from t6 where a = 1;
 Query Plan
@@ -2418,7 +2418,7 @@ Outputs & filters:
       distinct([t6.b], [t6.c])
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct c from t6 where b = 1 and a = 2;
 Query Plan
@@ -2434,8 +2434,8 @@ Outputs & filters:
       distinct([t6.c])
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
 explain select /*+index(t6 idx_b_c)*/ distinct c from t6 where b = 1 and a = 2;
 Query Plan
@@ -2451,8 +2451,8 @@ Outputs & filters:
       distinct([t6.c])
   1 - output([t6.c]), filter([t6.a = 2]), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ distinct c from t6 where b = 1 and a = 2;
 Query Plan
@@ -2468,8 +2468,8 @@ Outputs & filters:
       distinct([t6.c])
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
 explain select distinct a from t6 where b = 1 or b = 2;
 Query Plan
@@ -2485,8 +2485,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter(nil), rowset=256
       access([t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t6.b = 1 OR t6.b = 2])
 explain select distinct a from t6 where b = 1 and c = 2;
 Query Plan
@@ -2502,8 +2502,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ distinct a from t6 where b = 1 and c = 2;
 Query Plan
@@ -2519,8 +2519,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter(nil), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX), 
       range_cond([t6.b = 1], [t6.c = 2])
 explain select /*+index(t6 idx_b_a_c)*/ distinct a from t6 where b = 1 and c = 2;
 Query Plan
@@ -2536,8 +2536,8 @@ Outputs & filters:
       distinct([t6.a])
   1 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select distinct a, c from t6 where b = 1;
 Query Plan
@@ -2553,8 +2553,8 @@ Outputs & filters:
       distinct([t6.a], [t6.c])
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_c)*/ distinct a, c from t6 where b = 1;
 Query Plan
@@ -2570,8 +2570,8 @@ Outputs & filters:
       distinct([t6.a], [t6.c])
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ distinct a, c from t6 where b = 1;
 Query Plan
@@ -2587,8 +2587,8 @@ Outputs & filters:
       distinct([t6.a], [t6.c])
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select distinct c from t6 where b > 1;
 Query Plan
@@ -2604,8 +2604,8 @@ Outputs & filters:
       distinct([t6.c])
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MAX,MAX ; MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MAX,MAX ; MAX,MAX,MAX), 
       range_cond([t6.b > 1])
 explain select distinct e, c, a from t6 where b = 1 and d = 2;
 Query Plan
@@ -2621,8 +2621,8 @@ Outputs & filters:
       distinct([t6.e], [t6.c], [t6.a])
   1 - output([t6.e], [t6.c], [t6.a]), filter([t6.d = 2]), rowset=256
       access([t6.d], [t6.e], [t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select distinct b, d, a from t6 where e = 1 and c = 2;
 Query Plan
@@ -2638,7 +2638,7 @@ Outputs & filters:
       distinct([t6.b], [t6.d], [t6.a])
   1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_c)*/ distinct b, d, a from t6 where e = 1 and c = 2;
 Query Plan
@@ -2654,7 +2654,7 @@ Outputs & filters:
       distinct([t6.b], [t6.d], [t6.a])
   1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.pk], [t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_a_c)*/ distinct b, d, a from t6 where e = 1 and c = 2;
 Query Plan
@@ -2670,7 +2670,7 @@ Outputs & filters:
       distinct([t6.b], [t6.d], [t6.a])
   1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.pk], [t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_e_d_c_a)*/ distinct b, d, a from t6 where e = 1 and c = 2;
 Query Plan
@@ -2686,7 +2686,7 @@ Outputs & filters:
       distinct([t6.b], [t6.d], [t6.a])
   1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select distinct c from t6 where b = 1 and a > 2;
 Query Plan
@@ -2702,8 +2702,8 @@ Outputs & filters:
       distinct([t6.c])
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a > 2])
 explain select c from t6 where b = 1 limit 9 union select pk from tmp;
 Query Plan
@@ -2719,12 +2719,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      limit(9), offset(nil), is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      limit(9), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select /*+index(t6 idx_b_c)*/ c from t6 where b = 1 limit 9 union select pk from tmp;
 Query Plan
@@ -2740,12 +2740,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      limit(9), offset(nil), is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      limit(9), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select /*+index(t6 idx_b_a_c)*/ c from t6 where b = 1 limit 9 union select pk from tmp;
 Query Plan
@@ -2762,14 +2762,14 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
   2 - output([t6.c]), filter(nil), rowset=256
       sort_keys([t6.c, ASC])
   3 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      limit(9), offset(nil), is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      limit(9), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select b, c from t6 where a = 1 union select c1, c2 from tmp;
 Query Plan
@@ -2785,11 +2785,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([tmp.c1], [tmp.c2]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_c)*/ b, c from t6 where a = 1 union select c1, c2 from tmp;
 Query Plan
@@ -2805,11 +2805,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.pk], [t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([tmp.c1], [tmp.c2]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_a_c)*/ b, c from t6 where a = 1 union select c1, c2 from tmp;
 Query Plan
@@ -2825,11 +2825,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.b], [t6.c]), filter([t6.a = 1]), rowset=256
       access([t6.a], [t6.b], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([tmp.c1], [tmp.c2]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select c from t6 where b = 1 and a = 2 union select pk from tmp;
 Query Plan
@@ -2845,12 +2845,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select /*+index(t6 idx_b_c)*/ c from t6 where b = 1 and a = 2 union select pk from tmp;
 Query Plan
@@ -2866,12 +2866,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.c]), filter([t6.a = 2]), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select /*+index(t6 idx_b_a_c)*/ c from t6 where b = 1 and a = 2 union select pk from tmp;
 Query Plan
@@ -2887,12 +2887,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MIN,MIN ; 1,2,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a = 2])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select a from t6 where b = 1 or b = 2 union select pk from tmp;
 Query Plan
@@ -2909,14 +2909,14 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
   2 - output([t6.a]), filter(nil), rowset=256
       sort_keys([t6.a, ASC])
   3 - output([t6.a]), filter(nil), rowset=256
       access([t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t6.b = 1 OR t6.b = 2])
 explain select a from t6 where b = 1 and c = 2 union select pk from tmp;
 Query Plan
@@ -2932,12 +2932,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and c = 2 union select pk from tmp;
 Query Plan
@@ -2954,14 +2954,14 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
   2 - output([t6.a]), filter(nil), rowset=256
       sort_keys([t6.a, ASC])
   3 - output([t6.a]), filter(nil), rowset=256
       access([t6.pk], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,2,MIN ; 1,2,MAX), 
       range_cond([t6.b = 1], [t6.c = 2])
 explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and c = 2 union select pk from tmp;
 Query Plan
@@ -2977,12 +2977,12 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t6.a]), filter([t6.c = 2]), rowset=256
       access([t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
 explain select a, c from t6 where b = 1 union select c1, c2 from tmp;
 Query Plan
@@ -2998,12 +2998,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.c1], [tmp.c2]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+index(t6 idx_b_c)*/ a, c from t6 where b = 1 union select c1, c2 from tmp;
 Query Plan
@@ -3020,14 +3020,14 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([tmp.c1], [tmp.c2]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   2 - output([t6.a], [t6.c]), filter(nil), rowset=256
       sort_keys([t6.a, ASC], [t6.c, ASC])
   3 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.pk], [t6.a], [t6.c]), partitions(p0)
-      is_index_back=true, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX),
+      is_index_back=true, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MIN,MIN ; 1,MAX,MAX), 
       range_cond([t6.b = 1])
 explain select /*+index(t6 idx_b_a_c)*/ a, c from t6 where b = 1 union select c1, c2 from tmp;
 Query Plan
@@ -3043,12 +3043,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t6.a], [t6.c]), filter(nil), rowset=256
       access([t6.a], [t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.c1], [tmp.c2]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select c from t6 where b > 1 union select pk from tmp;
 Query Plan
@@ -3065,14 +3065,14 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
   2 - output([t6.c]), filter(nil), rowset=256
       sort_keys([t6.c, ASC])
   3 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.c], [t6.pk]), range(1,MAX,MAX ; MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.c], [t6.pk]), range(1,MAX,MAX ; MAX,MAX,MAX), 
       range_cond([t6.b > 1])
 explain select e, c, a from t6 where b = 1 and d = 2 union select c1, c2, c3 from tmp;
 Query Plan
@@ -3088,12 +3088,12 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t6.e], [t6.c], [t6.a]), filter([t6.d = 2]), rowset=256
       access([t6.d], [t6.e], [t6.c], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(1,MIN,MIN,MIN,MIN,MIN ; 1,MAX,MAX,MAX,MAX,MAX), 
       range_cond([t6.b = 1])
   2 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.c3], [tmp.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
 Query Plan
@@ -3109,11 +3109,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.c3], [tmp.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_c)*/ b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
 Query Plan
@@ -3130,13 +3130,13 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.c3], [tmp.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t6.b], [t6.d], [t6.a]), filter(nil), rowset=256
       sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
   3 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.pk], [t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t6.b], [t6.c], [t6.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_a_c)*/ b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
 Query Plan
@@ -3153,13 +3153,13 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.c3], [tmp.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   2 - output([t6.b], [t6.d], [t6.a]), filter(nil), rowset=256
       sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
   3 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.pk], [t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false,true],
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select  /*+index(t6 idx_b_e_d_c_a)*/ b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
 Query Plan
@@ -3175,11 +3175,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), rowset=256
       access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t6.b], [t6.e], [t6.d], [t6.c], [t6.a], [t6.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX)always true
   2 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), rowset=256
       access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.c1], [tmp.c2], [tmp.c3], [tmp.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select c from t6 where b = 1 and a > 2 union select pk from tmp;
 Query Plan
@@ -3196,14 +3196,14 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([tmp.pk]), filter(nil), rowset=256
       access([tmp.pk]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([tmp.pk]), range(MIN ; MAX)always true
   2 - output([t6.c]), filter(nil), rowset=256
       sort_keys([t6.c, ASC])
   3 - output([t6.c]), filter(nil), rowset=256
       access([t6.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX), 
       range_cond([t6.b = 1], [t6.a > 2])
 explain select * from t7 where a >= 0 and a <= 5 and b = 1;
 Query Plan
@@ -3216,8 +3216,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), filter([t7.b = 1]), rowset=256
       access([t7.__pk_increment], [t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true],
-      range_key([t7.a], [t7.c], [t7.b], [t7.__pk_increment]), range(0,MIN,MIN,MIN ; 5,MAX,MAX,MAX),
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([t7.a], [t7.c], [t7.b], [t7.__pk_increment]), range(0,MIN,MIN,MIN ; 5,MAX,MAX,MAX), 
       range_cond([t7.a >= 0], [t7.a <= 5])
 explain select * from t8 where e = 1 order by b;
 Query Plan
@@ -3233,7 +3233,7 @@ Outputs & filters:
       sort_keys([t8.b, ASC])
   1 - output([t8.a], [t8.e], [t8.b], [t8.c], [t8.d], [t8.f]), filter([t8.e = 1]), rowset=256
       access([t8.a], [t8.e], [t8.b], [t8.c], [t8.d], [t8.f]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.a]), range(MIN ; MAX)always true
 explain select * from t8 where e = 1 or f = 1 order by b;
 Query Plan
@@ -3249,7 +3249,7 @@ Outputs & filters:
       sort_keys([t8.b, ASC])
   1 - output([t8.a], [t8.e], [t8.f], [t8.b], [t8.c], [t8.d]), filter([t8.e = 1 OR t8.f = 1]), rowset=256
       access([t8.a], [t8.e], [t8.f], [t8.b], [t8.c], [t8.d]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.a]), range(MIN ; MAX)always true
 explain select * from t8 where d = 1 order by b;
 Query Plan
@@ -3265,7 +3265,7 @@ Outputs & filters:
       sort_keys([t8.b, ASC])
   1 - output([t8.a], [t8.d], [t8.b], [t8.c], [t8.e], [t8.f]), filter([t8.d = 1]), rowset=256
       access([t8.a], [t8.d], [t8.b], [t8.c], [t8.e], [t8.f]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.a]), range(MIN ; MAX)always true
 explain select avg(c1) over (partition by c2) from t9 order by c1;
 Query Plan
@@ -3285,7 +3285,7 @@ Outputs & filters:
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
   2 - output([t9.c1], [t9.c2]), filter(nil), rowset=256
       access([t9.c1], [t9.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c5], [t9.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c2, c3) from t9 order by c1;
 Query Plan
@@ -3305,7 +3305,7 @@ Outputs & filters:
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2], [t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
   2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c3) from t9 order by c1;
 Query Plan
@@ -3328,7 +3328,7 @@ Outputs & filters:
       sort_keys([t9.c3, ASC])
   3 - output([t9.c1], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c3) from t9 where c2 = 2 order by c1;
 Query Plan
@@ -3348,8 +3348,8 @@ Outputs & filters:
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
   2 - output([t9.c1], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t9.c2 = 2])
 explain select avg(c1) over (order by c2, c3) from t9 order by c1;
 Query Plan
@@ -3371,7 +3371,7 @@ ROW)
 ROW)
   2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (order by c2, c3 desc) from t9 order by c1;
 Query Plan
@@ -3396,7 +3396,7 @@ ROW)
       sort_keys([t9.c2, ASC], [t9.c3, DESC]), prefix_pos(1)
   3 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (order by c2 desc, c3 desc) from t9 order by c1;
 Query Plan
@@ -3418,7 +3418,7 @@ ROW)
 ROW)
   2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (order by c3) from t9 where c2 = 2 order by c1;
 Query Plan
@@ -3438,8 +3438,8 @@ Outputs & filters:
       win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
   2 - output([t9.c1], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t9.c2 = 2])
 explain select avg(c1) over (partition by c2 order by c3) from t9 order by c1;
 Query Plan
@@ -3459,7 +3459,7 @@ Outputs & filters:
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
   2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c2 order by c3, c5) from t9 order by c1;
 Query Plan
@@ -3481,7 +3481,7 @@ ROW)
 ROW)
   2 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c2 order by c3, c5 desc) from t9 order by c1;
 Query Plan
@@ -3506,7 +3506,7 @@ ROW)
       sort_keys([t9.c2, ASC], [t9.c3, ASC], [t9.c5, DESC]), prefix_pos(2)
   3 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c3 order by c5) from t9 where c2 = 2 order by c1;
 Query Plan
@@ -3526,8 +3526,8 @@ Outputs & filters:
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
   2 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(2,MIN,MIN,MIN ; 2,MAX,MAX,MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), 
       range_cond([t9.c2 = 2])
 explain select avg(c1) over (partition by c3, c5) from t9 order by c1;
 Query Plan
@@ -3550,7 +3550,7 @@ Outputs & filters:
       sort_keys([t9.c3, ASC], [t9.c5, ASC])
   3 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c3, c5) from t9 order by c4;
 Query Plan
@@ -3573,7 +3573,7 @@ Outputs & filters:
       sort_keys([t9.c3, ASC], [t9.c5, ASC])
   3 - output([t9.c1], [t9.c3], [t9.c5], [t9.c4]), filter(nil), rowset=256
       access([t9.c1], [t9.c3], [t9.c5], [t9.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c4], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (order by c3, c5) from t9 order by c1;
 Query Plan
@@ -3598,7 +3598,7 @@ ROW)
       sort_keys([t9.c3, ASC], [t9.c5, ASC])
   3 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (order by c3, c5) from t9 order by c4;
 Query Plan
@@ -3623,7 +3623,7 @@ ROW)
       sort_keys([t9.c3, ASC], [t9.c5, ASC])
   3 - output([t9.c1], [t9.c3], [t9.c5], [t9.c4]), filter(nil), rowset=256
       access([t9.c1], [t9.c3], [t9.c5], [t9.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c4], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 create index idx_c3_c2_c5 on t9(c3, c2, c5);
 explain select avg(c1) over (partition by c2 order by c3),
@@ -3648,7 +3648,7 @@ FOLLOWING)
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
   2 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c2 order by c3),
 max(c1) over (partition by c3 order by c2, c5)
@@ -3677,7 +3677,7 @@ ROW)
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
   4 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), rowset=256
       access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select avg(c1) over (partition by c3 order by c5),
 max(c1) over (partition by c2, c3, c5)
@@ -3706,7 +3706,7 @@ Outputs & filters:
 FOLLOWING)
   4 - output([t9.c1], [t9.c3], [t9.c5], [t9.c2]), filter(nil), rowset=256
       access([t9.c1], [t9.c3], [t9.c5], [t9.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 set @@recyclebin = 'off';
 drop database hualong;

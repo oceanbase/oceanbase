@@ -1,6 +1,6 @@
 # owner: linlin.xll
 # owner group: SQL1
-# description:
+# description: 
 
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
@@ -61,3 +61,4 @@ select * from t3 order by f asc|
 drop table t3|
 drop procedure fib|
 set @@max_sp_recursion_depth= 0|
+

@@ -48,17 +48,17 @@ Outputs & filters:
       equal_conds([b.d1 = c.c1]), other_conds(nil)
   2 - output([c.c1]), filter(nil), rowset=256
       access([c.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([a.c1], [b.d2], [b.d1], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
   4 - output([b.d2], [b.d1]), filter(nil), rowset=256
       access([b.d2], [b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   5 - output([a.c1], [a.c2]), filter([a.c2 < 5]), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c,  (b , a) ) */ count(*),sum(a.c1+b.d2*a.c2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
 +----------+---------------------+
@@ -87,17 +87,17 @@ Outputs & filters:
       equal_conds([c.c1 = b.d2 + 1]), other_conds(nil)
   2 - output([c.c1]), filter(nil), rowset=256
       access([c.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([b.d2], [a.c1], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
   4 - output([b.d2]), filter(nil), rowset=256
       access([b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   5 - output([a.c1], [a.c2]), filter([a.c2 < 15]), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c,  (b , a) ) */ count(a.c1), sum(a.c2+b.d2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on c.c1 = b.d2 + 1 where a.c2 < 15  ;
 +-------------+----------------+
@@ -131,21 +131,21 @@ Outputs & filters:
       equal_conds([d.c2 = c.c2]), other_conds(nil)
   3 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   4 - output([d.c2]), filter(nil), rowset=256
       access([d.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   5 - output([a.c1], [b.d2], [b.d1]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
   6 - output([a.c1]), filter([a.c2 < 5]), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   7 - output([b.d2], [b.d1]), filter(nil), rowset=256
       access([b.d2], [b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading((c, d), (a , b) ) */ count(*),sum(a.c1),sum(b.d2) from nn1 a  join nn2 b on a.c1 = b.d2  
 join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
@@ -181,21 +181,21 @@ Outputs & filters:
       equal_conds([d.c2 = c.c2]), other_conds(nil)
   3 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   4 - output([d.c2]), filter(nil), rowset=256
       access([d.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   5 - output([b.d1], [a.c1]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
   6 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   7 - output([b.d2], [b.d1]), filter(nil), rowset=256
       access([b.d2], [b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c, d, (a , b)) */ count(*),sum(a.c1+b.d1+c.c1-d.c2) from 
 nn1 a, nn2 b , nn1 c, nn1 d 
@@ -230,7 +230,7 @@ Outputs & filters:
       equal_conds([b.d1 = c.c1], [b.d2 = c.c2]), other_conds(nil)
   2 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([b.d1], [b.d2], [a.c1], [a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
@@ -238,15 +238,15 @@ Outputs & filters:
       equal_conds([d.c2 = a.c1]), other_conds(nil)
   5 - output([a.c1], [a.c2]), filter([a.c2 < 5]), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   6 - output([d.c2]), filter([d.c1 = d.c2]), rowset=256
       access([d.c2], [d.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   7 - output([b.d2], [b.d1]), filter(nil), rowset=256
       access([b.d2], [b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c,  (a ,d, b) ) use_hash(c,d) */ count(a.c1),sum(b.d1*b.d2-a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
 join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
@@ -279,17 +279,17 @@ Outputs & filters:
       equal_conds([b.d1 = c.c1], [d.c2 = c.c2]), other_conds(nil)
   2 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([d.c2], [b.d1]), filter(nil), rowset=256
       equal_conds([d.c1 = b.d2]), other_conds(nil)
   4 - output([d.c2], [d.c1]), filter(nil), rowset=256
       access([d.c2], [d.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   5 - output([b.d1], [b.d2]), filter(nil), rowset=256
       access([b.d1], [b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c,  (d, b) ) */ count(*) 
 from  nn2 b, nn1 c, nn1 d
@@ -342,31 +342,31 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   5 - output([t2.c1]), filter([t2.c2 < 4]), rowset=256
       access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t1.c1]), filter(nil), rowset=256
       equal_conds([t1.c1 = t3.c2]), other_conds(nil)
   7 - output([t1.c1]), filter([t1.c3 = 'hello11']), rowset=256
       access([t1.c1], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t3.c2]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t8.c1]), filter(nil), rowset=256
       equal_conds([t8.c1 = t9.c1]), other_conds(nil)
  11 - output([t8.c1]), filter(nil), rowset=256
       access([t8.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t4.c1]), filter(nil), rowset=256
       equal_conds([t4.c1 = t6.c1]), other_conds(nil)
@@ -374,15 +374,15 @@ Outputs & filters:
       equal_conds([t4.c1 = t5.c1]), other_conds(nil)
  15 - output([t4.c1]), filter(nil), rowset=256
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t2, (t1, t3), t7, (t8, t9), (t4, t5, t6)) */
 count(*) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -438,15 +438,15 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.d1]), other_conds(nil)
   5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t2.d1], [t2.d2]), filter(nil), rowset=256
       access([t2.d1], [t2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t3.c1]), filter(nil), rowset=256
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t4.d2], [t6.d2], [t5.c1], [t4.d1]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
@@ -454,28 +454,28 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
  10 - output([t4.d1], [t4.d2]), filter(nil), rowset=256
       access([t4.d1], [t4.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t5.c1]), filter(nil), rowset=256
  12 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t6.d2]), filter(nil), rowset=256
  14 - output([t6.d2]), filter(nil), rowset=256
       access([t6.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t7.c1], [t8.d2], [t7.c2], [t8.d1]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
  16 - output([t7.c1], [t7.c2]), filter(nil), rowset=256
       access([t7.c1], [t7.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t8.d2], [t8.d1]), filter(nil), rowset=256
  18 - output([t8.d1], [t8.d2]), filter(nil), rowset=256
       access([t8.d1], [t8.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1,t2,t3,(t4,t5,t6),(t7,t8)) */ count(*),sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2)
 from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5 , nn2 t6, nn1 t7, nn2 t8
@@ -512,24 +512,24 @@ Outputs & filters:
       equal_conds([d.c2 = c.c2], [b.d1 = c.c1]), other_conds(nil)
   2 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([d.c2], [a.c1], [b.d2], [a.c2], [b.d1]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
   4 - output([d.c2]), filter(nil), rowset=256
       access([d.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   5 - output([a.c1], [b.d2], [a.c2], [b.d1]), filter(nil), rowset=256
   6 - output([a.c1], [b.d2], [a.c2], [b.d1]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
   7 - output([a.c1], [a.c2]), filter([a.c2 < 5]), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   8 - output([b.d2], [b.d1]), filter(nil), rowset=256
       access([b.d2], [b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c, (d, (a,b))) */ count(a.c1+b.d2+a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
 join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
@@ -576,53 +576,53 @@ rowset=256
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   2 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t1.c1], [t3.c1], [t7.c1], [t8.c2], [t9.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256
       equal_conds([t1.c1 = t3.c2]), other_conds(nil)
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t3.c1], [t3.c2], [t7.c1], [t8.c2], [t9.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
   6 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t4.c1], [t7.c1], [t8.c2], [t9.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256
       equal_conds([t4.c1 = t7.c1]), other_conds(nil)
   8 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t4.c1], [t8.c2], [t9.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256
       equal_conds([t4.c1 = t8.c1]), other_conds(nil)
  10 - output([t8.c1], [t8.c2]), filter(nil), rowset=256
       access([t8.c1], [t8.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t4.c1], [t9.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256
       equal_conds([t4.c1 = t9.c1]), other_conds(nil)
  12 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t4.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256
       equal_conds([t4.c1 = t5.c1]), other_conds(nil)
  14 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
       access([t4.c1], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t5.c1], [t6.c2]), filter(nil), rowset=256
       equal_conds([t5.c1 = t6.c1]), other_conds(nil)
  16 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t2,  (t1, (t3 , (t7,  (t8, (t9 ,  (t4, (t5, (t6))))))))) */
 count(*),sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1)
@@ -670,7 +670,7 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1]), other_conds([t1.c1 + t2.d2 = t4.d1 + t1.c2])
   3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t4.d1], [t2.d1], [t3.c1], [t2.d2], [t4.d2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
@@ -678,28 +678,28 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   6 - output([t2.d1], [t2.d2]), filter(nil), rowset=256
       access([t2.d1], [t2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t3.c1]), filter(nil), rowset=256
   8 - output([t3.c1]), filter(nil), rowset=256
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t4.d1], [t4.d2]), filter(nil), rowset=256
  10 - output([t4.d1], [t4.d2]), filter(nil), rowset=256
       access([t4.d1], [t4.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t5.c1], [t5.c2], [t6.d2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
  12 - output([t5.c1], [t5.c2]), filter(nil), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t6.d2]), filter(nil), rowset=256
  14 - output([t6.d2]), filter(nil), rowset=256
       access([t6.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1, ((t2, t3), t4), (t5, t6)) */ count(t1.c1), count(t2.d1 * t3.c1), sum(t4.d1 + t5.c1)
 from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6
@@ -738,7 +738,7 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1]), other_conds([t1.c1 + t2.d2 = t4.d1 + t1.c2])
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.d1], [t3.c1], [t2.d2], [t4.d1], [t4.d2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
@@ -746,17 +746,17 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   5 - output([t2.d1], [t2.d2]), filter(nil), rowset=256
       access([t2.d1], [t2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t3.c1]), filter(nil), rowset=256
   7 - output([t3.c1]), filter(nil), rowset=256
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t4.d1], [t4.d2]), filter(nil), rowset=256
   9 - output([t4.d1], [t4.d2]), filter(nil), rowset=256
       access([t4.d1], [t4.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1, ((t2, t3), t4)) */ count(*), sum(t2.d1 * t3.c1 - t4.d2)
 from nn1 t1, nn2 t2, nn1 t3, nn2 t4
@@ -790,18 +790,18 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1]), other_conds(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.d1], [t3.c1], [t3.c2]), filter(nil), rowset=256
       conds([t2.d1 = t3.c1 + t2.d2]), nl_params_(nil), batch_join=false
   4 - output([t2.d1], [t2.d2]), filter(nil), rowset=256
       access([t2.d1], [t2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
   6 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
       access([t3.c1], [t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1, (t2, t3)) */ count(*), sum(t2.d1+t3.c2)
 from nn1 t1, nn2 t2, nn1 t3
@@ -859,7 +859,7 @@ Outputs & filters:
       equal_conds([c.c2 = VIEW1.c1]), other_conds(nil)
   4 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   5 - output([VIEW1.c1]), filter(nil), rowset=256
       access([VIEW1.c1])
@@ -871,35 +871,35 @@ Outputs & filters:
       equal_conds([y.d1 = z.c2]), other_conds(nil)
   9 - output([z.c2]), filter(nil), rowset=256
       access([z.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([z.__pk_increment]), range(MIN ; MAX)always true
  10 - output([y.d2], [y.d1]), filter(nil), rowset=256
       access([y.d2], [y.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([y.__pk_increment]), range(MIN ; MAX)always true
  11 - output([x.c2], [x.c1]), filter(nil), rowset=256
       access([x.c2], [x.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
  12 - output(nil), filter(nil), rowset=256
  13 - output(nil), filter(nil), rowset=256
       conds([y2.c1 = y3.c1]), nl_params_(nil), batch_join=false
  14 - output([y2.c1]), filter(nil), rowset=256
       access([y2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([y2.__pk_increment]), range(MIN ; MAX)always true
  15 - output([y3.c1]), filter(nil), rowset=256
  16 - output([y3.c1]), filter(nil), rowset=256
       access([y3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([y3.__pk_increment]), range(MIN ; MAX)always true
  17 - output([b.d1], [b.d2]), filter(nil), rowset=256
       access([b.d1], [b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
  18 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 SELECT count(*), sum(b.d1) from
   nn1 a,  nn2 b,  nn1 c
@@ -958,32 +958,32 @@ Outputs & filters:
       equal_conds([t5.c2 = t6.c1]), other_conds(nil)
   5 - output([t6.c1], [t6.c2]), filter(nil), rowset=256
       access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t5.c2], [t5.c1], [t4.c1]), filter(nil), rowset=256
       equal_conds([t4.c2 = t5.c1]), other_conds(nil)
   7 - output([t5.c1], [t5.c2]), filter([t5.c2 != 44 OR t5.c2 != 55]), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
       access([t4.c1], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t1.c1], [t3.c1], [t3.c2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
  10 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
       access([t3.c1], [t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t1.c1]), filter(nil), rowset=256
  12 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
       access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
  14 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
  15 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0))], [T_FUN_SUM(VIEW1.t2.c1)]), filter(nil), rowset=256
@@ -1060,7 +1060,7 @@ Outputs & filters:
       equal_conds([t4.d2 % 5 = t9.c1 % 4], [t8.d2 % 5 = t9.c1 % 14]), other_conds(nil)
   4 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t4.d2], [t4.d2 % 5], [t5.c1], [t4.d1 % 3], [t4.d1 % 4], [t4.d1 % 7], [t8.d2]), filter(nil), rowset=256
       equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 3 = t6.d2 % 2], [t4.d1 % 4 = t6.d1 % 4], [t4.d1 % 7 = t6.d1 % 7]), other_conds(nil)
@@ -1070,39 +1070,39 @@ Outputs & filters:
       equal_conds([t7.c1 % 7 = t8.d1 % 3]), other_conds(nil)
   8 - output([t8.d1], [t8.d2]), filter(nil), rowset=256
       access([t8.d1], [t8.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t7.c1], [t7.c2]), filter(nil), rowset=256
       access([t7.c1], [t7.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t5.c1], [t5.c1 % 6], [t6.d1], [t6.d2]), filter(nil), rowset=256
       equal_conds([t5.c1 % 2 = t6.d2 % 5]), other_conds(nil)
  11 - output([t6.d2], [t6.d1]), filter(nil), rowset=256
       access([t6.d2], [t6.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t5.c1], [t5.c1 % 6], [t5.c1 % 2]), filter([t5.c1 % 6 = t5.c1 % 2], [t5.c1 % 6 = t5.c2 % 5]), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t4.d1], [t4.d2]), filter(nil), rowset=256
       access([t4.d1], [t4.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  14 - output([t1.c1], [t1.c1 % 5], [t1.c2 % 5], [t1.c1 % 7], [t1.c1 % 3], [t1.c2 % 7]), filter(nil), rowset=256
       equal_conds([t1.c1 % 5 = t3.c1 % 4], [t1.c1 % 3 = t3.c2 % 7], [t1.c2 % 5 = t3.c2 % 5], [t1.c1 % 7 = t3.c1 % 7]), other_conds(nil)
  15 - output([t3.c1], [t3.c2], [t3.c2 % 7]), filter([t3.c2 % 7 = t3.c1 % 3]), rowset=256
       access([t3.c1], [t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t1.c1], [t1.c2], [t1.c1 % 5], [t1.c1 % 3], [t1.c2 % 7]), filter([t1.c1 % 3 = t1.c2 % 7], [t1.c1 % 5 = t1.c1 % 4]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t2.d2], [t2.d1], [t2.d2 % 2], [t2.d1 % 5]), filter([t2.d2 % 2 = t2.d2 % 7], [t2.d2 % 2 = t2.d1 % 3], [t2.d1 % 5 = t2.d1 % 4]), rowset=256
       access([t2.d2], [t2.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t9, (t8, t7, (t6, t5), t4), (t3, t1), t2)*/ count(*),sum(t9.c1-t5.c1+t4.d2-t1.c1) from 
 nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6, nn1 t7, nn2 t8, nn1 t9
@@ -1155,7 +1155,7 @@ Outputs & filters:
       equal_conds([a.c1 = c.c1]), other_conds(nil)
   2 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output([c.c1]), filter(nil), rowset=256
       equal_conds([c.c2 = d.d2]), other_conds(nil)
@@ -1165,17 +1165,17 @@ Outputs & filters:
       distinct([cc.c1], [cc.c2])
   6 - output([cc.c1], [cc.c2]), filter(nil), rowset=256
       access([cc.c1], [cc.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([cc.__pk_increment]), range(MIN ; MAX)always true
   7 - output([d.d2]), filter(nil), rowset=256
       equal_conds([nn2.d2 = d.d1]), other_conds(nil)
   8 - output([nn2.d2]), filter(nil), rowset=256
       access([nn2.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([nn2.__pk_increment]), range(MIN ; MAX)always true
   9 - output([d.d1], [d.d2]), filter(nil), rowset=256
       access([d.d1], [d.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(a (c ,(b, d))) */ count(*),sum(a.c1) from nn1 a, (select * from nn2) b, 
 (select * from nn1 cc group by c1,c2) c, nn2 d 
@@ -1211,24 +1211,24 @@ Outputs & filters:
       equal_conds([a.c1 = b.d1]), other_conds(nil)
   2 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   3 - output([b.d2], [b.d1]), filter(nil), rowset=256
       equal_conds([b.d2 = c.c1], [c.c2 = d.d2]), other_conds(nil)
   4 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   5 - output([b.d2], [b.d1], [d.d2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
   6 - output([b.d1], [b.d2]), filter(nil), rowset=256
       access([b.d1], [b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   7 - output([d.d2]), filter(nil), rowset=256
   8 - output([d.d2]), filter(nil), rowset=256
       access([d.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(a (c ,(b, d))) */count(*), sum(b.d2) from nn1 a left join nn2  b
 on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
@@ -1267,30 +1267,30 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))])
   2 - output([x.c1], [T_FUN_COUNT(x.c2)]), filter(nil), rowset=256
       access([x.c1], [x.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
   3 - output([:1]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d1]), other_conds([:0 = a.c1 + b.d1 + c.c2 - d.d2 * 5])
   4 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   5 - output([c.c2], [d.d2], [b.d1]), filter(nil), rowset=256
       equal_conds([b.d2 = c.c1], [c.c2 = d.d2]), other_conds(nil)
   6 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   7 - output([d.d2], [b.d1], [b.d2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
   8 - output([b.d1], [b.d2]), filter(nil), rowset=256
       access([b.d1], [b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   9 - output([d.d2]), filter(nil), rowset=256
  10 - output([d.d2]), filter(nil), rowset=256
       access([d.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
 select (select /*+ leading(a (c ,(b, d))) */ count(x.c2) from nn1 a left join nn2  b
 on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
@@ -1333,7 +1333,7 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   2 - output(nil), filter([t3.c1 IN (1, 2)]), rowset=256
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t1.c1]), filter(nil), rowset=256
   4 - output([t1.c1]), filter(nil), rowset=256
@@ -1348,25 +1348,25 @@ Outputs & filters:
       equal_conds([x.c1 = y.d1]), other_conds(nil)
   9 - output([x.c1]), filter(nil), rowset=256
       access([x.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
  10 - output([y.d1]), filter(nil), rowset=256
       equal_conds([y.d2 = z.c1]), other_conds(nil)
  11 - output([y.d1], [y.d2]), filter(nil), rowset=256
       access([y.d1], [y.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([y.__pk_increment]), range(MIN ; MAX)always true
  12 - output([z.c1]), filter(nil), rowset=256
       access([z.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([z.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  14 - output([t2.c2]), filter(nil), rowset=256
       access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where t2.c2=t1.c2 and t1.c1 = 
  (select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
@@ -1406,20 +1406,20 @@ Outputs & filters:
       equal_conds([c.c2 = d.d1]), other_conds(nil)
   4 - output([d.d1], [d.d2]), filter(nil), rowset=256
       access([d.d1], [d.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   5 - output([c.c2]), filter(nil), rowset=256
       access([c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   6 - output([b.d1]), filter(nil), rowset=256
   7 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading((d, c), b , a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
 where a.c1 = b.d1 and c.c2 = d.d1;
@@ -1457,20 +1457,20 @@ Outputs & filters:
       equal_conds([c.c2 = d.d2]), other_conds(nil)
   4 - output([d.d2]), filter(nil), rowset=256
       access([d.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   5 - output([c.c2], [c.c1]), filter(nil), rowset=256
       access([c.c2], [c.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   6 - output([b.d2]), filter(nil), rowset=256
   7 - output([b.d2]), filter(nil), rowset=256
       access([b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading((d, (c), (b)) , (a)) */  count(*),sum(a.c1+b.d2+c.c1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
 where a.c1 = b.d2  and c.c2 = d.d2;
@@ -1506,22 +1506,22 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   3 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   4 - output([d.d2]), filter(nil), rowset=256
   5 - output([d.d2]), filter(nil), rowset=256
       equal_conds([c.c2 = d.d1]), other_conds(nil)
   6 - output([c.c2]), filter(nil), rowset=256
       access([c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   7 - output([d.d1], [d.d2]), filter(nil), rowset=256
       access([d.d1], [d.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(b, (c d)) a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
 where a.c1 = b.d1 and c.c2 = d.d1;
@@ -1557,22 +1557,22 @@ Outputs & filters:
       equal_conds([a.c1 = b.d1]), other_conds(nil)
   3 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   4 - output([b.d1], [b.d2]), filter(nil), rowset=256
       access([b.d1], [b.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
   5 - output([d.d1], [c.c1]), filter(nil), rowset=256
   6 - output([d.d1], [c.c1]), filter(nil), rowset=256
       equal_conds([c.c2 = d.d1]), other_conds(nil)
   7 - output([d.d1]), filter(nil), rowset=256
       access([d.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   8 - output([c.c2], [c.c1]), filter(nil), rowset=256
       access([c.c2], [c.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(b1, (c1 d1 ) a1) */  count(*), sum(b.d2+d.d1*c.c1-a.c1) from nn1 a, nn2 b, nn1 c, nn2 d  
 where a.c1 = b.d1 and c.c2 = d.d1;
@@ -1623,31 +1623,31 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   7 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
       access([t4.c1], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t3.c2]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading((((t2,t1,t4),t3),t5), (t6),(t7))*/ count(*), sum(t6.c1+t7.c1+t4.c2) from 
 nn1 t1, nn1 t2, nn1 t3, nn1  t4, nn1 t5, nn1 t6, nn1 t7
@@ -1700,35 +1700,35 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   6 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
       access([t4.c1], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t6.c2]), filter(nil), rowset=256
   8 - output([t6.c2]), filter(nil), rowset=256
       access([t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t5.c2], [t5.c1]), filter(nil), rowset=256
       access([t5.c2], [t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t1.c1], [t2.c2]), filter(nil), rowset=256
  11 - output([t1.c1], [t2.c2]), filter(nil), rowset=256
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
  12 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
       access([t2.c1], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
  14 - output([t3.c1]), filter([t3.c2 IN (1, 23, 4, 2, 5, 6)]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t4,t6,t5) */ count(*), sum(t2.c2+t3.c1)
 from nn1 t1 left join nn1 t2 on t1.c1 = t2.c1 left JOIN
@@ -1765,23 +1765,23 @@ Outputs & filters:
       equal_conds([b.d1 = c.c1], [b.d2 = c.c2]), other_conds(nil)
   2 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
   3 - output([b.d2], [a.c1], [b.d1]), filter(nil), rowset=256
       equal_conds([a.c1 = b.d2]), other_conds(nil)
   4 - output([a.c1]), filter([a.c2 < 5]), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   5 - output([b.d2], [b.d1]), filter(nil), rowset=256
       equal_conds([d.c1 = b.d2]), other_conds(nil)
   6 - output([d.c1]), filter([d.c1 = d.c2]), rowset=256
       access([d.c2], [d.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   7 - output([b.d2], [b.d1]), filter(nil), rowset=256
       access([b.d2], [b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(c,  (a ,(d, b)) ) */ count(a.c1+b.d2) , sum(b.d2+b.d2*a.c1) from nn1 a  join nn2 b on a.c1 = b.d2  
 join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
@@ -1854,33 +1854,33 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   4 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t1.c1], [t3.c2]), filter(nil), rowset=256
       equal_conds([t1.c1 = t3.c2]), other_conds(nil)
   6 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t3.c2]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t7.c1]), filter(nil), rowset=256
       equal_conds([t7.c1 = t8.c1]), other_conds(nil)
   9 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t8.c1]), filter(nil), rowset=256
       equal_conds([t8.c1 = t9.c1]), other_conds(nil)
  11 - output([t8.c1]), filter(nil), rowset=256
       access([t8.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t4.c1], [t5.c2]), filter(nil), rowset=256
       equal_conds([t4.c1 = t6.c1]), other_conds(nil)
@@ -1888,15 +1888,15 @@ Outputs & filters:
       equal_conds([t4.c1 = t5.c1]), other_conds(nil)
  15 - output([t4.c1]), filter(nil), rowset=256
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t5.c1], [t5.c2]), filter(nil), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select count(*), sum(x+y-z*4) from v4;
 +----------+--------------+
@@ -1948,45 +1948,45 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   6 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t1.c1]), filter(nil), rowset=256
       equal_conds([t1.c1 = t3.c2]), other_conds(nil)
   8 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t3.c2]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t7.c1], [t9.c1]), filter(nil), rowset=256
       equal_conds([t7.c1 = t8.c1]), other_conds(nil)
  11 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t8.c1], [t9.c1]), filter(nil), rowset=256
       equal_conds([t8.c1 = t9.c1]), other_conds(nil)
  13 - output([t8.c1]), filter(nil), rowset=256
       access([t8.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  14 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
       access([t4.c1], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t5.c1], [t5.c2]), filter(nil), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t2, (t1, t3), (t7, (t8, t9))) */
 count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -2039,47 +2039,47 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   5 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t3.c2]), filter([t3.c2 = t3.c1], [t3.c2 >= t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t4.c1], [t5.c1], [t6.c1]), filter(nil), rowset=256
       equal_conds([t4.c1 = t5.c1]), other_conds(nil)
   9 - output([t4.c1]), filter(nil), rowset=256
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t5.c1], [t6.c1]), filter(nil), rowset=256
       equal_conds([t5.c1 = t6.c1]), other_conds(nil)
  11 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t7.c1], [t8.c2], [t9.c1]), filter(nil), rowset=256
       equal_conds([t7.c1 = t8.c2]), other_conds(nil)
  14 - output([t8.c2]), filter([t8.c2 >= t8.c1]), rowset=256
       access([t8.c2], [t8.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t7.c1], [t9.c1]), filter(nil), rowset=256
       equal_conds([t7.c1 = t9.c1]), other_conds(nil)
  16 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t2, t1, t3, (t4, (t5, t6)), (t8, (t9, t7))) */
 count(*), sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -2130,17 +2130,17 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   4 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t1.c1]), filter(nil), rowset=256
       equal_conds([t1.c1 = t3.c2]), other_conds(nil)
   6 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t3.c2]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t7.c1], [t8.c1], [t7.c2], [t9.c2]), filter(nil), rowset=256
       equal_conds([t7.c1 = t9.c1]), other_conds(nil)
@@ -2148,15 +2148,15 @@ Outputs & filters:
       equal_conds([t7.c1 = t8.c1]), other_conds(nil)
  10 - output([t7.c1], [t7.c2]), filter(nil), rowset=256
       access([t7.c1], [t7.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t8.c1]), filter(nil), rowset=256
       access([t8.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t9.c1], [t9.c2]), filter(nil), rowset=256
       access([t9.c1], [t9.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t4.c1]), filter(nil), rowset=256
       equal_conds([t4.c1 = t6.c1]), other_conds(nil)
@@ -2164,15 +2164,15 @@ Outputs & filters:
       equal_conds([t4.c1 = t5.c1]), other_conds(nil)
  15 - output([t4.c1]), filter(nil), rowset=256
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t2, (t1, t3), (t7, t8, t9), (t4, t5, t6)) */
 count(*), sum(t1.c1-t7.c2-t8.c1-t9.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -2225,17 +2225,17 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   5 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t2.c1]), filter(nil), rowset=256
       equal_conds([t2.c1 = t3.c1]), other_conds(nil)
   7 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t3.c1]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t4.c1], [t6.c1], [t5.c2]), filter(nil), rowset=256
       equal_conds([t4.c1 = t6.c1]), other_conds(nil)
@@ -2243,29 +2243,29 @@ Outputs & filters:
       equal_conds([t4.c1 = t5.c1]), other_conds(nil)
  11 - output([t4.c1]), filter(nil), rowset=256
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  12 - output([t5.c1], [t5.c2]), filter(nil), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t6.c1]), filter(nil), rowset=256
       equal_conds([t6.c1 = t7.c1]), other_conds(nil)
  14 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t8.c1], [t8.c2]), filter(nil), rowset=256
       access([t8.c1], [t8.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1, (t2  t3), (t4, t5  (t6, t7))) use_hash(t4, t5) use_hash(t6,t7) */
 count(*), sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -2319,7 +2319,7 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   6 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t1.c1], [t9.c1], [t8.c2]), filter(nil), rowset=256
       equal_conds([t1.c1 = t8.c1]), other_conds(nil)
@@ -2327,37 +2327,37 @@ Outputs & filters:
       equal_conds([t1.c1 = t7.c1]), other_conds(nil)
   9 - output([t7.c1]), filter(nil), rowset=256
       access([t7.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
  10 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
  11 - output([t8.c1], [t9.c1], [t8.c2]), filter(nil), rowset=256
       equal_conds([t8.c1 = t9.c1]), other_conds(nil)
  12 - output([t8.c1], [t8.c2]), filter(nil), rowset=256
       access([t8.c1], [t8.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.__pk_increment]), range(MIN ; MAX)always true
  13 - output([t9.c1]), filter(nil), rowset=256
       access([t9.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t9.__pk_increment]), range(MIN ; MAX)always true
  14 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), rowset=256
       access([t3.c2], [t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  15 - output([t4.c1]), filter(nil), rowset=256
       access([t4.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
  16 - output([t5.c1]), filter(nil), rowset=256
       access([t5.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
  17 - output([t6.c1]), filter(nil), rowset=256
       access([t6.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t2  (t7, t1 (t8, t9))) */
 count(*) , sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -2397,23 +2397,23 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
   5 - output([t4.c1], [t4.c2]), filter(nil), rowset=256
       access([t4.c1], [t4.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
   6 - output([t2.c1], [t3.c1], [t3.c2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), batch_join=false
   7 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
   9 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
       access([t3.c1], [t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1,t4,(t2,t3)) */
 count(*), sum(t1.c1)-sum(t4.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4
@@ -2459,7 +2459,7 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
   2 - output([x.c1], [x.c2], [x.c3]), filter(nil), startup_filter([:0]), rowset=256
       access([x.c1], [x.c2], [x.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
@@ -2473,11 +2473,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.d1]), other_conds(nil)
   8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   9 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
  10 - output(nil), filter(nil), rowset=256
  11 - output(nil), filter(nil), rowset=256
@@ -2488,11 +2488,11 @@ Outputs & filters:
       equal_conds([c.c2 = d.d1]), other_conds(nil)
  14 - output([c.c2]), filter(nil), rowset=256
       access([c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
  15 - output([d.d1]), filter(nil), rowset=256
       access([d.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
 select /*+ LEADING(@x2x (c d), (a b)) */
 * from nn1 x
@@ -2549,7 +2549,7 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
   2 - output([x.c1], [x.c2], [x.c3]), filter(nil), startup_filter([:0]), rowset=256
       access([x.c1], [x.c2], [x.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
@@ -2563,11 +2563,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.d1]), other_conds(nil)
   8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   9 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
  10 - output(nil), filter(nil), rowset=256
  11 - output(nil), filter(nil), rowset=256
@@ -2578,11 +2578,11 @@ Outputs & filters:
       equal_conds([c.c2 = d.d1]), other_conds(nil)
  14 - output([c.c2]), filter(nil), rowset=256
       access([c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
  15 - output([d.d1]), filter(nil), rowset=256
       access([d.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
 select /*+ LEADING(@x2x (c d), (a b)) */
 * from nn1 x
@@ -2639,7 +2639,7 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
   2 - output([x.c1], [x.c2], [x.c3]), filter(nil), startup_filter([:0]), rowset=256
       access([x.c1], [x.c2], [x.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
@@ -2653,11 +2653,11 @@ Outputs & filters:
       equal_conds([a.c1 = b.d1]), other_conds(nil)
   8 - output([a.c1]), filter(nil), rowset=256
       access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
   9 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
  10 - output(nil), filter(nil), rowset=256
  11 - output(nil), filter(nil), rowset=256
@@ -2668,11 +2668,11 @@ Outputs & filters:
       equal_conds([c.c2 = d.d1]), other_conds(nil)
  14 - output([c.c2]), filter(nil), rowset=256
       access([c.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
  15 - output([d.d1]), filter(nil), rowset=256
       access([d.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
 select /*+ LEADING(@x3x b d (a c)) */
 * from nn1 x
@@ -2723,21 +2723,21 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   3 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t5.d2], [t4.d1]), filter(nil), rowset=256
       equal_conds([t4.d1 = t5.d1]), other_conds(nil)
   6 - output([t4.d1]), filter(nil), rowset=256
       access([t4.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
   7 - output([t5.d1], [t5.d2]), filter(nil), rowset=256
       access([t5.d1], [t5.d2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t1,t2,(t4,t5))*/ count(*),min(t2.c1)+max(t5.d2) from nn1 t1, nn1 t2,  nn2 t4, nn2 t5 
 where t1.c1 = t2.c1 and 
@@ -2749,7 +2749,7 @@ where t1.c1 = t2.c1 and
 |       40 |                     2 |
 +----------+-----------------------+
 
-### 9.
+### 9. 
 explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
 Query Plan
 ========================================================
@@ -2769,15 +2769,15 @@ Outputs & filters:
       equal_conds([t1.b = t2.b]), other_conds(nil)
   2 - output([t2.b]), filter(nil), rowset=256
       access([t2.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 explain select /*+leading(t2 t3 t1)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
 Query Plan
@@ -2798,15 +2798,15 @@ Outputs & filters:
       equal_conds([t1.b = t2.b]), other_conds(nil)
   2 - output([t2.b]), filter(nil), rowset=256
       access([t2.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 explain select /*+leading(t3 t1 t2)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
 Query Plan
@@ -2827,15 +2827,15 @@ Outputs & filters:
       equal_conds([t1.a = t3.a]), other_conds(nil)
   2 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t2.b]), filter(nil), rowset=256
       access([t2.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select /*+leading(t1 t2 t3)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
 Query Plan
@@ -2856,15 +2856,15 @@ Outputs & filters:
       equal_conds([t1.b = t2.b]), other_conds(nil)
   2 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=256
       access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.b]), filter(nil), rowset=256
       access([t2.b]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=256
       access([t3.a], [t3.b], [t3.c]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 drop table nn1;
 drop table nn2;

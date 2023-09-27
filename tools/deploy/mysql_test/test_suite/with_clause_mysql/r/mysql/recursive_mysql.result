@@ -1828,17 +1828,17 @@ Outputs & filters:
       values({1, 1, 1})
   6 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
   7 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256
       access([cte2.a], [cte2.b], [cte2.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
   8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), rowset=256
       conds([cte3.a < cte2.b]), nl_params_(nil), batch_join=false
   9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256
       access([cte3.a], [cte3.b], [cte3.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
  10 - output([cte2.b]), filter(nil), rowset=256
  11 - output([cte2.b]), filter([cte2.a < 3]), rowset=256
@@ -1849,11 +1849,11 @@ Outputs & filters:
       values({1, 1, 1})
  15 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
  16 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256
       access([cte2.a], [cte2.b], [cte2.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
  17 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
  18 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
@@ -1863,7 +1863,7 @@ Outputs & filters:
       values({1, 1, 1})
  21 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
 
 set ob_query_timeout = 100000000;

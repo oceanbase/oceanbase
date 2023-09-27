@@ -92,7 +92,7 @@ while ($cnt <= 29)
   inc $cnt;
 }
 
-#verify bugfix of
+#verify bugfix of 
 --disable_warnings
 drop table if exists t1;
 --enable_warnings

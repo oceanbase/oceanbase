@@ -7328,7 +7328,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c1, t1.c2)]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c1, c2) from t1;
 +---------------------------+
@@ -7347,7 +7347,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c2, t1.c1)]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c2, c1) from t1;
 +----------------+
@@ -7366,7 +7366,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c1, t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c1, c1) from t1;
 +----------------+
@@ -7385,7 +7385,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([nullif(t1.c2, t1.c2)]), filter(nil), rowset=256
       access([t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c2, c2) from t1;
 +----------------+
@@ -7574,7 +7574,7 @@ select nullif(z0_test0,'中文字符') from t1;
 +---------------------------------+
 drop table t1;
 
-##bugfix:
+##bugfix: 
 create table t1 (pk double) PARTITION BY key (pk) partitions 1;
 insert into t1 values( NULLIF( 100.2345, 1 ));
 select * from t1;
@@ -7603,7 +7603,7 @@ from
       ) as c3
   ) as subq_0;
 
-##bugfix:
+##bugfix: 
 create table t1 (pk int);
 insert into t1 values (1);
 select pk, ( NULLIF( 14152561829011783680, INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) ) ) s , INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) s2 from t1;
@@ -7656,7 +7656,7 @@ select * from t2;
 +------+------+------+------+
 drop table t1,t2;
 
-##
+## 
 select collation(nullif('a', binary 'b'));
 +------------------------------------+
 | collation(nullif('a', binary 'b')) |

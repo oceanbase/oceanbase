@@ -178,7 +178,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with
@@ -279,7 +279,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with cte as (select count(*) from t1) select * from cte;
@@ -303,7 +303,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 1]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with 
@@ -333,7 +333,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([cast(t1.c1, DOUBLE(-1, -1)) + cast('1', DOUBLE(-1, -1)) <= cast(3, DOUBLE(-1, -1))]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with 
@@ -362,7 +362,7 @@ Outputs & filters:
       group([t1.c1]), agg_func(nil)
   1 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 Warnings:
 Warning	1052	Column 'c1' in group statement is ambiguous
@@ -397,7 +397,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 2]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with 
   cte1 AS ( select c1, c2 from t1 where t1.c1 > 2)
@@ -430,7 +430,7 @@ Outputs & filters:
       sort_keys([t1.c2, ASC])
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with 
   cte1 AS ( select c1, c2 + 1 as c3 from t1 order by c2)
@@ -467,11 +467,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
   2 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 with 
   cte2 AS (select * from t1 left join t2 on t1.c1=t2.c21 order by t1.c1)
@@ -510,12 +510,12 @@ Outputs & filters:
       conds([t1.c1 = t2.c21]), nl_params_(nil), batch_join=false
   1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with
@@ -549,11 +549,11 @@ Outputs & filters:
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
   1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with cte0 AS (select * from t2) select /*+ leading(t2 cte0) use_nl(cte0)*/ * from cte0, t1 where cte0.c21 = t1.c1;
@@ -627,11 +627,11 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c21], [t2.c22]), filter(nil), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 
 WITH cte AS
@@ -681,12 +681,12 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   1 - output(nil), filter([t1.c1 IS NOT NULL]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
   3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 WITH cte AS
@@ -718,7 +718,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t3.c1]), filter(nil), rowset=256
       access([t3.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
 
 with cte0 as (select * from t3 partition(p0)) select cte0.c1 from cte0;
@@ -741,7 +741,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), rowset=256
       access([t5.c1], [t5.c2], [t5.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t5.c1]), range(MIN ; MAX)always true
 
 with cte as (select * from t5 partition(p0)) select * from cte;
@@ -769,7 +769,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 WITH
@@ -801,7 +801,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1 + 1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with 
   cte1 AS ( select c1 + 1 as col1 from t1)
@@ -831,7 +831,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1 + 1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with
   cte1 AS ( select c1 + 1 as col1 from t1)
@@ -861,7 +861,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1 + 1 + 3]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with
   cte1 AS ( select c1 + 1 as col1 from t1)
@@ -892,7 +892,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with 
   cte AS (select 1 from t1)
@@ -925,7 +925,7 @@ Outputs & filters:
       sort_keys([t1.c1, ASC])
   1 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH cte2 AS (select c1 from t1)
 select c1 from cte2 order by c1;
@@ -958,11 +958,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
   1 - output([t2.c21]), filter([t2.c21 IN (1, 4, 7, 11)]), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1]), filter([t1.c1 IN (1, 4, 7, 11)]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH cte2 AS (select c1 from t1)
 select z1.c1 from cte2 z1, t2 where z1.c1 in (1,4,7,11) and z1.c1 = t2.c21;
@@ -992,11 +992,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
   1 - output([t2.c21]), filter([t2.c21 IN (1, 4, 7)]), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1]), filter([t1.c1 IN (1, 4, 7)]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 AS (SELECT c1 as abc, c2 FROM t1)
@@ -1026,7 +1026,7 @@ Outputs & filters:
       sort_keys([t1.c2, ASC])
   1 - output([t1.c1], [t1.c2]), filter([t1.c1 IN (1, 4, 11)]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (name1, name2) AS (select c1, c2 from t1)
@@ -1057,7 +1057,7 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   1 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([VIEW1.count(*)]), filter(nil), rowset=256
   3 - output([VIEW1.count(*)]), filter(nil), rowset=256
@@ -1066,7 +1066,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   5 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte as (select * from t1) select (select count(*) from cte) from t2;
 +----------------------------+
@@ -1098,11 +1098,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t1.c1]), other_conds(nil)
   1 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte AS (select c1 from t1) 
 select cte.c1 from cte z1, cte where z1.c1 = cte.c1;
@@ -1138,13 +1138,13 @@ Outputs & filters:
       access([z1.c1])
   2 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([cte.c1]), filter(nil), rowset=256
       access([cte.c1])
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte AS (select c1 from t1) 
 select /*+no_rewrite()*/ cte.c1 from cte z1, cte where z1.c1 = cte.c1;
@@ -1181,11 +1181,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds([t2.c21 != t1.c1])
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 with
   cte1 AS( select * from t1)
@@ -1216,7 +1216,7 @@ Outputs & filters:
       force partition granule
   3 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
       access([t3.c1], [t3.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
 WITH cte2 AS (select * from t3)
 select * from cte2 partition(p0);
@@ -1246,7 +1246,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH 
   cte1 AS (SELECT c1, c2 FROM t1),
@@ -1278,7 +1278,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (c1)AS(select c1 from t1),
@@ -1315,11 +1315,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c21], [t2.c22]), filter(nil), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH 
   cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
@@ -1360,11 +1360,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c21], [t2.c22]), filter(nil), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (a, b) AS (SELECT c1, c2 FROM t1),
@@ -1401,11 +1401,11 @@ Outputs & filters:
       equal_conds([t1.c2 = t2.c21]), other_conds(nil)
   1 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (a, b) AS (SELECT c1, c2 FROM t1),
@@ -1436,11 +1436,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t1.c1]), other_conds(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH 
   cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
@@ -1481,12 +1481,12 @@ Outputs & filters:
       conds([t1.c1 < t1.c1 + 1 * 2]), nl_params_(nil), batch_join=false
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
   3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH 
   cte1 (a, b) AS (SELECT c1, c2 FROM t1), 
@@ -1575,7 +1575,7 @@ Outputs & filters:
       equal_conds([t1.c1 = VIEW1.d]), other_conds(nil)
   1 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([VIEW1.d]), filter(nil), rowset=256
       access([VIEW1.d])
@@ -1583,18 +1583,18 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
   4 - output([t2.c22]), filter(nil), startup_filter([:0]), rowset=256
       access([t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([UNION([1])]), filter(nil), rowset=256
       limit(1), offset(nil)
   6 - output([UNION([1])]), filter(nil), rowset=256
   7 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   8 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (a, b) AS (SELECT c1, c2 FROM t1),
@@ -1632,24 +1632,24 @@ Outputs & filters:
       access([cte1.a])
   2 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c22]), filter(nil), rowset=256
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil), batch_das=false
   4 - output([t2.c22]), filter(nil), startup_filter([:0]), rowset=256
       access([t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   5 - output([UNION([1])]), filter(nil), rowset=256
       limit(1), offset(nil)
   6 - output([UNION([1])]), filter(nil), rowset=256
   7 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   8 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (a, b) AS (SELECT c1, c2 FROM t1),
@@ -1682,11 +1682,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds([t1.c2 != t2.c22])
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c21], [t2.c22]), filter(nil), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte1 (a, b) AS (SELECT c1, c2 FROM t1),
@@ -1717,11 +1717,11 @@ Outputs & filters:
   0 - output([UNION([1])]), filter(nil), rowset=256
   1 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH cte2 AS (select c1 from t1)
 select c1 from cte2
@@ -1766,11 +1766,11 @@ Outputs & filters:
       access([cte2.c1])
   2 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH cte2 AS (select c1 from t1)
 select /*+no_rewrite()*/ c1 from cte2
@@ -1810,11 +1810,11 @@ Outputs & filters:
   0 - output([INTERSECT([1])], [INTERSECT([2])], [INTERSECT([3])]), filter(nil), rowset=256
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH cte2 AS (select c1 from t1)
 select * from t1 intersect (select * from t2);
@@ -1854,7 +1854,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte as (select c21 from t2)
 select * from (with cte as (select c1 from t1) select * from cte) t;
@@ -1883,7 +1883,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 with cte as (select c21 from t2)
 select * from (with cte1 as (select c1 from t1) select * from cte) t;
@@ -1920,7 +1920,7 @@ Outputs & filters:
       force partition granule
   3 - output([t3.c1]), filter(nil), rowset=256
       access([t3.c1]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
 with cte as (select c21 from t2)
 select * from (with cte as (select c1 from t1) select * from (with cte as (select c1 from t3) select * from cte) cte) t;
@@ -1974,11 +1974,11 @@ Outputs & filters:
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
   1 - output([t2.c21], [t2.c22]), filter(nil), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH cte_outer AS (select * from t2) 
   select t1.*, t4.* from t1
@@ -2022,11 +2022,11 @@ Outputs & filters:
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
   2 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t2.c21], [t2.c22]), filter([t2.c21 > 1000]), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 WITH cte_outer AS (select * from t2)
 select t3.*, t4.* from
@@ -2052,7 +2052,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from (WITH t2 AS (select c1 from t1) select c1 from t2 where t2.c1 > 1000) t;
 +------+
@@ -2076,11 +2076,11 @@ Outputs & filters:
       exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil), batch_das=false
   1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000), t2.* from t2;
 +---------------------------------------------------------------------------+------+------+------+
@@ -2107,7 +2107,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1]), filter([t1.c1 > 0], [t1.c1 > 1000]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select t3.* from ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 where t3.c1 > 0;
 +------+
@@ -2138,11 +2138,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t1.c1]), other_conds(nil)
   2 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1000]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select t3.*, t4.* from 
 (WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 
@@ -2171,11 +2171,11 @@ Outputs & filters:
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
   1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte as (select * from t1) select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
 +------+------+------+------+------+------+
@@ -2300,7 +2300,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte as (select count(*) as k from t1) select * from cte where k = 1;
 +------+
@@ -2325,7 +2325,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 WITH
   cte0 AS ( select * from t1)
@@ -2363,7 +2363,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 insert into t1 with cte as (select * from t1) SELECT * FROM cte;
 
@@ -2385,7 +2385,7 @@ Outputs & filters:
       access([ANONYMOUS_VIEW1.a], [ANONYMOUS_VIEW1.b], [ANONYMOUS_VIEW1.a])
   2 - output([t2.c21], [t2.c22], [t2.c21]), filter(nil), rowset=256
       access([t2.c21], [t2.c22]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 insert into t1 with cte (a,b,c) as (select c21,c22,c23 from t2) select a,b,a from cte;
 select * from t1;
@@ -2440,7 +2440,7 @@ Outputs & filters:
       conds(nil), nl_params_(nil), batch_join=false
   2 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 2]), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([cte.count(*)+99]), filter(nil), rowset=256
   4 - output([cte.count(*)+99]), filter(nil), rowset=256
@@ -2449,7 +2449,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   6 - output([T_FUN_COUNT(*)]), filter([t2.c21 = 1]), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 update t1 set c1=(with cte as (select count(*)+99 from t2 where c21=1) select * from cte) where c2 = 2;
 select * from t1;
@@ -2499,7 +2499,7 @@ Outputs & filters:
       sort_keys([t1.c1, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte as (select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from t1 group by c1 order by c1) select * from cte;
 +------+---------+-------------------------------------------------------+
@@ -2535,11 +2535,11 @@ Outputs & filters:
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
   3 - output([t2.c21]), filter(nil), rowset=256
       access([t2.c21]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 with cte(c1, c2) as (select t1.c1, t1.c2 from t1, t2 where t1.c1 = t2.c21) select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from cte group by c1 order by c1;
 +------+---------+-------------------------------------------------------+
@@ -2580,11 +2580,11 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MAX(T_FUN_MAX(t1.c1))])
   4 - output([T_FUN_MAX(t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 where c1 = ( with cte as (select max( c1 ) from ( select * from t1 )) select * from cte);
 
@@ -2612,11 +2612,11 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MAX(T_FUN_MAX(t1.c1))])
   4 - output([T_FUN_MAX(t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 delete from t1 where c1 = ( with cte (a) as (select max( c1 ) from t1 ) select * from cte);
 
@@ -2630,11 +2630,11 @@ with cte as (select * from t1) select 1 from dual;
 | 1 |
 +---+
 
-with recursive cte1 as
+with recursive cte1 as 
 (
   select 1 as c1, 2 as c2, 3 as c3, 4 as c4, 5 as c5, 6 as c6, 7 as c7, 8 as c8, 9 as c9, 10 as c10, 11 as c11, 12 as c12
   union all
-  select c1+1,c2+1,c3+1,c4+1,c5+1,c6+1,c7+1,c8+1,c9+1,c10+1, c11+1, c12+1 from cte1 where c1 < 10
+  select c1+1,c2+1,c3+1,c4+1,c5+1,c6+1,c7+1,c8+1,c9+1,c10+1, c11+1, c12+1 from cte1 where c1 < 10  
 )
 select * from cte1;
 +------+------+------+------+------+------+------+------+------+------+------+------+

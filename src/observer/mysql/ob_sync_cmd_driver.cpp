@@ -21,6 +21,7 @@
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include "share/ob_lob_access_utils.h"
+#include "observer/mysql/obmp_stmt_prexecute.h"
 
 namespace oceanbase
 {
@@ -127,7 +128,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     }
 
     // open失败，决定是否需要重试
-    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret, is_prexecute_);
+    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
     LOG_WARN("result set open failed, check if need retry",
              K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
     ret = cli_ret;
@@ -148,7 +149,12 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
         need_send_eof = true;
       }
     }
-  } else { /*do nothing*/ }
+  } else if (is_prexecute_) {
+    if (OB_FAIL(response_query_header(result, false, false , // in prexecute , has_more_result and has_ps out is no matter, it will be recalc
+                                      true))) {
+      LOG_WARN("prexecute response query head fail. ", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret)) {
     // for CRUD SQL
@@ -189,7 +195,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
         LOG_WARN("response packet fail", K(ret));
       }
     }
-  }
+  } else { /*do nothing*/ }
 
   if (!OB_SUCC(ret) && !process_ok && !retry_ctrl_.need_retry()) {
     int sret = OB_SUCCESS;
@@ -286,8 +292,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
   const common::ObNewRow *row = NULL;
   if (OB_FAIL(result.next_row(row)) ) {
     LOG_WARN("fail to get next row", K(ret));
-  } else if ((!is_prexecute_ || stmt::T_ANONYMOUS_BLOCK == result.get_stmt_type()) &&
-              OB_FAIL(response_query_header(result, result.has_more_result(), true, is_prexecute_))) {
+  } else if (OB_FAIL(response_query_header(result, result.has_more_result(), true))) {
     LOG_WARN("fail to response query header", K(ret));
   } else if (OB_ISNULL(ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
