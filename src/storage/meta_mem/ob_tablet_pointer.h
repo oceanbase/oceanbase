@@ -69,6 +69,7 @@ public:
   bool is_tablet_status_written() const;
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();
+  int release_memtable_and_mds_table_for_ls_offline();
   int get_min_mds_ckpt_scn(share::SCN &scn);
   ObLS *get_ls() const;
 private:

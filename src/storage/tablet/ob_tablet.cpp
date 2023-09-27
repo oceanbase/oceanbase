@@ -3598,26 +3598,6 @@ int ObTablet::mark_mds_table_switched_to_empty_shell_()
   return ret;
 }
 
-int ObTablet::reset_storage_related_member()
-{
-  int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (is_ls_inner_tablet()) {
-    // do nothing
-  } else if (is_empty_shell()) {
-    LOG_DEBUG("tablet is empty shell", K(ret));
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->reset_storage_recorder())) {
-    LOG_WARN("failed to destroy storage recorder", K(ret), KPC(memtable_mgr));
-  }
-  return ret;
-}
-
 int ObTablet::get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const
 {
   int ret = OB_SUCCESS;
