@@ -766,8 +766,7 @@ int ObPLRoutineTable::make_routine_ast(ObIAllocator &allocator,
           OZ (routine_ast->add_dependency_object(ret_param->get_obj_version()));
         }
         OX (routine_ast->set_ret_type(ret_param->get_type()));
-        CK (ret_param->get_type().is_valid_type());
-        if (OB_SUCC(ret) && ret_param->get_type().is_obj_type()) {
+        if (OB_SUCC(ret) && ret_param->get_type().is_valid_type() && ret_param->get_type().is_obj_type()) {
           CK (OB_NOT_NULL(ret_param->get_type().get_data_type()));
           if (OB_SUCC(ret)
               && ob_is_enum_or_set_type(ret_param->get_type().get_data_type()->get_obj_type())) {

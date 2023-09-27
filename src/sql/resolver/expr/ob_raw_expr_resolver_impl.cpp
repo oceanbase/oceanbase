@@ -2573,11 +2573,17 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
               if (OB_SUCC(ret)) {
                 if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
-                  CK (OB_NOT_NULL(var->get_type().get_meta_type()));
-                  CK (OB_NOT_NULL(var->get_type().get_data_type()));
-                  OX (c_expr->set_meta_type(*var->get_type().get_meta_type()));
-                  OX (c_expr->set_expr_obj_meta(*var->get_type().get_meta_type()));
-                  OX (c_expr->set_accuracy(var->get_type().get_data_type()->get_accuracy()));
+                  if (OB_NOT_NULL(var->get_type().get_meta_type())) {
+                    CK (OB_NOT_NULL(var->get_type().get_data_type()));
+                    OX (c_expr->set_meta_type(*var->get_type().get_meta_type()));
+                    OX (c_expr->set_expr_obj_meta(*var->get_type().get_meta_type()));
+                    OX (c_expr->set_accuracy(var->get_type().get_data_type()->get_accuracy()));
+                  } else {
+                    ObObjMeta meta;
+                    OX (meta.set_type(ObExtendType));
+                    OX (c_expr->set_meta_type(meta));
+                    OX (c_expr->set_udt_id(var->get_type().get_user_type_id()));
+                  }
                 }
               }
             }

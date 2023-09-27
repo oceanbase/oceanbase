@@ -4455,12 +4455,18 @@ int ObPLResolver::resolve_cursor_for_loop(
         OX (stmt->set_cursor_index(cursor_index));
 
         //解析实参
-        OZ (resolve_cursor_actual_params(
-          (T_FUN_SYS == cursor_node->type_ && cursor_node->num_child_ > 1)
-             ? cursor_node->children_[1] : NULL,
-          stmt,
-          func));
-
+        if (OB_SUCC(ret)) {
+          const ObStmtNodeTree *param_node = NULL;
+          if (T_FUN_SYS == cursor_node->type_ && cursor_node->num_child_ > 1) {
+            param_node = cursor_node->children_[1];
+          } else if (T_OBJ_ACCESS_REF == cursor_node->type_
+                     && cursor_node->children_[1] != NULL
+                     && T_FUN_SYS == cursor_node->children_[1]->children_[0]->type_
+                     && cursor_node->children_[1]->children_[0]->num_child_ > 1) {
+            param_node = cursor_node->children_[1]->children_[0]->children_[1];
+          }
+          OZ (resolve_cursor_actual_params(param_node, stmt, func));
+        }
         if (OB_SUCC(ret)) {
           const ObPLVar *var = NULL;
           const ObPLCursor *cursor = stmt->get_cursor();
@@ -11133,7 +11139,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
     } else {
       // do nothing
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(uinfo.ref_expr_) && uinfo.ref_expr_->get_udf_id() == OB_INVALID_ID) {
       SMART_VAR(ObPLFunctionAST, dummy_ast, resolve_ctx_.allocator_) {
         ObSEArray<ObObjAccessIdx, 1> access_idxs;
         OZ (resolve_udf_info(uinfo, access_idxs, dummy_ast));
@@ -15160,10 +15166,25 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
   OZ (resolve_ctx_.schema_guard_.get_package_info(
       tenant_id, database_id, package_name, PACKAGE_TYPE, compatible_mode, package_info));
   if (OB_SUCC(ret)
-      && OB_ISNULL(package_info) && db_name.case_compare(OB_SYS_DATABASE_NAME)) {
+      && OB_ISNULL(package_info) && 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
     OZ (resolve_ctx_.schema_guard_.get_package_info(
       OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
       package_name, PACKAGE_TYPE, compatible_mode, package_info));
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
+    ObSchemaChecker checker;
+    ObSEArray<uint64_t, 4> syn_id_array;
+    ObString new_package_name;
+    OZ (checker.init(resolve_ctx_.schema_guard_));
+    OZ (checker.get_obj_info_recursively_with_synonym(
+      tenant_id, database_id, package_name, database_id, new_package_name, syn_id_array, true));
+    OZ (resolve_ctx_.schema_guard_.get_package_info(
+      tenant_id, database_id, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
+    if (OB_SUCC(ret)
+        && OB_ISNULL(package_info) && OB_SYS_DATABASE_ID == database_id) {
+      OZ (resolve_ctx_.schema_guard_.get_package_info(
+        OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
+    }
   }
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -15244,10 +15265,15 @@ int ObPLResolver::resolve_cursor(
       ObString package_name;
       ObString cursor_name;
       const ObStmtNodeTree *package_node = parse_tree->children_[0];
-      CK (T_OBJ_ACCESS_REF == parse_tree->children_[1]->type_);
       const ObStmtNodeTree *cursor_node = parse_tree->children_[1]->children_[0];
       package_name.assign_ptr(package_node->str_value_, static_cast<int32_t>(package_node->str_len_));
-      cursor_name.assign_ptr(cursor_node->str_value_, static_cast<int32_t>(cursor_node->str_len_));
+      if (T_FUN_SYS == cursor_node->type_
+          && OB_NOT_NULL(cursor_node->children_[0])
+          && T_IDENT == cursor_node->children_[0]->type_) {
+        cursor_name.assign_ptr(cursor_node->children_[0]->str_value_, static_cast<int32_t>(cursor_node->children_[0]->str_len_));
+      } else {
+        cursor_name.assign_ptr(cursor_node->str_value_, static_cast<int32_t>(cursor_node->str_len_));
+      }
       db_name = resolve_ctx_.session_info_.get_database_name();
       if (OB_FAIL(ret)) {
       } else if (package_name.empty()) {

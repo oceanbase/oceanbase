@@ -94,7 +94,7 @@ int ObPlAggUdfFunction::get_package_routine_info(const ObString &routine_name,
                                                          routine_infos))) {
     LOG_WARN("failed to get package routine infos", K(ret));
   } else if (OB_FAIL(pick_routine(routine_infos, base_routine_info, param_type))) {
-    LOG_WARN("get unexpected error", K(routine_infos), K(base_routine_info), K(ret));
+    LOG_WARN("get unexpected error", K(routine_infos), K(base_routine_info), K(ret), K(type_id_), K(routine_name), K(routine_type));
   } else if (OB_ISNULL(base_routine_info) ||
              OB_ISNULL(routine_info = static_cast<const ObRoutineInfo *>(base_routine_info))) {
     ret = OB_ERR_UNEXPECTED;

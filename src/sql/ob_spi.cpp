@@ -5844,7 +5844,7 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
     if (OB_NOT_NULL(src_cursor) && src_cursor->isopen()) {
       LOG_DEBUG("copy ref cursor, src ref count: ", K(src_cursor->get_ref_count()));
       need_inc_ref_cnt = (0 == src_cursor->get_ref_count() && src_cursor->get_is_returning());
-      CK (0 < src_cursor->get_ref_count() || need_inc_ref_cnt);
+      OV (0 < src_cursor->get_ref_count() || need_inc_ref_cnt, OB_ERR_UNEXPECTED, KPC(src_cursor), K(need_inc_ref_cnt));
       // 到了这里先把returning状态重置，ref count先不加，等赋值成功再加
       OX (src_cursor->set_is_returning(false));
     }
