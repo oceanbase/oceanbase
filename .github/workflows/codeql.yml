@@ -1,0 +1,52 @@
+name: CodeQL
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # every Monday
+
+jobs:
+  codeql:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 20480 # reserve for CodeQL
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-docker-images: 'true'
+
+    - name: Install ubuntu environment
+      shell: bash
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin libncurses5
+
+    - uses: actions/checkout@v3
+
+    - name: Cache deps
+      id: cache-deps
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-deps
+      with:
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-el9.x86_64-${{ hashFiles('deps/init/oceanbase.el9.x86_64.deps') }}
+        path: deps/3rd
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: cpp
+
+    - name: Build project
+      shell: bash
+      run: |
+        rm -rf build_debug
+        bash build.sh debug --init --make -j3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:cpp"
