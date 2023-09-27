@@ -3970,14 +3970,12 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
       } else if (sys_var->is_influence_plan()
                 && FALSE_IT(is_influence_plan_cache_sys_var = true)) {
-        // do nothing.
+        // add all deserialize sys_var id.
+      } else if (!is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else {
         LOG_TRACE("deserialize sync sys var", K(sys_var_id), K(*sys_var),
                    K(sessid_), K(proxy_sessid_));
-      }
-      // add all deserialize sys_var id.
-      if (OB_SUCC(ret) && !is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
-        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       }
     }
     if (OB_SUCC(ret) && !is_error_sync) {
@@ -4468,8 +4466,6 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
         if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
           LOG_WARN("fail to deserialize sys var id", K(data_len), K(pos), K(ret));
         } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
-        } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
-          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
         } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
           if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
             // 可能是版本不同，为了兼容，跳过这段数据，并继续循环
@@ -4485,6 +4481,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
           } else {
             LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
           }
+        } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
         } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
           LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
         } else if (OB_ISNULL(sys_var)) {

@@ -243,7 +243,7 @@ public:
   virtual ~ObSessInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) = 0;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) = 0;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo& sess) const = 0;
+  virtual int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const = 0;
   // When implementing new information synchronization,
   // it is necessary to add a self-verification interface
   // include fetch, compare, and error display.
@@ -263,7 +263,7 @@ public:
   ~ObSysVarEncoder() {}
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
-  int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+  int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const;
   int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
   int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -278,7 +278,7 @@ public:
   ~ObAppInfoEncoder() {}
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
-  int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+  int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const;
   int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
   int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -306,7 +306,7 @@ public:
   virtual ~ObAppCtxInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo& sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos);
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
@@ -321,7 +321,7 @@ public:
   virtual ~ObClientIdInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos);
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
@@ -337,7 +337,7 @@ public:
   virtual ~ObSequenceCurrvalEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override;
   virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -352,7 +352,7 @@ public:
   virtual ~ObControlInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos);
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
@@ -372,7 +372,7 @@ public:
   virtual ~ObErrorSyncSysVarEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override;
   virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -386,7 +386,7 @@ class CLS final : public ObSessInfoEncoder {                            \
 public:                                                                 \
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override; \
-  int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;    \
+  int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;    \
   int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override; \
   int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \

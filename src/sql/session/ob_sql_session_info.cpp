@@ -2793,9 +2793,8 @@ int ObErrorSyncSysVarEncoder::deserialize(ObSQLSessionInfo &sess, const char *bu
   return ret;
 }
 
-int64_t ObErrorSyncSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
+int ObErrorSyncSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const {
   int ret = OB_SUCCESS;
-  int64_t len = 0;
   ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
   if (OB_FAIL(sess.get_error_sync_sys_vars(sys_var_delta_ids))) {
     LOG_WARN("failed to calc need serialize vars", K(ret));
@@ -2804,7 +2803,7 @@ int64_t ObErrorSyncSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) con
   } else {
     LOG_DEBUG("success serialize size sys var delta", K(ret), K(sys_var_delta_ids.count()), K(len));
   }
-  return len;
+  return ret;
 }
 
 int ObErrorSyncSysVarEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -2939,9 +2938,8 @@ int ObSysVarEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf,
   return ret;
 }
 
-int64_t ObSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
+int ObSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const {
   int ret = OB_SUCCESS;
-  int64_t len = 0;
   ObSEArray<ObSysVarClassType, ObSysVarFactory::ALL_SYS_VARS_COUNT> sys_var_delta_ids;
   if (OB_FAIL(sess.get_sync_sys_vars(sys_var_delta_ids))) {
     LOG_WARN("failed to calc need serialize vars", K(ret));
@@ -2950,7 +2948,7 @@ int64_t ObSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
   } else {
     LOG_DEBUG("success serialize size sys var delta", K(ret), K(sys_var_delta_ids.count()), K(len));
   }
-  return len;
+  return ret;
 }
 
 int ObSysVarEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -3132,8 +3130,10 @@ int ObAppInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const
   return ret;
 }
 
-int64_t ObAppInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess) const {
-  return sess.get_client_app_info().get_serialize_size();
+int ObAppInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const {
+  int ret = OB_SUCCESS;
+  len = sess.get_client_app_info().get_serialize_size();
+  return ret;
 }
 
 int ObAppInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -3147,7 +3147,9 @@ int ObAppInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const i
 
 int64_t ObAppInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
 {
-  return get_serialize_size(sess);
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
 }
 
 int ObAppInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -3264,11 +3266,11 @@ int ObClientIdInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, 
   }
   return ret;
 }
-int64_t ObClientIdInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+int ObClientIdInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const
 {
-  int64_t len = 0;
+  int ret = OB_SUCCESS;
   OB_UNIS_ADD_LEN(sess.get_client_identifier());
-  return len;
+  return ret;
 }
 
 int ObClientIdInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -3282,7 +3284,9 @@ int ObClientIdInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, co
 
 int64_t ObClientIdInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
 {
-  return get_serialize_size(sess);
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
 }
 
 int ObClientIdInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -3363,15 +3367,15 @@ int ObAppCtxInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, co
   }
   return ret;
 }
-int64_t ObAppCtxInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+int ObAppCtxInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const
 {
-  int64_t len = 0;
+  int ret = OB_SUCCESS;
   ObContextsMap &map = sess.get_contexts_map();
   OB_UNIS_ADD_LEN(map.size());
   for (auto it = map.begin(); it != map.end(); ++it) {
     OB_UNIS_ADD_LEN(*it->second);
   }
-  return len;
+  return ret;
 }
 
 int ObAppCtxInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -3385,7 +3389,9 @@ int ObAppCtxInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, cons
 
 int64_t ObAppCtxInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
 {
-  return get_serialize_size(sess);
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
 }
 
 int ObAppCtxInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -3486,16 +3492,16 @@ int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *bu
   return ret;
 }
 
-int64_t ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+int ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const
 {
-  int64_t len = 0;
+  int ret = OB_SUCCESS;
   ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
   OB_UNIS_ADD_LEN(map.size());
   for (auto it = map.begin(); it != map.end(); ++it) {
     OB_UNIS_ADD_LEN(it->first);
     OB_UNIS_ADD_LEN(it->second);
   }
-  return len;
+  return ret;
 }
 
 int ObSequenceCurrvalEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
@@ -3510,7 +3516,9 @@ int ObSequenceCurrvalEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
 
 int64_t ObSequenceCurrvalEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
 {
-  return get_serialize_size(sess);
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
 }
 
 int ObSequenceCurrvalEncoder::compare_sess_info(const char* current_sess_buf,
@@ -3703,9 +3711,11 @@ int ObControlInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, c
   return ret;
 }
 
-int64_t ObControlInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+int ObControlInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) const
 {
-  return sess.get_control_info().get_serialize_size() + 6 + sizeof(bool);
+  int ret = OB_SUCCESS;
+  len = sess.get_control_info().get_serialize_size() + 6 + sizeof(bool);
+  return ret;
 }
 
 int ObControlInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -3719,7 +3729,9 @@ int ObControlInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, con
 
 int64_t ObControlInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
 {
-  return get_serialize_size(sess);
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
 }
 
 int ObControlInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
@@ -3786,9 +3798,11 @@ int CLS::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t leng
 {                                                                       \
   return ObSqlTransControl::update_txn_##func##_state(sess, buf, length, pos); \
 }                                                                       \
-int64_t CLS::get_serialize_size(ObSQLSessionInfo &sess) const          \
+int CLS::get_serialize_size(ObSQLSessionInfo &sess, int64_t &len) const          \
 {                                                                       \
-  return ObSqlTransControl::get_txn_##func##_state_serialize_size(sess); \
+  int ret = OB_SUCCESS;                                                 \
+  len = ObSqlTransControl::get_txn_##func##_state_serialize_size(sess); \
+  return ret;                                                           \
 }                                                                        \
 int CLS::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t data_len, int64_t &pos) \
 {                                                                       \

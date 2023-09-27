@@ -237,7 +237,7 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
     char *buf = NULL;
 
     int64_t size = 0;
-    int32_t sess_size[SESSION_SYNC_MAX_TYPE];
+    int64_t sess_size[SESSION_SYNC_MAX_TYPE];
     for (int64_t i=0; OB_SUCC(ret) && i < SESSION_SYNC_MAX_TYPE; i++) {
       oceanbase::sql::SessionSyncInfoType info_type = (oceanbase::sql::SessionSyncInfoType)(i);
       sess_size[i] = 0;
@@ -247,9 +247,12 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         if (info_type == SESSION_SYNC_SYS_VAR && !need_sync_sys_var) {
           // do nothing.
         } else if (encoder->is_changed_) {
-          sess_size[i] = encoder->get_serialize_size(sess);
-          size += ObProtoTransUtil::get_serialize_size(sess_size[i]);
-          LOG_DEBUG("get seri size", K(sess_size[i]), K(encoder->get_serialize_size(sess)));
+          if (OB_FAIL(encoder->get_serialize_size(sess, sess_size[i]))) {
+            LOG_WARN("fail to get serialize size", K(info_type), K(ret));
+          } else {
+            size += ObProtoTransUtil::get_serialize_size(sess_size[i]);
+            LOG_DEBUG("get seri size", K(sess_size[i]));
+          }
         } else {
           // encoder->is_changed_ = false;
         }
