@@ -27,7 +27,7 @@ jobs:
         path: deps/3rd
 
     - name: Build
-      uses: ./.github/workflows/build_base
+      uses: ./.github/workflows/buildbase
       with:
         save_cache: ${{github.event_name == 'push'}}
         os: 'centos7'
@@ -54,7 +54,7 @@ jobs:
         path: deps/3rd
 
     - name: Build
-      uses: ./.github/workflows/build_base
+      uses: ./.github/workflows/buildbase
       with:
         save_cache: ${{github.event_name == 'push'}}
         os: 'ubuntu22'
