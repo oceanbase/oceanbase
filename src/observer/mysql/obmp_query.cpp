@@ -502,6 +502,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       //每次执行不同sql都需要更新
       ctx_.self_add_plan_ = false;
       retry_ctrl_.reset_retry_times();//每个statement单独记录retry times
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
       do {
         ret = OB_SUCCESS; //当发生本地重试的时候，需要重置错误码，不然无法推进重试
         need_disconnect = true;
@@ -580,7 +581,6 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
                                                     bool &need_disconnect)
 {
   int ret = OB_SUCCESS;
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   //create a temporary memory context to process retry or the rest sql of multi-query,
   //avoid memory dynamic leaks caused by query retry or too many multi-query items
   lib::ContextParam param;

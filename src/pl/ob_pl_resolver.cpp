@@ -10576,7 +10576,9 @@ int ObPLResolver::resolve_obj_access_node(const ParseNode &node,
 {
   int ret = OB_SUCCESS;
   pl::ObPLPackageGuard package_guard(session_info.get_effective_tenant_id());
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
+                             OB_MALLOC_NORMAL_BLOCK_SIZE,
+                             MTL_ID());
   // fake resolve_ctx, we only use session_info, schema_guard
   ObPLResolveCtx resolve_ctx(
     allocator, session_info, schema_guard, package_guard, *(GCTX.sql_proxy_), false);
