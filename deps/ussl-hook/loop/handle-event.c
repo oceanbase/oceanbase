@@ -349,7 +349,14 @@ static void handle_acceptfd_error(acceptfd_sk_t *s, int *err)
   remove_from_timeout_list(&s->timeout_link);
   *err = EUCLEAN;
   if (s->fd >= 0) {
-    close(s->fd);
+    int err = 0;
+    if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
+      ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
+                    s->fd, errno);
+    }
+    if (0 != (err = ussl_close(s->fd))) {
+      ussl_log_warn("ussl_close failed, fd:%d, errno:%d", s->fd, errno);
+    }
   }
   s->fd = -1;
 }
@@ -476,7 +483,14 @@ static int acceptfd_handle_ssl_event(acceptfd_sk_t *s)
     ussl_log_warn("ssl_do_handshake failed, fd:%d, ret:%d, src_addr:%s", s->fd, ret, src_addr);
     remove_from_timeout_list(&s->timeout_link);
     if (s->fd >= 0) {
-      close(s->fd);
+      int err = 0;
+      if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
+        ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
+                      s->fd, errno);
+      }
+      if (0 != (err = ussl_close(s->fd))) {
+        ussl_log_warn("ussl_close failed, fd:%d, errno:%d", s->fd, errno);
+      }
     }
     s->fd = -1;
   }

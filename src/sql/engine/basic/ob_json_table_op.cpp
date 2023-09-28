@@ -2013,15 +2013,32 @@ int JtColNode::get_default_value_pre_mysql(ObExpr* default_expr,
   } else {
     ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
     ObIJsonBase* tmp_node = nullptr;
-    const ObDatum& datum = *tmp_datum;
+    ObObjType val_type = default_expr->datum_meta_.type_;
+    ObCollationType cs_type = default_expr->datum_meta_.cs_type_;
+    // const ObDatum& datum = *tmp_datum;
+    ObDatum converted_datum;
+    converted_datum.set_datum(*tmp_datum);
+    // convert string charset if needed
+    if (ob_is_string_type(val_type)
+        && (ObCharset::charset_type_by_coll(cs_type) != CHARSET_UTF8MB4)) {
+      ObString origin_str = converted_datum.get_string();
+      ObString converted_str;
+      if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str,
+                                                        CS_TYPE_UTF8MB4_BIN, ctx->row_alloc_))) {
+        LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
+      } else {
+        converted_datum.set_string(converted_str);
+        cs_type = CS_TYPE_UTF8MB4_BIN;
+      }
+    }
 
     if (OB_FAIL(check_default_cast_allowed(default_expr))) {
       LOG_WARN("check default value can't cast return type", K(ret), K(default_expr->datum_meta_));
-    } else if (ObJsonExprHelper::is_convertible_to_json(default_expr->datum_meta_.type_)) {
-      if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(datum,
-                                                                    default_expr->datum_meta_.type_,
+    } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
+      if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(converted_datum,
+                                                                    val_type,
                                                                     &ctx->row_alloc_,
-                                                                    default_expr->datum_meta_.cs_type_,
+                                                                    cs_type,
                                                                     res, false,
                                                                     default_expr->obj_meta_.has_lob_header(),
                                                                     false, lib::is_oracle_mode(), true))
@@ -2029,7 +2046,7 @@ int JtColNode::get_default_value_pre_mysql(ObExpr* default_expr,
         ret = OB_INVALID_DEFAULT;
         LOG_USER_ERROR(OB_INVALID_DEFAULT, col_info_.col_name_.length(), col_info_.col_name_.ptr());
       }
-    } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(datum,
+    } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(converted_datum,
                                                                     default_expr->datum_meta_.type_,
                                                                     &ctx->row_alloc_,
                                                                     default_expr->datum_meta_.scale_,

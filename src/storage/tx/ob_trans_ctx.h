@@ -104,6 +104,7 @@ public:
       cluster_version_(0), ls_tx_ctx_mgr_(NULL),
       session_id_(UINT32_MAX),
       stc_(0), part_trans_action_(ObPartTransAction::UNKNOWN),
+      callback_scheduler_on_clear_(false),
       pending_callback_param_(common::OB_SUCCESS), p_mt_ctx_(NULL),
       is_exiting_(false), for_replay_(false),
       has_pending_callback_(false),
@@ -260,6 +261,8 @@ protected:
   // the variable is used to record the action of the current transaction in the stmt execution
   int64_t part_trans_action_;
   ObTxCommitCallback commit_cb_;
+  // [only used by mysqltest]: will callback scheduler when clear log is persistented
+  bool callback_scheduler_on_clear_;
   ObTransNeedWaitWrap trans_need_wait_wrap_;
   int pending_callback_param_;
   // it is used to wake up the lock queue after submitting the log of elr trans

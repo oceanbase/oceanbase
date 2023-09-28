@@ -4934,9 +4934,9 @@ int ObIJsonBase::to_int(int64_t &value, bool check_range, bool force_convert) co
             ret = OB_ERR_DATA_TRUNCATED;
             LOG_WARN("fail to cast string to int", K(ret), K(length), KCSTRING(start));
           }
+          value = val;
         }
       }
-
       break;
     }
 
@@ -5079,6 +5079,7 @@ int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_rang
           }
         }
       }
+      value = val;
       break;
     }
 
@@ -5207,6 +5208,7 @@ int ObIJsonBase::to_double(double &value) const
                 LOG_DEBUG("check_convert_str_err", K(length), K(data - endptr));
               }
             }
+            value = val;
           }
         }
       }
@@ -5285,6 +5287,7 @@ int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) co
         } else if (OB_FAIL(num.from(data, length, *allocator))) {
           LOG_WARN("fail to create number from string", K(ret), KP(data));
         }
+        number = num;
         break;
       }
 

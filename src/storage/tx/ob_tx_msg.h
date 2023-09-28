@@ -559,7 +559,7 @@ namespace transaction
             || (20 <= msg_type && 22 >= msg_type)
             || (40 <= msg_type && 49 >= msg_type)
             || (50 <= msg_type && 53 >= msg_type)
-            || (60 <= msg_type && 66 >= msg_type));
+            || (60 <= msg_type && 67 >= msg_type));
       }
 
       static bool is_2pc_msg_type(const int16_t msg_type)
