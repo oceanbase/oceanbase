@@ -90,6 +90,7 @@ public:
                         K_(multi_range_split_array));
 private:
   ObArrayArray<ObStoreRange> multi_range_split_array_;
+  common::ObIAllocator *result_alloc_;
 };
 
 class ObDASRangesCostOp : public ObDASSimpleOp

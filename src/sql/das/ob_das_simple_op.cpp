@@ -111,7 +111,7 @@ OB_SERIALIZE_MEMBER((ObDASSplitRangesOp, ObIDASTaskOp),
                      expected_task_count_);
 
 ObDASSplitRangesResult::ObDASSplitRangesResult()
-  : ObIDASTaskResult() {}
+  : ObIDASTaskResult(), result_alloc_(nullptr) {}
 
 ObDASSplitRangesResult::~ObDASSplitRangesResult()
 {
@@ -122,7 +122,7 @@ int ObDASSplitRangesResult::init(const ObIDASTaskOp &op, common::ObIAllocator &a
 {
   int ret = OB_SUCCESS;
   UNUSED(op);
-  UNUSED(alloc);
+  result_alloc_ = &alloc;
   multi_range_split_array_.reset();
   return ret;
 }
@@ -143,8 +143,56 @@ int ObDASSplitRangesResult::assign(const ObArrayArray<ObStoreRange> &array)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObDASSplitRangesResult, ObIDASTaskResult),
-                     multi_range_split_array_);
+OB_DEF_SERIALIZE_SIZE(ObDASSplitRangesResult)
+{
+  int64_t len = 0;
+  BASE_ADD_LEN((ObDASSplitRangesResult, ObIDASTaskResult));
+  OB_UNIS_ADD_LEN(multi_range_split_array_);
+  return len;
+}
+
+OB_DEF_SERIALIZE(ObDASSplitRangesResult)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((ObDASSplitRangesResult, ObIDASTaskResult));
+  OB_UNIS_ENCODE(multi_range_split_array_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASSplitRangesResult)
+{
+  int ret = OB_SUCCESS;
+  BASE_DESER((ObDASSplitRangesResult, ObIDASTaskResult));
+  OB_UNIS_DECODE(multi_range_split_array_);
+
+  if (OB_ISNULL(result_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr result_alloc", K(ret));
+  } else {
+    int64_t count = multi_range_split_array_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < multi_range_split_array_.count(i); j++) {
+        ObStoreRange &store_range = multi_range_split_array_.at(i, j);
+
+        // deep copy ObRowKey of store_range
+        const ObStoreRowkey &start_key = store_range.get_start_key();
+        const ObStoreRowkey &end_key = store_range.get_end_key();
+        ObStoreRowkey dst_start_key;
+        ObStoreRowkey dst_end_key;
+        if (OB_FAIL(start_key.deep_copy(dst_start_key, *result_alloc_))) {
+          LOG_WARN("failed to deep copy start key", K(start_key), K(ret));
+        } else if (OB_FAIL(end_key.deep_copy(dst_end_key, *result_alloc_))) {
+          LOG_WARN("failed to deep copy end key", K(start_key), K(ret));
+        } else {
+          store_range.set_start_key(dst_start_key);
+          store_range.set_end_key(dst_end_key);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
 
 ObDASRangesCostOp::ObDASRangesCostOp(common::ObIAllocator &op_alloc)
   : ObDASSimpleOp(op_alloc), total_size_(0) {}
@@ -247,6 +295,28 @@ int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
       LOG_WARN("execute das split_multi_ranges task failed", K(ret));
     } else if (OB_FAIL(multi_range_split_array.assign(split_ranges_op->get_split_array()))) {
       LOG_WARN("assgin split multi ranges array failed", K(ret));
+    } else {
+      int64_t count = multi_range_split_array.count();
+      common::ObIAllocator &alloc = exec_ctx.get_allocator();
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < multi_range_split_array.count(i); j++) {
+          ObStoreRange &store_range = multi_range_split_array.at(i, j);
+
+          // deep copy ObRowKey of store_range
+          const ObStoreRowkey &start_key = store_range.get_start_key();
+          const ObStoreRowkey &end_key = store_range.get_end_key();
+          ObStoreRowkey dst_start_key;
+          ObStoreRowkey dst_end_key;
+          if (OB_FAIL(start_key.deep_copy(dst_start_key, alloc))) {
+            LOG_WARN("failed to deep copy start key", K(start_key), K(ret));
+          } else if (OB_FAIL(end_key.deep_copy(dst_end_key, alloc))) {
+            LOG_WARN("failed to deep copy end key", K(start_key), K(ret));
+          } else {
+            store_range.set_start_key(dst_start_key);
+            store_range.set_end_key(dst_end_key);
+          }
+        }
+      }
     }
   }
   return ret;
