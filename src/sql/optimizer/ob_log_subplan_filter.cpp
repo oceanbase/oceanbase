@@ -560,6 +560,16 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       }
     }
   }
+  // check if exec params contain sub_query
+  for (int64_t i = 0; OB_SUCC(ret) && enable_das_group_rescan_ && i < exec_params_.count(); i++) {
+    const ObExecParamRawExpr *exec_param = exec_params_.at(i);
+    if (OB_ISNULL(exec_param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param is nullptr", K(ret), K(i));
+    } else if (OB_NOT_NULL(exec_param->get_ref_expr()) && exec_param->get_ref_expr()->has_flag(CNT_SUB_QUERY)) {
+      enable_das_group_rescan_ = false;
+    }
+  }
   // set use batch
   for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
     ObLogicalOperator *child = get_child(i);
