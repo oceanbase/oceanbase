@@ -876,7 +876,7 @@ class ObPxCleanDtlIntermResArgs
   OB_UNIS_VERSION(1);
 public:
   ObPxCleanDtlIntermResArgs() : info_(), batch_size_(0) {}
-  ~ObPxCleanDtlIntermResArgs() { }
+  ~ObPxCleanDtlIntermResArgs() { reset(); }
   void reset()
   {
     info_.reset();

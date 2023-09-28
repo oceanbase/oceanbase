@@ -766,6 +766,7 @@ public:
 
   DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_count, int);
   DELEGATE_WITH_RET(ls_tx_svr_, get_active_tx_count, int);
+  DELEGATE_WITH_RET(ls_tx_svr_, print_all_tx_ctx, int);
   //dup table ls meta interface
   CONST_DELEGATE_WITH_RET(dup_table_ls_handler_, get_dup_table_ls_meta, int);
   DELEGATE_WITH_RET(dup_table_ls_handler_, set_dup_table_ls_meta, int);

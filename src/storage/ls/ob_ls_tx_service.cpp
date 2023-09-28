@@ -775,6 +775,19 @@ int ObLSTxService::get_active_tx_count(int64_t &active_tx_count)
   return ret;
 }
 
+int ObLSTxService::print_all_tx_ctx(const int64_t print_num)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    const bool verbose = true;
+    mgr_->print_all_tx_ctx(print_num, verbose);
+  }
+  return ret;
+}
+
 int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
 {
   int ret = OB_SUCCESS;
