@@ -371,36 +371,41 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
   bool is_batched_multi_stmt = pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
   int64_t query_cnt = pc_ctx.sql_ctx_.multi_stmt_item_.get_batched_stmt_cnt();
   ParamStore *params = pc_ctx.fp_result_.cache_params_;
+  ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  is_same = true;
   if (is_batched_multi_stmt) {
     // batch执行
     ObArenaAllocator tmp_alloc;
     ParamStore param_store((ObWrapperAllocator(tmp_alloc)));
     ParamStore *ab_params = pc_ctx.ab_params_;
-    if (OB_ISNULL(ab_params)) {
+    if (OB_ISNULL(ab_params) || OB_ISNULL(phy_ctx)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null ptr unexpected", K(ret));
-    }
-    ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
-    // pc_ctx.fp_result_.cache_params_  在batch场景下，cache_params_不应该为null
-    for (int64_t i = 0; OB_SUCC(ret) && i < query_cnt; ++i) {
-      param_store.reuse();
-      phy_ctx->reset_datum_param_store();
-      phy_ctx->set_original_param_cnt(ab_params->count());
-      if (OB_FAIL(get_one_group_params(i, *ab_params, param_store))) {
-        LOG_WARN("fail to get one params", K(ret), K(i));
-      } else if (OB_FAIL(pc_ctx.fp_result_.cache_params_->assign(param_store))) {
-        LOG_WARN("assign params failed", K(ret), K(param_store));
-      } else if (OB_FAIL(phy_ctx->init_datum_param_store())) {
-        LOG_WARN("init datum_store failed", K(ret), K(param_store));
-      } else if (batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same)) {
-        LOG_WARN("fail to match_params_info", K(ret), K(outline_param_idx), KPC(params));
-      } else if (!is_same) {
-        ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-        LOG_TRACE("params is not same type", K(param_store), K(i));
-      } 
+      LOG_WARN("null ptr unexpected", K(ret), K(phy_ctx), K(ab_params));
+    } else if (query_cnt <= 1) {
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_TRACE("unexpected query count", K(ret), K(query_cnt));
+    } else {
+      // pc_ctx.fp_result_.cache_params_  在batch场景下，cache_params_不应该为null
+      for (int64_t i = 0; OB_SUCC(ret) && is_same && i < query_cnt; ++i) {
+        param_store.reuse();
+        phy_ctx->reset_datum_param_store();
+        phy_ctx->set_original_param_cnt(ab_params->count());
+        if (OB_FAIL(get_one_group_params(i, *ab_params, param_store))) {
+          LOG_WARN("fail to get one params", K(ret), K(i));
+        } else if (OB_FAIL(pc_ctx.fp_result_.cache_params_->assign(param_store))) {
+          LOG_WARN("assign params failed", K(ret), K(param_store));
+        } else if (OB_FAIL(phy_ctx->init_datum_param_store())) {
+          LOG_WARN("init datum_store failed", K(ret), K(param_store));
+        } else if (OB_FAIL(batch_plan_set->match_params_info(params, pc_ctx, outline_param_idx, is_same))) {
+          LOG_WARN("fail to match_params_info", K(ret), K(outline_param_idx), KPC(params));
+        } else if (i != 0 && !is_same) {
+          ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+          LOG_TRACE("params is not same type", K(param_store), K(i));
+        }
+      }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && is_same) {
       phy_ctx->reset_datum_param_store();
       phy_ctx->set_original_param_cnt(ab_params->count());
       if (OB_FAIL(batch_plan_set->copy_param_flag_from_param_info(ab_params))) {
