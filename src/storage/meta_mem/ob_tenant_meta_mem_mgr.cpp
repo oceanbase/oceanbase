@@ -1209,16 +1209,36 @@ void ObTenantMetaMemMgr::mark_mds_table_deleted_(const ObTabletMapKey &key)
     if (OB_ENTRY_NOT_EXIST == ret) {
       // do nothing
     } else {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to get pointer from map", KR(ret), "resource_ptr", ptr_handle.get_resource_ptr());
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to get pointer from map", KR(ret), K(key), "resource_ptr", ptr_handle.get_resource_ptr());
     }
+  } else if (OB_ISNULL(ptr_handle.get_resource_ptr())) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ptr_handle is null", KPC(ptr_handle.get_resource_ptr()));
   } else {
-    if (OB_ISNULL(ptr_handle.get_resource_ptr())) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ptr_handle is null", KPC(ptr_handle.get_resource_ptr()));
+    ObTabletPointer *tablet_pointer = static_cast<ObTabletPointer *>(ptr_handle.get_resource_ptr());
+    tablet_pointer->mark_mds_table_deleted();
+  }
+}
+
+int ObTenantMetaMemMgr::release_memtable_and_mds_table_for_ls_offline(const ObTabletMapKey &key)
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointerHandle ptr_handle(tablet_map_);
+  if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
     } else {
-      ObTabletPointer *tablet_pointer = static_cast<ObTabletPointer *>(ptr_handle.get_resource_ptr());
-      tablet_pointer->mark_mds_table_deleted();
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to get pointer from map", KR(ret), K(key), "resource_ptr", ptr_handle.get_resource_ptr());
+    }
+  } else if (OB_ISNULL(ptr_handle.get_resource_ptr())) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ptr_handle is null", KPC(ptr_handle.get_resource_ptr()));
+  } else {
+    ObTabletPointer *tablet_pointer = static_cast<ObTabletPointer *>(ptr_handle.get_resource_ptr());
+    if (OB_FAIL(tablet_pointer->release_memtable_and_mds_table_for_ls_offline())) {
+      LOG_WARN("failed to release memtable and mds table", K(ret), K(key));
     }
   }
+
+  return ret;
 }
 
 int ObTenantMetaMemMgr::create_tmp_tablet(

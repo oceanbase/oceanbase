@@ -175,7 +175,7 @@ int ObLSTabletService::offline()
   } else {
     DestroyMemtableAndMemberAndMdsTableOperator clean_mem_op(this);
     if (OB_FAIL(tablet_id_set_.foreach(clean_mem_op))) {
-      LOG_WARN("fail to clean memtables", K(ret), K(clean_mem_op.cur_tablet_id_));
+      LOG_WARN("fail to clean memtables", K(ret), "cur_tablet_id", clean_mem_op.cur_tablet_id_);
     }
     mds_table_mgr_.offline();
   }
@@ -5917,28 +5917,19 @@ int ObLSTabletService::GetAllTabletIDOperator::operator()(const common::ObTablet
 int ObLSTabletService::DestroyMemtableAndMemberAndMdsTableOperator::operator()(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObTabletHandle handle;
-  const uint64_t tenant_id = MTL_ID();
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   cur_tablet_id_ = tablet_id;
-  if (OB_UNLIKELY(!tablet_id.is_valid()) ||
-      OB_ISNULL(tablet_svr_)) {
+  if (OB_UNLIKELY(!tablet_id.is_valid()) || OB_ISNULL(tablet_svr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(tablet_svr_));
-  } else if (OB_FAIL(tablet_svr_->get_tablet(tablet_id, handle, 0,
-                                             ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      LOG_WARN("failed to get tablet, skip clean memtable", K(ret), K(tablet_id));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_ERROR("failed to get tablet", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(tablet_svr_->ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret));
+  } else {
+    const ObTabletMapKey key(tablet_svr_->ls_->get_ls_id(), tablet_id);
+    if (OB_FAIL(t3m->release_memtable_and_mds_table_for_ls_offline(key))) {
+      LOG_WARN("failed to release memtables and mds table", K(ret), K(key));
     }
-  } else if (OB_FAIL(handle.get_obj()->release_memtables())) {
-    LOG_WARN("failed to release memtables", K(tenant_id), K(tablet_id));
-  } else if (OB_FAIL(handle.get_obj()->forcely_reset_mds_table("OFFLINE"))) {
-    LOG_WARN("failed to release mds_table", K(tenant_id), K(tablet_id));
-  } else if (!tablet_id.is_ls_inner_tablet() && OB_FAIL(handle.get_obj()->reset_storage_related_member())) {
-    LOG_WARN("failed to destroy storage related member", K(ret), K(tenant_id), K(tablet_id));
   }
   return ret;
 }
@@ -5946,12 +5937,9 @@ int ObLSTabletService::DestroyMemtableAndMemberAndMdsTableOperator::operator()(c
 int ObLSTabletService::SetMemtableFrozenOperator::operator()(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObTabletHandle handle;
-  const uint64_t tenant_id = MTL_ID();
   cur_tablet_id_ = tablet_id;
-  if (OB_UNLIKELY(!tablet_id.is_valid()) ||
-      OB_ISNULL(tablet_svr_)) {
+  if (OB_UNLIKELY(!tablet_id.is_valid()) || OB_ISNULL(tablet_svr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(tablet_svr_));
   } else if (OB_FAIL(tablet_svr_->get_tablet(tablet_id,
@@ -5965,7 +5953,7 @@ int ObLSTabletService::SetMemtableFrozenOperator::operator()(const common::ObTab
       LOG_ERROR("failed to get tablet", K(ret), K(tablet_id));
     }
   } else if (OB_FAIL(handle.get_obj()->set_frozen_for_all_memtables())) {
-    LOG_WARN("failed to set frozen for all memtables", K(tenant_id), K(tablet_id));
+    LOG_WARN("failed to set frozen for all memtables", K(ret), K(tablet_id));
   }
   return ret;
 }

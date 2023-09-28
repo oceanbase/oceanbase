@@ -314,7 +314,6 @@ public:
   // just for rebuild or migrate retry.
   int release_memtables();
   int wait_release_memtables();
-  int reset_storage_related_member();
 
   // multi-source data operation
   int get_storage_schema_for_transfer_in(

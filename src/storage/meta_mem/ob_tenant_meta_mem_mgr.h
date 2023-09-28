@@ -275,6 +275,7 @@ public:
 
   int has_meta_wait_gc(bool &is_wait);
   int dump_tablet_info();
+  int release_memtable_and_mds_table_for_ls_offline(const ObTabletMapKey &key);
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
 private:

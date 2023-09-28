@@ -41,8 +41,6 @@ public:
   template <typename Key, typename Value>// general remove for multi key unit
   int remove(const Key &key, mds::MdsCtx &ctx, const int64_t lock_timeout_us = 0);
   // sometimes mds ndoes needed be forcely released, e.g.: ls offline
-  template <int N>
-  int forcely_reset_mds_table(const char (&reason)[N]);// reason must be compile-time str
   template <typename T>
   int is_locked_by_others(bool &is_locked, const mds::MdsWriter &self = mds::MdsWriter()) const;
 
