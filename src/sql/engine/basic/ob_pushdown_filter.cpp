@@ -54,31 +54,39 @@ OB_SERIALIZE_MEMBER((ObPushdownWhiteFilterNode,ObPushdownFilterNode),
 int ObPushdownBlackFilterNode::merge(ObIArray<ObPushdownFilterNode*> &merged_node)
 {
   int ret = OB_SUCCESS;
+  int64_t merge_expr_count = 0;
+  for (int64_t i = 0; i < merged_node.count(); i++) {
+    merge_expr_count += static_cast<ObPushdownBlackFilterNode *>(merged_node.at(i))->get_filter_expr_count();
+  }
   if (0 < filter_exprs_.count()) {
     common::ObArray<ObExpr *> tmp_expr;
     if (OB_FAIL(tmp_expr.assign(filter_exprs_))) {
       LOG_WARN("failed to assign filter exprs", K(ret));
     } else if (FALSE_IT(filter_exprs_.reuse())) {
-    } else if (OB_FAIL(filter_exprs_.init(tmp_expr.count() + merged_node.count()))) {
+    } else if (OB_FAIL(filter_exprs_.init(tmp_expr.count() + merge_expr_count))) {
       LOG_WARN("failed to init filter exprs", K(ret));
     } else if (OB_FAIL(filter_exprs_.assign(tmp_expr))) {
       LOG_WARN("failed to assign filter exprs", K(ret));
     }
-  } else if (OB_FAIL(filter_exprs_.init(1 + merged_node.count()))) {
+  } else if (OB_FAIL(filter_exprs_.init(1 + merge_expr_count))) {
     LOG_WARN("failed to init exprs", K(ret));
   } else if (OB_FAIL(filter_exprs_.push_back(tmp_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   }
 
-  for (int64_t i = 0; i < merged_node.count() && OB_SUCC(ret); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < merged_node.count(); ++i) {
     ObPushdownBlackFilterNode *black_node = static_cast<ObPushdownBlackFilterNode*>(merged_node.at(i));
-    if (OB_ISNULL(black_node->tmp_expr_)) {
+    if (!black_node->filter_exprs_.empty()) {
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < black_node->filter_exprs_.count(); idx++) {
+        if (OB_FAIL(filter_exprs_.push_back(black_node->filter_exprs_.at(idx)))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    } else if (OB_ISNULL(black_node->tmp_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: exprs must be only one", K(ret));
-    } else {
-      if (OB_FAIL(filter_exprs_.push_back(black_node->tmp_expr_))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      }
+    } else if (OB_FAIL(filter_exprs_.push_back(black_node->tmp_expr_))) {
+      LOG_WARN("failed to push back expr", K(ret));
     }
   }
   return ret;

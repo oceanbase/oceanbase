@@ -105,7 +105,7 @@ int ObTabletCreateMdsHelper::on_register(
   } else if (arg.is_old_mds_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, arg is old mds", K(ret), K(arg));
-  } else if (CLICK_FAIL(check_create_new_tablets(arg))) {
+  } else if (CLICK_FAIL(check_create_new_tablets(arg, false/*is_replay*/))) {
     LOG_WARN("failed to check crate new tablets", K(ret), "arg", PRETTY_ARG(arg));
   } else if (CLICK_FAIL(register_process(arg, ctx))) {
     LOG_WARN("fail to register_process", K(ret), "arg", PRETTY_ARG(arg));
@@ -178,27 +178,15 @@ int ObTabletCreateMdsHelper::on_replay(
     LOG_WARN("arg is invalid", K(ret), "arg", PRETTY_ARG(arg));
   } else if (arg.is_old_mds_) {
     LOG_INFO("skip replay create tablet for old mds", K(ret), K(scn), "arg", PRETTY_ARG(arg));
-  } else {
-    // Should not fail the replay process when tablet count excceed recommended value
-    // Only print ERROR log to notice user scale up the unit memory
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(check_create_new_tablets(arg))) {
-      if (OB_TOO_MANY_PARTITIONS_ERROR == tmp_ret) {
-        LOG_ERROR("tablet count is too big, consider scale up the unit memory", K(tmp_ret));
-      } else {
-        LOG_WARN("failed to check create new tablets", K(tmp_ret));
-      }
-    }
-
-    if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
-      LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
-    }
-
-    if (OB_FAIL(ret)) {
-      handle_ret_for_replay(ret);
-    }
+  } else if (CLICK_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
+    LOG_WARN("failed to check create new tablets", K(ret));
+  } else if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
+    LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
   }
 
+  if (OB_FAIL(ret)) {
+    handle_ret_for_replay(ret);
+  }
   return ret;
 }
 
@@ -242,7 +230,7 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const int64_t inc_tablet_c
   return ret;
 }
 
-int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg)
+int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg, const bool is_replay)
 {
   int ret = OB_SUCCESS;
   bool skip_check = !arg.need_check_tablet_cnt_;
@@ -259,10 +247,19 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreate
 
   if (OB_FAIL(ret) || skip_check) {
   } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(), is_truncate/*is_soft_limit*/))) {
-    if (is_truncate && OB_TOO_MANY_PARTITIONS_ERROR == ret) {
+    if (is_truncate && OB_TOO_MANY_PARTITIONS_ERROR == ret) { /* failed for truncate */
       ret = OB_EAGAIN; // do not retry here within trx_ctx_lock, rely on multi-source data trx retrying
-    } else {
+    } else if (!is_replay) { /* return error directly on register*/
       LOG_WARN("fail to create new tablets", K(ret));
+    } else {
+      // Should not fail the replay process when tablet count excceed recommended value, excepts truncate
+      // Only print ERROR log to notice user scale up the unit memory
+      if (OB_TOO_MANY_PARTITIONS_ERROR == ret) {
+        LOG_ERROR("tablet count is too big, consider scale up the unit memory", K(ret));
+      } else {
+        LOG_WARN("fail to create new tablets", K(ret));
+      }
+      ret = OB_SUCCESS; /*ignore failure*/
     }
   }
   return ret;
