@@ -531,8 +531,9 @@ int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_row_array.count(); ++i) {
       ObTableLoadObjRow &row = obj_row_array.at(i);
-      row.seq_no_.batch_id_ = batch_id;
-      row.seq_no_.batch_seq_no_ = i;
+      row.seq_no_.sequence_no_ = batch_id;
+      row.seq_no_.sequence_no_ <<= ObTableLoadSequenceNo::BATCH_ID_SHIFT;
+      row.seq_no_.sequence_no_ |= i;
     }
   }
   return ret;

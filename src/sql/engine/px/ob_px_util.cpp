@@ -193,14 +193,21 @@ int ObPXServerAddrUtil::get_external_table_loc(
     } else {
       ObSEArray<ObAddr, 16> all_locations;
       int64_t expected_location_cnt = std::min(dfo.get_dop(), dfo.get_external_table_files().count());
-      if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
-        LOG_WARN("fail to get external table location", K(ret));
-      } else if (expected_location_cnt >= all_locations.count() ?
-                 OB_FAIL(target_locations.assign(all_locations))
-               : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
-                                                                        expected_location_cnt,
-                                                                        target_locations)))
-      LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+      if (1 == expected_location_cnt) {
+        if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
+          LOG_WARN("fail to push push back", K(ret));
+        }
+      } else {
+        if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
+          LOG_WARN("fail to get external table location", K(ret));
+        } else if (expected_location_cnt >= all_locations.count() ?
+                   OB_FAIL(target_locations.assign(all_locations))
+                 : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
+                                                                          expected_location_cnt,
+                                                                          target_locations))) {
+          LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+        }
+      }
     }
     LOG_TRACE("calc external table location", K(target_locations));
     if (OB_SUCC(ret)) {
