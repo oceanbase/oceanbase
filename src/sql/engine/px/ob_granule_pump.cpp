@@ -1069,14 +1069,14 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
       } else if (OB_FAIL(affinitize_rule.add_partition(tablet_loc.tablet_id_.id(),
                                                       tablet_idx,
                                                       parallelism,
+                                                      my_session->get_effective_tenant_id(),
                                                       partition_row_info))) {
         LOG_WARN("Failed to get affinitize taskid" , K(ret));
       }
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty(),
-                                               my_session->get_effective_tenant_id()))) {
+  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty()))) {
     LOG_WARN("failed to do random", K(ret));
   } else {
     const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs = affinitize_rule.get_result();
