@@ -45,6 +45,6 @@ devdeps-oblogmsg-1.0-52022113019.el7.x86_64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el7.x86_64.rpm
 
 [test-utils]
-ob-deploy-1.6.0-41.el7.x86_64.rpm target=community
+ob-deploy-2.3.0-4.el7.x86_64.rpm target=community
 obclient-2.2.2-1.el7.x86_64.rpm target=community
 libobclient-2.2.2-3.el7.x86_64.rpm target=community

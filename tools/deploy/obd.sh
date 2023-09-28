@@ -1,6 +1,6 @@
 #!/bin/bash 
 
-BASE_DIR=$(git rev-parse --show-toplevel 2>/dev/null)
+BASE_DIR=$(readlink -f "$(dirname ${BASH_SOURCE[0]})/../..")
 DEPLOY_PATH="$BASE_DIR/tools/deploy"
 OBSERVER_BIN="$BASE_DIR/tools/deploy/bin/observer"
 OBD_CLUSTER_PATH="$DEPLOY_PATH"/.obd/cluster

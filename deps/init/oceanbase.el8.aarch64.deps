@@ -43,6 +43,6 @@ devdeps-oblogmsg-1.0-52022113019.el8.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.aarch64.rpm
 
 [test-utils]
-ob-deploy-1.6.0-41.el8.aarch64.rpm target=community
+ob-deploy-2.3.0-4.el8.aarch64.rpm target=community
 obclient-2.2.2-1.el8.aarch64.rpm target=community
 libobclient-2.2.2-3.el8.aarch64.rpm target=community
