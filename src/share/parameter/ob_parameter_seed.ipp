@@ -589,9 +589,9 @@ DEF_TIME(log_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s",
         "Range: [1s,300s]",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(ls_gc_delay_time, OB_TENANT_PARAMETER, "1h",
+DEF_TIME(ls_gc_delay_time, OB_TENANT_PARAMETER, "0s",
         "[0s,)",
-        "The max delay time for ls gc when log archive is off. The default value is 3600s. Range: [0s, +∞). "
+        "The max delay time for ls gc when log archive is off. The default value is 0s. Range: [0s, +∞). "
         "The ls delay deletion mechanism will no longer take effect when the tenant is dropped.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

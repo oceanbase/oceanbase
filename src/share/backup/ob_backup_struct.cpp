@@ -1528,6 +1528,28 @@ int ObBackupDest::set(const char *root_path, const ObBackupStorageInfo *storage_
   return ret;
 }
 
+// check if backup_dest contains "encrypt_key=" then set
+int ObBackupDest::set_without_decryption(const common::ObString &backup_dest) {
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  char *backup_dest_str = nullptr;
+  char *result = nullptr;
+  if (OB_ISNULL(backup_dest_str = reinterpret_cast<char *>(allocator.alloc(backup_dest.length() + 1)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed" ,KR(ret));
+  } else {
+    MEMCPY(backup_dest_str, backup_dest.ptr(), backup_dest.length());
+    backup_dest_str[backup_dest.length()] = '\0';
+    if (OB_NOT_NULL(result = strstr(backup_dest_str, ENCRYPT_KEY))) {
+      ret = OB_INVALID_BACKUP_DEST;
+      LOG_WARN("backup destination should not contain encrypt_key", K(ret), K(backup_dest_str));
+      LOG_USER_ERROR(OB_INVALID_BACKUP_DEST, "backup destination contains encrypt_key, which");
+    } else if (OB_FAIL(set(backup_dest_str))) {
+      LOG_WARN("fail to set backup dest", K(ret));
+    }
+  }
+  return ret;
+}
 
 void ObBackupDest::root_path_trim_()
 {
@@ -4034,7 +4056,7 @@ int ObLogArchiveDestAtrr::set_log_archive_dest(const common::ObString &str)
   if (str.empty()) {
     ret = OB_INVALID_ARGUMENT;
      LOG_WARN("invalid args", K(ret), K(str));
-  } else if (OB_FAIL(dest_.set(str.ptr()))) {
+  } else if (OB_FAIL(dest_.set_without_decryption(str))) {
     LOG_WARN("fail to set dest", K(ret));
   }
   return ret;

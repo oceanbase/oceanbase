@@ -132,6 +132,9 @@ TEST(ObBackupDest, oss_encrypt)
   ObBackupDest dest1;
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);
+  ObString backup_test_str(backup_test);
+  ObBackupDest dest2;
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest2.set_without_decryption(backup_test_str));
 
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
@@ -199,6 +202,9 @@ TEST(ObBackupDest, cos_encrypt)
   ObBackupDest dest1;
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);
+  ObString backup_test_str(backup_test);
+  ObBackupDest dest2;
+  ASSERT_EQ(OB_INVALID_BACKUP_DEST, dest2.set_without_decryption(backup_test_str));
 
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
