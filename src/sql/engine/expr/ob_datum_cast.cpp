@@ -1381,7 +1381,7 @@ static int common_string_string(const ObExpr &expr,
     } else if (OB_FAIL(ObCharset::charset_convert(in_cs_type, in_str.ptr(),
                                                   in_str.length(), out_cs_type, buf,
                                                   buf_len, result_len, lib::is_mysql_mode(),
-                                                  !CM_IS_IGNORE_CHARSET_CONVERT_ERR(expr.extra_),
+                                                  !CM_IS_IGNORE_CHARSET_CONVERT_ERR(expr.extra_) && CM_IS_IMPLICIT_CAST(expr.extra_),
                                                   ObCharset::is_cs_unicode(out_cs_type) ? 0xFFFD : '?'))) {
       LOG_WARN("charset convert failed", K(ret));
     } else {

@@ -1321,7 +1321,8 @@ int ObDMLStmtPrinter::print_base_table(const TableItem *table_item)
         const ObIArray<ObString> &part_names = table_item->part_names_;
         DATA_PRINTF(" partition(");
         for (int64_t i = 0; OB_SUCC(ret) && i < part_names.count(); ++i) {
-          DATA_PRINTF("%.*s,", LEN_AND_PTR(part_names.at(i)));
+          PRINT_IDENT_WITH_QUOT(part_names.at(i));
+          DATA_PRINTF(",");
         }
         if (OB_SUCC(ret)) {
           --*pos_;
