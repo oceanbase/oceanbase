@@ -314,7 +314,9 @@ int ObTenantMetaChecker::build_replica_map_(
     LOG_WARN("ObTenantMetaChecker is stopped", KR(ret), K_(tenant_id), K_(ls_checker_tg_id));
   } else if (OB_FAIL(replica_map.create(
       hash::cal_next_prime(LS_REPLICA_MAP_BUCKET_NUM),
-      "LSCheckMap"))) {
+      "LSCheckMap",
+      ObModIds::OB_HASH_NODE,
+      tenant_id_))) {
     LOG_WARN("fail to create replica_map", KR(ret));
   } else if (OB_FAIL(lst_iter.init(*lst_operator_, tenant_id_, mode))) {
     LOG_WARN("fail to init ls meta table iter", KR(ret), K_(tenant_id), K(mode));
@@ -362,7 +364,9 @@ int ObTenantMetaChecker::build_replica_map_(ObTabletReplicaMap &replica_map)
     LOG_WARN("ObTenantMetaChecker is stopped", KR(ret), K_(tenant_id), K_(tablet_checker_tg_id));
   } else if (OB_FAIL(replica_map.create(
       hash::cal_next_prime(TABLET_REPLICA_MAP_BUCKET_NUM),
-      "TabletCheckMap"))) {
+      "TabletCheckMap",
+      ObModIds::OB_HASH_NODE,
+      tenant_id_))) {
     LOG_WARN("fail to create replica_map", KR(ret));
   } else if (OB_FAIL(tt_iter.init(*tt_operator_, tenant_id_))) {
     LOG_WARN("fail to init tablet meta table iter", KR(ret), K_(tenant_id));

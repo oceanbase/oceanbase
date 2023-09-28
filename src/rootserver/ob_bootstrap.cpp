@@ -56,6 +56,9 @@
 #include "share/scn.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "rootserver/ob_root_service.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "close_modules/tde_security/share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
@@ -273,6 +276,9 @@ int ObPreBootstrap::notify_sys_tenant_root_key()
 #ifdef OB_BUILD_TDE_SECURITY
   ObArray<ObAddr> addrs;
   obrpc::ObRootKeyArg arg;
+  arg.tenant_id_ = OB_SYS_TENANT_ID;
+  arg.is_set_ = false;
+  obrpc::ObRootKeyResult result;
   if (OB_FAIL(addrs.reserve(rs_list_.count()))) {
     LOG_WARN("fail to reserve array", KR(ret));
   }
@@ -280,9 +286,18 @@ int ObPreBootstrap::notify_sys_tenant_root_key()
     if (OB_FAIL(addrs.push_back(rs_list_[i].server_))) {
       LOG_WARN("fail to push back server", KR(ret));
     }
-  } // end for
-  if (FAILEDx(ObDDLService::create_root_key(
-              rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(OB_SYS_TENANT_ID,
+                                                                result.key_type_,
+                                                         result.root_key_))) {
+  } else if (obrpc::RootKeyType::INVALID != result.key_type_ || !result.root_key_.empty()) {
+    LOG_INFO("root key existed in local");
+  } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, addrs, result, false))) {
+    LOG_WARN("fail to notify root key", K(ret));
+  } else if (obrpc::RootKeyType::INVALID != result.key_type_ || !result.root_key_.empty()) {
+    LOG_INFO("root key existed in remote");
+  } else if (OB_FAIL(ObDDLService::create_root_key(rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
     LOG_WARN("fail to create sys tenant root key", KR(ret), K(addrs));
   }
   BOOTSTRAP_CHECK_SUCCESS();
