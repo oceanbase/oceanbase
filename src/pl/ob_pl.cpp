@@ -1642,7 +1642,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
     ObString pc_key;
     ParseResult parse_result;
     ObPLParser pl_parser(allocator,
-                      ctx.get_my_session()->get_dtc_params().connection_collation_,
+                      ctx.get_my_session()->get_charsets4parser(),
                       ctx.get_my_session()->get_sql_mode());
     OZ (pl_parser.fast_parse(sql, parse_result));
     if (OB_SUCC(ret)) {
@@ -2353,7 +2353,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     ObParser parser(ctx.get_allocator(),
                     ctx.get_my_session()->get_sql_mode(),
-                    ctx.get_my_session()->get_local_collation_connection());
+                    ctx.get_my_session()->get_charsets4parser());
     ParseResult parse_result;
     ParseMode parse_mode = ctx.get_sql_ctx()->is_dynamic_sql_ ? DYNAMIC_SQL_MODE
         : (ctx.get_my_session()->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);

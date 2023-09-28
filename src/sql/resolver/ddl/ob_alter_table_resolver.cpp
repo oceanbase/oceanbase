@@ -877,11 +877,23 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             break;
         }
         case T_REMOVE_TTL: {
+          uint64_t tenant_data_version = 0;
+          if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+          } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("REMOVE TTL is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "REMOVE TTL in data version less than 4.2.1");
+          } else {
             ttl_definition_.reset();
             if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
               SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
             }
-            break;
+          }
+          break;
         }
         default: {
             ret = OB_ERR_UNEXPECTED;

@@ -355,7 +355,7 @@ int ObMySQLProcTable::extract_create_node_from_routine_info(ObIAllocator &alloc,
 
   ParseResult parse_result;
   ObString routine_stmt;
-  pl::ObPLParser parser(alloc, CS_TYPE_UTF8MB4_BIN, exec_env.get_sql_mode());
+  pl::ObPLParser parser(alloc, ObCharsets4Parser(), exec_env.get_sql_mode());
   const ObString &routine_body = routine_info.get_routine_body();
   const char prefix[] = "CREATE\n";
   int64_t prefix_len = STRLEN(prefix);

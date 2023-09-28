@@ -172,7 +172,7 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
           resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_dtc_params(), default_value));
     OZ (ObRawExprUtils::parse_default_expr_from_str(
       default_value,
-      resolve_ctx_.session_info_.get_local_collation_connection(),
+      resolve_ctx_.session_info_.get_charsets4parser(),
       resolve_ctx_.allocator_,
       default_node));
     CK (OB_NOT_NULL(default_node));
@@ -2454,7 +2454,7 @@ int ObPLResolver::build_record_type_by_view_schema(const ObPLResolveCtx &ctx,
   ObSqlString select_sql;
   ParseResult parse_result;
   ObParser parser(alloc, ctx.session_info_.get_sql_mode(),
-                  ctx.session_info_.get_local_collation_connection());
+                  ctx.session_info_.get_charsets4parser());
   ObSchemaChecker schema_checker;
   ObResolverParams resolver_ctx;
   ParseNode *select_stmt_node = NULL;
@@ -8735,7 +8735,7 @@ int ObPLResolver::resolve_condition_compile(
   ObString old_sql;
   ObString new_sql;
   ObPLParser pl_parser(
-    resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_local_collation_connection(),
+    resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_charsets4parser(),
     resolve_ctx_.session_info_.get_sql_mode());
   ParseResult parse_result;
 
@@ -12354,7 +12354,7 @@ int ObPLResolver::resolve_package_accessible_by(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN, resolve_ctx_.session_info_.get_sql_mode());
+  ObPLParser parser(allocator, ObCharsets4Parser(), resolve_ctx_.session_info_.get_sql_mode());
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *package_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;
@@ -12400,7 +12400,7 @@ int ObPLResolver::resolve_routine_accessible_by(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN, resolve_ctx_.session_info_.get_sql_mode());
+  ObPLParser parser(allocator, ObCharsets4Parser(), resolve_ctx_.session_info_.get_sql_mode());
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *routine_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;

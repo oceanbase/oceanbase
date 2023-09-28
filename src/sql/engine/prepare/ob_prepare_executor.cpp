@@ -28,7 +28,7 @@ int ObPrepareExecutor::multiple_query_check(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 1> queries;
-  ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+  ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
   ObMPParseStat parse_stat;
   if (OB_FAIL(parser.split_multiple_stmt(sql, queries, parse_stat, false, true))) {
     LOG_WARN("failed to split multiple stmt", K(ret), K(sql));

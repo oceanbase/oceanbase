@@ -580,7 +580,7 @@ int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
   OX (set_spi_cursor(NULL));
   if (OB_SUCC(ret)) {
     ObIAllocator &alloc = get_dbms_entity()->get_arena_allocator();
-    ObParser parser(alloc, session.get_sql_mode(), session.get_local_collation_connection());
+    ObParser parser(alloc, session.get_sql_mode(), session.get_charsets4parser());
     ParseResult parse_result;
     int64_t param_count = 0;
     char **param_names = NULL;

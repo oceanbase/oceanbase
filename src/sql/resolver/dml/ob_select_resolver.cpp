@@ -4541,7 +4541,7 @@ int ObSelectResolver::mock_to_named_windows(ObString &name,
                                    win_str.ptr()))) {
       LOG_WARN("fail to concat string", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(sql_str.string(),
-                                                                params_.session_info_->get_local_collation_connection(),
+                                                                params_.session_info_->get_charsets4parser(),
                                                                 params_.expr_factory_->get_allocator(),
                                                                 mock_node))) {
       LOG_WARN("parse expr node from string failed", K(ret));

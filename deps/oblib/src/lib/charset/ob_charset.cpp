@@ -2981,9 +2981,10 @@ int ObCharset::charset_convert(ObIAllocator &alloc,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid collation type", K(ret), K(src_cs_type), K(dst_cs_type));
   } else  {
-    if (0 == in.length()
-        || charset_type_by_coll(src_cs_type) == charset_type_by_coll(dst_cs_type)
-        || charset_type_by_coll(dst_cs_type) == CHARSET_BINARY) {
+    if ((0 == in.length()
+         || charset_type_by_coll(src_cs_type) == charset_type_by_coll(dst_cs_type)
+         || charset_type_by_coll(dst_cs_type) == CHARSET_BINARY)
+        && !(convert_flag & REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET)) {
       if (!(convert_flag & COPY_STRING_ON_SAME_CHARSET)) {
         out = in;
       } else {
@@ -3029,9 +3030,14 @@ int ObCharset::charset_convert(ObIAllocator &alloc,
             LOG_WARN("convert charset failed",
                     K(ret), K(in), K(src_cs_type), K(dst_cs_type),
                     KPHEX(in.ptr(), in.length()));
-            if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)) {
+            if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)
+                || !!(convert_flag & REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET)) {
               if (OB_NOT_NULL(action_flag)) {
-                *action_flag |= REPLACE_UNKNOWN_CHARACTER;
+                if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)) {
+                  *action_flag |= REPLACE_UNKNOWN_CHARACTER;
+                } else {
+                  *action_flag |= REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET;
+                }
               }
               int32_t in_offset = 0;
               int64_t res_buf_offset = 0;

@@ -1098,16 +1098,11 @@ int ObTTLUtil::get_all_user_tenant_ttl(ObIArray<ObSimpleTTLInfo> &ttl_info_array
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 32> tenant_ids;
-  {
-    share::schema::ObSchemaGetterGuard schema_guard;
-    if (OB_ISNULL(GCTX.schema_service_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid GCTX", KR(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-      LOG_WARN("fail to get schema guard", KR(ret));
-    } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
-      LOG_WARN("fail to get tenant ids", KR(ret));
-    }
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid GCTX", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_ids(tenant_ids))) {
+    LOG_WARN("fail to get tenant ids", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
     if (is_user_tenant(tenant_ids[i])) {

@@ -61,7 +61,7 @@ TEST_F(TestSqlParameterization, parameterize_sql)
   ObString stmt = ObString::make_string("select * from t1 where c1 = 3 group by 2 order by 1");
   ObSEArray<const ObPCParam *, OB_PC_NOT_PARAM_COUNT> not_params;
   ObFastParserResult fp_result;
-  FPContext fp_ctx(ObCharset::get_system_collation());
+  FPContext fp_ctx(ObCharsets4Parser());
   fp_ctx.sql_mode_ = SMO_DEFAULT;
   if (OB_FAIL(ObSqlParameterization::fast_parser(allocator,
                                                  fp_ctx,

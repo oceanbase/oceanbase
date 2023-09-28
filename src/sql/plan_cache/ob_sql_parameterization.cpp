@@ -999,7 +999,7 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
                                                     ObPlanCacheCtx &pc_ctx,
                                                     ParseNode *tree,
                                                     ParamStore &params,
-                                                    ObCollationType cs_type)
+                                                    ObCharsets4Parser charsets4parser)
 {
   int ret = OB_SUCCESS;
   SqlInfo sql_info;
@@ -1029,7 +1029,7 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     // if so, faster parser is needed
     // otherwise, fast parser has been done before
     pc_ctx.fp_result_.reset();
-    FPContext fp_ctx(cs_type);
+    FPContext fp_ctx(charsets4parser);
     fp_ctx.enable_batched_multi_stmt_ = pc_ctx.sql_ctx_.handle_batched_multi_stmt();
     fp_ctx.sql_mode_ = session->get_sql_mode();
     fp_ctx.is_udr_mode_ = pc_ctx.is_rewrite_sql_;
@@ -1510,7 +1510,7 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
       } else { /*do nothing*/}
     }
   } else {
-    ObParser parser(allocator, fp_ctx.sql_mode_, fp_ctx.conn_coll_);
+    ObParser parser(allocator, fp_ctx.sql_mode_, fp_ctx.charsets4parser_);
     SMART_VAR(ParseResult, parse_result) {
       if (OB_FAIL(parser.parse(sql, parse_result, FP_MODE, fp_ctx.enable_batched_multi_stmt_))) {
         SQL_PC_LOG(WARN, "fail to fast parser", K(sql), K(ret));
@@ -1556,7 +1556,7 @@ int ObSqlParameterization::raw_fast_parameterize_sql(ObIAllocator &allocator,
                                                      ParseMode parse_mode)
 {
   int ret = OB_SUCCESS;
-  ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+  ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
   ParseResult parse_result;
 
   NG_TRACE(pc_fast_parse_start);

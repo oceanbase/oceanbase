@@ -45,6 +45,7 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/monitor/flt/ob_flt_extra_info.h"
 #include "sql/monitor/flt/ob_flt_utils.h"
+#include "sql/parser/ob_parser_utils.h"
 
 namespace oceanbase
 {
@@ -977,6 +978,13 @@ public:
                                 get_nls_collation(),
                                 get_nls_collation_nation(),
                                 get_local_collation_connection());
+  }
+
+  inline ObCharsets4Parser get_charsets4parser() const {
+    ObCharsets4Parser charsets4parser;
+    charsets4parser.string_collation_ = get_local_collation_connection();
+    charsets4parser.nls_collation_ = get_nls_collation();
+    return charsets4parser;
   }
 
   inline ObSessionNLSParams get_session_nls_params() const

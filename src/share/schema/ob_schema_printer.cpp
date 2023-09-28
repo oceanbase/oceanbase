@@ -3755,7 +3755,7 @@ int ObSchemaPrinter::print_object_definition(const ObUDTObjectType *object,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  pl::ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN);
+  pl::ObPLParser parser(allocator, ObCharsets4Parser());
   ObStmtNodeTree *object_stmt = NULL;
   const ParseNode *src_node = NULL;
   ObString object_src;
@@ -4089,7 +4089,7 @@ int ObSchemaPrinter::print_routine_definition(
                || routine_info->get_routine_body().prefix_match_ci("function")) {
       use_v1 = false;
 
-      pl::ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN, exec_env.get_sql_mode());
+      pl::ObPLParser parser(allocator, ObCharsets4Parser(), exec_env.get_sql_mode());
 
       if (lib::is_mysql_mode()) {
         const char prefix[] = "CREATE\n";
@@ -4151,7 +4151,7 @@ int ObSchemaPrinter::print_routine_definition(
     ObStmtNodeTree *parse_tree = NULL;
     const ObStmtNodeTree *routine_tree = NULL;
     ObArenaAllocator allocator;
-    pl::ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN);
+    pl::ObPLParser parser(allocator, ObCharsets4Parser());
     ObStmtNodeTree *param_list = NULL;
     ObStmtNodeTree *return_type = NULL;
     ObStmtNodeTree *clause_list = NULL;

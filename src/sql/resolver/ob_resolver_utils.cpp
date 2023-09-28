@@ -4292,7 +4292,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allocator is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-                expr_str, params.session_info_->get_local_collation_connection(),
+                expr_str, params.session_info_->get_charsets4parser(),
                 *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
   } else if (OB_FAIL(resolve_generated_column_expr(params, expr_node, tbl_schema,
@@ -4332,7 +4332,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     LOG_WARN("allocator or session is null", K(ret),
              KP(params.allocator_), KP(params.session_info_));
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-                      expr_str, params.session_info_->get_local_collation_connection(),
+                      expr_str, params.session_info_->get_charsets4parser(),
                       *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
   } else if (OB_FAIL(resolve_generated_column_expr(params,
@@ -4751,7 +4751,7 @@ int ObResolverUtils::resolve_generated_column_info(const ObString &expr_str,
   int ret = OB_SUCCESS;
   const ParseNode *node = NULL;
   if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-              expr_str, CS_TYPE_UTF8MB4_BIN,
+              expr_str, ObCharsets4Parser(),
               allocator, node))) {
     LOG_WARN("parse expr node from string failed", K(ret), K(expr_str));
   } else if (OB_ISNULL(node)) {
@@ -4857,7 +4857,7 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allocator or session is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-              expr_str, params.session_info_->get_local_collation_connection(),
+              expr_str, params.session_info_->get_charsets4parser(),
               *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
   } else if (OB_FAIL(resolve_default_expr_v2_column_expr(params, expr_node,  default_expr_v2_column, expr, allow_sequence))) {

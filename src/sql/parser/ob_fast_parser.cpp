@@ -113,8 +113,8 @@ ObFastParserBase::ObFastParserBase(
   question_mark_ctx_.by_ordinal_ = false;
   question_mark_ctx_.by_name_ = false;
   question_mark_ctx_.name_ = nullptr;
-  charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.conn_coll_);
-  charset_info_ = ObCharset::get_charset(fp_ctx.conn_coll_);
+  charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.charsets4parser_.string_collation_);
+  charset_info_ = ObCharset::get_charset(fp_ctx.charsets4parser_.string_collation_);
 }
 
 int ObFastParserBase::parse(const ObString &stmt,

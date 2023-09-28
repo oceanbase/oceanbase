@@ -185,7 +185,7 @@ int ObCreateRuleProcessor::generate_exec_arg()
   } else {
     ObUDRAnalyzer analyzer(ctx_.get_allocator(),
                            session->get_sql_mode(),
-                           session->get_local_collation_connection());
+                           session->get_charsets4parser());
     if (OB_FAIL(analyzer.parse_and_check(arg_.pattern_, arg_.replacement_))) {
       LOG_WARN("failed to parse and check", K(ret));
     } else if (OB_FAIL(analyzer.parse_pattern_to_gen_param_infos_str(

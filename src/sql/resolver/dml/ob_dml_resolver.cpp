@@ -5144,7 +5144,7 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       ObString view_def;
 
       ObParser parser(*params_.allocator_, session_info_->get_sql_mode(),
-                      session_info_->get_local_collation_connection());
+                      session_info_->get_charsets4parser());
       if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
                               *params_.allocator_,
                               session_info_->get_local_collation_connection(),
@@ -8461,7 +8461,7 @@ int ObDMLResolver::check_table_exist_or_not(uint64_t tenant_id,
     if (OB_SUCC(ret)) {
       if (!is_exist) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_INFO("table not exist", K(tenant_id), K(database_id), K(table_name), K(ret));
+        LOG_INFO("table not exist", K(tenant_id), K(database_id), K(table_name), KPHEX(table_name.ptr(), table_name.length()), K(ret));
       }
     }
   }
@@ -8572,8 +8572,11 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
   } else if (parse_tree.type_  == T_OBJ_ACCESS_REF) {
-    ObJsonBuffer path_buffer(allocator);
-    if (OB_FAIL(path_buffer.append("$."))) {
+    ObJsonBuffer* path_buffer = nullptr;
+    if (OB_ISNULL(path_buffer = static_cast<ObJsonBuffer*>(allocator->alloc(sizeof(ObJsonBuffer))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (FALSE_IT(path_buffer = new (path_buffer) ObJsonBuffer(allocator))) {
+    } else if (OB_FAIL(path_buffer->append("$."))) {
       LOG_WARN("failed to append path start", K(ret));
     } else if (parse_tree.num_child_ != 2
                || OB_ISNULL(parse_tree.children_)
@@ -8582,8 +8585,8 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to make path, param not expected", K(ret), K(parse_tree.num_child_),
               KP(parse_tree.children_));
-    } else if (OB_FAIL(path_buffer.append(parse_tree.children_[0]->str_value_,
-                                          parse_tree.children_[0]->str_len_))) {
+    } else if (OB_FAIL(path_buffer->append(parse_tree.children_[0]->raw_text_,
+                                          parse_tree.children_[0]->text_len_))) {
       LOG_WARN("failed to append raw text", K(ret));
     } else {
       ParseNode *tmp_path = parse_tree.children_[1];
@@ -8592,7 +8595,7 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
           tmp_path = NULL;
           // do nothing
         } else {
-          if (OB_FAIL(print_json_path(tmp_path, path_buffer))) {
+          if (OB_FAIL(print_json_path(tmp_path, *path_buffer))) {
             LOG_WARN("failed to print path", K(ret));
           }
         }
@@ -8600,12 +8603,12 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
 
       char* path_buf = NULL;
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(path_buf = static_cast<char*>(allocator->alloc(path_buffer.length() + 1)))) {
+      } else if (OB_ISNULL(path_buf = static_cast<char*>(allocator->alloc(path_buffer->length() + 1)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate path buffer", K(ret), K(path_buffer.length()));
+        LOG_WARN("failed to allocate path buffer", K(ret), K(path_buffer->length()));
       } else {
-        MEMCPY(path_buf, path_buffer.ptr(), path_buffer.length());
-        path_buf[path_buffer.length()] = 0;
+        MEMCPY(path_buf, path_buffer->ptr(), path_buffer->length());
+        path_buf[path_buffer->length()] = 0;
         path_str.assign_ptr(path_buf, strlen(path_buf));
       }
     }
@@ -9202,8 +9205,15 @@ int ObDMLResolver::resolve_json_table_nested_column(const ParseNode &parse_tree,
     col_def = new (buf) ObDmlJtColDef();
     col_def->col_base_info_.col_type_ = NESTED_COL_TYPE;
 
-    const ParseNode* path_node = parse_tree.children_[0];
-    if (OB_ISNULL(path_node->str_value_) || path_node->str_len_ == 0) {
+    ParseNode* path_node = const_cast<ParseNode*>(parse_tree.children_[0]);
+
+    // json table nested path syntax, not quoted:
+    // nested path employees[*] columns ( name, job )
+    if (path_node->value_ == 2) {
+      if (OB_FAIL(json_table_make_json_path(*path_node, allocator_, col_def->col_base_info_.path_))) {
+        LOG_WARN("failed to make json path.", K(ret));
+      }
+    } else if (OB_ISNULL(path_node->str_value_) || path_node->str_len_ == 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("allocate memory failed", K(ret), K(alloc_size));
     } else {
@@ -9212,12 +9222,12 @@ int ObDMLResolver::resolve_json_table_nested_column(const ParseNode &parse_tree,
       } else if (OB_FAIL(json_table_make_json_path(*path_node, allocator_, col_def->col_base_info_.path_))) {
         LOG_WARN("failed to make json path.", K(ret));
       }
+    }
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(resolve_json_table_column_item(*parse_tree.children_[1],
-                                                        table_item, col_def, parent, id, cur_column_id))) {
-        LOG_WARN("failed to resolve nested column defination.", K(ret));
-      }
+    if (OB_SUCC(ret)
+        && OB_FAIL(resolve_json_table_column_item(*parse_tree.children_[1],
+                    table_item, col_def, parent, id, cur_column_id))) {
+      LOG_WARN("failed to resolve nested column defination.", K(ret));
     }
   }
   return ret;
