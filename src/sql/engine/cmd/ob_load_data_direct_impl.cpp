@@ -1524,8 +1524,8 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
     handle->data_desc_ = data_desc_;
     handle->start_line_no_ = total_line_no_ ;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
-    handle->sequence_no_.chunk_id_ = chunk_id;
-    handle->sequence_no_.chunk_seq_no_ = 0;
+    handle->sequence_no_.sequence_no_ = chunk_id;
+    handle->sequence_no_.sequence_no_ <<= ObTableLoadSequenceNo::CHUNK_ID_SHIFT;
     handle->data_buffer_.swap(expr_buffer_);
     handle->data_buffer_.is_end_file_ = data_reader_.is_end_file();
     total_line_no_ += current_line_count;
@@ -1792,8 +1792,8 @@ int ObLoadDataDirectImpl::MultiFilesLoadExecutor::get_next_task_handle(TaskHandl
     handle->data_desc_ = data_desc;
     handle->start_line_no_ = 0;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
-    handle->sequence_no_.data_id_ = data_id;
-    handle->sequence_no_.data_seq_no_ = 0;
+    handle->sequence_no_.sequence_no_ = data_id;
+    handle->sequence_no_.sequence_no_ <<= ObTableLoadSequenceNo::DATA_ID_SHIFT;
   }
   return ret;
 }
