@@ -776,10 +776,15 @@ int ObTableScanOp::prepare_all_das_tasks()
   int ret = OB_SUCCESS;
   if (MY_SPEC.batch_scan_flag_) {
     if (OB_SUCC(ret)) {
-      group_size_ = tsc_rtdef_.bnlj_params_.at(0).second->count_;
-      if (OB_UNLIKELY(group_size_ > max_group_size_)) {
+      if (!tsc_rtdef_.bnlj_params_.empty()) {
+        group_size_ = tsc_rtdef_.bnlj_params_.at(0).second->count_;
+        if (OB_UNLIKELY(group_size_ > max_group_size_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("The amount of data exceeds the pre allocated memory", K(ret));
+        }
+      } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The amount of data exceeds the pre allocated memory", K(ret));
+        LOG_WARN("batch nlj params is empty", K(ret));
       }
     }
   }
@@ -1010,10 +1015,15 @@ int ObTableScanOp::prepare_batch_scan_range()
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   int64_t batch_size = 0;
   if (OB_SUCC(ret)) {
-    group_size_ = tsc_rtdef_.bnlj_params_.at(0).second->count_;
-    if (OB_UNLIKELY(group_size_ > max_group_size_)) {
+    if (!tsc_rtdef_.bnlj_params_.empty()) {
+      group_size_ = tsc_rtdef_.bnlj_params_.at(0).second->count_;
+      if (OB_UNLIKELY(group_size_ > max_group_size_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The amount of data exceeds the pre allocated memory", K(ret));
+      }
+    } else {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("The amount of data exceeds the pre allocated memory", K(ret));
+      LOG_WARN("batch nlj params is empry", K(ret));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < group_size_; ++i) {
