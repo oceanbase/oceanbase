@@ -106,3 +106,4 @@ select repeat(c1, 10),repeat(c2,10),repeat(c3,10) from t2;
 | aaaaaaaaaa     | bbbbbbbbbb    | cccccccccc    |
 +----------------+---------------+---------------+
 drop table t2;
+

@@ -4,7 +4,7 @@ USER_PRIVILEGES	CREATE VIEW `USER_PRIVILEGES` AS    SELECT CAST(CONCAT('''', V.U
 desc information_schema.user_privileges;
 Field	Type	Null	Key	Default	Extra
 GRANTEE	varchar(81)	NO			
-TABLE_CATALOG	varchar(512)	NO
+TABLE_CATALOG	varchar(512)	NO			
 PRIVILEGE_TYPE	varchar(64)	NO			
 IS_GRANTABLE	varchar(3)	NO			
 select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';

@@ -399,7 +399,7 @@ explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2);
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
 
-##bug
+##bug 
 --disable_warnings
 drop table if exists t1, t2, t3;
 --enable_warnings 

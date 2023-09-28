@@ -158,19 +158,19 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
   5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -242,7 +242,7 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
@@ -253,13 +253,13 @@ Outputs & filters:
       sort_keys([e.MGR, ASC])
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   7 - output([r.empno]), filter(nil), rowset=256
       sort_keys([r.empno, ASC])
   8 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -328,18 +328,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -417,12 +417,12 @@ Outputs & filters:
       conds([e.SAL = d.SAL]), nl_params_(nil), use_batch=false
   3 - output([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
       access([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   4 - output([d.SAL]), filter(nil), rowset=256
   5 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
@@ -432,15 +432,15 @@ Outputs & filters:
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
   9 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
  10 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  11 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -554,18 +554,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -635,18 +635,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -731,15 +731,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -748,15 +748,15 @@ Outputs & filters:
       equal_conds([r.mgr = e.EMPno]), other_conds(nil)
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -837,15 +837,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -854,15 +854,15 @@ Outputs & filters:
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  11 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -944,15 +944,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -962,15 +962,15 @@ Outputs & filters:
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
  11 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -1052,15 +1052,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -1070,15 +1070,15 @@ Outputs & filters:
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  11 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  12 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  13 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -1145,18 +1145,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
   5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1226,18 +1226,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1322,15 +1322,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -1339,16 +1339,16 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([n.empno]), filter(nil), rowset=256
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -1430,15 +1430,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -1447,16 +1447,16 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([n.empno]), filter(nil), rowset=256
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -1522,18 +1522,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1602,18 +1602,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1711,19 +1711,19 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
   5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1795,7 +1795,7 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
@@ -1806,13 +1806,13 @@ Outputs & filters:
       sort_keys([e.MGR, ASC])
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   7 - output([r.empno]), filter(nil), rowset=256
       sort_keys([r.empno, ASC])
   8 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1881,18 +1881,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -1970,12 +1970,12 @@ Outputs & filters:
       conds([e.SAL = d.SAL]), nl_params_(nil), use_batch=false
   3 - output([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
       access([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   4 - output([d.SAL]), filter(nil), rowset=256
   5 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
@@ -1985,15 +1985,15 @@ Outputs & filters:
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
   9 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
  10 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  11 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -2107,18 +2107,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -2188,18 +2188,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -2284,15 +2284,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -2301,15 +2301,15 @@ Outputs & filters:
       equal_conds([r.mgr = e.EMPno]), other_conds(nil)
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -2390,15 +2390,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -2407,15 +2407,15 @@ Outputs & filters:
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  11 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -2497,15 +2497,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -2515,15 +2515,15 @@ Outputs & filters:
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
  11 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -2605,15 +2605,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -2623,15 +2623,15 @@ Outputs & filters:
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  11 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  12 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  13 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 ##oracle ok
@@ -2699,18 +2699,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
   5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -2780,18 +2780,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -2876,15 +2876,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -2893,16 +2893,16 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([n.empno]), filter(nil), rowset=256
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -2984,15 +2984,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -3001,16 +3001,16 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([n.empno]), filter(nil), rowset=256
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -3076,18 +3076,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3156,18 +3156,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3265,19 +3265,19 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
   5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3349,7 +3349,7 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
@@ -3360,13 +3360,13 @@ Outputs & filters:
       sort_keys([e.MGR, ASC])
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   7 - output([r.empno]), filter(nil), rowset=256
       sort_keys([r.empno, ASC])
   8 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3435,18 +3435,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3524,12 +3524,12 @@ Outputs & filters:
       conds([e.SAL = d.SAL]), nl_params_(nil), use_batch=false
   3 - output([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
       access([e.SAL], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   4 - output([d.SAL]), filter(nil), rowset=256
   5 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
@@ -3539,15 +3539,15 @@ Outputs & filters:
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
   9 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
  10 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  11 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3661,18 +3661,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3742,18 +3742,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -3838,15 +3838,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -3855,15 +3855,15 @@ Outputs & filters:
       equal_conds([r.mgr = e.EMPno]), other_conds(nil)
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -3944,15 +3944,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -3961,15 +3961,15 @@ Outputs & filters:
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  11 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -4051,15 +4051,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -4069,15 +4069,15 @@ Outputs & filters:
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
  11 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -4159,15 +4159,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -4177,15 +4177,15 @@ Outputs & filters:
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  11 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  12 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  13 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -4252,18 +4252,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
   5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -4333,18 +4333,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -4429,15 +4429,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -4446,16 +4446,16 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([n.empno]), filter(nil), rowset=256
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -4537,15 +4537,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -4554,16 +4554,16 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  11 - output([n.empno]), filter(nil), rowset=256
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -4629,18 +4629,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -4709,18 +4709,18 @@ Outputs & filters:
   1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   5 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
@@ -4837,15 +4837,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -4857,15 +4857,15 @@ Outputs & filters:
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno = e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  14 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  15 - output([VIEW1.c1]), filter(nil), rowset=256
  16 - output([VIEW1.c1]), filter(nil), rowset=256
@@ -4874,7 +4874,7 @@ Outputs & filters:
       group([t1.c1]), agg_func(nil)
  18 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS
@@ -4957,15 +4957,15 @@ Outputs & filters:
       equal_conds([e.EMPno = cast(n1.empno, DECIMAL(-1, -1))]), other_conds(nil)
   5 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   6 - output([n1.empno]), filter(nil), rowset=256
       access([n1.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n1.__pk_increment]), range(MIN ; MAX)always true
   7 - output([n2.empno]), filter(nil), rowset=256
       access([n2.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
@@ -4979,22 +4979,22 @@ Outputs & filters:
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  13 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
  14 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno = e.MGR], [e.EMPno = e.EMPno]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
  15 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
  16 - output(nil), filter(nil), rowset=256
  17 - output(nil), filter(nil), rowset=256
       access(nil)
  18 - output([1]), filter(nil), rowset=256
       access(nil), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([disemp1.__pk_increment]), range(MIN ; MAX)always true
  19 - output([VIEW1.c1]), filter(nil), rowset=256
  20 - output([VIEW1.c1]), filter(nil), rowset=256
@@ -5003,7 +5003,7 @@ Outputs & filters:
       group([t1.c1]), agg_func(nil)
  22 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (empno, mgr, iters, sal) AS

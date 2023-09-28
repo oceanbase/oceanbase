@@ -77,7 +77,7 @@ select x, y, st_astext(poi) from gis_point;
 
 drop table if exists gis_point;
 
-#
+# 
 create table if not exists gis_point (
         x decimal(19,16),
         y decimal(19,16),

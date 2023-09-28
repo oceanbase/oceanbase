@@ -67,7 +67,8 @@ int ObKVCacheStore::init(ObKVCacheInstMap &insts,
     max_mb_num_ = max_cache_size / block_size
         + 2 * (WASH_THREAD_RETIRE_LIMIT + RETIRE_LIMIT * OB_MAX_THREAD_NUM);
     if (NULL == (mb_handles_ = static_cast<ObKVMemBlockHandle *>(buf = ob_malloc(
-            (sizeof(ObKVMemBlockHandle) + sizeof(ObKVMemBlockHandle*)) * max_mb_num_, "CACHE_MB_HANDLE")))) {
+            (sizeof(ObKVMemBlockHandle) + sizeof(ObKVMemBlockHandle*)) * max_mb_num_,
+             ObMemAttr(OB_SERVER_TENANT_ID, "CACHE_MB_HANDLE", ObCtxIds::UNEXPECTED_IN_500))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(ERROR, "Fail to allocate memory for mb_handles_, ", K_(max_mb_num), K(ret));
     } else if (OB_FAIL(mb_handles_pool_.init(max_mb_num_,

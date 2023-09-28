@@ -32,7 +32,7 @@ Outputs & filters:
       distinct([t1.c2], [t1.c1])
   3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select c2, sum(c1) from (select distinct c2, c1 from t1) x group by c2;
 +------+---------+
@@ -63,7 +63,7 @@ Outputs & filters:
       distinct([t1.c2], [t1.c1])
   3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select c2, sum(c1 + c2) from (select distinct c2, c1 from t1) x group by c2;
 +------+--------------+
@@ -94,7 +94,7 @@ Outputs & filters:
       distinct([t1.c2], [t1.c1])
   3 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select c2, sum(c1 + c2), max(c3) from (select c1, c2, c1 + 2 as c3 from (select distinct c2, c1 from t1) x ) y group by c2;
 +------+--------------+---------+
@@ -116,7 +116,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter([t1.c2 = 1]), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where c2 in (select 1 from t1);
 +------+------+

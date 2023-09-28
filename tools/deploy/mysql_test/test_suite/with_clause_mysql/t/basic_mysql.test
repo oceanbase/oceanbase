@@ -755,11 +755,11 @@ delete from t1 where c1 = ( with cte (a) as (select max( c1 ) from t1 ) select *
 --echo ##############################
 with cte as (select * from t1) select 1 from dual;
 
-with recursive cte1 as
+with recursive cte1 as 
 (
   select 1 as c1, 2 as c2, 3 as c3, 4 as c4, 5 as c5, 6 as c6, 7 as c7, 8 as c8, 9 as c9, 10 as c10, 11 as c11, 12 as c12
   union all
-  select c1+1,c2+1,c3+1,c4+1,c5+1,c6+1,c7+1,c8+1,c9+1,c10+1, c11+1, c12+1 from cte1 where c1 < 10
+  select c1+1,c2+1,c3+1,c4+1,c5+1,c6+1,c7+1,c8+1,c9+1,c10+1, c11+1, c12+1 from cte1 where c1 < 10  
 )
 select * from cte1;
 

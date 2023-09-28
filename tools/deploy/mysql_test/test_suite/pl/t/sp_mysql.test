@@ -1172,7 +1172,7 @@ select f1(), f3()|
 select id, f1(), f3() from t1 order by id|
 
 # Function which uses two different tables
-create function f4() returns double
+create function f4() returns double 
   return (select d from t1, t2 where t1.data = t2.i and t1.id= "b")|
 
 select f4()|
@@ -1197,7 +1197,7 @@ select f5(2)|
 --error 1424
 select f5(3)|
 
-# OTOH this should work
+# OTOH this should work 
 create function f6() returns int
 begin
   declare n int;
@@ -1303,8 +1303,8 @@ unlock tables|
 #
 # Unlike for permanent tables we should be able to create, use
 # and drop such tables in functions.
-#
-# Simplest function using temporary table. It is also test case for bug
+# 
+# Simplest function using temporary table. It is also test case for bug 
 # #12198 "Temporary table aliasing does not work inside stored functions"
 #--error 1422
 #create function f9() returns int
@@ -1318,7 +1318,7 @@ unlock tables|
 #  return a + b;
 #end|
 ## This will emit warning as t3 was not existing before.
-#--error 1305
+#--error 1305 
 #select f9()|
 #--error 1305
 #select f9() from t1 limit 1|
@@ -1767,7 +1767,7 @@ create procedure h_se()
     deterministic
 begin
   -- integrity constraint violation
-  declare continue handler for sqlstate '23000'
+  declare continue handler for sqlstate '23000' 
     select 'Outer (bad)' as 'h_se';
 
   begin
@@ -1782,12 +1782,12 @@ create procedure h_ss()
     deterministic
 begin
   -- integrity constraint violation
-  declare continue handler for sqlstate '23000'
+  declare continue handler for sqlstate '23000' 
     select 'Outer (bad)' as 'h_ss';
 
   begin
     -- integrity constraint violation
-    declare continue handler for sqlstate '23000'
+    declare continue handler for sqlstate '23000' 
       select 'Inner (good)' as 'h_ss';
 
     insert into t3 values (1);
@@ -1798,7 +1798,7 @@ create procedure h_sn()
     deterministic
 begin
   -- Note: '02000' is more specific than NOT FOUND ;
-  --       there might be other not found states
+  --       there might be other not found states 
   declare continue handler for sqlstate '02000' -- no data
     select 'Outer (bad)' as 'h_sn';
 
@@ -1832,7 +1832,7 @@ create procedure h_sx()
     deterministic
 begin
   -- integrity constraint violation
-  declare continue handler for sqlstate '23000'
+  declare continue handler for sqlstate '23000' 
     select 'Outer (bad)' as 'h_sx';
 
   begin
@@ -2127,7 +2127,7 @@ drop procedure if exists bug1862|
 --error 1064
 create procedure bug1862()
 begin
-  insert into t3 values(2);
+  insert into t3 values(2);    
   flush tables;
 end|
 
@@ -2334,7 +2334,7 @@ insert into t3 values (123456789012)|
 drop procedure if exists bug2780|
 create procedure bug2780()
 begin
-  declare exit handler for sqlwarning set @x = 1;
+  declare exit handler for sqlwarning set @x = 1; 
 
   set @x = 0;
   insert into t3 values (123456789012);
@@ -2360,7 +2360,7 @@ drop table t3|
 #drop procedure if exists bug1863|
 #
 #create procedure bug1863(in1 int)
-#begin
+#begin 
 #
 #  declare ind int default 0;
 #  declare t1 int;
@@ -2398,13 +2398,13 @@ drop table t3|
 # BUG#2656
 #
 
-create table t3 (
+create table t3 ( 
   OrderID  int not null,
   MarketID int,
   primary key (OrderID)
 )|
 
-create table t4 (
+create table t4 ( 
   MarketID int not null,
   Market varchar(60),
   Status char(1),
@@ -2419,24 +2419,24 @@ insert t4 (MarketID,Market,Status) values (2,"MarketID Two","A")|
 --disable_warnings ONCE
 drop procedure if exists bug2656_1|
 create procedure bug2656_1()
-begin
+begin 
   select
     m.Market
-  from  t4 m JOIN t3 o
+  from  t4 m JOIN t3 o 
         ON o.MarketID != 1 and o.MarketID = m.MarketID;
 end |
 
 --disable_warnings ONCE
 drop procedure if exists bug2656_2|
 create procedure bug2656_2()
-begin
+begin 
   select
     m.Market
-  from
+  from  
     t4 m, t3 o
-  where
+  where       
     m.MarketID != 1 and m.MarketID = o.MarketID;
-
+        
 end |
 
 call bug2656_1()|
@@ -2729,7 +2729,7 @@ drop function bug3788|
 create function bug3788() returns binary(1) return 5|
 select bug3788()|
 drop function bug3788|
-
+ 
 
 #
 # BUG#4726
@@ -2852,7 +2852,7 @@ create procedure bug4904 ()
 begin
   declare continue handler for sqlstate 'HY000' begin end;
 
-  select s1 from t3 union select s2 from t3;
+  select s1 from t3 union select s2 from t3; 
 end|
 
 call bug4904()|
@@ -3103,7 +3103,7 @@ begin
   insert into t3 values (1);
   insert into t3 values (1,2);
 end|
-
+ 
 create table t3 (s1 int, primary key (s1))|
 insert into t3 values (1)|
 call bug6029()|
@@ -3230,7 +3230,7 @@ drop table t3|
 #
 # BUG#6857: current_time() in STORED PROCEDURES
 #
---disable_warnings
+--disable_warnings 
 drop procedure if exists bug6857|
 --enable_warnings
 create procedure bug6857()
@@ -3343,7 +3343,7 @@ delimiter ;|
 # BUG#8849: problem with insert statement with table alias's
 #
 # Rolling back changes to AND/OR structure of ON and WHERE clauses  in SP
-#
+# 
 
 delimiter |;
 --disable_warnings ONCE
@@ -3450,25 +3450,25 @@ create procedure bug9074()
 begin
   declare x1, x2, x3, x4, x5, x6 int default 0;
 
-  begin
-    declare continue handler for sqlstate '23000' set x5 = 1;
+  begin    
+    declare continue handler for sqlstate '23000' set x5 = 1;      
 
-    insert into t3 values ('a', 'b');
-    set x6 = 1;
+    insert into t3 values ('a', 'b');      
+    set x6 = 1;      
   end;
 
  begin1_label:
   begin
-    declare continue handler for sqlstate '23000' set x1 = 1;
+    declare continue handler for sqlstate '23000' set x1 = 1;      
 
-    insert into t3 values ('a', 'b');
-    set x2 = 1;
-
+    insert into t3 values ('a', 'b');      
+    set x2 = 1;      
+				
    begin2_label:
-    begin
-      declare exit handler for sqlstate '23000' set x3 = 1;
+    begin  
+      declare exit handler for sqlstate '23000' set x3 = 1;         
 
-      set x4= 1;
+      set x4= 1;         
       insert into t3 values ('a','b');
       set x4= 0;
     end begin2_label;
@@ -3730,16 +3730,16 @@ drop procedure bug9004_2|
 #
 --disable_warnings ONCE
 drop procedure if exists bug7293|
-insert into t1 values ('secret', 0)|
+insert into t1 values ('secret', 0)| 
 create procedure bug7293(p1 varchar(100))
 begin
   if exists (select id from t1 where soundex(p1)=soundex(id)) then
     select 'yes';
   end if;
-end;|
+end;| 
 
-call bug7293('secret')|
-call bug7293 ('secrete')|
+call bug7293('secret')| 
+call bug7293 ('secrete')| 
 drop procedure bug7293|
 delete from t1|
 
@@ -3755,7 +3755,7 @@ drop view if exists v1|
 
 create view v1 as select * from t1, t2 where id = s|
 create procedure bug9841 ()
-  update v1 set data = 10|
+  update v1 set data = 10| 
 call bug9841()|
 
 drop view v1|
@@ -3779,15 +3779,15 @@ drop procedure bug5963_1|
 drop table t3|
 
 
-create procedure bug5963_2 (cfk_value int)
-begin
-  if cfk_value in (select cpk from t3) then
-    set @x = 5;
-  end if;
-  end;
-|
-create table t3 (cpk int)|
-insert into t3 values (1)|
+create procedure bug5963_2 (cfk_value int) 
+begin 
+  if cfk_value in (select cpk from t3) then 
+    set @x = 5; 
+  end if; 
+  end; 
+| 
+create table t3 (cpk int)| 
+insert into t3 values (1)| 
 
 call bug5963_2(1)|
 call bug5963_2(1)|
@@ -4033,16 +4033,16 @@ create table t3 (c1 varchar(5), c2 char(5), c3 enum('one','two'), c4 text, c5 bl
 insert into t3 values ('', '', '', '', '', '', NULL)|
 
 create procedure bug8692()
-begin
-    declare v1 VARCHAR(10);
-    declare v2 VARCHAR(10);
-    declare v3 VARCHAR(10);
-    declare v4 VARCHAR(10);
-    declare v5 VARCHAR(10);
-    declare v6 VARCHAR(10);
-    declare v7 VARCHAR(10);
-    declare c8692 cursor for select c1,c2,c3,c4,c5,c6,c7 from t3;
-    open c8692;
+begin 
+    declare v1 VARCHAR(10); 
+    declare v2 VARCHAR(10); 
+    declare v3 VARCHAR(10); 
+    declare v4 VARCHAR(10); 
+    declare v5 VARCHAR(10); 
+    declare v6 VARCHAR(10); 
+    declare v7 VARCHAR(10); 
+    declare c8692 cursor for select c1,c2,c3,c4,c5,c6,c7 from t3; 
+    open c8692; 
     fetch c8692 into v1,v2,v3,v4,v5,v6,v7;
     select v1, v2, v3, v4, v5, v6, v7;
 end|
@@ -4196,7 +4196,7 @@ drop procedure if exists bug11333|
 
 create table t3 (c1 char(128))|
 
-insert into t3 values
+insert into t3 values 
   ('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')|
 
 
@@ -4746,7 +4746,7 @@ create procedure bug10100p(prm int, inout res int)
 begin
   set res = res * prm;
   if prm > 1 then
-    call bug10100p(prm - 1, res);
+    call bug10100p(prm - 1, res);  
   end if;
 end|
 create procedure bug10100t(prm int)
@@ -4955,10 +4955,10 @@ begin
   insert into t4 set a=null;
   insert into t4 set a=null;
   insert into t4 select null as a;
-
+  
   insert into t3 set a=null;
   insert into t3 set a=null;
-
+  
   select * from t3;
 end|
 
@@ -5008,7 +5008,7 @@ drop procedure bug14376|
 #
 # Bug#5967 "Stored procedure declared variable used instead of column"
 # The bug should be fixed later.
-# Test precedence of names of parameters, variable declarations,
+# Test precedence of names of parameters, variable declarations, 
 # variable declarations in nested compound statements, table columns,
 # table columns in cursor declarations.
 # According to the standard, table columns take precedence over
@@ -5102,7 +5102,7 @@ select * from t1 order by data|
 #
 # A test case for Bug#15392 "Server crashes during prepared statement
 # execute": make sure that stored procedure check for error conditions
-# properly and do not continue execution if an error has been set.
+# properly and do not continue execution if an error has been set. 
 #
 # It's necessary to use several DBs because in the original code
 # the successful return of mysql_change_db overrode the error from
@@ -5290,7 +5290,7 @@ drop procedure if exists bug15231_6|
 --enable_warnings
 
 create table t3 (id int not null)|
-
+  
 create procedure bug15231_1()
 begin
   declare xid integer;
@@ -5404,7 +5404,7 @@ insert into t3 values
 
 create procedure bug17476(pDateFormat varchar(10))
   select date_format(t3.d, pDateFormat), count(*)
-    from t3
+    from t3 
     group by date_format(t3.d, pDateFormat)|
 
 call bug17476('%Y-%m')|
@@ -5486,7 +5486,7 @@ begin
   select id from t1 order by x, id;
 end|
 
-#
+# 
 # BUG#14945: Truncate table doesn't reset the auto_increment counter
 #
 --disable_warnings ONCE
@@ -5564,28 +5564,28 @@ drop procedure bug18787|
 # (... if the database name is longer than 21 characters)
 #
 #               1234567890123456789012
-create database bug18344_012345678901|
+create database bug18344_012345678901| 
 use bug18344_012345678901|
 create procedure bug18344() begin end|
 create procedure bug18344_2() begin end|
 
-create database bug18344_0123456789012|
+create database bug18344_0123456789012| 
 use bug18344_0123456789012|
 create procedure bug18344() begin end|
 create procedure bug18344_2() begin end|
 
 use test|
 
-select schema_name from information_schema.schemata where
+select schema_name from information_schema.schemata where 
   schema_name like 'bug18344%'|
 select routine_name,routine_schema from information_schema.routines where
   routine_schema like 'bug18344%'|
 
-drop database bug18344_012345678901|
-drop database bug18344_0123456789012|
+drop database bug18344_012345678901| 
+drop database bug18344_0123456789012| 
 
 # Should be nothing left.
-select schema_name from information_schema.schemata where
+select schema_name from information_schema.schemata where 
   schema_name like 'bug18344%'|
 select routine_name,routine_schema from information_schema.routines where
   routine_schema like 'bug18344%'|
@@ -5605,7 +5605,7 @@ create function bug12472() returns int return (select count(*) from t1)|
 show create table t3|
 --error 1146
 select * from t3|
---error 1051
+--error 1051 
 drop table t3|
 # Check case when function is used indirectly through view
 create view v1 as select bug12472() as j|
@@ -5742,7 +5742,7 @@ create database mysqltest1 charset=utf8|
 create database mysqltest2 charset=utf8|
 create procedure mysqltest1.p1()
 begin
--- alters the default collation of database test
+-- alters the default collation of database test 
   alter database character set koi8r;
 end|
 use mysqltest1|
@@ -6128,7 +6128,7 @@ DROP FUNCTION bug19862|
 
 
 # Bug#21002 "Derived table not selecting from a "real" table fails in JOINs"
-#
+#         
 # A regression caused by the fix for Bug#18444: for derived tables we should
 # set an empty string as the current database. They do not belong to any
 # database and must be usable even if there is no database
@@ -6227,7 +6227,7 @@ drop database това_е_дълго_име_за_база_данни_нали|
 
 #
 # BUG#21493: Crash on the second call of a procedure containing
-#            a select statement that uses an IN aggregating subquery
+#            a select statement that uses an IN aggregating subquery  
 #
 
 CREATE TABLE t3 (
@@ -6277,7 +6277,7 @@ CREATE FUNCTION bug21493(paramMember VARCHAR(15)) RETURNS varchar(45)
 BEGIN
 DECLARE tracks VARCHAR(45);
 SELECT GROUP_CONCAT(Track SEPARATOR ', ') FROM t4
-  WHERE Member_ID=paramMember AND Action='Enrolled' AND
+  WHERE Member_ID=paramMember AND Action='Enrolled' AND 
         (Track,Action_Date) IN (SELECT Track, MAX(Action_Date) FROM t4
                                   WHERE Member_ID=paramMember GROUP BY Track) INTO tracks;
 RETURN tracks;
@@ -6460,7 +6460,7 @@ drop procedure proc_21462_b|
 #
 # Bug#19733 "Repeated alter, or repeated create/drop, fails"
 # Check that CREATE/DROP INDEX is re-execution friendly.
-#
+# 
 --disable_warnings
 drop table if exists t3|
 drop procedure if exists proc_bug19733|
@@ -6489,7 +6489,7 @@ drop table t3|
 
 #
 # BUG#20492: Subsequent calls to stored procedure yeild incorrect
-# result if join is used
+# result if join is used 
 #
 # Optimized ON expression in join wasn't properly saved for reuse.
 #
@@ -6664,14 +6664,14 @@ DROP FUNCTION IF EXISTS bug23760_rc_test|
 CREATE TABLE bug23760 (
   id INT NOT NULL AUTO_INCREMENT ,
   num INT NOT NULL ,
-  PRIMARY KEY ( id )
+  PRIMARY KEY ( id ) 
 )|
 
 CREATE TABLE bug23760_log (
  id INT NOT NULL AUTO_INCREMENT ,
  reason VARCHAR(50)NULL ,
  ammount INT NOT NULL ,
-  PRIMARY KEY ( id )
+  PRIMARY KEY ( id ) 
 )|
 
 CREATE PROCEDURE bug23760_update_log(r Varchar(50), a INT)
@@ -6794,7 +6794,7 @@ begin
     else set x:= x+100;
   end case;
   set x:=x + 500;
-
+  
   return x;
 end|
 
@@ -6954,7 +6954,7 @@ SELECT SUM(f2), bug25373(f1) FROM t3 GROUP BY f1 WITH ROLLUP|
 DROP FUNCTION bug25373|
 DROP TABLE t3|
 
-#todo:
+#todo: 
 #这里等共享表达式提交之后再将这个case补上
 #SELECT SUM(f2), bug25373(f1) FROM t3 GROUP BY bug25373(f1) WITH ROLLUP
 
@@ -7028,14 +7028,14 @@ select bug20777(18446744073709551616) as 'upper bounds unsigned bigint + 1';
 --error 1264
 select bug20777(-1) as 'lower bounds unsigned bigint - 1';
 --error 1264
-create table examplebug20777 as select
+create table examplebug20777 as select 
   0 as 'i',
   bug20777(9223372036854775806) as '2**63-2',
   bug20777(9223372036854775807) as '2**63-1',
   bug20777(9223372036854775808) as '2**63',
   bug20777(9223372036854775809) as '2**63+1',
   bug20777(18446744073709551614) as '2**64-2',
-  bug20777(18446744073709551615) as '2**64-1',
+  bug20777(18446744073709551615) as '2**64-1', 
   bug20777(18446744073709551616) as '2**64';
 
 #insert into examplebug20777 values (1, 9223372036854775806, 9223372036854775807, 223372036854775808, 9223372036854775809, 18446744073709551614, 18446744073709551615, 8446744073709551616);
@@ -7077,7 +7077,7 @@ BEGIN
 
   RETURN v2;
 END|
-
+ 
 SELECT bug5274_f2()|
 
 # Cleanup.
@@ -7150,7 +7150,7 @@ drop function   bug27354;
 # Bug #28605: SHOW CREATE VIEW with views using stored_procedures no longer
 # showing SP names.
 #
-CREATE TABLE t1 (a INT);
+CREATE TABLE t1 (a INT); 
 INSERT INTO t1 VALUES (1),(2);
 
 CREATE FUNCTION metered(a INT) RETURNS INT RETURN 12;
@@ -7258,7 +7258,7 @@ drop procedure if exists test.sp_bug29050;
 create database mysqltest_db1;
 use mysqltest_db1;
 # For the sake of its side effect
-drop database mysqltest_db1;
+drop database mysqltest_db1; 
 # Now we have no current database selected.
 create table test.t1 (id int);
 insert into test.t1 (id) values (1);
@@ -7419,16 +7419,16 @@ begin
   set x=-1;
    return x;
 end|
-
+                          
 delimiter ;|
-
+                  
 create view v1 as select 1 as one, f1() as days;
-
+                          
 connect (bug29408,$OBMYSQL_MS0,root@mysql, ,*NO-ONE*,$OBMYSQL_PORT);
 connection bug29408;
 
 --source mysql_test/include/show_create_table_old_version_replica2.inc
-show create view test.v1;
+show create view test.v1;      
 select column_name from information_schema.columns
 where table_name='v1' and table_schema='test';
 
@@ -7951,7 +7951,7 @@ drop view v1;
 drop table t1;
 
 #
-# Bug#38469 invalid memory read and/or crash with utf8 text field, stored procedure, uservar
+# Bug#38469 invalid memory read and/or crash with utf8 text field, stored procedure, uservar 
 #
 delimiter $;
 --disable_warnings ONCE
@@ -8221,15 +8221,15 @@ DROP TABLE t1;
 #DROP VIEW t3;
 #
 #--echo #
-#--echo # Bug #46629: Item_in_subselect::val_int(): Assertion `0'
+#--echo # Bug #46629: Item_in_subselect::val_int(): Assertion `0' 
 #--echo # on subquery inside a SP
 #--echo #
 #CREATE TABLE t1(a INT);
 #CREATE TABLE t2(a INT, b INT PRIMARY KEY);
 #
 #DELIMITER |;
-#CREATE PROCEDURE p1 ()
-#BEGIN
+#CREATE PROCEDURE p1 () 
+#BEGIN 
 #  SELECT a FROM t1 A WHERE A.b IN (SELECT b FROM t2 AS B);
 #END|
 #DELIMITER ;|
@@ -8500,7 +8500,7 @@ DROP FUNCTION f4;
 DROP TABLE t1;
 
 --echo #
---echo # Bug#34197: CREATE PROCEDURE fails when COMMENT truncated in non
+--echo # Bug#34197: CREATE PROCEDURE fails when COMMENT truncated in non 
 --echo #            strict SQL mode
 --echo #
 
@@ -8540,7 +8540,7 @@ DROP PROCEDURE p1;
 #CREATE TEMPORARY TABLE t1 (f1 INT);
 #
 #--echo # t1 still refers to the view since it was inlined
-#--echo #
+#--echo # 
 ##--error ER_NON_INSERTABLE_TABLE
 #CALL p1(2);
 #
@@ -8654,7 +8654,7 @@ drop procedure p1;
 create procedure p1(p1 integer, p2 integer)
   select * from t1 limit a, b;
 --echo #
---echo # Try to use data types not allowed in LIMIT
+--echo # Try to use data types not allowed in LIMIT 
 --echo #
 #--error ER_WRONG_SPVAR_TYPE_IN_LIMIT
 drop procedure p1;
@@ -8724,7 +8724,7 @@ drop function f1;
 
 delimiter |;
 --echo #
---echo # Try to use data types not allowed in LIMIT
+--echo # Try to use data types not allowed in LIMIT 
 --echo #
 create function f1(p1 date, p2 date)
   returns int
@@ -8813,10 +8813,10 @@ drop table t1;
 drop procedure p1;
 drop function f1;
 
---echo #
---echo # BUG#11766234: 59299: ASSERT (TABLE_REF->TABLE || TABLE_REF->VIEW)
+--echo # 
+--echo # BUG#11766234: 59299: ASSERT (TABLE_REF->TABLE || TABLE_REF->VIEW) 
 --echo #               FAILS IN SET_FIELD_ITERATOR
---echo #
+--echo # 
 
 CREATE TABLE t1 (a INT);
 CREATE TABLE t2 (a INT);
@@ -8842,7 +8842,7 @@ DROP PROCEDURE proc;
 --echo # --
 --echo # -- Bug 11765684 - 58674: SP-cache does not detect changes in
 --echo # -- pre-locking list caused by triggers
---echo # ---
+--echo # --- 
 
 --disable_warnings
 DROP TABLE IF EXISTS t1;
@@ -8884,7 +8884,7 @@ DROP PROCEDURE p1;
 --echo # --
 --echo # -- Bug#12652769 - 61470: case operator in stored routine retains old
 --echo # -- value of input parameter
---echo # ---
+--echo # --- 
 
 --disable_warnings
 DROP TABLE IF EXISTS t1;
@@ -8942,20 +8942,20 @@ DROP PROCEDURE p1;
 
 --disable_warnings
 DROP TABLE IF EXISTS t1;
-DROP PROCEDURE IF EXISTS p1;
+DROP PROCEDURE IF EXISTS p1; 
 DROP PROCEDURE IF EXISTS p2;
 --enable_warnings
 
-CREATE TABLE t1 (c1 INT);
+CREATE TABLE t1 (c1 INT); 
 INSERT INTO t1 VALUES (1);
 
 delimiter |;
 
-CREATE PROCEDURE p1()
-BEGIN
-  DECLARE foo, cnt INT UNSIGNED DEFAULT 1;
-  SET foo = (SELECT MIN(c1) FROM t1 LIMIT cnt);
-END|
+CREATE PROCEDURE p1() 
+BEGIN 
+  DECLARE foo, cnt INT UNSIGNED DEFAULT 1; 
+  SET foo = (SELECT MIN(c1) FROM t1 LIMIT cnt); 
+END| 
 
 CREATE PROCEDURE p2()
 BEGIN
@@ -9041,7 +9041,7 @@ BEGIN
     END;
   END;
 RETURN 1;
-END $
+END $ 
 delimiter ;$
 
 # This used to cause an assertion.

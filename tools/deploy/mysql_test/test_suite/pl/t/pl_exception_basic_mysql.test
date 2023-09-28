@@ -45,7 +45,7 @@ select * from a;
 drop table a;
 drop procedure p;
 
-#case 2
+#case 2 
 create table a(a1 int);
 delimiter //;
 create procedure p()
@@ -1489,3 +1489,4 @@ select * from b;
 drop table a;
 drop table b;
 drop procedure p;
+

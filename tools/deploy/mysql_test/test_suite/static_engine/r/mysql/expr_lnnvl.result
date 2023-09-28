@@ -58,3 +58,4 @@ select * from v1;
 |        0 |
 +----------+
 drop view v1;
+

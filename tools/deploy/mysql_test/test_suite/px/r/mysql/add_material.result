@@ -38,7 +38,7 @@ Outputs & filters:
       affinitize
   5 - output([t1.c1]), filter(nil), rowset=16
       access([t1.c1]), partitions(p[0-9])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   6 - output([t2.c1]), filter(nil), rowset=16
   7 - output([t2.c1]), filter(nil), rowset=16
@@ -46,7 +46,7 @@ Outputs & filters:
   8 - output([t2.c1]), filter(nil), rowset=16
   9 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
 select /*+ USE_PX parallel(3) */* from
 (select c1,count(*) over(partition by c1) c2 from
@@ -106,13 +106,13 @@ Outputs & filters:
  10 - output([b.c1]), filter(nil), rowset=16
  11 - output([b.c1]), filter(nil), rowset=16
       access([b.c1]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([b.c1]), range(MIN ; MAX)always true
  12 - output([a.c1], [a.c2]), filter(nil), rowset=16
       affinitize
  13 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p[0-9])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([a.c1]), range(MIN ; MAX)always true
 select a.c2,count(*) from (select /*+ USE_PX parallel(3) PQ_DISTRIBUTE(b HASH HASH) */a.c1,a.c2,b.c1 c3,b.c2 c4 from t1 a join t2 b on a.c1=b.c1)a group by a.c2;
 c2	count(*)
