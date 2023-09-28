@@ -214,7 +214,7 @@ int ObForeignKeyChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc)
   } else if (OB_FAIL(DAS_CTX(das_ref_.get_exec_ctx()).extended_tablet_loc(*table_loc_, tablet_id, tablet_loc))) {
     LOG_WARN("extended tablet loc failed", K(ret));
   }
-  LOG_INFO("tablet_id and partition id is", K(tablet_id), K(partition_id));
+  LOG_DEBUG("tablet_id and partition id is", K(tablet_id), K(partition_id));
   return ret;
 }
 
@@ -595,7 +595,7 @@ int ObForeignKeyChecker::check_need_shadow_columns(const ObIArray<ObForeignKeyCo
     }
     need_shadow_columns = is_rowkey_all_null;
   }
-  LOG_INFO("need shadow columns", K(need_shadow_columns));
+  LOG_DEBUG("need shadow columns", K(need_shadow_columns));
   return ret;
 }
 
