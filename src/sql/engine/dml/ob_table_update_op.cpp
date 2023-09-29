@@ -201,7 +201,7 @@ int ObTableUpdateOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
       if (OB_SUCC(ret)) {
         if (!MY_SPEC.from_multi_table_dml()) {
           OZ(check_row_null(MY_SPEC.new_row_, MY_SPEC.column_infos_, MY_SPEC.updated_column_infos_));
-          if (MY_SPEC.need_filter_null_row_) {
+          if (OB_SUCC(ret) && MY_SPEC.need_filter_null_row_) {
             bool is_null = false;
             if (OB_FAIL(check_rowkey_is_null(MY_SPEC.old_row_, MY_SPEC.primary_key_ids_.count(), is_null))) {
               LOG_WARN("check rowkey is null failed", K(ret));

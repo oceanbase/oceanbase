@@ -35701,10 +35701,10 @@ Outputs & filters:
   3 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil)
   4 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  5 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
+  5 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
   6 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil)
-  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
   9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
@@ -35791,10 +35791,10 @@ Outputs & filters:
   5 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil)
   6 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  7 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
+  7 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
   8 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil)
-  9 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+  9 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
   11 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
@@ -35888,10 +35888,10 @@ Outputs & filters:
   7 - output([t3.c1], [t4.c1]), filter(nil)
   8 - output([t3.c1], [t4.c1]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  9 - output([t3.c1]), filter(nil),
+  9 - output([t3.c1]), filter(nil), 
       access([t3.c1]), partitions(p0)
   10 - output([t4.c1]), filter(nil)
-  11 - output([t4.c1]), filter(nil),
+  11 - output([t4.c1]), filter(nil), 
       access([t4.c1]), partitions(p0)
   12 - output([t2.c1]), filter(nil)
   13 - output([t2.c1]), filter(nil), 
@@ -36031,10 +36031,10 @@ Outputs & filters:
   7 - output([t3.c1], [t4.c1]), filter(nil)
   8 - output([t3.c1], [t4.c1]), filter(nil), 
       conds([t4.c1 != t3.c1]), nl_params_(nil)
-  9 - output([t3.c1]), filter(nil),
+  9 - output([t3.c1]), filter(nil), 
       access([t3.c1]), partitions(p0)
   10 - output([t4.c1]), filter(nil)
-  11 - output([t4.c1]), filter(nil),
+  11 - output([t4.c1]), filter(nil), 
       access([t4.c1]), partitions(p0)
   12 - output([t2.c1]), filter(nil)
   13 - output([t2.c1]), filter(nil), 
@@ -39354,9 +39354,9 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
   3 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  4 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
+  4 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
-  5 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+  5 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   6 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
@@ -39434,9 +39434,9 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
   5 - output([t3.c1], [t3.c2], [t3.c3], [t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  6 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil),
+  6 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
-  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil),
+  7 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
@@ -39521,9 +39521,9 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
   7 - output([t3.c1], [t4.c1]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  8 - output([t3.c1]), filter(nil),
+  8 - output([t3.c1]), filter(nil), 
       access([t3.c1]), partitions(p0)
-  9 - output([t4.c1]), filter(nil),
+  9 - output([t4.c1]), filter(nil), 
       access([t4.c1]), partitions(p0)
   10 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p0)
@@ -39654,9 +39654,9 @@ Outputs & filters:
       access([t1.c1]), partitions(p0)
   7 - output([t3.c1], [t4.c1]), filter(nil), 
       equal_conds([t4.c1 = t3.c1]), other_conds(nil)
-  8 - output([t3.c1]), filter(nil),
+  8 - output([t3.c1]), filter(nil), 
       access([t3.c1]), partitions(p0)
-  9 - output([t4.c1]), filter(nil),
+  9 - output([t4.c1]), filter(nil), 
       access([t4.c1]), partitions(p0)
   10 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p0)
@@ -64699,10 +64699,10 @@ Outputs & filters:
   2 - output([t2.c2], [t3.c2]), filter(nil)
   3 - output([t2.c2], [t3.c2]), filter(nil), 
       conds(nil), nl_params_(nil)
-  4 - output([t2.c2]), filter([t2.c1 = 1]),
+  4 - output([t2.c2]), filter([t2.c1 = 1]), 
       access([t2.c1], [t2.c2]), partitions(p0)
   5 - output([t3.c2]), filter(nil)
-  6 - output([t3.c2]), filter([t3.c1 = 1]),
+  6 - output([t3.c2]), filter([t3.c1 = 1]), 
       access([t3.c1], [t3.c2]), partitions(p0)
 
 select t1.c2, t2.c2, t3.c2 from t1 left join (t2 left join t3 on t2.c1 = t3.c1) on t1.c1 = 1 and t2.c1 = 1 and t3.c1 = 1;
@@ -64789,10 +64789,10 @@ Outputs & filters:
   4 - output([t2.c2], [t3.c2]), filter(nil)
   5 - output([t2.c2], [t3.c2]), filter(nil), 
       conds(nil), nl_params_(nil)
-  6 - output([t2.c2]), filter([t2.c1 = 1]),
+  6 - output([t2.c2]), filter([t2.c1 = 1]), 
       access([t2.c1], [t2.c2]), partitions(p0)
   7 - output([t3.c2]), filter(nil)
-  8 - output([t3.c2]), filter([t3.c1 = 1]),
+  8 - output([t3.c2]), filter([t3.c1 = 1]), 
       access([t3.c1], [t3.c2]), partitions(p0)
 
 insert into t14_temp (select t1.c2, t2.c2, t3.c2 from t1 left join (t2 left join t3 on t2.c1 = t3.c1) on t1.c1 = 1 and t2.c1 = 1 and t3.c1 = 1);
@@ -68063,10 +68063,10 @@ Outputs & filters:
   4 - output([t2.c1], [t2.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t2.c1 = t3.c1]), other_conds(nil)
   5 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
-  6 - output([t2.c1], [t2.c2]), filter(nil),
+  6 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p0)
   7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  8 - output([t3.c1], [t3.c2]), filter(nil),
+  8 - output([t3.c1], [t3.c2]), filter(nil), 
       access([t3.c1], [t3.c2]), partitions(p0)
   9 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
   10 - output([t4.c1], [t4.c2]), filter(nil), 
@@ -68167,10 +68167,10 @@ Outputs & filters:
   6 - output([t2.c1], [t2.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t2.c1 = t3.c1]), other_conds(nil)
   7 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
-  8 - output([t2.c1], [t2.c2]), filter(nil),
+  8 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p0)
   9 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  10 - output([t3.c1], [t3.c2]), filter(nil),
+  10 - output([t3.c1], [t3.c2]), filter(nil), 
       access([t3.c1], [t3.c2]), partitions(p0)
   11 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
   12 - output([t4.c1], [t4.c2]), filter(nil), 
@@ -70017,10 +70017,10 @@ Outputs & filters:
   4 - output([t3.c1], [t3.c2], [t4.c1], [t4.c2]), filter(nil), 
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
   5 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  6 - output([t3.c1], [t3.c2]), filter(nil),
+  6 - output([t3.c1], [t3.c2]), filter(nil), 
       access([t3.c1], [t3.c2]), partitions(p0)
   7 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
-  8 - output([t4.c1], [t4.c2]), filter(nil),
+  8 - output([t4.c1], [t4.c2]), filter(nil), 
       access([t4.c1], [t4.c2]), partitions(p0)
   9 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   10 - output([t2.c1], [t2.c2]), filter(nil), 
@@ -70121,10 +70121,10 @@ Outputs & filters:
   6 - output([t3.c1], [t3.c2], [t4.c1], [t4.c2]), filter(nil), 
       equal_conds([t3.c1 = t4.c1]), other_conds(nil)
   7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  8 - output([t3.c1], [t3.c2]), filter(nil),
+  8 - output([t3.c1], [t3.c2]), filter(nil), 
       access([t3.c1], [t3.c2]), partitions(p0)
   9 - output([t4.c1], [t4.c2]), filter(nil), sort_keys([t4.c1, ASC])
-  10 - output([t4.c1], [t4.c2]), filter(nil),
+  10 - output([t4.c1], [t4.c2]), filter(nil), 
       access([t4.c1], [t4.c2]), partitions(p0)
   11 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   12 - output([t2.c1], [t2.c2]), filter(nil), 
@@ -71879,10 +71879,10 @@ Outputs & filters:
   6 - output([t1.c1], [t1.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t1.c1 = t3.c1]), other_conds(nil)
   7 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  8 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]),
+  8 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]), 
       access([t3.c1], [t3.c2]), partitions(p0)
   9 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  10 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]),
+  10 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]), 
       access([t1.c1], [t1.c2]), partitions(p0)
   11 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   12 - output([t2.c1], [t2.c2]), filter([t2.c1 > 1]), 
@@ -72011,10 +72011,10 @@ Outputs & filters:
   8 - output([t1.c1], [t1.c2], [t3.c1], [t3.c2]), filter(nil), 
       equal_conds([t1.c1 = t3.c1]), other_conds(nil)
   9 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
-  10 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]),
+  10 - output([t3.c1], [t3.c2]), filter([t3.c1 > 1]), 
       access([t3.c1], [t3.c2]), partitions(p0)
   11 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  12 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]),
+  12 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1]), 
       access([t1.c1], [t1.c2]), partitions(p0)
   13 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c1, ASC])
   14 - output([t2.c1], [t2.c2]), filter([t2.c1 > 1]), 

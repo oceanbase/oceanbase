@@ -9,7 +9,7 @@ desc schemata;
 Field	Type	Null	Key	Default	Extra
 CATALOG_NAME	varchar(3)	NO			
 SCHEMA_NAME	varchar(128)	NO			
-DEFAULT_CHARACTER_SET_NAME	varchar(128)	NO
-DEFAULT_COLLATION_NAME	varchar(128)	NO
+DEFAULT_CHARACTER_SET_NAME	varchar(128)	NO			
+DEFAULT_COLLATION_NAME	varchar(128)	NO			
 SQL_PATH	null	NO			
 DEFAULT_ENCRYPTION	varchar(2)	NO			

@@ -1192,8 +1192,8 @@ desc information_schema.SCHEMATA;
 Field	Type	Null	Key	Default	Extra
 CATALOG_NAME	varchar(3)	NO			
 SCHEMA_NAME	varchar(128)	NO			
-DEFAULT_CHARACTER_SET_NAME	varchar(128)	NO
-DEFAULT_COLLATION_NAME	varchar(128)	NO
+DEFAULT_CHARACTER_SET_NAME	varchar(128)	NO			
+DEFAULT_COLLATION_NAME	varchar(128)	NO			
 SQL_PATH	null	NO			
 DEFAULT_ENCRYPTION	varchar(2)	NO			
 desc information_schema.SCHEMA_PRIVILEGES;
@@ -1534,7 +1534,7 @@ WAIT_TIME	bigint(20)	NO		NULL
 QUEUE_TIME	bigint(20)	NO		NULL	
 PROCESS_TIME	bigint(20)	NO		NULL	
 LAST_TIMESTAMP	timestamp(6)	NO		NULL	
-DCOUNT	bigint(20)	NO		NULL
+DCOUNT	bigint(20)	NO		NULL	
 desc oceanbase.gv$obrpc_outgoing;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
@@ -1854,8 +1854,8 @@ EXPECTED_WORKER_COUNT	bigint(20)	NO		NULL
 USED_WORKER_COUNT	bigint(20)	NO		NULL	
 SCHED_INFO	varchar(16384)	YES		NULL	
 FUSE_ROW_CACHE_HIT	bigint(20)	NO		NULL	
-PS_CLIENT_STMT_ID	bigint(20)	NO		NULL
-PS_INNER_STMT_ID	bigint(20)	NO		NULL
+PS_CLIENT_STMT_ID	bigint(20)	NO		NULL	
+PS_INNER_STMT_ID	bigint(20)	NO		NULL	
 TRANSACTION_HASH	bigint(20) unsigned	NO		NULL	
 REQUEST_TYPE	bigint(20)	NO		NULL	
 IS_BATCHED_MULTI_STMT	tinyint(4)	NO		NULL	
@@ -2201,7 +2201,7 @@ WAIT_TIME	bigint(20)	NO
 QUEUE_TIME	bigint(20)	NO			
 PROCESS_TIME	bigint(20)	NO			
 LAST_TIMESTAMP	timestamp(6)	NO			
-DCOUNT	bigint(20)	NO
+DCOUNT	bigint(20)	NO			
 desc oceanbase.v$obrpc_outgoing;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO			
@@ -2496,8 +2496,8 @@ EXPECTED_WORKER_COUNT	bigint(20)	NO
 USED_WORKER_COUNT	bigint(20)	NO			
 SCHED_INFO	varchar(16384)	NO			
 FUSE_ROW_CACHE_HIT	bigint(20)	NO			
-PS_CLIENT_STMT_ID	bigint(20)	NO
-PS_INNER_STMT_ID	bigint(20)	NO
+PS_CLIENT_STMT_ID	bigint(20)	NO			
+PS_INNER_STMT_ID	bigint(20)	NO			
 TRANSACTION_HASH	bigint(20) unsigned	NO			
 REQUEST_TYPE	bigint(20)	NO			
 IS_BATCHED_MULTI_STMT	tinyint(4)	NO			
@@ -4921,7 +4921,7 @@ wait_time	bigint(20)	NO		NULL
 queue_time	bigint(20)	NO		NULL	
 process_time	bigint(20)	NO		NULL	
 ilast_timestamp	timestamp(6)	NO		NULL	
-dcount	bigint(20)	NO		NULL
+dcount	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_partition_amplification_stat;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -5782,8 +5782,8 @@ used_worker_count	bigint(20)	NO		NULL
 sched_info	varchar(16384)	YES		NULL	
 fuse_row_cache_hit	bigint(20)	NO		NULL	
 user_client_ip	varchar(46)	NO		NULL	
-ps_client_stmt_id	bigint(20)	NO		NULL
-ps_inner_stmt_id	bigint(20)	NO		NULL
+ps_client_stmt_id	bigint(20)	NO		NULL	
+ps_inner_stmt_id	bigint(20)	NO		NULL	
 transaction_hash	bigint(20) unsigned	NO		NULL	
 request_type	bigint(20)	NO		NULL	
 is_batched_multi_stmt	tinyint(4)	NO		NULL	

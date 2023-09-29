@@ -48,7 +48,7 @@ Query Plan
 |0 |EXPRESSION|    |1        |1   |
 ===================================
 
-Outputs & filters:
+Outputs & filters: 
 -------------------------------------
   0 - output([?]), filter(nil)
       values({?})
@@ -60,3 +60,4 @@ select * from v1;
 |        0 |
 +----------+
 drop view v1;
+
