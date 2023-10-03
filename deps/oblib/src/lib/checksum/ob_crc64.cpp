@@ -1121,11 +1121,8 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
   uint32_t d = 0;
 
   uint32_t vendor_info[4];
-  __asm__("mov $0x0, %eax\n\t");
-  __asm__("cpuid\n\t");
-  __asm__("mov %%ebx, %0\n\t":"=r" (vendor_info[0]));
-  __asm__("mov %%edx, %0\n\t":"=r" (vendor_info[1]));
-  __asm__("mov %%ecx, %0\n\t":"=r" (vendor_info[2]));
+  uint32_t leaf = 0;
+  asm("cpuid" : "+a"(leaf), "=b"(vendor_info[0]), "=d"(vendor_info[1]), "=c"(vendor_info[2]));
   vendor_info[3]='\0';
 
   if (strcmp((char*)vendor_info, "GenuineIntel") == 0) {
