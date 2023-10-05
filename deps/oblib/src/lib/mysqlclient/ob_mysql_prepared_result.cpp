@@ -25,7 +25,7 @@ namespace common
 {
 namespace sqlclient
 {
-ObMySQLPreparedResult::ObMySQLPreparedResult(ObMySQLPreparedStatement &stmt) :
+ObMySQLPreparedResultImpl::ObMySQLPreparedResultImpl(ObMySQLPreparedStatement &stmt) :
     stmt_(stmt),
     alloc_(stmt.get_allocator()),
     result_column_count_(0),
@@ -33,11 +33,11 @@ ObMySQLPreparedResult::ObMySQLPreparedResult(ObMySQLPreparedStatement &stmt) :
 {
 }
 
-ObMySQLPreparedResult::~ObMySQLPreparedResult()
+ObMySQLPreparedResultImpl::~ObMySQLPreparedResultImpl()
 {
 }
 
-int ObMySQLPreparedResult::init()
+int ObMySQLPreparedResultImpl::init()
 {
   int ret = OB_SUCCESS;
   MYSQL_STMT *stmt = NULL;
@@ -60,7 +60,7 @@ int ObMySQLPreparedResult::init()
   return ret;
 }
 
-int ObMySQLPreparedResult::bind_result_param()
+int ObMySQLPreparedResultImpl::bind_result_param()
 {
   int ret = OB_SUCCESS;
   MYSQL_STMT *stmt = NULL;
@@ -74,14 +74,16 @@ int ObMySQLPreparedResult::bind_result_param()
   return ret;
 }
 
-void ObMySQLPreparedResult::close()
+int ObMySQLPreparedResultImpl::close()
 {
+  int ret = OB_SUCCESS;
   result_column_count_ = 0;
   alloc_.free(bind_);
   bind_ = NULL;
+  return ret;
 }
 
-int ObMySQLPreparedResult::next()
+int ObMySQLPreparedResultImpl::next()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -107,7 +109,7 @@ int ObMySQLPreparedResult::next()
   return ret;
 }
 
-int ObMySQLPreparedResult::bind_result(const int64_t col_idx, enum_field_types buffer_type, char *out_buf,
+int ObMySQLPreparedResultImpl::bind_result(const int64_t col_idx, enum_field_types buffer_type, char *out_buf,
                                        const int64_t buf_len, unsigned long &res_len)
 {
   int ret = OB_SUCCESS;
@@ -127,7 +129,7 @@ int ObMySQLPreparedResult::bind_result(const int64_t col_idx, enum_field_types b
   return ret;
 }
 
-int ObMySQLPreparedResult::get_int(const int64_t col_idx, int64_t &int_val) const
+int ObMySQLPreparedResultImpl::get_int(const int64_t col_idx, int64_t &int_val) const
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < result_column_count_)) {
@@ -147,7 +149,7 @@ int ObMySQLPreparedResult::get_int(const int64_t col_idx, int64_t &int_val) cons
   return ret;
 }
 
-int ObMySQLPreparedResult::get_varchar(const int64_t col_idx, ObString &varchar_val) const
+int ObMySQLPreparedResultImpl::get_varchar(const int64_t col_idx, ObString &varchar_val) const
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < result_column_count_)) {

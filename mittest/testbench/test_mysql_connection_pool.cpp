@@ -12,7 +12,7 @@ public:
 
   virtual void SetUp();
   virtual void Tear();
-  void TestBasicRead(common::sqlclient::ObISQLConnection *conn);
+  void TestBasicRead(common::sqlclient::ObMySQLConnection *conn);
 
 public:
   int tg_id;
@@ -50,7 +50,7 @@ void TestMySQLConnectionPool::Tear() {
 }
 
 void TestMySQLConnectionPool::TestBasicRead(
-    common::sqlclient::ObISQLConnection *conn) {
+    common::sqlclient::ObMySQLConnection *conn) {
   common::ObISQLClient::ReadResult res;
   res.reset();
   conn->execute_read(sql, res);
@@ -68,9 +68,9 @@ TEST_F(TestMySQLConnectionPool, acquire_mysql_connection) {
   int64_t tenant_count = tenant_list.count();
   for (int64_t tenant_idx = 0; tenant_idx < tenant_count; ++tenant_idx) {
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
-    common::sqlclient::ObISQLConnection *conn = nullptr;
+    common::sqlclient::ObMySQLConnection *conn = nullptr;
     EXPECT_EQ(OB_SUCCESS, tenant_list.at(tenant_idx, tenant_id));
-    EXPECT_EQ(OB_SUCCESS, sql_conn_pool.acquire(tenant_id, conn, nullptr));
+    EXPECT_EQ(OB_SUCCESS, sql_conn_pool.acquire(tenant_id, conn));
     TestBasicRead(conn);
     EXPECT_EQ(OB_SUCCESS, sql_conn_pool.release(conn, true));
   }
@@ -111,8 +111,7 @@ TEST_F(TestMySQLConnectionPool, create_dblink_pool) {
         EXPECT_EQ(OB_SUCCESS, conn_array.push_back(conn));
       }
       for (int64_t conn_idx = 0; conn_idx < CONCURRENT_LINKS; ++conn_idx) {
-        TestBasicRead(
-            (common::sqlclient::ObISQLConnection *)conn_array.at(conn_idx));
+        TestBasicRead((common::sqlclient::ObMySQLConnection *)conn_array.at(conn_idx));
       }
       common::sqlclient::ObISQLConnection *conn = nullptr;
       EXPECT_NE(OB_SUCCESS,

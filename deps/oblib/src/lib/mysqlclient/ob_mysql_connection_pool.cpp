@@ -833,7 +833,7 @@ int ObMySQLConnectionPool::create_all_dblink_pool()
   return ret;
 }
 
-int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn, uint32_t sessid, int64_t sql_request_level)
+int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx, ObMySQLConnection *&dblink_conn, uint32_t sessid, int64_t sql_request_level)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(do_acquire_dblink(dblink_id, param_ctx, dblink_conn, sessid))) {
@@ -849,12 +849,16 @@ int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param
   return ret;
 }
 
-int ObMySQLConnectionPool::release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid)
+int ObMySQLConnectionPool::release_dblink(ObMySQLConnection *dblink_conn, uint32_t sessid)
 {
   int ret = OB_SUCCESS;
-  const bool succ = OB_NOT_NULL(dblink_conn) ? dblink_conn->usable() : false;
-  if (OB_FAIL(release(dynamic_cast<ObMySQLConnection *>(dblink_conn), succ, sessid))) {
-    LOG_WARN("fail to release dblink conn", K(ret));
+  if (NULL != dblink_conn) {
+    if (OB_ISNULL(dblink_conn)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ObMySQLConnectionPool only release ObMySQLConnection", K(ret));
+    } else if (OB_FAIL(release_dblink(dblink_conn, sessid))) {
+      LOG_WARN("release connection failed", K(ret));
+    }
   }
   return ret;
 }
@@ -877,51 +881,48 @@ int ObMySQLConnectionPool::get_dblink_pool(uint64_t dblink_id, ObServerConnectio
   return ret;
 }
 
-int ObMySQLConnectionPool::do_acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn, uint32_t sessid)
+int ObMySQLConnectionPool::do_acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx, ObMySQLConnection *&dblink_conn, uint32_t sessid)
 {
   UNUSED(param_ctx);
   int ret = OB_SUCCESS;
   ObServerConnectionPool *dblink_pool = NULL;
-  ObMySQLConnection *dblink_conn1 = NULL;
   if (OB_FAIL(get_dblink_pool(dblink_id, dblink_pool))) {
     LOG_WARN("failed to get dblink pool", K(ret), K(dblink_id));
   } else if (OB_ISNULL(dblink_pool)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink pool is NULL", K(ret));
-  } else if (OB_FAIL(dblink_pool->acquire(dblink_conn1, sessid))) {
+  } else if (OB_FAIL(dblink_pool->acquire(dblink_conn, sessid))) {
     LOG_WARN("failed to acquire dblink conn", K(ret));
-  } else if (OB_ISNULL(dblink_conn1)) {
+  } else if (OB_ISNULL(dblink_conn)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink conn is NULL", K(ret));
-  } else if (OB_UNLIKELY(dblink_conn1->is_busy())) {
+  } else if (OB_UNLIKELY(dblink_conn->is_busy())) {
     ret =  OB_ERR_SYS;
     LOG_WARN("dblink conn is busy, should not happen", K(ret));
   } else {
     ATOMIC_INC((uint64_t *)&busy_conn_count_);
-    dblink_conn1->set_busy(true);
-    dblink_conn1->set_timestamp(::oceanbase::common::ObTimeUtility::current_time());
-    dblink_conn = static_cast<ObISQLConnection *>(dblink_conn1);
-    LOG_TRACE("acquire connection from mysql connection pool", K(this), K(busy_conn_count_), KP(dblink_conn), K(dblink_conn1->is_closed()), K(dblink_pool), K(sessid));
+    dblink_conn->set_busy(true);
+    dblink_conn->set_timestamp(::oceanbase::common::ObTimeUtility::current_time());
+    LOG_TRACE("acquire connection from mysql connection pool", K(this), K(busy_conn_count_), KP(dblink_conn), K(dblink_conn->is_closed()), K(dblink_pool), K(sessid));
   }
   return ret;
 }
 
-int ObMySQLConnectionPool::try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level)
+int ObMySQLConnectionPool::try_connect_dblink(ObMySQLConnection *dblink_conn, int64_t sql_request_level)
 {
   int ret = OB_SUCCESS;
-  ObMySQLConnection *dblink_conn1 = static_cast<ObMySQLConnection *>(dblink_conn);
-  if (OB_ISNULL(dblink_conn1)) {
+  if (OB_ISNULL(dblink_conn)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dblink conn is NULL", K(ret));
-  } else if (dblink_conn1->is_closed()) {
-    dblink_conn1->set_timeout(config_.sqlclient_wait_timeout_);
+  } else if (dblink_conn->is_closed()) {
+    dblink_conn->set_timeout(config_.sqlclient_wait_timeout_);
     LOG_TRACE("set dblink timeout and sql request level", K(sql_request_level), K(config_.sqlclient_wait_timeout_), K(lbt()), K(ret));
-    if (OB_FAIL(dblink_conn1->connect_dblink(is_use_ssl_, sql_request_level))) {
-      LOG_WARN("fail to connect dblink", K(dblink_conn1->get_server()), K(ret));
-    } else if (OB_FAIL(dblink_conn1->set_timeout_variable(config_.long_query_timeout_,
+    if (OB_FAIL(dblink_conn->connect_dblink(is_use_ssl_, sql_request_level))) {
+      LOG_WARN("fail to connect dblink", K(dblink_conn->get_server()), K(ret));
+    } else if (OB_FAIL(dblink_conn->set_timeout_variable(config_.long_query_timeout_,
                                                          DEFAULT_TRANSACTION_TIMEOUT_US))) {
       LOG_WARN("fail to set mysql timeout variablse", K(ret));
-      dblink_conn1->close();
+      dblink_conn->close();
     }
   }
   return ret;

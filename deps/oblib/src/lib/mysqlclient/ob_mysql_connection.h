@@ -46,6 +46,7 @@ class ObContFunc;
 
 class ObMySQLConnection : public ObISQLConnection //, ObIDbLinkConnection
 {
+  friend ObContFunc;
   #define CONT_FUNC_DEF(id, type) \
   friend class type;                    
   #include "ob_cont_func_define.h"
@@ -64,6 +65,13 @@ public:
     DEBUG_MODE = 0,
     MYSQL_MODE = 1,
     OCEANBASE_MODE = 2
+  };
+  enum ConnStatus
+  {
+    INIT = 0,
+    SUCCESS = 1,
+    ERROR = 2,
+    PENDING = 3
   };
 public:
   ObMySQLConnection();
@@ -89,9 +97,6 @@ public:
   void set_last_error(int err_code);
   int get_last_error(void) const;
 
-  virtual int execute_read(const char *sql, ObISQLClient::ReadResult &res, 
-      bool is_user_sql = false, const common::ObAddr *sql_exec_addr = nullptr) override;
-      
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
@@ -99,7 +104,7 @@ public:
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
-
+  
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
       int64_t &affected_rows, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) override;
@@ -107,9 +112,22 @@ public:
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
                             int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;
+
+  int execute_read(const char *sql, ObISQLClient::ReadResult &res);
+  int execute_read(ObMySQLPreparedStatement &stmt, ObISQLClient::ReadResult &res);
+  int execute_read_async(ObMySQLPreparedStatement &stmt);
+  int get_async_read_result(ObISQLClient::ReadResult &res);
+  int execute_write(const char *sql, int64_t &affected_rows);
+  int execute_write(ObMySQLPreparedStatement &stmt, int64_t &affected_rows);
+  int execute_write_async(ObMySQLPreparedStatement &stmt);
+  int get_async_write_result(int64_t &affected_rows);
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int rollback() override;
   virtual int commit() override;
+  int start_transaction_async(bool with_snap_shot = false);
+  int rollback_async();
+  int commit_async();
+  ConnStatus get_conn_status();
 
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
@@ -136,15 +154,10 @@ public:
   // dblink.
   virtual int connect_dblink(const bool use_ssl, int64_t sql_request_level);
 
-  // Async Mode
-  int wait_for_mysql();
-  int rollback_async();
-  int commit_async();
-  int get_cont_status(ObMySQLPreparedStatement *cur_stmt = NULL);
-
 private:
   int switch_tenant(const uint64_t tenant_id);
   int reset_read_consistency();
+  int wait_for_mysql();
 
 private:
   const static int64_t READ_CONSISTENCY_STRONG = 3;
@@ -173,6 +186,7 @@ private:
   ObContFunc* cont_funcs_[ContFuncDefID::END];
   int cur_cont_func_;
   ObArenaAllocator alloc_;
+  ConnStatus conn_status_; 
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLConnection);
@@ -216,7 +230,9 @@ class ObContFunc
 public:
   ObContFunc(ObMySQLConnection *conn) : conn_(conn) {}
   virtual ~ObContFunc() {}
-  virtual bool run_func() = 0;
+  virtual void run_func() = 0;
+  void update_connection_status();
+  void update_stmt_connection_status();
 
 protected:
   ObMySQLConnection *conn_;
@@ -228,7 +244,7 @@ class ObConnectContFunc : public ObContFunc
 public:
   ObConnectContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObConnectContFunc() {}
-  virtual bool run_func() override; 
+  virtual void run_func() override; 
 };
 
 class ObQueryContFunc : public ObContFunc
@@ -236,7 +252,7 @@ class ObQueryContFunc : public ObContFunc
 public:
   ObQueryContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObQueryContFunc() {}
-  virtual bool run_func() override; 
+  virtual void run_func() override; 
 };
 
 class ObUpdateContFunc : public ObContFunc
@@ -244,7 +260,7 @@ class ObUpdateContFunc : public ObContFunc
 public:
   ObUpdateContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObUpdateContFunc() {}
-  virtual bool run_func() override; 
+  virtual void run_func() override; 
 };
 
 class ObStmtQueryContFunc : public ObContFunc
@@ -252,7 +268,7 @@ class ObStmtQueryContFunc : public ObContFunc
 public:
   ObStmtQueryContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObStmtQueryContFunc() {}
-  virtual bool run_func() override; 
+  virtual void run_func() override; 
 };
 
 class ObStmtUpdateContFunc : public ObContFunc
@@ -260,7 +276,7 @@ class ObStmtUpdateContFunc : public ObContFunc
 public:
   ObStmtUpdateContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObStmtUpdateContFunc() {}
-  virtual bool run_func() override; 
+  virtual void run_func() override; 
 };
 
 class ObCommitContFunc : public ObContFunc
@@ -268,7 +284,7 @@ class ObCommitContFunc : public ObContFunc
 public:
   ObCommitContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObCommitContFunc() {}
-  virtual bool run_func() override; 
+  virtual void run_func() override; 
 };
 
 class ObRollbackContFunc : public ObContFunc
@@ -276,7 +292,7 @@ class ObRollbackContFunc : public ObContFunc
 public:
   ObRollbackContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
   virtual ~ObRollbackContFunc() {}
-  virtual bool run_func() override;
+  virtual void run_func() override;
 };
 }
 }

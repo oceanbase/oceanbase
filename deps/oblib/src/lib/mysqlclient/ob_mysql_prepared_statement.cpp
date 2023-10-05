@@ -32,7 +32,8 @@ ObMySQLPreparedStatement::ObMySQLPreparedStatement() :
     param_(*this),
     result_(*this),
     stmt_param_count_(0),
-    stmt_(NULL)
+    stmt_(NULL),
+    sql_str_(NULL)
 {
 }
 
@@ -42,7 +43,8 @@ ObMySQLPreparedStatement::ObMySQLPreparedStatement(ObArenaAllocator *arena_alloc
     param_(*this),
     result_(*this),
     stmt_param_count_(0),
-    stmt_(NULL)
+    stmt_(NULL),
+    sql_str_(NULL)
 {
 }
 
@@ -76,20 +78,23 @@ int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const char *sql)
   int ret = OB_SUCCESS;
   // will be used by param_ and result_
   conn_ = &conn;
-
   if (OB_ISNULL(sql)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql", KP(sql), K(ret));
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
-  } else if (0 != mysql_stmt_prepare(stmt_, sql, STRLEN(sql))) {
+  } else if (OB_UNLIKELY(0 != mysql_stmt_prepare(stmt_, sql, STRLEN(sql)))) {
     ret = -mysql_errno(conn_->get_handler());
     LOG_WARN("fail to prepare stmt", "info", mysql_error(conn_->get_handler()), K(ret));
   } else if (OB_FAIL(param_.init())) {
     LOG_WARN("fail to init prepared result", K(ret));
   } else if (OB_FAIL(result_.init())) {
     LOG_WARN("fail to init prepared result", K(ret));
+  } else if (OB_ISNULL(sql_str_ = (char *)alloc_->alloc(STRLEN(sql) * sizeof(char)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    sql_str_ = NULL;
+    LOG_WARN("fail to init sql for prepared statement");
   } else {
     LOG_INFO("conn_handler", "handler", conn_->get_handler(), K_(stmt));
   }
@@ -143,9 +148,8 @@ int ObMySQLPreparedStatement::execute_update_async()
   return ret;
 }
 
-ObMySQLPreparedResult *ObMySQLPreparedStatement::execute_query()
+int ObMySQLPreparedStatement::execute_query(ObMySQLResult *& result, bool enable_use_result)
 {
-  ObMySQLPreparedResult *result = NULL;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -154,17 +158,40 @@ ObMySQLPreparedResult *ObMySQLPreparedStatement::execute_query()
     LOG_WARN("fail to bind prepared input param", K(ret));
   } else if (OB_FAIL(result_.bind_result_param())) {
     LOG_WARN("bind result param fail", K(ret));
-  } else if (0 != mysql_stmt_execute(stmt_)) {
+  } else if (OB_UNLIKELY(0 != mysql_stmt_execute(stmt_))) {
     ret = -mysql_stmt_errno(stmt_);
     LOG_WARN("fail to execute stmt", "info", mysql_stmt_error(stmt_), K(ret));
-  } else if (0 != mysql_stmt_store_result(stmt_)) {
+  } else if (OB_UNLIKELY(0 != mysql_stmt_store_result(stmt_))) {
     ret = -mysql_stmt_errno(stmt_);
     LOG_WARN("fail to store prepared result", "info", mysql_stmt_error(stmt_), K(ret));
   } else {
     result = &result_;
   }
-  conn_->set_last_error(ret);
-  return result;
+  return ret;
+}
+
+int ObMySQLPreparedStatement::execute_query_async()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("stmt handler is null", K(ret));
+  } else if (OB_FAIL(param_.bind_param())) {
+    LOG_WARN("fail to bind prepared input param", K(ret));
+  } else if (OB_FAIL(result_.bind_result_param())) {
+    LOG_WARN("bind result param fail", K(ret));
+  } else if (OB_LIKELY(conn_->async_status_ = mysql_stmt_execute_start(&conn_->mysql_int_err_, stmt_))) {
+    conn_->cur_cont_func_ = ContFuncDefID::CONT_FUNC_STMT_QUERY;
+  } else if (OB_UNLIKELY(conn_->mysql_int_err_)) {
+    ret = -mysql_stmt_errno(stmt_);
+    LOG_WARN("execute stmt fail", "info", mysql_stmt_error(stmt_), K(ret));
+  }
+  return ret;
+}
+
+const char *ObMySQLPreparedStatement::get_stmt_sql() const 
+{
+  return sql_str_;
 }
 
 int ObMySQLPreparedStatement::set_int(const int64_t col_idx, const int64_t int_val)

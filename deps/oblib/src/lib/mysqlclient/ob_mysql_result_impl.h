@@ -32,20 +32,11 @@ public:
   explicit ObMySQLResultImpl(ObMySQLStatement &stmt);
   ~ObMySQLResultImpl();
   int init(bool enable_use_result = false);
-  /*
-   * close result
-   */
-  int close();
-  /*
-   * row count
-   */
-  // must using store mode after mysql_store_result()
   int64_t get_row_count(void) const;
-
-  /*
-   * move result cursor to next row
-   */
-  int next();
+  virtual int close() override;
+  virtual int next() override;
+  int bind_result(const int64_t col_idx, enum_field_types buf_type, char *out_buf, const int64_t buf_len,
+                  unsigned long &res_len);
   /*
    * read int/str/TODO from result set
    * col_idx: indicate which column to read, [0, max_read_col)

@@ -148,8 +148,10 @@ public:
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size);
 
+  virtual int acquire(const uint64_t tenant_id, ObMySQLConnection *&connection);
   virtual int acquire(const uint64_t tenant_id, ObISQLConnection *&conn, ObISQLClient *client_addr) override;
   virtual int release(ObISQLConnection *conn, const bool success, uint32_t sessid = 0) override;
+  int release(ObMySQLConnection *connection, const bool succ, uint32_t sessid = 0);
 
   virtual int on_client_inactive(ObISQLClient *client_addr) override
   {
@@ -164,7 +166,7 @@ public:
   MySQLConnectionPoolType get_pool_type() const { return pool_type_; }
   const char* get_db_name() const { return db_name_; }
   const char* get_user_name() const { return db_user_; }
-  virtual DblinkDriverProto get_pool_link_driver_proto() { return DBLINK_DRV_OB; }
+  virtual DblinkDriverProto get_pool_link_driver_proto() override { return DBLINK_DRV_OB; }
 
   // dblink
   virtual int create_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
@@ -172,21 +174,33 @@ public:
                          const ObString &db_pass, const ObString &db_name,
                          const common::ObString &conn_str,
                          const common::ObString &cluster_str,
-                         const dblink_param_ctx &param_ctx);
+                         const dblink_param_ctx &param_ctx) override;
   virtual int acquire_dblink(uint64_t dblink_id,
                              const dblink_param_ctx &param_ctx,
                              ObISQLConnection *&dblink_conn,
                              uint32_t sessid = 0, int64_t
-                             sql_request_level = 0);
-  virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0);
+                             sql_request_level = 0) override { return OB_NOT_SUPPORTED; }
+  int acquire_dblink(uint64_t dblink_id,
+                     const dblink_param_ctx &param_ctx,
+                     ObMySQLConnection *&dblink_conn,
+                     uint32_t sessid = 0, int64_t
+                     sql_request_level = 0);
+  virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0) override { return OB_NOT_SUPPORTED; }
+  int release_dblink(ObMySQLConnection *dblink_conn, uint32_t sessid = 0);
   virtual int do_acquire_dblink(uint64_t dblink_id,
                                 const dblink_param_ctx &param_ctx,
                                 ObISQLConnection *&dblink_conn,
-                                uint32_t sessid);
-  virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0);
+                                uint32_t sessid) override { return OB_NOT_SUPPORTED; }
+  int do_acquire_dblink(uint64_t dblink_id,
+                        const dblink_param_ctx &param_ctx,
+                        ObMySQLConnection *&dblink_conn,
+                        uint32_t sessid);
+  virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0) override { return OB_NOT_SUPPORTED; }
+  int try_connect_dblink(ObMySQLConnection *dblink_conn, int64_t sql_request_level = 0);
   int create_all_dblink_pool();
   int get_dblink_pool(uint64_t dblink_id, ObServerConnectionPool *&dblink_pool);
   void set_check_read_consistency(bool need_check) { check_read_consistency_ = need_check; }
+
 protected:
   // update interval.
   // update ms list in backgroud thread and
@@ -194,15 +208,11 @@ protected:
   //virtual void run(int64_ts);
   virtual void runTimerTask();
   int create_server_connection_pool(const common::ObAddr &server);
-
-  virtual int acquire(const uint64_t tenant_id, ObMySQLConnection *&connection);
   int do_acquire(const uint64_t tenant_id, ObMySQLConnection *&connection);
-
 
 protected:
   int execute_init_sql(ObMySQLConnection *connection);
   int try_connect(ObMySQLConnection *connection);
-  int release(ObMySQLConnection *connection, const bool succ, uint32_t sessid = 0);
   int get_pool(const uint64_t tenant_id, ObServerConnectionPool *&pool);
   int get_tenant_server_pool(const uint64_t tenant_id, ObTenantServerConnectionPool *&tenant_server_pool);
   int purge_connection_pool();

@@ -37,7 +37,6 @@ public:
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
   int init(ObMySQLConnection &conn, const char *sql);
-  int init_async(ObMySQLConnection &conn, const char *sql);
   /*
    * close statement
    */
@@ -70,17 +69,19 @@ public:
    * use prepare method to read data instead
    * reference ObMySQLPrepareStatement
    */
-  ObMySQLPreparedResult *execute_query();
-  // TODO: add async api for query
+  int execute_query(ObMySQLResult *&result, bool enable_use_result);
+  int execute_query_async();
+  const char *get_stmt_sql() const;
 
 private:
   ObMySQLConnection *conn_;
   ObArenaAllocator arena_allocator_;  // TODO: used right allocator?
   ObIAllocator *alloc_;  // bind to arena_allocator_
   ObMySQLPreparedParam param_;
-  ObMySQLPreparedResult result_;
+  ObMySQLPreparedResultImpl result_;
   int64_t stmt_param_count_;
   MYSQL_STMT *stmt_;
+  const char *sql_str_;
 };
 } //namespace sqlclient
 }
