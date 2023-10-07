@@ -124,6 +124,9 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
           length /= mbminlen;
           precision = -1;
           scale = -1;
+          if (ObCharType == ob_type && length > 256) {
+            length = 256;
+          }
         }
         break;
       }
