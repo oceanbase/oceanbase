@@ -30,6 +30,7 @@
 #include "ob_table_session_pool.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_table_move_response.h"
+#include "ob_table_connection_mgr.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -111,6 +112,12 @@ int ObTableLoginP::process()
     if (common::OB_INVALID_ARGUMENT == ret) {
       RPC_OBRPC_LOG(ERROR, "yyy retcode is 4002", "pkt", req_->get_packet());
     }
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = ObTableConnectionMgr::get_instance().update_table_connection(req_, result_.tenant_id_,
+                result_.database_id_, result_.user_id_))) {
+    LOG_WARN("fail to update table connection", K_(req), K_(result_.tenant_id),
+              K_(result_.database_id), K_(result_.user_id), K(tmp_ret), K(ret));
+  }
   EVENT_INC(TABLEAPI_LOGIN_COUNT);
   return ret;
 }
@@ -229,7 +236,8 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      need_retry_in_queue_(false),
      retry_count_(0),
      trans_desc_(NULL),
-     had_do_response_(false)
+     had_do_response_(false),
+     user_client_addr_()
 {
   need_audit_ = GCONF.enable_sql_audit;
   trans_state_ptr_ = &trans_state_;
@@ -877,6 +885,7 @@ int ObTableRpcProcessor<T>::before_process()
     audit_record_.exec_timestamp_.receive_ts_ = RpcProcessor::req_->get_receive_timestamp();
     audit_record_.exec_timestamp_.enter_queue_ts_ = RpcProcessor::req_->get_enqueue_timestamp();
   }
+  user_client_addr_ = RPC_REQ_OP.get_peer(RpcProcessor::req_);
   if (need_audit()) {
     start_audit(RpcProcessor::req_);
   }
@@ -947,6 +956,7 @@ int ObTableRpcProcessor<T>::response(int error_code)
 template<class T>
 int ObTableRpcProcessor<T>::after_process(int error_code)
 {
+  int ret = OB_SUCCESS;
   NG_TRACE(process_end); // print trace log if necessary
   // some statistics must be recorded for plan stat, even though sql audit disabled
   audit_record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
@@ -961,6 +971,11 @@ int ObTableRpcProcessor<T>::after_process(int error_code)
   }
   if (need_audit()) {
     end_audit();
+  }
+  if (OB_FAIL(ObTableConnectionMgr::get_instance().update_table_connection(user_client_addr_,
+                credential_.tenant_id_, credential_.database_id_, credential_.user_id_))) {
+       LOG_WARN("fail to update conn active time", K(ret), K_(user_client_addr), K_(credential_.tenant_id),
+                K_(credential_.database_id), K_(credential_.user_id));
   }
   return RpcProcessor::after_process(error_code);
 }

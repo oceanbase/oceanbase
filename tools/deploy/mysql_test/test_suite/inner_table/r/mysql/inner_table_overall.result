@@ -638,6 +638,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12389	__all_virtual_wr_snapshot	2	201001	1
 12390	__all_virtual_wr_statname	2	201001	1
 12391	__all_virtual_wr_sysstat	2	201001	1
+12392	__all_virtual_kv_connection	2	201001	1
 12393	__all_virtual_virtual_long_ops_status_mysql_sys_agent	2	201001	1
 12394	__all_virtual_ls_transfer_member_list_lock_info	2	201001	1
 12395	__all_virtual_timestamp_service	2	201001	1
@@ -973,6 +974,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21394	CDB_WR_STATNAME	1	201001	1
 21395	DBA_WR_SYSSTAT	1	201001	1
 21396	CDB_WR_SYSSTAT	1	201001	1
+21397	GV$OB_KV_CONNECTIONS	1	201001	1
+21398	V$OB_KV_CONNECTIONS	1	201001	1
 21399	GV$OB_LOCKS	1	201001	1
 21400	V$OB_LOCKS	1	201001	1
 21401	CDB_OB_LOG_RESTORE_SOURCE	1	201001	1
