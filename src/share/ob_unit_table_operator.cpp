@@ -403,6 +403,36 @@ int ObUnitTableOperator::get_resource_pools(const common::ObIArray<uint64_t> &po
   return ret;
 }
 
+int ObUnitTableOperator::get_resource_pool(common::ObISQLClient &sql_client,
+                                           const uint64_t pool_id,
+                                           const bool select_for_update,
+                                           ObResourcePool &resource_pool) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    if (!inited_) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT * FROM %s WHERE resource_pool_id = %lu%s",
+          OB_ALL_RESOURCE_POOL_TNAME, pool_id,
+          select_for_update ? " FOR UPDATE" : ""))) {
+        LOG_WARN("assign sql string failed", K(ret), K(pool_id), K(select_for_update));
+      } else if (OB_FAIL(sql_client.read(res, sql_string.ptr()))) {
+        LOG_WARN("update status of ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(read_resource_pool(*result, resource_pool))) {
+        LOG_WARN("fail to read resource pool from result", KR(ret), K(pool_id), K(select_for_update));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::update_resource_pool(common::ObISQLClient &client,
                                               const ObResourcePool &resource_pool)
 {

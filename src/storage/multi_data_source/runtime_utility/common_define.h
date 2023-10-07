@@ -5,6 +5,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
+#include "ob_clock_generator.h"
 #include "src/share/ob_errno.h"
 #include "src/share/scn.h"
 #include "src/share/ob_occam_time_guard.h"

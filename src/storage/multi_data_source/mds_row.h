@@ -27,6 +27,7 @@
 #include "storage/multi_data_source/adapter_define/mds_dump_node.h"
 #include <utility>
 #include "deps/oblib/src/common/meta_programming/ob_meta_copy.h"
+#include "runtime_utility/mds_retry_control.h"
 
 namespace oceanbase
 {
@@ -76,7 +77,7 @@ public:
   template <typename DATA>
   int set(DATA &&data,
           MdsCtx &ctx,
-          const int64_t lock_timeout_us,
+          const RetryParam &retry_param,
           const bool is_for_remove = false);
   template <typename DATA>
   int replay(DATA &&data,
@@ -87,7 +88,7 @@ public:
   int get_snapshot(READ_OP &&read_operation,
                    const share::SCN snapshot,
                    const int64_t read_seq,
-                   const int64_t timeout_us) const;
+                   const RetryParam &retry_param) const;
   template <typename READ_OP>
   int get_latest(READ_OP &&read_operation, const int64_t read_seq) const;
   template <typename READ_OP>
@@ -95,7 +96,7 @@ public:
                     const MdsWriter &writer,
                     const share::SCN snapshot,
                     const int64_t read_seq,
-                    const int64_t timeout_us) const;
+                    const RetryParam &retry_param) const;
   template <typename DUMP_OP>
   int scan_dump_node_from_tail_to_head(DUMP_OP &&op,
                                        const uint8_t mds_table_id,
@@ -116,10 +117,6 @@ public:
   int for_each_node_(OPERATION &&op) const;
   template <typename READ_OP, typename SPECIFIED_GET_LOGIC>
   int get_with_read_wrapper_(READ_OP &&read_operation, SPECIFIED_GET_LOGIC &&specified_logic) const;
-  template <typename WRITE_OPERATION>
-  int write_operation_wrapper_(WRITE_OPERATION &&write_op,
-                               MdsCtx &ctx,
-                               const int64_t lock_timeout_us);
   template <typename DATA>
   int construct_insert_record_user_mds_node_(MdsRowBase<K, V> *p_mds_row,
                                              DATA &&data,
@@ -128,7 +125,7 @@ public:
                                              MdsCtx &ctx);
   int check_node_snapshot_(const UserMdsNode<K, V> &node,
                            const share::SCN snapshot,
-                           const int64_t timeout_ts,
+                           const RetryParam &retry_param,
                            bool &can_read) const;
   template <int N>
   void report_event_(const char (&event_str)[N],

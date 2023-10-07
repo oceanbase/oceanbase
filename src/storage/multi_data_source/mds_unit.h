@@ -48,6 +48,89 @@ struct KvPair : public ListNode<KvPair<K, V>>
 template <typename K, typename V>
 class MdsUnit final : public MdsUnitBase<K, V>
 {
+  struct SetOP {
+    SetOP() = delete;
+    SetOP(const SetOP &) = delete;
+    SetOP &operator=(const SetOP &) = delete;
+    SetOP(MdsUnit<K, V> *p_this,
+          bool is_lvalue,
+          MdsTableBase *p_mds_table,
+          const K &key,
+          V &value,
+          MdsCtx &ctx,
+          bool is_for_remove,
+          RetryParam &retry_param) :
+    this_(p_this),
+    is_lvalue_(is_lvalue),
+    p_mds_table_(p_mds_table),
+    key_(key),
+    value_(value),
+    ctx_(ctx),
+    is_for_remove_(is_for_remove),
+    retry_param_(retry_param) {}
+    int operator()();
+    MdsUnit<K, V> *this_;
+    bool is_lvalue_;
+    MdsTableBase *p_mds_table_;
+    const K &key_;
+    V &value_;
+    MdsCtx &ctx_;
+    bool is_for_remove_;
+    RetryParam &retry_param_;
+  };
+  template <typename OP>
+  struct GetSnapShotOp {
+    GetSnapShotOp() = delete;
+    GetSnapShotOp(const GetSnapShotOp &) = delete;
+    GetSnapShotOp &operator=(const GetSnapShotOp &) = delete;
+    GetSnapShotOp(const MdsUnit<K, V> *p_this,
+                  const K &key,
+                  OP &read_op,
+                  share::SCN snapshot,
+                  int64_t read_seq,
+                  RetryParam &retry_param)
+    : this_(p_this),
+    key_(key),
+    read_op_(read_op),
+    snapshot_(snapshot),
+    read_seq_(read_seq),
+    retry_param_(retry_param) {}
+    int operator()();
+    const MdsUnit<K, V> *this_;
+    const K &key_;
+    OP &read_op_;
+    share::SCN snapshot_;
+    int64_t read_seq_;
+    RetryParam &retry_param_;
+  };
+  template <typename OP>
+  struct GetByWriterOp {
+    GetByWriterOp() = delete;
+    GetByWriterOp(const GetByWriterOp &) = delete;
+    GetByWriterOp &operator=(const GetByWriterOp &) = delete;
+    GetByWriterOp(const MdsUnit<K, V> *p_this,
+                  const K &key,
+                  OP &read_op,
+                  const MdsWriter &writer,
+                  share::SCN snapshot,
+                  int64_t read_seq,
+                  RetryParam &retry_param)
+    : this_(p_this),
+    key_(key),
+    read_op_(read_op),
+    writer_(writer),
+    snapshot_(snapshot),
+    read_seq_(read_seq),
+    retry_param_(retry_param) {}
+    int operator()();
+    const MdsUnit<K, V> *this_;
+    const K &key_;
+    OP &read_op_;
+    const MdsWriter &writer_;
+    share::SCN snapshot_;
+    int64_t read_seq_;
+    RetryParam &retry_param_;
+  };
 public:
   typedef K key_type;
   typedef V value_type;
@@ -124,8 +207,9 @@ public:
                      const char *file = __builtin_FILE(),
                      const uint32_t line = __builtin_LINE(),
                      const char *function_name = __builtin_FUNCTION()) const;
-  const Row<K, V> *get_row_from_list_(const K &key) const;
-  int insert_empty_kv_to_list_(const K &key, Row<K, V> *&row, MdsTableBase *p_mds_table);
+  KvPair<K, Row<K, V>> *get_row_from_list_(const K &key) const;
+  int insert_empty_kv_to_list_(const K &key, KvPair<K, Row<K, V>> *&p_kv, MdsTableBase *p_mds_table);
+  void erase_kv_from_list_if_empty_(KvPair<K, Row<K, V>> *p_kv);
   SortedList<KvPair<K, Row<K, V>>, SORT_TYPE::ASC> multi_row_list_;
   mutable MdsLock lock_;
 };
@@ -134,6 +218,74 @@ public:
 template <typename V>
 class MdsUnit<DummyKey, V> final : public MdsUnitBase<DummyKey, V>
 {
+  struct SetOP {
+    SetOP() = delete;
+    SetOP(const SetOP &) = delete;
+    SetOP &operator=(const SetOP &) = delete;
+    SetOP(MdsUnit<DummyKey, V> *p_this,
+          bool is_lvalue,
+          V &value,
+          MdsCtx &ctx,
+          RetryParam &retry_param) :
+    this_(p_this),
+    is_lvalue_(is_lvalue),
+    value_(value),
+    ctx_(ctx),
+    retry_param_(retry_param) {}
+    int operator()();
+    MdsUnit<DummyKey, V> *this_;
+    bool is_lvalue_;
+    V &value_;
+    MdsCtx &ctx_;
+    RetryParam &retry_param_;
+  };
+  template <typename OP>
+  struct GetSnapShotOp {
+    GetSnapShotOp() = delete;
+    GetSnapShotOp(const GetSnapShotOp &) = delete;
+    GetSnapShotOp &operator=(const GetSnapShotOp &) = delete;
+    GetSnapShotOp(const MdsUnit<DummyKey, V> *p_this,
+                  OP &read_op,
+                  share::SCN snapshot,
+                  int64_t read_seq,
+                  RetryParam &retry_param)
+    : this_(p_this),
+    read_op_(read_op),
+    snapshot_(snapshot),
+    read_seq_(read_seq),
+    retry_param_(retry_param) {}
+    int operator()();
+    const MdsUnit<DummyKey, V> *this_;
+    OP &read_op_;
+    share::SCN snapshot_;
+    int64_t read_seq_;
+    RetryParam &retry_param_;
+  };
+  template <typename OP>
+  struct GetByWriterOp {
+    GetByWriterOp() = delete;
+    GetByWriterOp(const GetByWriterOp &) = delete;
+    GetByWriterOp &operator=(const GetByWriterOp &) = delete;
+    GetByWriterOp(const MdsUnit<DummyKey, V> *p_this,
+                  OP &read_op,
+                  const MdsWriter &writer,
+                  share::SCN snapshot,
+                  int64_t read_seq,
+                  RetryParam &retry_param)
+    : this_(p_this),
+    read_op_(read_op),
+    writer_(writer),
+    snapshot_(snapshot),
+    read_seq_(read_seq),
+    retry_param_(retry_param) {}
+    int operator()();
+    const MdsUnit<DummyKey, V> *this_;
+    OP &read_op_;
+    const MdsWriter &writer_;
+    share::SCN snapshot_;
+    int64_t read_seq_;
+    RetryParam &retry_param_;
+  };
 public:
   typedef DummyKey key_type;
   typedef V value_type;

@@ -429,7 +429,19 @@ private:
                            const double limit,
                            bool &is_enough,
                            AlterResourceErr &err_index) const;
-  virtual int migrate_unit(const uint64_t unit_id, const common::ObAddr &dst, const bool is_manual = false);
+  virtual int migrate_unit_(const uint64_t unit_id, const common::ObAddr &dst, const bool is_manual = false);
+  int do_migrate_unit_notify_resource_(const share::ObResourcePool &pool,
+                                       const share::ObUnit &new_unit,
+                                       const bool is_manual,
+                                       const bool granted);
+  int do_migrate_unit_in_trans_(const share::ObResourcePool &pool,
+                                const share::ObUnit &new_unit,
+                                const bool is_manual,
+                                const bool granted);
+  int do_migrate_unit_inmemory_(const share::ObUnit &new_unit,
+                                share::ObUnit *unit,
+                                const bool is_manual,
+                                const bool granted);
   int inner_get_unit_info_by_id(const uint64_t unit_id, share::ObUnitInfo &unit) const;
   int check_server_enough(const uint64_t tenant_id,
                           const common::ObIArray<share::ObResourcePoolName> &pool_names,
