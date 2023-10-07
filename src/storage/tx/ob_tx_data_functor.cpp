@@ -355,7 +355,7 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
           retry_cnt = 0;
           logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
           if (NULL != detector && detector->is_clog_disk_has_fatal_error()) {
-            ret = OB_IO_ERROR;
+            ret = detector->is_clog_disk_has_full_error()? OB_SERVER_OUTOF_DISK_SPACE: OB_CLOG_DISK_HANG;
             TRANS_LOG(ERROR, "unexpected io error", K(ret), K(tx_data), KPC(tx_cc_ctx), KPC(this));
           }
         }

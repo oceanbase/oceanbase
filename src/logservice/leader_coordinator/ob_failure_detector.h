@@ -92,6 +92,8 @@ public:
    */
   void detect_failure();
   bool is_clog_disk_has_fatal_error();
+  bool is_clog_disk_has_hang_error();
+  bool is_clog_disk_has_full_error();
   bool is_data_disk_has_fatal_error();
   bool is_schema_not_refreshed();
 private:

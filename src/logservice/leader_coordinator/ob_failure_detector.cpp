@@ -313,6 +313,16 @@ bool ObFailureDetector::is_clog_disk_has_fatal_error()
          || ATOMIC_LOAD(&has_add_clog_full_event_);
 }
 
+bool ObFailureDetector::is_clog_disk_has_hang_error()
+{
+  return ATOMIC_LOAD(&has_add_clog_hang_event_);
+}
+
+bool ObFailureDetector::is_clog_disk_has_full_error()
+{
+  return ATOMIC_LOAD(&has_add_clog_full_event_);
+}
+
 bool ObFailureDetector::is_data_disk_has_fatal_error()
 {
   return ATOMIC_LOAD(&has_add_data_disk_hang_event_);
