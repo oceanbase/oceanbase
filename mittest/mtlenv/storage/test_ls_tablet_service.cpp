@@ -1009,6 +1009,45 @@ TEST_F(TestLSTabletService, test_update_empty_shell)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+TEST_F(TestLSTabletService, test_update_tablet_release_memtable)
+{
+  int ret = OB_SUCCESS;
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  ObTabletID data_tablet_id(9000000111);
+  share::schema::ObTableSchema data_schema;
+
+  TestSchemaUtils::prepare_data_schema(data_schema);
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = TestTabletHelper::create_tablet(ls_handle, data_tablet_id, data_schema, allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  valid_tablet_num(inner_tablet_count);
+  ASSERT_EQ(1 + INNER_TABLET_CNT, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
+  ret = TestTabletHelper::create_tablet(ls_handle, data_tablet_id, data_schema, allocator_);
+  ASSERT_EQ(OB_ENTRY_EXIST, ret);
+  valid_tablet_num(inner_tablet_count);
+  ASSERT_EQ(1 + INNER_TABLET_CNT, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
+
+  ObTabletHandle tablet_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));
+  ASSERT_EQ(0, tablet_handle.get_obj()->memtable_count_);
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->create_memtable(data_tablet_id, 100));
+  ASSERT_EQ(1, tablet_handle.get_obj()->memtable_count_);
+
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->update_tablet_release_memtable(data_tablet_id, SCN::max_scn()));
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->update_tablet_release_memtable(data_tablet_id, SCN::max_scn()));
+
+  MTL(ObTenantCheckpointSlogHandler *)->shared_block_rwriter_.macro_handle_.reset();
+
+  ObTabletMapKey key;
+  key.ls_id_ = ls_id_;
+  key.tablet_id_ = data_tablet_id;
+  ret = MTL(ObTenantMetaMemMgr*)->del_tablet(key);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
 } // end storage
 } // end oceanbase
 

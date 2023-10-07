@@ -3506,6 +3506,33 @@ int ObTablet::inner_get_memtables(common::ObIArray<storage::ObITable *> &memtabl
   return ret;
 }
 
+int ObTablet::rebuild_memtables(const share::SCN scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(release_memtables(scn))) {
+    LOG_WARN("fail to release memtables", K(ret), K(scn));
+  } else {
+    reset_memtable();
+    if (OB_FAIL(pull_memtables_without_ddl())) {
+      LOG_WARN("fail to pull memtables without ddl", K(ret));
+    } else {
+      tablet_addr_.inc_seq();
+      table_store_addr_.addr_.inc_seq();
+      if (table_store_addr_.is_memory_object()) {
+        ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
+        if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+          LOG_WARN("inner get memtables fail", K(ret), K(*this));
+        } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
+          LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
+        } else {
+          LOG_INFO("table store update memtable success", KPC(this));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTablet::release_memtables(const SCN scn)
 {
   int ret = OB_SUCCESS;

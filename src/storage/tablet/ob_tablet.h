@@ -309,10 +309,18 @@ public:
 
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
+
+  // ATTENTION!!!
+  // 1. release memtables from memtable manager and this tablet.
+  // 2. If a tablet may be being accessed, shouldn't call this function.
+  int rebuild_memtables(const share::SCN scn);
+
+  // ATTENTION!!! The following two interfaces only release memtable from memtable manager.
   int release_memtables(const share::SCN scn);
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
+
   int wait_release_memtables();
 
   // multi-source data operation

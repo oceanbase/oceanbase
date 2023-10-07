@@ -242,6 +242,9 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
+  int update_tablet_release_memtable(
+      const common::ObTabletID &tablet_id,
+      const SCN scn);
   int update_tablet_report_status(const common::ObTabletID &tablet_id);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
