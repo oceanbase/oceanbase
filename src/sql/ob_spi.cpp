@@ -2348,7 +2348,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
               LOG_WARN("push_back error", K(ret));
             }
           }
-          // add debug info, for convinence of sql reconstruct debug
+          // add debug info, for convenience of sql reconstruct debug
           LOG_DEBUG("spi prepare, source sql and prepared reconstruct sql", K(sql),
                                               K(pl_prepare_result.result_set_->get_route_sql()));
           if (OB_SUCC(ret)) {
@@ -4048,7 +4048,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(cursor));
 
   if (OB_FAIL(ret)) {
-  } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
+  } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initialize, so it's invalid */
     if (lib::is_oracle_mode()) {
       if (!cursor->get_snapshot().valid_) {
         ret = OB_ERR_FETCH_OUT_SEQUENCE;

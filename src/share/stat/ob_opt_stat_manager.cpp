@@ -405,7 +405,7 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                                                         false,
                                                                         is_history_stat,
                                                                         print_params))) {
-    LOG_WARN("failed to update coumn stats", K(ret));
+    LOG_WARN("failed to update column stats", K(ret));
   }
   return ret;
 }

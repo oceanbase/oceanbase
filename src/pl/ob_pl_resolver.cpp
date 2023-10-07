@@ -7133,7 +7133,7 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
     LOG_WARN("routine param does not has default value",
               K(ret), K(exprs.count()), K(params_list.count()));
   }
-  // Step 2: initilize params array, put all null.
+  // Step 2: initialize params array, put all null.
   for (int64_t i = 0; OB_SUCC(ret) && i < params_list.count(); ++i) {
     OZ (params.push_back(NULL));
     OZ (expr_idx.push_back(OB_INVALID_INDEX));

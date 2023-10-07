@@ -533,11 +533,11 @@ void TestLobManager::insert_lob_meta(
 //   TestLobCommon::build_lob_piece_table_schema(tenant_id_, table_schema);
 
 //   // build table param
-//   ObSArray<uint64_t> colunm_ids;
-//   colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
-//   colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
-//   colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
-//   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
+//   ObSArray<uint64_t> column_ids;
+//   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
+//   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
+//   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
+//   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, column_ids, table_param));
 // }
 
 void TestLobManager::lob_write(
@@ -560,11 +560,11 @@ void TestLobManager::lob_write(
 
   // build table param
   share::schema::ObTableParam table_param(allocator);
-  ObSArray<uint64_t> colunm_ids;
+  ObSArray<uint64_t> column_ids;
   for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
-    colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
+    column_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
   }
-  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, column_ids, table_param));
 
   ObExecContext exec_ctx(allocator);
   // 1. get tx desc
@@ -634,11 +634,11 @@ void TestLobManager::scan_lob_meta(
 
   // build table param
   share::schema::ObTableParam table_param(allocator);
-  ObSArray<uint64_t> colunm_ids;
+  ObSArray<uint64_t> column_ids;
   for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
-    colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
+    column_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
   }
-  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, column_ids, table_param));
 
   // prepare piece table schema
   share::schema::ObTableSchema ptable_schema;
@@ -646,11 +646,11 @@ void TestLobManager::scan_lob_meta(
 
   // build table param
   share::schema::ObTableParam ptable_param(allocator);
-  ObSArray<uint64_t> pcolunm_ids;
-  pcolunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
-  pcolunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
-  pcolunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
-  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(ptable_schema, pcolunm_ids, ptable_param));
+  ObSArray<uint64_t> pcolumn_ids;
+  pcolumn_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
+  pcolumn_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
+  pcolumn_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(ptable_schema, pcolumn_ids, ptable_param));
 
   ObExecContext exec_ctx(allocator);
   // 1. get tx desc
@@ -1002,14 +1002,14 @@ TEST_F(TestLobManager, DISABLED_basic3)
 
   // build table param
   share::schema::ObTableParam table_param(allocator);
-  ObSArray<uint64_t> colunm_ids;
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 3);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 4);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 5);
-  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
+  ObSArray<uint64_t> column_ids;
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 3);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 4);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 5);
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, column_ids, table_param));
 
   // prepare piece table schema
   share::schema::ObTableSchema ptable_schema;
@@ -1017,11 +1017,11 @@ TEST_F(TestLobManager, DISABLED_basic3)
 
   // build table param
   share::schema::ObTableParam ptable_param(allocator);
-  ObSArray<uint64_t> pcolunm_ids;
-  pcolunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
-  pcolunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
-  pcolunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
-  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(ptable_schema, pcolunm_ids, ptable_param));
+  ObSArray<uint64_t> pcolumn_ids;
+  pcolumn_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
+  pcolumn_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
+  pcolumn_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(ptable_schema, pcolumn_ids, ptable_param));
 
 
   uint64_t total_len = 10 * 1024 * 1024; // 10M

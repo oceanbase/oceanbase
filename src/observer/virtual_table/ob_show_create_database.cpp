@@ -121,7 +121,7 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
   } else if (OB_UNLIKELY(cur_row_.count_ < output_column_ids_.count())) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN,
-               "cur row cell count is less than output coumn",
+               "cur row cell count is less than output column",
                K(ret),
                K(cur_row_.count_),
                K(output_column_ids_.count()));

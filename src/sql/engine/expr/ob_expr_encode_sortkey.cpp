@@ -45,7 +45,7 @@ int ObExprEncodeSortkey::calc_result_typeN(ObExprResType &type,
   int ret = OB_SUCCESS;
   if (param_num % 3 != 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument number, param should be according to (colunm, asc/desc, "
+    LOG_WARN("invalid argument number, param should be according to (column, asc/desc, "
              "nulls_first/nulls_last)",
              K(param_num), K(ret));
   } else {
@@ -73,7 +73,7 @@ int ObExprEncodeSortkey::eval_encode_sortkey(const ObExpr &expr, ObEvalCtx &ctx,
 
   if (expr.arg_cnt_ % 3 != 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument number, param should be according to (colunm, asc/desc, "
+    LOG_WARN("invalid argument number, param should be according to (column, asc/desc, "
              "nulls_first/nulls_last)",
              K(ret));
   } else {
@@ -206,7 +206,7 @@ int ObExprEncodeSortkey::eval_encode_sortkey_batch(const ObExpr &expr,
 
   if (expr.arg_cnt_ % 3 != 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument number, param should be according to (colunm, asc/desc, "
+    LOG_WARN("invalid argument number, param should be according to (column, asc/desc, "
              "nulls_first/nulls_last)",
              K(ret));
   } else {

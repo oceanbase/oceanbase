@@ -188,14 +188,14 @@ void TestTableScanPureDataTable::table_scan(
   // build table param
   ObArenaAllocator allocator;
   share::schema::ObTableParam table_param(allocator);
-  ObSArray<uint64_t> colunm_ids;
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 3);
-  colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + 4);
+  ObSArray<uint64_t> column_ids;
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 2);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 3);
+  column_ids.push_back(OB_APP_MIN_COLUMN_ID + 4);
 
-  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
+  ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, column_ids, table_param));
 
   ObTableScanParam scan_param;
   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_scan_param(tenant_id_, read_snapshot, table_param, scan_param));

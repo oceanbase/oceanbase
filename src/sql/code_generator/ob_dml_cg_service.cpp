@@ -2686,11 +2686,11 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
        * and spec is value table here.
        */
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("foreign key column id is not in colunm ids",
+      LOG_WARN("foreign key column id is not in column ids",
                 K(fk_arg), K(name_column_ids.at(i)), K(ret));
     } else if (!var_exist_in_array(column_ids, value_column_ids.at(i), fk_column.idx_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("foreign key column id is not in colunm ids",
+      LOG_WARN("foreign key column id is not in column ids",
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
     } else {
       fk_column.obj_meta_ = column_schema->get_meta_type();

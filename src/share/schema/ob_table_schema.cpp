@@ -2605,7 +2605,7 @@ int ObTableSchema::add_partition_key(const common::ObString &column_name)
     LOG_WARN("Failed to set partition key position", K(ret));
   } else if (OB_FAIL(partition_key_info_.set_column(partition_key_info_.get_size(),
                                                     partition_key_column))) {
-    LOG_WARN("Failed to set partition coumn");
+    LOG_WARN("Failed to set partition column");
   } else {
     part_key_column_num_ = partition_key_info_.get_size();
   }
@@ -2627,7 +2627,7 @@ int ObTableSchema::add_subpartition_key(const common::ObString &column_name)
     LOG_WARN("Failed to set partition key position", K(ret));
   } else if (OB_FAIL(subpartition_key_info_.set_column(subpartition_key_info_.get_size(),
                                                        partition_key_column))) {
-    LOG_WARN("Failed to set partition coumn");
+    LOG_WARN("Failed to set partition column");
   } else {
     subpart_key_column_num_ = subpartition_key_info_.get_size();
   }
@@ -2708,7 +2708,7 @@ int ObTableSchema::get_default_row(
         LOG_WARN("column must not null", K(ret), K(j), K(column_cnt_));
       } else if (column->get_column_id() == column_ids.at(i).col_id_) {
         if (column->is_identity_column()) {
-          // Identity colunm's orig_default_value and cur_default_val are used to store sequence id
+          // Identity column's orig_default_value and cur_default_val are used to store sequence id
           // and desc table, it does not have the same semantics as normal default. so here we set
           // its default value as null to avoid type mismatch.
           default_row.cells_[i].set_null();

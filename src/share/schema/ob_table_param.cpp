@@ -1220,7 +1220,7 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2 &column_
       ret = column_param.set_cur_default_value(nop_obj);
     }
   } else if (column_schema.is_identity_column()) {
-    // Identity colunm's orig_default_value and cur_default_val are used to store sequence id
+    // Identity column's orig_default_value and cur_default_val are used to store sequence id
     // and desc table, it does not have the same semantics as normal default. so here we set
     // its default value as null to avoid type mismatch.
     ObObj null_obj;

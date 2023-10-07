@@ -1956,7 +1956,7 @@ int ObTableSchema::add_column(const ColumnType &column)
           if (column.is_part_key_column()) {
             if (OB_FAIL(partition_key_info_.set_column(column.get_part_key_pos() - 1,
                     partition_key_column))) {
-              SHARE_SCHEMA_LOG(WARN, "Failed to set partition coumn");
+              SHARE_SCHEMA_LOG(WARN, "Failed to set partition column");
             } else {
               part_key_column_num_ = partition_key_info_.get_size();
             }
