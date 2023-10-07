@@ -405,13 +405,13 @@ OB_DEF_SERIALIZE(ObPxBloomFilter)
               bits_array_length_,
               true_count_,
               begin_idx_,
-              end_idx_,
-              max_bit_count_);
+              end_idx_);
   for (int i = begin_idx_; OB_SUCC(ret) && i <= end_idx_; ++i) {
     if (OB_FAIL(serialization::encode(buf, buf_len, pos, bits_array_[i]))) {
       LOG_WARN("fail to encode bits data", K(ret), K(bits_array_[i]));
     }
   }
+  OB_UNIS_ENCODE(max_bit_count_);
   return ret;
 }
 
@@ -427,8 +427,7 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
               bits_array_length_,
               true_count_,
               begin_idx_,
-              end_idx_,
-              max_bit_count_);
+              end_idx_);
   int64_t real_len = end_idx_ - begin_idx_ + 1;
   bits_array_length_ = real_len;
   void *bits_array_buf = NULL;
@@ -451,6 +450,7 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
                        : &ObPxBloomFilter::might_contain_nonsimd;
     }
   }
+  OB_UNIS_DECODE(max_bit_count_);
   return ret;
 }
 
@@ -466,11 +466,11 @@ OB_DEF_SERIALIZE_SIZE(ObPxBloomFilter)
         bits_array_length_,
         true_count_,
         begin_idx_,
-        end_idx_,
-        max_bit_count_);
+        end_idx_);
   for (int i = begin_idx_; i <= end_idx_; ++i) {
     len += serialization::encoded_length(bits_array_[i]);
   }
+  OB_UNIS_ADD_LEN(max_bit_count_);
   return len;
 }
 
