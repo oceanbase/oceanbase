@@ -1049,6 +1049,7 @@ int ObServer::start()
         const int64_t start_ts = ObTimeUtility::current_time();
         int64_t schema_refreshed_ts = 0;
         const int64_t expire_time = start_ts + MAX_CHECK_TIME;
+        tenant_ids.set_max_print_count(512);
 
         if (OB_FAIL(multi_tenant_.get_mtl_tenant_ids(tenant_ids))) {
           FLOG_ERROR("get mtl tenant ids fail", KR(ret));

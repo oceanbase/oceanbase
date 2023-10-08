@@ -56,6 +56,13 @@ public:
   void on_tsc_retry() { (void)ATOMIC_FAA(&tsc_retry_, 1); }
   int32_t get_wlock_retry_count() { return ATOMIC_LOAD(&wlock_retry_); }
   int32_t get_tsc_retry_count() { return ATOMIC_LOAD(&tsc_retry_); }
+  bool need_print() const
+  {
+    return 1 == wlock_retry_
+        || 1 == tsc_retry_
+        || 0 == wlock_retry_ % 10
+        || 0 == tsc_retry_ % 10;
+  }
 private:
   int32_t wlock_retry_;
   int32_t tsc_retry_;
@@ -525,7 +532,6 @@ private:
   ObMemtableCtxCbAllocator ctx_cb_allocator_;
   ObRedoLogGenerator log_gen_;
   MemtableCtxStat mtstat_;
-  ObTimeInterval log_conflict_interval_;
   transaction::ObPartTransCtx *ctx_;
   int64_t truncate_cnt_;
   // the retry count of lock for read
