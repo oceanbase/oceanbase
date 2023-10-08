@@ -751,8 +751,8 @@ int ObLSRestoreTaskMgr::check_tablet_is_deleted_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet is empty shell", K(ret), KPC(tablet));
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-    if (OB_EMPTY_RESULT == ret) {
-      LOG_WARN("tablet_status is null", K(ret), KPC(tablet));
+    if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+      LOG_WARN("tablet_status is null or not committed", K(ret), KPC(tablet));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));

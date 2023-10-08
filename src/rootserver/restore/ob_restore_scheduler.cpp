@@ -1328,7 +1328,8 @@ int ObRestoreScheduler::restore_wait_to_consistent_scn(const share::ObPhysicalRe
     }
     if (trans.is_started()) {
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("fail to rollback trans", KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_WARN("fail to rollback trans", KR(ret), KR(tmp_ret));
       }
     }
   }
