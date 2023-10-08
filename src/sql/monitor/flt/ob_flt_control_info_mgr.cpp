@@ -43,6 +43,9 @@ bool ObFLTResetSessOp::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInf
         } else {
           ret = OB_SUCCESS;
         }
+      } else if (sess_info->get_effective_tenant_id() != tenant_id_) {
+        // do nothing
+        (void)sess_info->unlock_thread_data();
       } else if (sess_info->is_coninfo_set_by_sess()) {
         // already has, do nothing
         (void)sess_info->unlock_thread_data();
@@ -191,7 +194,7 @@ int ObFLTControlInfoManager::apply_control_info()
   int ret = OB_SUCCESS;
 
   sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
-  ObFLTResetSessOp reset_op;
+  ObFLTResetSessOp reset_op(tenant_id_);
   if (OB_ISNULL(session_mgr)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "sessionMgr is NULL", K(ret));
