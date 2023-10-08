@@ -40,6 +40,20 @@ namespace oceanbase
 namespace common
 {
 
+int64_t ObSyslogTimeGuard::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (click_count_ > 0) {
+    ret = databuff_printf(buf, buf_len, pos, "time dist: %s=%d", click_str_[0], click_[0]);
+    for (int i = 1; OB_SUCC(ret) && i < click_count_; i++) {
+      ret = databuff_printf(buf, buf_len, pos, ", %s=%d", click_str_[i], click_[i]);
+    }
+  }
+  if (OB_FAIL(ret)) pos = 0;
+  return pos;
+}
+
 void __attribute__((weak)) allow_next_syslog(int64_t)
 {
   // do nothing
@@ -654,13 +668,20 @@ int ObLogger::log_tail(int32_t level, char *buf, const int64_t buf_len, int64_t 
   return ret;
 }
 
-int ObLogger::log_head(const char *mod_name,
-                        const int32_t level,
-                        const char *file,
-                        const int32_t line,
-                        const char *function,
-                        const int errcode,
-                        char *buf, const int64_t buf_len, int64_t &pos)
+void ts_to_tv(int64_t ts, timeval &tv)
+{
+  tv.tv_sec = static_cast<long>(ts / 1000000);
+  tv.tv_usec = static_cast<long>(ts % 1000000);
+}
+
+int ObLogger::log_head(const int64_t ts,
+                       const char *mod_name,
+                       const int32_t level,
+                       const char *file,
+                       const int32_t line,
+                       const char *function,
+                       const int errcode,
+                       char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (level >= 0 && level < static_cast<int>(sizeof(errstr_) / sizeof(char *))
@@ -670,7 +691,7 @@ int ObLogger::log_head(const char *mod_name,
     base_file_name = (NULL != base_file_name) ? base_file_name + 1 : file;
 
     struct timeval tv;
-    (void)gettimeofday(&tv, NULL);
+    ts_to_tv(ts, tv);
     struct tm tm;
     ob_fast_localtime(last_unix_sec_, last_localtime_, static_cast<time_t>(tv.tv_sec), &tm);
     const uint64_t *trace_id = ObCurTraceId::get();

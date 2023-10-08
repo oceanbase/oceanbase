@@ -58,6 +58,52 @@ namespace oceanbase
 namespace common
 {
 
+inline int64_t log_cur_ts()
+{
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  const int64_t us =
+            static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec);
+  return us;
+}
+
+class ObSyslogTimeGuard
+{
+public:
+  explicit ObSyslogTimeGuard()
+  {
+    start_ts_ = log_cur_ts();
+    last_ts_ = start_ts_;
+    click_count_ = 0;
+  }
+  void click(const char *mod = NULL)
+  {
+    const int64_t cur_ts = log_cur_ts();
+    if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
+      click_str_[click_count_] = mod;
+      click_[click_count_++] = (int32_t)(cur_ts - last_ts_);
+      last_ts_ = cur_ts;
+    }
+  }
+  int64_t get_start_ts() const
+  {
+    return start_ts_;
+  }
+  int64_t get_diff() const
+  {
+    return log_cur_ts() - start_ts_;
+  }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  static const int64_t MAX_CLICK_COUNT = 16;
+private:
+  int64_t start_ts_;
+  int64_t last_ts_;
+  int64_t click_count_;
+  int32_t click_[MAX_CLICK_COUNT];
+  const char *click_str_[MAX_CLICK_COUNT];
+};
+
 class ObVSliceAlloc;
 class ObBlockAllocMgr;
 class ObFIFOAllocator;
@@ -557,9 +603,6 @@ public:
   //will record log files in the directory for log file
   int set_record_old_log_file(bool rec_old_file_flag = false);
 
-  //@brief Get current time.
-  int64_t get_cur_us();
-
   //@brief Get the process-only ObLogger.
   static ObLogger &get_logger();
 
@@ -649,13 +692,14 @@ private:
 
   int log_tail(int32_t level, char *buf, const int64_t buf_len, int64_t &pos);
 
-  int log_head(const char *mod_name,
-                const int32_t level,
-                const char *file,
-                const int32_t line,
-                const char *function,
-                const int errcode,
-                char *buf, const int64_t buf_len, int64_t &pos);
+  int log_head(const int64_t ts,
+               const char *mod_name,
+               const int32_t level,
+               const char *file,
+               const int32_t line,
+               const char *function,
+               const int errcode,
+               char *buf, const int64_t buf_len, int64_t &pos);
 
   void insert_warning_buffer_line_column_info(const UserMsgLevel user_msg_level,
                                                       const int line,
@@ -928,7 +972,7 @@ void ObLogger::log_it(const char *mod_name,
             int64_t buf_len = tb->get_cap();
             int64_t &pos = tb->get_pos();
             int64_t orig_pos = pos;
-            ret = log_head(mod_name, level, file, line, function, errcode, buf, buf_len, pos);
+            ret = log_head(log_cur_ts(), mod_name, level, file, line, function, errcode, buf, buf_len, pos);
             if (OB_SUCC(ret)) {
               ret = log_data_func(buf, buf_len, pos);
             }
@@ -1065,15 +1109,6 @@ inline int32_t ObLogger::get_log_level(const uint64_t par_mod_id, const uint64_t
   return cur_level;
 }
 
-inline int64_t ObLogger::get_cur_us()
-{
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  const int64_t us =
-            static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec);
-  return us;
-}
-
 inline int ObLogger::set_mod_log_levels(const char *level_str, int64_t version)
 {
   return parse_set(level_str, static_cast<int32_t>(std::strlen(level_str)), version);
@@ -1155,7 +1190,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   auto fd_type = get_fd_type(mod_name);
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
-  const int64_t logging_time_us_begin = get_cur_us();
+  ObSyslogTimeGuard tg;
   if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size, allow))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
   } else if (OB_UNLIKELY(!allow) && !need_print_log_limit_msg()) {
@@ -1166,7 +1201,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     ObPLogItem *log_item = new (local_buf_) ObPLogItem();
     log_item->set_buf_size(MAX_LOG_SIZE);
     log_item->set_log_level(level);
-    log_item->set_timestamp(logging_time_us_begin);
+    log_item->set_timestamp(tg.get_start_ts());
     log_item->set_tl_type(tl_type_);
     log_item->set_force_allow(is_force_allows());
     log_item->set_fd_type(fd_type);
@@ -1175,7 +1210,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     int64_t buf_len = log_item->get_buf_size();
     int64_t pos = log_item->get_data_len();
     if (with_head) {
-      if (OB_FAIL(log_head(mod_name, level, file, line, function, errcode,
+      if (OB_FAIL(log_head(tg.get_start_ts(), mod_name, level, file, line, function, errcode,
                            buf, buf_len, pos))) {
         LOG_STDERR("log_header error ret = %d\n", ret);
       }
@@ -1208,6 +1243,7 @@ inline void ObLogger::do_log_message(const bool is_async,
         check_log_end(*log_item, pos);
       }
     }
+    tg.click("FORMAT_END");
 
 
     if (OB_SUCC(ret)) {
@@ -1227,6 +1263,7 @@ _Pragma("GCC diagnostic pop")
             // update buf_size
           new_log_item->set_buf_size(log_item->get_data_len());
           log_item = new_log_item;
+          tg.click("ALLOC_END");
         }
 
         if (OB_SUCC(ret)) {
@@ -1239,10 +1276,12 @@ _Pragma("GCC diagnostic pop")
               (void)ATOMIC_AAF(current_written_count_ + tl_type, 1);
             }
             last_logging_seq_ = curr_logging_seq_;
+            tg.click("APPEND_END");
           }
         }
       } else {
         flush_logs_to_file(&log_item, 1);
+        tg.click("FLUSH_END");
       }
 
       // stat
@@ -1252,11 +1291,18 @@ _Pragma("GCC diagnostic pop")
           free_log_item(log_item);
         }
         log_item = NULL;
+        tg.click("FREE_END");
       }
       check_reset_force_allows();
     } /* not allow */
   }
-  last_logging_cost_time_us_ = get_cur_us() - logging_time_us_begin;
+  last_logging_cost_time_us_ = tg.get_diff();
+  if (OB_UNLIKELY(last_logging_cost_time_us_ > 1000 * 1000)) {
+    char buf[256] = {'\0'};
+    int64_t pos = tg.to_string(buf, sizeof buf);
+    fprintf(stderr, "LOGGER COST TOO MUCH TIME, tid: [%ld], start_ts: %ld, cost: %ld, %.*s, %s\n",
+            GETTID(), tg.get_start_ts(), last_logging_cost_time_us_, static_cast<int>(pos), buf, lbt());
+  }
 }
 
 template <typename ... Args>
