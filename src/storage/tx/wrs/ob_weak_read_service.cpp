@@ -162,6 +162,8 @@ int ObWeakReadService::check_tenant_can_start_service(const uint64_t tenant_id,
       // success
     }
   } else {
+    // tenant not exist
+    can_start_service = true;
     FLOG_WARN("change tenant context fail when get weak read service cluster version",
         KR(ret), K(tenant_id));
   }
