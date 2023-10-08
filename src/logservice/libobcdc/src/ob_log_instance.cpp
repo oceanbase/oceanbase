@@ -3157,7 +3157,10 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     const bool touch_memory_limit = (memory_hold > memory_limit);
     double pause_dispatch_percent = pause_dispatch_threshold / 100.0;
     if (touch_memory_limit) {
-      pause_dispatch_percent = 0;
+      const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
+      if (user_queue_br_count > queue_backlog_lowest_tolerance || resource_collector_br_count > queue_backlog_lowest_tolerance) {
+        pause_dispatch_percent = 0;
+      }
       // pause redo dispatch
     } else if (touch_memory_warn_limit) {
       pause_dispatch_percent = pause_dispatch_percent * 0.1;
@@ -3172,9 +3175,11 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     if (force_pause_dispatch) {
       current_need_pause = true;
       reason = "USER_FORCE_PAUSE";
+      // NOTICE: rely on stat of resource_collector_ is right
     } else if (resource_collector_br_count > (rc_br_thread_count * rc_thread_queue_len * pause_dispatch_percent)) {
       current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
       reason = "SLOW_RESOURCE_RECYCLING";
+      // NOTICE: rely on stat of binlog_record_queue is right
     } else if (user_queue_br_count > (CDC_CFG_MGR.get_br_queue_length() * pause_dispatch_percent)) {
       current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
       reason = "SLOW_CONSUMPTION_DOWNSTREAM";

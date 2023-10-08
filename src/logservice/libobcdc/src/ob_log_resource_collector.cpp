@@ -401,6 +401,8 @@ int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task
   // thread [0] for LOB_DATA_CLEAN_TASK
   // thread [1, br_thread_num] for BR_TASK
   // thread [br_thread_num + 1, thread_num] for PART_TRANS_TASK
+  // Do stat before actual push task into RCThread may leads to wraog stat if push failed,
+  // thus we will retry RCThread::push until success
   if (task.is_part_trans_task()) {
     hash_value = ATOMIC_FAA(&part_trans_task_push_seq, 1);
     hash_value = (hash_value % (RCThread::get_thread_num() - br_thread_num_ - 1)) + br_thread_num_ + 1;
