@@ -15,6 +15,7 @@
 
 #include <random>
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "src/sql/ob_sql_define.h"
 
 namespace oceanbase
 {
@@ -30,7 +31,7 @@ class ObExprZipf : public ObFuncExprOperator
     int initialize(ObEvalCtx &ctx, const ObExpr &expr);
     int generate_next_value(int64_t seed, int64_t &result);
   private:
-    common::ObArray<double> probe_cp_; // cumulative probability array
+    sql::ObTMArray<double> probe_cp_; // cumulative probability array
     std::mt19937_64 gen_; // map continuous small number to large sparse space
   };
 public:
