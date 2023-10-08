@@ -422,6 +422,13 @@ public:
                                const ObSQLSessionInfo &session_info,
                                const ObIArray<ObObjAccessIdent> &access_idents,
                                ObPLExternTypeInfo *extern_type_info);
+  static void pl_reset_warning_buffer()
+  {
+    ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
+    if (NULL != buf) {
+      buf->reset();
+    }
+  }
   static bool is_object_not_exist_error(int ret)
   {
     return OB_ERR_SP_DOES_NOT_EXIST == ret

@@ -11193,6 +11193,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
      || OB_ERR_INVALID_TYPE_FOR_OP == ret
      || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
+      pl_reset_warning_buffer();
       OZ (resolve_record_construct(q_name, udf_info, user_type, expr));
     }
   }
@@ -11505,6 +11506,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   } else {
     if (OB_FAIL(resolve_var(q_name, unit_ast, expr))) {
       if (OB_ERR_SP_UNDECLARED_VAR == ret) {
+        pl_reset_warning_buffer();
         if (OB_FAIL(resolve_sequence_object(q_name, unit_ast, expr))) {
           LOG_IN_CHECK_MODE("failed to sequence object", K(q_name), K(ret));
         }
@@ -11513,11 +11515,13 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
       }
     }
     if (OB_ERR_SP_UNDECLARED_VAR == ret) {
+      pl_reset_warning_buffer();
       if (OB_FAIL(resolve_sqlcode_or_sqlerrm(q_name, unit_ast, expr))) {
         LOG_IN_CHECK_MODE("failed to resolve sqlcode or sqlerrm",  K(ret), K(q_name));
       }
     }
     if (OB_ERR_SP_UNDECLARED_VAR == ret) {
+      pl_reset_warning_buffer();
       if (OB_FAIL(resolve_udf_without_brackets(q_name, unit_ast, expr))) {
         LOG_IN_CHECK_MODE("failed to resolve udf without bracks", K(ret), K(q_name));
       }
@@ -11525,6 +11529,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
     if (OB_ERR_SP_UNDECLARED_VAR == ret) {
       if ((T_SP_IF == item_type_ || T_SP_CASE == item_type_ || T_SP_WHEN == item_type_)
           && lib::is_oracle_mode()) {
+        pl_reset_warning_buffer();
         ret = check_undeclared_var_type(q_name);
       }
       if (OB_ERR_SP_UNDECLARED_VAR == ret) {
