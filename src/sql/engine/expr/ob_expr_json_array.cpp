@@ -195,9 +195,9 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
-                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false))) {
+                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent))) {
       LOG_WARN("failed to get json value node.", K(ret), K(val_type));
-    } else if (is_null_absent && j_val->json_type() == ObJsonNodeType::J_NULL) {
+    } else if (OB_ISNULL(j_val)) {
     } else if (OB_FAIL(j_arr.append(static_cast<ObJsonNode*>(j_val)))) {
       LOG_WARN("failed to append in array.", K(ret), K(i));
     }

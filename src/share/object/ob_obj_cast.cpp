@@ -6000,20 +6000,30 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonNull j_null;
     ObJsonNode *j_tree = NULL;
     uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
+    bool is_oracle = lib::is_oracle_mode();
+    ObObjType in_type = in.get_type();
+    bool is_convert_jstr_type = (in_type == ObTinyTextType
+                                 || in_type == ObTextType
+                                 || in_type == ObMediumTextType
+                                 || in_type == ObLongTextType);
     if (expect_type == ObJsonType && j_text.length() == 0 && cast_mode == 0) { // add column json null
       j_base = &j_null;
-    } else if (lib::is_oracle_mode() && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
+    } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
       j_base = &j_null;
-    } else if (lib::is_mysql_mode() && CS_TYPE_BINARY == in.get_collation_type()) {
+    } else if (!is_oracle && CS_TYPE_BINARY == in.get_collation_type()) {
       j_base = &j_opaque;
-    } else if (lib::is_mysql_mode()
-        && CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)
-        && !CM_IS_JSON_VALUE(cast_mode) && ob_is_string_type(in.get_type())) {
+    } else if (!is_oracle
+                && CM_IS_IMPLICIT_CAST(cast_mode)
+                && !CM_IS_COLUMN_CONVERT(cast_mode)
+                && !CM_IS_JSON_VALUE(cast_mode)
+                && is_convert_jstr_type) {
       // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
       ret = OB_SUCCESS;
       j_base = &j_string;
     } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
-      if (lib::is_mysql_mode() && CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)) {
+      if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
+                     && !CM_IS_COLUMN_CONVERT(cast_mode)
+                     && is_convert_jstr_type) {
         ret = OB_SUCCESS;
         j_base = &j_string;
       } else {

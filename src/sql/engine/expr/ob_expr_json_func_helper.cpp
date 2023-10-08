@@ -314,7 +314,8 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
                                            ObIJsonBase*& j_base,
                                            bool is_format_json,
                                            bool is_strict,
-                                           bool is_bin)
+                                           bool is_bin,
+                                           bool is_absent_null)
 {
   INIT_SUCC(ret);
   ObDatum *json_datum = nullptr;
@@ -323,6 +324,8 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
 
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret), K(json_arg->datum_meta_));
+  } else if ((json_datum->is_null() || ob_is_null(json_arg->obj_meta_.get_type()))
+             && is_absent_null) {
   } else if (OB_FAIL(oracle_datum2_json_val(json_datum,
                                             json_arg->obj_meta_,
                                             allocator,
@@ -1598,7 +1601,7 @@ int ObJsonExprHelper::calc_asciistr_in_expr(const ObString &src,
             } else {
               buf[pos++] = '\\';
             }
-            if (OB_SUCC(ret)) {
+            if (OB_SUCC(ret) && '\\' != wchar) {
               int64_t hex_writtern_bytes = 0;
               if (OB_FAIL(hex_print(temp_buf + i*utf16_minmb_len, utf16_minmb_len,
                                     buf + pos, buf_len - pos, hex_writtern_bytes))) {
