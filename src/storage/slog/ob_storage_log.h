@@ -254,11 +254,6 @@ public:
       const char* buf,
       const int64_t data_len,
       int64_t& pos);
-  int deserialize(
-      ObArenaAllocator &allocator,
-      const char* buf,
-      const int64_t data_len,
-      int64_t& pos);
   virtual int64_t get_serialize_size() const;
 
   DECLARE_TO_STRING;
