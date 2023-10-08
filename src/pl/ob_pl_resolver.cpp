@@ -15186,7 +15186,7 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
         OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
     }
   }
-  if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
+  if ((OB_SUCC(ret) && OB_ISNULL(package_info)) || OB_SYNONYM_NOT_EXIST == ret) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
     LOG_WARN("package not exist", K(ret), K(package_name), K(db_name));
     LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, "PACKAGE",
