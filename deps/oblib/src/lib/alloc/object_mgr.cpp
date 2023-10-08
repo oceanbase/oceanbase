@@ -11,6 +11,7 @@
  */
 
 #include "object_mgr.h"
+#include "lib/allocator/ob_ctx_define.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/alloc/memory_sanity.h"
 
@@ -18,12 +19,14 @@ using namespace oceanbase;
 using namespace lib;
 
 SubObjectMgr::SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id,
-                           const uint32_t ablock_size, IBlockMgr *blk_mgr)
+                           const uint32_t ablock_size,
+                           const bool enable_dirty_list,
+                           IBlockMgr *blk_mgr)
   : IBlockMgr(tenant_id, ctx_id), mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
-    normal_locker_(mutex_), logger_locker_(mutex_),
+    normal_locker_(mutex_), no_log_locker_(mutex_),
     locker_(!for_logger ? static_cast<ISetLocker&>(normal_locker_) :
-            static_cast<ISetLocker&>(logger_locker_)),
-    bs_(), os_(NULL, ablock_size)
+            static_cast<ISetLocker&>(no_log_locker_)),
+    bs_(), os_(NULL, ablock_size, enable_dirty_list)
 {
   bs_.set_locker(&locker_);
   os_.set_locker(&locker_);
@@ -61,10 +64,12 @@ void SubObjectMgr::free_block(ABlock *block)
 }
 
 ObjectMgr::ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id,
-                     uint32_t ablock_size, int parallel, IBlockMgr *blk_mgr)
+                     uint32_t ablock_size, int parallel, bool enable_dirty_list, IBlockMgr *blk_mgr)
   : IBlockMgr(tenant_id, ctx_id), ta_(allocator),
-    ablock_size_(ablock_size), parallel_(parallel), blk_mgr_(blk_mgr), sub_cnt_(1),
-    root_mgr_(common::ObCtxIds::LOGGER_CTX_ID == ctx_id, tenant_id, ctx_id, ablock_size_, blk_mgr_),
+    ablock_size_(ablock_size), parallel_(parallel), enable_dirty_list_(enable_dirty_list),
+    blk_mgr_(blk_mgr), sub_cnt_(1),
+    root_mgr_(CTX_ATTR(ctx_id).enable_no_log_, tenant_id, ctx_id, ablock_size_,
+              enable_dirty_list, blk_mgr_),
     last_wash_ts_(0), last_washed_size_(0)
 {
   root_mgr_.set_tenant_ctx_allocator(allocator);
@@ -229,8 +234,8 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   root_mgr.unlock();
   if (OB_NOT_NULL(obj)) {
     SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
-    sub_mgr = new (obj->data_) SubObjectMgr(common::ObCtxIds::LOGGER_CTX_ID == ctx_id_, tenant_id_, ctx_id_,
-                                            ablock_size_, blk_mgr_);
+    sub_mgr = new (obj->data_) SubObjectMgr(CTX_ATTR(ctx_id_).enable_no_log_, tenant_id_, ctx_id_,
+                                            ablock_size_, enable_dirty_list_, blk_mgr_);
     sub_mgr->set_tenant_ctx_allocator(ta_);
   }
   return sub_mgr;

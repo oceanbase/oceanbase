@@ -84,10 +84,10 @@ private:
 };
 
 template<typename t_lock>
-class SetLockerForLogger : public ISetLocker
+class SetLockerNoLog : public ISetLocker
 {
 public:
-  SetLockerForLogger(t_lock &mutex)
+  SetLockerNoLog(t_lock &mutex)
     : mutex_(mutex), is_disable_(false) {}
   void lock() override
   {
