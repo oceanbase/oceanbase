@@ -12976,6 +12976,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12435: __all_virtual_clone_job
 # 12436: __all_virtual_clone_job_history
+# 12437: __all_virtual_checkpoint_diagnose_memtable_info
+# 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
+# 12439: __all_virtual_checkpoint_diagnose_info
 
 #
 # 余留位置
