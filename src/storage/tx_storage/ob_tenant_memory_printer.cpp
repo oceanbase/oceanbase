@@ -124,8 +124,15 @@ int ObTenantMemoryPrinter::print_tenant_usage()
     }
 
     // print global chunk freelist
+    const int64_t max_unmanaged_memory_size = 10LL<<30;
+    int64_t memory_limit = CHUNK_MGR.get_limit();
     int64_t resident_size = 0;
     int64_t memory_used = get_virtual_memory_used(&resident_size);
+
+    if (resident_size > CHUNK_MGR.get_limit() + max_unmanaged_memory_size) {
+      LOG_ERROR("RESIDENT_SIZE OVER MEMORY_LIMIT", K(resident_size), K(memory_limit));
+    }
+
     _STORAGE_LOG(INFO,
         "[CHUNK_MGR] free=%ld pushes=%ld pops=%ld limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld" \
         " freelist_hold=%'15ld large_freelist_hold=%'15ld" \
@@ -141,7 +148,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
         CHUNK_MGR.get_free_chunk_count(),
         CHUNK_MGR.get_free_chunk_pushes(),
         CHUNK_MGR.get_free_chunk_pops(),
-        CHUNK_MGR.get_limit(),
+        memory_limit,
         CHUNK_MGR.get_hold(),
         CHUNK_MGR.get_total_hold(),
         CHUNK_MGR.get_used(),
