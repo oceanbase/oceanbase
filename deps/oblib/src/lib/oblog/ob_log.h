@@ -757,7 +757,7 @@ private:
 
   int backtrace_if_needed(ObPLogItem &log_item, const bool force);
   int check_tl_log_limiter(const uint64_t location_hash_val, const int32_t level, const int errcode,
-                           const int64_t log_size, bool &allow);
+                           const int64_t log_size, bool &allow, const char *&limiter_info);
   bool need_print_log_limit_msg();
 
   int alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item);
@@ -1182,6 +1182,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   bool old_val = set_disable_logging(true);
   DEFER(set_disable_logging(old_val));
   bool allow = true;
+  const char *limiter_info = "";
 
   bool force_bt = false;
   bool disable = false;
@@ -1191,7 +1192,8 @@ inline void ObLogger::do_log_message(const bool is_async,
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
   ObSyslogTimeGuard tg;
-  if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size, allow))) {
+  if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
+          allow, limiter_info))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
   } else if (OB_UNLIKELY(!allow) && !need_print_log_limit_msg()) {
     inc_dropped_log_count(level);
@@ -1234,10 +1236,9 @@ inline void ObLogger::do_log_message(const bool is_async,
     }
 
     if (OB_SUCC(ret) && !allow) {
-      static const char *EXCEED_INFO = " REACH SYSLOG RATE LIMIT";
       int64_t pos = log_item->get_header_len();
       if (OB_FAIL(logdata_print_info(log_item->get_buf(), log_item->get_buf_size(), pos,
-                                     EXCEED_INFO))) {
+                                     limiter_info))) {
         // do nothing
       } else {
         check_log_end(*log_item, pos);
