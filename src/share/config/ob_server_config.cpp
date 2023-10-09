@@ -356,33 +356,90 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
       LOG_ERROR("update observer memory config failed",
                 K(memory_limit), K(system_memory), K(hidden_sys_memory), K(min_server_avail_memory));
     }
-
-    //check the hold memory of tenant 500
-    int64_t tenant_500_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
-    int64_t tenant_500_reserved = system_memory_ - get_extra_memory();
-    if (tenant_500_hold > tenant_500_reserved) {
-      if (server_config._ignore_system_memory_over_limit_error) {
-        LOG_ERROR("the hold memory of tenant_500 is over the reserved memory",
-               K(tenant_500_hold), K(tenant_500_reserved));
-      } else {
-        LOG_WARN("the hold memory of tenant_500 is over the reserved memory",
-               K(tenant_500_hold), K(tenant_500_reserved));
-      }
-    }
   }
 
 #ifdef ENABLE_500_MEMORY_LIMIT
+
   if (OB_FAIL(ret)) {
     // do-nothing
   } else if (is_arbitration_mode) {
     // do-nothing
-  } else if (OB_FAIL(ObMallocAllocator::get_instance()->set_500_tenant_limit(
-      !server_config._enable_system_tenant_memory_limit))) {
+  } else if (OB_FAIL(set_500_tenant_limit(server_config._system_tenant_limit_mode))) {
     LOG_ERROR("set the limit of tenant 500 failed", KR(ret));
   }
 #endif
   return ret;
 }
+
+void ObServerMemoryConfig::check_500_tenant_hold(bool ignore_error)
+{
+  //check the hold memory of tenant 500
+  int ret = OB_SUCCESS;
+  int64_t hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
+  int64_t reserved = system_memory_ - get_extra_memory();
+  if (hold > reserved) {
+    if (ignore_error) {
+      LOG_WARN("the hold memory of tenant_500 is over the reserved memory",
+              K(hold), K(reserved));
+    } else {
+      LOG_ERROR("the hold memory of tenant_500 is over the reserved memory",
+              K(hold), K(reserved));
+    }
+  }
+}
+
+#ifdef ENABLE_500_MEMORY_LIMIT
+int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
+{
+  const int64_t UNLIMIT_MODE = 0;
+  const int64_t CTX_LIMIT_MODE = 1;
+  const int64_t TENANT_LIMIT_MODE = 2;
+
+  int ret = OB_SUCCESS;
+  bool unlimited = false;
+  auto ma = ObMallocAllocator::get_instance();
+  if (UNLIMIT_MODE == limit_mode) {
+    unlimited = true;
+    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
+  } else if (CTX_LIMIT_MODE == limit_mode) {
+    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
+  } else if (TENANT_LIMIT_MODE == limit_mode) {
+    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = true;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid limit mode", K(ret), K(limit_mode));
+  }
+  for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
+    if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||
+        ObCtxIds::PKT_NIO == ctx_id ||
+        ObCtxIds::CO_STACK == ctx_id ||
+        ObCtxIds::LIBEASY == ctx_id ||
+        ObCtxIds::GLIBC == ctx_id ||
+        ObCtxIds::LOGGER_CTX_ID== ctx_id ||
+        ObCtxIds::RPC_CTX_ID == ctx_id ||
+        ObCtxIds::UNEXPECTED_IN_500 == ctx_id) {
+      continue;
+    }
+    auto ta = ma->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ctx_id);
+    const char *ctx_name = get_global_ctx_info().get_ctx_name(ctx_id);
+    if (OB_NOT_NULL(ta)) {
+      int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (4LL<<30) : (50LL<<20);
+      if (unlimited) {
+        ctx_limit = INT64_MAX;
+      }
+      if (OB_FAIL(ta->set_limit(ctx_limit))) {
+        LOG_WARN("set ctx limit of 500 tenant failed", K(ret), K(ctx_limit),
+                 "ctx_name", ctx_name);
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant ctx allocator is not exist", K(ret),
+               "ctx_name", ctx_name);
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObServerConfig::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {

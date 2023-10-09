@@ -522,7 +522,7 @@ int ObPLRoutineInfo::make_routine_param(ObIAllocator &allocator,
 
 #ifdef OB_BUILD_ORACLE_PL
   if (OB_SUCC(ret)) {
-    if (ObPLUDTObjectManager::is_self_param(param_name)) {
+    if (0 == param_name.case_compare("SELF")) {
       param->set_is_self_param(true);
     } else {
       param->set_is_self_param(false);
@@ -1639,7 +1639,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         // 尝试去系统租户下查找
         if (NULL == udt_info
             && (OB_INVALID_ID == parent_id
-                || is_oracle_sys_database_id(parent_id))) {
+                || is_oracle_sys_database_id(parent_id)
+                || is_oceanbase_sys_database_id(parent_id))) {
           OZ (schema_guard.get_udt_info(OB_SYS_TENANT_ID,
               OB_SYS_DATABASE_ID, OB_INVALID_ID, name, udt_info));
           if (OB_SUCC(ret) && udt_info != NULL) {
@@ -2686,6 +2687,13 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
                     ? ObPLExternalNS::LOCAL_TYPE : ObPLExternalNS::PKG_TYPE;
           }
         }
+      }
+      if (OB_SUCC(ret)
+          && OB_INVALID_INDEX == var_idx
+          && OB_INVALID_INDEX == parent_id
+          && BLOCK_OBJECT_SPEC == get_block_type()
+          && ObCharset::case_compat_mode_equal(var_name, get_package_name())) {
+        parent_id = get_database_id();
       }
     }
     // 尝试匹配为当前NS的Label

@@ -1607,6 +1607,12 @@ DEF_TIME(_schema_memory_recycle_interval, OB_CLUSTER_PARAMETER, "15m", "[0s,)",
 DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_system_tenant_limit_mode, OB_CLUSTER_PARAMETER, "1", "[0,2]",
+        "specifies the limit mode for the memory hold of system tenant, "
+        "0: not limit the memory hold of system tenant, "
+        "1: only limit the DEFAULT_CTX_ID memory of system tenant, "
+        "2: besides limit the DEFAULT_CTX_ID memory, the total hold of system tenant is also limited.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
 DEF_BOOL(_force_malloc_for_absent_tenant, OB_CLUSTER_PARAMETER, "False",
          "force malloc even if tenant does not exist in observer",

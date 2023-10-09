@@ -641,11 +641,8 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
         routine_param.set_nocopy_param();
       }
 #ifdef OB_BUILD_ORACLE_PL
-      if (OB_SUCC(ret)) {
-        // 借用text_len_ , 后续修改
-        if (pl::ObPLUDTObjectManager::is_self_param(param_name)) {
-          routine_param.set_is_self_param();
-        }
+      if (OB_SUCC(ret) && 0 == param_name.case_compare("SELF")) {
+        routine_param.set_is_self_param();
       }
 #endif
       // 设置default value expr str
