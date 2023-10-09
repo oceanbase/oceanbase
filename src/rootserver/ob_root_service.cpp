@@ -1999,13 +1999,17 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     if (OB_SUCC(ret)) {
       char ori_min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
       uint64_t ori_cluster_version = GET_MIN_CLUSTER_VERSION();
+      share::ObServerInfoInTable::ObBuildVersion build_version;
       if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
           ori_min_server_version, OB_SERVER_VERSION_LENGTH, ori_cluster_version)) {
          ret = OB_INVALID_ARGUMENT;
          LOG_WARN("fail to print version str", KR(ret), K(ori_cluster_version));
+      } else if (OB_FAIL(observer::ObService::get_build_version(build_version))) {
+        LOG_WARN("fail to get build version", KR(ret));
       } else {
         CLUSTER_EVENT_SYNC_ADD("BOOTSTRAP", "BOOTSTRAP_SUCCESS",
-                               "cluster_version", ori_min_server_version);
+                               "cluster_version", ori_min_server_version,
+                               "build_version", build_version.ptr());
       }
     }
 
