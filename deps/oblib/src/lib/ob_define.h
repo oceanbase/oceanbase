@@ -717,6 +717,7 @@ const char *const OB_SECURITY_AUDIT_DEFINITION = "security_audit_definition";
 const char *const OB_SYNONYM_IDS_LIST = "synonym_ids_list";
 const char *const OB_CREATE_SYNONYM_DEFINITION = "create_synonym_definition";
 const char *const OB_TIMEZONE_INFO_DEFINITION = "timezone_info_definition";
+const char *const OB_MASKED_STR = "***";
 
 enum ObCopySSTableType
 {

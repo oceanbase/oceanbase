@@ -205,13 +205,14 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
            "tenant_id", result.get_session().get_effective_tenant_id(),
            "execution_id", result.get_session().get_current_execution_id());
 #endif
-  NG_TRACE_EXT(parse_begin, OB_ID(stmt), trunc_stmt.string(), OB_ID(stmt_len), stmt.length());
+  NG_TRACE(parse_begin);
   //1 check inited
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
   } else if (OB_FAIL(handle_text_query(stmt, context, result))) {
     if (OB_EAGAIN != ret && OB_ERR_PROXY_REROUTE != ret) {
-      LOG_WARN("fail to handle text query", K(stmt), K(ret));
+      LOG_WARN("fail to handle text query",
+               "stmt", context.is_sensitive_ ? ObString(OB_MASKED_STR) : stmt, K(ret));
     }
   }
   CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, true);
@@ -229,6 +230,9 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   }
   FLT_SET_TAG(database_id, result.get_session().get_database_id(),
                 sql_id, context.sql_id_);
+  NG_TRACE_EXT(stmt_query_end, OB_ID(stmt),
+               context.is_sensitive_ ? ObString(OB_MASKED_STR) : trunc_stmt.string(),
+               OB_ID(stmt_len), stmt.length());
 
   return ret;
 }
@@ -1031,7 +1035,8 @@ int ObSql::do_real_prepare(const ObString &sql,
   } else if (OB_FAIL(parser.parse(sql,
                                   parse_result,
                                   parse_mode))) {
-    LOG_WARN("generate syntax tree failed", K(sql), K(ret));
+    LOG_WARN("generate syntax tree failed",
+             "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql, K(ret));
   } else if (is_mysql_mode()
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
     ret = OB_ER_UNSUPPORTED_PS;
@@ -1039,6 +1044,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   } else {
     ps_status_guard.is_varparams_sql_prepare(is_from_pl, parse_result.question_mark_ctx_.count_ > 0 ? true : false);
   }
+  context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
   OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
 
@@ -1149,7 +1155,8 @@ int ObSql::do_real_prepare(const ObString &sql,
     }
 
     LOG_INFO("generate new stmt", K(ret), K(param_cnt), K(stmt_type), K(info_ctx.no_param_sql_),
-             K(info_ctx.normalized_sql_), K(sql), K(info_ctx.num_of_returning_into_));
+             K(info_ctx.normalized_sql_), K(info_ctx.num_of_returning_into_),
+             "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql);
   }
   if (OB_SUCC(ret)) {
     info_ctx.param_cnt_ = param_cnt;
@@ -1303,13 +1310,15 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
-            LOG_WARN("generate syntax tree failed", K(sql), K(ret));
+            LOG_WARN("generate syntax tree failed", K(ret),
+                     "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
             ret = OB_ER_UNSUPPORTED_PS;
             LOG_WARN("This command is not supported in the prepared statement protocol yet", K(ret));
           } else if (NULL == pl_prepare_ctx.secondary_ns_ && !pl_prepare_ctx.is_dynamic_sql_) {
             result.set_simple_ps_protocol();
           }
+          context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
           if (OB_FAIL(ret)) {
             // do nothing
@@ -1524,7 +1533,9 @@ int ObSql::handle_pl_execute(const ObString &sql,
     result.set_simple_ps_protocol();
   }
 
-  LOG_TRACE("arrive handle pl execute", K(ret), K(sql), K(is_prepare_protocol), K(is_dynamic_sql), K(lbt()));
+  LOG_TRACE("arrive handle pl execute", K(ret),
+            "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql,
+            K(is_prepare_protocol), K(is_dynamic_sql), K(lbt()));
 
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(pctx)) {
@@ -2210,12 +2221,18 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                                 context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
                                 (context.session_info_->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
         if (OB_FAIL(parser.parse(sql, parse_result, parse_mode))) {
-          LOG_WARN("failed to parse sql", K(ret), K(sql), K(stmt_type));
+          LOG_WARN("failed to parse sql", K(ret), K(stmt_type),
+                   "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
+        }
+        context.is_sensitive_ |= parse_result.contain_sensitive_data_;
+
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(check_read_only_privilege(parse_result, ectx, *schema_guard, sql_traits))) {
           LOG_WARN("failed to check read only privilege", K(ret));
         } else if (OB_FAIL(generate_physical_plan(parse_result, NULL, context, result,
             false /*is_begin_commit_stmt*/, PC_PS_MODE))) {
-          LOG_WARN("generate physical plan failed", K(ret), K(sql), K(stmt_type));
+          LOG_WARN("generate physical plan failed", K(ret),
+                   "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql, K(stmt_type));
         } // TODO 生成物理计划的路径可x需q区分
       }
     }
@@ -2759,33 +2776,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, tmp_node, stmt);
       } else {
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
-        ObItemType resolve_type = parse_result.result_tree_->children_[0]->type_;
-        switch (resolve_type) {
-          case T_ALTER_SYSTEM_SET:
-          case T_ALTER_SYSTEM_SET_PARAMETER:
-          case T_CREATE_USER:
-          case T_SET_PASSWORD:
-          case T_GRANT:
-          case T_CREATE_ROLE:
-          case T_ALTER_ROLE:
-          case T_SET_ROLE_PASSWORD:
-          case T_SYSTEM_GRANT:
-          case T_GRANT_ROLE: {
-            context.is_sensitive_ = true;
-            break;
-          }
-          case T_CREATE_TABLE: {
-            ParseNode *special_type_node = parse_result.result_tree_->children_[0]->children_[0];
-            if (OB_NOT_NULL(special_type_node) && T_EXTERNAL == special_type_node->type_) {
-              //external table location may contain sensitive access info
-              context.is_sensitive_ = true;
-            }
-            break;
-          }
-          default: {
-            break;
-          }
-        }
       }
       // set const param constraint after resolving
       context.all_plan_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_plan_const_param_constraints_);
@@ -4081,12 +4071,14 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                              pc_ctx.is_rewrite_sql_ ? UDR_SQL_MODE : STD_MODE,
                              pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
                              false, lib::is_mysql_mode() && NULL != session->get_pl_context()))) {
-      LOG_WARN("Generate syntax tree failed", K(outlined_stmt), K(ret));
+      LOG_WARN("Generate syntax tree failed", K(ret),
+               "outlined_stmt", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : outlined_stmt);
     } else if ((PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
       && OB_FAIL(construct_param_store_from_parameterized_params(
                     pc_ctx, pctx->get_param_store_for_update()))) {
       LOG_WARN("construct param store failed", K(ret));
     }
+    pc_ctx.sql_ctx_.is_sensitive_ |= parse_result.contain_sensitive_data_;
     if (OB_SUCC(ret)) {
       // parser返回成功
       if (OB_ISNULL(parse_result.result_tree_)) {
@@ -4907,7 +4899,8 @@ int ObSql::handle_parser(const ObString &sql,
     LOG_WARN("invalid argument", K(ret), KP(pctx), KP(pc_ctx.sql_ctx_.session_info_));
   } else if (OB_FAIL(parser_and_check(sql, exec_ctx, pc_ctx, parse_result,
                                       get_plan_err, add_plan_to_pc, is_enable_transform_tree))) {
-    LOG_WARN("fail to parser normal query", K(sql), K(ret));
+    LOG_WARN("fail to parser normal query",
+             "sql", pc_ctx.sql_ctx_.is_sensitive_ ? ObString(OB_MASKED_STR) : sql, K(ret));
   }
   if (OB_SUCC(ret)) {
     if (exec_ctx.has_dynamic_values_table()) {

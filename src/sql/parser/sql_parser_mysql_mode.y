@@ -4431,6 +4431,7 @@ TEMPORARY
 }
 | EXTERNAL
 {
+  result->contain_sensitive_data_ = true;
   malloc_terminal_node($$, result->malloc_pool_, T_EXTERNAL);
 }
 | /* EMPTY */
@@ -12696,14 +12697,17 @@ CIPHER STRING_VALUE
 user:
 STRING_VALUE
 {
+  result->may_contain_sensitive_data_ = true;
   $$ = $1;
 }
 | NAME_OB
 {
+  result->may_contain_sensitive_data_ = true;
   $$ = $1;
 }
 | unreserved_keyword
 {
+  result->may_contain_sensitive_data_ = true;
   get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
 }
 ;
@@ -12729,6 +12733,7 @@ user opt_host_name
 password:
 STRING_VALUE
 {
+  result->contain_sensitive_data_ = true;
   $$ = $1;
   $$->stmt_loc_.first_column_ = @1.first_column - 1;
   $$->stmt_loc_.last_column_ = @1.last_column - 1;
@@ -15862,6 +15867,7 @@ ALTER SYSTEM BACKUP BACKUPPIECE ALL NOT BACKED UP INTNUM TIMES opt_with_active_p
 SET ENCRYPTION ON IDENTIFIED BY STRING_VALUE ONLY
 {
   ParseNode *mode = NULL;
+  result->contain_sensitive_data_ = true;
   malloc_terminal_node(mode, result->malloc_pool_, T_INT);
   mode->value_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_SET_ENCRYPTION, 2, mode, $6);
@@ -15870,6 +15876,7 @@ SET ENCRYPTION ON IDENTIFIED BY STRING_VALUE ONLY
 SET DECRYPTION IDENTIFIED BY string_list
 {
   ParseNode *string_list_node = NULL;
+  result->contain_sensitive_data_ = true;
   merge_nodes(string_list_node, result, T_STRING_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_SET_DECRYPTION, 1, string_list_node);
 }
@@ -16204,6 +16211,7 @@ opt_backup_dest:
 }
 | FROM STRING_VALUE
 {
+  result->contain_sensitive_data_ = true;
   $$ = $2;
 }
 ;
@@ -16336,6 +16344,7 @@ opt_backup_backup_dest:
 | BACKUP_BACKUP_DEST opt_equal_mark STRING_VALUE
 {
   (void)($2);
+  result->contain_sensitive_data_ = true;
   $$ = $3;
 }
 ;
@@ -17288,6 +17297,7 @@ opt_backup_to:
 | TO opt_equal_mark STRING_VALUE
 {
   (void)($2);
+  result->contain_sensitive_data_ = true;
   $$ = $3;
 }
 ;
@@ -17333,6 +17343,7 @@ opt_backup_key_info:
 /*EMPTY*/  { $$ = NULL; }
 | WITH KEY FROM STRING_VALUE opt_encrypt_key
 {
+  result->contain_sensitive_data_ = true;
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_KEY, 2, $4, $5);
 }
 ;
@@ -17341,6 +17352,7 @@ opt_encrypt_key:
 /*EMPTY*/  { $$ = NULL; }
 | ENCRYPTED BY STRING_VALUE
 {
+  result->contain_sensitive_data_ = true;
   $$ = $3;
 }
 ;
