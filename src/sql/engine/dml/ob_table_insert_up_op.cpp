@@ -201,10 +201,18 @@ int ObTableInsertUpOp::do_table_insert_up()
         }
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
           ret = OB_SUCCESS;
-          if (OB_FAIL(process_on_duplicate_update(
-                  duplicated_rows, dml_param_, n_duplicated_rows, affected_rows, update_count))) {
-            if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-              LOG_WARN("fail to process on duplicate update", K(ret));
+          lib::ContextParam param;
+          param
+              .set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
+              .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+              .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+          CREATE_WITH_TEMP_CONTEXT(param)
+          {
+            if (OB_FAIL(process_on_duplicate_update(
+                    duplicated_rows, dml_param_, n_duplicated_rows, affected_rows, update_count))) {
+              if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+                LOG_WARN("fail to process on duplicate update", K(ret));
+              }
             }
           }
         }

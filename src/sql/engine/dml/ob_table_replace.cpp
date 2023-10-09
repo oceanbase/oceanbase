@@ -146,6 +146,9 @@ int ObTableReplace::do_table_replace(ObExecContext& ctx) const
   if (OB_ISNULL(replace_ctx = GET_PHY_OPERATOR_CTX(ObTableReplaceCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get replace operator context failed", K(ret), K(get_id()));
+  } else if (OB_ISNULL(my_session = GET_MY_SESSION(ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get my session", K(ret));
   } else if (replace_ctx->iter_end_) {
     LOG_DEBUG("can't get gi task, iter end", K(replace_ctx->iter_end_), K(get_id()));
   } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
@@ -167,9 +170,18 @@ int ObTableReplace::do_table_replace(ObExecContext& ctx) const
     while (OB_SUCC(ret) && OB_SUCC(try_check_status(ctx)) && OB_SUCC(get_next_row(ctx, insert_row))) {
       if (OB_FAIL(try_insert(ctx, expr_ctx, insert_row, *pkey, replace_ctx->dml_param_, duplicated_rows))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-          if (OB_FAIL(do_replace(ctx, *pkey, duplicated_rows, replace_ctx->dml_param_))) {
-            if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-              LOG_WARN("fail to do replace row", K(ret));
+          ret = OB_SUCCESS;
+          lib::ContextParam param;
+          param
+              .set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
+              .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+              .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+          CREATE_WITH_TEMP_CONTEXT(param)
+          {
+            if (OB_FAIL(do_replace(ctx, *pkey, duplicated_rows, replace_ctx->dml_param_))) {
+              if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+                LOG_WARN("fail to do replace row", K(ret));
+              }
             }
           }
         } else {

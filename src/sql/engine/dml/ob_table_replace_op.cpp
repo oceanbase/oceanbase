@@ -132,12 +132,21 @@ int ObTableReplaceOp::do_table_replace()
     while (OB_SUCC(ret) && OB_SUCC(inner_get_next_row())) {
       if (OB_FAIL(try_insert(*my_session, *pkey, *partition_service, dml_param_, dup_rows_iter))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-          if (OB_ISNULL(dup_rows_iter)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("dup row iter is NULL", K(ret), KP(dup_rows_iter));
-          } else if (OB_FAIL(do_replace(*my_session, *pkey, *partition_service, *dup_rows_iter, dml_param_))) {
-            if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-              LOG_WARN("fail to do replace row", K(ret));
+          ret = OB_SUCCESS;
+          lib::ContextParam param;
+          param
+              .set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
+              .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+              .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+          CREATE_WITH_TEMP_CONTEXT(param)
+          {
+            if (OB_ISNULL(dup_rows_iter)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("dup row iter is NULL", K(ret), KP(dup_rows_iter));
+            } else if (OB_FAIL(do_replace(*my_session, *pkey, *partition_service, *dup_rows_iter, dml_param_))) {
+              if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+                LOG_WARN("fail to do replace row", K(ret));
+              }
             }
           }
         } else {

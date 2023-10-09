@@ -485,14 +485,22 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
           // 2. There are conflicting rows,
           // get the primary key column and related index columns of the conflicting row
           ret = OB_SUCCESS;
-          if (OB_FAIL(process_on_duplicate_update(ctx,
-                  duplicated_rows,
-                  insert_update_ctx->dml_param_,
-                  n_duplicated_rows,
-                  affected_rows,
-                  update_count))) {
-            if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-              LOG_WARN("fail to proecess on duplicate update", K(ret));
+          lib::ContextParam param;
+          param
+              .set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
+              .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+              .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+          CREATE_WITH_TEMP_CONTEXT(param)
+          {
+            if (OB_FAIL(process_on_duplicate_update(ctx,
+                    duplicated_rows,
+                    insert_update_ctx->dml_param_,
+                    n_duplicated_rows,
+                    affected_rows,
+                    update_count))) {
+              if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+                LOG_WARN("fail to proecess on duplicate update", K(ret));
+              }
             }
           }
         }  // end if primary_key_duplicate
