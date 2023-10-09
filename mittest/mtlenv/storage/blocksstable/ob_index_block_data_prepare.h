@@ -68,7 +68,7 @@ public:
       const int64_t snapshot_version, const ObDmlFlag dml_flag, ObDatumRow &multi_row);
   static void fake_freeze_info();
   virtual ObITable::TableType get_merged_table_type() const;
-  void prepare_query_param(const bool is_reverse_scan);
+  void prepare_query_param(const bool is_reverse_scan, ObArenaAllocator *allocator = nullptr);
   void destroy_query_param();
   void prepare_ddl_kv();
 protected:
@@ -108,15 +108,16 @@ protected:
 
 ObArenaAllocator TestIndexBlockDataPrepare::allocator_;
 
-void TestIndexBlockDataPrepare::prepare_query_param(const bool is_reverse_scan)
+void TestIndexBlockDataPrepare::prepare_query_param(const bool is_reverse_scan, ObArenaAllocator *allocator)
 {
-  schema_cols_.set_allocator(&allocator_);
+  ObArenaAllocator *test_allocator = nullptr == allocator ? &allocator_ : allocator;
+  schema_cols_.set_allocator(test_allocator);
   schema_cols_.init(table_schema_.get_column_count());
   ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(schema_cols_));
   iter_param_.table_id_ = table_schema_.get_table_id();
   iter_param_.tablet_id_ = table_schema_.get_table_id();
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
-      allocator_, 10, table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), schema_cols_, nullptr/*storage_cols_index*/));
+      *test_allocator, 10, table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), schema_cols_, nullptr/*storage_cols_index*/));
   iter_param_.read_info_ = &read_info_;
   //jsut for test
   context_.query_flag_.set_not_use_row_cache();
@@ -128,8 +129,8 @@ void TestIndexBlockDataPrepare::prepare_query_param(const bool is_reverse_scan)
   }
   context_.store_ctx_ = &store_ctx_;
   context_.ls_id_ = ls_id_;
-  context_.allocator_ = &allocator_;
-  context_.stmt_allocator_ = &allocator_;
+  context_.allocator_ = test_allocator;
+  context_.stmt_allocator_ = test_allocator;
   context_.limit_param_ = nullptr;
   context_.is_inited_ = true;
 }
@@ -217,6 +218,7 @@ void TestIndexBlockDataPrepare::TearDown()
     root_index_builder_->~ObSSTableIndexBuilder();
     allocator_.free((void *)root_index_builder_);
   }
+  allocator_.reuse();
 }
 
 void TestIndexBlockDataPrepare::fake_freeze_info()
