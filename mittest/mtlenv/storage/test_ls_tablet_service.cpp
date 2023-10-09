@@ -132,9 +132,6 @@ void TestLSTabletService::SetUp()
 void TestLSTabletService::TearDownTestCase()
 {
   int ret = OB_SUCCESS;
-  while (MTL(ObTenantMetaMemMgr*)->full_tablet_creator_.transform_head_.is_valid()) {
-    MTL(ObTenantMetaMemMgr*)->full_tablet_creator_.persist_tablet();
-  }
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
 

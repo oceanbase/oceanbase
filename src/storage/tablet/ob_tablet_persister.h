@@ -94,6 +94,7 @@ public:
       const ObTablet &old_tablet,
       char *buf,
       const int64_t len);
+  static int transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle);
 private:
   static int check_tablet_meta_ids(
       const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,

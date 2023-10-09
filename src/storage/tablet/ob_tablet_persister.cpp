@@ -17,6 +17,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
+#include "storage/tablet/ob_tablet_slog_helper.h"
 
 using namespace std::placeholders;
 using namespace oceanbase::common;
@@ -306,6 +307,25 @@ int ObTabletPersister::persist_and_fill_tablet(
     LOG_WARN("fail to acquire tablet", K(ret), K(key), K(type));
   } else if (CLICK_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), K(new_handle), K(type));
+  }
+
+  return ret;
+}
+
+int ObTabletPersister::transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle)
+{
+  int ret = OB_SUCCESS;
+
+  ObArray<ObSharedBlocksWriteCtx> tmp_tablet_meta_write_ctxs;
+  ObArray<ObSharedBlocksWriteCtx> tmp_sstable_meta_write_ctxs;
+  ObArenaAllocator tmp_allocator;
+
+  if (OB_UNLIKELY(!old_tablet.is_empty_shell())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only support transform empty shell", K(ret), K(old_tablet));
+  } else if (OB_FAIL(persist_and_fill_tablet(
+      old_tablet, tmp_allocator, tmp_tablet_meta_write_ctxs, tmp_sstable_meta_write_ctxs, new_handle))) {
+    LOG_WARN("fail to persist old empty shell", K(ret), K(old_tablet));
   }
 
   return ret;

@@ -433,16 +433,6 @@ int ObTabletCreateDeleteHelper::prepare_create_msd_tablet()
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::push_msd_tablet_to_queue(ObTabletHandle &handle)
-{
-  int ret = OB_SUCCESS;
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  if (OB_FAIL(t3m->get_mstx_tablet_creator().push_tablet_to_queue(handle))) {
-    LOG_WARN("fail to push full tablet to queue", K(ret));
-  }
-  return ret;
-}
-
 int ObTabletCreateDeleteHelper::create_msd_tablet(
     const ObTabletMapKey &key,
     ObTabletHandle &handle)

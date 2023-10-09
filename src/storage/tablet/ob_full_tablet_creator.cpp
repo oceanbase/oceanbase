@@ -26,12 +26,8 @@ namespace storage
 ObFullTabletCreator::ObFullTabletCreator()
   : is_inited_(false),
     tiny_allocator_(),
-    transform_head_(),
-    transform_tail_(),
     wait_create_tablets_cnt_(0),
     created_tablets_cnt_(0),
-    persist_queue_cnt_(0),
-    mutex_(),
     mstx_mem_ctx_(nullptr)
 {
 }
@@ -70,9 +66,6 @@ int ObFullTabletCreator::init(const uint64_t tenant_id)
 
 void ObFullTabletCreator::reset()
 {
-  transform_head_.reset();
-  transform_tail_.reset();
-  persist_queue_cnt_ = 0;
   wait_create_tablets_cnt_ = 0;
   created_tablets_cnt_ = 0;
   tiny_allocator_.reset();
@@ -110,7 +103,6 @@ int ObFullTabletCreator::throttle_tablet_creation()
     if (need_wait) {
       ob_usleep(10); // sleep 10us, do not get mutex here
     }
-    lib::ObMutexGuard guard(mutex_);
     if (total() < limit_size) {
       need_wait = false;
     } else if (ObTimeUtility::fast_current_time() - start_time >= timeout) {
@@ -120,10 +112,9 @@ int ObFullTabletCreator::throttle_tablet_creation()
     } else {
       need_wait = true;
       if (REACH_TENANT_TIME_INTERVAL(log_timeout)) {
-        const int64_t hanging_tablets_cnt = ATOMIC_LOAD(&created_tablets_cnt_) - ATOMIC_LOAD(&persist_queue_cnt_);
         const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
         LOG_WARN("prepare create tablet timeout",
-            K_(created_tablets_cnt), K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt), K(limit_size),
+            K_(created_tablets_cnt), K(wait_create_tablets_cnt), K(limit_size),
             K(tiny_allocator_.total()), K(tiny_allocator_.used()),
             K(mstx_mem_ctx_->hold()), K(mstx_mem_ctx_->used()));
       }
@@ -175,226 +166,6 @@ int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
     }
   }
   return ret;
-}
-
-int ObFullTabletCreator::persist_tablet()
-{
-  int ret = OB_SUCCESS;
-  int64_t persist_tablets_cnt = 0;
-  int64_t error_tablets_cnt = 0;
-  int64_t retry_tablets_cnt = 0;
-  ObTabletHandle old_handle;
-  const int64_t per_round_time = ObTenantMetaMemMgr::TABLET_TRANSFORM_INTERVAL_US;
-  const int64_t start_time = ObTimeUtility::fast_current_time();
-  while (OB_SUCC(ret) && ObTimeUtility::fast_current_time() - start_time < per_round_time && OB_SUCC(pop_tablet(old_handle))) {
-    const ObTablet *old_tablet = old_handle.get_obj();
-    const ObMetaDiskAddr old_addr = old_tablet->get_tablet_addr();
-    const ObTabletMeta &tablet_meta = old_tablet->get_tablet_meta();
-    ObTabletMapKey key(tablet_meta.ls_id_, tablet_meta.tablet_id_);
-    ObMetaDiskAddr addr;
-    ObTabletHandle new_handle;
-    ObLSHandle ls_handle;
-    ObLSTabletService *ls_tablet_svr = nullptr;
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    ObTabletCreateDeleteMdsUserData mds_data;
-    ObTimeGuard single_guard("try persist tablet", 5 * 1000); // 5ms
-    bool tmp_fail = false;
-    if (OB_UNLIKELY(!old_tablet->is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected old tablet", K(ret), K(key), K(old_handle), KPC(old_tablet));
-    } else if (FALSE_IT(single_guard.click("start persist"))) {
-    } else if (OB_FAIL(t3m->get_tablet_addr(key, addr))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS; // deleted, skip
-      } else {
-        LOG_ERROR("fail to get meta addr", K(ret), K(key), K(old_handle), K(old_tablet->is_empty_shell()));
-      }
-    } else if (!addr.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected not memory tablet addr", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
-    } else if (addr != old_addr) {
-      if (addr.is_disked()) {
-        LOG_INFO("full tablet has been persisted, skip this", K(ret), K(key), K(old_addr), K(addr));
-      } else {
-        ret = OB_NOT_THE_OBJECT; // create_memtable may change the addr, push back to queue
-        tmp_fail = true;
-        LOG_INFO("memory addr changed, push back to queue", K(ret), K(key), K(old_addr), K(addr));
-      }
-    } else if (OB_FAIL(old_tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), mds_data, 0))) {
-      if (OB_EMPTY_RESULT != ret && OB_ERR_SHARED_LOCK_CONFLICT != ret && OB_VERSION_NOT_MATCH != ret) {
-        LOG_ERROR("fail to get tablet status", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
-      } else {
-        tmp_fail = true;
-      }
-    } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*old_tablet, new_handle))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS; // deleted, skip
-      } else {
-        LOG_WARN("fail to persist old tablet", K(ret), K(key), K(old_handle), K(old_tablet->is_empty_shell()));
-      }
-    } else if (FALSE_IT(single_guard.click("end persist"))) {
-    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(tablet_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_ERROR("fail to get ls", K(ret), K(tablet_meta.ls_id_));
-    } else if (OB_ISNULL(ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr())) {
-      ret = OB_ERR_NULL_VALUE;
-      LOG_ERROR("null ls tablet svr", K(ret), K(ls_handle));
-    } else if (OB_FAIL(ls_tablet_svr->update_tablet_mstx(key, old_addr, old_handle, new_handle))) {
-      LOG_WARN("fail to update tablet mstx", K(ret), K(key), K(old_addr), K(old_handle), K(new_handle), K(old_tablet->is_empty_shell()));
-    } else {
-      single_guard.click("end update mstx");
-    }
-
-    if (OB_FAIL(ret)) {
-      if (tmp_fail) {
-        ++retry_tablets_cnt;
-      } else {
-        ++error_tablets_cnt;
-      }
-      if (OB_FAIL(push_tablet_to_queue(old_handle))) {
-        LOG_ERROR("fail to push tablet, wrong tablet may be leaked", K(ret), K(key), K(old_handle), K(old_tablet->is_empty_shell()));
-      }
-      ret = OB_SUCCESS; // continue to persist other tablet
-    } else {
-      ++persist_tablets_cnt;
-      LOG_DEBUG("succeed to persist one tablet", KP(old_tablet), K(single_guard));
-    }
-  }
-  if (OB_ITER_END == ret) {
-    ret = OB_SUCCESS;
-  }
-  // persist_tablets_cnt: the cnt of tablets that have been persisted in this round
-  // error_tablets_cnt:   the cnt of tablets that couldn't be persisted in this round
-  // tablets_cnt:         the cnt of tablets left in queue (including error_tablets_cnt)
-  if (persist_tablets_cnt + error_tablets_cnt + retry_tablets_cnt > 0) {
-    lib::ObMutexGuard guard(mutex_);
-    const int64_t hanging_tablets_cnt = ATOMIC_LOAD(&created_tablets_cnt_) - ATOMIC_LOAD(&persist_queue_cnt_);
-    const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
-    FLOG_INFO("Finish persist task one round", K(persist_tablets_cnt), K(error_tablets_cnt), K(retry_tablets_cnt),
-        K_(created_tablets_cnt), K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt),
-        K(tiny_allocator_.total()), K(tiny_allocator_.used()),
-        K(mstx_mem_ctx_->hold()), K(mstx_mem_ctx_->used()));
-  }
-  return ret;
-}
-
-int ObFullTabletCreator::pop_tablet(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  tablet_handle.reset();
-  lib::ObMutexGuard guard(mutex_);
-  if (OB_UNLIKELY(0 > persist_queue_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected <0 tablets cnt", K(ret), K_(persist_queue_cnt));
-  } else if (0 == persist_queue_cnt_) {
-    ret = OB_ITER_END;
-  } else if (OB_UNLIKELY(!transform_head_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected invalid tablet handle to pop", K(ret), K_(persist_queue_cnt), K_(transform_head));
-  } else {
-    tablet_handle = transform_head_;
-    transform_head_ = transform_head_.get_obj()->get_next_full_tablet();
-    ObTabletHandle empty_handle;
-    tablet_handle.get_obj()->set_next_full_tablet(empty_handle);
-    --persist_queue_cnt_;
-    if (!persist_queue_cnt_) {
-      transform_tail_.reset();
-    }
-  }
-  return ret;
-}
-
-int ObFullTabletCreator::push_tablet_to_queue(const ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
-  bool hdl_valid, tablet_valid, addr_valid;
-  hdl_valid = tablet_valid = addr_valid = true;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("full tablet creator not inited", K(ret));
-  } else if (OB_UNLIKELY(!(hdl_valid = tablet_handle.is_valid())
-                      || !(tablet_valid = tablet_handle.get_obj()->is_valid())
-                      || !(addr_valid = tablet_handle.get_obj()->get_tablet_addr().is_valid())
-                      || tablet_handle.get_obj()->get_tablet_addr().is_block())) {
-    // TODO (@chenqingxiang.cqx) use !is_memory() to skip tablet if empty shell is allocated from pool
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tablet handle or not memory tablet addr", K(ret), K(hdl_valid), K(tablet_valid), K(addr_valid),
-        K(tablet_handle), KPC(tablet_handle.get_obj()));
-  } else if (0 == persist_queue_cnt_) {
-    tablet_handle.get_obj()->set_next_full_tablet(transform_head_);
-    transform_head_ = transform_tail_ = tablet_handle;
-    ++persist_queue_cnt_;
-  } else {
-    transform_tail_.get_obj()->set_next_full_tablet(tablet_handle);
-    transform_tail_ = tablet_handle;
-    ++persist_queue_cnt_;
-  }
-  return ret;
-}
-
-int ObFullTabletCreator::remove_tablet_from_queue(const ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
-  bool hdl_valid, tablet_valid, addr_valid;
-  hdl_valid = tablet_valid = addr_valid = true;
-  ObMetaDiskAddr tablet_addr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("full tablet creator not inited", K(ret));
-  } else if (OB_UNLIKELY(!(hdl_valid = tablet_handle.is_valid())
-                      || !(tablet_valid = tablet_handle.get_obj()->is_valid())
-                      || !(addr_valid = (tablet_addr = tablet_handle.get_obj()->get_tablet_addr()).is_valid()))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to remove invalid tablet", K(ret), K(hdl_valid), K(tablet_valid), K(addr_valid),
-        K(tablet_handle), K(tablet_addr), KPC(tablet_handle.get_obj()));
-  } else if (tablet_addr.is_block()
-          || tablet_addr.is_none()
-          || 0 == persist_queue_cnt_) {
-    // skip persisted or none-addr tablet
-    // TODO (@chenqingxiang.cqx) use !is_memory() to skip tablet if empty shell is allocated from pool
-  } else {
-    ObTabletHandle curr_handle = transform_head_;
-    if (OB_UNLIKELY(!curr_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid tranform head", K(ret), K_(transform_head));
-    } else if (curr_handle.get_obj() == tablet_handle.get_obj()) {
-      transform_head_ = transform_head_.get_obj()->get_next_full_tablet();
-      --persist_queue_cnt_;
-      if (!persist_queue_cnt_) {
-        transform_tail_.reset();
-      }
-    } else {
-      ObTabletHandle prev_handle = curr_handle;
-      while (curr_handle.is_valid()) {
-        if (curr_handle.get_obj() == tablet_handle.get_obj()) {
-          prev_handle.get_obj()->set_next_full_tablet(curr_handle.get_obj()->get_next_full_tablet());
-          if (curr_handle.get_obj() == transform_tail_.get_obj()) {
-            transform_tail_ = prev_handle;
-          }
-          --persist_queue_cnt_;
-          break;
-        }
-        prev_handle = curr_handle;
-        curr_handle = curr_handle.get_obj()->get_next_full_tablet();
-      }
-    }
-  }
-  return ret;
-}
-
-void ObFullTabletCreator::destroy_queue()
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
-  while (transform_head_.is_valid()) {
-    transform_head_ = transform_head_.get_obj()->get_next_full_tablet();
-    --persist_queue_cnt_;
-  }
-  transform_tail_.reset();
-  if (OB_UNLIKELY(0 != persist_queue_cnt_)) {
-    LOG_ERROR("unexpected tablets cnt", K_(persist_queue_cnt));
-  }
 }
 
 } // namespace storage
