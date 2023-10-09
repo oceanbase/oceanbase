@@ -67,7 +67,14 @@ int rename_with_retry(const char *src_name,
       if (-1 == ::rename(src_name, dest_name)) {
         ret  = convert_sys_errno();
         PALF_LOG(WARN, "rename file failed", KR(ret), K(src_name), K(dest_name));
-        ob_usleep(RETRY_INTERVAL);
+        // for xfs, source file not exist and dest file exist after rename return ENOSPC, therefore, next rename will return
+        // OB_NO_SUCH_FILE_OR_DIRECTORY.
+        if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
+          ret = OB_SUCCESS;
+          PALF_LOG(WARN, "rename file failed, source file not exist, return OB_SUCCESS.", K(src_name), K(dest_name));
+        } else {
+          ob_usleep(RETRY_INTERVAL);
+        }
       }
     } while(OB_ALLOCATE_DISK_SPACE_FAILED == ret);
   }
