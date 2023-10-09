@@ -55,6 +55,10 @@ public:
                                  common::ObIArray<ObResourcePool> &pools) const;
   virtual int get_resource_pools(const common::ObIArray<uint64_t> &pool_ids,
                                  common::ObIArray<ObResourcePool> &pools) const;
+  int get_resource_pool(ObISQLClient &sql_client,
+                        const uint64_t pool_id,
+                        const bool select_for_update,
+                        ObResourcePool &resource_pool) const;
   virtual int update_resource_pool(common::ObISQLClient &client,
                                    const ObResourcePool &resource_pool);
   virtual int remove_resource_pool(common::ObISQLClient &client,
