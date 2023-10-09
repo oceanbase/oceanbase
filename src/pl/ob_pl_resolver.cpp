@@ -5325,9 +5325,22 @@ int ObPLResolver::resolve_return(const ObStmtNodeTree *parse_tree, ObPLReturnStm
         ret = OB_ERR_CONS_HAS_RET_NODE;
         LOG_WARN("udt constructor should not have return expr", K(ret));
         LOG_USER_ERROR(OB_ERR_CONS_HAS_RET_NODE);
-      } else if (OB_FAIL(ObPLUDTObjectManager::make_return_node(get_resolve_ctx().allocator_,
-                                                                expr_node))) {
-        LOG_WARN("failed to make udt construtor's ret node", K(ret));
+      } else {
+        ParseNode *child = NULL;
+        ParseNode *parent = NULL;
+        if (NULL == (child = new_terminal_node(&resolve_ctx_.allocator_, T_IDENT))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else if (NULL == (parent = new_non_terminal_node(&resolve_ctx_.allocator_, T_OBJ_ACCESS_REF, 2, child, NULL))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else {
+          child->str_value_ = "SELF";
+          child->str_len_ = 4;
+          child->raw_text_ = "SELF";
+          child->text_len_ = 4;
+          expr_node = parent;
+        }
       }
     }
 #endif
@@ -15608,6 +15621,7 @@ int ObPLResolver::make_block(
     block->get_namespace().set_pre_ns(NULL == parent ? NULL : &parent->get_namespace());
     block->get_namespace().set_block_type(ObPLBlockNS::BLOCK_ROUTINE);
     block->get_namespace().set_db_name(func.get_db_name());
+    block->get_namespace().set_database_id(func.get_database_id());
     block->get_namespace().set_package_name(func.get_package_name());
     block->get_namespace().set_package_id(func.get_package_id());
     block->get_namespace().set_package_version(func.get_package_version());
@@ -15669,6 +15683,7 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
     package_ast.is_package() ? ObPLBlockNS::BLOCK_PACKAGE_SPEC : ObPLBlockNS::BLOCK_OBJECT_SPEC :
     package_ast.is_package() ? ObPLBlockNS::BLOCK_PACKAGE_BODY : ObPLBlockNS::BLOCK_OBJECT_BODY);
     block->get_namespace().set_db_name(package_ast.get_db_name());
+    block->get_namespace().set_database_id(package_ast.get_database_id());
     block->get_namespace().set_package_name(package_ast.get_name());
     block->get_namespace().set_package_id(package_ast.get_id());
     block->get_namespace().set_package_version(package_ast.get_version());
@@ -15895,10 +15910,11 @@ int ObPLResolver::resolve_routine_decl_param_list(const ParseNode *param_list,
               }
               if (OB_SUCC(ret)) {
                 if (ObPLBlockNS::BlockType::BLOCK_OBJECT_SPEC == top_ns->get_block_type()
-                || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == top_ns->get_block_type()) {
+                    || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == top_ns->get_block_type()) {
                   const ObString &obj_name = top_ns->get_package_name();
                   if (0 != obj_name.case_compare(param->get_type_name())) {
                     ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+                    LOG_WARN("PLS-00382: expression is of wrong type", K(ret), K(obj_name), K(param->get_type_name()));
                     LOG_USER_ERROR(OB_ERR_EXPRESSION_WRONG_TYPE);
                   }
                   if (OB_FAIL(ret)) {
