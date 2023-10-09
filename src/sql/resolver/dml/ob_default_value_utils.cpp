@@ -355,6 +355,7 @@ int ObDefaultValueUtils::get_default_type_for_insert(const ColumnItem* column, O
         ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
         LOG_WARN("Column can not be null", K(column->column_name_), K(ret));
       } else {
+        LOG_USER_WARN(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
         op = OB_NOT_STRICT_DEFAULT_OP;
       }
     }
