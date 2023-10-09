@@ -1017,6 +1017,9 @@ void ObTenant::set_unit_max_cpu(double cpu)
   unit_max_cpu_ = cpu;
   const double default_cfs_period_us = 100000.0;
   int32_t cfs_quota_us = static_cast<int32_t>(default_cfs_period_us * cpu);
+  if (is_sys_tenant(id_)) {
+    cfs_quota_us = -1;
+  }
   if (cgroup_ctrl_.is_valid()
       && !is_meta_tenant(id_)
       && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.set_cpu_cfs_quota(cfs_quota_us, id_))) {
