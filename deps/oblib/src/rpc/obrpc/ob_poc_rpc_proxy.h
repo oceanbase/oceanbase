@@ -132,7 +132,7 @@ public:
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     {
-      lib::Thread::RpcGuard guard(addr);
+      lib::Thread::RpcGuard guard(addr, pcode);
       if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
         RPC_LOG(WARN, "rpc encode req fail", K(ret));
       } else if(OB_FAIL(check_blacklist(addr))) {

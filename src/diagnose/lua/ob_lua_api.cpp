@@ -1917,14 +1917,22 @@ int dump_thread_info(lua_State *L)
             }
           } else if (sizeof(ObAddr) == process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0)
                      && addr.is_valid()) {
-            int ret = 0;
-            if ((ret = snprintf(wait_event, BUF_LEN, "rpc to ")) > 0) {
-              IGNORE_RETURN addr.to_string(wait_event + ret, BUF_LEN - ret);
+            GET_OTHER_TSI_ADDR(pcode, &Thread::pcode_);
+            int64_t pos1 = 0;
+            int64_t pos2 = 0;
+            if (((pos1 = snprintf(wait_event, 37, "rpc 0x%X(%s", pcode, obrpc::ObRpcPacketSet::instance().name_of_idx(obrpc::ObRpcPacketSet::instance().idx_of_pcode(pcode)) + 3)) > 0)
+                && ((pos2 = snprintf(wait_event + std::min(36L, pos1), 6, ") to ")) > 0)) {
+              int64_t pos = std::min(36L, pos1) + std::min(5L, pos2);
+              pos += addr.to_string(wait_event + pos, BUF_LEN - pos);
             }
           } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "tenant worker request");
           } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "IO events");
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_LOCAL_RETRY & event))) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "local retry");
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_PX_MSG & event))) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "px message");
           } else if (0 != sleep_us) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", sleep_us);
           } else if (0 != blocking_ts) {
