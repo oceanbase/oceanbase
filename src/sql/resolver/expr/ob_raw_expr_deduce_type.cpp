@@ -92,7 +92,7 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr &expr)
   int ret = OB_SUCCESS;
   if (expr.is_cursor()) {
     expr.set_data_type(ObExtendType);
-  } else if (((1 == expr.get_output_column()) && (!expr.is_set() || expr.is_multiset()))) {
+  } else if (expr.is_scalar()) {
     expr.set_result_type(expr.get_column_types().at(0));
     if (ob_is_enumset_tc(expr.get_data_type())) {
       const ObSelectStmt *ref_stmt = expr.get_ref_stmt();
@@ -3258,10 +3258,9 @@ int ObRawExprDeduceType::add_implicit_cast(ObOpRawExpr &parent,
             parent.get_param_expr(child_idx) = child_ptr;
           }
           idx += ele_cnt;
-        } else if (((T_REF_QUERY == child_ptr->get_expr_type()
-                     && !(static_cast<ObQueryRefRawExpr *>(child_ptr)->is_cursor()))
-                    && (static_cast<ObQueryRefRawExpr *>(child_ptr)->get_output_column() > 1
-                        || static_cast<ObQueryRefRawExpr *>(child_ptr)->is_set()))) {
+        } else if (T_REF_QUERY == child_ptr->get_expr_type()
+                   && !static_cast<ObQueryRefRawExpr *>(child_ptr)->is_cursor()
+                   && !static_cast<ObQueryRefRawExpr *>(child_ptr)->is_scalar()) {
           // subquery result not scalar (is row or set), add cast on subquery stmt's output
           ObQueryRefRawExpr *query_ref_expr = static_cast<ObQueryRefRawExpr *>(child_ptr);
           const int64_t column_cnt = query_ref_expr->get_output_column();
@@ -3514,6 +3513,7 @@ int ObRawExprDeduceType::add_implicit_cast_for_subquery(
   //   (select c1 from t1) + a
   int ret = OB_SUCCESS;
   CK(expr.get_output_column() > 1 || expr.is_set());
+  CK(!expr.is_multiset_expr());
   CK(expr.get_output_column() == input_types.count());
   CK(NULL != expr.get_ref_stmt());
   CK(expr.get_column_types().count() == expr.get_output_column()
