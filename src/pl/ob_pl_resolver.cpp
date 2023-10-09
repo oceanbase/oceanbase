@@ -16833,27 +16833,21 @@ int ObPLResolver::replace_map_or_order_expr(
   if (OB_FAIL(ret)) {
   } else if (OB_NOT_NULL(routine_info)) {
     const ObString &routine_name = routine_info->get_routine_name();
-    ObObjAccessIdent access_ident(routine_name);
+    ObObjAccessIdent left_access_ident(routine_name);
     ObSEArray<ObObjAccessIdx, 1> left_idxs;
-    ObSEArray<ObObjAccessIdx, 1> right_idxs;
     OZ (left_idxs.push_back(ObObjAccessIdx(*user_type,
                                            ObObjAccessIdx::AccessType::IS_EXPR,
                                            ObString(""),
                                            *user_type,
                                            reinterpret_cast<int64_t>(left))));
-    OZ (right_idxs.push_back(ObObjAccessIdx(*user_type,
-                                            ObObjAccessIdx::AccessType::IS_EXPR,
-                                            ObString(""),
-                                            *user_type,
-                                            reinterpret_cast<int64_t>(right))));
-    OX (access_ident.set_pl_udf());
-    OX (access_ident.access_name_ = routine_name);
+    OX (left_access_ident.set_pl_udf());
+    OX (left_access_ident.access_name_ = routine_name);
     if (routine_info->is_udt_order()) {
-      OZ (access_ident.params_.push_back(std::make_pair(right, 0)));
+      OZ (left_access_ident.params_.push_back(std::make_pair(right, 0)));
     }
     CK (OB_NOT_NULL(current_block_));
-    OZ (init_udf_info_of_accessident(access_ident));
-    OZ (resolve_access_ident(access_ident, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, left_idxs, func, true));
+    OZ (init_udf_info_of_accessident(left_access_ident));
+    OZ (resolve_access_ident(left_access_ident, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, left_idxs, func, true));
     CK (left_idxs.at(left_idxs.count() - 1).is_udf_type());
     OX (left = left_idxs.at(left_idxs.count() - 1).get_sysfunc_);
     if (OB_FAIL(ret)) {
@@ -16869,7 +16863,17 @@ int ObPLResolver::replace_map_or_order_expr(
       }
       OX (right = const_expr);
     } else {
-      OZ (resolve_access_ident(access_ident, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, right_idxs, func, true));
+      ObObjAccessIdent right_access_ident(routine_name);
+      ObSEArray<ObObjAccessIdx, 1> right_idxs;
+      OX (right_access_ident.set_pl_udf());
+      OX (right_access_ident.access_name_ = routine_name);
+      OZ (init_udf_info_of_accessident(right_access_ident));
+      OZ (right_idxs.push_back(ObObjAccessIdx(*user_type,
+                               ObObjAccessIdx::AccessType::IS_EXPR,
+                               ObString(""),
+                               *user_type,
+                               reinterpret_cast<int64_t>(right))));
+      OZ (resolve_access_ident(right_access_ident, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, right_idxs, func, true));
       CK (right_idxs.at(right_idxs.count() - 1).is_udf_type());
       OX (right = right_idxs.at(right_idxs.count() - 1).get_sysfunc_);
     }
