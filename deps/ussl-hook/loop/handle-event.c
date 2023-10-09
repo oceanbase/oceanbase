@@ -243,19 +243,27 @@ static int handle_client_readable_event(ussl_sock_t *s)
     if (rbytes <= 0) {
       handle_recv_fail(rbytes, cs, &ret);
     } else if (rbytes < sizeof(negotiation_head_t)) {
-      ret = 0;
+      ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, cs->fd);
+      client_stop_timer_and_give_back_fd(cs, 1);
+      ret = EUCLEAN;
     } else { // get mag len & read msg
       negotiation_head_t msg_head;
       memcpy(&msg_head, buf, sizeof(msg_head));
       if (NEGOTIATION_MAGIC != msg_head.magic) {
         client_stop_timer_and_give_back_fd(cs, 1);
         ret = EUCLEAN;
+      } else if (rbytes < sizeof(negotiation_head_t) + msg_head.len) {
+        ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, cs->fd);
+        client_stop_timer_and_give_back_fd(cs, 1);
+        ret = EUCLEAN;
       } else {
-        while ((rbytes = recv(cs->fd, buf, sizeof(msg_head) + msg_head.len, 0)) <= 0 &&
+        while ((rbytes = recv(cs->fd, buf, sizeof(msg_head) + msg_head.len, 0)) < 0 &&
               EINTR == errno)
           ;
-        if (rbytes <= 0) {
-          handle_recv_fail(rbytes, cs, &ret);
+        if (rbytes != sizeof(msg_head) + msg_head.len) {
+          ussl_log_warn("recv data failed, fd:%d, errno:%d, rbytes:%ld", cs->fd, errno, rbytes);
+          client_stop_timer_and_give_back_fd(cs, 1);
+          ret = EUCLEAN;
         } else {
           negotiation_message_t nego_msg;
           memcpy(&nego_msg, buf + sizeof(msg_head), sizeof(nego_msg));
@@ -364,8 +372,9 @@ static void handle_acceptfd_error(acceptfd_sk_t *s, int *err)
 static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
 {
   int err = 0;
-  char buf[256];
-  ssize_t rbytes = recv(s->fd, buf, sizeof(buf), MSG_PEEK);
+  char buf[USSL_BUF_LEN];
+  ssize_t rbytes = 0;
+  while ((rbytes = recv(s->fd, buf, sizeof(buf), MSG_PEEK)) < 0 && EINTR == errno);
   negotiation_head_t *h = (typeof(h))buf;
   char src_addr[IP_STRING_MAX_LEN] = {0};
   ussl_get_peer_addr(s->fd, src_addr, IP_STRING_MAX_LEN);
@@ -380,6 +389,8 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
       handle_acceptfd_error(s, &err);
     }
   } else if (rbytes < sizeof(negotiation_head_t)) {
+    ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, s->fd);
+    handle_acceptfd_error(s, &err);
   } else if (h->magic != NEGOTIATION_MAGIC) {
     int need_dispatch = 0;
     if (test_server_auth_methods(USSL_AUTH_NONE)) {
@@ -387,9 +398,9 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
     } else if (is_local_ip_address(src_addr)) {
       ussl_log_info("local ip address:%s, need dispatch", src_addr);
       need_dispatch = 1;
-    } else if (h->magic == 0x12345678 || h->magic == 0x78563412) {
-      ussl_log_info("easy negotation message, need dispatch, src:%s, fd:%d", src_addr, s->fd);
-      need_dispatch = 1;
+    } else {
+      need_dispatch = is_net_keepalive_connection(rbytes, buf);
+      ussl_log_info("easy negotation message, need dispatch:%d, src:%s, fd:%d", need_dispatch, src_addr, s->fd);
     }
     if (need_dispatch) {
       ussl_log_info("recv non-negotiation message, the fd will be dispatched, fd:%d, src_addr:%s, magic:0x%x",
@@ -404,12 +415,13 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
       handle_acceptfd_error(s, &err);
     }
   } else if (h->len + sizeof(*h) > rbytes) {
-    // need read more
+    ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, s->fd);
+    handle_acceptfd_error(s, &err);
   } else {
     while ((rbytes = recv(s->fd, buf, h->len + sizeof(negotiation_head_t), 0)) < 0 &&
            EINTR == errno)
       ;
-    if (rbytes != (h->len + sizeof(negotiation_head_t))) {
+    if (rbytes != h->len + sizeof(negotiation_head_t)) {
       ussl_log_warn("consume nego message failed, rbytes:%ld, fd:%d, errno:%d", rbytes, s->fd,
                      errno);
       handle_acceptfd_error(s, &err);
