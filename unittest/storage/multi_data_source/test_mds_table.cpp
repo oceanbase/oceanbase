@@ -627,6 +627,20 @@ TEST_F(TestMdsTable, test_rw_lock_wwlock) {
   t2.join();
 }
 
+TEST_F(TestMdsTable, test_rvalue_set) {
+  ExampleUserData2 data;
+  ASSERT_EQ(OB_SUCCESS, data.assign(MdsAllocator::get_instance(), "123"));
+  MdsCtx ctx(mds::MdsWriter(ObTransID(100)));
+  ObString str = data.data_;
+  ASSERT_EQ(OB_SUCCESS, mds_table_.set(std::move(data), ctx, 0));
+  bool is_committed = false;
+  ASSERT_EQ(OB_SUCCESS, mds_table_.get_latest<ExampleUserData2>([&data, str](const ExampleUserData2 &read_data) -> int {
+    MDS_ASSERT(data.data_ == nullptr);
+    MDS_ASSERT(str.ptr() == read_data.data_.ptr());
+    return OB_SUCCESS;
+  }, is_committed));
+}
+
 }
 }
 

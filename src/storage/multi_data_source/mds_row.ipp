@@ -234,88 +234,48 @@ int MdsRow<K, V>::construct_insert_record_user_mds_node_(MdsRowBase<K, V> *mds_r
 }
 
 template <typename K, typename V>
-template <typename WRITE_OPERATION>
-int MdsRow<K, V>::write_operation_wrapper_(WRITE_OPERATION &&write_op,
-                                           MdsCtx &ctx,
-                                           const int64_t lock_timeout_us)
+template <typename DATA>
+int MdsRow<K, V>::set(DATA &&data,
+                      MdsCtx &ctx,
+                      const RetryParam &retry_param,
+                      const bool is_for_remove)
 {
-  #define PRINT_WRAPPER KR(ret), K(typeid(V).name()), K(ctx), KTIME(timeout_ts),\
-                        K(lock_timeout_us), K(try_lock_times), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(typeid(V).name()), K(ctx), K(retry_param), K(*this)
   int ret = OB_SUCCESS;
   bool write_conflict = true;
-  int try_lock_times = 0;
-  int64_t timeout_ts = ObClockGenerator::getRealClock() + lock_timeout_us;
-  MDS_TG(std::max(lock_timeout_us, (int64_t)5_ms));
+  MDS_TG(5_ms);
   if (!ctx.can_write()) {
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG_SET(WARN, "invalid mds ctx");
   } else {
-    do {
-      MDS_TG(5_ms);
-      MdsWLockGuard lg(MdsRowBase<K, V>::lock_);// lock row
-      if (sorted_list_.empty()) {// for now, all writting data are in memory
-        write_conflict = false;
-      } else {
-        if (OB_LIKELY(sorted_list_.get_head().is_decided_())) {
-          write_conflict = false;
-        } else if (sorted_list_.get_head().get_writer_() == ctx.get_writer()) {
-          write_conflict = false;
-        }
-      }
-      UserMdsNode<K, V> *new_node = nullptr;
-      if (OB_UNLIKELY(write_conflict)) {
-        ret = OB_TRY_LOCK_ROW_CONFLICT;
-      } else if (MDS_FAIL(write_op())) {
-        MDS_LOG_SET(WARN, "execute write op failed");
-      } else {
-        MDS_LOG_SET(TRACE, "MdsRow set node success");
-      }
-    } while (++try_lock_times &&
-             OB_TRY_LOCK_ROW_CONFLICT == ret &&// keep trying but release latch
-             ObClockGenerator::getRealClock() < timeout_ts &&// check timeout
-             ({ob_usleep(50_ms); true;}));// if not, wait and try again
-  }
-  if (OB_FAIL(ret)) {
-    if (lock_timeout_us != 0 && OB_TRY_LOCK_ROW_CONFLICT == ret) {
-      ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
-      MDS_LOG_SET(WARN, "write data conflict cause reach lock timeout");
+    MdsWLockGuard lg(MdsRowBase<K, V>::lock_);// lock row
+    if (sorted_list_.empty()) {// for now, all writting data are in memory
+      write_conflict = false;
     } else {
-      MDS_LOG_SET(WARN, "write failed");
+      if (OB_LIKELY(sorted_list_.get_head().is_decided_())) {
+        write_conflict = false;
+      } else if (sorted_list_.get_head().get_writer_() == ctx.get_writer()) {
+        write_conflict = false;
+      }
     }
-  } else {
-    MDS_LOG_SET(TRACE, "MdsRow write node success");
+    UserMdsNode<K, V> *new_node = nullptr;
+    if (OB_UNLIKELY(write_conflict)) {
+      ret = OB_EAGAIN;
+      if (retry_param.check_reach_print_interval_and_update()) {
+        MDS_LOG_SET(INFO, "mds row write conflict");
+      }
+    } else if (MDS_FAIL(construct_insert_record_user_mds_node_(this,
+                                                               std::forward<DATA>(data),
+                                                               is_for_remove ? MdsNodeType::DELETE : MdsNodeType::SET,
+                                                               share::SCN::max_scn(),
+                                                               ctx))) {
+      MDS_LOG_SET(WARN, "execute write op failed");
+    } else {
+      MDS_LOG_SET(DEBUG, "MdsRow set node success");
+    }
   }
   return ret;
   #undef PRINT_WRAPPER
-}
-
-template <typename K, typename V>
-template <typename DATA>
-int MdsRow<K, V>::set(DATA &&data,
-                      MdsCtx &ctx,
-                      const int64_t lock_timeout_us,
-                      const bool is_for_remove)
-{
-  ForwardWrapper forward_wrapper(std::forward<DATA>(data));
-  return write_operation_wrapper_(
-    [&forward_wrapper, &ctx, is_for_remove, this]() -> int {
-      int ret = OB_SUCCESS;
-      if (forward_wrapper.is_constructed_from_lvalue_) {
-        ret = construct_insert_record_user_mds_node_(this,
-                                                     forward_wrapper.data_,
-                                                     is_for_remove ? MdsNodeType::DELETE : MdsNodeType::SET,
-                                                     share::SCN::max_scn(),
-                                                     ctx);
-      } else {
-        ret = construct_insert_record_user_mds_node_(this,
-                                                     std::move(forward_wrapper.data_),
-                                                     is_for_remove ? MdsNodeType::DELETE : MdsNodeType::SET,
-                                                     share::SCN::max_scn(),
-                                                     ctx);
-      }
-      return ret;
-    },
-  ctx, lock_timeout_us);
 }
 
 template <typename K, typename V>
@@ -352,12 +312,10 @@ int MdsRow<K, V>::replay(DATA &&data,
 }
 
 // this function must be called from for_each_lock_ method with lock protection.
-// but this function may hung until node decided, so when it sleep, must release lock,
-// when it awaken, must add lock again.
 template <typename K, typename V>
 int MdsRow<K, V>::check_node_snapshot_(const UserMdsNode<K, V> &node,
                                        const share::SCN snapshot,
-                                       const int64_t timeout_ts,
+                                       const RetryParam &retry_param,
                                        bool &can_read) const
 {
   #define PRINT_WRAPPER KR(ret), KPC(node), K(typeid(READ_OP).name()), K(retry_times), K(can_read),\
@@ -369,11 +327,9 @@ int MdsRow<K, V>::check_node_snapshot_(const UserMdsNode<K, V> &node,
     snapshot_converted = share::SCN::scn_dec(snapshot_converted);
   }
   if (!node.is_decided_() && node.get_prepare_version_() <= snapshot_converted) {
-    if (ObClockGenerator::getRealClock() > timeout_ts) {
-      ret = OB_ERR_SHARED_LOCK_CONFLICT;
-      MDS_LOG(WARN, "timeout when wait node decided", K(node), K(node.get_prepare_version_()), K(snapshot_converted), K(snapshot));
-    } else {
-      ret = OB_EAGAIN;
+    ret = OB_EAGAIN;
+    if (retry_param.check_reach_print_interval_and_update()) {
+      MDS_LOG(WARN, "mds row lock_for_read conflict");
     }
   } else if (node.is_committed_() && node.get_commit_version_() <= snapshot_converted) {
     can_read = true;
@@ -428,28 +384,24 @@ template <typename READ_OP>
 int MdsRow<K, V>::get_snapshot(READ_OP &&read_operation,
                                const share::SCN snapshot,
                                const int64_t read_seq,
-                               const int64_t timeout_us) const
+                               const RetryParam &retry_param) const
 {
-  #define PRINT_WRAPPER KR(ret), K(snapshot), K(read_seq), K(timeout_us), K(timeout_ts), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(snapshot), K(read_seq), K(retry_param), K(*this)
   int ret = OB_SUCCESS;
   UNUSED(read_seq);
-  int64_t timeout_ts = ObClockGenerator::getRealClock() + timeout_us;
   MDS_TG(5_ms);
-  do {
-    MdsRLockGuard lg(MdsRowBase<K, V>::lock_);
-    if (MDS_FAIL(get_with_read_wrapper_(read_operation,
-      [&](const UserMdsNode<K, V> &node, bool &can_read) -> int {
-        return check_node_snapshot_(node, snapshot, timeout_ts, can_read);
-      }
-    ))) {
-      if (OB_EAGAIN != ret && OB_SNAPSHOT_DISCARDED != ret) {
-        MDS_LOG_GET(WARN, "MdsRow get_snapshot failed");
-      }
-    } else {
-      MDS_LOG_GET(TRACE, "MdsRow get_snapshot success");
+  MdsRLockGuard lg(MdsRowBase<K, V>::lock_);
+  if (MDS_FAIL(get_with_read_wrapper_(read_operation,
+    [this, snapshot, &retry_param](const UserMdsNode<K, V> &node, bool &can_read) -> int {
+      return check_node_snapshot_(node, snapshot, retry_param, can_read);
     }
-  } while (OB_EAGAIN == ret &&
-           ({ob_usleep(10_ms); true;}));
+  ))) {
+    if (OB_EAGAIN != ret && OB_SNAPSHOT_DISCARDED != ret) {
+      MDS_LOG_GET(WARN, "MdsRow get_snapshot failed");
+    }
+  } else {
+    MDS_LOG_GET(DEBUG, "MdsRow get_snapshot success");
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -485,35 +437,30 @@ int MdsRow<K, V>::get_by_writer(READ_OP &&read_operation,
                                 const MdsWriter &writer,
                                 const share::SCN snapshot,
                                 const int64_t read_seq,
-                                const int64_t timeout_us) const
+                                const RetryParam &retry_param) const
 {
-  #define PRINT_WRAPPER KR(ret), K(writer), K(snapshot), K(read_seq), K(timeout_us),\
-                        KTIME(timeout_ts), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(writer), K(snapshot), K(read_seq), K(retry_param), K(*this)
   int ret = OB_SUCCESS;
   UNUSED(read_seq);
   MDS_TG(5_ms);
-  int64_t timeout_ts = ObClockGenerator::getRealClock() + timeout_us;
-  do {
-    MdsRLockGuard lg(MdsRowBase<K, V>::lock_);
-    if (MDS_FAIL(get_with_read_wrapper_(read_operation,
-      [&](const UserMdsNode<K, V> &node, bool &can_read) -> int {
-        int ret = OB_SUCCESS;
-        if (node.get_writer_() == writer) {
-          can_read = true;
-        } else {
-          ret = check_node_snapshot_(node, snapshot, timeout_ts, can_read);
-        }
-        return ret;
+  MdsRLockGuard lg(MdsRowBase<K, V>::lock_);
+  if (MDS_FAIL(get_with_read_wrapper_(read_operation,
+    [this, snapshot, &writer, &retry_param](const UserMdsNode<K, V> &node, bool &can_read) -> int {
+      int ret = OB_SUCCESS;
+      if (node.get_writer_() == writer) {
+        can_read = true;
+      } else {
+        ret = check_node_snapshot_(node, snapshot, retry_param, can_read);
       }
-    ))) {
-      if (OB_UNLIKELY(OB_EAGAIN != ret && OB_SNAPSHOT_DISCARDED != ret)) {
-        MDS_LOG_GET(WARN, "MdsRow get_by_writer failed");
-      }
-    } else {
-      MDS_LOG_GET(TRACE, "MdsRow get_by_writer success");
+      return ret;
     }
-  } while (OB_EAGAIN == ret &&
-           ({ob_usleep(10_ms); true;}));
+  ))) {
+    if (OB_UNLIKELY(OB_EAGAIN != ret && OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsRow get_by_writer failed");
+    }
+  } else {
+    MDS_LOG_GET(DEBUG, "MdsRow get_by_writer success");
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
