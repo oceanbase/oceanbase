@@ -1696,28 +1696,39 @@ static int ob_wc_mb_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)),
   if (OB_UNLIKELY(len <= 0)) {
     ret = OB_CS_TOOSMALL;
   } else if (w_char < 0x80) { //7	U+0000	U+007F	1	0xxxxxxx
-    bytes = 1;
+    if(OB_LIKELY(len >=1)){
+      ret = 1;
+      r[0] = (unsigned char) w_char;
+    }
+    else{
+      ret = OB_CS_TOOSMALLN(1);
+    }
   } else if (w_char < 0x800) {//11	U+0080	U+07FF	2	110xxxxx	10xxxxxx
-    bytes = 2;
+    if(OB_LIKELY(len >=2)){
+      ret = 2;
+      r[1] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0xc0;
+    }
+    else{
+      ret = OB_CS_TOOSMALLN(2);
+    }
   } else if (w_char < 0x10000) {//16	U+0800	U+FFFF	3	1110xxxx	10xxxxxx	10xxxxxx
-    bytes = 3;
+    if(OB_LIKELY(len >=3)){
+      ret = 3;
+      r[2] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x800;
+    }
+    else{
+      ret = OB_CS_TOOSMALLN(3);
+    }
   } else if (w_char < 0x200000) {// 21	U+10000	U+1FFFFF 4	11110xxx	10xxxxxx	10xxxxxx	10xxxxxx
-    bytes = 4;
+    if(OB_LIKELY(len >=4)){
+      ret = 4;
+      r[3] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x10000;
+    }
+    else{
+      ret = OB_CS_TOOSMALLN(4);
+    }
   } else {
     ret = OB_CS_ILUNI;
-  }
-  if (OB_UNLIKELY(ret != 0)) {
-    //do nothing
-  } else if (OB_UNLIKELY(bytes > len)) {
-    ret = OB_CS_TOOSMALLN(bytes);
-  } else {
-    switch (bytes) {
-      case 4: r[3] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x10000;
-      case 3: r[2] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x800;
-      case 2: r[1] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0xc0;
-      case 1: r[0] = (unsigned char) w_char;
-    }
-    ret = bytes;
   }
   return ret;
 }
