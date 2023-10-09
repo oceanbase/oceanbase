@@ -104,6 +104,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
     ObTablet *tablet = nullptr;
     ObTabletCreateDeleteMdsUserData user_data;
     ObTabletHAStatus src_tablet_ha_status;
+    bool last_is_committed = false;
     while (OB_SUCC(ret)) {
       tablet_handle.reset();
       user_data.reset();
@@ -180,25 +181,33 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
                               "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
         if (OB_FAIL(tablet_info.init(tablet->get_tablet_meta().tablet_id_, is_committed))) {
-
+          LOG_WARN("failed to init ObTabletBackfillInfo", K(ret), "backfilled tablet id", tablet->get_tablet_meta().tablet_id_, K(is_committed));
         } else if (OB_FAIL(param.tablet_infos_.push_back(tablet_info))) {
           LOG_WARN("failed to push tablet id into array", K(ret), KPC(tablet));
         } else if (src_ls_id.is_valid() && transfer_scn.is_valid()) {
+          // Only one transfer task is allowed to execute at the same time, verify that the transferred tablets parameter are the same.
           if (in_migration) {
             //migration will has multi transfer task tablets.
             if (src_ls_id != tablet->get_tablet_meta().transfer_info_.ls_id_
                 || transfer_scn != tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
               param.tablet_infos_.pop_back();
             }
-          } else if (src_ls_id != tablet->get_tablet_meta().transfer_info_.ls_id_
-              || transfer_scn != tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
-            // Only one transfer task is allowed to execute at the same time, verify that the transferred tablets parameter are the same.
+          } else if (src_ls_id == tablet->get_tablet_meta().transfer_info_.ls_id_
+              && transfer_scn == tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
+            last_is_committed = is_committed;
+          } else if (transfer_scn != tablet->get_tablet_meta().transfer_info_.transfer_start_scn_ && last_is_committed && is_committed) {
             ret = OB_TRANSFER_SYS_ERROR;
-            LOG_ERROR("transfer task is not unique", K(ret), K(src_ls_id), K(transfer_scn), KPC(tablet));
+            LOG_ERROR("transfer task is not unique", K(ret), K(src_ls_id), K(transfer_scn), K(last_is_committed), K(is_committed), KPC(tablet));
+          } else {
+            ret = OB_EAGAIN;
+            LOG_WARN("transfer start trans is likely to rollback", K(ret), K(src_ls_id), K(transfer_scn),
+                "tablet_id", tablet->get_tablet_meta().tablet_id_,
+                "tablet_transfer_info", tablet->get_tablet_meta().transfer_info_);
           }
         } else {
           src_ls_id = tablet->get_tablet_meta().transfer_info_.ls_id_;
           transfer_scn = tablet->get_tablet_meta().transfer_info_.transfer_start_scn_;
+          last_is_committed = is_committed;
         }
       }
     }
