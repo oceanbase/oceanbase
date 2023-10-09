@@ -1668,6 +1668,31 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
 
         }
       }
+      // then routine
+      if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx) {
+        uint64_t tenant_id = session_info.get_effective_tenant_id();
+        uint64_t db_id = OB_INVALID_ID;
+        uint64_t udt_id = OB_INVALID_ID;
+        if (parent_id != OB_INVALID_INDEX) {
+          db_id = parent_id;
+        } else {
+          OZ (session_info.get_database_id(db_id));
+        }
+        const ObRoutineInfo *routine_info = NULL;
+        OZ (schema_guard.get_standalone_procedure_info(tenant_id, db_id, name, routine_info));
+        if (NULL == routine_info) {
+          ret = OB_SUCCESS;
+          OZ (schema_guard.get_standalone_function_info(tenant_id, db_id, name, routine_info));
+        }
+        if (NULL == routine_info) {
+          ret = OB_SUCCESS;
+          type = ObPLExternalNS::INVALID_VAR;
+        } else {
+          // udf/procedure will resolve later, here only avoid to resolve synonym
+          type = ObPLExternalNS::INVALID_VAR;
+          var_idx = routine_info->get_routine_id();
+        }
+      }
       //then synonym
       if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx) {
         bool exist = false;
@@ -1685,7 +1710,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
         OZ (ObResolverUtils::resolve_synonym_object_recursively(
           schema_checker, synonym_checker,
-          tenant_id, db_id, name, object_db_id, object_name, exist));
+          tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
         if (exist) {
           OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
         }
@@ -1898,7 +1923,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
 }
 
 int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const ObString &org_package_name,
-                                                  const ObString &org_type_name, const ObUserDefinedType *&user_type)
+                                                  const ObString &org_type_name, const ObUserDefinedType *&user_type,
+                                                  bool try_synonym = true)
 {
   int ret = OB_SUCCESS;
   user_type = NULL;
@@ -1928,45 +1954,6 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
       } else if (OB_INVALID_ID == db_id) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_WARN("db name not found", K(ret));
-      }
-    }
-    // schema object, will try synonym first
-    if (OB_SUCC(ret)) {
-      bool exist = false;
-      uint64_t object_db_id = OB_INVALID_ID;
-      ObString object_name;
-      ObSchemaChecker schema_checker;
-      ObSynonymChecker synonym_checker;
-      if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()))) {
-        LOG_WARN("failed to init schema checker for resolve synonym", K(ret));
-      } else if (!package_name.empty()) {
-        if (OB_FAIL(ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
-                                                                        synonym_checker,
-                                                                        tenant_id,
-                                                                        db_id,
-                                                                        package_name,
-                                                                        object_db_id,
-                                                                        object_name,
-                                                                        exist))) {
-          LOG_WARN("failed to resolve synonym object", K(ret), K(package_name), K(db_id), K(tenant_id));
-        } else if (exist) {
-          package_name = object_name;
-          db_id = object_db_id;
-        }
-      } else if (!type_name.empty()) {
-        if (OB_FAIL(ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
-                                                                        synonym_checker,
-                                                                        tenant_id,
-                                                                        db_id,
-                                                                        type_name,
-                                                                        object_db_id,
-                                                                        object_name,
-                                                                        exist))) {
-          LOG_WARN("failed to resolve synonym object", K(ret), K(package_name), K(db_id), K(tenant_id));
-        } else if (exist) {
-          type_name = object_name;
-          db_id = object_db_id;
-        }
       }
     }
     if (OB_SUCC(ret) && !package_name.empty()) {
@@ -2021,27 +2008,6 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
           resolve_ctx_.allocator_, *package_user_type, copy_pl_type));
         CK (OB_NOT_NULL(copy_pl_type));
         CK (OB_NOT_NULL(user_type = static_cast<ObUserDefinedType *>(copy_pl_type)));
-
-        // do we realy need this?
-        // if (OB_SUCC(ret)) {
-        //   ObUserDefinedType *copy_user_type = static_cast<ObUserDefinedType *>(copy_pl_type);
-        //   ObSqlString package_type_name;
-        //   ObString copy_type_name;
-        //   if (!db_name.empty()
-        //       && db_name.case_compare(resolve_ctx_.session_info_.get_database_name()) != 0) {
-        //     OZ (package_type_name.append(db_name));
-        //     OZ (package_type_name.append("."));
-        //   }
-        //   if (!package_name.empty()) {
-        //     OZ (package_type_name.append(package_name));
-        //     OZ (package_type_name.append("."));
-        //   }
-        //   OZ (package_type_name.append(type_name));
-        //   OZ (ob_write_string(resolve_ctx_.allocator_, package_type_name.string(), copy_type_name));
-        //   CK (OB_NOT_NULL(copy_user_type));
-        //   OX (copy_user_type->set_name(copy_type_name));
-        //   OX (user_type = copy_user_type);
-        // }
 
         if (OB_SUCC(ret)) {
           ObSchemaObjVersion obj_version;
@@ -2108,6 +2074,53 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
         if (OB_FAIL(add_dependency_object(obj_version))) {
           LOG_WARN("add dependency object failed", K(obj_version), K(*udt_info), K(ret));
         }
+      }
+    }
+    // schema object, will try synonym
+    if (OB_SUCC(ret) && OB_ISNULL(user_type) && try_synonym) {
+      bool exist = false;
+      uint64_t object_db_id = OB_INVALID_ID;
+      ObString object_name;
+      ObSchemaChecker schema_checker;
+      ObSynonymChecker synonym_checker;
+      if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()))) {
+        LOG_WARN("failed to init schema checker for resolve synonym", K(ret));
+      } else if (!package_name.empty()) {
+        if (OB_FAIL(ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
+                                                                        synonym_checker,
+                                                                        tenant_id,
+                                                                        db_id,
+                                                                        package_name,
+                                                                        object_db_id,
+                                                                        object_name,
+                                                                        exist,
+                                                                        db_name.empty()))) {
+          LOG_WARN("failed to resolve synonym object", K(ret), K(package_name), K(db_id), K(tenant_id));
+        } else if (exist) {
+          package_name = object_name;
+          db_id = object_db_id;
+        }
+      } else if (!type_name.empty()) {
+        if (OB_FAIL(ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
+                                                                        synonym_checker,
+                                                                        tenant_id,
+                                                                        db_id,
+                                                                        type_name,
+                                                                        object_db_id,
+                                                                        object_name,
+                                                                        exist,
+                                                                        db_name.empty()))) {
+          LOG_WARN("failed to resolve synonym object", K(ret), K(package_name), K(db_id), K(tenant_id));
+        } else if (exist) {
+          type_name = object_name;
+          db_id = object_db_id;
+        }
+      }
+      if (OB_SUCC(ret) && exist) {
+        const share::schema::ObDatabaseSchema *db_schema = NULL;
+        OZ (schema_checker.get_database_schema(tenant_id, db_id, db_schema));
+        CK (OB_NOT_NULL(db_schema));
+        OZ (resolve_external_type_by_name(db_schema->get_database_name_str(), package_name, type_name, user_type, false));
       }
     }
   }
