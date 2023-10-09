@@ -1,14 +1,61 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
+// Copyright 2007, Google Inc.
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//     * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//     * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Author: wan@google.com (Zhanyong Wan)
+
+// Google Mock - a framework for writing C++ mock classes.
+//
+// This file implements the ON_CALL() and EXPECT_CALL() macros.
+//
+// A user can use the ON_CALL() macro to specify the default action of
+// a mock method.  The syntax is:
+//
+//   ON_CALL(mock_object, Method(argument-matchers))
+//       .With(multi-argument-matcher)
+//       .WillByDefault(action);
+//
+//  where the .With() clause is optional.
+//
+// A user can use the EXPECT_CALL() macro to specify an expectation on
+// a mock method.  The syntax is:
+//
+//   EXPECT_CALL(mock_object, Method(argument-matchers))
+//       .With(multi-argument-matchers)
+//       .Times(cardinality)
+//       .InSequence(sequences)
+//       .After(expectations)
+//       .WillOnce(action)
+//       .WillRepeatedly(action)
+//       .RetiresOnSaturation();
+//
+// where all clauses are optional, and .InSequence()/.After()/
+// .WillOnce() can appear any number of times.
 
 #ifndef GMOCK_INCLUDE_GMOCK_GMOCK_SPEC_BUILDERS_H_
 #define GMOCK_INCLUDE_GMOCK_GMOCK_SPEC_BUILDERS_H_
