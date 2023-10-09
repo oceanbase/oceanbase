@@ -1604,7 +1604,8 @@ int ObTransferHandler::update_all_tablet_to_ls_(
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("TRANSFER", "BEFORE_TRANSFER_UPDATE_TABLET_TO_LS");
+  ObTransferEventRecorder::record_transfer_task_event(
+    task_info.task_id_, "BEFORE_TRANSFER_UPDATE_TABLET_TO_LS", task_info.src_ls_id_, task_info.dest_ls_id_);
 #endif
   DEBUG_SYNC(BEFORE_TRANSFER_UPDATE_TABLET_TO_LS);
   const int64_t start_ts = ObTimeUtil::current_time();
