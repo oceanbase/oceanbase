@@ -6300,6 +6300,8 @@ def_table_schema(
 
 # 485 : __all_clone_job
 # 486 : __all_clone_job_history
+# 487 : __wr_system_event
+# 488 : __wr_event_name
 
 #
 # 余留位置
@@ -12979,6 +12981,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12437: __all_virtual_checkpoint_diagnose_memtable_info
 # 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
 # 12439: __all_virtual_checkpoint_diagnose_info
+# 12440: __all_virtual_wr_system_event
+# 12441: __all_virtual_wr_event_name
 
 #
 # 余留位置
@@ -13391,6 +13395,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15418: __all_virtual_cgroup_config
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
+# 15421: __all_virtual_wr_system_event
+# 15422: __all_virtual_wr_event_name
 # 余留位置
 
 ################################################################################
@@ -29886,6 +29892,10 @@ def_table_schema(
 
 #21479 GV$OB_CGROUP_CONFIG
 #21480 V$OB_CGROUP_CONFIG
+#21481 DBA_WR_SYSTEM_EVENT
+#21482 CDB_WR_SYSTEM_EVENT
+#21483 DBA_WR_EVENT_NAME
+#21484 CDB_WR_EVENT_NAME
 
 # 余留位置
 
@@ -48355,6 +48365,8 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+# 25269: DBA_WR_SYSTEM_EVENT
+# 25270: DBA_WR_EVENT_NAME
 
 # 余留位置
 
