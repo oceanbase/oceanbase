@@ -14146,11 +14146,15 @@ int ObPLResolver::build_collection_attribute_access(ObRawExprFactory &expr_facto
           access_idx.get_sysfunc_ = NULL;
         }
       } else {
-        access_idx.access_type_ = ObObjAccessIdx::AccessType::IS_LOCAL;
-        access_idx.var_index_ = const_expr->get_value().get_unknown();
+        const ObPLVar *var = NULL;
         CK (OB_NOT_NULL(ns.get_symbol_table()));
-        CK (OB_NOT_NULL(ns.get_symbol_table()->get_symbol(access_idx.var_index_)));
-        if (OB_SUCC(ret)) {
+        CK (OB_NOT_NULL(var = ns.get_symbol_table()->get_symbol(const_expr->get_value().get_unknown())));
+        if (OB_SUCC(ret)
+            && (ob_is_int_tc(var->get_type().get_obj_type())
+                || ob_is_uint_tc(var->get_type().get_obj_type())
+                || ob_is_number_tc(var->get_type().get_obj_type()))) {
+          access_idx.access_type_ = ObObjAccessIdx::AccessType::IS_LOCAL;
+          access_idx.var_index_ = const_expr->get_value().get_unknown();
           access_idx.var_name_ = ns.get_symbol_table()->get_symbol(access_idx.var_index_)->get_name();
         }
       }
