@@ -21,6 +21,7 @@ namespace oceanbase
 namespace share
 {
 class ObLSLocationService;
+class ObTabletLSService;
 
 class ObLSLocationUpdateTask
     : public observer::ObIUniqTaskQueueTask<ObLSLocationUpdateTask>
@@ -197,6 +198,16 @@ private:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t add_timestamp_;
+};
+
+class ObClearTabletLSCacheTimerTask : public common::ObTimerTask
+{
+public:
+  explicit ObClearTabletLSCacheTimerTask(ObTabletLSService &tablet_ls_service);
+  virtual ~ObClearTabletLSCacheTimerTask() {}
+  virtual void runTimerTask() override;
+private:
+  ObTabletLSService &tablet_ls_service_;
 };
 
 } // end namespace share
