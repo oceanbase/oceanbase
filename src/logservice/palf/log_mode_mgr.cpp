@@ -782,16 +782,20 @@ int LogModeMgr::ack_mode_meta(const common::ObAddr &server, const int64_t propos
   } else if (false == server.is_valid() || INVALID_PROPOSAL_ID == proposal_id) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K_(self), K(server), K(proposal_id));
-  } else if (ModeChangeState::MODE_ACCEPT != state_ || new_proposal_id_ != proposal_id) {
+  } else if (ModeChangeState::MODE_ACCEPT != state_) {
+    PALF_LOG(TRACE, "ack_mode_meta not int ACCEPT state", K(ret), K_(palf_id),
+        K_(self), K(server), "state", state2str_(state_));
+  } else if (new_proposal_id_ != proposal_id) {
     ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "ack_mode_meta not int ACCEPT state", K(ret), K_(palf_id), K_(self), K(server),
+    PALF_LOG(WARN, "ack_mode_meta failed", K(ret), K_(palf_id), K_(self), K(server),
         K(proposal_id), K_(new_proposal_id), "state", state2str_(state_));
   } else if (OB_FAIL(ack_list_.add_server(server))) {
     PALF_LOG(WARN, "add_server failed", K(ret), K_(palf_id), K_(self), K(server));
-  } else { }
+  } else {
+    PALF_LOG(INFO, "ack_mode_meta finish", K(ret), K_(palf_id), K_(self), K(server),
+        K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list), K_(resend_mode_meta_list));
+  }
   (void) resend_mode_meta_list_.remove_learner(server);
-  PALF_LOG(INFO, "ack_mode_meta finish", K(ret), K_(palf_id), K_(self), K(server),
-      K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list), K_(resend_mode_meta_list));
   return ret;
 }
 
