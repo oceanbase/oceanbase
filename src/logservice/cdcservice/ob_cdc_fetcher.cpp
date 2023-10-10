@@ -1008,6 +1008,11 @@ int ObCdcFetcher::init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id) {
       ctx.set_source(source);
       LOG_INFO("init archive source succ", K(ctx), K(ls_id));
     }
+
+    if (OB_FAIL(ret)) {
+      logservice::ObResSrcAlloctor::free(source);
+      source = nullptr;
+    }
   }
   return ret;
 }
