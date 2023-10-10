@@ -91,6 +91,14 @@ public:
   }
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
 
+  bool operator==(const ObTTLTaskInfo& other) const
+  {
+    return ((tenant_id_ == other.tenant_id_) &&
+           (task_id_ == other.task_id_) &&
+           (table_id_ == other.table_id_) &&
+           (tablet_id_ == other.tablet_id_));
+  }
+
   TO_STRING_KV(K_(task_id), K_(tablet_id), K_(table_id), K_(is_user_trigger),
                K_(is_user_trigger), K_(row_key), K_(ttl_del_cnt),
                K_(max_version_del_cnt), K_(scan_cnt), K_(err_code),

@@ -55254,8 +55254,6 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_dbms_lock_allocated'])
 
 # 101092 : placeholder for index of __all_tablet_reorganize_history
-# 101093 : placeholder for index of __all_kv_ttl_task
-# 101094 : placeholder for index of __all_kv_ttl_task_history
 
 def_sys_index_table(
   index_name = 'idx_kv_ttl_task_table_id',
