@@ -931,8 +931,19 @@ public:
                                           const ObRefreshSchemaStatus &schema_status,
                                           int64_t &baseline_schema_version) = 0;
 
+  virtual int fetch_new_object_ids(
+              const uint64_t tenant_id,
+              const int64_t object_cnt,
+              uint64_t &max_object_id) = 0;
   virtual int fetch_new_partition_ids(
-              const uint64_t tenant_id, const int64_t partition_num, uint64_t &new_partition_id) = 0;
+              const uint64_t tenant_id,
+              const int64_t partition_num,
+              uint64_t &max_partition_id) = 0;
+  virtual int fetch_new_tablet_ids(
+              const uint64_t tenant_id,
+              const bool gen_normal_tablet,
+              const uint64_t size,
+              uint64_t &min_tablet_id) = 0;
   virtual int fetch_new_table_id(const uint64_t tenant_id, uint64_t &new_table_id) = 0;
   virtual int fetch_new_tenant_id(uint64_t &new_tenant_id) = 0;
   virtual int fetch_new_database_id(const uint64_t tenant_id, uint64_t &new_database_id) = 0;
@@ -960,13 +971,6 @@ public:
   virtual int fetch_new_profile_id(const uint64_t tenant_id, uint64_t &new_profile_id) = 0;
   virtual int fetch_new_audit_id(const uint64_t tenant_id, uint64_t &new_audit_id) = 0;
   virtual int fetch_new_directory_id(const uint64_t tenant_id, uint64_t &new_directory_id) = 0;
-  virtual int fetch_new_normal_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size) = 0;
-  virtual int fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size) = 0;
-  virtual int fetch_new_tablet_ids(
-              const uint64_t tenant_id,
-              const bool gen_normal_tablet,
-              const uint64_t size,
-              uint64_t &min_tablet_id) = 0;
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id) = 0;
   virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id) = 0;
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id) = 0;
