@@ -760,7 +760,7 @@ int ObInnerTableSchema::dba_ob_tenant_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   JOB_ID,   JOB_TYPE,   JOB_STATUS,   RESULT_CODE,   PROGRESS,   gmt_create AS START_TIME,   gmt_modified AS MODIFY_TIME,   TENANT_ID,   SQL_TEXT,   EXTRA_INFO,   RS_SVR_IP,   RS_SVR_PORT FROM oceanbase.__all_rootservice_job WHERE   JOB_TYPE in (     'ALTER_TENANT_LOCALITY',     'ROLLBACK_ALTER_TENANT_LOCALITY',     'SHRINK_RESOURCE_TENANT_UNIT_NUM',     'ALTER_TENANT_PRIMARY_ZONE',     'ALTER_RESOURCE_TENANT_UNIT_NUM'   ) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   JOB_ID,   JOB_TYPE,   JOB_STATUS,   RESULT_CODE,   PROGRESS,   gmt_create AS START_TIME,   gmt_modified AS MODIFY_TIME,   TENANT_ID,   SQL_TEXT,   EXTRA_INFO,   RS_SVR_IP,   RS_SVR_PORT FROM oceanbase.__all_rootservice_job WHERE   JOB_TYPE in (     'ALTER_TENANT_LOCALITY',     'ROLLBACK_ALTER_TENANT_LOCALITY',     'SHRINK_RESOURCE_TENANT_UNIT_NUM',     'ALTER_TENANT_PRIMARY_ZONE',     'ALTER_RESOURCE_TENANT_UNIT_NUM',     'UPGRADE_POST_ACTION',     'UPGRADE_SYSTEM_VARIABLE',     'UPGRADE_SYSTEM_TABLE',     'UPGRADE_BEGIN',     'UPGRADE_VIRTUAL_SCHEMA',     'UPGRADE_SYSTEM_PACKAGE',     'UPGRADE_ALL_POST_ACTION',     'UPGRADE_INSPECTION',     'UPGRADE_END',     'UPGRADE_ALL'   )   AND TENANT_ID != 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

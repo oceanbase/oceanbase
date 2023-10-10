@@ -19,6 +19,7 @@
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
 #include "share/ob_tenant_info_proxy.h" //ObAllTenantInfoProxy
+#include "observer/ob_service.h"
 
 namespace oceanbase
 {
@@ -306,25 +307,27 @@ int ObUpgradeExecutor::execute(
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(arg));
   } else if (OB_FAIL(set_execute_mark_())) {
     LOG_WARN("fail to set execute mark", KR(ret));
+  } else if (OB_FAIL(construct_tenant_ids_(arg.tenant_ids_, tenant_ids))) {
+    LOG_WARN("fail to construct tenant_ids", KR(ret), K(arg));
   } else {
+    const uint64_t tenant_id = (1 == tenant_ids.count()) ?  tenant_ids.at(0) : 0;
+    const int64_t BUF_LEN = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    char extra_buf[BUF_LEN] = {'\0'};
     int64_t job_id = OB_INVALID_ID;
-    ObString extra_info;
-    char extra_buf[common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH] = {0};
-    int64_t len = 0;
-    if (version > 0) {
-      len = ObClusterVersion::print_version_str(
-            extra_buf, common::OB_CLUSTER_VERSION_LENGTH, version);
-    }
-    extra_info.assign_ptr(extra_buf, len);
-    if (OB_FAIL(RS_JOB_CREATE_WITH_RET(job_id, job_type, *sql_proxy_,
-                                       "tenant_id", 0,
-                                       "extra_info", extra_buf))) {
+    uint64_t current_data_version = 0;
+    if (0 != tenant_id && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, current_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(fill_extra_info_(tenant_id, version,
+               current_data_version, BUF_LEN, extra_buf))) {
+      LOG_WARN("fail to fill extra info", KR(ret),
+               K(tenant_id), K(version), K(current_data_version));
+    } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(
+               job_id, job_type, *sql_proxy_, "tenant_id", tenant_id,
+               "extra_info", ObHexEscapeSqlStr(ObString(strlen(extra_buf), extra_buf))))) {
       LOG_WARN("fail to create rs job", KR(ret));
     } else if (job_id <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("job_id is invalid", KR(ret), K(job_id));
-    } else if (OB_FAIL(construct_tenant_ids_(arg.tenant_ids_, tenant_ids))) {
-      LOG_WARN("fail to construct tenant_ids", KR(ret), K(arg));
     } else {
       switch (action) {
         case obrpc::ObUpgradeJobArg::UPGRADE_POST_ACTION: {
@@ -396,16 +399,42 @@ int ObUpgradeExecutor::execute(
     }
 
     if (OB_SUCC(ret)) {
-      char ori_min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
-      uint64_t ori_cluster_version = GET_MIN_CLUSTER_VERSION();
+      const int64_t BUF_LEN = OB_SERVER_VERSION_LENGTH;
+      char min_cluster_version_str[BUF_LEN] = {'\0'};
+      const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+      char targe_data_version_str[BUF_LEN] = {'\0'};
+      const uint64_t target_data_version = DATA_CURRENT_VERSION;
+      share::ObServerInfoInTable::ObBuildVersion build_version;
       if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
-          ori_min_server_version, OB_SERVER_VERSION_LENGTH, ori_cluster_version)) {
-         ret = OB_INVALID_ARGUMENT;
-         LOG_WARN("fail to print version str", KR(ret), K(ori_cluster_version));
+          min_cluster_version_str, BUF_LEN, min_cluster_version)) {
+         ret = OB_SIZE_OVERFLOW;
+         LOG_WARN("fail to print version str", KR(ret), K(min_cluster_version));
+      } else if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+                 targe_data_version_str, BUF_LEN, target_data_version)) {
+         ret = OB_SIZE_OVERFLOW;
+         LOG_WARN("fail to print version str", KR(ret), K(target_data_version));
+      } else if (OB_FAIL(observer::ObService::get_build_version(build_version))) {
+        LOG_WARN("fail to get build version", KR(ret));
+      } else if (0 != tenant_id) {
+        char current_data_version_str[BUF_LEN] = {'\0'};
+        if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+            current_data_version_str, BUF_LEN, current_data_version)) {
+           ret = OB_SIZE_OVERFLOW;
+           LOG_WARN("fail to print version str", KR(ret), K(current_data_version));
+        }
+        CLUSTER_EVENT_SYNC_ADD("UPGRADE",
+                               ObRsJobTableOperator::get_job_type_str(job_type),
+                               "cluster_version", min_cluster_version_str,
+                               "build_version", build_version.ptr(),
+                               "target_data_version", targe_data_version_str,
+                               "current_data_version", current_data_version_str,
+                               "tenant_id", tenant_id)
       } else {
         CLUSTER_EVENT_SYNC_ADD("UPGRADE",
                                ObRsJobTableOperator::get_job_type_str(job_type),
-                               "cluster_version", ori_min_server_version);
+                               "cluster_version", min_cluster_version_str,
+                               "build_version", build_version.ptr(),
+                               "target_data_version", targe_data_version_str);
       }
     }
 
@@ -417,6 +446,58 @@ int ObUpgradeExecutor::execute(
       }
     }
     execute_ = false;
+  }
+  return ret;
+}
+
+int ObUpgradeExecutor::fill_extra_info_(
+    const uint64_t tenant_id,
+    const int64_t specified_version,
+    const uint64_t current_data_version,
+    const int64_t buf_len,
+    char *buf)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  const int64_t VERSION_LEN = common::OB_CLUSTER_VERSION_LENGTH;
+  char version_buf[VERSION_LEN] = {'\0'};
+  int64_t version_len = 0;
+  if (specified_version > 0) {
+    if (OB_INVALID_INDEX == (version_len = ObClusterVersion::print_version_str(
+        version_buf, VERSION_LEN, static_cast<uint64_t>(specified_version)))) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("fail to print version", KR(ret), K(specified_version));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, len,
+               "SPECIFIED_DATA_VERSION: '%s'", version_buf))) {
+      LOG_WARN("fail to print string", KR(ret), K(len));
+    }
+  } else {
+    if (OB_SUCC(ret)) {
+      uint64_t target_data_version = DATA_CURRENT_VERSION;
+      if (OB_INVALID_INDEX == (version_len = ObClusterVersion::print_version_str(
+          version_buf, VERSION_LEN, target_data_version))) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("fail to print version", KR(ret), K(target_data_version));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, len,
+                 "TARGET_DATA_VERSION: '%s'", version_buf))) {
+        LOG_WARN("fail to print string", KR(ret), K(len));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (0 != tenant_id) {
+      // record current data version when upgrade single tenant
+      if (OB_UNLIKELY(len < 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("str should not be empty", KR(ret), K(len));
+      } else if (OB_INVALID_INDEX == (version_len = ObClusterVersion::print_version_str(
+          version_buf, VERSION_LEN, current_data_version))) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("fail to print version", KR(ret), K(current_data_version));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, len,
+                 ", CURRENT_DATA_VERSION: '%s'", version_buf))) {
+        LOG_WARN("fail to print string", KR(ret), K(len));
+      }
+    }
   }
   return ret;
 }
