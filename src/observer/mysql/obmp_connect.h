@@ -117,7 +117,6 @@ private:
                              sql::ObSQLSessionInfo &session);
 
   int set_proxy_version(ObSMConnection &conn);
-  int update_charset_sys_vars(ObSMConnection &conn, sql::ObSQLSessionInfo &sess_info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;

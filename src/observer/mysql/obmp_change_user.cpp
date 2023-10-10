@@ -276,9 +276,13 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
   int ret = OB_SUCCESS;
 
   ObSchemaGetterGuard schema_guard;
+  ObSMConnection *conn = NULL;
   if (OB_ISNULL(session) || OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN,"invalid argument", K(session), K(gctx_.schema_service_));
+  } else if (OB_ISNULL(conn = get_conn())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("null conn", K(ret));
   } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                                   session->get_effective_tenant_id(), schema_guard))) {
     OB_LOG(WARN,"fail get schema guard", K(ret));
@@ -308,8 +312,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
       login_info.client_ip_ = session->get_client_ip();
       OB_LOG(INFO, "com change user", "username", login_info.user_name_,
             "tenant name", login_info.tenant_name_);
-      const ObSMConnection &conn = *get_conn();
-      login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
+      login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
       login_info.passwd_ = auth_response_;
 
     }
@@ -348,6 +351,12 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
                                                       session->get_database_name(),
                                                       db_id))) {
         OB_LOG(WARN, "failed to get database id", K(ret));
+      } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
+        LOG_WARN("update transmisson checksum flag failed", K(ret));
+      } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
+        LOG_WARN("update_proxy_sys_vars failed", K(ret));
+      } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
+        LOG_WARN("fail to update charset sys vars", K(ret));
       } else {
         session->set_database_id(db_id);
       }
