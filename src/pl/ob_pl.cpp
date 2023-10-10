@@ -2860,7 +2860,12 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
     OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
-  } else if (real_pl_type->is_package_type() || real_pl_type->is_rowtype_type()) {
+  } else if (OB_NOT_NULL(session->get_pl_context())
+      && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
+    pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
+    CK (OB_NOT_NULL(ns));
+    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
+  } else {
     ObPLResolveCtx ns(allocator,
                       *session,
                       *schema_guard,
@@ -2868,11 +2873,6 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
                       *sql_proxy,
                       false);
     OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
-  } else if (OB_NOT_NULL(session->get_pl_context())
-      && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
-    pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
-    CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
   }
   OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
@@ -3241,11 +3241,17 @@ do {                                                                  \
                                              *get_allocator()));
             OX (get_params().at(i) = tmp);
           } else {
+            // same type, we already check this on resolve stage, here directly assign value to symbol.
+            get_params().at(i) = params->at(i);
             if (get_params().at(i).is_ref_cursor_type()) {
-              get_params().at(i) = params->at(i);
               get_params().at(i).set_is_ref_cursor_type(true);
-            } else {
-              get_params().at(i) = params->at(i);
+            } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
+              ObPLComposite *composite = NULL;
+              get_params().at(i).set_udt_id(pl_type.get_user_type_id());
+              composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
+              if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
+                composite->set_id(pl_type.get_user_type_id());
+              }
             }
           }
         }
@@ -4310,7 +4316,7 @@ int ObPLINS::get_size(ObPLTypeSize type,
   const ObUserDefinedType *user_type = NULL;
   CK (pl_type.is_composite_type());
   OZ (get_user_type(pl_type.get_user_type_id(), user_type, allocator));
-  CK (OB_NOT_NULL(user_type));
+  OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(pl_type));
   OZ (user_type->get_size(*this, type, size));
   return ret;
 }
