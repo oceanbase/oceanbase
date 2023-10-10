@@ -186,6 +186,7 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
           tx_desc_addr_buffer_[0] = 0;
           snprintf(tx_desc_addr_buffer_, 18, "0x%lx", (uint64_t)tx_scheduler_stat.tx_desc_addr_);
           cur_row_.cells_[i].set_varchar(tx_desc_addr_buffer_);
+          cur_row_.cells_[i].set_default_collation_type();
           break;
         case SAVEPOINTS:
           if (0 < tx_scheduler_stat.savepoints_.count()) {
