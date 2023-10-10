@@ -1286,6 +1286,8 @@ void ObRootService::wait()
   FLOG_INFO("global ctx timer exit success");
   ddl_service_.get_index_name_checker().reset_all_cache();
   FLOG_INFO("reset index name checker success");
+  ddl_service_.get_non_partitioned_tablet_allocator().reset_all_cache();
+  FLOG_INFO("reset non partitioned tablet allocator success");
   ObUpdateRsListTask::clear_lock();
   THE_RS_JOB_TABLE.reset_max_job_id();
   int64_t cost = ObTimeUtility::current_time() - start_time;

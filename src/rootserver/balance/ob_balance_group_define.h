@@ -96,7 +96,8 @@ public:
   }
 
   TO_STRING_KV(K_(id), K_(name));
-
+public:
+  const static char* NON_PART_BG_NAME;
 private:
   ObBalanceGroupID id_;
   ObBalanceGroupName name_;
