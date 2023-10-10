@@ -33025,30 +33025,16 @@ int ObDDLSQLTransaction::start(
   return ret;
 }
 
-int ObDDLSQLTransaction::lock_ddl_epoch(ObISQLClient *proxy)
+int ObDDLSQLTransaction::lock_ddl_epoch_(common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  int64_t ddl_epoch_local = trans_start_ddl_epoch_;
-  int64_t ddl_epoch_core = 0;
-  int64_t tenant_id = tenant_id_;
-
-  ObGlobalStatProxy global_stat_proxy(*proxy, tenant_id);
-  if (OB_FAIL(global_stat_proxy.select_ddl_epoch_for_update(*proxy, tenant_id, ddl_epoch_core))) {
-    LOG_WARN("fail to get ddl epoch from inner table", K(ret));
-    if (OB_ERR_NULL_VALUE == ret) {
-      // ignore ret
-      (void)schema_service_->get_ddl_epoch_mgr().remove_ddl_epoch(tenant_id);
-    }
-  } else {
-    if (ddl_epoch_local == ddl_epoch_core) {
-    } else {
-      ret = OB_RS_NOT_MASTER;
-      LOG_WARN("ddl epoch unexpected", K(ret), K(ddl_epoch_local), K(ddl_epoch_core));
-      // ignore ret
-      (void)schema_service_->get_ddl_epoch_mgr().remove_ddl_epoch(tenant_id);
-    }
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_ddl_epoch_mgr().check_and_lock_ddl_epoch(
+             trans, tenant_id_, trans_start_ddl_epoch_))) {
+    LOG_WARN("fail to check and lock ddl epoch", KR(ret), K_(tenant_id), K_(trans_start_ddl_epoch));
   }
-
   return ret;
 }
 
@@ -33076,7 +33062,7 @@ int ObDDLSQLTransaction::end(const bool commit)
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema service is null", K(ret));
-  } else if (commit && enable_check_ddl_epoch_ && OB_FAIL(lock_ddl_epoch(this))) {
+  } else if (commit && enable_check_ddl_epoch_ && OB_FAIL(lock_ddl_epoch_(*this))) {
     // compare ddl_epoch promise execute on master
     LOG_WARN("lock_ddl_epoch fail", K(ret));
   } else if (commit && need_end_signal_) {
