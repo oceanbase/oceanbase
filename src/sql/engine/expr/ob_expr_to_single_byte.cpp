@@ -126,7 +126,7 @@ int ObExprToSingleByte::calc_to_single_byte(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObDatum *src_param = NULL;
-  if (expr.args_[0]->eval(ctx, src_param)) {
+  if (OB_FAIL(expr.args_[0]->eval(ctx, src_param))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
     if (src_param->is_null()) {
