@@ -10,15 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/ob_ctx_parallel_define.h"
+#include "lib/allocator/ob_ctx_define.h"
 
 namespace oceanbase
 {
 namespace common
 {
-ObCtxParallel &ObCtxParallel::instance()
+ObCtxAttrCenter &ObCtxAttrCenter::instance()
 {
-  static ObCtxParallel instance;
+  static ObCtxAttrCenter instance;
   return instance;
 }
 } // end of namespace common
