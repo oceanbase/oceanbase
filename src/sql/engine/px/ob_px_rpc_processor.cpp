@@ -107,20 +107,22 @@ int ObInitSqcP::process()
       UNSET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
       unregister_interrupt_ = false;
     }
+
+    //
+    if (is_schema_error(ret)) {
+      if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
+        ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
+      } else {
+        ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+      }
+    }
+
     int report_ret = OB_SUCCESS;
+    // DO NOT use sqc_handler after release_handler!!!
     ObPxSqcHandler::release_handler(sqc_handler, report_ret);
     arg_.sqc_handler_ = nullptr;
   }
 
-  //
-  if (OB_SUCCESS != ret && is_schema_error(ret)) {
-    if (OB_NOT_NULL(sqc_handler)
-        && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
-      ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-    } else {
-      ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-    }
-  }
   // 非rpc框架的错误内容设置到response消息中
   // rpc框架的错误码在process中返回OB_SUCCESS
   result_.rc_ = ret;
