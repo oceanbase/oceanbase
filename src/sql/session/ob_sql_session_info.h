@@ -239,7 +239,7 @@ public:
   virtual ~ObSessInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) = 0;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) = 0;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo& sess) const = 0;
+  virtual int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const = 0;
   bool is_changed_;
 };
 
@@ -249,7 +249,7 @@ public:
   ~ObSysVarEncoder() {}
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
-  int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+  int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const;
 };
 
 class ObAppInfoEncoder : public ObSessInfoEncoder {
@@ -258,7 +258,7 @@ public:
   ~ObAppInfoEncoder() {}
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
-  int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+  int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const;
   int set_client_info(ObSQLSessionInfo* sess, const ObString &client_info);
   int set_module_name(ObSQLSessionInfo* sess, const ObString &mod);
   int set_action_name(ObSQLSessionInfo* sess, const ObString &act);
@@ -280,7 +280,7 @@ public:
   virtual ~ObAppCtxInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo& sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const override;
 };
 class ObClientIdInfoEncoder : public ObSessInfoEncoder {
 public:
@@ -288,7 +288,7 @@ public:
   virtual ~ObClientIdInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
 };
 
 class ObSequenceCurrvalEncoder : public ObSessInfoEncoder {
@@ -297,7 +297,7 @@ public:
   virtual ~ObSequenceCurrvalEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
 };
 
 class ObControlInfoEncoder : public ObSessInfoEncoder {
@@ -306,7 +306,7 @@ public:
   virtual ~ObControlInfoEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   static const int16_t CONINFO_BY_SESS = 0xC078;
 };
 
@@ -319,7 +319,7 @@ public:
   virtual ~ObErrorSyncSysVarEncoder() {}
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
-  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
 };
 
 #define DEF_SESSION_TXN_ENCODER(CLS)                                    \
@@ -327,7 +327,7 @@ class CLS final : public ObSessInfoEncoder {                            \
 public:                                                                 \
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override; \
-  int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;    \
+  int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;    \
 };
 DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
 DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);
