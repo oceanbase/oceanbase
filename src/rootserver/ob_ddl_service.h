@@ -2655,7 +2655,7 @@ private:
       const ObIArray<const ObTableSchema*> &table_schemas);
   // regist multi_data_source data into trans
   int regist_multi_source_data_();
-  int lock_ddl_epoch(ObISQLClient *proxy);
+  int lock_ddl_epoch_(common::ObMySQLTransaction &trans);
 
 private:
   share::schema::ObMultiVersionSchemaService *schema_service_;

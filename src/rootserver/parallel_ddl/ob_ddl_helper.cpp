@@ -597,12 +597,15 @@ int ObDDLHelper::gen_object_ids_(
   } else if (0 == object_cnt) {
     // skip
   } else {
-    ObMaxIdFetcher id_fetcher(*sql_proxy_);
     uint64_t max_object_id = OB_INVALID_ID;
     uint64_t min_object_id = OB_INVALID_ID;
-    if (OB_FAIL(id_fetcher.fetch_new_max_id(tenant_id_, OB_MAX_USED_OBJECT_ID_TYPE,
-               max_object_id, UINT64_MAX/*initial value should exist*/, object_cnt))) {
-      LOG_WARN("fail to fetch object id", KR(ret), K_(tenant_id), K(object_cnt));
+    share::schema::ObSchemaService *schema_service_impl = NULL;
+    if (OB_ISNULL(schema_service_)
+        || OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ptr is null", KR(ret), KP_(schema_service));
+    } else if (OB_FAIL(schema_service_impl->fetch_new_object_ids(tenant_id_, object_cnt, max_object_id))) {
+      LOG_WARN("fail to fetch new object ids", KR(ret), K_(tenant_id), K(object_cnt));
     } else if (OB_UNLIKELY(OB_INVALID_ID == max_object_id)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("object_id is invalid", KR(ret), K_(tenant_id), K(object_cnt));
