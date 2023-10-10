@@ -2376,7 +2376,7 @@ int ObSchemaPrinter::print_hash_sub_partition_elements(
         SHARE_SCHEMA_LOG(WARN, "sub partition is null", K(ret), K(sub_part_num));
       } else {
         const ObString& part_name = sub_partition->get_part_name();
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition %.*s", part_name.length(), part_name.ptr()))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition `%.*s`", part_name.length(), part_name.ptr()))) {
           SHARE_SCHEMA_LOG(WARN, "print part name failed", K(ret), K(part_name));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
@@ -2423,7 +2423,7 @@ int ObSchemaPrinter::print_list_sub_partition_elements(ObSubPartition** sub_part
         if (OB_FAIL(databuff_printf(buf,
                 buf_len,
                 pos,
-                "subpartition %.*s values %s (",
+                "subpartition `%.*s` values %s (",
                 part_name.length(),
                 part_name.ptr(),
                 share::is_oracle_mode() ? "" : "in"))) {
@@ -2463,7 +2463,7 @@ int ObSchemaPrinter::print_range_sub_partition_elements(ObSubPartition** sub_par
       } else {
         const ObString& part_name = sub_partition->get_part_name();
         if (OB_FAIL(databuff_printf(
-                buf, buf_len, pos, "subpartition %.*s values less than (", part_name.length(), part_name.ptr()))) {
+                buf, buf_len, pos, "subpartition `%.*s` values less than (", part_name.length(), part_name.ptr()))) {
           SHARE_SCHEMA_LOG(WARN, "print part name failed", K(ret), K(part_name));
         } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(
                        sub_partition->get_high_bound_val(), buf, buf_len, pos, false, tz_info))) {
@@ -2561,7 +2561,7 @@ int ObSchemaPrinter::print_list_partition_elements(const ObPartitionSchema*& sch
           if (OB_FAIL(databuff_printf(buf,
                   buf_len,
                   pos,
-                  "partition %.*s values %s (",
+                  "partition `%.*s` values %s (",
                   part_name.length(),
                   part_name.ptr(),
                   share::is_oracle_mode() ? "" : "in"))) {
@@ -2612,7 +2612,7 @@ int ObSchemaPrinter::print_range_partition_elements(const ObPartitionSchema*& sc
           const ObString& part_name = partition->get_part_name();
           bool print_collation = agent_mode && tablegroup_def;
           if (OB_FAIL(databuff_printf(
-                  buf, buf_len, pos, "partition %.*s values less than (", part_name.length(), part_name.ptr()))) {
+                  buf, buf_len, pos, "partition `%.*s` values less than (", part_name.length(), part_name.ptr()))) {
             SHARE_SCHEMA_LOG(WARN, "print partition name failed", K(ret), K(part_name));
           } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(
                          partition->get_high_bound_val(), buf, buf_len, pos, print_collation, tz_info))) {
@@ -3365,7 +3365,7 @@ int ObSchemaPrinter::print_hash_partition_elements(const ObPartitionSchema*& sch
           SHARE_SCHEMA_LOG(WARN, "partition is NULL", K(ret), K(part_num));
         } else {
           const ObString& part_name = partition->get_part_name();
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition %.*s", part_name.length(), part_name.ptr()))) {
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition `%.*s`", part_name.length(), part_name.ptr()))) {
             SHARE_SCHEMA_LOG(WARN, "print partition name failed", K(ret), K(part_name));
           } else if (agent_mode &&
                      OB_FAIL(databuff_printf(buf, buf_len, pos, " id %ld", partition->get_part_id()))) {  // print id
