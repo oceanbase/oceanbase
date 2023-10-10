@@ -40,7 +40,10 @@ public:
   static void free(ObITabletMetaBackupReader *&reader);
   static void free(ObBackupMetaIndexIterator *&iterator);
   static void free(ObIMacroBlockIndexIterator *&iterator);
+  static void free(ObBackupMacroBlockIndexIterator *&iterator);
+  static void free(ObBackupMacroRangeIndexIterator *&iterator);
   static void free(ObIBackupTabletProvider *&provider);
+  static void free(ObBackupTabletProvider *&provider);
   static void free(ObIBackupMacroBlockIndexFuser *&fuser);
   static void free(ObBackupTabletCtx *&ctx);
 

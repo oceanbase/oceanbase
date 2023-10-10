@@ -2050,6 +2050,10 @@ int ObBackupTabletProvider::prepare_tablet_logic_id_reader_(const common::ObTabl
     LOG_WARN("failed to init reader", K(ret), K(tablet_id), K(tablet_handle), K(table_key));
   } else {
     reader = tmp_reader;
+    tmp_reader = NULL;
+  }
+  if (OB_NOT_NULL(tmp_reader)) {
+    ObLSBackupFactory::free(tmp_reader);
   }
   return ret;
 }
