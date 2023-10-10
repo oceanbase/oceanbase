@@ -566,6 +566,10 @@ int ObStatsEstimator::copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
                      !src_col_stat->get_histogram().is_valid()) {
             LOG_TRACE("no need copy histogram", K(src_col_stat->get_histogram()),
                                                 K(dst_col_stat->get_histogram()), K(i), K(j));
+            if (!src_col_stat->get_histogram().is_valid() &&
+                !dst_col_stat->get_histogram().is_valid()) {
+              dst_col_stat->get_histogram().reset();
+            }
           } else {
             ObHistogram &src_hist = src_col_stat->get_histogram();
             dst_col_stat->get_histogram().set_type(src_hist.get_type());

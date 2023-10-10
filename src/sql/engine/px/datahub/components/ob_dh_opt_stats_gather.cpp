@@ -60,17 +60,14 @@ OB_DEF_DESERIALIZE(ObOptStatsGatherPieceMsg)
     for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
       int col_stat_size = 0;
       OB_UNIS_DECODE(col_stat_size);
-      void *tmp_buf = arena_.alloc(col_stat_size);
-      if (OB_ISNULL(tmp_buf)) {
+      ObOptColumnStat *tmp_col_stat = ObOptColumnStat::malloc_new_column_stat(arena_);
+      if (OB_ISNULL(tmp_col_stat)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        ObOptColumnStat *tmp_stat = new (tmp_buf) ObOptColumnStat(arena_);
-        if (OB_FAIL(tmp_stat->deserialize(buf, data_len, pos))) {
-          LOG_WARN("deserialize datum store failed", K(ret), K(i));
-        } else if (OB_FAIL(column_stats_.push_back(tmp_stat))) {
-          LOG_WARN("push back datum store failed", K(ret), K(i));
-        }
+        LOG_WARN("failed to create new col stat", K(ret));
+      } else if (OB_FAIL(tmp_col_stat->deserialize(buf, data_len, pos))) {
+        LOG_WARN("deserialize datum store failed", K(ret), K(i));
+      } else if (OB_FAIL(column_stats_.push_back(tmp_col_stat))) {
+        LOG_WARN("push back datum store failed", K(ret), K(i));
       }
     }
     OB_UNIS_DECODE(target_osg_id_);

@@ -1226,11 +1226,10 @@ int ObDbmsStatsExportImport::init_opt_stat(ObExecContext &ctx,
       LOG_WARN("failed to get opt col stat", K(ret));
     } else if (col_stat != NULL) {//find already exists opt column stat
       /*do nothing*/
-    } else if (OB_ISNULL(ptr = param.allocator_->alloc(sizeof(ObOptColumnStat)))) {
+    } else if (OB_ISNULL(col_stat = ObOptColumnStat::malloc_new_column_stat(*param.allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(ptr));
+      LOG_WARN("memory is not enough", K(ret), K(col_stat));
     } else {
-      col_stat = new (ptr) ObOptColumnStat(*param.allocator_);
       col_stat->set_table_id(param.table_id_);
       col_stat->set_partition_id(part_id);
       col_stat->set_stat_level(type);

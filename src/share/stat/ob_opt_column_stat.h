@@ -330,6 +330,8 @@ public:
   common::ObCollationType get_collation_type() const { return cs_type_; }
   void set_collation_type(common::ObCollationType cs_type) { cs_type_ = cs_type; }
 
+  static ObOptColumnStat *malloc_new_column_stat(common::ObIAllocator &allocator);
+
   TO_STRING_KV(K_(table_id),
                K_(partition_id),
                K_(column_id),

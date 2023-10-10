@@ -607,12 +607,10 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       ObOptColumnStat *col_stat = NULL;
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = alloc.alloc(sizeof(ObOptColumnStat)))) {
+      if (OB_ISNULL(col_stat = ObOptColumnStat::malloc_new_column_stat(alloc))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("memory is not enough", K(ret), K(ptr));
+        LOG_WARN("memory is not enough", K(ret), K(col_stat));
       } else {
-        col_stat = new (ptr) ObOptColumnStat(alloc);
         ObGlobalMinEval min_eval;
         ObGlobalMaxEval max_eval;
         ObGlobalNullEval null_eval;
