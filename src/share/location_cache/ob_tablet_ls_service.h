@@ -35,7 +35,11 @@ class ObTabletLSService
 {
 public:
   ObTabletLSService()
-      : inited_(false), sql_proxy_(NULL), inner_cache_(), async_queue_() {}
+      : inited_(false),
+        sql_proxy_(NULL),
+        inner_cache_(),
+        async_queue_(),
+        clear_expired_cache_task_(*this) {}
   virtual ~ObTabletLSService() {}
   int init(common::ObMySQLProxy &sql_proxy);
   // Gets the mapping between the tablet and log stream synchronously.
@@ -87,6 +91,8 @@ public:
   int destroy();
   int reload_config();
 
+  int clear_expired_cache();
+
 private:
   int get_from_cache_(
       const uint64_t tenant_id,
@@ -102,15 +108,20 @@ private:
   int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
   bool belong_to_sys_ls_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
 
+private:
+  class IsDroppedTenantCacheFunctor; // use to clear expired cache of dropped tenant
+
   const int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
   const int64_t USER_TASK_QUEUE_SIZE = 100 * 1000; // 10W partitions
   const int64_t MINI_MODE_USER_TASK_QUEUE_SIZE = 10 * 1000; // 1W partitions
+  const int64_t CLEAR_EXPIRED_CACHE_INTERVAL_US = 6 * 3600 * 1000 * 1000L; // 6h
 
   bool inited_;
   bool stopped_;
   common::ObMySQLProxy *sql_proxy_;
   ObTabletLSMap inner_cache_; // Store the mapping between tablet and log stream in user tenant.
   ObTabletLSUpdateQueue async_queue_;
+  ObClearTabletLSCacheTimerTask clear_expired_cache_task_; // timer task used to clear the expired cache
   //TODO: need more queue later
 };
 
