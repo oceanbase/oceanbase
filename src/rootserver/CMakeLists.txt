@@ -128,6 +128,7 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_create_table_helper.cpp
   parallel_ddl/ob_create_view_helper.cpp
   parallel_ddl/ob_index_name_checker.cpp
+  parallel_ddl/ob_tablet_balance_allocator.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze

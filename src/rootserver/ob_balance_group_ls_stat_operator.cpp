@@ -35,6 +35,8 @@
 #include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "share/location_cache/ob_location_service.h" // ObLocationService
 #include "share/ob_rpc_struct.h" // ObCreateDupLSArg & ObCreateDupLSResult
+#include "rootserver/ob_root_service.h"
+#include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 
 namespace oceanbase
 {
@@ -338,6 +340,46 @@ int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
   return ret;
 }
 
+int ObBalanceGroupLSStatOperator::inc_balance_group_ls_stat(
+    const int64_t timeout,
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObBalanceGroupLSStat &ls_stat)
+{
+  int ret = OB_SUCCESS;
+  common::ObTimeoutCtx timeout_ctx;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(
+             timeout <= 0
+             || OB_INVALID_TENANT_ID == tenant_id
+             || !ls_stat.get_balance_group_id().is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_stat));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(
+             timeout_ctx, timeout))) {
+    LOG_WARN("fail to set timeout", KR(ret), K(timeout));
+  } else {
+    const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
+    common::ObSqlString inc_sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(generate_inc_sql_(ls_stat, inc_sql))) {
+      LOG_WARN("fail to generate inc sql", KR(ret),
+               K(tenant_id), K(ls_stat), K(inc_sql));
+    } else if (OB_FAIL(sql_client.write(
+               sql_tenant_id, inc_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to insert update", KR(ret),
+               K(tenant_id), K(inc_sql));
+    } else if (OB_UNLIKELY(affected_rows > 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", KR(ret),
+               K(tenant_id), K(inc_sql), K(affected_rows));
+    }
+  }
+  return ret;
+}
+
 int ObBalanceGroupLSStatOperator::delete_balance_group_ls_stat(
     const int64_t timeout,
     common::ObISQLClient &sql_client,
@@ -353,6 +395,46 @@ int ObBalanceGroupLSStatOperator::delete_balance_group_ls_stat(
     LOG_WARN("fail to format sql", KR(ret));
   } else if (OB_FAIL(sql_client.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("fail to delete inner table", KR(ret), K(sql));
+  }
+  return ret;
+}
+
+int ObBalanceGroupLSStatOperator::generate_inc_sql_(
+    const ObBalanceGroupLSStat &bg_ls_stat,
+    common::ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!bg_ls_stat.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(bg_ls_stat));
+  } else if (OB_FAIL(sql_string.append_fmt(
+             "INSERT INTO %s ("
+             "tenant_id, "
+             "balance_group_id_high, "
+             "balance_group_id_low, "
+             "ls_id, "
+             "tablet_group_count, "
+             "balance_group_name)"
+             " VALUES ("
+             "%ld, %ld, %ld, %ld, %ld, '%s') "
+             "ON DUPLICATE KEY UPDATE "
+             "tablet_group_count = tablet_group_count + %ld, "
+             "balance_group_name = '%s'",
+             OB_ALL_BALANCE_GROUP_LS_STAT_TNAME,
+             bg_ls_stat.get_tenant_id(),
+             bg_ls_stat.get_balance_group_id().id_high_,
+             bg_ls_stat.get_balance_group_id().id_low_,
+             bg_ls_stat.get_ls_id().id(),
+             bg_ls_stat.get_tablet_group_count(),
+             to_cstring(ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str())),
+             bg_ls_stat.get_tablet_group_count(),
+             to_cstring(ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()))))) {
+    LOG_WARN("fail to append fmt", KR(ret), K(bg_ls_stat));
+  } else {
+    LOG_INFO("balance group ls inc sql", K(sql_string));
   }
   return ret;
 }
@@ -402,7 +484,8 @@ int ObBalanceGroupLSStatOperator::generate_insert_update_sql(
 ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     const uint64_t tenant_id,
     share::schema::ObSchemaGetterGuard &schema_guard,
-    common::ObMySQLProxy *sql_proxy)
+    common::ObMySQLProxy *sql_proxy,
+    const bool use_parallel_ddl /*= false*/)
   : tenant_id_(tenant_id),
     schema_guard_(schema_guard),
     sql_proxy_(sql_proxy),
@@ -410,7 +493,8 @@ ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     status_(MyStatus::INVALID),
     ls_id_array_(),
     inited_(false),
-    is_add_partition_(false)
+    is_add_partition_(false),
+    use_parallel_ddl_(use_parallel_ddl)
 {
 }
 
@@ -492,10 +576,10 @@ int ObNewTableTabletAllocator::prepare(
     // If ls status is not normal or is blocking tablet in, choose new ls for tablet creating.
     if (OB_FAIL(ret)) {
     } else if (is_related_table(table_schema.get_table_type(), table_schema.get_index_type())) {
-	    // skip lock ls
+      // skip lock ls
     } else if (OB_FAIL(check_and_replace_ls_(trans, table_schema.get_tenant_id()))) {
-	    LOG_WARN("lock user ls failed", KR(ret),
-			    "tenant_id", table_schema.get_tenant_id(), K_(ls_id_array));
+      LOG_WARN("lock user ls failed", KR(ret),
+               "tenant_id", table_schema.get_tenant_id(), K_(ls_id_array));
     }
   }
 
@@ -637,7 +721,7 @@ int ObNewTableTabletAllocator::get_available_ls(
         if (ls_attr.ls_is_normal()
             && SYS_LS != ls_attr.get_ls_id()
             && !ls_attr.get_ls_flag().is_block_tablet_in()
-	    && !ls_attr.get_ls_flag().is_duplicate_ls()) {
+            && !ls_attr.get_ls_flag().is_duplicate_ls()) {
           if (OB_FAIL(ls_id_array.push_back(ls_attr.get_ls_id()))) {
             LOG_WARN("fail to push back", KR(ret), K(ls_attr), K(ls_id_array));
           }
@@ -987,6 +1071,39 @@ int ObNewTableTabletAllocator::alloc_tablet_for_non_partitioned_balance_group(
   return ret;
 }
 
+int ObNewTableTabletAllocator::alloc_tablet_for_non_partitioned_balance_group_by_cache_(
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("alloc tablet for non partitioned balance group by cache",
+           "tenant_id", table_schema.get_tenant_id(),
+           "table_id", table_schema.get_table_id());
+  common::ObArray<share::ObLSID> ls_id_array;
+  share::ObLSID ls_id;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
+  } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO != table_schema.get_part_level())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret),
+             "part_num", table_schema.get_all_part_num(),
+             "part_level", table_schema.get_part_level(),
+             K(table_schema));
+  } else if (OB_FAIL(get_available_ls(ls_id_array))) {
+    LOG_WARN("fail to get available ls", KR(ret));
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
+  } else if (OB_FAIL(GCTX.root_service_->get_ddl_service()
+                     .get_non_partitioned_tablet_allocator()
+                     .alloc_tablet(tenant_id_, ls_id_array, ls_id))) {
+    LOG_WARN("fail to alloc tablet by cache", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ls_id_array_.push_back(ls_id))) {
+    LOG_WARN("fail to push back ls id", KR(ret), K_(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
 int ObNewTableTabletAllocator::alloc_tablet_for_partitioned_balance_group(
     const share::schema::ObTableSchema &table_schema)
 {
@@ -1036,8 +1153,14 @@ int ObNewTableTabletAllocator::alloc_tablet_by_count_balance(
       }
     }
   } else if (PARTITION_LEVEL_ZERO == table_schema.get_part_level()) {
-    if (OB_FAIL(alloc_tablet_for_non_partitioned_balance_group(table_schema))) {
-      LOG_WARN("fail to alloc tablet by non partitioned balance group", KR(ret));
+    if (!use_parallel_ddl_) {
+      if (OB_FAIL(alloc_tablet_for_non_partitioned_balance_group(table_schema))) {
+        LOG_WARN("fail to alloc tablet by non partitioned balance group", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(alloc_tablet_for_non_partitioned_balance_group_by_cache_(table_schema))) {
+        LOG_WARN("fail to alloc tablet by non partitioned balance group by cache", KR(ret));
+      }
     }
   } else {
     if (OB_FAIL(alloc_tablet_for_partitioned_balance_group(table_schema))) {

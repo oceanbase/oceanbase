@@ -38,6 +38,7 @@
 #include "common/ob_common_utility.h"
 #include "share/config/ob_config.h" // ObConfigPairs
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
+#include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 
 namespace oceanbase
 {
@@ -125,6 +126,10 @@ public:
   ObSnapshotInfoManager &get_snapshot_mgr() { return *snapshot_mgr_; }
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
   share::schema::ObIndexNameChecker &get_index_name_checker() { return index_name_checker_; }
+  share::schema::ObNonPartitionedTableTabletAllocator &get_non_partitioned_tablet_allocator()
+  {
+     return non_partitioned_tablet_allocator_;
+  }
 
   // create_index_table will fill table_id and frozen_version to table_schema
   virtual int create_index_table(const obrpc::ObCreateIndexArg &arg,
@@ -1121,6 +1126,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       share::schema::ObSchemaGetterGuard &schema_guard,
       share::schema::ObTableSchema &schema);
 
+  int reset_parallel_cache(const uint64_t tenant_id);
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -2571,6 +2577,7 @@ private:
 
   // for paralled ddl to cache oracle's index name map
   share::schema::ObIndexNameChecker index_name_checker_;
+  share::schema::ObNonPartitionedTableTabletAllocator non_partitioned_tablet_allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLService);
 };
