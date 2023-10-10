@@ -423,7 +423,7 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
     auto ta = ma->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ctx_id);
     const char *ctx_name = get_global_ctx_info().get_ctx_name(ctx_id);
     if (OB_NOT_NULL(ta)) {
-      int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (4LL<<30) : (50LL<<20);
+      int64_t ctx_limit = ObCtxIds::DEFAULT_CTX_ID == ctx_id ? (2LL<<30) : (50LL<<20);
       if (unlimited) {
         ctx_limit = INT64_MAX;
       }
