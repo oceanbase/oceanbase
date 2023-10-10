@@ -512,7 +512,7 @@ inline int64_t ObFastParserBase::is_latin1_char(const int64_t pos)
 }
 
 // ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
-inline int64_t ObFastParserBase::is_utf8_char(const int64_t pos)
+inline int64_t ObFastParserBase::is_utf8_char(const int64_t pos, bool *is_multi_byte_normal_char/*nullptr*/)
 {
   int64_t idf_pos = -1;
   if (is_oracle_mode_ &&
@@ -522,6 +522,9 @@ inline int64_t ObFastParserBase::is_utf8_char(const int64_t pos)
       -1 != is_utf8_multi_byte_left_parenthesis(raw_sql_.raw_sql_, pos) ||
       -1 != is_utf8_multi_byte_right_parenthesis(raw_sql_.raw_sql_, pos))) {
     raw_sql_.scan(3);
+    if (nullptr != is_multi_byte_normal_char) {
+      *is_multi_byte_normal_char = true;
+    }
   } else {
     bool is_idf = true;
     if (is_u2(raw_sql_.char_at(pos))) {
@@ -674,7 +677,7 @@ inline int64_t ObFastParserBase::is_gbk_multi_byte_right_parenthesis(
 }
 
 // {GB_1}{GB_2}
-inline int64_t ObFastParserBase::is_gbk_char(const int64_t pos)
+inline int64_t ObFastParserBase::is_gbk_char(const int64_t pos, bool *is_multi_byte_normal_char/*nullptr*/)
 {
   int64_t idf_pos = -1;
   if (is_oracle_mode_ &&
@@ -684,6 +687,9 @@ inline int64_t ObFastParserBase::is_gbk_char(const int64_t pos)
       -1 != is_gbk_multi_byte_left_parenthesis(raw_sql_.raw_sql_, pos) ||
       -1 != is_gbk_multi_byte_right_parenthesis(raw_sql_.raw_sql_, pos))) {
     raw_sql_.scan(2);
+    if (nullptr != is_multi_byte_normal_char) {
+      *is_multi_byte_normal_char = true;
+    }
   } else if (is_gb1(raw_sql_.char_at(pos)) && is_gb2(raw_sql_.char_at(pos + 1))) {
     idf_pos = pos + 2;
   }
@@ -1231,9 +1237,10 @@ int ObFastParserBase::process_binary(bool is_quote)
   return ret;
 }
 
-inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
+inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos, bool *is_multi_byte_normal_char/*nullptr*/)
 {
   int64_t idf_pos = -1;
+  bool is_multi_byte_normal_ch = false;
   char ch = raw_sql_.char_at(pos);
   if (is_first_identifier_char(ch)) {
     idf_pos = pos + 1;
@@ -1242,11 +1249,14 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     // comma, opening parenthesis, or closing parenthesis. This judgment logic is
     // added here to avoid the next judgment whether it is utf8 char or gbk char
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
-    idf_pos = is_utf8_char(pos);
+    idf_pos = is_utf8_char(pos, &is_multi_byte_normal_ch);
   } else if (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_) {
-    idf_pos = is_gbk_char(pos);
+    idf_pos = is_gbk_char(pos, &is_multi_byte_normal_ch);
   } else if (CHARSET_LATIN1 == charset_type_) {
     idf_pos = is_latin1_char(pos);
+  }
+  if (nullptr != is_multi_byte_normal_char) {
+    *is_multi_byte_normal_char = is_multi_byte_normal_ch;
   }
   return idf_pos;
 }
@@ -2750,12 +2760,15 @@ int ObFastParserOracle::parse_next_token()
         break;
       }
       default : {
-        int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
+        bool is_multi_byte_normal_char = false;
+        int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_, &is_multi_byte_normal_char);
         if (-1 != next_idf_pos) {
           raw_sql_.cur_pos_ = next_idf_pos;
           if (OB_LIKELY(process_idf_func_ != nullptr)) {
             OZ ((this->*process_idf_func_)(false));
           }
+        } else if (is_multi_byte_normal_char) {
+          cur_token_type_ = NORMAL_TOKEN;
         } else if (is_normal_char(ch)) {
           cur_token_type_ = NORMAL_TOKEN;
           raw_sql_.scan();

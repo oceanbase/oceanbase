@@ -321,7 +321,7 @@ protected:
 	//{U}
 	int64_t is_latin1_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
-	int64_t is_utf8_char(const int64_t pos);
+	int64_t is_utf8_char(const int64_t pos, bool *is_multi_byte_normal_char = nullptr);
 	// NOTES: No boundary check, the caller guarantees safety!!!
 	// ([\\\xe3\][\\\x80\][\\\x80])
 	int64_t is_utf8_multi_byte_space(const char *str, const int64_t start_pos);
@@ -332,7 +332,7 @@ protected:
 	// ([\\\xef\][\\\xbc\][\\\x89])
 	int64_t is_utf8_multi_byte_right_parenthesis(const char *str, const int64_t start_pos);
 	// {GB_1}{GB_2}
-	int64_t is_gbk_char(const int64_t pos);
+	int64_t is_gbk_char(const int64_t pos, bool *is_multi_byte_normal_char = nullptr);
 	// ([\\\xa1][\\\xa1])
 	int64_t is_gbk_multi_byte_space(const char *str, const int64_t start_pos);
 	// ([\\\xa3][\\\xac])
@@ -405,7 +405,7 @@ protected:
 	 * Return the next position of the position that meets the condition
 	 * and return -1 if it is not satisfied
 	 */
-	int64_t is_first_identifier_flags(const int64_t pos);
+	int64_t is_first_identifier_flags(const int64_t pos, bool *is_multi_byte_normal_char = nullptr);
 	// Add parameterized nodes
 	int add_bool_type_node(bool is_true);
 	int add_null_type_node();
