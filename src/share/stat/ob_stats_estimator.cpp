@@ -569,6 +569,7 @@ int ObStatsEstimator::copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
             if (!src_col_stat->get_histogram().is_valid() &&
                 !dst_col_stat->get_histogram().is_valid()) {
               dst_col_stat->get_histogram().reset();
+              dst_col_stat->get_histogram().set_sample_size(dst_col_stat->get_num_not_null());
             }
           } else {
             ObHistogram &src_hist = src_col_stat->get_histogram();
