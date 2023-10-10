@@ -72,29 +72,6 @@ static void get_client_addr(int fd, char *buf, int len)
   }
 }
 
-static int epoll_unregist_and_give_back(clientfd_sk_t *cs, int need_close)
-{
-  int ret = 0;
-  char client_addr[IP_STRING_MAX_LEN] = {0};
-  get_client_addr(cs->fd_info.client_fd, client_addr, IP_STRING_MAX_LEN);
-  if (need_close && cs->fd >= 0) {
-    shutdown(cs->fd, SHUT_WR);
-  }
-  if (0 != (ret = libc_epoll_ctl(cs->ep->fd, EPOLL_CTL_DEL, cs->fd, NULL))) {
-    ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", cs->ep->fd,
-                   cs->fd, errno);
-  } else if (0 != (ret = libc_epoll_ctl(cs->fd_info.org_epfd, EPOLL_CTL_ADD,
-                                        cs->fd_info.client_fd, &cs->fd_info.event))) {
-    ussl_log_warn("give back fd to origin epoll failed, fd:%d, errno:%d", cs->fd_info.client_fd,
-                   errno);
-  } else {
-    ussl_log_info("give back fd to origin epoll succ, client_fd:%d, client_epfd:%d, event:0x%x, client_addr:%s, need_close:%d",
-                  cs->fd_info.client_fd, cs->fd_info.org_epfd, cs->fd_info.event.events, client_addr, need_close);
-  }
-  cs->fd = -1;
-  return ret;
-}
-
 static int is_local_ip_address(const char *addr)
 {
   int ret = 0;
@@ -169,42 +146,10 @@ static int handle_client_writable_event(ussl_sock_t *s)
     }
   }
   if (0 != err  || 0 != so_error || need_giveback) {
-    int need_close = ((err != 0) || (so_error != 0)) ? 1 : 0;
-    if (0 != (err = epoll_unregist_and_give_back(cs, need_close))) {
-      ussl_log_warn("epoll_unregist_and_give_back failed, fd:%d, err:%d", cs->fd, err);
-    }
+    s->has_error = ((err != 0) || (so_error != 0)) ? 1 : 0;
     ret = EUCLEAN;
   }
   return ret;
-}
-
-static void client_stop_timer_and_give_back_fd(clientfd_sk_t *cs, int need_close)
-{
-  int err = 0;
-  remove_from_timeout_list(&cs->timeout_link);
-  if (0 != (err = epoll_unregist_and_give_back(cs, need_close))) {
-    ussl_log_warn("unregist and give back failed, fd:%d, err:%d", cs->fd, err);
-  }
-}
-
-static void handle_recv_fail(ssize_t rbytes, clientfd_sk_t *s, int *ret)
-{
-  if (0 == rbytes) {
-    ussl_log_info("read EOF, peer close connection, fd:%d", s->fd);
-    client_stop_timer_and_give_back_fd(s, 1);
-    *ret = EUCLEAN;
-  } else {
-    if (EINTR == errno) {
-      *ret = 0;
-    } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
-      s->mask &= ~EPOLLIN;
-      *ret = EAGAIN;
-    } else {
-      ussl_log_warn("read failed, fd:%d, errno:%d", s->fd, errno);
-      client_stop_timer_and_give_back_fd(s, 1);
-      *ret = EUCLEAN;
-    }
-  }
 }
 
 static int client_do_ssl_handshake(clientfd_sk_t *cs)
@@ -214,13 +159,13 @@ static int client_do_ssl_handshake(clientfd_sk_t *cs)
   err = ssl_do_handshake(cs->fd);
   if (0 == err) {
     // stop timer and give back
-    client_stop_timer_and_give_back_fd(cs, 0);
+    cs->has_error = 0;
     ret = EUCLEAN;
   } else if (EAGAIN == err) {
     ret = EAGAIN;
   } else {
     ussl_log_warn("client do ssl handshake failed, fd:%d, err:%d, errno:%d", cs->fd, err, errno);
-    client_stop_timer_and_give_back_fd(cs, 1);
+    cs->has_error = 1;
     ret = EUCLEAN;
   }
   return ret;
@@ -240,21 +185,34 @@ static int handle_client_readable_event(ussl_sock_t *s)
     // peek
     while ((rbytes = recv(cs->fd, buf, sizeof(buf), MSG_PEEK)) < 0 && EINTR == errno)
       ;
-    if (rbytes <= 0) {
-      handle_recv_fail(rbytes, cs, &ret);
+    if (0 == rbytes) {
+      ret = EUCLEAN;
+      cs->has_error = 1;
+      ussl_log_info("read EOF, fd:%d, src_addr:%s", cs->fd, client_addr);
+    } else if (rbytes < 0) {
+      if (EINTR == errno) {
+        ret = 0;
+      } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
+        s->mask &= ~EPOLLIN;
+        ret = EAGAIN;
+      } else {
+        s->has_error = 1;
+        ret = EUCLEAN;
+        ussl_log_warn("read failed, fd:%d, errno:%d", s->fd, errno);
+      }
     } else if (rbytes < sizeof(negotiation_head_t)) {
       ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, cs->fd);
-      client_stop_timer_and_give_back_fd(cs, 1);
+      cs->has_error = 1;
       ret = EUCLEAN;
     } else { // get mag len & read msg
       negotiation_head_t msg_head;
       memcpy(&msg_head, buf, sizeof(msg_head));
       if (NEGOTIATION_MAGIC != msg_head.magic) {
-        client_stop_timer_and_give_back_fd(cs, 1);
+        cs->has_error = 1;
         ret = EUCLEAN;
       } else if (rbytes < sizeof(negotiation_head_t) + msg_head.len) {
         ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, cs->fd);
-        client_stop_timer_and_give_back_fd(cs, 1);
+        cs->has_error = 1;
         ret = EUCLEAN;
       } else {
         while ((rbytes = recv(cs->fd, buf, sizeof(msg_head) + msg_head.len, 0)) < 0 &&
@@ -262,7 +220,7 @@ static int handle_client_readable_event(ussl_sock_t *s)
           ;
         if (rbytes != sizeof(msg_head) + msg_head.len) {
           ussl_log_warn("recv data failed, fd:%d, errno:%d, rbytes:%ld", cs->fd, errno, rbytes);
-          client_stop_timer_and_give_back_fd(cs, 1);
+          cs->has_error = 1;
           ret = EUCLEAN;
         } else {
           negotiation_message_t nego_msg;
@@ -271,7 +229,7 @@ static int handle_client_readable_event(ussl_sock_t *s)
             // do ssl handshake
             if (0 !=
                 (ret = fd_enable_ssl_for_client(cs->fd, cs->fd_info.ssl_ctx_id, nego_msg.type))) {
-              client_stop_timer_and_give_back_fd(cs, 1);
+              cs->has_error = 1;
               ussl_log_error("create SSL failed, fd:%d, errno:%d", s->fd, errno);
             } else {
               ussl_log_info("client do ssl handshake first, fd:%d, addr:%s, auth_method:%s", cs->fd,
@@ -304,24 +262,6 @@ int clientfd_sk_handle_event(clientfd_sk_t *s)
   return ret;
 }
 
-static int remove_from_epoll_and_dispatch(acceptfd_sk_t *s, uint64_t gid)
-{
-  int err = EUCLEAN;
-  remove_from_timeout_list(&s->timeout_link);
-  int ret = 0;
-  if (0 != (ret = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
-    ussl_log_warn("remove acceptfd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd, s->fd,
-                   errno);
-  } else if (0 != (ret = dispatch_accept_fd_to_certain_group(s->fd, gid))) {
-    ussl_log_warn("dispatch fd to default group failed, fd:%d, ret:%d", s->fd, ret);
-  }
-  if (0 != ret && s->fd >= 0) {
-    close(s->fd);
-  }
-  s->fd = -1;
-  return err;
-}
-
 void ussl_get_peer_addr(int fd, char *buf, int len)
 {
   struct sockaddr_storage addr;
@@ -352,23 +292,6 @@ void ussl_get_peer_addr(int fd, char *buf, int len)
   }
 }
 
-static void handle_acceptfd_error(acceptfd_sk_t *s, int *err)
-{
-  remove_from_timeout_list(&s->timeout_link);
-  *err = EUCLEAN;
-  if (s->fd >= 0) {
-    int err = 0;
-    if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
-      ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
-                    s->fd, errno);
-    }
-    if (0 != (err = ussl_close(s->fd))) {
-      ussl_log_warn("ussl_close failed, fd:%d, errno:%d", s->fd, errno);
-    }
-  }
-  s->fd = -1;
-}
-
 static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
 {
   int err = 0;
@@ -379,18 +302,23 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
   char src_addr[IP_STRING_MAX_LEN] = {0};
   ussl_get_peer_addr(s->fd, src_addr, IP_STRING_MAX_LEN);
   if (0 == rbytes) {
-    handle_acceptfd_error(s, &err);
+    err = EUCLEAN;
+    s->has_error = 1;
+    ussl_log_info("read EOF, fd:%d, src_addr:%s", s->fd, src_addr);
   } else if (rbytes < 0) {
     if (EINTR == errno) {
     } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
       s->mask &= ~EPOLLIN;
       err = EAGAIN;
     } else {
-      handle_acceptfd_error(s, &err);
+      err = EUCLEAN;
+      s->has_error = 1;
+      ussl_log_info("recv failed, fd:%d, errno:%d, src_addr:%s", s->fd, errno, src_addr);
     }
   } else if (rbytes < sizeof(negotiation_head_t)) {
-    ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, s->fd);
-    handle_acceptfd_error(s, &err);
+    err = EUCLEAN;
+    s->has_error = 1;
+    ussl_log_info("read EOF, fd:%d, src_addr:%s", s->fd, src_addr);
   } else if (h->magic != NEGOTIATION_MAGIC) {
     int need_dispatch = 0;
     if (test_server_auth_methods(USSL_AUTH_NONE)) {
@@ -403,31 +331,38 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
       ussl_log_info("easy negotation message, need dispatch:%d, src:%s, fd:%d", need_dispatch, src_addr, s->fd);
     }
     if (need_dispatch) {
+      err = EUCLEAN;
+      s->fd_info.client_gid = UINT64_MAX;
       ussl_log_info("recv non-negotiation message, the fd will be dispatched, fd:%d, src_addr:%s, magic:0x%x",
-                    s->fd, src_addr, h->magic);
-      err = remove_from_epoll_and_dispatch(s, UINT64_MAX);
+              s->fd, src_addr, h->magic);
     } else {
       char auth_type[AUTH_TYPE_STRING_MAX_LEN] = {0};
       auth_type_to_str(get_server_auth_methods(), auth_type, AUTH_TYPE_STRING_MAX_LEN);
+      err = EUCLEAN;
+      s->has_error = 1;
       ussl_log_warn("connection is not allowed, fd:%d, src_addr:%s, server_auth_method:%s, "
                      "rbytes:%ld, magic:%x",
                      s->fd, src_addr, auth_type, rbytes, h->magic);
-      handle_acceptfd_error(s, &err);
     }
   } else if (h->len + sizeof(*h) > rbytes) {
+    err = EUCLEAN;
+    s->has_error = 1;
     ussl_log_warn("recv message is not complete, close connection, rbytes:%ld, fd:%d", rbytes, s->fd);
-    handle_acceptfd_error(s, &err);
   } else {
     while ((rbytes = recv(s->fd, buf, h->len + sizeof(negotiation_head_t), 0)) < 0 &&
            EINTR == errno)
       ;
     if (rbytes != h->len + sizeof(negotiation_head_t)) {
+      err = EUCLEAN;
+      s->has_error = 1;
       ussl_log_warn("consume nego message failed, rbytes:%ld, fd:%d, errno:%d", rbytes, s->fd,
                      errno);
-      handle_acceptfd_error(s, &err);
     } else {
       if (is_local_ip_address(src_addr)) {
-        err = remove_from_epoll_and_dispatch(s, UINT64_MAX);
+        //TODO fix me
+        //if observer use local loop ip to start service, there will be error here
+        err = EUCLEAN;
+        s->fd_info.client_gid = UINT64_MAX;
         ussl_log_info("local ip address:%s, dispatch after consume", src_addr);
       } else {
         negotiation_message_t *nego_message = (typeof(nego_message))(h + 1);
@@ -436,31 +371,36 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
         auth_type_to_str(nego_message->type, auth_type, AUTH_TYPE_STRING_MAX_LEN);
         if (USSL_AUTH_NONE == nego_message->type) {
           if (test_server_auth_methods(USSL_AUTH_NONE)) {
+            err = EUCLEAN;
+            s->fd_info.client_gid = nego_message->client_gid;
             ussl_log_info("auth mothod is NONE, the fd will be dispatched, fd:%d, src_addr:%s", s->fd,
                           src_addr);
-            err = remove_from_epoll_and_dispatch(s, nego_message->client_gid);
           } else {
+            err = EUCLEAN;
+            s->has_error = 1;
             ussl_log_warn("ussl server not support mode:%s, fd:%d", auth_type, s->fd);
-            handle_acceptfd_error(s, &err);
           }
         } else if (USSL_AUTH_SSL_IO == nego_message->type ||
                   USSL_AUTH_SSL_HANDSHAKE == nego_message->type) {
           if (test_server_auth_methods(USSL_AUTH_SSL_IO) ||
               test_server_auth_methods(USSL_AUTH_SSL_HANDSHAKE)) {
             if (-1 == ssl_config_ctx_id) {
+              err = EUCLEAN;
+              s->has_error = 1;
               ussl_log_error("ssl config not configured!");
-              handle_acceptfd_error(s, &err);
             } else {
               negotiation_message_t nego_message_ack;
               nego_message_ack.type = nego_message->type;
               if (0 != fd_enable_ssl_for_server(s->fd, ssl_config_ctx_id, nego_message->type)) {
+                err = EUCLEAN;
+                s->has_error = 1;
                 ussl_log_error("fd_enable_ssl_for_server failed, fd:%d", s->fd);
-                handle_acceptfd_error(s, &err);
               } else if (0 != send_negotiation_message(s->fd, (char *)&nego_message_ack,
                                                       sizeof(nego_message_ack))) {
+                err = EUCLEAN;
+                s->has_error = 1;
                 ussl_log_warn("send_negotiation_message failed, auth-mode:%d, fd:%d",
                               nego_message->type, s->fd);
-                handle_acceptfd_error(s, &err);
               } else {
                 ussl_log_info("auth method is SSL_NO_ENCRYPT or SSL_IO, and the negotiation message "
                               "has be sent, fd:%d, src_addr:%s",
@@ -470,8 +410,9 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
               }
             }
           } else {
+            err = EUCLEAN;
+            s->has_error = 1;
             ussl_log_warn("ussl server not support mode:%s, fd:%d", auth_type, s->fd);
-            handle_acceptfd_error(s, &err);
           }
         }
       }
@@ -487,24 +428,12 @@ static int acceptfd_handle_ssl_event(acceptfd_sk_t *s)
   ussl_get_peer_addr(s->fd, src_addr, IP_STRING_MAX_LEN);
   ret = ssl_do_handshake(s->fd);
   if (0 == ret) {
-    ussl_log_info("ssl_do_handshake succ, fd:%d, client_gid:%lu, src_addr:%s", s->fd, s->fd_info.client_gid, src_addr);
-    remove_from_epoll_and_dispatch(s, s->fd_info.client_gid);
     ret = EUCLEAN;
+    ussl_log_info("ssl_do_handshake succ, fd:%d, client_gid:%lu, src_addr:%s", s->fd, s->fd_info.client_gid, src_addr);
   } else if (EAGAIN == ret) {
   } else {
+    s->has_error = 1;
     ussl_log_warn("ssl_do_handshake failed, fd:%d, ret:%d, src_addr:%s", s->fd, ret, src_addr);
-    remove_from_timeout_list(&s->timeout_link);
-    if (s->fd >= 0) {
-      int err = 0;
-      if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
-        ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
-                      s->fd, errno);
-      }
-      if (0 != (err = ussl_close(s->fd))) {
-        ussl_log_warn("ussl_close failed, fd:%d, errno:%d", s->fd, errno);
-      }
-    }
-    s->fd = -1;
   }
   return ret;
 }

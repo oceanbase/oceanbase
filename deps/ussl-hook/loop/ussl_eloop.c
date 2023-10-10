@@ -65,9 +65,6 @@ static void ussl_eloop_refire(ussl_eloop_t *ep, int64_t epoll_timeout)
 static void ussl_sock_destroy(ussl_sock_t *s)
 {
   ussl_dlink_delete(&s->ready_link);
-  if (s->fd >= 0) {
-    close(s->fd);
-  }
   if (s->fty) {
     s->fty->destroy(s->fty, s);
   }
@@ -76,7 +73,11 @@ static void ussl_sock_destroy(ussl_sock_t *s)
 static void ussl_eloop_handle_sock_event(ussl_sock_t *s)
 {
   int err = 0;
-  if (0 == (err = s->handle_event(s))) {
+  if (ussl_skt(s, ERR) || ussl_skt(s, HUP)) {
+    ussl_log_info("sock has error: sock:%p, fd:%d, mask:0x%x", s, s->fd, s->mask);
+    s->has_error = 1;
+    ussl_sock_destroy(s);
+  } else if (0 == (err = s->handle_event(s))) {
     // yield
   } else if (EAGAIN == err) {
     if (ussl_skt(s, PENDING)) {
