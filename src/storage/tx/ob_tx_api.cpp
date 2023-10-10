@@ -1583,15 +1583,20 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
     ret = sync_rollback_savepoint__(tx, msg, tx.brpc_mask_set_,
                                     expire_ts, max_retry_intval, retries);
     tx.lock_.lock();
-    tx.flags_.BLOCK_ = false;
     // restore state
     if (OB_SUCC(ret) && tx.is_tx_active()) {
       tx.state_ = save_state;
     }
     // mask_set need clear
     tx.brpc_mask_set_.reset();
+    // check interrupt
+    if (OB_SUCC(ret) && tx.flags_.INTERRUPTED_) {
+      ret = OB_ERR_INTERRUPTED;
+      TRANS_LOG(WARN, "rollback savepoint was interrupted", K(ret));
+    }
     // clear interrupt flag
     tx.clear_interrupt();
+    tx.flags_.BLOCK_ = false;
   }
   if (OB_NOT_NULL(tmp_tx_desc)) {
     msg.tx_ptr_ = NULL;
