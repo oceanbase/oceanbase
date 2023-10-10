@@ -119,7 +119,7 @@ public:
   int init(const int64_t task_id, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
-      const bool need_read_inner_table = true);
+      const bool need_read_inner_table);
   virtual int next() override;
   virtual bool is_iter_end() const override;
   virtual int get_cur_index(ObBackupMacroRangeIndex &index) override;
