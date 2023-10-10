@@ -511,16 +511,22 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
         TRY_SYNONYM(package_name);
         if (OB_SUCC(ret) && need_try_synonym) {
           if (OB_FAIL(schema_checker.get_package_id( // try synonym user package now!
-              is_sys_database_id(object_db_id) ? OB_SYS_TENANT_ID : tenant_id,
-              object_db_id, object_name, compatible_mode, package_id))
+              tenant_id, object_db_id, object_name, compatible_mode, package_id))
               || OB_INVALID_ID == package_id) {
-            if (OB_FAIL(schema_checker.get_udt_id( // try synonym user type now!
-                  tenant_id, object_db_id, OB_INVALID_ID, object_name, package_id))
+            if ((is_sys_database_id(object_db_id)
+                  && OB_FAIL(schema_checker.get_package_id(OB_SYS_TENANT_ID, object_db_id, object_name, compatible_mode, package_id)))
                 || OB_INVALID_ID == package_id) {
-              LOG_WARN("failed to get package id", K(ret));
-            } else { // it`s user udt, get udt routines
-              OZ (schema_checker.get_udt_routine_infos(
-                tenant_id, object_db_id, package_id, routine_name, routine_type, routines));
+              if (OB_FAIL(schema_checker.get_udt_id( // try synonym user type now!
+                    tenant_id, object_db_id, OB_INVALID_ID, object_name, package_id))
+                  || OB_INVALID_ID == package_id) {
+                LOG_WARN("failed to get package id", K(ret));
+              } else { // it`s user udt, get udt routines
+                OZ (schema_checker.get_udt_routine_infos(
+                  tenant_id, object_db_id, package_id, routine_name, routine_type, routines));
+              }
+            } else { // it`s user pacakge, get package routines
+              OZ (schema_checker.get_package_routine_infos(
+                tenant_id, package_id, object_db_id, routine_name, routine_type, routines));
             }
           } else { // it`s user pacakge, get package routines
             OZ (schema_checker.get_package_routine_infos(
