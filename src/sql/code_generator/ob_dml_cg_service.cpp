@@ -2694,6 +2694,9 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
     } else {
       fk_column.obj_meta_ = column_schema->get_meta_type();
+      if (ob_is_double_tc(fk_column.obj_meta_.get_type())) {
+        fk_column.obj_meta_.set_scale(column_schema->get_accuracy().get_scale());
+      }
       if (OB_FAIL(fk_arg.columns_.push_back(fk_column))) {
         LOG_WARN("failed to push foreign key column", K(fk_arg), K(fk_column), K(ret));
       }
