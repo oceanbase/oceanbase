@@ -211,6 +211,7 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
 #include "observer/virtual_table/ob_virtual_flt_config.h"
 
+#include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2503,6 +2504,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "fail to init ObVirtualLSLogRestoreStatus with omt", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(ls_log_restore_status);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KV_CONNECTION_TID:
+          {
+            ObAllVirtualKvConnection *kv_connection = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvConnection, kv_connection))) {
+              kv_connection->set_connection_mgr(&table::ObTableConnectionMgr::get_instance());
+              vt_iter = static_cast<ObVirtualTableIterator *>(kv_connection);
             }
             break;
           }

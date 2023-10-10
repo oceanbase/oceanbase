@@ -12754,6 +12754,29 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sysstat']))
 # 12392: __all_virtual_kv_connection
+def_table_schema(
+  owner      = 'shenyunlong.syl',
+  table_name = '__all_virtual_kv_connection',
+  table_id = '12392',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('client_port', 'int'),
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('user_id', 'int'),
+    ('db_id', 'int'),
+    ('first_active_time', 'timestamp'),
+    ('last_active_time', 'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
@@ -28103,6 +28126,45 @@ def_table_schema(
 )
 # 21397: GV$OB_KV_CONNECTIONS
 # 21398: V$OB_KV_CONNECTIONS
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'GV$OB_KV_CONNECTIONS',
+  table_id        = '21397',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """
+  select
+    tenant_id as TENANT_ID,
+    user_id as USER_ID,
+    db_id as DB_ID,
+    svr_ip as SVR_IP,
+    svr_port as SVR_PORT,
+    client_ip as CLIENT_IP,
+    client_port as CLIENT_PORT,
+    first_active_time as FIRST_ACTIVE_TIME,
+    last_active_time as LAST_ACTIVE_TIME
+  from oceanbase.__all_virtual_kv_connection
+  order by LAST_ACTIVE_TIME desc, FIRST_ACTIVE_TIME desc
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'V$OB_KV_CONNECTIONS',
+  table_id        = '21398',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """
+  SELECT * FROM oceanbase.GV$OB_KV_CONNECTIONS
+        WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'yangyifei.yyf',
