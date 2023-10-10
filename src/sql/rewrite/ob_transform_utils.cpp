@@ -3388,7 +3388,7 @@ int ObTransformUtils::classify_scalar_query_ref(ObRawExpr *expr,
     LOG_WARN("expr is null", K(ret));
   } else if (expr->is_query_ref_expr()) {
     ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr *>(expr);
-    if (query_ref->is_set() || query_ref->get_output_column() > 1) {
+    if (!query_ref->is_scalar()) {
       // if a query ref returns multi row or multi col,
       // we consider such query ref as a non-scalar one.
       if (OB_FAIL(add_var_to_array_no_dup(non_scalar_query_refs, expr))) {
@@ -12737,7 +12737,7 @@ int ObTransformUtils::is_scalar_expr(ObRawExpr* expr, bool &is_scalar)
     is_scalar = false;
   } else if (expr->is_query_ref_expr()) {
     ObQueryRefRawExpr *query_ref = static_cast<ObQueryRefRawExpr*>(expr);
-    is_scalar = (!query_ref->is_set()) && (query_ref->get_output_column() == 1);
+    is_scalar = query_ref->is_scalar();
   }
   return ret;
 }
