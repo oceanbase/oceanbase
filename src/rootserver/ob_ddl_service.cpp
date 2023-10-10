@@ -178,7 +178,8 @@ ObDDLService::ObDDLService()
     unit_mgr_(NULL),
     snapshot_mgr_(NULL),
     ddl_lock_(),
-    index_name_checker_()
+    index_name_checker_(),
+    non_partitioned_tablet_allocator_()
 {
 }
 
@@ -197,6 +198,8 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
     LOG_WARN("init twice", KR(ret));
   } else if (OB_FAIL(index_name_checker_.init(sql_proxy))) {
     LOG_WARN("fail to init index name checker", KR(ret));
+  } else if (OB_FAIL(non_partitioned_tablet_allocator_.init(sql_proxy))) {
+    LOG_WARN("fail to init non partitioned tablet allocator", KR(ret));
   } else {
     rpc_proxy_ = &rpc_proxy;
     common_rpc_ = &common_rpc;
@@ -24996,6 +24999,13 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
           LOG_WARN("delete_recycle_object failed", KR(ret), KPC(tenant_schema));
         }
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(reset_parallel_cache(meta_tenant_id))) {
+          LOG_WARN("fail to reset parallel cache", KR(ret), K(meta_tenant_id));
+        } else if (OB_FAIL(reset_parallel_cache(user_tenant_id))) {
+          LOG_WARN("fail to reset parallel cache", KR(ret), K(user_tenant_id));
+        }
+      }
     } else {// put tenant into recyclebin
       ObTenantSchema new_tenant_schema;
       ObSqlString new_tenant_name;
@@ -32897,6 +32907,22 @@ ObDDLSQLTransaction::~ObDDLSQLTransaction()
   }
 }
 
+int ObDDLService::reset_parallel_cache(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(index_name_checker_.reset_cache(tenant_id))) {
+    ret = OB_FAIL(ret) ? ret : tmp_ret;
+    LOG_ERROR("reset cache failed", KR(tmp_ret), KR(ret), K(tenant_id));
+  }
+
+  if (OB_TMP_FAIL(non_partitioned_tablet_allocator_.reset_cache(tenant_id))) {
+    ret = OB_FAIL(ret) ? ret : tmp_ret;
+    LOG_ERROR("reset cache failed", KR(tmp_ret), KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 /*
  * @description:
  * start transaction for DDL, lock and check schema has refreshed
@@ -33011,13 +33037,9 @@ int ObDDLSQLTransaction::end(const bool commit)
     if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("root_service is null", KR(ret));
-    } else {
-      ObIndexNameChecker &checker = GCTX.root_service_
-                                      ->get_ddl_service()
-                                        .get_index_name_checker();
-      if (OB_FAIL(checker.reset_cache(tenant_id_))) {
-        LOG_ERROR("reset cache failed", KR(ret), K(tenant_id_));
-      }
+    } else if (OB_FAIL(GCTX.root_service_->get_ddl_service()
+                       .reset_parallel_cache(tenant_id_))) {
+      LOG_WARN("fail to reset parallel cache", KR(ret), K_(tenant_id));
     }
   }
 

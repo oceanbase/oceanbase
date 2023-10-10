@@ -2331,7 +2331,8 @@ int ObCreateTableHelper::create_tablets_()
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id_,
                               schema_guard,
-                              sql_proxy_);
+                              sql_proxy_,
+                              true /*use parallel ddl*/);
     int64_t last_schema_version = OB_INVALID_VERSION;
     auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {

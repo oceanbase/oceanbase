@@ -27,6 +27,8 @@ using namespace share::schema;
 namespace rootserver
 {
 
+const char* ObBalanceGroup::NON_PART_BG_NAME = "NON_PART_TABLE";
+
 int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
     const int64_t max_part_level,
     const int64_t part_group_index/* = 0*/)
@@ -85,7 +87,7 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
     LOG_WARN("table is in tablegroup, should init balance group by tablegroup", KR(ret), K(table_schema));
   } else if (PARTITION_LEVEL_ZERO == part_level) {
     // All tenant's non-partition table is a balance group
-    if (OB_FAIL(bg_name_str.append_fmt("NON_PART_TABLE"))) {
+    if (OB_FAIL(bg_name_str.append_fmt("%s", NON_PART_BG_NAME))) {
       LOG_WARN("fail to append fmt", KR(ret), K(table_schema));
     } else {
       id_ = ObBalanceGroupID(0, 0);
