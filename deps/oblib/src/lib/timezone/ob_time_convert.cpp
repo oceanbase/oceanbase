@@ -26,6 +26,7 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "common/object/ob_object.h"
 //#include "lib/timezone/ob_timezone_util.h"
+#include "lib/locale/ob_locale_type.h"
 
 #define STRING_WITH_LEN(X) (X), ((sizeof(X) - 1))
 
@@ -4901,6 +4902,247 @@ int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString
               res_null = true;
             }
             ret = data_fmt_s(buf, buf_len, pos, WDAY_NAMES[parts[DT_WDAY]].ptr_);
+            break;
+          }
+          case 'w': { //Day of the week (0=Sunday..6=Saturday)
+            if (OB_UNLIKELY(0 == parts[DT_WDAY])) {
+              res_null = true;
+            }
+            ret = data_fmt_d(buf, buf_len, pos, parts[DT_WDAY] % DAYS_PER_WEEK);
+            break;
+          }
+          case 'X': { //Year for the week where Sunday is the first day of the week, numeric, four digits; used with %V
+            //due to the face that %X is often used with %V.
+            // In order to optimize the implementation, we set the right week_sunday value which will possibly be used for %V case latter.
+            if (-2 == delta_sunday) {
+              week_sunday = ob_time_to_week(ob_time, WEEK_MODE[2], delta_sunday);
+            }
+            int32_t year = ob_time.parts_[DT_YEAR] + delta_sunday;
+            if (OB_UNLIKELY(-1 == year)) {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, 0);
+            } else {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, year);
+            }
+            break;
+          }
+          case 'x': { //Year for the week, where Monday is the first day of the week, numeric, four digits; used with %v
+            if (-2 == delta_monday) {
+              week_monday = ob_time_to_week(ob_time, WEEK_MODE[3], delta_monday);
+            }
+            int32_t year = ob_time.parts_[DT_YEAR] + delta_monday;
+            if (OB_UNLIKELY(-1 == year)) {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, 0);
+            } else {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, year);
+            }
+            break;
+          }
+          case '%': { //A literal "%" character
+            if (pos >= buf_len) {
+              ret = OB_SIZE_OVERFLOW;
+              break;
+            }
+            buf[pos++] = '%';
+            break;
+          }
+          default: {
+            if (pos >= buf_len) {
+              ret = OB_SIZE_OVERFLOW;
+              break;
+            }
+            buf[pos++] = *format_ptr;
+            break;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          format_ptr++;
+        }
+      } else if (pos >= buf_len) {
+        ret = OB_SIZE_OVERFLOW;
+        break;
+      } else {
+        buf[pos++] = *(format_ptr++);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString &format,
+                                           char *buf, int64_t buf_len, int64_t &pos, bool &res_null, const ObString &locale_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(format.ptr()) || OB_ISNULL(buf) || OB_UNLIKELY(format.length() <= 0 || buf_len <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("format or output string is invalid", K(ret), K(format), KP(buf), K(buf_len));
+  } else {
+    const char *format_ptr = format.ptr();
+    const char *end_ptr = format.ptr() + format.length();
+    const int32_t *parts = ob_time.parts_;
+    int32_t week_sunday = -1;
+    int32_t week_monday = -1;
+    int32_t delta_sunday = -2;
+    int32_t delta_monday = -2;
+    //used for am/pm conversation in order to avoid if-else tests.
+
+    OB_LOCALE *ob_cur_locale = ob_locale_by_name(locale_name);
+    OB_LOCALE_TYPE *locale_type_day = ob_cur_locale->day_names_;
+    OB_LOCALE_TYPE *locale_type_ab_day = ob_cur_locale->ab_day_names_;
+    OB_LOCALE_TYPE *locale_type_mon = ob_cur_locale->month_names_;
+    OB_LOCALE_TYPE *locale_type_ab_mon = ob_cur_locale->ab_month_names_;
+
+    const char ** locale_daynames = locale_type_day->type_names_;
+    const char ** locale_ab_daynames = locale_type_ab_day->type_names_;
+    const char ** locale_monthnames = locale_type_mon->type_names_;
+    const char ** locale_ab_monthnames = locale_type_ab_mon->type_names_;
+
+    //used for am/pm conversation in order to avoid if-else tests.
+    const int hour_converter[24] = {12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                                    12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+    while (format_ptr < end_ptr && OB_SUCCESS == ret) {
+      if ('%' == *format_ptr) {
+        format_ptr++;
+        if (format_ptr >= end_ptr) {
+          ret = OB_INVALID_ARGUMENT;
+          break;
+        }
+        switch (*format_ptr) {
+         /*The cases are not ordered alphabetically since Y y m d D are used frequently
+         *in order to get better performance, we locate them in front of others
+         */
+          case 'Y': { //Year, numeric, four digits
+            if (OB_UNLIKELY(ob_time.parts_[DT_YEAR] > 9999 || ob_time.parts_[DT_YEAR] < 0)) {
+              ret = OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
+            } else {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, ob_time.parts_[DT_YEAR]);
+            }
+            break;
+          }
+          case 'y': { //Year, numeric (two digits)
+            if (OB_UNLIKELY(ob_time.parts_[DT_YEAR] > 9999 || ob_time.parts_[DT_YEAR] < 0)) {
+              ret = OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
+            } else {
+              int year = (ob_time.parts_[DT_YEAR]) % 100;
+              ret = data_fmt_nd(buf, buf_len, pos, 2, year);
+            }
+            break;
+          }
+          case 'M': { //Month name (January..December)
+            if (OB_UNLIKELY(0 == parts[DT_MON])) {
+              res_null = true;
+            }
+            ret = data_fmt_s(buf, buf_len, pos, locale_monthnames[parts[DT_MON]-1]);
+            break;
+          }
+          case 'm': { //Month, numeric (00..12)
+            ret = data_fmt_nd(buf, buf_len, pos, 2, parts[DT_MON]);
+            break;
+          }
+          case 'D': { //Day of the month with English suffix (0th, 1st, 2nd, 3rd...)
+            ret = data_fmt_s(buf, buf_len, pos, DAY_NAME[parts[DT_MDAY]]);
+            break;
+          }
+          case 'd': { //Day of the month, numeric (00..31)
+            ret = data_fmt_nd(buf, buf_len, pos, 2, parts[DT_MDAY]);
+            break;
+          }
+          case 'a': { //Abbreviated weekday name (Sun..Sat)
+            if (OB_UNLIKELY(0 == parts[DT_WDAY])) {
+              res_null = true;
+            }
+            ret = data_fmt_s(buf, buf_len, pos, locale_ab_daynames[parts[DT_WDAY]-1]);
+            break;
+          }
+          case 'b': { //Abbreviated month name (Jan..Dec)
+            if (OB_UNLIKELY(0 == parts[DT_MON])) {
+              res_null = true;
+            }
+            ret = data_fmt_s(buf, buf_len, pos, locale_ab_monthnames[parts[DT_MON]-1]);
+            break;
+          }
+          case 'c': { //Month, numeric (0..12)
+            ret = data_fmt_d(buf, buf_len, pos, parts[DT_MON]);
+            break;
+          }
+          case 'e': { //Day of the month, numeric (0..31)
+            ret = data_fmt_d(buf, buf_len, pos, parts[DT_MDAY]);
+            break;
+          }
+          case 'f': { //Microseconds (000000..999999)
+            ret = data_fmt_nd(buf, buf_len, pos, 6, parts[DT_USEC]);
+            break;
+          }
+          case 'H': { //Hour (00..23)
+            ret = data_fmt_nd(buf, buf_len, pos, 2, parts[DT_HOUR]);
+            break;
+          }
+          case 'h': //Hour (01..12)
+          case 'I': { //Hour (01..12)
+            int hour = hour_converter[parts[DT_HOUR]];
+            ret = data_fmt_nd(buf, buf_len, pos, 2, hour);
+            break;
+          }
+          case 'i': { //Minutes, numeric (00..59)
+            ret = data_fmt_nd(buf, buf_len, pos, 2, parts[DT_MIN]);
+            break;
+          }
+          case 'j': { //Day of year (001..366)
+            ret = data_fmt_nd(buf, buf_len, pos, 3, parts[DT_YDAY]);
+            break;
+          }
+          case 'k': { //Hour (0..23)
+            ret = data_fmt_d(buf, buf_len, pos, parts[DT_HOUR]);
+            break;
+          }
+          case 'l': { //Hour (1..12)
+            int hour = hour_converter[parts[DT_HOUR]];
+            ret = data_fmt_d(buf, buf_len, pos, hour);
+            break;
+          }
+          case 'p': { //AM or PM
+            const char *ptr = parts[DT_HOUR] < 12 ? "AM" : "PM";
+            ret = data_fmt_s(buf, buf_len, pos, ptr);
+            break;
+          }
+          case 'r': { //Time, 12-hour (hh:mm:ss followed by AM or PM)
+            int hour = hour_converter[parts[DT_HOUR]];
+            const char *ptr = parts[DT_HOUR] < 12 ? "AM" : "PM";
+            ret = databuff_printf(buf, buf_len, pos, "%02d:%02d:%02d %s", hour, parts[DT_MIN], parts[DT_SEC], ptr);
+            break;
+          }
+          case 'S': //Seconds (00..59)
+          case 's': { //Seconds (00..59)
+            ret = data_fmt_nd(buf, buf_len, pos, 2, parts[DT_SEC]);
+            break;
+          }
+          case 'T': { //Time, 24-hour (hh:mm:ss)
+            ret = databuff_printf(buf, buf_len, pos, "%02d:%02d:%02d", parts[DT_HOUR], parts[DT_MIN], parts[DT_SEC]);
+            break;
+          }
+          case 'U': { //Week (00..53), where Sunday is the first day of the week
+            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time_to_week(ob_time, WEEK_MODE[0]));
+            break;
+          }
+          case 'u': { //Week (00..53), where Monday is the first day of the week
+            ret = data_fmt_nd(buf, buf_len, pos, 2, ob_time_to_week(ob_time, WEEK_MODE[1]));
+            break;
+          }
+          case 'V': { //Week (01..53), where Sunday is the first day of the week; used with %X
+            //due to the face that V is often used with X.
+            // In order to optimize the implementation, we set the right delta value which will possibly be used for %X case latter.
+            // week_sunday != -1 means that its value has been computed in %X case ever.
+            ret = data_fmt_nd(buf, buf_len, pos, 2, (-1 == week_sunday) ? ob_time_to_week(ob_time, WEEK_MODE[2], delta_sunday) : week_sunday);
+            break;
+          }
+          case 'v': { //Week (01..53), where Monday is the first day of the week; used with %x
+            ret = data_fmt_nd(buf, buf_len, pos, 2, (-1 == week_monday) ? ob_time_to_week(ob_time, WEEK_MODE[3], delta_monday) : week_monday);
+            break;
+          }
+          case 'W': { //Weekday name (Sunday..Saturday)
+            if (OB_UNLIKELY(0 == parts[DT_WDAY])) {
+              res_null = true;
+            }
+            ret = data_fmt_s(buf, buf_len, pos, locale_daynames[parts[DT_WDAY]-1]);
             break;
           }
           case 'w': { //Day of the week (0=Sunday..6=Saturday)
