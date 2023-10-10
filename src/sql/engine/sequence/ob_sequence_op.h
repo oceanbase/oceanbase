@@ -107,10 +107,7 @@ public:
   virtual int inner_open() override;
   virtual int inner_close() override;
 
-  void reset()
-  {
-    seq_executors_.reset();
-  }
+  void reset() { }
 
   virtual void destroy() override;
 private:
