@@ -496,6 +496,7 @@ OB_INLINE int ObStorageDatum::deep_copy(const ObStorageDatum &src, common::ObIAl
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "allocate memory failed", K(ret), K(src));
+      pack_ = 0;
     } else {
       MEMCPY(buf, src.ptr_, src.len_);
       // need set ptr_ after memory copy, if this == &src
@@ -520,6 +521,7 @@ OB_INLINE int ObStorageDatum::deep_copy(const ObStorageDatum &src, char * buf, c
   } else if (OB_UNLIKELY(nullptr == buf || buf_len < pos + src.len_)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to deep copy datum", K(ret), K(src), KP(buf), K(buf_len), K(pos));
+    pack_ = 0;
   } else {
     MEMCPY(buf + pos, src.ptr_, src.len_);
     // need set ptr_ after memory copy, if this == &src
