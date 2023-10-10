@@ -30,7 +30,12 @@ public:
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const;
+  static int calc_unistr(const common::ObString &src,
+                          const common::ObCollationType src_cs_type,
+                          const common::ObCollationType dst_cs_type,
+                          char* buf, const int64_t buf_len, int32_t &pos);
   static int calc_unistr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUnistr);
 };

@@ -215,6 +215,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "max_execution_time",
   "max_sp_recursion_depth",
   "max_user_connections",
+  "ncharacter_set_connection",
   "net_buffer_length",
   "net_read_timeout",
   "net_write_timeout",
@@ -452,6 +453,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_MAX_EXECUTION_TIME,
   SYS_VAR_MAX_SP_RECURSION_DEPTH,
   SYS_VAR_MAX_USER_CONNECTIONS,
+  SYS_VAR_NCHARACTER_SET_CONNECTION,
   SYS_VAR_NET_BUFFER_LENGTH,
   SYS_VAR_NET_READ_TIMEOUT,
   SYS_VAR_NET_WRITE_TIMEOUT,
@@ -830,7 +832,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "runtime_filter_max_in_num",
   "runtime_bloom_filter_max_size",
   "optimizer_features_enable",
-  "_ob_proxy_weakread_feedback"
+  "_ob_proxy_weakread_feedback",
+  "ncharacter_set_connection"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1233,6 +1236,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarRuntimeBloomFilterMaxSize)
         + sizeof(ObSysVarOptimizerFeaturesEnable)
         + sizeof(ObSysVarObProxyWeakreadFeedback)
+        + sizeof(ObSysVarNcharacterSetConnection)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3345,6 +3349,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObProxyWeakreadFeedback));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNcharacterSetConnection())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNcharacterSetConnection", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NCHARACTER_SET_CONNECTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarNcharacterSetConnection));
       }
     }
 
@@ -5928,6 +5941,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObProxyWeakreadFeedback())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObProxyWeakreadFeedback", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_NCHARACTER_SET_CONNECTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarNcharacterSetConnection)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarNcharacterSetConnection)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNcharacterSetConnection())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarNcharacterSetConnection", K(ret));
       }
       break;
     }

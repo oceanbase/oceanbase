@@ -1691,6 +1691,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(233); }
 };
+class ObSysVarNcharacterSetConnection : public ObCharsetSysVar
+{
+public:
+  ObSysVarNcharacterSetConnection() : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset, NULL, ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset, ObSysVarGetMetaTypeFuncs::get_meta_type_varchar) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_NCHARACTER_SET_CONNECTION; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(234); }
+};
 
 
 class ObSysVarFactory
@@ -1711,7 +1718,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 137;
+  const static int64_t OB_SYS_VARS_COUNT = 138;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

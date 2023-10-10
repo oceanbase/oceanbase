@@ -3383,7 +3383,11 @@ int ObBasicSessionInfo::get_charset_sys_var(const ObSysVarClassType sys_var_id,
     } else if (OB_FAIL(val->get_value().get_int(coll_int64))) {
       LOG_ERROR("fail to get int from value", K(*val), K(ret));
     } else if (OB_UNLIKELY(false == ObCharset::is_valid_collation(coll_int64))) {
-      LOG_ERROR("invalid collation", K(sys_var_id), K(coll_int64), K(*val));
+      if (SYS_VAR_NCHARACTER_SET_CONNECTION == sys_var_id && coll_int64 == 0) {
+        //do nothing
+      } else {
+        LOG_ERROR("invalid collation", K(sys_var_id), K(coll_int64), K(*val));
+      }
     } else {
       cs_type = ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64));
     }
@@ -5160,6 +5164,14 @@ int ObBasicSessionInfo::get_character_set_connection(ObCharsetType &character_se
 {
   if (CHARSET_INVALID == (character_set_connection = sys_vars_cache_.get_character_set_connection())) {
     get_charset_sys_var(SYS_VAR_CHARACTER_SET_CONNECTION, character_set_connection);
+  }
+  return OB_SUCCESS;
+}
+
+int ObBasicSessionInfo::get_ncharacter_set_connection(ObCharsetType &ncharacter_set_connection) const
+{
+  if (CHARSET_INVALID == (ncharacter_set_connection = sys_vars_cache_.get_ncharacter_set_connection())) {
+    get_charset_sys_var(SYS_VAR_NCHARACTER_SET_CONNECTION, ncharacter_set_connection);
   }
   return OB_SUCCESS;
 }
