@@ -276,6 +276,7 @@
 #include "ob_expr_spatial_collection.h"
 #include "ob_expr_st_geomfromtext.h"
 #include "ob_expr_st_area.h"
+#include "ob_expr_st_centroid.h"
 #include "ob_expr_st_intersects.h"
 #include "ob_expr_st_x.h"
 #include "ob_expr_st_transform.h"
@@ -1037,7 +1038,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprJoinFilter::eval_in_filter,                                   /* 605 */
   ObExprCurrentScn::eval_current_scn,                                 /* 606 */
   ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
-  ObExprAlignDate4Cmp::eval_align_date4cmp,                            /* 608 */
+  ObExprAlignDate4Cmp::eval_align_date4cmp,                           /* 608 */
+  ObExprSTCentroid::eval_st_centroid,                                 /* 609 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

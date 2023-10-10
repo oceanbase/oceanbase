@@ -16,6 +16,7 @@
 
 #include "lib/geo/ob_geo_dispatcher.h"
 #include "lib/geo/ob_geo_func_area.h"
+#include "lib/geo/ob_geo_func_centroid.h"
 #include "lib/geo/ob_geo_func_correct.h"
 #include "lib/geo/ob_geo_func_intersects.h"
 #include "lib/geo/ob_geo_func_difference.h"
@@ -56,6 +57,7 @@ enum class ObGeoFuncType
   IsValid = 12,
   DistanceSphere = 13,
   Within = 14,
+  Centroid = 15,
   ObGisFuncTypeMax
 };
 
@@ -80,6 +82,12 @@ template <>
 struct ObGeoFunc<ObGeoFuncType::Area>
 {
   typedef ObGeoFuncArea geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Centroid>
+{
+  typedef ObGeoFuncCentroid geo_func;
 };
 
 template <>

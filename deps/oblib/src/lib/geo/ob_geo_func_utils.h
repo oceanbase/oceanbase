@@ -49,7 +49,8 @@ public:
                            GcType *gc,
                            typename GcTreeType::sub_mpt_type *&multi_point,
                            typename GcTreeType::sub_ml_type *&multi_line,
-                           typename GcTreeType::sub_mp_type *&multi_poly);
+                           typename GcTreeType::sub_mp_type *&multi_poly,                            
+                           bool do_union = true);
 
 private:
   template<typename GcTreeType>
@@ -68,10 +69,10 @@ int ObGeoFuncUtils::ob_geo_gc_union(ObIAllocator &allocator,
 {
   INIT_SUCC(ret);
   ObGeometry *func_result = NULL;
-  if (!mps->is_tree() || !mls->is_tree() || !mpols->is_tree()) {
+  if (OB_UNLIKELY(!mps->is_tree() || !mls->is_tree() || !mpols->is_tree())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid geometry type, must be geotree", K(ret));
-  } else {
+  } else if (OB_LIKELY(!(mps->is_empty() && mls->is_empty() && mpols->is_empty()))) {
     MultiPolygonType *mpols_res = OB_NEWx(MultiPolygonType, (&allocator));
     if (OB_ISNULL(mpols_res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -144,14 +145,12 @@ int ObGeoFuncUtils::ob_geo_gc_union(ObIAllocator &allocator,
         mps = static_cast<MultiPointType *>(func_result);
       }
     }
+    // If all multi-geo are empty, we've encountered at least one invalid geometry.
+    if (OB_SUCC(ret) && mps->empty() && mls->empty() && mpols->empty()) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      OB_LOG(WARN, "there is at least one invalid geometry in collection", K(ret));
+    }
   }
-
-  // If all multi-geo are empty, we've encountered at least one invalid geometry.
-  if (OB_SUCC(ret) && mps->empty() && mls->empty() && mpols->empty()) {
-    ret = OB_ERR_GIS_INVALID_DATA;
-    OB_LOG(WARN, "there is at least one invalid geometry in collection", K(ret));
-  }
-
   return ret;
 }
 
@@ -169,7 +168,7 @@ int ObGeoFuncUtils::ob_geo_gc_split(ObIAllocator &allocator,
   typedef typename GcTreeType::sub_ml_type ML;
   typedef typename GcTreeType::sub_mp_type MPO;
 
-  if (!gc.is_tree()) {
+  if (OB_UNLIKELY(!gc.is_tree())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid geometry type, must be geotree", K(ret));
   } else {
@@ -193,7 +192,8 @@ int ObGeoFuncUtils::ob_gc_prepare(const ObGeoEvalCtx &context,
                                   GcType *gc,
                                   typename GcTreeType::sub_mpt_type *&multi_point,
                                   typename GcTreeType::sub_ml_type *&multi_line,
-                                  typename GcTreeType::sub_mp_type *&multi_poly)
+                                  typename GcTreeType::sub_mp_type *&multi_poly,
+                                  bool do_union /* true*/)
 {
   INIT_SUCC(ret);
   ObIAllocator *allocator = context.get_allocator();
@@ -206,7 +206,7 @@ int ObGeoFuncUtils::ob_gc_prepare(const ObGeoEvalCtx &context,
               *static_cast<const GcTreeType *>(tree_visitor.get_geometry()),
               multi_point, multi_line, multi_poly))) {
     OB_LOG(WARN, "failed to do gc split", K(ret));
-  } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *srs, multi_point,
+  } else if (do_union && OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *srs, multi_point,
                                                       multi_line, multi_poly))) {
     OB_LOG(WARN, "failed to do gc union", K(ret));
   } else { /* do nothing */ }
@@ -227,7 +227,7 @@ int ObGeoFuncUtils::ob_geo_gc_split_inner(const GcTreeType &gc,
   typedef typename GcTreeType::sub_mp_type MPO;
 
   ObGeoCRS crs = gc.crs();
-  if (crs != mpt.crs() || crs != ml.crs() || crs != mpo.crs()) {
+  if (OB_UNLIKELY(crs != mpt.crs() || crs != ml.crs() || crs != mpo.crs())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "geometries should in same crs", K(ret), K(crs));
   }

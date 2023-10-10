@@ -1016,6 +1016,7 @@
 #define N_ST_GEOMETRYFROMTEXT               "st_geometryfromtext"
 #define N_ST_INTERSECTION                   "st_intersection"
 #define N_ST_AREA                           "st_area"
+#define N_ST_CENTROID                       "st_centroid"
 #define N_ST_INTERSECTS                     "st_intersects"
 #define N_ST_X                              "st_x"
 #define N_ST_Y                              "st_y"

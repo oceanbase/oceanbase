@@ -103,6 +103,7 @@ extern ObRawExpr *USELESS_POINTER;
   (((op) == T_FUN_SYS_ST_GEOMFROMTEXT) \
     || ((op) == T_FUN_SYS_ST_INTERSECTION) \
     || ((op) == T_FUN_SYS_ST_AREA) \
+    || ((op) == T_FUN_SYS_ST_CENTROID) \
     || ((op) == T_FUN_SYS_ST_INTERSECTS) \
     || ((op) == T_FUN_SYS_ST_X) \
     || ((op) == T_FUN_SYS_ST_Y) \

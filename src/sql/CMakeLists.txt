@@ -610,6 +610,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_geomfromtext.cpp
   engine/expr/ob_expr_st_intersects.cpp
   engine/expr/ob_expr_st_area.cpp
+  engine/expr/ob_expr_st_centroid.cpp
   engine/expr/ob_expr_st_x.cpp
   engine/expr/ob_expr_st_transform.cpp
   engine/expr/ob_expr_priv_st_transform.cpp

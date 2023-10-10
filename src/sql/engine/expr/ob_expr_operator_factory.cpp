@@ -354,6 +354,7 @@
 #include "sql/engine/expr/ob_expr_spatial_collection.h"
 #include "sql/engine/expr/ob_expr_st_geomfromtext.h"
 #include "sql/engine/expr/ob_expr_st_area.h"
+#include "sql/engine/expr/ob_expr_st_centroid.h"
 #include "sql/engine/expr/ob_expr_st_intersects.h"
 #include "sql/engine/expr/ob_expr_st_x.h"
 #include "sql/engine/expr/ob_expr_st_transform.h"
@@ -941,6 +942,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprGeometryCollection);
     REG_OP(ObExprSTGeomFromText);
     REG_OP(ObExprSTArea);
+    REG_OP(ObExprSTCentroid);
     REG_OP(ObExprSTIntersects);
     REG_OP(ObExprSTX);
     REG_OP(ObExprSTY);
@@ -1439,6 +1441,9 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
     } else if (0 == origin_name.case_compare("area")) {
       // area is synonym for st_area
       alias_name = ObString::make_string(N_ST_AREA);
+    } else if (0 == origin_name.case_compare("centroid")) {
+      // centroid is synonym for st_centroid
+      alias_name = ObString::make_string(N_ST_CENTROID);
     } else {
       //do nothing
     }

@@ -64,6 +64,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_func_envelope.cpp
   geo/ob_geo_func_intersects.cpp
   geo/ob_geo_func_area.cpp
+  geo/ob_geo_func_centroid.cpp
   geo/ob_geo_func_correct.cpp
   geo/ob_geo_func_disjoint.cpp
   geo/ob_geo_func_utils.cpp

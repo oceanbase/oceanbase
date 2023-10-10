@@ -210,6 +210,9 @@ int ObExprSpatialCollection::calc_polygon(const ObString wkb_linestring,
     const char *org_data = data;
     if (ObGeoTypeUtil::get_bo_from_wkb(wkb_linestring, bo)) {
       LOG_WARN("fail to get byte order", K(ret), K(wkb_linestring));
+    } else if (ObGeoWkbByteOrder::BigEndian != bo && ObGeoWkbByteOrder::LittleEndian != bo) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_WARN("invalid byte order", K(ret), K(bo));
     } else if (len < WKB_GEO_ELEMENT_NUM_SIZE) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid data len", K(ret), K(len));

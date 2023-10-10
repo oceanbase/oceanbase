@@ -571,7 +571,7 @@ int ObGeoTypeUtil::get_buffered_geo(ObArenaAllocator *allocator,
 
 int ObGeoTypeUtil::get_header_info_from_wkb(const ObString &wkb, ObGeoWkbHeader &header) {
   int ret = OB_SUCCESS;
-  if (wkb.length() < WKB_GEO_SRID_SIZE + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE) {
+  if (OB_UNLIKELY(wkb.length() < WKB_GEO_SRID_SIZE + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE)) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("invalid wkb length", K(wkb.length()));
   } else {
@@ -641,11 +641,23 @@ int ObGeoTypeUtil::get_type_from_wkb(const ObString &wkb, ObGeoType &type)
 int ObGeoTypeUtil::get_bo_from_wkb(const ObString &wkb, ObGeoWkbByteOrder &bo)
 {
   int ret = OB_SUCCESS;
-  ObGeoWkbHeader header;
-  if (OB_FAIL(get_header_info_from_wkb(wkb, header))) {
-    LOG_WARN("failed to get info from wkb", K(ret));
+  if (OB_UNLIKELY(wkb.length() < WKB_GEO_SRID_SIZE + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE)) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid wkb length", K(wkb.length()));
   } else {
-    bo = header.bo_;
+    uint32_t offset = WKB_GEO_SRID_SIZE;
+    uint8_t version = (*(wkb.ptr() + offset));
+    if (IS_GEO_VERSION(version)) {
+      if (GET_GEO_VERSION(version) != GEO_VESION_1) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("invalid wkb version", K(version));
+      } else {
+        offset +=  WKB_VERSION_SIZE;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      bo = static_cast<ObGeoWkbByteOrder>(*(wkb.ptr() + offset));
+    }
   }
   return ret;
 }
