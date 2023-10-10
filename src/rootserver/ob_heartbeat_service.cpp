@@ -71,6 +71,8 @@ int ObHeartbeatService::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("has already inited", KR(ret), K(is_inited_));
+  } else if (MTL_ID() != OB_SYS_TENANT_ID) {
+    // only create hb service threads in sys tenant
   } else if (OB_ISNULL(srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     HBS_LOG_ERROR("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
