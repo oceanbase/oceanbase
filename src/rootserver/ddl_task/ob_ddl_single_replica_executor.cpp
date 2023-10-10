@@ -94,7 +94,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     ObDDLBuildSingleReplicaRequestProxy proxy(*rpc_proxy,
         &obrpc::ObSrvRpcProxy::build_ddl_single_replica_request);
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
-    ObArray<int64_t> idxs;
+    ObArray<int64_t> idxs; // to record the tablets position in build_infos that need to be scheduled.
     const int64_t current_time = ObTimeUtility::current_time();
     int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
     const bool force_renew = true;
@@ -119,6 +119,8 @@ int ObDDLSingleReplicaExecutor::schedule_task()
             LOG_WARN("push back failed", K(ret));
           } else if (OB_FAIL(request_tablet_task_ids.push_back(tablet_task_ids_.at(i)))) {
             LOG_WARN("push back failed", K(ret));
+          } else if (OB_FAIL(idxs.push_back(i))) {
+            LOG_WARN("fail to push back idx", K(ret));
           } else {
             build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
           }
@@ -165,8 +167,6 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       } else if (FALSE_IT(arg.dest_ls_id_ = dest_ls_id)) {
       } else if (OB_FAIL(proxy.call(dest_leader_addr, rpc_timeout, dest_tenant_id_, arg))) {
         LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
-      } else if (OB_FAIL(idxs.push_back(i))) {
-        LOG_WARN("fail to push back idx", K(ret));
       } else {
         LOG_INFO("send build single replica request", K(arg), K(dest_leader_addr));
       }
