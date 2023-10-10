@@ -198,12 +198,7 @@ int64_t ObArchiveSender::get_send_task_status_count() const
 int ObArchiveSender::modify_thread_count(const int64_t thread_count)
 {
   int ret = OB_SUCCESS;
-  int64_t count = thread_count;
-  if (thread_count < MIN_SENDER_THREAD_COUNT) {
-    count = MIN_SENDER_THREAD_COUNT;
-  } else if (thread_count > MAX_SENDER_THREAD_COUNT) {
-    count = MAX_SENDER_THREAD_COUNT;
-  }
+  int64_t count = thread_count + 1;    // dedicate sender 0 thread to advance archive progress and release memory
   if (count == get_thread_count()) {
     // do nothing
   } else if (OB_FAIL(set_thread_count(count))) {
@@ -248,17 +243,19 @@ void ObArchiveSender::run1()
 
 void ObArchiveSender::do_thread_task_()
 {
-  // try consume task
-  {
+  // dedicate sender 0 thread to advance archive progress and release memory
+  // consume archive task
+  if (0 != get_thread_idx()) {
     (void)try_consume_send_task_();
   }
 
   // try free send task
-  {
+  if (0 == get_thread_idx()) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(try_free_send_task_())) {
       ARCHIVE_LOG(WARN, "try free send task failed", K(ret));
     }
+    usleep(100 * 1000L);
   }
 
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
@@ -364,12 +361,8 @@ int ObArchiveSender::try_free_send_task_()
 {
   int ret = OB_SUCCESS;
   const int64_t counts = std::max(1L, task_queue_.size());
-  if (0 != get_thread_idx()) {
-    // only 0 thread affirm and free send task
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < counts; i++) {
-      ret = do_free_send_task_();
-    }
+  for (int64_t i = 0; OB_SUCC(ret) && i < counts; i++) {
+    ret = do_free_send_task_();
   }
   return ret;
 }
