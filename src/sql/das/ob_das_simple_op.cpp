@@ -284,6 +284,7 @@ int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
   ObDASSplitRangesOp *split_ranges_op = nullptr;
   ObEvalCtx eval_ctx(exec_ctx);
   ObDASRef das_ref(eval_ctx, exec_ctx);
+  das_ref.set_mem_attr(ObMemAttr(MTL_ID(), "DASSplitRanges"));
   if (OB_FAIL(das_ref.create_das_task(tablet_loc, DAS_OP_SPLIT_MULTI_RANGES, task_op))) {
     LOG_WARN("prepare das split_multi_ranges task failed", K(ret));
   } else {
@@ -332,6 +333,7 @@ int ObDASSimpleUtils::get_multi_ranges_cost(ObExecContext &exec_ctx,
   ObDASRangesCostOp *ranges_cost_op = nullptr;
   ObEvalCtx eval_ctx(exec_ctx);
   ObDASRef das_ref(eval_ctx, exec_ctx);
+  das_ref.set_mem_attr(ObMemAttr(MTL_ID(), "DASGetRangeCost"));
   if (OB_FAIL(das_ref.create_das_task(tablet_loc, DAS_OP_GET_RANGES_COST, task_op))) {
     LOG_WARN("prepare das get_multi_ranges_cost task failed", K(ret));
   } else {
