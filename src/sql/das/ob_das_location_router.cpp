@@ -743,7 +743,7 @@ int ObDASTabletMapper::get_partition_id_map(ObObjectID partition_id,
 ObDASLocationRouter::ObDASLocationRouter(ObIAllocator &allocator)
   : last_errno_(OB_SUCCESS),
     cur_errno_(OB_SUCCESS),
-    total_retry_cnt_(0),
+    history_retry_cnt_(0),
     cur_retry_cnt_(0),
     all_tablet_list_(allocator),
     succ_tablet_list_(allocator),
@@ -1238,7 +1238,7 @@ int ObDASLocationRouter::block_renew_tablet_location(const ObTabletID &tablet_id
 void ObDASLocationRouter::set_retry_info(const ObQueryRetryInfo* retry_info)
 {
   last_errno_ = retry_info->get_last_query_retry_err();
-  total_retry_cnt_ = retry_info->get_retry_cnt();
+  history_retry_cnt_ = retry_info->get_retry_cnt();
 }
 
 int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)

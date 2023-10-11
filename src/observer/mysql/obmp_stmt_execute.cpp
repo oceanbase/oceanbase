@@ -1496,7 +1496,6 @@ OB_NOINLINE int ObMPStmtExecute::process_retry(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   //create a temporary memory context to process retry, avoid memory bloat caused by retries
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   lib::ContextParam param;
   param.set_mem_attr(MTL_ID(),
       ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
@@ -1524,6 +1523,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
   int ret = OB_SUCCESS;
   // 每次执行不同sql都需要更新
   ctx_.self_add_plan_ = false;
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     // 每次都必须设置为OB_SCCESS, 否则可能会因为没有调用do_process()造成死循环
     ret = OB_SUCCESS;
