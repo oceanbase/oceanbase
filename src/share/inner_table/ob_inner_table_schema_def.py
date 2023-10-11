@@ -6302,7 +6302,7 @@ def_table_schema(
 # 486 : __all_clone_job_history
 # 487 : __wr_system_event
 # 488 : __wr_event_name
-
+# 489 : __all_tenant_scheduler_running_job
 #
 # 余留位置
 ################################################################################
@@ -13006,7 +13006,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12439: __all_virtual_checkpoint_diagnose_info
 # 12440: __all_virtual_wr_system_event
 # 12441: __all_virtual_wr_event_name
-
+# 12442: __all_tenant_scheduler_running_job
 #
 # 余留位置
 #
@@ -13420,6 +13420,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15420: __all_virutal_column_group_maping_history
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
+# 15423: __all_tenant_scheduler_running_job
 # 余留位置
 
 ################################################################################
@@ -48440,7 +48441,7 @@ def_table_schema(
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 # 25269: DBA_WR_SYSTEM_EVENT
 # 25270: DBA_WR_EVENT_NAME
-
+# 25271: DBA_SCHEDULER_RUNNING_JOBS
 # 余留位置
 
 #### End Data Dictionary View
