@@ -24826,11 +24826,23 @@ int ObDDLService::record_tenant_locality_event_history(
     // ALTER_LOCALITY, ROLLBACK_ALTER_LOCALITY(only 4.2), NOP_LOCALITY_OP
     job_type =  ObRsJobType::JOB_TYPE_INVALID == job_type ?
                 ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY : job_type;
-    ret = RS_JOB_CREATE_WITH_RET(job_id, job_type, trans,
+    const int64_t extra_info_len = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    HEAP_VAR(char[extra_info_len], extra_info) {
+      memset(extra_info, 0, extra_info_len);
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
+              "FROM: '%.*s', TO: '%.*s'", tenant_schema.get_previous_locality_str().length(),
+              tenant_schema.get_previous_locality_str().ptr(), tenant_schema.get_locality_str().length(),
+              tenant_schema.get_locality_str().ptr()))) {
+        LOG_WARN("format extra_info failed", KR(ret), K(tenant_schema));
+      } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(job_id, job_type, trans,
         "tenant_name", tenant_schema.get_tenant_name(),
         "tenant_id", tenant_schema.get_tenant_id(),
         "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-        "extra_info", tenant_schema.get_previous_locality_str());
+        "extra_info", ObHexEscapeSqlStr(extra_info)))) {
+        LOG_WARN("failed to create new rs job", KR(ret), K(job_type), K(tenant_schema), K(extra_info));
+      }
+    }
     FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] create a new rs job", KR(ret),
         "tenant_id", tenant_schema.get_tenant_id(), K(job_id), K(alter_locality_op));
   }

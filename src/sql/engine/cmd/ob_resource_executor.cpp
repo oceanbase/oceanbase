@@ -144,15 +144,20 @@ int ObAlterResourceTenantExecutor::execute(
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = nullptr;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
-  const obrpc::ObAlterResourceTenantArg &arg = stmt.get_arg();
-
-  if (OB_UNLIKELY(nullptr == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)))) {
+  obrpc::ObAlterResourceTenantArg &arg = stmt.get_arg();
+  ObString first_stmt;
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+    SQL_ENG_LOG(WARN, "fail to get first stmt" , KR(ret));
+  } else if (OB_UNLIKELY(nullptr == (task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get task executor context failed", KR(ret));
   } else if (OB_UNLIKELY(nullptr == (common_rpc_proxy = task_exec_ctx->get_common_rpc()))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get common rpc proxy failed", KR(ret));
-  } else if (OB_SUCCESS != (ret = common_rpc_proxy->alter_resource_tenant(arg))) {
+  } else {
+    arg.ddl_stmt_str_ = first_stmt;
+  }
+  if (FAILEDx(common_rpc_proxy->alter_resource_tenant(arg))) {
     SQL_ENG_LOG(WARN, "fail to send alter resource tenant rpc", KR(ret));
   }
   return ret;

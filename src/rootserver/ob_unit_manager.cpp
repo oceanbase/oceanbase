@@ -1428,11 +1428,12 @@ int ObUnitManager::determine_alter_resource_tenant_unit_num_type(
     const uint64_t tenant_id,
     const common::ObIArray<share::ObResourcePool *> &pools,
     const int64_t new_unit_num,
+    int64_t &old_unit_num,
     AlterUnitNumType &alter_unit_num_type)
 {
   int ret = OB_SUCCESS;
   int64_t complete_unit_num_per_zone = 0;
-  int64_t current_unit_num_per_zone = 0;
+  old_unit_num = 0;
   bool has_unit_num_modification = true;
 
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
@@ -1440,13 +1441,13 @@ int ObUnitManager::determine_alter_resource_tenant_unit_num_type(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
   } else if (OB_FAIL(get_tenant_pools_complete_unit_num_and_status(
           tenant_id, pools, complete_unit_num_per_zone,
-          current_unit_num_per_zone, has_unit_num_modification))) {
+          old_unit_num, has_unit_num_modification))) {
     LOG_WARN("fail to get tenant pools complete unit num and status", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(complete_unit_num_per_zone <= 0 || current_unit_num_per_zone <= 0)) {
+  } else if (OB_UNLIKELY(complete_unit_num_per_zone <= 0 || old_unit_num <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected complete unit num", KR(ret),
-             K(complete_unit_num_per_zone), K(current_unit_num_per_zone));
-  } else if (current_unit_num_per_zone == new_unit_num) {
+             K(complete_unit_num_per_zone), K(old_unit_num));
+  } else if (old_unit_num == new_unit_num) {
     // when the new unit num is equal to the current unit num, do nothing and return
     alter_unit_num_type = AUN_NOP;
   } else {
@@ -1459,7 +1460,7 @@ int ObUnitManager::determine_alter_resource_tenant_unit_num_type(
         alter_unit_num_type = AUN_MAX;
       }
     } else { // no unit num change
-      if (new_unit_num > current_unit_num_per_zone) {
+      if (new_unit_num > old_unit_num) {
         alter_unit_num_type = AUN_EXPAND;
       } else {
         alter_unit_num_type = AUN_SHRINK;
@@ -1472,7 +1473,9 @@ int ObUnitManager::determine_alter_resource_tenant_unit_num_type(
 int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
     const uint64_t tenant_id,
     const int64_t new_unit_num,
+    const int64_t old_unit_num,
     const AlterUnitNumType alter_unit_num_type,
+    const common::ObString &sql_text,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -1487,7 +1490,8 @@ int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
     if (AUN_EXPAND == alter_unit_num_type) {
       // skip, no rs job for expand task in version 4.1
       // we do not need to rollback rs job, since in 4.1, there is no inprogress rs job at this step
-    } else if (OB_FAIL(register_shrink_tenant_pool_unit_num_rs_job(tenant_id, new_unit_num, trans))) {
+    } else if (OB_FAIL(register_shrink_tenant_pool_unit_num_rs_job(tenant_id,
+            new_unit_num, old_unit_num, sql_text, trans))) {
       LOG_WARN("fail to execute register_shrink_tenant_pool_unit_num_rs_job", KR(ret),
           K(tenant_id), K(new_unit_num));
     }
@@ -1499,9 +1503,11 @@ int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
       LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
       (void) print_user_error_(tenant_id);
     } else if(OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
-      LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
+      LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job",
+          KR(ret), K(tenant_id), K(sql_text));
     } else {
-      ret = create_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num, job_id, trans);
+      ret = create_alter_resource_tenant_unit_num_rs_job(tenant_id,
+          new_unit_num, old_unit_num, job_id, sql_text, trans);
       FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job", "type",
           AUN_EXPAND == alter_unit_num_type ? "EXPAND UNIT_NUM" : "SHRINK UNIT_NUM",
           KR(ret), K(tenant_id), K(job_id), K(alter_unit_num_type));
@@ -1533,6 +1539,8 @@ int ObUnitManager::find_alter_resource_tenant_unit_num_rs_job(
 int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
     const uint64_t tenant_id,
     const int64_t new_unit_num,
+    const int64_t old_unit_num,
+    const common::ObString &sql_text,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -1546,11 +1554,13 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
     ret = create_alter_resource_tenant_unit_num_rs_job(
         tenant_id,
         new_unit_num,
+        old_unit_num,
         job_id,
+        sql_text,
         trans,
         JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM);
     FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
-        KR(ret), K(tenant_id), K(job_id));
+        KR(ret), K(tenant_id), K(job_id), K(sql_text));
   }
   return ret ;
 }
@@ -1600,7 +1610,9 @@ int ObUnitManager::cancel_alter_resource_tenant_unit_num_rs_job(
 int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
     const uint64_t tenant_id,
     const int64_t new_unit_num,
+    const int64_t old_unit_num,
     int64_t &job_id,
+    const common::ObString &sql_text,
     common::ObMySQLTransaction &trans,
     ObRsJobType job_type)
 {
@@ -1612,7 +1624,8 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
     int64_t pos = 0;
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObSimpleTenantSchema *tenant_schema;
-    if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos, "new_unit_num: %ld", new_unit_num))) {
+    if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
+            "FROM: '%ld', TO: '%ld'", old_unit_num, new_unit_num))) {
       if (OB_SIZE_OVERFLOW == ret) {
         LOG_WARN("format to buff size overflow", K(ret));
       } else {
@@ -1634,7 +1647,8 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
         trans,
         "tenant_id", tenant_id,
         "tenant_name", tenant_schema->get_tenant_name(),
-        "extra_info", extra_info))) {
+        "sql_text", ObHexEscapeSqlStr(sql_text),
+        "extra_info", ObHexEscapeSqlStr(extra_info)))) {
       LOG_WARN("fail to create rs job", KR(ret), K(tenant_id), K(job_type));
     }
   }
@@ -1644,6 +1658,8 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
 int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
     const uint64_t tenant_id,
     const int64_t new_unit_num,
+    const int64_t old_unit_num,
+    const common::ObString &sql_text,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -1662,8 +1678,10 @@ int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
     (void) print_user_error_(tenant_id);
   } else if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
     LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(create_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num, job_id, trans))) {
-    LOG_WARN("fail to execute create_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id), K(new_unit_num));
+  } else if (OB_FAIL(create_alter_resource_tenant_unit_num_rs_job(tenant_id,
+          new_unit_num, old_unit_num, job_id, sql_text, trans))) {
+    LOG_WARN("fail to execute create_alter_resource_tenant_unit_num_rs_job", KR(ret),
+        K(tenant_id), K(new_unit_num), K(old_unit_num), K(sql_text));
   }
   FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] rollback a SHRINK UNIT_NUM rs job",
       KR(ret), K(tenant_id), K(job_id), K(new_unit_num));
@@ -1789,7 +1807,9 @@ int ObUnitManager::expand_tenant_pools_unit_num_(
     const uint64_t tenant_id,
     common::ObIArray<share::ObResourcePool *> &pools,
     const int64_t new_unit_num,
-    const char *module)
+    const int64_t old_unit_num,
+    const char *module,
+    const common::ObString &sql_text)
 {
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
@@ -1803,8 +1823,10 @@ int ObUnitManager::expand_tenant_pools_unit_num_(
     LOG_WARN("fail to generate new unit group id array", KR(ret), K(pools), K(new_unit_num));
   } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("fail to start transaction", KR(ret));
-  } else if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num, AUN_EXPAND, trans))) {
-    LOG_WARN("fail to register shrink tenant pool unit num rs job", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id,
+          new_unit_num, old_unit_num, AUN_EXPAND, sql_text, trans))) {
+    LOG_WARN("fail to register shrink tenant pool unit num rs job", KR(ret),
+        K(tenant_id), K(sql_text), K(old_unit_num), K(new_unit_num));
   } else {
     share::ObResourcePool new_pool;
     for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
@@ -1997,7 +2019,9 @@ int ObUnitManager::shrink_tenant_pools_unit_num(
     const uint64_t tenant_id,
     common::ObIArray<share::ObResourcePool *> &pools,
     const int64_t new_unit_num,
-    const common::ObIArray<uint64_t> &delete_unit_group_id_array)
+    const int64_t old_unit_num,
+    const common::ObIArray<uint64_t> &delete_unit_group_id_array,
+     const common::ObString &sql_text)
 {
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
@@ -2017,8 +2041,10 @@ int ObUnitManager::shrink_tenant_pools_unit_num(
   } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("fail to start transaction", KR(ret));
   } else {
-    if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num, AUN_SHRINK, trans))) {
-      LOG_WARN("fail to register shrink tenant pool unit num rs job", KR(ret), K(tenant_id));
+    if (OB_FAIL(register_alter_resource_tenant_unit_num_rs_job(tenant_id,
+            new_unit_num, old_unit_num, AUN_SHRINK, sql_text, trans))) {
+      LOG_WARN("fail to register shrink tenant pool unit num rs job", KR(ret),
+          K(tenant_id), K(new_unit_num), K(sql_text), K(old_unit_num));
     } else {
       share::ObResourcePool new_pool;
       for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
@@ -2103,7 +2129,9 @@ int ObUnitManager::shrink_tenant_pools_unit_num(
 int ObUnitManager::rollback_tenant_shrink_pools_unit_num(
     const uint64_t tenant_id,
     common::ObIArray<share::ObResourcePool *> &pools,
-    const int64_t new_unit_num)
+    const int64_t new_unit_num,
+    const int64_t old_unit_num,
+    const common::ObString &sql_text)
 {
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
@@ -2113,8 +2141,9 @@ int ObUnitManager::rollback_tenant_shrink_pools_unit_num(
   } else if (OB_FAIL(trans.start(proxy_, OB_SYS_TENANT_ID))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
-    if (OB_FAIL(rollback_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num, trans))) {
-      LOG_WARN("rollback rs_job failed ", KR(ret), K(new_unit_num));
+    if (OB_FAIL(rollback_alter_resource_tenant_unit_num_rs_job(tenant_id, new_unit_num,
+            old_unit_num, sql_text, trans))) {
+      LOG_WARN("rollback rs_job failed ", KR(ret), K(new_unit_num), K(old_unit_num), K(sql_text));
     } else {
       share::ObResourcePool new_pool;
       for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
@@ -2201,7 +2230,8 @@ int ObUnitManager::rollback_tenant_shrink_pools_unit_num(
 int ObUnitManager::alter_resource_tenant(
     const uint64_t tenant_id,
     const int64_t new_unit_num,
-    const common::ObIArray<uint64_t> &delete_unit_group_id_array)
+    const common::ObIArray<uint64_t> &delete_unit_group_id_array,
+    const common::ObString &sql_text)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start to alter resource tenant", K(tenant_id));
@@ -2210,6 +2240,7 @@ int ObUnitManager::alter_resource_tenant(
   common::ObArray<share::ObResourcePool *> *pools = nullptr;
   const char *module = "ALTER_RESOURCE_TENANT";
   AlterUnitNumType alter_unit_num_type = AUN_MAX;
+  int64_t old_unit_num = 0;
 
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_INNER_STAT_ERROR;
@@ -2223,7 +2254,7 @@ int ObUnitManager::alter_resource_tenant(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pools ptr is null", KR(ret), K(tenant_id));
   } else if (OB_FAIL(determine_alter_resource_tenant_unit_num_type(
-          tenant_id, *pools, new_unit_num, alter_unit_num_type))) {
+          tenant_id, *pools, new_unit_num, old_unit_num, alter_unit_num_type))) {
     LOG_WARN("fail to do determine alter resource tenant unit num type", KR(ret));
   } else if (AUN_NOP == alter_unit_num_type) {
     if (delete_unit_group_id_array.count() > 0) {
@@ -2235,8 +2266,9 @@ int ObUnitManager::alter_resource_tenant(
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollback shrink pool unit num combined with deleting unit");
     } else if (OB_FAIL(rollback_tenant_shrink_pools_unit_num(
-            tenant_id, *pools, new_unit_num))) {
-      LOG_WARN("fail to rollback shrink pool unit num", K(ret), K(new_unit_num));
+            tenant_id, *pools, new_unit_num, old_unit_num, sql_text))) {
+      LOG_WARN("fail to rollback shrink pool unit num", K(ret),
+          K(new_unit_num), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_EXPAND == alter_unit_num_type) {
     // in 4.1, if enable_rebalance is false, this op can be executed successfully
@@ -2245,15 +2277,15 @@ int ObUnitManager::alter_resource_tenant(
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand pool unit num combined with deleting unit");
     } else if (OB_FAIL(expand_tenant_pools_unit_num_(
-            tenant_id, *pools, new_unit_num, module))) {
+            tenant_id, *pools, new_unit_num, old_unit_num, module, sql_text))) {
       LOG_WARN("fail to expend pool unit num", K(module), KR(ret), K(new_unit_num), K(tenant_id),
-          KPC(pools));
+          KPC(pools), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_SHRINK == alter_unit_num_type) {
     // both 4.1 and 4.2 do not allow this op when enable_rebalance is false.
-    if (OB_FAIL(shrink_tenant_pools_unit_num(
-            tenant_id, *pools, new_unit_num, delete_unit_group_id_array))) {
-      LOG_WARN("fail to shrink pool unit num", K(ret), K(new_unit_num));
+    if (OB_FAIL(shrink_tenant_pools_unit_num(tenant_id, *pools, new_unit_num,
+            old_unit_num, delete_unit_group_id_array, sql_text))) {
+      LOG_WARN("fail to shrink pool unit num", K(ret), K(new_unit_num), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_MAX == alter_unit_num_type) {
     ret = OB_OP_NOT_ALLOW;
