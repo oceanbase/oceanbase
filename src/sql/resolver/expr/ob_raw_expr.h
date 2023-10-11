@@ -2363,6 +2363,7 @@ public:
   bool has_nl_param() const { return has_nl_param_; }
   void set_is_multiset(bool is_multiset) { is_multiset_ = is_multiset; }
   bool is_multiset() const {return is_multiset_; }
+  bool is_scalar() const { return !is_set_ && !is_multiset_ && get_output_column() == 1; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;

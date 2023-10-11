@@ -835,7 +835,7 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
     } else {
       const ObDatum &d = *subquery_datum;
       ObObj v, v2;
-      if (OB_FAIL(d.to_obj(v, expr.args_[0]->obj_meta_, expr.args_[0]->obj_datum_map_))) {
+      if (OB_FAIL(d.to_obj(v, subquery_row[0]->obj_meta_, subquery_row[0]->obj_datum_map_))) {
         LOG_WARN("failed to get obj", K(ret), K(d));
       } else if (info->not_null_) {
         if (v.is_null()) {
