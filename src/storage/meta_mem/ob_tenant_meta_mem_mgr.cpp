@@ -688,7 +688,7 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
   if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
     LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
   }
-  LOG_DEBUG("gc tablet", K(ret), KP(tablet), K(common::lbt()));
+  FLOG_INFO("gc tablet", K(ret), KP(tablet), K(common::lbt()));
   return ret;
 }
 
@@ -744,7 +744,7 @@ int ObTenantMetaMemMgr::gc_tablets_in_queue(bool &all_tablet_cleaned)
         ret = OB_SUCCESS; // continue to gc other tablet
       } else {
         ++gc_tablets_cnt;
-        LOG_DEBUG("succeed to gc tablet", K(ret), KP(tablet));
+        FLOG_INFO("succeed to gc tablet", K(ret), KP(tablet));
       }
       tablet = static_cast<ObTablet *>(next_tablet);
     }
