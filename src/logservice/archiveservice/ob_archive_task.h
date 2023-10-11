@@ -68,11 +68,13 @@ public:
   int init(const uint64_t tenant_id,
            const ObLSID &id,
            const ArchiveWorkStation &station,
+           const share::SCN &base_scn,
            const LSN &start_lsn,
            const LSN &end_lsn);
   uint64_t get_tenant_id() const { return tenant_id_; }
   ObLSID get_ls_id() const { return id_; }
-  const ArchiveWorkStation &get_station() { return station_; }
+  const ArchiveWorkStation &get_station() const { return station_; }
+  const share::SCN &get_base_scn() const { return base_scn_; }
   const LSN &get_start_offset() const { return start_offset_; }
   const LSN &get_cur_offset() const { return cur_offset_; }
   const LSN &get_end_offset() const { return end_offset_; }
@@ -97,6 +99,7 @@ public:
                K_(station),
                K_(cur_piece),
                K_(next_piece),
+               K_(base_scn),
                K_(start_offset),
                K_(end_offset),
                K_(cur_offset),
@@ -111,6 +114,7 @@ private:
   ArchiveWorkStation station_;
   ObArchivePiece cur_piece_;    // 该份数据属于ObArchivePiece目录
   ObArchivePiece next_piece_;
+  share::SCN base_scn_;
   LSN start_offset_; // 起始拉日志文件起始offset
   LSN end_offset_;   // 拉取日志文件结束offset(如果是拉取完整文件任务，该值为infoblock起点)
   LSN cur_offset_;

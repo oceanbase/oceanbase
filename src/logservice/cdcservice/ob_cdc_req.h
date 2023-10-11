@@ -326,6 +326,8 @@ public:
     LAGGED_FOLLOWER = 0,         // lagged follower
     LOG_NOT_IN_THIS_SERVER = 1,  // this server does not server this log
     LS_OFFLINED = 2,             // LS offlined
+    ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF = 3,   // Reach Max LSN in archive log but cannot switch
+                                 // to palf because ls not exists in current server
   };
 public:
   ObCdcLSFetchLogResp() { reset(); }
@@ -401,6 +403,9 @@ public:
     pos_ += want_size;
     log_num_++;
   }
+  bool log_reach_threshold() const {
+    return pos_ > FETCH_BUF_THRESHOLD;
+  }
   bool is_valid() const
   {
     return pos_ >= 0 && pos_ <= FETCH_BUF_LEN;
@@ -420,6 +425,7 @@ public:
 
 private:
   static const int64_t FETCH_BUF_LEN = palf::MAX_LOG_BUFFER_SIZE * 8;
+  static const int64_t FETCH_BUF_THRESHOLD = FETCH_BUF_LEN - palf::MAX_LOG_BUFFER_SIZE;
 
 private:
   int64_t rpc_ver_;

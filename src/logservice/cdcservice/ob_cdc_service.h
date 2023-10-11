@@ -18,6 +18,7 @@
 #include "ob_cdc_start_lsn_locator.h"
 #include "ob_cdc_struct.h"                      // ClientLSKey, ClientLSCtx, ClientLSCtxMap
 #include "logservice/restoreservice/ob_remote_log_iterator.h"
+#include "logservice/ob_log_external_storage_handler.h"   // ObLogExternalStorageHandler
 
 namespace oceanbase
 {
@@ -42,6 +43,29 @@ public:
   }
 private:
   int64_t cur_ts_;
+};
+
+class ExpiredArchiveClientLSFunctor
+{
+  static constexpr int64_t LS_ARCHIVE_ENTRY_EXPIRED_TIME = 10L * 60 * 1000 * 1000; // 10 min;
+public:
+  explicit ExpiredArchiveClientLSFunctor(const int64_t current_time);
+  ~ExpiredArchiveClientLSFunctor();
+
+  bool operator()(const ClientLSKey &key, ClientLSCtx *value);
+
+  int64_t get_other_client_ls_cnt() const {
+    return other_client_ls_cnt_;
+  }
+
+  int64_t get_valid_client_ls_cnt() const {
+    return valid_client_ls_cnt_;
+  }
+
+private:
+  int64_t current_time_us_;
+  int64_t valid_client_ls_cnt_;
+  int64_t other_client_ls_cnt_;
 };
 
 class ObCdcService: public lib::TGRunnable
@@ -97,6 +121,9 @@ public:
 private:
   int query_tenant_archive_info_();
   int recycle_expired_ctx_(const int64_t cur_ts);
+
+  int resize_log_ext_handler_();
+
   void do_monitor_stat_(const int64_t start_ts,
       const int64_t end_ts,
       const int64_t send_ts,
@@ -119,6 +146,7 @@ private:
   common::ObSpinLock dest_info_lock_;
   ClientLSCtxMap ls_ctx_map_;
   archive::LargeBufferPool large_buffer_pool_;
+  logservice::ObLogExternalStorageHandler log_ext_handler_;
 };
 
 } // namespace cdc

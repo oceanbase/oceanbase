@@ -21,6 +21,10 @@
 #include "logservice/archiveservice/large_buffer_pool.h" // LargeBufferPool
 namespace oceanbase
 {
+namespace logservice
+{
+class ObLogExternalStorageHandler;
+}
 namespace cdc
 {
 using oceanbase::share::ObLSID;
@@ -35,7 +39,8 @@ public:
   ObCdcStartLsnLocator();
   ~ObCdcStartLsnLocator();
   int init(const uint64_t tenant_id,
-      archive::LargeBufferPool *large_buffer_pool);
+      archive::LargeBufferPool *large_buffer_pool,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   void destroy();
   int req_start_lsn_by_ts_ns(const ObLocateLSNByTsReq &req_msg,
       ObLocateLSNByTsResp &result,
@@ -61,6 +66,7 @@ private:
   bool is_inited_;
   uint64_t tenant_id_;
   archive::LargeBufferPool *large_buffer_pool_;
+  logservice::ObLogExternalStorageHandler *log_ext_handler_;
 };
 
 } // namespace cdc

@@ -13,7 +13,7 @@
 #include "ob_start_archive_helper.h"
 #include "lib/ob_define.h"                  // OB_INVALID_FILE_ID
 #include "lib/ob_errno.h"
-#include "logservice/archiveservice/ob_archive_define.h"
+#include "ob_archive_define.h"
 #include "logservice/ob_log_handler.h"
 #include "logservice/ob_log_service.h"      // ObLogService
 #include "logservice/palf/log_define.h"
@@ -47,6 +47,7 @@ StartArchiveHelper::StartArchiveHelper(const ObLSID &id,
     piece_interval_(piece_interval),
     genesis_scn_(genesis_scn),
     base_piece_id_(base_piece_id),
+    max_offset_(),
     start_offset_(),
     archive_file_id_(OB_INVALID_ARCHIVE_FILE_ID),
     archive_file_offset_(OB_INVALID_ARCHIVE_FILE_OFFSET),
@@ -65,6 +66,7 @@ StartArchiveHelper::~StartArchiveHelper()
   piece_interval_ = 0;
   genesis_scn_.reset();
   base_piece_id_ = 0;
+  max_offset_.reset();
   start_offset_.reset();
   archive_file_id_ = OB_INVALID_ARCHIVE_FILE_ID;
   archive_file_offset_ = OB_INVALID_ARCHIVE_FILE_OFFSET;
@@ -80,6 +82,7 @@ bool StartArchiveHelper::is_valid() const
     && station_.is_valid()
     && piece_.is_valid()
     && max_archived_scn_.is_valid()
+    && max_offset_.is_valid()
     && (log_gap_exist_
         || (start_offset_.is_valid()
           && OB_INVALID_ARCHIVE_FILE_ID != archive_file_id_
@@ -105,6 +108,14 @@ int StartArchiveHelper::handle()
     ARCHIVE_LOG(WARN, "locate round start archive point failed", K(ret));
   }
 
+  if (OB_SUCC(ret)) {
+    palf::PalfHandleGuard guard;
+    if (OB_FAIL(MTL(ObLogService*)->open_palf(id_, guard))) {
+      ARCHIVE_LOG(WARN, "open_palf failed", K(id_));
+    } else if (OB_FAIL(guard.get_end_lsn(max_offset_))) {
+      ARCHIVE_LOG(WARN, "get end_lsn failed", K(id_));
+    }
+  }
   return ret;
 }
 

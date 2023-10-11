@@ -1970,6 +1970,7 @@ DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process sessio
 DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");
 DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARCHIVELOG mode");
 DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
+DEFINE_ERROR_DEP(OB_CLOUD_OBJECT_NOT_APPENDABLE, -9098, -1, "HY000", "normal object in object_storage(oss,cos,etc.) can't be appended content");
 // end of backup and restore error codes 9001 ~ 9099
 
 DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");

@@ -315,3 +315,12 @@ The read and write operation on configs in gc handler should be mutually exclusi
 ## latch: cdcservice clientlsctx lock wait
 
 The read and write operation on source(RemoteLogParent) in ClientLSCtx should be mutually exclusive.
+
+## thread_cond: log external storage io task lock wait
+The read and write operation on ObLogExternalStorageIOTaskCtx should be mutually exclusive.
+
+## rwlock: log external storage io handler rw lock wait
+The read and write operation on ObLogExternalStorageIOHandler should be mutually exclusive.
+
+## rwlock: log external storage io handler spin lock wait
+The read and write operation on ObLogExternalStorageIOHandler should be mutually exclusive.

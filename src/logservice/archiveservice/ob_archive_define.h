@@ -55,15 +55,13 @@ const int64_t MAX_FETCH_TASK_NUM = 4;
 
 const int64_t MIN_FETCHER_THREAD_COUNT = 1;
 const int64_t MAX_FETCHER_THREAD_COUNT = 3;
-const int64_t MIN_SENDER_THREAD_COUNT = 1;
-const int64_t MAX_SENDER_THREAD_COUNT = 10;
 
 const int64_t DEFAULT_LS_RECORD_INTERVAL = 30 * 60 * 1000 * 1000L;   // 30min
 const int64_t MAX_META_RECORD_DATA_SIZE = 2 * 1024 * 1024L;
 const int64_t MAX_META_RECORD_FILE_SIZE = COMMON_HEADER_SIZE + MAX_META_RECORD_DATA_SIZE;  // 2M + 4K
 
-const int64_t MAX_LS_ARCHIVE_MEMORY_LIMIT = 3 * MAX_LOG_FILE_SIZE;
-const int64_t MAX_LS_SEND_TASK_COUNT_LIMIT = 4;
+const int64_t MAX_LS_ARCHIVE_MEMORY_LIMIT = 4 * MAX_LOG_FILE_SIZE;
+const int64_t MAX_LS_SEND_TASK_COUNT_LIMIT = 6;
 // ================================================= //
 
 // 日志流leader授权备份zone内server归档, leader通过lease机制将授权下发给server

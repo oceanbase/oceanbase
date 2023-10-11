@@ -159,6 +159,7 @@ private:
   int push_log_(const share::ObLSID &id,
       const ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
+      const bool is_full_file,
       const int64_t offset,
       char *data,
       const int64_t data_len);

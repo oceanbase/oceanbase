@@ -49,6 +49,8 @@ ob_set_subtarget(ob_logservice common
   ob_server_log_block_mgr.cpp
   ob_log_flashback_service.cpp
   ob_net_keepalive_adapter.cpp
+  ob_log_external_storage_handler.cpp
+  ob_log_external_storage_io_task.cpp
 )
 
 ob_set_subtarget(ob_logservice common_mixed

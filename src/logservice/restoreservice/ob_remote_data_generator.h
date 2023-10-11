@@ -40,6 +40,7 @@ class LogGroupEntry;
 }
 namespace logservice
 {
+class ObLogExternalStorageHandler;
 using oceanbase::palf::LSN;
 using oceanbase::palf::LogGroupEntry;
 using oceanbase::share::ObLSID;
@@ -142,12 +143,14 @@ public:
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const share::SCN &end_scn);
+      const share::SCN &end_scn,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   virtual ~RemoteDataGenerator();
 
 public:
   virtual int next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size) = 0;
   virtual int update_max_lsn(const palf::LSN &lsn) = 0;
+  virtual int advance_step_lsn(const palf::LSN &lsn) = 0;
   bool is_valid() const;
   bool is_fetch_to_end() const;
   TO_STRING_KV(K_(tenant_id), K_(id), K_(start_lsn), K_(next_fetch_lsn), K_(end_scn),
@@ -155,7 +158,7 @@ public:
 
 protected:
   int process_origin_data_(char *origin_buf, const int64_t origin_buf_size, char *buf, int64_t &buf_size);
-  int update_max_lsn_(const palf::LSN &lsn);
+  int update_next_fetch_lsn_(const palf::LSN &lsn);
 
 protected:
   uint64_t tenant_id_;
@@ -165,6 +168,7 @@ protected:
   share::SCN end_scn_;
   LSN end_lsn_;
   bool to_end_;
+  logservice::ObLogExternalStorageHandler *log_ext_handler_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RemoteDataGenerator);
@@ -178,12 +182,14 @@ public:
       const LSN &start_lsn,
       const LSN &end_lsn,
       const share::SCN &end_scn,
-      const ObAddr &server);
+      const ObAddr &server,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   virtual ~ServiceDataGenerator();
 
 public:
   int next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size);
   int update_max_lsn(const palf::LSN &lsn) { UNUSED(lsn); return common::OB_SUCCESS; }
+  int advance_step_lsn(const palf::LSN &lsn) override { UNUSED(lsn); return common::OB_SUCCESS;}
   INHERIT_TO_STRING_KV("RemoteDataGenerator", RemoteDataGenerator, K_(server), K_(result));
 
 private:
@@ -210,37 +216,98 @@ public:
       share::ObBackupDest *dest,
       ObLogArchivePieceContext *piece_context,
       char *buf,
-      const int64_t buf_size);
+      const int64_t buf_size,
+      const int64_t single_read_size,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   ~LocationDataGenerator();
   int next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size);
   int update_max_lsn(const palf::LSN &lsn);
+  int advance_step_lsn(const palf::LSN &lsn) override;
   INHERIT_TO_STRING_KV("RemoteDataGenerator", RemoteDataGenerator,
       K_(pre_scn), K_(base_lsn), K_(data_len), KPC_(dest), KPC_(piece_context),
-      K_(dest_id), K_(round_id), K_(piece_id), K_(max_file_id), K_(max_file_offset));
+      K_(cur_file));
 
+private:
+  struct FileDesc
+  {
+    //bool inited_;
+    bool is_origin_data_;
+    int64_t dest_id_;
+    int64_t round_id_;
+    int64_t piece_id_;
+    int64_t file_id_;
+    int64_t base_file_offset_;
+    int64_t max_file_offset_;
+    int64_t cur_offset_;
+    palf::LSN base_lsn_;
+    palf::LSN cur_lsn_;
+
+    FileDesc() { reset(); }
+    virtual ~FileDesc() { reset(); }
+    void reset();
+    bool is_valid() const;
+    bool match(const int64_t dest_id,
+        const int64_t round_id,
+        const int64_t piece_id,
+        const palf::LSN &lsn) const;
+    int set(const bool origin_data,
+        const int64_t dest_id,
+        const int64_t round_id,
+        const int64_t piece_id,
+        const int64_t file_id,
+        const int64_t base_file_offset,
+        const int64_t max_file_offset,
+        const palf::LSN &base_lsn);
+    int advance(const palf::LSN &cur_lsn);
+
+    TO_STRING_KV(K_(is_origin_data),
+        K_(dest_id),
+        K_(round_id),
+        K_(piece_id),
+        K_(file_id),
+        K_(base_file_offset),
+        K_(max_file_offset),
+        K_(cur_offset),
+        K_(base_lsn),
+        K_(cur_lsn));
+  };
 private:
   bool is_valid() const;
   int fetch_log_from_location_(char *&buf, int64_t &siz);
-  int get_precise_file_and_offset_(
+  int get_precise_file_and_offset_(int64_t &dest_id,
+      int64_t &round_id,
+      int64_t &piece_id,
       int64_t &file_id,
       int64_t &file_offset,
       palf::LSN &lsn,
       share::ObBackupPath &piece_path);
+  void cal_read_size_(const int64_t dest_id,
+      const int64_t round_id,
+      const int64_t piece_id,
+      const int64_t file_id,
+      const int64_t file_offset,
+      int64_t &size);
+  int read_file_(const ObString &base,
+    const share::ObBackupStorageInfo *storage_info,
+    const share::ObLSID &id,
+    const int64_t file_id,
+    const int64_t offset,
+    char *data,
+    const int64_t data_len,
+    int64_t &real_read_size);
 private:
   share::SCN pre_scn_;
+  // base_lsn_ is the start_lsn from the archive file, while the next_fetch_lsn_ is the start_lsn to fetch,
+  // when the piece context does not match the log to fetch, the two variables are not equal
   palf::LSN base_lsn_;
   int64_t data_len_;
   char *buf_;
   int64_t buf_size_;
+  int64_t single_read_size_;
   share::ObBackupDest *dest_;
   ObLogArchivePieceContext *piece_context_;
 
-  int64_t dest_id_;
-  int64_t round_id_;
-  int64_t piece_id_;
-  // 读取该归档文件信息
-  int64_t max_file_id_;
-  int64_t max_file_offset_;
+  FileDesc cur_file_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LocationDataGenerator);
@@ -259,11 +326,13 @@ public:
       const share::SCN &end_scn,
       const int64_t piece_index,
       const int64_t min_file_id,
-      const int64_t max_file_id);
+      const int64_t max_file_id,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
 
   virtual ~RawPathDataGenerator();
   int next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size);
   int update_max_lsn(const palf::LSN &lsn) { UNUSED(lsn); return common::OB_SUCCESS; }
+  int advance_step_lsn(const palf::LSN &lsn) override { UNUSED(lsn); return common::OB_SUCCESS;}
 
   INHERIT_TO_STRING_KV("RemoteDataGenerator", RemoteDataGenerator, K_(array), K_(data_len),
       K_(file_id), K_(base_lsn), K_(index), K_(min_file_id), K_(max_file_id));

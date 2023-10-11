@@ -380,6 +380,7 @@ public:
     memory_size_ = memory_size;
     return orig_size;
   }
+
   int64_t get_memory_size() { return memory_size_; }
   bool update_mini_mode(bool mini_mode)
   {

@@ -97,7 +97,8 @@ public:
   // 获取fetch进度
   int get_fetcher_progress(const ArchiveWorkStation &station,
                          palf::LSN &offset,
-                         share::SCN &scn);
+                         share::SCN &scn,
+                         int64_t &last_fetch_timestamp);
 
   int compensate_piece(const ArchiveWorkStation &station,
                        const int64_t next_compensate_piece_id);
@@ -125,6 +126,8 @@ public:
   int get_max_archive_info(const ArchiveKey &key,
                            ObLSArchivePersistInfo &info);
 
+  int get_max_no_limit_lsn(const ArchiveWorkStation &station, LSN &lsn);
+
   int mark_error(const ArchiveKey &key);
 
   int print_self();
@@ -150,14 +153,15 @@ private:
     ~ArchiveDest();
 
   public:
-    int init(const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
+    int init(const LSN &max_no_limit_lsn,
+        const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
         const int64_t file_offset, const share::ObArchivePiece &piece,
         const share::SCN &max_archived_scn, const bool is_log_gap_exist,
         ObArchiveAllocator *allocator);
     void destroy();
     void get_sequencer_progress(LSN &offset) const;
     int update_sequencer_progress(const int64_t size, const LSN &offset);
-    void get_fetcher_progress(LogFileTuple &tuple) const;
+    void get_fetcher_progress(LogFileTuple &tuple, int64_t &last_fetch_timestamp) const;
     int update_fetcher_progress(const share::SCN &round_start_scn, const LogFileTuple &tuple);
     int push_fetch_log(ObArchiveLogFetchTask &task);
     int push_send_task(ObArchiveSendTask &task, ObArchiveWorker &worker);
@@ -170,6 +174,7 @@ private:
     void get_archive_progress(int64_t &file_id, int64_t &file_offset, LogFileTuple &tuple);
     void get_send_task_count(int64_t &count);
     void get_archive_send_arg(ObArchiveSendDestArg &arg);
+    void get_max_no_limit_lsn(LSN &lsn);
     void mark_error();
     void print_tasks_();
     int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -181,6 +186,8 @@ private:
   private:
     bool               has_encount_error_;
     bool               is_worm_;
+    // archive_lag_target with noneffective for logs whose lsn smaller than this lsn
+    palf::LSN          max_no_limit_lsn_;
     palf::LSN          piece_min_lsn_;
     // archived log description
     LogFileTuple       max_archived_info_;
@@ -190,6 +197,7 @@ private:
 
     LSN       max_seq_log_offset_;
     LogFileTuple       max_fetch_info_;
+    int64_t last_fetch_timestamp_;
     ObArchiveLogFetchTask *wait_send_task_array_[MAX_FETCH_TASK_NUM];
     int64_t             wait_send_task_count_;
     ObArchiveTaskStatus *send_task_queue_;

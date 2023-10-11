@@ -599,6 +599,15 @@ DEF_TIME(log_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s",
         "Range: [1s,300s]",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(archive_lag_target, OB_TENANT_PARAMETER, "120s",
+        "[0ms,7200s]",
+        "The lag target of the log archive. The log archive target affects not only the backup availability, "
+        "but also the lag of the standby database based on archive. Values larger than 7200s are not reasonable lag. "
+        "The typical value is 120s. Extremely low values can result in high IOPS, which is not optimal for object storage; "
+        "such values can also affect the performance of the database. The value 0ms means to archive as soon as possible. "
+        "Range: [0ms,7200s]",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",

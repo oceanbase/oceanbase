@@ -411,6 +411,11 @@ WAIT_EVENT_DEF(STORAGE_WRITING_THROTTLE_SLEEP, 20003, "sleep: storage writing th
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_RETRY_SLEEP, 20004, "sleep: tablet autoinc fetch new range retry wait", "sleep_interval", "", "", CONCURRENCY, "sleep: tablet autoinc fetch new range retry wait", true)
 WAIT_EVENT_DEF(STORAGE_AUTOINC_FETCH_CONFLICT_SLEEP, 20005, "sleep: tablet autoinc fetch new range conflict wait", "sleep_interval", "", "", CONCURRENCY, "sleep: tablet autoinc fetch new range conflict wait", true)
 
+// logservice
+WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, 20007, "latch: log external storage io task wait", "", "", "", CONCURRENCY, "latch: log external storage io task wait", true)
+WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, 20008, "latch: log external storage handler rw wait", "", "", "", CONCURRENCY, "latch: log external storage handler rw wait", true)
+WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_WAIT, 20009, "latch: log external storage handler spin wait", "", "", "", CONCURRENCY, "latch: log external storage handler spin wait", true)
+
 WAIT_EVENT_DEF(WAIT_EVENT_END, 99999, "event end", "", "", "", OTHER, "event end", false)
 #endif
 

@@ -21,8 +21,6 @@ namespace oceanbase
 namespace logservice
 {
 const int64_t MAX_FETCH_LOG_BUF_LEN = 4 * 1024 * 1024L;
-const int64_t MIN_FETCH_LOG_WORKER_THREAD_COUNT = 1;
-const int64_t MAX_FETCH_LOG_WORKER_THREAD_COUNT = 10;
 const int64_t MAX_LS_FETCH_LOG_TASK_CONCURRENCY = 4;
 
 struct ObLogRestoreErrorContext
@@ -47,7 +45,8 @@ struct ObRestoreLogContext
   TO_STRING_KV(K_(seek_done), K_(lsn));
 };
 
-int64_t get_restore_concurrency_by_max_cpu(const uint64_t tenant_id);
+int64_t get_tenant_cpu(const uint64_t tenant_id);
+
 } // namespace logservice
 } // namespace oceanbase
 

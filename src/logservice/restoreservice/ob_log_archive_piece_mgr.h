@@ -72,6 +72,13 @@ public:
       const int64_t file_offset,
       const palf::LSN &max_lsn);
 
+  void get_max_file_info(int64_t &dest_id,
+      int64_t &round_id,
+      int64_t &piece_id,
+      int64_t &max_file_id,
+      int64_t &max_file_offset,
+      palf::LSN &max_lsn);
+
   int deep_copy_to(ObLogArchivePieceContext &other);
 
   void reset_locate_info();
