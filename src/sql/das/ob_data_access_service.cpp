@@ -219,7 +219,7 @@ int ObDataAccessService::refresh_task_location_info(ObDASRef &das_ref, ObIDASTas
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = das_ref.get_exec_ctx();
   ObDASTabletLoc *tablet_loc = const_cast<ObDASTabletLoc*>(task_op.get_tablet_loc());
-  int64_t retry_cnt = DAS_CTX(exec_ctx).get_location_router().get_retry_cnt();
+  int64_t retry_cnt = DAS_CTX(exec_ctx).get_location_router().get_cur_retry_cnt();
   if (OB_FAIL(ObDASUtils::wait_das_retry(retry_cnt))) {
     LOG_WARN("wait das retry failed", K(ret));
   } else if (OB_FAIL(DAS_CTX(exec_ctx).get_location_router().get_tablet_loc(*tablet_loc->loc_meta_,
@@ -247,6 +247,8 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
   ObDasAggregatedTasks das_task_wrapper(tmp_alloc);
   bool retry_continue = false;
   ObDASLocationRouter &location_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
+  location_router.reset_cur_retry_cnt();
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     ObDASRetryCtrl::retry_func retry_func = nullptr;
 
@@ -259,12 +261,13 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       retry_func(das_ref, task_op, need_retry);
       LOG_INFO("[DAS RETRY] check if need tablet level retry",
                KR(task_op.errcode_), K(need_retry),
-               "retry_cnt", location_router.get_retry_cnt(),
+               "continuous_retry_cnt", location_router.get_cur_retry_cnt(),
+               "total_retry_cnt", location_router.get_total_retry_cnt(),
                KPC(task_op.get_tablet_loc()));
       if (need_retry &&
           task_op.get_gi_above_and_rescan() &&
-          location_router.get_retry_cnt() > 100) { //hard code retry 100 times.
-        //When das scan under px gi with transfor case, we need to disable das retry.
+          location_router.get_total_retry_cnt() > 100) { //hard code retry 100 times.
+        // disable das retry for rescan.
         need_retry = false;
         retry_continue = false;
         LOG_INFO("[DAS RETRY] The PX task has retried too many times and has exited the DAS retry process");
@@ -272,8 +275,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       if (need_retry) {
         task_op.in_part_retry_ = true;
         location_router.set_last_errno(task_op.get_errcode());
-        location_router.inc_retry_cnt();
-        oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
+        location_router.inc_cur_retry_cnt();
         if (OB_TMP_FAIL(clear_task_exec_env(das_ref, task_op))) {
           LOG_WARN("clear task execution environment failed", K(tmp_ret));
         }

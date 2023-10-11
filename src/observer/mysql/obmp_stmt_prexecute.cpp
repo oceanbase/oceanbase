@@ -196,6 +196,7 @@ int ObMPStmtPrexecute::before_process()
                                                         session->get_effective_tenant_id()))) {
               LOG_WARN("failed to check_and_refresh_schema", K(ret));
             } else {
+              oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
               do {
                 share::schema::ObSchemaGetterGuard schema_guard;
                 const uint64_t tenant_id = session->get_effective_tenant_id();
@@ -252,9 +253,6 @@ int ObMPStmtPrexecute::before_process()
                     }
                     session->set_session_in_retry(retry_ctrl_.need_retry());
                   }
-                }
-                if (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type()) {
-                  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
                 }
               } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
               if (OB_SUCC(ret) && retry_ctrl_.get_retry_times() > 0) {

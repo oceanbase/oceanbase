@@ -310,10 +310,17 @@ public:
   int save_touched_tablet_id(const common::ObTabletID &tablet_id) { return all_tablet_list_.push_back(tablet_id); }
   void set_last_errno(int err_no) { last_errno_ = err_no; }
   int get_last_errno() const { return last_errno_; }
-  void set_retry_cnt(int64_t retry_cnt) { retry_cnt_ = retry_cnt; }
-  void inc_retry_cnt() { ++retry_cnt_; }
+  void set_history_retry_cnt(int64_t history_retry_cnt) { history_retry_cnt_ = history_retry_cnt; }
+  void accumulate_retry_count()
+  {
+    history_retry_cnt_ += cur_retry_cnt_;
+    cur_retry_cnt_ = 0;
+  }
+  int64_t get_total_retry_cnt() const { return history_retry_cnt_ + cur_retry_cnt_; }
+  int64_t get_cur_retry_cnt() const { return cur_retry_cnt_; }
+  void reset_cur_retry_cnt() { cur_retry_cnt_ = 0; }
+  void inc_cur_retry_cnt() { ++cur_retry_cnt_; }
   void set_retry_info(const ObQueryRetryInfo* retry_info);
-  int64_t get_retry_cnt() const { return retry_cnt_; }
   int get_external_table_ls_location(share::ObLSLocation &location);
   void save_cur_exec_status(int err_no)
   {
@@ -338,7 +345,8 @@ private:
 private:
   int last_errno_;
   int cur_errno_;
-  int64_t retry_cnt_;
+  int64_t history_retry_cnt_; //Total number of retries before the current retry round.
+  int64_t cur_retry_cnt_; // the counter of continuous retry
   // NOTE: Only all_tablet_list_ needs to be serialized and send to other server to perform das remote execution;
   // And other members will be collected by execution server self, No need to perform serialization;
   ObList<common::ObTabletID, common::ObIAllocator> all_tablet_list_;
