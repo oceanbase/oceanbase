@@ -1173,7 +1173,8 @@ public:
   int resolve_external_type_by_name(const ObString &db_name,
                                     const ObString &package_name,
                                     const ObString &type_name,
-                                    const ObUserDefinedType *&user_type);
+                                    const ObUserDefinedType *&user_type,
+                                    bool try_synonym);
   int resolve_external_type_by_id(uint64_t type_id, const ObUserDefinedType *&user_type);
   int resolve_external_routine(const ObString &db_name,
                                const ObString &package_name,
