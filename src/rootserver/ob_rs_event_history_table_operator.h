@@ -24,6 +24,7 @@ public:
   virtual ~ObRsEventHistoryTableOperator() {}
 
   int init(common::ObMySQLProxy &proxy, const common::ObAddr &self_addr);
+
   virtual int async_delete() override;
 
   static ObRsEventHistoryTableOperator &get_instance();

@@ -114,7 +114,7 @@ IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
 
  TO_STRING_KV(K_(tenant_id), K_(tenant_role), K_(switchover_status),
               K_(switchover_epoch), K_(sync_scn), K_(replayable_scn),
-              K_(standby_scn), K_(recovery_until_scn), K_(log_mode));
+              K_(standby_scn), K_(recovery_until_scn), K_(log_mode), K_(max_ls_id));
   DECLARE_TO_YSON_KV;
 
   // Getter&Setter

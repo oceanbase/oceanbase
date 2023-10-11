@@ -39,6 +39,7 @@ ObEventTableClearTask::ObEventTableClearTask(
 int ObEventTableClearTask::process()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (!rs_event_operator_.is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("rs_event_operator not init", K(ret));
@@ -48,12 +49,16 @@ int ObEventTableClearTask::process()
   } else if (!deadlock_history_operator_.is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("deadlock_history_operator_ not init", K(ret));
-  } else if (OB_FAIL(rs_event_operator_.async_delete())) {
-    LOG_WARN("async_delete failed", K(ret));
-  } else if (OB_FAIL(server_event_operator_.async_delete())) {
-    LOG_WARN("async_delete failed", K(ret));
-  } else if (OB_FAIL(deadlock_history_operator_.async_delete())) {
-    LOG_WARN("async_delete failed", K(ret));
+  } else {
+    if (OB_TMP_FAIL(rs_event_operator_.async_delete())) {
+      LOG_WARN("async_delete failed", KR(tmp_ret));
+    }
+    if (OB_TMP_FAIL(server_event_operator_.async_delete())) {
+      LOG_WARN("async_delete failed", KR(tmp_ret));
+    }
+    if (OB_TMP_FAIL(deadlock_history_operator_.async_delete())) {
+      LOG_WARN("async_delete failed", KR(tmp_ret));
+    }
   }
   return ret;
 }
@@ -74,8 +79,9 @@ ObAsyncTask *ObEventTableClearTask::deep_copy(char *buf, const int64_t buf_size)
 
 ////////////////////////////////////////////////////////////////
 ObEventHistoryTableOperator::ObEventTableUpdateTask::ObEventTableUpdateTask(
-    ObEventHistoryTableOperator &table_operator, const bool is_delete)
-  : IObDedupTask(T_RS_ET_UPDATE), table_operator_(table_operator), is_delete_(is_delete)
+    ObEventHistoryTableOperator &table_operator, const bool is_delete, const int64_t create_time)
+  : IObDedupTask(T_RS_ET_UPDATE), table_operator_(table_operator), is_delete_(is_delete),
+  create_time_(create_time)
 {
 }
 
@@ -128,6 +134,7 @@ bool ObEventHistoryTableOperator::ObEventTableUpdateTask::operator==(
     } else {
       is_equal = (&(this->table_operator_) == &(o.table_operator_))
           && this->sql_ == o.sql_ && this->is_delete_ == o.is_delete_;
+      //no need take care of create_time
     }
   }
   return is_equal;
@@ -143,7 +150,7 @@ IObDedupTask *ObEventHistoryTableOperator::ObEventTableUpdateTask::deep_copy(
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "buf", reinterpret_cast<int64_t>(buf), K(buf_size),
         "need size", get_deep_copy_size());
   } else {
-    task = new (buf) ObEventTableUpdateTask(table_operator_, is_delete_);
+    task = new (buf) ObEventTableUpdateTask(table_operator_, is_delete_, create_time_);
     char *ptr = buf + sizeof(ObEventTableUpdateTask);
     MEMCPY(ptr, sql_.ptr(), sql_.length());
     task->assign_ptr(ptr, sql_.length());
@@ -157,8 +164,8 @@ int ObEventHistoryTableOperator::ObEventTableUpdateTask::process()
   if (!this->is_valid()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("invalid event task update task", "task", *this, K(ret));
-  } else if (OB_FAIL(table_operator_.process_task(sql_, is_delete_))) {
-    LOG_WARN("process_task failed", K_(sql), K_(is_delete), K(ret));
+  } else if (OB_FAIL(table_operator_.process_task(sql_, is_delete_, create_time_))) {
+      LOG_WARN("process_task failed", K_(sql), K_(is_delete), KR(ret), K(create_time_));
   }
   return ret;
 }
@@ -268,7 +275,28 @@ int ObEventHistoryTableOperator::gen_event_ts(int64_t &event_ts)
   return ret;
 }
 
-int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_delete)
+int ObEventHistoryTableOperator::default_async_delete()
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited()) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "not init", K(ret));
+  } else {
+    const int64_t now = ObTimeUtility::current_time();
+    ObSqlString sql;
+    const bool is_delete = true;
+    const int64_t delete_timestap = now - GCONF.ob_event_history_recycle_interval;
+    if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE gmt_create < usec_to_time(%ld) LIMIT 1024",
+            event_table_name_, delete_timestap))) {
+      SHARE_LOG(WARN, "assign_fmt failed", K(ret), K(event_table_name_));
+    } else if (OB_FAIL(add_task(sql, is_delete, now))) {
+      SHARE_LOG(WARN, "add_task failed", K(sql), K(is_delete), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_delete, const int64_t create_time)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -281,7 +309,9 @@ int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_
     ret = OB_CANCELED;
     LOG_WARN("observer is stopped, cancel task", K(sql), K(is_delete), K(ret));
   } else {
-    ObEventTableUpdateTask task(*this, is_delete);
+    int64_t new_create_time = OB_INVALID_TIMESTAMP == create_time ?
+      ObTimeUtility::current_time() : create_time;
+    ObEventTableUpdateTask task(*this, is_delete, new_create_time);
     if (OB_FAIL(task.init(sql.ptr(), sql.length() + 1))) { // extra byte for '\0'
       LOG_WARN("task init error", K(ret));
     } else if (OB_FAIL(event_queue_.add_task(task))) {
@@ -289,7 +319,7 @@ int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("duplicated task is not expected to exist", K(task), K(ret));
       } else {
-        LOG_WARN("event_queue_ add_task failed", K(task), K(ret));
+        LOG_WARN("event_queue_ add_task failed", K(task), K(ret), K(new_create_time));
       }
     } else {
       // do nothing
@@ -299,9 +329,11 @@ int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_
   return ret;
 }
 
-int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is_delete)
+int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is_delete, const int64_t create_time)
 {
   int ret = OB_SUCCESS;
+
+  DEBUG_SYNC(BEFORE_PROCESS_EVENT_TASK);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -324,17 +356,35 @@ int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is
       } else {
         int64_t cnt = 0;
         const int64_t MAX_DELETE_TIMES = 10;
+        int tmp_ret = OB_SUCCESS;
         while (OB_SUCCESS == ret && !stopped_) {
           if (OB_FAIL(proxy_->write(sql.ptr(), affected_rows))) {
             LOG_WARN("execute sql failed", K(sql), K(ret));
           } else if (0 == affected_rows) {
-            LOG_INFO("finished to delete from event history table", K(sql));
+            LOG_INFO("finished to delete from event history table", K(sql), K(create_time));
             break;
           } else if (cnt > MAX_DELETE_TIMES) {
-            LOG_INFO("delete cnt reach limit, schedule next round", K(sql));
+            LOG_INFO("delete cnt reach limit, schedule next round", K(sql), K(create_time));
+            if (OB_INVALID_TIMESTAMP == create_time) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("create time is invalid", KR(ret), K(create_time), K(sql));
+            } else if (ObTimeUtility::current_time() - create_time > EVENT_TABLE_CLEAR_INTERVAL) {
+              //has new clear task, no need add task again
+              LOG_INFO("maybe has new clear task, no need add task again", K(create_time));
+            } else {
+              ObSqlString new_sql;
+              const bool is_delete = true;
+              if (OB_TMP_FAIL(new_sql.assign(sql))) {
+                LOG_WARN("failed to assign sql", KR(tmp_ret), K(sql));
+              } else if (OB_TMP_FAIL(add_task(new_sql, is_delete, create_time))) {
+                LOG_WARN("failed to add task", KR(tmp_ret), K(new_sql), K(create_time));
+              } else {
+                LOG_INFO("has event need delete, add task again", K(new_sql), K(create_time));
+              }
+            }
             break;
           } else {
-            LOG_INFO("delete rows from event history table", K(affected_rows), K(sql));
+            LOG_INFO("delete rows from event history table", K(affected_rows), K(sql), K(cnt));
             cnt++;
           }
         }
