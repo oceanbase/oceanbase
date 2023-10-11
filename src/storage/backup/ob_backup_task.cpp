@@ -768,13 +768,17 @@ int ObLSBackupDataDagNet::prepare_backup_tablet_provider_(const ObLSBackupParam 
   if (!param.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(param));
-  } else if (OB_ISNULL(tmp_provider = static_cast<ObBackupTabletProvider *>(ObLSBackupFactory::get_backup_tablet_provider(type, param.tenant_id_)))) {
+  }  else if (OB_ISNULL(tmp_provider = static_cast<ObBackupTabletProvider *>(ObLSBackupFactory::get_backup_tablet_provider(type, param.tenant_id_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate provider", K(ret), K(param));
   } else if (OB_FAIL(tmp_provider->init(param, backup_data_type, ls_backup_ctx, index_kv_cache, sql_proxy))) {
     LOG_WARN("failed to init provider", K(ret), K(param), K(backup_data_type));
   } else {
     provider = tmp_provider;
+    tmp_provider = NULL;
+  }
+  if (OB_NOT_NULL(tmp_provider)) {
+    ObLSBackupFactory::free(tmp_provider);
   }
   return ret;
 }
@@ -3025,7 +3029,11 @@ int ObLSBackupDataTask::prepare_macro_block_reader_(const uint64_t tenant_id,
     LOG_WARN("failed to init", K(ret), K(list));
   } else {
     reader = tmp_reader;
+    tmp_reader = NULL;
     LOG_INFO("prepare macro block reader", K(list));
+  }
+  if (OB_NOT_NULL(tmp_reader)) {
+    ObLSBackupFactory::free(tmp_reader);
   }
   return ret;
 }
@@ -3046,7 +3054,11 @@ int ObLSBackupDataTask::prepare_tablet_meta_reader_(const common::ObTabletID &ta
     LOG_WARN("failed to init", K(ret), K(tablet_id), K_(backup_data_type));
   } else {
     reader = tmp_reader;
+    tmp_reader = NULL;
     LOG_INFO("prepare tablet meta reader", K(tablet_id), K(reader_type));
+  }
+  if (OB_NOT_NULL(tmp_reader)) {
+    ObLSBackupFactory::free(tmp_reader);
   }
   return ret;
 }

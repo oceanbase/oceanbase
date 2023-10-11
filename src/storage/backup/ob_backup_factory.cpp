@@ -197,6 +197,20 @@ void ObLSBackupFactory::free(ObIMacroBlockIndexIterator *&iterator)
   }
 }
 
+void ObLSBackupFactory::free(ObBackupMacroBlockIndexIterator *&iterator)
+{
+  if (OB_NOT_NULL(iterator)) {
+    OB_DELETE(ObBackupMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+  }
+}
+
+void ObLSBackupFactory::free(ObBackupMacroRangeIndexIterator *&iterator)
+{
+  if (OB_NOT_NULL(iterator)) {
+    OB_DELETE(ObBackupMacroRangeIndexIterator, ObModIds::BACKUP, iterator);
+  }
+}
+
 void ObLSBackupFactory::free(ObIBackupTabletProvider *&provider)
 {
   if (OB_NOT_NULL(provider)) {
@@ -205,6 +219,13 @@ void ObLSBackupFactory::free(ObIBackupTabletProvider *&provider)
     } else {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown provider type", "type", provider->get_type());
     }
+  }
+}
+
+void ObLSBackupFactory::free(ObBackupTabletProvider *&provider)
+{
+  if (OB_NOT_NULL(provider)) {
+    OB_DELETE(ObBackupTabletProvider, ObModIds::BACKUP, provider);
   }
 }
 

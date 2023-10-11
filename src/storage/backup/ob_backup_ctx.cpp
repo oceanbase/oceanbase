@@ -1213,7 +1213,8 @@ int ObLSBackupCtx::get_last_persist_macro_block_(const ObBackupRetryDesc &retry_
           param_.ls_id_,
           backup_data_type_,
           retry_desc.turn_id_,
-          retry_desc.retry_id_))) {
+          retry_desc.retry_id_,
+          true/*need_read_inner_table*/))) {
     LOG_WARN("failed to init iterator", K(ret), K_(param));
   } else {
     ObArray<ObBackupMacroBlockIndex> index_list;
@@ -1354,7 +1355,8 @@ int ObLSBackupCtx::inner_recover_need_reuse_macro_block_(const ObBackupRetryDesc
           param_.ls_id_,
           backup_data_type_,
           retry_desc.turn_id_,
-          retry_desc.retry_id_))) {
+          retry_desc.retry_id_,
+          true/*need_read_inner_table*/))) {
     LOG_WARN("failed to init iterator", K(ret), K_(param));
   } else {
     ObArray<ObBackupMacroBlockIndex> index_list;
@@ -1412,6 +1414,10 @@ int ObLSBackupCtx::prepare_tablet_id_reader_(ObILSTabletIdReader *&reader)
     LOG_WARN("failed to init tablet id reader", K(ret), K(param_));
   } else {
     reader = tmp_reader;
+    tmp_reader = NULL;
+  }
+  if (OB_NOT_NULL(tmp_reader)) {
+    ObLSBackupFactory::free(tmp_reader);
   }
   return ret;
 }
