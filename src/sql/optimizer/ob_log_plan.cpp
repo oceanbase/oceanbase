@@ -10045,9 +10045,7 @@ int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
       LOG_WARN("failed to check subquery has ref assign user var", K(ret));
     } else if (has_ref_assign_user_var) {
       is_valid = false;
-    } else if (expr->get_output_column() == 1 &&
-               !static_cast<ObQueryRefRawExpr *>(expr)->is_set() &&
-               !static_cast<ObQueryRefRawExpr *>(expr)->is_multiset() ) {
+    } else if (static_cast<ObQueryRefRawExpr *>(expr)->is_scalar()) {
       if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back candi onetime expr", K(ret));
       }

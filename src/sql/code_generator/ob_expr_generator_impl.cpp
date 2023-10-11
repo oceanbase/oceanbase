@@ -390,7 +390,7 @@ int ObExprGeneratorImpl::visit(ObQueryRefRawExpr &expr)
                "expr type", get_type_name(expr.get_expr_type()));
     } else {
       ObExprSubQueryRef *subquery_op = static_cast<ObExprSubQueryRef*>(op);
-      bool result_is_scalar = (expr.get_output_column() == 1 && !expr.is_set() && !expr.is_multiset());
+      bool result_is_scalar = expr.is_scalar();
       subquery_op->set_result_is_scalar(result_is_scalar);
       subquery_op->set_result_type(expr.get_result_type());
       if (result_is_scalar) {

@@ -1763,8 +1763,7 @@ int ObTransformSubqueryCoalesce::get_subquery_assign_exprs(ObIArray<ObRawExpr*> 
       if (OB_ISNULL(query_ref_expr) || OB_ISNULL(stmt = query_ref_expr->get_ref_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null stmt", K(ret));
-      } else if (query_ref_expr->is_set() ||
-                 1 != query_ref_expr->get_output_column()) {
+      } else if (!query_ref_expr->is_scalar()) {
         //do nothing
       } else if (stmt->has_limit() || stmt->has_distinct() || stmt->is_set_stmt()) {
         //stmt can not coalesce,do nothing

@@ -8040,7 +8040,7 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
              OB_UNLIKELY(OB_INVALID_ID == elem_udt_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", KPC(multiset_expr), K(elem_type));
-  } else if (!multiset_stmt->is_set_stmt()) {
+  } else if (!multiset_stmt->is_set_stmt() && !multiset_stmt->is_distinct()) {
     // if multiset stmt is set stmt, create a view for it.
     // e.g. create type tbl_obj as table of obj
     //      cast(multiset(select 1 as a from dual union select 2 as a from dual) as tbl_obj)
@@ -8202,7 +8202,7 @@ int ObTransformPreProcess::add_column_conv_to_multiset(ObQueryRefRawExpr *multis
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("unexpected column count", K(ret), KPC(multiset_stmt), KPC(multiset_expr));
   } else {
-    if (!multiset_stmt->is_set_stmt()) {
+    if (!multiset_stmt->is_set_stmt() && !multiset_stmt->is_distinct()) {
       // do nothing
       // if multiset stmt is set stmt, create a view for it.
     } else if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, multiset_stmt, new_stmt))) {
