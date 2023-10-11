@@ -171,9 +171,9 @@ int ObWeakReadService::check_tenant_can_start_service(const uint64_t tenant_id,
   if (can_start_service) {
     FLOG_INFO("[WRS] [OBSERVER_NOTICE] current tenant start service successfully",
         K(tenant_id),
-        "target_ts", gts_scn.convert_to_ts(),
+        "target_ts", (gts_scn.is_valid() ? gts_scn.convert_to_ts() : 0),
         "min_ts", (min_version.is_valid() ? min_version.convert_to_ts() : 0),
-        "delta_us", (min_version.is_valid() ? (gts_scn.convert_to_ts() - min_version.convert_to_ts()) : 0));
+        "delta_us", ((min_version.is_valid() && gts_scn.is_valid()) ? (gts_scn.convert_to_ts() - min_version.convert_to_ts()) : 0));
   } else {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       int64_t tmp_version = min_version.is_valid() ? min_version.convert_to_ts() : 0;
