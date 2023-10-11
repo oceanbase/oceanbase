@@ -16924,6 +16924,9 @@ int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitA
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    OZ (SMART_CALL(replace_object_compare_expr(expr->get_param_expr(i),unit_ast)));
+  }
   if (OB_FAIL(ret)) {
   } else if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
     CK (2 == expr->get_param_count());
