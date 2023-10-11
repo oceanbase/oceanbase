@@ -11201,7 +11201,8 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
      || OB_ERR_FUNCTION_UNKNOWN == ret
      || OB_ERR_SP_UNDECLARED_VAR == ret
      || OB_ERR_INVALID_TYPE_FOR_OP == ret
-     || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+     || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret
+     || OB_ERR_SP_DOES_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       OZ (resolve_record_construct(q_name, udf_info, user_type, expr));
     }

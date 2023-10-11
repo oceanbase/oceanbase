@@ -2028,21 +2028,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
         ObSchemaChecker schema_checker;
         ObSynonymChecker synonym_checker;
         OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
-        OZ (ObResolverUtils::resolve_synonym_object_recursively(
-          schema_checker, synonym_checker,
-          tenant_id, db_id, type_name, object_db_id, object_name, exist));
-        if (OB_FAIL(ret)) {
-        } else if (exist) {
-          if (OB_FAIL(resolve_ctx_.schema_guard_.get_udt_info(tenant_id, object_db_id,
-                                                              OB_INVALID_ID, object_name,
-                                                              udt_info))) {
-            LOG_WARN("get udt info failed", K(ret));
-          }
-        } else if (OB_FAIL(resolve_ctx_.schema_guard_.get_udt_info(tenant_id, db_id,
-                                                              OB_INVALID_ID, type_name,
-                                                              udt_info))) {
-          LOG_WARN("get udt info failed", K(ret));
-        }
+        OZ (resolve_ctx_.schema_guard_.get_udt_info(tenant_id, db_id, OB_INVALID_ID, type_name, udt_info));
       }
       if (OB_SUCC(ret) && (is_oracle_sys_user || OB_ISNULL(udt_info))) {
         // try system udt
