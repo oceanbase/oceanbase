@@ -80,7 +80,7 @@ int ObMemtableGetIterator::init(
   if (OB_UNLIKELY(nullptr == read_info || !read_info->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected read info", K(ret), KPC(read_info));
-  } else if (OB_FAIL(cur_row_.init(*context.stmt_allocator_, read_info->get_request_count()))) {
+  } else if (OB_FAIL(cur_row_.init(*context.allocator_, read_info->get_request_count()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else {
     param_ = &param;
@@ -196,7 +196,7 @@ int ObMemtableScanIterator::init(
   if (OB_ISNULL(read_info_ = param.get_read_info(false))) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "Unexpected null read info", K(ret), K(param));
-  } else if (OB_FAIL(row_.init(*context.stmt_allocator_, read_info_->get_request_count()))) {
+  } else if (OB_FAIL(row_.init(*context.allocator_, read_info_->get_request_count()))) {
     TRANS_LOG(WARN, "Failed to init datum row", K(ret));
   } else {
     TRANS_LOG(DEBUG, "scan iterator init succ", K(param.table_id_));
@@ -451,7 +451,7 @@ int ObMemtableMGetIterator::init(
   } else if (OB_UNLIKELY(nullptr == read_info || !read_info->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected read info", K(ret), KPC(read_info));
-  } else if (OB_FAIL(cur_row_.init(*context.stmt_allocator_, read_info->get_request_count()))) {
+  } else if (OB_FAIL(cur_row_.init(*context.allocator_, read_info->get_request_count()))) {
     TRANS_LOG(WARN, "Failed to init datum row", K(ret));
   } else {
     const ObColDescIArray &out_cols = read_info->get_columns_desc();
@@ -774,7 +774,7 @@ int ObMemtableMultiVersionScanIterator::init(
       TRANS_LOG(WARN, "mvcc engine scan fail", K(ret), K(mvcc_scan_range));
     } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_rowkey_count()))) {
       TRANS_LOG(WARN, "init nop bitmap fail, ", K(ret));
-    } else if (OB_FAIL(row_.init(*context.stmt_allocator_, read_info_->get_request_count()))) {
+    } else if (OB_FAIL(row_.init(*context.allocator_, read_info_->get_request_count()))) {
       TRANS_LOG(WARN, "Failed to init datum row", K(ret));
     } else {
       TRANS_LOG(DEBUG, "multi version scan iterator init succ", K(param.table_id_), K(range));

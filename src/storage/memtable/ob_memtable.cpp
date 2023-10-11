@@ -834,7 +834,7 @@ int ObMemtable::get(
       }
     } else {
       if (OB_UNLIKELY(!row.is_valid())) {
-        if (OB_FAIL(row.init(*context.stmt_allocator_, out_cols.count()))) {
+        if (OB_FAIL(row.init(*context.allocator_, out_cols.count()))) {
           STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
         }
       }
