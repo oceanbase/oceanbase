@@ -714,9 +714,6 @@ private:
   int create_empty_shell_tablet(
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
-  int no_lock_update_tablet_to_empty_shell(
-      const ObTabletMapKey &key,
-      ObTabletHandle &new_tablet_handle);
 
 private:
   int direct_insert_rows(const uint64_t table_id,

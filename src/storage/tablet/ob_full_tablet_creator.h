@@ -41,12 +41,8 @@ public:
   int init(const uint64_t tenant_id);
   void reset();
   int create_tablet(ObTabletHandle &tablet_handle);
-  int persist_tablet();
-  void destroy_queue(); // used to release tablets when t3m::destroy
-    /* ATTENTION: below functions should be called without any ls_tablet or t3m locks */
+  /* ATTENTION: below functions should be called without any ls_tablet or t3m locks */
   int throttle_tablet_creation();
-  int push_tablet_to_queue(const ObTabletHandle &tablet_handle);
-  int remove_tablet_from_queue(const ObTabletHandle &tablet_handle);
   void free_tablet(ObTablet *tablet);
   OB_INLINE int64_t total() const {
       return tiny_allocator_.total() + (nullptr == mstx_mem_ctx_ ? 0 : mstx_mem_ctx_->hold()); }
@@ -56,17 +52,12 @@ public:
   TO_STRING_KV(K(tiny_allocator_.used()), K(tiny_allocator_.total()),
                "full allocator used", used(), "full allocator total", total());
 private:
-  int pop_tablet(ObTabletHandle &tablet_handle);
   common::ObIAllocator &get_allocator() { return mstx_mem_ctx_->get_malloc_allocator(); }
 private:
   bool is_inited_;
   common::ObFIFOAllocator tiny_allocator_;
-  ObTabletHandle transform_head_; // for transform thread
-  ObTabletHandle transform_tail_; // for transform thread
   int64_t wait_create_tablets_cnt_; // tablets waiting to be created
   int64_t created_tablets_cnt_; // tablets has been created
-  int64_t persist_queue_cnt_; // tablets in persist queue
-  lib::ObMutex mutex_;
   lib::MemoryContext mstx_mem_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObFullTabletCreator);
 };
