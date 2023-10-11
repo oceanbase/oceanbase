@@ -8603,6 +8603,9 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
       }
       if (OB_FAIL(table_scan->set_limit_offset(new_limit_expr, new_offset_expr))) {
         LOG_WARN("failed to set limit-offset", K(ret));
+      } else if (NULL != new_limit_expr && NULL == new_offset_expr &&
+                 OB_FAIL(construct_startup_filter_for_limit(new_limit_expr, table_scan))) {
+        LOG_WARN("failed to construct startup filter", KPC(limit_expr));
       } else {
         is_pushed = true;
       }
@@ -8710,6 +8713,11 @@ int ObLogPlan::allocate_limit_as_top(ObLogicalOperator *&old_top,
     } else {
       old_top = limit;
     }
+  }
+  if (OB_SUCC(ret) && NULL != limit_expr && NULL == offset_expr
+      && NULL == percent_expr && !is_calc_found_rows &&
+      OB_FAIL(construct_startup_filter_for_limit(limit_expr, limit))) {
+    LOG_WARN("failed to construct startup filter", KPC(limit_expr));
   }
   return ret;
 }
@@ -14127,6 +14135,49 @@ int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
                                                                   redundant_quals))) {
       LOG_WARN("failed to deduce redundancy quals with equal set", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::construct_startup_filter_for_limit(ObRawExpr *limit_expr, ObLogicalOperator *log_op)
+{
+  int ret = OB_SUCCESS;
+  int64_t limit_value = 0;
+  ObRawExpr *limit_is_zero = NULL;
+  ObConstRawExpr *zero_expr = NULL;
+  ObRawExpr *startup_filter = NULL;
+  bool is_null_value = false;
+  if (OB_ISNULL(limit_expr) || OB_ISNULL(log_op)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ObTransformUtils::get_expr_int_value(limit_expr,
+                                                          get_optimizer_context().get_params(),
+                                                          get_optimizer_context().get_exec_ctx(),
+                                                          &get_allocator(),
+                                                          limit_value,
+                                                          is_null_value))) {
+    LOG_WARN("failed to get limit int value", K(ret));
+  } else if (limit_value > 0 || is_null_value) {
+    // do not construct startup filter which is always true
+  } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(&get_optimizer_context().get_expr_factory(),
+                                                           startup_filter, false))) {
+    LOG_WARN("failed to build bool expr", K(ret));
+  } else if (OB_FAIL(log_op->get_startup_exprs().push_back(startup_filter))) {
+    LOG_WARN("failed to allocate select into", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(get_optimizer_context().get_expr_factory(),
+                                                          ObIntType,
+                                                          0,
+                                                          zero_expr))) {
+    LOG_WARN("failed to build int expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(get_optimizer_context().get_expr_factory(),
+                                                           get_optimizer_context().get_session_info(),
+                                                           T_OP_EQ,
+                                                           limit_is_zero,
+                                                           limit_expr,
+                                                           zero_expr))) {
+    LOG_WARN("failed to build cmp expr", K(ret));
+  } else if (OB_FAIL(log_op->expr_constraints_.push_back(
+      ObExprConstraint(limit_is_zero, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE)))) {
+    LOG_WARN("failed to add expr constraint", K(ret));
   }
   return ret;
 }

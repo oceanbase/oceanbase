@@ -572,6 +572,20 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
   return found;
 }
 
+int ObOptimizerUtil::append_exprs_no_dup(ObIArray<ObRawExpr *> &dst, const ObIArray<ObRawExpr *> &src)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < src.count(); ++idx) {
+    ObRawExpr *expr = src.at(idx);
+    if (find_equal_expr(dst, expr)) {
+      //do nothing
+    } else if (OB_FAIL(dst.push_back(expr))) {
+      LOG_WARN("Add var to array error", K(ret));
+    } else { } //do nothing
+  }
+  return ret;
+}
+
 bool ObOptimizerUtil::is_sub_expr(const ObRawExpr *sub_expr,
                                   const ObRawExpr *expr)
 {
