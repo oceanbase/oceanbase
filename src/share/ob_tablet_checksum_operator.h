@@ -124,6 +124,11 @@ public:
       const uint64_t tenant_id,
       const SCN &compaction_scn,
       bool &is_exist);
+  static int is_all_tablet_checksum_sync(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      common::ObIArray<uint64_t> &frozen_scn_vals,
+      bool &is_sync);
 
 private:
   static int construct_load_sql_str_(
