@@ -1845,7 +1845,7 @@ int ObLSTabletService::replay_create_tablet(
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(tablet_id_set_.erase(tablet_id))) {
-        if (OB_HASH_NOT_EXIST != ret) {
+        if (OB_HASH_NOT_EXIST != tmp_ret) {
           LOG_ERROR("fail to erase tablet id from set", K(tmp_ret), K(tablet_id));
         }
       }
