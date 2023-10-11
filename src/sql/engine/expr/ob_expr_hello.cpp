@@ -58,7 +58,6 @@ int ObExprHello::eval(const ObExpr& expr, ObEvalCtx &ctx, ObDatum& expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  UNUSED(ctx);
   const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
