@@ -4356,7 +4356,8 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
       package_id, routine_id, cursor_index, cur_var);
   OV (ignore ? true : NULL != cursor ? !cursor->is_invalid_cursor() : true, OB_ERR_INVALID_CURSOR);
   OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(),
-                            package_id, routine_id, ignore));
+                        package_id, routine_id, ignore),
+                        K(package_id), K(routine_id), K(cursor_index), K(cur_var));
   if (OB_SUCC(ret) && DECL_PKG == loc) {
     OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
   }
