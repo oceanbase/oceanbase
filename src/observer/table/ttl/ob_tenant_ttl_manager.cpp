@@ -409,7 +409,7 @@ int ObTTLTaskScheduler::try_add_periodic_task()
       if (tenant_task_.is_finished_ && OB_FAIL(add_ttl_task_internal(TRIGGER_TYPE::PERIODIC_TRIGGER))) {
         LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id));
       } else {
-        periodic_launched_ = false;
+        periodic_launched_ = true;
       }
     }
   } else {
@@ -739,7 +739,10 @@ int ObTTLTaskScheduler::check_all_tabelt_finished(bool &all_finished)
         const int64_t table_id = table_id_array.at(idx);
         const ObTableSchema *table_schema = nullptr;
         if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
-          LOG_WARN("failed to get simple schema", KR(ret), K(table_id));
+          LOG_WARN("fail to get simple schema", KR(ret), K(table_id));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table schema is null", KR(ret), K(table_id));
         } else if (OB_FAIL(ObTTLUtil::check_is_ttl_table(*table_schema, is_ttl_table))) {
           LOG_WARN("fail to check is ttl table", KR(ret));
         } else if (is_ttl_table) {
