@@ -1703,8 +1703,7 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
       } else if (tablet->is_empty_shell()) {
         max_minor_end_scn_ = MAX(max_minor_end_scn_, tablet->get_tablet_meta().get_max_replayed_scn());
         break;
-      } else if (tablet->get_tablet_meta().ha_status_.is_data_status_complete()
-          || !tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+      } else if (tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
         ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
         if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
           LOG_WARN("fail to fetch table store", K(ret));
