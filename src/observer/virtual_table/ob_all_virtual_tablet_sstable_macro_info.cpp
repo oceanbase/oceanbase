@@ -478,6 +478,8 @@ void ObAllVirtualTabletSSTableMacroInfo::release_last_tenant()
   }
   curr_range_.reset();
   tablet_allocator_.reset();
+  iter_allocator_.reset();
+  rowkey_allocator_.reset();
 }
 
 bool ObAllVirtualTabletSSTableMacroInfo::is_need_process(uint64_t tenant_id)
@@ -517,6 +519,8 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_tablet()
   tablet_allocator_.reuse();
   if (nullptr == tablet_iter_) {
     tablet_allocator_.set_tenant_id(MTL_ID());
+    iter_allocator_.set_tenant_id(MTL_ID());
+    rowkey_allocator_.set_tenant_id(MTL_ID());
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
     if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, tablet_allocator_))) {
       ret = OB_ERR_UNEXPECTED;
