@@ -15232,6 +15232,7 @@ ALTER SYSTEM REFRESH IO CALIBRATION opt_storage_name opt_calibration_list opt_se
 ALTER SYSTEM opt_set alter_system_set_parameter_actions
 {
   (void)$3;
+  result->contain_sensitive_data_ = true;
   merge_nodes($$, result, T_SYTEM_ACTION_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SYSTEM_SET_PARAMETER, 1, $$);
 }
