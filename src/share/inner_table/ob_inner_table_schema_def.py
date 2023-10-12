@@ -29970,6 +29970,7 @@ def_table_schema(
 #21482 CDB_WR_SYSTEM_EVENT
 #21483 DBA_WR_EVENT_NAME
 #21484 CDB_WR_EVENT_NAME
+#21485 DBA_OB_FORMAT_OUTLINES
 
 # 余留位置
 
@@ -54532,6 +54533,7 @@ def_table_schema(
 # 28199: V$OB_PL_CACHE_OBJECT
 # 28200: GV$OB_CGROUP_CONFIG
 # 28201: V$OB_CGROUP_CONFIG
+# 28202: DBA_OB_FORMAT_OUTLINES
 
 ################################################################################
 # Lob Table (50000, 70000)
