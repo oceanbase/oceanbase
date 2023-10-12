@@ -138,6 +138,7 @@
 #endif
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -1762,44 +1763,56 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("hidden tenant can't be deleted", K(ret), K(tenant_id));
   } else  {
+    const ObUnitInfoGetter::ObTenantConfig local_unit = tenant->get_unit();
+    const ObUnitInfoGetter::ObUnitStatus local_unit_status = local_unit.unit_status_;
+    // add a event when try to gc for the first time
+    if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
+        local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+      SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_id,
+          "unit_id", local_unit.unit_id_, "unit_status", "DELETING");
+    }
+
     // Ensure to write delete_tenant_prepare_slog only once
-    ObUnitInfoGetter::ObUnitStatus old_unit_status = tenant->get_unit_status();
-    if (old_unit_status != ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER) {
+    if (local_unit_status != ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER) {
       tenant->set_unit_status(ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER);
       tenant->set_create_status(ObTenantCreateStatus::DELETING);
       if (OB_FAIL(write_delete_tenant_prepare_slog(tenant_id))) {
-        LOG_WARN("fail to write delete tenant slog", K(ret), K(tenant_id), K(old_unit_status));
-        tenant->set_unit_status(old_unit_status);
+        LOG_WARN("fail to write delete tenant slog", K(ret), K(tenant_id), K(local_unit_status));
+        tenant->set_unit_status(local_unit_status);
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    do {
-      // 保证remove_tenant, clear_persistent_data可以幂等重试,
-      // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
-      // 即使这个过程中宕机重启, 重启回放日志时会继续删除并且补一条delete commit log
-      bool remove_tenant_succ = false;
-      if (OB_FAIL(remove_tenant(tenant_id, remove_tenant_succ))) {
-        LOG_WARN("fail to remove tenant", K(ret), K(tenant_id));
-        // If lock failed, the tenant is not removed from tenants_list,
-        // Here can break and leave ObTenantNodeBalancer::check_del_tenant to retry again,
-        // in this case, the deletion of other tenants does not get stuck.
-        // Otherwise it will have to retry indefinitely here, because the tenant cannot be obtained
-        if (false == remove_tenant_succ) {
-          break;
-        } else {
-          SLEEP(1);
-        }
-      } else if (OB_FAIL(clear_persistent_data(tenant_id))) {
-        LOG_ERROR("fail to clear persistent_data", K(ret), K(tenant_id));
-        SLEEP(1);
-      } else if (OB_FAIL(write_delete_tenant_commit_slog(tenant_id))) {
-        LOG_WARN("fail to write delete tenant commit slog", K(ret), K(tenant_id));
-      }
-    } while (OB_FAIL(ret));
     if (OB_SUCC(ret)) {
-      lib::ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+      do {
+        // 保证remove_tenant, clear_persistent_data可以幂等重试,
+        // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
+        // 即使这个过程中宕机重启, 重启回放日志时会继续删除并且补一条delete commit log
+        bool remove_tenant_succ = false;
+        if (OB_FAIL(remove_tenant(tenant_id, remove_tenant_succ))) {
+          LOG_WARN("fail to remove tenant", K(ret), K(tenant_id));
+          // If lock failed, the tenant is not removed from tenants_list,
+          // Here can break and leave ObTenantNodeBalancer::check_del_tenant to retry again,
+          // in this case, the deletion of other tenants does not get stuck.
+          // Otherwise it will have to retry indefinitely here, because the tenant cannot be obtained
+          if (false == remove_tenant_succ) {
+            break;
+          } else {
+            SLEEP(1);
+          }
+        } else if (OB_FAIL(clear_persistent_data(tenant_id))) {
+          LOG_ERROR("fail to clear persistent_data", K(ret), K(tenant_id));
+          SLEEP(1);
+        } else if (OB_FAIL(write_delete_tenant_commit_slog(tenant_id))) {
+          LOG_WARN("fail to write delete tenant commit slog", K(ret), K(tenant_id));
+        }
+      } while (OB_FAIL(ret));
+
+      if (OB_SUCC(ret)) {
+        lib::ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+        // add a event when finish gc unit
+        SERVER_EVENT_ADD("unit", "finish unit gc", "tenant_id", tenant_id,
+            "unit_id", local_unit.unit_id_, "unit_status", "DELETED");
+      }
     }
   }
 
