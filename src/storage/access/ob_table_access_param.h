@@ -118,7 +118,7 @@ public:
   }
   OB_INLINE int64_t get_group_idx_col_index() const
   {
-    return (read_info_ != nullptr) ? read_info_->get_group_idx_col_index() : common::OB_INVALID_INDEX;
+    return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->get_group_idx_col_index() : common::OB_INVALID_INDEX;
   }
   OB_INLINE bool need_fill_group_idx() const
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }

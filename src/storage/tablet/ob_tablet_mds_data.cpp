@@ -689,8 +689,7 @@ int ObTabletMdsData::init_single_complex_addr_and_extra_info(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (nullptr == ptr
-      || finish_medium_scn < src_addr_extra_info.last_medium_scn_
+  } else if (finish_medium_scn < src_addr_extra_info.last_medium_scn_
       || src_addr_extra_info.last_medium_scn_ < src_data_extra_info.last_medium_scn_) {
     dst_extra_info.last_compaction_type_ = src_data_extra_info.last_compaction_type_;
     dst_extra_info.last_medium_scn_ = src_data_extra_info.last_medium_scn_;

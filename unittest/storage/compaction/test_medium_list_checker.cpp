@@ -108,19 +108,19 @@ TEST_F(TestMediumListChecker, test_validate_medium_info_list)
   ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
 
   ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, 10/*last_medium_scn_of_first_medium_info*/));
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, array, 100/*last_major_snapshot*/);
+  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
   array.reset();
   ASSERT_EQ(OB_SUCCESS, construct_array("200, 400, 500", array, 100/*last_medium_scn_of_first_medium_info*/));
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, array, 50/*last_major_snapshot*/);
+  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 50/*last_major_snapshot*/);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, array, 100/*last_major_snapshot*/);
+  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   extra_info.last_medium_scn_ = 1000;
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, array, 1000/*last_major_snapshot*/);
+  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 1000/*last_major_snapshot*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // push item without clear array
