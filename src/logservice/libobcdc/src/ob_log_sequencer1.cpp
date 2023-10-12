@@ -964,8 +964,16 @@ int ObLogSequencer::handle_multi_data_source_info_(
             LOG_DEBUG("CDC_CREATE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
           }
         } else if (tablet_change_info.is_delete_tablet_op()) {
+          const bool skip_delete_tablet_op = (1 == TCONF.skip_delete_tablet_op);
+
+          if (OB_UNLIKELY(skip_delete_tablet_op)) {
+            LOG_INFO("[IGNORE][CDC_DELETE_TABLET]",
+                "tls_id", part_trans_task->get_tls_id(),
+                "trans_id", trans_ctx.get_trans_id(),
+                K(tablet_change_info),
+                "op_tablets", tablet_change_info.get_delete_tablet_op_arr());
           // 1. delete tablet should wait all task in dml_parse done.
-          if (OB_FAIL(wait_until_parser_done_("delete_tablet_op", stop_flag))) {
+          } else if (OB_FAIL(wait_until_parser_done_("delete_tablet_op", stop_flag))) {
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
             }
