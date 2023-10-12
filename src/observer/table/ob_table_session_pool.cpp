@@ -258,7 +258,7 @@ int ObTableApiSessPoolMgr::ObTableApiSessEliminationTask::run_recycle_retired_se
 
 /*
   init session pool
-  - init key_node_map_ which is a hashmap, key is user_id, value is ObTableApiSessNode*
+  - init key_node_map_ which is a hashmap, key is ObTableApiCredential.hash_val_, value is ObTableApiSessNode*
 */
 int ObTableApiSessPool::init(int64_t hash_bucket/* = SESS_POOL_DEFAULT_BUCKET_NUM */)
 {
@@ -432,7 +432,7 @@ int ObTableApiSessPool::get_sess_node(uint64_t key,
     3.1 if there is no session node val in node list, extend it.
 
   struct pool {
-    map: [user_id0:node1][user_id2:node:2]
+    map: [key1:node1][key2:node:2]
   }
 
   struct node {
@@ -445,7 +445,7 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
   ObTableApiSessNode *sess_node = nullptr;
   bool need_extend = false;
 
-  if (OB_FAIL(get_sess_node(credential.user_id_, sess_node))) { // first get
+  if (OB_FAIL(get_sess_node(credential.hash_val_, sess_node))) { // first get
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("fail to get sess node", K(ret), K(credential));
     }
@@ -455,7 +455,7 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
     // do nothing
   } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret) && OB_FAIL(create_and_add_node_safe(credential))) { // not exist, create
     LOG_WARN("fail to create and add session node", K(ret), K(credential));
-  } else if (OB_UNLIKELY(OB_ISNULL(sess_node)) && OB_FAIL(get_sess_node(credential.user_id_, sess_node))) { // get again
+  } else if (OB_UNLIKELY(OB_ISNULL(sess_node)) && OB_FAIL(get_sess_node(credential.hash_val_, sess_node))) { // get again
     LOG_WARN("fail to get sess node", K(ret), K(credential));
   } else if (OB_UNLIKELY(OB_ISNULL(sess_node))) {
     ret = OB_ERR_UNEXPECTED;
@@ -511,9 +511,9 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
   ObTableApiSessNode *node = nullptr;
   if (OB_FAIL(create_node_safe(credential, node))) {
     LOG_WARN("fail to create node", K(ret), K(credential));
-  } else if (OB_FAIL(key_node_map_.set_refactored(credential.user_id_, node))) {
+  } else if (OB_FAIL(key_node_map_.set_refactored(credential.hash_val_, node))) {
     if (OB_HASH_EXIST != ret) {
-      LOG_WARN("fail to add sess node to hash map", K(ret), K(credential.user_id_), K(*node));
+      LOG_WARN("fail to add sess node to hash map", K(ret), K(credential), K(*node));
     }
     // this node has been set by other thread, free it
     ObLockGuard<ObSpinLock> guard(lock_);
@@ -534,7 +534,7 @@ int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
   int ret = OB_SUCCESS;
 
   ObTableApiSessNode *node = nullptr;
-  const uint64_t key = credential.user_id_;
+  const uint64_t key = credential.hash_val_;
   if (OB_FAIL(get_sess_node(key, node))) {
     if (OB_HASH_NOT_EXIST == ret) { // not exist, create
       if (OB_FAIL(create_and_add_node_safe(credential))) {
@@ -556,7 +556,7 @@ int ObTableApiSessPool::replace_sess_node_safe(ObTableApiCredential &credential)
   int ret = OB_SUCCESS;
 
   ObTableApiSessNodeReplaceOp replace_callback(*this, credential);
-  if (OB_FAIL(key_node_map_.atomic_refactored(credential.user_id_, replace_callback))) {
+  if (OB_FAIL(key_node_map_.atomic_refactored(credential.hash_val_, replace_callback))) {
     LOG_WARN("fail to replace session", K(ret), K(credential));
   }
 
