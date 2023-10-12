@@ -12809,13 +12809,13 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
 {
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, NULL, NULL, require_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, require_node, NULL);
 }
 | ALTER USER user_with_host_name WITH resource_option_list
 {
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, NULL, NULL, res_opt_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, res_opt_node, NULL);
 }
 ;
 
