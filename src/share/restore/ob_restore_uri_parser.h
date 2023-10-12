@@ -16,7 +16,6 @@
 #include "share/restore/ob_physical_restore_info.h"
 #include "share/ob_kv_parser.h"
 #include "share/ob_list_parser.h"
-#include "share/restore/ob_restore_args.h"
 #include "lib/hash/ob_hashmap.h"
 #include "common/ob_zone.h"
 

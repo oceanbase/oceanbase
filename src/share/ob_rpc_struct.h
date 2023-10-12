@@ -42,7 +42,6 @@
 #include "share/schema/ob_dependency_info.h"
 #include "share/schema/ob_trigger_info.h"
 #include "share/ob_storage_format.h"
-#include "share/restore/ob_restore_args.h"  // ObRestoreArgs
 #include "share/io/ob_io_calibration.h"  // ObIOBenchResult
 #include "rootserver/ob_rs_job_table_operator.h"
 #include "sql/executor/ob_task_id.h"

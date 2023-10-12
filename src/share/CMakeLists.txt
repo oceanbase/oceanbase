@@ -217,7 +217,6 @@ ob_set_subtarget(ob_share common_mixed
   restore/ob_import_table_struct.cpp
   restore/ob_import_util.cpp
   restore/ob_recover_table_util.cpp
-  restore/ob_restore_args.cpp
   restore/ob_restore_uri_parser.cpp
   restore/ob_ls_restore_status.cpp
   restore/ob_restore_type.cpp
