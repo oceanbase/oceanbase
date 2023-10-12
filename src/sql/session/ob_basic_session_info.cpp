@@ -142,6 +142,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       is_tenant_killed_(0),
       reused_count_(0),
       first_need_txn_stmt_type_(stmt::T_NONE),
+      need_recheck_txn_readonly_(false),
       exec_min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
       stmt_type_(stmt::T_NONE),
       labels_(),
@@ -425,6 +426,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   // 不要重置release_to_pool_，原因见属性声明位置的注释。
   is_tenant_killed_ = 0;
   first_need_txn_stmt_type_ = stmt::T_NONE;
+  need_recheck_txn_readonly_ = false;
   exec_min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   labels_.reuse();
   thread_id_ = 0;
@@ -5357,12 +5359,14 @@ int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
   return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
 }
 
-void ObBasicSessionInfo::reset_tx_variable()
+void ObBasicSessionInfo::reset_tx_variable(bool reset_next_scope)
 {
   LOG_DEBUG("reset tx variable", K(lbt()));
   reset_first_need_txn_stmt_type();
-  reset_tx_isolation();
-  reset_tx_read_only();
+  if (reset_next_scope) {
+    reset_tx_isolation();
+    reset_tx_read_only();
+  }
   reset_trans_flags();
   clear_app_trace_id();
 }
@@ -5439,18 +5443,33 @@ void ObBasicSessionInfo::reset_tx_read_only()
 int ObBasicSessionInfo::check_tx_read_only_privilege(const ObSqlTraits &sql_traits)
 {
   int ret = OB_SUCCESS;
-  if (sql_traits.is_cause_implicit_commit_) {
-    reset_tx_read_only();
-  } else {}
-  // pl call stmt and anonymous does not check here,
-  // will be check in ObTransService::start_stmt_sanity_check_
-  if (get_tx_read_only() && !sql_traits.is_readonly_stmt_
+  set_need_recheck_txn_readonly(false);
+  bool read_only = tx_desc_ && tx_desc_->is_in_tx() ? tx_desc_->is_rdonly() : get_tx_read_only();
+  if (!sql_traits.is_readonly_stmt_
       && sql_traits.stmt_type_ != ObItemType::T_SP_CALL_STMT
       && sql_traits.stmt_type_ != ObItemType::T_SP_ANONYMOUS_BLOCK
       && sql_traits.stmt_type_ != ObItemType::T_EXPLAIN) {
-    ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
-
-  } else {}
+    if (sql_traits.is_cause_implicit_commit_ && !sql_traits.is_commit_stmt_) {
+      if (sys_vars_cache_.get_tx_read_only()) {
+        // should implicit commit current transaction before report error
+        //
+        // example case:
+        //
+        // set session transaction read only;
+        // set transaction read write;
+        // start transaction;
+        // insert into t values(1);
+        // create table t1(id int); -- error: OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION
+        // rollback;
+        // select * from t where id = 1; -- 1 row found
+        //
+        set_need_recheck_txn_readonly(true);
+      }
+    } else if (read_only) {
+      ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
+    }
+  }
+  LOG_DEBUG("CHECK readonly", KP(this), K(sessid_), K(sql_traits.is_readonly_stmt_), K(get_tx_read_only()));
   return ret;
 }
 

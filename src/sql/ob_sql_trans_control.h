@@ -167,19 +167,21 @@ private:
 class ObSqlTransControl
 {
 public:
-  static int reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc = false);
-  static int reset_session_tx_state(ObBasicSessionInfo *session, bool reuse_tx_desc = false);
+  static int reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc = false, bool active_tx_end = true);
+  static int reset_session_tx_state(ObBasicSessionInfo *session, bool reuse_tx_desc = false, bool active_tx_end = true);
   static int create_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int release_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int explicit_start_trans(ObExecContext &exec_ctx, const bool read_only, const ObString hint = ObString());
   static int explicit_end_trans(ObExecContext &exec_ctx, const bool is_rollback, const ObString hint = ObString());
   static int implicit_end_trans(ObExecContext &exec_ctx,
                                 const bool is_rollback,
-                                ObEndTransAsyncCallback *callback = NULL);
+                                ObEndTransAsyncCallback *callback = NULL,
+                                bool reset_trans_variable = true);
   static int end_trans(ObExecContext &exec_ctx,
                        const bool is_rollback,
                        const bool is_explicit,
-                       ObEndTransAsyncCallback *callback = NULL);
+                       ObEndTransAsyncCallback *callback = NULL,
+                       bool reset_trans_variable = true);
   static int rollback_trans(ObSQLSessionInfo *session,
                             bool &need_disconnect);
   static int do_end_trans_(ObSQLSessionInfo *session,
