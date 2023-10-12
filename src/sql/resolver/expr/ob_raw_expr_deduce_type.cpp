@@ -3463,7 +3463,7 @@ int ObRawExprDeduceType::add_implicit_cast_for_op_row(
      || OB_ISNULL(child_ptr->get_param_expr(0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("child_ptr is NULL", K(ret), K(child_ptr));
-  } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory_,
+  } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*child_ptr->get_expr_factory(),
                                                      child_ptr,
                                                      child_ptr))) {
     LOG_WARN("failed to copy expr node", K(ret));
