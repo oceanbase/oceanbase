@@ -3588,10 +3588,10 @@ int ObDDLOperator::update_aux_table(
       }
     } else if (table_type == AUX_LOB_META) {
       lob_meta_table_id = new_table_schema.get_aux_lob_meta_tid();
-      N = new_table_schema.has_lob_aux_table() ? 1 : 0;
+      N = (table_schema.has_lob_aux_table() && new_table_schema.has_lob_aux_table()) ? 1 : 0;
     } else if (table_type == AUX_LOB_PIECE) {
       lob_piece_table_id = new_table_schema.get_aux_lob_piece_tid();
-      N = new_table_schema.has_lob_aux_table() ? 1 : 0;
+      N = (table_schema.has_lob_aux_table() && new_table_schema.has_lob_aux_table()) ? 1 : 0;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid table type", K(ret), K(table_type));
@@ -3599,7 +3599,6 @@ int ObDDLOperator::update_aux_table(
   }
   if (OB_SUCC(ret)) {
     ObTableSchema new_aux_table_schema;
-    int64_t N = is_index ? simple_index_infos.count() : aux_tid_array.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       const ObTableSchema *aux_table_schema = NULL;
       if (is_index && OB_NOT_NULL(global_idx_schema_array) && !global_idx_schema_array->empty()) {
