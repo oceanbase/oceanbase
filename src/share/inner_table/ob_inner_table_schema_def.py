@@ -9084,7 +9084,7 @@ def_table_schema(
   ('process_priv', 'varchar:1'),
   ('file_priv', 'varchar:1'),
   ('grant_priv', 'varchar:1'),
-  ('reference_priv', 'varchar:1'),
+  ('references_priv', 'varchar:1'),
   ('index_priv', 'varchar:1'),
   ('alter_priv', 'varchar:1'),
   ('show_db_priv', 'varchar:1'),
@@ -9141,7 +9141,7 @@ def_table_schema(
   ('create_priv', 'varchar:1'),
   ('drop_priv', 'varchar:1'),
   ('grant_priv', 'varchar:1'),
-  ('reference_priv', 'varchar:1'),
+  ('references_priv', 'varchar:1'),
   ('index_priv', 'varchar:1'),
   ('alter_priv', 'varchar:1'),
   ('create_tmp_table_priv', 'varchar:1'),
@@ -9230,7 +9230,7 @@ def_table_schema(
    ('comment', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
    ('character_set_client', 'varchar:MAX_CHARSET_LENGTH'),
    ('collation_connection', 'varchar:MAX_CHARSET_LENGTH'),
-   ('collation_database', 'varchar:MAX_CHARSET_LENGTH'),
+   ('db_collation', 'varchar:MAX_CHARSET_LENGTH'),
    ('body_utf8', 'varchar:OB_MAX_VARCHAR_LENGTH'),
    ],
 )
@@ -9982,9 +9982,9 @@ def_table_schema(
   ('TABLE_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
   ('COLUMN_NAME', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false', ''),
   ('ORDINAL_POSITION', 'uint', 'false', '0'),
-  ('COLUMN_DEFAULT', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
+  ('COLUMN_DEFAULT', 'longtext', 'true'),
   ('IS_NULLABLE', 'varchar:COLUMN_NULLABLE_LENGTH',  'false', ''),
-  ('DATA_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH',  'false', ''),
+  ('DATA_TYPE', 'longtext',  'false', ''),
   ('CHARACTER_MAXIMUM_LENGTH', 'uint', 'true'),
   ('CHARACTER_OCTET_LENGTH', 'uint', 'true'),
   ('NUMERIC_PRECISION', 'uint', 'true'),
@@ -9992,12 +9992,12 @@ def_table_schema(
   ('DATETIME_PRECISION', 'uint', 'true'),
   ('CHARACTER_SET_NAME', 'varchar:MAX_CHARSET_LENGTH', 'true'),
   ('COLLATION_NAME', 'varchar:MAX_COLLATION_LENGTH', 'true'),
-  ('COLUMN_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH'),
+  ('COLUMN_TYPE', 'longtext'),
   ('COLUMN_KEY', 'varchar:MAX_COLUMN_KEY_LENGTH', 'false', ''),
   ('EXTRA', 'varchar:COLUMN_EXTRA_LENGTH', 'false', ''),
   ('PRIVILEGES', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH', 'false', ''),
-  ('COLUMN_COMMENT', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'false', ''),
-  ('GENERATION_EXPRESSION', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', '')
+  ('COLUMN_COMMENT', 'longtext', 'false', ''),
+  ('GENERATION_EXPRESSION', 'longtext', 'false', '')
   ],
 )
 
@@ -14164,7 +14164,7 @@ def_table_schema(
                       CAST(mp.DEFINER AS CHAR(93)) as DEFINER,
                       CAST(mp.CHARACTER_SET_CLIENT AS CHAR(32)) as CHARACTER_SET_CLIENT,
                       CAST(mp.COLLATION_CONNECTION AS CHAR(32)) as COLLATION_CONNECTION,
-                      CAST(mp.collation_database AS CHAR(32)) as DATABASE_COLLATION
+                      CAST(mp.db_collation AS CHAR(32)) as DATABASE_COLLATION
                     from
                       mysql.proc as mp
                       join oceanbase.__all_database a

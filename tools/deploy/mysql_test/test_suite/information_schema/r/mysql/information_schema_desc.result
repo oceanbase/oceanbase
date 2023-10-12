@@ -24,9 +24,9 @@ TABLE_SCHEMA	varchar(128)	NO		NULL
 TABLE_NAME	varchar(256)	NO		NULL	
 COLUMN_NAME	varchar(128)	NO			
 ORDINAL_POSITION	bigint(20) unsigned	NO			
-COLUMN_DEFAULT	varchar(262144)	YES		NULL	
+COLUMN_DEFAULT	longtext	YES		NULL	
 IS_NULLABLE	varchar(4)	NO			
-DATA_TYPE	varchar(1048576)	NO			
+DATA_TYPE	longtext	NO			
 CHARACTER_MAXIMUM_LENGTH	bigint(20) unsigned	YES		NULL	
 CHARACTER_OCTET_LENGTH	bigint(20) unsigned	YES		NULL	
 NUMERIC_PRECISION	bigint(20) unsigned	YES		NULL	
@@ -34,12 +34,12 @@ NUMERIC_SCALE	bigint(20) unsigned	YES		NULL
 DATETIME_PRECISION	bigint(20) unsigned	YES		NULL	
 CHARACTER_SET_NAME	varchar(128)	YES		NULL	
 COLLATION_NAME	varchar(128)	YES		NULL	
-COLUMN_TYPE	varchar(1048576)	NO		NULL	
+COLUMN_TYPE	longtext	NO		NULL	
 COLUMN_KEY	varchar(3)	NO			
 EXTRA	varchar(4096)	NO			
 PRIVILEGES	varchar(200)	NO			
-COLUMN_COMMENT	varchar(2048)	NO			
-GENERATION_EXPRESSION	varchar(262144)	NO			
+COLUMN_COMMENT	longtext	NO			
+GENERATION_EXPRESSION	longtext	NO			
 desc global_status;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			
