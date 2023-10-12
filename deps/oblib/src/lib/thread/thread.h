@@ -22,6 +22,7 @@
 
 namespace oceanbase {
 namespace lib {
+class ObPThread;
 
 class Thread;
 class Threads;
@@ -46,6 +47,7 @@ public:
 /// A wrapper of Linux thread that supports normal thread operations.
 class Thread {
 public:
+  friend class ObPThread;
   static constexpr int PATH_SIZE = 128;
   Thread(Threads *threads, int64_t idx, int64_t stack_size);
   ~Thread();
@@ -163,6 +165,7 @@ public:
   static thread_local uint8_t wait_event_;
 private:
   static void* __th_start(void *th);
+  int try_wait();
   void destroy_stack();
   static thread_local Thread* current_thread_;
 

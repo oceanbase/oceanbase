@@ -13,13 +13,18 @@
 #include "ob_dynamic_thread_pool.h"
 #include "lib/thread/ob_thread_name.h"
 
+extern "C" {
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
+}
+
 namespace oceanbase
 {
 namespace common
 {
 
 ObDynamicThreadInfo::ObDynamicThreadInfo()
-  : tid_(-1),
+  : tid_(nullptr),
     idx_(-1),
     pool_(NULL),
     is_stop_(false),
@@ -226,7 +231,6 @@ int ObDynamicThreadPool::stop_all_threads()
 int ObDynamicThreadPool::start_thread(ObDynamicThreadInfo &thread_info)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -239,10 +243,9 @@ int ObDynamicThreadPool::start_thread(ObDynamicThreadInfo &thread_info)
     COMMON_LOG(ERROR, "this thread failed during startup, cannot start again", K(ret), K(thread_info));
   } else {
     thread_info.is_stop_ = false;
-    if (0 != (tmp_ret = pthread_create(&thread_info.tid_, NULL, task_thread_func, &thread_info))) {
-      ret = OB_ERR_SYS;
+    if (OB_FAIL(ob_pthread_create(&thread_info.tid_, task_thread_func, &thread_info))) {
       thread_info.error_thread_ = true;
-      COMMON_LOG(ERROR, "failed to create thread", K(ret), K(tmp_ret), K(thread_info));
+      COMMON_LOG(ERROR, "failed to create thread", K(ret), K(thread_info));
     } else {
       thread_info.is_alive_ = true;
       ++start_thread_num_;
@@ -266,14 +269,10 @@ int ObDynamicThreadPool::stop_thread(ObDynamicThreadInfo &thread_info)
     COMMON_LOG(ERROR, "thread is not alive, cannot stop", K(ret), K(thread_info));
   } else {
     thread_info.is_stop_ = true;
-    if (0 != (tmp_ret = pthread_join(thread_info.tid_, NULL))) {
-      ret = OB_ERR_SYS;
-      COMMON_LOG(ERROR, "failed to join thread", K(ret), K(thread_info));
-    } else {
-      thread_info.is_alive_ = false;
-      ++stop_thread_num_;
-      COMMON_LOG(INFO, "succeed to stop thread", K(thread_info));
-    }
+    ob_pthread_join(thread_info.tid_);
+    thread_info.is_alive_ = false;
+    ++stop_thread_num_;
+    COMMON_LOG(INFO, "succeed to stop thread", K(thread_info));
   }
 
   return ret;

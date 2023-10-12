@@ -16,6 +16,11 @@
 #include "lib/ob_define.h"                     // RETRY_FUNC
 #include "lib/queue/ob_multi_fixed_queue.h"   // ObMultiFixedQueue
 
+extern "C" {
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
+}
+
 namespace oceanbase
 {
 namespace common
@@ -71,7 +76,7 @@ private:
 
   volatile bool stop_flag_ CACHE_ALIGNED;
 
-  pthread_t     tids_[MAX_THREAD_NUM];
+  void*     tids_[MAX_THREAD_NUM];
   MQueue        queue_;
 
 private:
@@ -148,12 +153,9 @@ int ObMQThread<MAX_THREAD_NUM, ModuleClass>::start()
     stop_flag_ = false;
 
     for (int64_t index = 0; OB_SUCC(ret) && index < thread_num_; index++) {
-      int pthread_ret = 0;
 
-      if (0 != (pthread_ret = pthread_create(tids_ + index, NULL, thread_func_, this))) {
-        LIB_LOG(ERROR, "pthread_create fail", K(pthread_ret),
-                KERRNOMSG(pthread_ret), K(index));
-        ret = OB_ERR_UNEXPECTED;
+      if (OB_FAIL(ob_pthread_create(tids_ + index, thread_func_, this))) {
+        LIB_LOG(ERROR, "pthread_create fail", K(ret), K(index));
       }
     }
   }
@@ -168,14 +170,8 @@ void ObMQThread<MAX_THREAD_NUM, ModuleClass>::stop()
     stop_flag_ = true;
 
     for (int64_t index = 0; index < thread_num_; index++) {
-      if (0 != tids_[index]) {
-        int pthread_ret = pthread_join(tids_[index], NULL);
-
-        if (0 != pthread_ret) {
-          LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "pthread_join fail", "thread_id", tids_[index], K(pthread_ret));
-        } else {
-          // do nothing
-        }
+      if (nullptr != tids_[index]) {
+        ob_pthread_join(tids_[index]);
       }
     }
 
