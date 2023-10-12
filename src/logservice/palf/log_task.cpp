@@ -141,9 +141,7 @@ LogTask::LogTask()
      gen_ts_(OB_INVALID_TIMESTAMP),
      freeze_ts_(OB_INVALID_TIMESTAMP),
      submit_ts_(OB_INVALID_TIMESTAMP),
-     first_ack_ts_(OB_INVALID_TIMESTAMP),
      flushed_ts_(OB_INVALID_TIMESTAMP),
-     committed_ts_(OB_INVALID_TIMESTAMP),
      lock_()
 {
   reset();
@@ -167,9 +165,7 @@ void LogTask::reset()
   gen_ts_ = OB_INVALID_TIMESTAMP;
   freeze_ts_ = OB_INVALID_TIMESTAMP;
   submit_ts_ = OB_INVALID_TIMESTAMP;
-  first_ack_ts_ = OB_INVALID_TIMESTAMP;
   flushed_ts_ = OB_INVALID_TIMESTAMP;
-  committed_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 bool LogTask::can_be_slid()
@@ -435,19 +431,10 @@ void LogTask::set_submit_ts(const int64_t ts)
   ATOMIC_STORE(&submit_ts_, ts);
 }
 
-void LogTask::set_first_ack_ts(const int64_t ts)
-{
-  ATOMIC_STORE(&first_ack_ts_, ts);
-}
-
 void LogTask::set_flushed_ts(const int64_t ts)
 {
   ATOMIC_STORE(&flushed_ts_, ts);
 }
 
-void LogTask::set_committed_ts(const int64_t ts)
-{
-  ATOMIC_STORE(&committed_ts_, ts);
-}
 }  // namespace palf
 }  // namespace oceanbase
