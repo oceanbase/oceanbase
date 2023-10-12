@@ -13841,7 +13841,7 @@ def_table_schema(
                              table_id,
                              row_cnt,
                              avg_row_len,
-                             row_cnt * avg_row_len as data_size
+                             (macro_blk_cnt * 2 * 1024 * 1024) as data_size
                       from oceanbase.__all_table_stat
                       where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
@@ -35113,7 +35113,7 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
+               (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
         WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
@@ -35143,7 +35143,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
              FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON P.TABLE_ID = TS.TABLE_ID
           AND P.PART_ID = TS.PARTITION_ID
@@ -35177,7 +35177,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
             FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON SUBP.TABLE_ID = TS.TABLE_ID
           AND SUBP.SUB_PART_ID = TS.PARTITION_ID
@@ -35270,7 +35270,7 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
+               (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
         WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
@@ -35300,7 +35300,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
              FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON P.TABLE_ID = TS.TABLE_ID
           AND P.PART_ID = TS.PARTITION_ID
@@ -35334,7 +35334,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
             FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON SUBP.TABLE_ID = TS.TABLE_ID
           AND SUBP.SUB_PART_ID = TS.PARTITION_ID
