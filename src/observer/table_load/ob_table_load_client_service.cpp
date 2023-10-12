@@ -753,7 +753,8 @@ int ObTableLoadClientService::exist_client_task(const ObTableLoadUniqueKey &key,
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get refactored", KR(ret), K(key));
       } else {
-        ret = OB_ENTRY_NOT_EXIST;
+        ret = OB_SUCCESS;
+        is_exist = false;
       }
     } else {
       is_exist = true;
