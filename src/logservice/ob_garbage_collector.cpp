@@ -375,6 +375,7 @@ void ObGCHandler::reset()
   ls_ = NULL;
   gc_start_ts_ = OB_INVALID_TIMESTAMP;
   block_tx_ts_ = OB_INVALID_TIMESTAMP;
+  log_sync_stopped_ = false;
   is_inited_ = false;
 }
 
@@ -395,6 +396,11 @@ int ObGCHandler::init(ObLS *ls)
   return ret;
 }
 
+void ObGCHandler::set_log_sync_stopped()
+{
+  ATOMIC_SET(&log_sync_stopped_, true);
+  CLOG_LOG(INFO, "set log_sync_stopped_ to true", K(ls_->get_ls_id()));
+}
 int ObGCHandler::execute_pre_remove()
 {
   int ret = OB_SUCCESS;
@@ -533,8 +539,7 @@ int ObGCHandler::check_ls_can_offline(const share::ObLSStatus &ls_status)
   return ret;
 }
 
-int ObGCHandler::gc_check_invalid_member_seq(const int64_t gc_seq,
-                                             bool &need_gc)
+int ObGCHandler::gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1621,6 +1626,22 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
       tmp_ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "gc_handler is NULL", K(tmp_ret), K(id));
     } else if (is_need_gc_ls_status_(ls_status)) {
+      //this replica  may not be able to synchornize complete logs
+      if (GCReason::LS_STATUS_ENTRY_NOT_EXIST == gc_reason) {
+        SCN offline_scn;
+        if (OB_SUCCESS != (tmp_ret = (ls->get_offline_scn(offline_scn)))) {
+          CLOG_LOG(ERROR, "get_offline_scn failed", K(id));
+        } else if (!offline_scn.is_valid()) {
+          gc_handler->set_log_sync_stopped();
+        }
+      } else if (NOT_IN_LEADER_MEMBER_LIST == gc_reason) {
+        ObLogHandler *log_handler = NULL;
+        if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+          CLOG_LOG(ERROR, "log_handler is NULL", K(tmp_ret), K(id));
+        } else if (!log_handler->is_sync_enabled() || !log_handler->is_replay_enabled()) {
+          gc_handler->set_log_sync_stopped();
+        }
+      }
       ObSwitchLeaderAdapter switch_leader_adapter;
       if (OB_SUCCESS != (tmp_ret = (gc_handler->execute_pre_remove()))) {
         CLOG_LOG(WARN, "failed to execute_pre_remove", K(tmp_ret), K(id), K_(self_addr));
