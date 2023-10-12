@@ -11986,28 +11986,6 @@ int ObPLResolver::resolve_udf_info(
       OX (udf_raw_expr->set_is_udt_cons(udf_info.is_udf_udt_cons()));
       OX (udf_raw_expr->set_is_udt_udf(routine_info->is_udt_routine()));
       OX (udf_raw_expr->set_is_deterministic(routine_info->is_deterministic()));
-      /*if (OB_SUCC(ret)) {
-        bool enable_parallel = true;
-        if (udf_raw_expr->is_parallel_enable()) {
-          //do nothing
-        } else {
-          if (routine_info->is_modifies_sql_data() ||
-              routine_info->is_wps() ||
-              routine_info->is_rps() ||
-              routine_info->is_has_sequence() ||
-              routine_info->is_external_state()) {
-            enable_parallel = false;
-          } else if (routine_info->is_reads_sql_data()) {
-            enable_parallel = true;
-          }
-          OX (udf_raw_expr->set_parallel_enable(enable_parallel));
-        }
-      }*/
-      if (OB_SUCC(ret)
-          && udf_info.is_udf_udt_cons()
-          && OB_NOT_NULL(udf_raw_expr->get_param_expr(0))) {
-        OX (udf_raw_expr->set_pkg_id(udf_raw_expr->get_param_expr(0)->get_result_type().get_udt_id()));
-      }
     }
   }
   return ret;
@@ -14058,7 +14036,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
       OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-        K(is_routine), K(is_resolve_rowtype), K(type), K(pl_data_type), K(var_index));
+        K(is_routine), K(is_resolve_rowtype), K(type),
+        K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
