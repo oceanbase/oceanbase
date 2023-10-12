@@ -101,7 +101,7 @@ int ObExprSTArea::eval_st_area(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         ObGeoExprUtils::geo_func_error_handle(ret, N_ST_AREA);
       } else if (!std::isfinite(result)) {
         ret = OB_OPERATE_OVERFLOW;
-        LOG_WARN("Result value is out of range in st_area", K(ret));
+        LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "Result", N_ST_AREA);
       } else {
         res.set_double(result);
       }
