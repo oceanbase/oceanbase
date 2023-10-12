@@ -139,6 +139,8 @@ int ObTabletPersister::persist_and_transform_tablet(
       LOG_WARN("fail to acqurie tablet", K(ret), K(type), K(new_handle));
     } else if (OB_FAIL(transform_tablet_memory_footprint(old_tablet, new_handle.get_buf(), new_handle.get_buf_len()))) {
       LOG_WARN("fail to transform tablet memory footprint", K(ret), K(old_tablet), K(type));
+    } else if (OB_FAIL(new_handle.get_obj()->inc_macro_ref_cnt())) {
+      LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), K(new_handle));
     }
   }
   return ret;
