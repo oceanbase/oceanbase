@@ -1463,7 +1463,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
         STORAGE_LOG(ERROR, "unexpected error, macro handle in wait info is nullptr", K(ret), KPC(wait_info));
       } else {
         ObTmpMacroBlock &blk = wait_info->get_block();
-        const MacroBlockId &macro_id = wait_info->block_handle_->get_macro_id();
+        const MacroBlockId macro_id = wait_info->block_handle_->get_macro_id();
         const int64_t block_id = blk.get_block_id();
         const int64_t free_page_nums = blk.get_free_page_nums();
         if (OB_FAIL(wait_info->exec_wait(io_timeout_ms))) {
