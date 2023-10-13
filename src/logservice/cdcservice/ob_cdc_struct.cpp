@@ -167,6 +167,11 @@ int ObCdcGetSourceFunctor::operator()(const share::ObLSID &id, logservice::ObRem
     } else if (OB_FAIL(guard.set_source(source))) {
       LOG_WARN("RemoteSourceGuard set source failed", KR(ret));
     } else { }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(source)) {
+      logservice::ObResSrcAlloctor::free(source);
+      source = nullptr;
+    }
   }
   return ret;
 }

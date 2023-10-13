@@ -57,6 +57,11 @@ int LSFetchCtxGetSourceFunctor::operator()(const ObLSID &id, logservice::ObRemot
   } else if (OB_FAIL(guard.set_source(source))) {
     LOG_ERROR("source guard set source failed", KR(ret), KPC(source));
   }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(source)) {
+    logservice::ObResSrcAlloctor::free(source);
+    source = nullptr;
+  }
   return ret;
 }
 
@@ -233,6 +238,11 @@ int LSFetchCtx::init_archive_source_(const ObBackupDest &archive_dest)
     } else if (OB_FAIL(location_source->set(archive_dest, SCN::max_scn()))) {
       LOG_ERROR("location source set archive dest failed", KR(ret), K(archive_dest));
     } else {}
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(location_source)) {
+      logservice::ObResSrcAlloctor::free(location_source);
+      location_source = nullptr;
+    }
   }
   return ret;
 }
