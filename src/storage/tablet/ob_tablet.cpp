@@ -4764,12 +4764,9 @@ int ObTablet::check_medium_list() const
       const ObTabletDumpedMediumInfo *dumped_list = nullptr;
       if (OB_FAIL(ObTabletMdsData::load_medium_info_list(arena_allocator, mds_data_.medium_info_list_, dumped_list))) {
         LOG_WARN("failed to load medium info list", K(ret), K(ls_id), K(tablet_id), K(mds_data_));
-      } else if (nullptr == dumped_list) {
-        // do nothing
-        LOG_INFO("skip check medium list for empty dumped medium info list", KR(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(
           mds_data_.extra_medium_info_,
-          dumped_list->medium_info_list_,
+          nullptr == dumped_list ? nullptr : &dumped_list->medium_info_list_,
           last_major->get_snapshot_version()))) {
         LOG_WARN("fail to validate medium info list", K(ret), K(ls_id), K(tablet_id), K(mds_data_), KPC(dumped_list), KPC(last_major));
       }
@@ -5723,7 +5720,7 @@ int ObTablet::validate_medium_info_list(
   } else if (OB_ISNULL(medium_info_list)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is null", K(ret), K(ls_id), K(tablet_id), K(finish_medium_scn), KP(medium_info_list));
-  } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(extra_info, medium_info_list->medium_info_list_, finish_medium_scn))) {
+  } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(extra_info, &medium_info_list->medium_info_list_, finish_medium_scn))) {
     LOG_WARN("failed to validate medium info list", KR(ret), K(ls_id), K(tablet_id), K(mds_data), K(finish_medium_scn));
   }
   return ret;

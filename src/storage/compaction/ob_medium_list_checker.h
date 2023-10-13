@@ -23,7 +23,7 @@ public:
   typedef common::ObIArray<compaction::ObMediumCompactionInfo*> MediumInfoArray;
   static int validate_medium_info_list(
     const ObExtraMediumInfo &extra_info,
-    const MediumInfoArray &medium_info_array,
+    const MediumInfoArray *medium_info_array,
     const int64_t last_major_snapshot);
   static int check_continue(
     const MediumInfoArray &medium_info_array,
