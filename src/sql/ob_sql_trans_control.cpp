@@ -1053,6 +1053,10 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       auto &touched_ls = tx_result.get_touched_ls();
       OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls),
           savepoint, stmt_expire_ts, touched_ls);
+      // prioritize returning session error code
+      if (session->is_terminate(ret)) {
+        LOG_INFO("trans has terminated when end stmt", K(ret), K(tx_id_before_rollback));
+      }
     }
     // this may happend cause tx may implicit aborted
     // (for example: first write sql of implicit started trans meet lock conflict)
