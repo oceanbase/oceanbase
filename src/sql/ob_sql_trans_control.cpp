@@ -198,7 +198,8 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
 
 int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
                                           const bool is_rollback,
-                                          ObEndTransAsyncCallback *callback)
+                                          ObEndTransAsyncCallback *callback,
+                                          bool reset_trans_variable)
 {
   int ret = OB_SUCCESS;
 #ifndef NDEBUG
@@ -210,7 +211,7 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
   OX (tx_id = session->get_tx_id().get_id());
   CHECK_TX_FREE_ROUTE(exec_ctx, session);
   FLTSpanGuard(end_transaction);
-  OZ(end_trans(exec_ctx, is_rollback, false, callback));
+  OZ(end_trans(exec_ctx, is_rollback, false, callback, reset_trans_variable));
   FLT_SET_TAG(trans_id, tx_id);
   return ret;
 }
@@ -246,7 +247,8 @@ int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is
 int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
                                  const bool is_rollback,
                                  const bool is_explicit,
-                                 ObEndTransAsyncCallback *callback)
+                                 ObEndTransAsyncCallback *callback,
+                                 bool reset_trans_variable)
 {
   int ret = OB_SUCCESS;
   bool sync = false;
@@ -278,7 +280,7 @@ int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
       }
       callback->callback(OB_SUCCESS);
     } else {
-      reset_session_tx_state(session, true);
+      reset_session_tx_state(session, true, reset_trans_variable);
       exec_ctx.set_need_disconnect(false);
     }
   } else {
@@ -301,7 +303,7 @@ int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
       bool reuse_tx = OB_SUCCESS == ret
         || OB_TRANS_COMMITED == ret
         || OB_TRANS_ROLLBACKED == ret;
-      reset_session_tx_state(session, reuse_tx);
+      reset_session_tx_state(session, reuse_tx, reset_trans_variable);
     }
   }
   if (callback && !is_rollback) {
@@ -1192,7 +1194,7 @@ int ObSqlTransControl::get_trans_result(ObExecContext &exec_ctx)
   return get_trans_result(exec_ctx, exec_ctx.get_my_session()->get_trans_result());
 }
 
-int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool reuse_tx_desc)
+int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool reuse_tx_desc, bool reset_trans_variable)
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("reset session tx state", KPC(session->get_tx_desc()), K(lbt()));
@@ -1217,11 +1219,11 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool 
     }
   }
   session->get_trans_result().reset();
-  session->reset_tx_variable();
+  session->reset_tx_variable(reset_trans_variable);
   return ret;
 }
 
-int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc)
+int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc, bool reset_trans_variable)
 {
   int temp_ret = OB_SUCCESS;
   // cleanup txn level temp tables if this is the txn start node
@@ -1234,7 +1236,7 @@ int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool re
       LOG_WARN_RET(temp_ret, "trx level temporary table clean failed", KR(temp_ret));
     }
   }
-  int ret = reset_session_tx_state(static_cast<ObBasicSessionInfo*>(session), reuse_tx_desc);
+  int ret = reset_session_tx_state(static_cast<ObBasicSessionInfo*>(session), reuse_tx_desc, reset_trans_variable);
   return COVER_SUCC(temp_ret);
 }
 

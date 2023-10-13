@@ -2916,9 +2916,9 @@ void ObSQLSessionInfo::check_txn_free_route_alive()
   ObSqlTransControl::check_free_route_tx_alive(*this, txn_free_route_ctx_);
 }
 
-void ObSQLSessionInfo::reset_tx_variable()
+void ObSQLSessionInfo::reset_tx_variable(bool reset_next_scope)
 {
-  ObBasicSessionInfo::reset_tx_variable();
+  ObBasicSessionInfo::reset_tx_variable(reset_next_scope);
   set_early_lock_release(false);
 }
 void ObSQLSessionInfo::destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc)

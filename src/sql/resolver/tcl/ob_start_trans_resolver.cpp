@@ -68,6 +68,8 @@ int ObStartTransResolver::resolve(const ParseNode &parse_node)
         start_stmt->set_read_only(true);
       } else if (IS_READ_WRITE(parse_node.children_[0]->value_)) {
         start_stmt->set_read_only(false);
+      } else {
+        start_stmt->set_read_only(session_info_->get_tx_read_only());
       }
       if (IS_WITH_SNAPSHOT(parse_node.children_[0]->value_)) {
         start_stmt->set_with_consistent_snapshot(true);
