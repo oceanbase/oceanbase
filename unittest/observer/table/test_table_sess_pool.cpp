@@ -42,9 +42,10 @@ void TestTableSessPool::prepare_sess_pool(ObTableApiSessPoolMgr &mgr)
       ObTableApiCredential credential;
       credential.tenant_id_ = tenant_ids[i];
       credential.user_id_ = user_ids[j];
+      credential.hash_val_ = credential.hash();
       ASSERT_EQ(OB_SUCCESS, pool->update_sess(credential));
       ObTableApiSessNode *node = nullptr;
-      ASSERT_EQ(OB_SUCCESS, tmp_pool->get_sess_node(user_ids[j], node));
+      ASSERT_EQ(OB_SUCCESS, tmp_pool->get_sess_node(credential.hash_val_, node));
       ASSERT_NE(nullptr, node);
       for (int64_t k = 0; k < SESS_CNT; k++) {
         void *buf = node->allocator_.alloc(sizeof(ObTableApiSessNodeVal));
