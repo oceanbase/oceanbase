@@ -20,7 +20,7 @@ runs:
     - name: Setup ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
-        max-size: 10G
+        max-size: 800M
         save: ${{inputs.save_cache}}
         key: ${{inputs.os}}
 
@@ -29,3 +29,4 @@ runs:
       run: |
         bash build.sh debug -DOB_USE_CCACHE=ON
         cd build_debug && make -j4
+        ccache -s
