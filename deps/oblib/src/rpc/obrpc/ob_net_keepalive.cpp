@@ -677,6 +677,21 @@ int ret = OB_SUCCESS;
   }
 }
 
+int ObNetKeepAlive::get_last_resp_ts(const common::ObAddr &addr, int64_t &last_resp_ts)
+{
+  int ret = OB_SUCCESS;
+  last_resp_ts = OB_INVALID_TIMESTAMP;
+
+  easy_addr_t ez_addr = to_ez_addr(addr);
+  DestKeepAliveState *rs = regist_dest_if_need(ez_addr);
+  if (rs != NULL) {
+    last_resp_ts = ATOMIC_LOAD(&rs->last_read_ts_);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  return ret;
+}
+
 }//end of namespace obrpc
 }//end of namespace oceanbase
 

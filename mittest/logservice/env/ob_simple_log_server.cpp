@@ -64,12 +64,24 @@ bool MockNetKeepAliveAdapter::in_black_or_stopped(const common::ObAddr &server)
 
 bool MockNetKeepAliveAdapter::is_server_stopped(const common::ObAddr &server)
 {
-  return log_deliver_->need_filter_packet_by_blacklist(server);
+  UNUSED(server);
+  return false;
 }
 
 bool MockNetKeepAliveAdapter::in_black(const common::ObAddr &server)
 {
   return log_deliver_->need_filter_packet_by_blacklist(server);
+}
+
+int MockNetKeepAliveAdapter::get_last_resp_ts(const common::ObAddr &server,
+                                              int64_t &last_resp_ts)
+{
+  if (log_deliver_->need_filter_packet_by_blacklist(server)) {
+    last_resp_ts = 1;
+  } else {
+    last_resp_ts = common::ObTimeUtility::current_time();
+  }
+  return OB_SUCCESS;
 }
 
 uint32_t get_local_addr(const char *dev_name)

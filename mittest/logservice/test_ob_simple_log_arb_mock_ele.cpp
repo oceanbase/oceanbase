@@ -738,7 +738,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_disk_full_reconfirm)
       srv->set_leader(id, addr1);
     }
     EXPECT_UNTIL_EQ(false, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
-    global_timeous_us = 5 * 1000 * 1000;
+    global_timeous_us = 15 * 1000 * 1000;
     dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
 
     for (auto srv: get_cluster()) {
