@@ -17,36 +17,26 @@
 
 #include "lib/container/ob_vector.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/thread/threads.h"
 
 namespace oceanbase
 {
 namespace diagnose
 {
-class ObUnixDomainListener
+class ObUnixDomainListener : public lib::Threads
 {
   static constexpr int MAX_CONNECTION_QUEUE_LENGTH = 1;
   static constexpr int CODE_BUFFER_SIZE = 1 << 20; // 1M
   static constexpr const char *addr = "run/lua.sock";
 public:
   explicit ObUnixDomainListener()
-    : is_inited_(false),
-      stop_(false),
-      running_(false),
-      listen_fd_(-1) {}
-  ~ObUnixDomainListener();
-  int init();
-  int run();
-  void stop();
-  void wait();
-  void destroy();
+    : listen_fd_(-1)
+  {}
+  void run1() override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUnixDomainListener);
 private:
-  bool is_inited_;
-  bool stop_;
-  bool running_;
   int listen_fd_;
-  std::thread worker_;
 };
 
 class ObLuaHandler

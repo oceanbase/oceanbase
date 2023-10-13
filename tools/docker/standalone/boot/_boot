@@ -71,6 +71,16 @@ function run_custom_scripts_recursive {
   done
 }
 
+function deploy_failed {
+  echo "deploy failed!"
+  if exit_while_error
+  then
+    exit 1
+  else
+    echo "Please check the log file ${OB_HOME_PATH}/log/observer.log"
+  fi
+}
+
 # We should decide whether the observer's data exists and
 # whether the obd has the information of the cluster
 
@@ -120,6 +130,10 @@ else # nothing here, bootstrap
   remove_disk_check_logic_in_obd
   obd devmode enable && obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE;
 
+  if [ $? -ne 0 ]; then
+    deploy_failed
+  fi
+
   create_tenant_cmd="obd cluster tenant create ${OB_CLUSTER_NAME} -n ${OB_TENANT_NAME}"
   if ! [ -z "${OB_TENANT_MINI_CPU}" ]; then
     create_tenant_cmd="${create_tenant_cmd} --min-cpu=${OB_TENANT_MINI_CPU}"
@@ -131,6 +145,9 @@ else # nothing here, bootstrap
     create_tenant_cmd="${create_tenant_cmd} --log-disk-size=${OB_TENANT_LOG_DISK_SIZE}"
   fi;
   eval ${create_tenant_cmd}
+  if [ $? -ne 0 ]; then
+    deploy_failed
+  fi
 
   if [ "x${MODE}" != "xSLIM" ]; then
     obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql
@@ -138,6 +155,9 @@ else # nothing here, bootstrap
     run_custom_scripts /root/boot/init.d
   fi
 
+  if [ $? -ne 0 ]; then
+    deploy_failed
+  fi
   mv -f $TMPFILE ${OB_HOME_PATH}/boot.yaml && echo "deploy success!"
 fi
 

@@ -11,11 +11,6 @@
  */
 
 int64_t ob_update_loop_ts();
-
-int ussl_is_stop()
-{
-  return ATOMIC_LOAD(&ussl_is_stopped);
-}
 struct epoll_event *ussl_make_epoll_event(struct epoll_event *event, uint32_t event_flag, void *val)
 {
   event->events = event_flag;
@@ -55,11 +50,11 @@ static void ussl_eloop_fire(ussl_eloop_t *ep, ussl_sock_t *s)
   }
 }
 
-static void ussl_eloop_refire(ussl_eloop_t *ep)
+static void ussl_eloop_refire(ussl_eloop_t *ep, int64_t epoll_timeout)
 {
   const int maxevents = 512;
   struct epoll_event events[maxevents];
-  int cnt = ob_epoll_wait(ep->fd, events, maxevents, 1000);
+  int cnt = ob_epoll_wait(ep->fd, events, maxevents, epoll_timeout);
   for (int i = 0; i < cnt; i++) {
     ussl_sock_t *s = (ussl_sock_t *)events[i].data.ptr;
     s->mask |= events[i].events;
@@ -70,9 +65,6 @@ static void ussl_eloop_refire(ussl_eloop_t *ep)
 static void ussl_sock_destroy(ussl_sock_t *s)
 {
   ussl_dlink_delete(&s->ready_link);
-  if (s->fd >= 0) {
-    close(s->fd);
-  }
   if (s->fty) {
     s->fty->destroy(s->fty, s);
   }
@@ -81,7 +73,11 @@ static void ussl_sock_destroy(ussl_sock_t *s)
 static void ussl_eloop_handle_sock_event(ussl_sock_t *s)
 {
   int err = 0;
-  if (0 == (err = s->handle_event(s))) {
+  if (ussl_skt(s, ERR) || ussl_skt(s, HUP)) {
+    ussl_log_info("sock has error: sock:%p, fd:%d, mask:0x%x", s, s->fd, s->mask);
+    s->has_error = 1;
+    ussl_sock_destroy(s);
+  } else if (0 == (err = s->handle_event(s))) {
     // yield
   } else if (EAGAIN == err) {
     if (ussl_skt(s, PENDING)) {
@@ -98,7 +94,11 @@ int ussl_eloop_run(ussl_eloop_t *ep)
 {
   while (!ussl_is_stop()) {
     ob_update_loop_ts();
-    ussl_eloop_refire(ep);
+    int64_t epoll_timeout = 1000;
+    if (ep->ready_link.next != &(ep->ready_link)) {
+      epoll_timeout = 0;
+    }
+    ussl_eloop_refire(ep, epoll_timeout);
     ussl_dlink_for(&ep->ready_link, p) { ussl_eloop_handle_sock_event(ussl_structof(p, ussl_sock_t, ready_link)); }
     check_and_handle_timeout_event();
   }

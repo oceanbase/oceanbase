@@ -66,6 +66,10 @@ using namespace oceanbase::obrpc;
 #define EXPAND_INTERVAL (1 * 1000 * 1000)
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 
+extern "C" {
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+int ob_pthread_tryjoin_np(void *ptr);
+}
 void MultiLevelReqCnt::atomic_inc(const int32_t level)
 {
   if (level < 0 || level >= MAX_REQUEST_LEVEL) {
@@ -583,7 +587,8 @@ ObTenant::ObTenant(const int64_t id,
       tenant_meta_(),
       shrink_(0),
       total_worker_cnt_(0),
-      gc_thread_(0),
+      gc_thread_(nullptr),
+      has_created_(false),
       stopped_(0),
       wait_mtl_finished_(false),
       req_queue_(),
@@ -869,7 +874,6 @@ void ObTenant::sleep_and_warn(ObTenant* tenant)
 
 void* ObTenant::wait(void* t)
 {
-  ObStackHeaderGuard stack_header_guard;
   int ret = OB_SUCCESS;
   ObTenant* tenant = (ObTenant*)t;
   ob_get_tenant_id() = tenant->id_;
@@ -936,30 +940,26 @@ void* ObTenant::wait(void* t)
 int ObTenant::try_wait()
 {
   int ret = OB_SUCCESS;
-  int tmp = 0;
-  if (-1 == gc_thread_) {
-    LOG_WARN("try_wait after wait successfully", K(id_), K(wait_mtl_finished_));
-  } else if (0 == gc_thread_) {
-    // it may takes too much time for killing session after remove_tenant, we should recalculate.
-    ATOMIC_STORE(&stopped_, ObTimeUtility::current_time());
-    if (0 != (tmp = pthread_create(&gc_thread_, nullptr, wait, this))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("tenant gc thread create failed", K(tmp), K(errno), K(id_));
+  if (nullptr == gc_thread_) {
+    if (has_created_) {
+      LOG_WARN("try_wait after wait successfully", K(id_), K(wait_mtl_finished_));
     } else {
-      ret = OB_EAGAIN;
-      LOG_INFO("tenant pthread_create gc thread successfully", K(id_), K(gc_thread_));
+      // it may takes too much time for killing session after remove_tenant, we should recalculate.
+      ATOMIC_STORE(&stopped_, ObTimeUtility::current_time());
+      if (OB_FAIL(ob_pthread_create(&gc_thread_, wait, this))) {
+        LOG_ERROR("tenant gc thread create failed", K(ret), K(errno), K(id_));
+      } else {
+        has_created_ = true;
+        ret = OB_EAGAIN;
+        LOG_INFO("tenant pthread_create gc thread successfully", K(id_), K(gc_thread_));
+      }
     }
   } else {
-    tmp = pthread_tryjoin_np(gc_thread_, nullptr);
-    if (EBUSY == tmp) {
-      ret = OB_EAGAIN;
-      LOG_WARN("tenant pthread_tryjoin_np failed", K(id_));
-    } else if (0 == tmp) {
-      gc_thread_ = -1; // avoid try_wait again after wait success
-      LOG_INFO("tenant pthread_tryjoin_np successfully", K(id_));
+    if (OB_FAIL(ob_pthread_tryjoin_np(gc_thread_))) {
+      LOG_WARN("tenant pthread_tryjoin_np failed", K(errno), K(id_));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("pthread_tryjoin_np failed", K(tmp), K(errno), K(id_));
+      gc_thread_ = nullptr; // avoid try_wait again after wait success
+      LOG_INFO("tenant pthread_tryjoin_np successfully", K(id_));
     }
     const int64_t ts = ObTimeUtility::current_time() - stopped_;
     // only warn for one time in all tenant.
@@ -1015,12 +1015,36 @@ void ObTenant::set_unit_max_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_max_cpu_ = cpu;
-  const double default_cfs_period_us = 100000.0;
-  int32_t cfs_quota_us = static_cast<int32_t>(default_cfs_period_us * cpu);
-  if (cgroup_ctrl_.is_valid()
-      && !is_meta_tenant(id_)
-      && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.set_cpu_cfs_quota(cfs_quota_us, id_))) {
-    LOG_WARN_RET(tmp_ret, "set cpu cfs quota failed", K(tmp_ret), K_(id), K(cfs_quota_us));
+  int32_t cfs_period_us = 0;
+  int32_t cfs_period_us_new = 0;
+  if (!cgroup_ctrl_.is_valid() || is_meta_tenant(id_)) {
+    // do nothing
+  } else if (is_sys_tenant(id_)) {
+    int32_t sys_cfs_quota_us = -1;
+    if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(sys_cfs_quota_us, id_))) {
+      LOG_WARN_RET(tmp_ret, "set sys tennat cpu cfs quota failed", K(tmp_ret), K_(id), K(sys_cfs_quota_us));
+    }
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.get_cpu_cfs_period(cfs_period_us_new, id_, INT64_MAX))) {
+    LOG_WARN_RET(tmp_ret, "fail get cpu cfs period", K_(id));
+  } else {
+    uint32_t loop_times = 0;
+    // to avoid kernel scaling cfs_period_us after get cpu_cfs_period,
+    // we should check whether cfs_period_us has been changed after set cpu_cfs_quota.
+    while (OB_SUCCESS == tmp_ret && cfs_period_us_new != cfs_period_us) {
+      cfs_period_us = cfs_period_us_new;
+      int32_t cfs_quota_us = static_cast<int32_t>(cfs_period_us * cpu);
+      if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(cfs_quota_us, id_))) {
+        LOG_WARN_RET(tmp_ret, "set cpu cfs quota failed", K_(id), K(cfs_quota_us));
+      } else if (OB_TMP_FAIL(cgroup_ctrl_.get_cpu_cfs_period(cfs_period_us_new, id_, INT64_MAX))) {
+        LOG_ERROR_RET(tmp_ret, "fail get cpu cfs period", K_(id));
+      } else {
+        loop_times++;
+        if (loop_times > 3) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR_RET(tmp_ret, "cpu_cfs_period has been always changing, thread may be hung", K_(id), K(cfs_period_us), K(cfs_period_us_new), K(cfs_quota_us));
+        }
+      }
+    }
   }
 }
 

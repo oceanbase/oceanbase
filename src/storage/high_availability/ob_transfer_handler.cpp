@@ -971,7 +971,7 @@ int ObTransferHandler::commit_trans_(
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
   } else {
-    tmp_ret = trans.end(OB_SUCC(result));
+    tmp_ret = trans.end(OB_SUCCESS == result);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("end transaction failed", K(tmp_ret), K(ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;

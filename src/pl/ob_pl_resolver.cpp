@@ -11995,28 +11995,6 @@ int ObPLResolver::resolve_udf_info(
       OX (udf_raw_expr->set_is_udt_cons(udf_info.is_udf_udt_cons()));
       OX (udf_raw_expr->set_is_udt_udf(routine_info->is_udt_routine()));
       OX (udf_raw_expr->set_is_deterministic(routine_info->is_deterministic()));
-      /*if (OB_SUCC(ret)) {
-        bool enable_parallel = true;
-        if (udf_raw_expr->is_parallel_enable()) {
-          //do nothing
-        } else {
-          if (routine_info->is_modifies_sql_data() ||
-              routine_info->is_wps() ||
-              routine_info->is_rps() ||
-              routine_info->is_has_sequence() ||
-              routine_info->is_external_state()) {
-            enable_parallel = false;
-          } else if (routine_info->is_reads_sql_data()) {
-            enable_parallel = true;
-          }
-          OX (udf_raw_expr->set_parallel_enable(enable_parallel));
-        }
-      }*/
-      if (OB_SUCC(ret)
-          && udf_info.is_udf_udt_cons()
-          && OB_NOT_NULL(udf_raw_expr->get_param_expr(0))) {
-        OX (udf_raw_expr->set_pkg_id(udf_raw_expr->get_param_expr(0)->get_result_type().get_udt_id()));
-      }
     }
   }
   return ret;
@@ -14067,7 +14045,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
       OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-        K(is_routine), K(is_resolve_rowtype), K(type), K(pl_data_type), K(var_index));
+        K(is_routine), K(is_resolve_rowtype), K(type),
+        K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
@@ -14165,11 +14144,15 @@ int ObPLResolver::build_collection_attribute_access(ObRawExprFactory &expr_facto
           access_idx.get_sysfunc_ = NULL;
         }
       } else {
-        access_idx.access_type_ = ObObjAccessIdx::AccessType::IS_LOCAL;
-        access_idx.var_index_ = const_expr->get_value().get_unknown();
+        const ObPLVar *var = NULL;
         CK (OB_NOT_NULL(ns.get_symbol_table()));
-        CK (OB_NOT_NULL(ns.get_symbol_table()->get_symbol(access_idx.var_index_)));
-        if (OB_SUCC(ret)) {
+        CK (OB_NOT_NULL(var = ns.get_symbol_table()->get_symbol(const_expr->get_value().get_unknown())));
+        if (OB_SUCC(ret)
+            && (ob_is_int_tc(var->get_type().get_obj_type())
+                || ob_is_uint_tc(var->get_type().get_obj_type())
+                || ob_is_number_tc(var->get_type().get_obj_type()))) {
+          access_idx.access_type_ = ObObjAccessIdx::AccessType::IS_LOCAL;
+          access_idx.var_index_ = const_expr->get_value().get_unknown();
           access_idx.var_name_ = ns.get_symbol_table()->get_symbol(access_idx.var_index_)->get_name();
         }
       }
@@ -16949,6 +16932,9 @@ int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitA
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    OZ (SMART_CALL(replace_object_compare_expr(expr->get_param_expr(i),unit_ast)));
+  }
   if (OB_FAIL(ret)) {
   } else if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
     CK (2 == expr->get_param_count());

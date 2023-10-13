@@ -436,7 +436,8 @@ int ObLocationService::batch_renew_tablet_locations(
       }
     }
     FLOG_INFO("[TABLET_LOCATION] batch renew tablet locations finished",
-        KR(ret), K(tenant_id), K(renew_type), K(is_nonblock), K(tablet_list), K(ls_ids));
+        KR(ret), K(tenant_id), K(renew_type), K(is_nonblock), K(tablet_list), K(ls_ids),
+        K(error_code));
   }
   return ret;
 }
@@ -445,6 +446,12 @@ int ObLocationService::batch_renew_tablet_locations(
 ObLocationService::RenewType ObLocationService::gen_renew_type_(const int error) const
 {
   RenewType renew_type = DEFAULT_RENEW_BOTH;
+
+  // ALL error need renew both (tablet/LS) locations
+  //
+  // OB_NOT_MASTER also need renew tablet locations. SQL may request wrong Tablet-LS location.
+  renew_type = DEFAULT_RENEW_BOTH;
+  /*
   switch (error) {
     case OB_NOT_MASTER: {
       renew_type = ONLY_RENEW_LS_LOCATION;
@@ -455,6 +462,7 @@ ObLocationService::RenewType ObLocationService::gen_renew_type_(const int error)
       break;
     }
   }
+  */
   return renew_type;
 }
 

@@ -22,7 +22,8 @@ typedef int (*ussl_handle_event_t)(struct ussl_sock_t *);
   ussl_dlink_t ready_link;          \
   int fd;                           \
   uint32_t mask;                    \
-  uint8_t conn_ok : 1
+  uint8_t conn_ok;                  \
+  uint8_t has_error
 
 typedef struct ussl_sock_t
 {

@@ -334,7 +334,6 @@ void ObIndexNameChecker::reset_all_cache()
 int ObIndexNameChecker::reset_cache(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  bool can_skip = false;
   SpinRLockGuard guard(rwlock_);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;

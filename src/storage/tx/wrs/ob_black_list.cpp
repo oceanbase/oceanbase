@@ -14,8 +14,8 @@
 #include "share/ob_thread_mgr.h"                                // set_thread_name
 #include "observer/ob_server_struct.h"                          // for GCTX
 #include "deps/oblib/src/common/ob_role.h"                      // role
-#include "src/storage/tx/wrs/ob_weak_read_util.h"               // ObWeakReadUtil
-#include "src/storage/tx/ob_ts_mgr.h"
+#include "storage/tx/wrs/ob_weak_read_util.h"               // ObWeakReadUtil
+#include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase
 {
@@ -252,7 +252,9 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     } else {
       max_stale_time = get_tenant_max_stale_time_(bl_key.get_tenant_id());
       int64_t max_stale_time_ns = max_stale_time * 1000;
-      if (gts_scn.get_val_for_gts() > ls_info.weak_read_scn_ + max_stale_time_ns || ls_info.tx_blocked_) {
+      if (gts_scn.get_val_for_gts() > ls_info.weak_read_scn_ + max_stale_time_ns
+          || ls_info.tx_blocked_
+          || ls_info.migrate_status_ != ObMigrationStatus::OB_MIGRATION_STATUS_NONE) {
         // scn is out-of-time，add this log stream into blacklist
         if (OB_FAIL(ls_bl_mgr_.update(bl_key, ls_info))) {
           TRANS_LOG(WARN, "ls_bl_mgr_ add fail ", K(bl_key), K(ls_info));
@@ -324,7 +326,7 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
 
   ObLSID ls_id(id);
   common::ObAddr server;
-  ObMigrateStatus migrate_status = ObMigrateStatus(migrate_status_int);
+  ObMigrationStatus migrate_status = ObMigrationStatus(migrate_status_int);
 
   if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {
     ret = OB_ERR_UNEXPECTED;

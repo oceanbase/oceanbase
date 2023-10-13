@@ -254,7 +254,7 @@ public:
       const uint64_t tenant_id,
       const int64_t version_cnt,
       int64_t &schema_version);
-
+  int get_dropped_tenant_ids(common::ObIArray<uint64_t> &dropped_tenant_ids);
   /*----------- check schema interface -----------------*/
   bool is_sys_full_schema() const;
 

@@ -51,6 +51,7 @@
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
+#include "observer/ob_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1528,12 +1529,16 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
         LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(stage), K(upgrade));
       }
     }
+    share::ObServerInfoInTable::ObBuildVersion build_version;
     if (FAILEDx(admin_set_config.execute(set_config_arg))) {
       LOG_WARN("execute set config failed", KR(ret));
+    } else if (OB_FAIL(observer::ObService::get_build_version(build_version))) {
+      LOG_WARN("fail to get build version", KR(ret));
     } else {
       CLUSTER_EVENT_SYNC_ADD("UPGRADE",
                              upgrade ? "BEGIN_UPGRADE" : "END_UPGRADE",
-                             "cluster_version", min_server_version);
+                             "cluster_version", min_server_version,
+                             "build_version", build_version.ptr());
       LOG_INFO("change upgrade parameters",
                "enable_upgrade_mode", upgrade,
                "in_major_version_upgrade_mode", GCONF.in_major_version_upgrade_mode());
@@ -1586,13 +1591,18 @@ int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg
     if (FAILEDx(admin_set_config.execute(set_config_arg))) {
       LOG_WARN("execute set config failed", KR(ret));
     } else {
-      if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE != arg.stage_) {
+      share::ObServerInfoInTable::ObBuildVersion build_version;
+      if (OB_FAIL(observer::ObService::get_build_version(build_version))) {
+        LOG_WARN("fail to get build version", KR(ret));
+      } else if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE != arg.stage_) {
         CLUSTER_EVENT_SYNC_ADD("UPGRADE", "BEGIN_ROLLING_UPGRADE",
-                               "cluster_version", ori_min_server_version);
+                               "cluster_version", ori_min_server_version,
+                               "build_version", build_version.ptr());
       } else {
         CLUSTER_EVENT_SYNC_ADD("UPGRADE", "END_ROLLING_UPGRADE",
                                "cluster_version", min_server_version,
-                               "ori_cluster_version", ori_min_server_version);
+                               "ori_cluster_version", ori_min_server_version,
+                               "build_version", build_version.ptr());
       }
       LOG_INFO("change upgrade parameters", KR(ret), "_upgrade_stage", arg.stage_);
     }

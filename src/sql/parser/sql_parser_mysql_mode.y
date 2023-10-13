@@ -427,7 +427,7 @@ END_P SET_VAR DELIMITER
 %type <node> deallocate_prepare_stmt deallocate_or_drop
 %type <ival> opt_scope opt_drop_behavior opt_integer scope_or_scope_alias global_or_session_alias
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i cast_datetime_type_i text_type_i blob_type_i
-%type <node> create_user_stmt user_specification user_specification_list user password opt_host_name user_with_host_name
+%type <node> create_user_stmt user_specification user_specification_list user password opt_host_name user_with_host_name opt_auth_plugin
 %type <node> drop_user_stmt user_list
 %type <node> set_password_stmt opt_for_user
 %type <node> rename_user_stmt rename_info rename_list
@@ -4431,6 +4431,7 @@ TEMPORARY
 }
 | EXTERNAL
 {
+  result->contain_sensitive_data_ = true;
   malloc_terminal_node($$, result->malloc_pool_, T_EXTERNAL);
 }
 | /* EMPTY */
@@ -12569,27 +12570,42 @@ user_specification
 }
 ;
 
+opt_auth_plugin:
+WITH STRING_VALUE
+{
+  $$ = $2;
+}
+| WITH NAME_OB
+{
+  $$ = $2;
+}
+|
+{
+  $$ = NULL;
+}
+;
+
 user_specification:
 user opt_host_name
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 4, $1, NULL, need_enc_node, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, NULL, need_enc_node, $2, NULL);
 }
-| user opt_host_name IDENTIFIED BY password
+| user opt_host_name IDENTIFIED opt_auth_plugin BY password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 4, $1, $5, need_enc_node, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $6, need_enc_node, $2, $4);
 }
-| user opt_host_name IDENTIFIED BY PASSWORD password
+| user opt_host_name IDENTIFIED opt_auth_plugin BY PASSWORD password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 4, $1, $6, need_enc_node, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $7, need_enc_node, $2, $4);
 }
 ;
 
@@ -12696,14 +12712,17 @@ CIPHER STRING_VALUE
 user:
 STRING_VALUE
 {
+  result->may_contain_sensitive_data_ = true;
   $$ = $1;
 }
 | NAME_OB
 {
+  result->may_contain_sensitive_data_ = true;
   $$ = $1;
 }
 | unreserved_keyword
 {
+  result->may_contain_sensitive_data_ = true;
   get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
 }
 ;
@@ -12729,6 +12748,7 @@ user opt_host_name
 password:
 STRING_VALUE
 {
+  result->contain_sensitive_data_ = true;
   $$ = $1;
   $$->stmt_loc_.first_column_ = @1.first_column - 1;
   $$->stmt_loc_.last_column_ = @1.last_column - 1;
@@ -12769,33 +12789,33 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, $5, need_enc_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $5, need_enc_node, NULL, NULL);
 }
 | SET PASSWORD opt_for_user COMP_EQ PASSWORD '(' password ')'
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, $7, need_enc_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, NULL);
 }
-| ALTER USER user_with_host_name IDENTIFIED BY password
+| ALTER USER user_with_host_name IDENTIFIED opt_auth_plugin BY password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, $6, need_enc_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
 }
 | ALTER USER user_with_host_name require_specification
 {
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, NULL, NULL, require_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, require_node, NULL);
 }
 | ALTER USER user_with_host_name WITH resource_option_list
 {
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, NULL, NULL, res_opt_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, res_opt_node, NULL);
 }
 ;
 
@@ -15212,6 +15232,7 @@ ALTER SYSTEM REFRESH IO CALIBRATION opt_storage_name opt_calibration_list opt_se
 ALTER SYSTEM opt_set alter_system_set_parameter_actions
 {
   (void)$3;
+  result->contain_sensitive_data_ = true;
   merge_nodes($$, result, T_SYTEM_ACTION_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SYSTEM_SET_PARAMETER, 1, $$);
 }
@@ -15862,6 +15883,7 @@ ALTER SYSTEM BACKUP BACKUPPIECE ALL NOT BACKED UP INTNUM TIMES opt_with_active_p
 SET ENCRYPTION ON IDENTIFIED BY STRING_VALUE ONLY
 {
   ParseNode *mode = NULL;
+  result->contain_sensitive_data_ = true;
   malloc_terminal_node(mode, result->malloc_pool_, T_INT);
   mode->value_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_SET_ENCRYPTION, 2, mode, $6);
@@ -15870,6 +15892,7 @@ SET ENCRYPTION ON IDENTIFIED BY STRING_VALUE ONLY
 SET DECRYPTION IDENTIFIED BY string_list
 {
   ParseNode *string_list_node = NULL;
+  result->contain_sensitive_data_ = true;
   merge_nodes(string_list_node, result, T_STRING_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_SET_DECRYPTION, 1, string_list_node);
 }
@@ -16204,6 +16227,7 @@ opt_backup_dest:
 }
 | FROM STRING_VALUE
 {
+  result->contain_sensitive_data_ = true;
   $$ = $2;
 }
 ;
@@ -16336,6 +16360,7 @@ opt_backup_backup_dest:
 | BACKUP_BACKUP_DEST opt_equal_mark STRING_VALUE
 {
   (void)($2);
+  result->contain_sensitive_data_ = true;
   $$ = $3;
 }
 ;
@@ -17288,6 +17313,7 @@ opt_backup_to:
 | TO opt_equal_mark STRING_VALUE
 {
   (void)($2);
+  result->contain_sensitive_data_ = true;
   $$ = $3;
 }
 ;
@@ -17333,6 +17359,7 @@ opt_backup_key_info:
 /*EMPTY*/  { $$ = NULL; }
 | WITH KEY FROM STRING_VALUE opt_encrypt_key
 {
+  result->contain_sensitive_data_ = true;
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_KEY, 2, $4, $5);
 }
 ;
@@ -17341,6 +17368,7 @@ opt_encrypt_key:
 /*EMPTY*/  { $$ = NULL; }
 | ENCRYPTED BY STRING_VALUE
 {
+  result->contain_sensitive_data_ = true;
   $$ = $3;
 }
 ;

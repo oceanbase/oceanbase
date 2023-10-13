@@ -130,12 +130,20 @@ public:
       const uint64_t tenant_id,
       const ObBalanceGroupID &balance_group_id,
       const common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array);
+  int inc_balance_group_ls_stat(
+      const int64_t timeout_abs,
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObBalanceGroupLSStat &ls_stat);
   int delete_balance_group_ls_stat(
       const int64_t timeout,
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id);
 private:
   int generate_insert_update_sql(
+      const ObBalanceGroupLSStat &bg_ls_stat,
+      common::ObSqlString &sql_string);
+  int generate_inc_sql_(
       const ObBalanceGroupLSStat &bg_ls_stat,
       common::ObSqlString &sql_string);
 private:
@@ -151,7 +159,8 @@ public:
   ObNewTableTabletAllocator(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObMySQLProxy *sql_proxy);
+      common::ObMySQLProxy *sql_proxy,
+      const bool use_parallel_ddl = false);
   virtual ~ObNewTableTabletAllocator();
 public:
   int init();
@@ -196,6 +205,8 @@ private:
   int alloc_tablet_by_count_balance(
       const share::schema::ObTableSchema &table_schema);
   int alloc_tablet_for_non_partitioned_balance_group(
+      const share::schema::ObTableSchema &table_schema);
+  int alloc_tablet_for_non_partitioned_balance_group_by_cache_(
       const share::schema::ObTableSchema &table_schema);
   int alloc_tablet_for_partitioned_balance_group(
       const share::schema::ObTableSchema &table_schema);
@@ -262,6 +273,7 @@ private:
   bool inited_;
   bool is_add_partition_;
   static int64_t alloc_tablet_ls_offset_;
+  bool use_parallel_ddl_;
 };
 
 }//end namespace rootserver

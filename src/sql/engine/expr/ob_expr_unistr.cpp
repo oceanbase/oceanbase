@@ -54,9 +54,9 @@ int ObExprUnistr::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-int calc_unistr(const ObString &src,
-                const ObCollationType src_cs_type,
-                const ObCollationType dst_cs_type,
+int ObExprUnistr::calc_unistr(const common::ObString &src,
+                const common::ObCollationType src_cs_type,
+                const common::ObCollationType dst_cs_type,
                 char* buf, const int64_t buf_len, int32_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -133,7 +133,7 @@ int ObExprUnistr::calc_unistr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 {
   int ret = OB_SUCCESS;
   ObDatum *src_param = NULL;
-  if (expr.args_[0]->eval(ctx, src_param)) {
+  if (OB_FAIL(expr.args_[0]->eval(ctx, src_param))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
     if (src_param->is_null()) {
@@ -310,7 +310,7 @@ int ObExprAsciistr::calc_asciistr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 {
   int ret = OB_SUCCESS;
   ObDatum *src_param = NULL;
-  if (expr.args_[0]->eval(ctx, src_param)) {
+  if (OB_FAIL(expr.args_[0]->eval(ctx, src_param))) {
     LOG_WARN("eval arg failed", K(ret));
   } else {
     if (src_param->is_null()) {

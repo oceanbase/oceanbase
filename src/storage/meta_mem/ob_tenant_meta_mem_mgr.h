@@ -358,15 +358,6 @@ private:
     virtual ~RefreshConfigTask() = default;
     virtual void runTimerTask() override;
   };
-  class TabletPersistTask : public common::ObTimerTask
-  {
-  public:
-    explicit TabletPersistTask(ObTenantMetaMemMgr *t3m) : t3m_(t3m) {}
-    virtual ~TabletPersistTask() = default;
-    virtual void runTimerTask() override;
-  private:
-    ObTenantMetaMemMgr *t3m_;
-  };
   class MinMinorSSTableInfo final
   {
   public:
@@ -490,7 +481,6 @@ private:
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.
   TableGCTask table_gc_task_;
   RefreshConfigTask refresh_config_task_;
-  TabletPersistTask tablet_persist_task_;
   TabletGCTask tablet_gc_task_;
   ObTablet *gc_head_;
   int64_t wait_gc_tablets_cnt_;

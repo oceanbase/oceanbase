@@ -182,6 +182,14 @@ int64_t ObTenantInfo::get_memstore_limit() const
   return mem_memstore_limit_;
 }
 
+bool ObTenantInfo::is_memstore_limit_changed(const int64_t curr_memstore_limit_percentage) const
+{
+  SpinRLockGuard guard(lock_);
+  const int64_t tmp_var = mem_upper_limit_ / 100;
+  const int64_t curr_mem_memstore_limit = tmp_var * curr_memstore_limit_percentage;
+  return (curr_mem_memstore_limit != mem_memstore_limit_);
+}
+
 void ObTenantInfo::get_freeze_ctx(ObTenantFreezeCtx &ctx) const
 {
   SpinRLockGuard guard(lock_);

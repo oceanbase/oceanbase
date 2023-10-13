@@ -37,6 +37,7 @@ ob_set_subtarget(ob_server common
   ob_tenant_duty_task.cpp
   ob_uniq_task_queue.cpp
   ob_server_startup_task_handler.cpp
+  ob_srv_rpc_handler.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed
@@ -162,6 +163,7 @@ ob_set_subtarget(ob_server table
   table/ttl/ob_table_ttl_task.cpp
   table/ttl/ob_table_ttl_executor.cpp
   table/ob_table_move_response.cpp
+  table/ob_table_connection_mgr.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -393,6 +395,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
   virtual_table/ob_virtual_flt_config.cpp
+  virtual_table/ob_all_virtual_kv_connection.cpp
 )
 
 ob_server_add_target(ob_server)

@@ -208,9 +208,6 @@ void Thread::wait()
 {
   int ret = 0;
   if (pth_ != 0) {
-    if (2 <= ATOMIC_AAF(&join_concurrency_, 1)) {
-      ob_abort();
-    }
     if (0 != (ret = pthread_join(pth_, nullptr))) {
       LOG_ERROR("pthread_join failed", K(ret), K(errno));
 #ifndef OB_USE_ASAN
@@ -219,10 +216,22 @@ void Thread::wait()
 #endif
     }
     destroy_stack();
-    if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
-      ob_abort();
+  }
+}
+
+int Thread::try_wait()
+{
+  int ret = OB_SUCCESS;
+  if (pth_ != 0) {
+    int pret = 0;
+    if (0 != (pret = pthread_tryjoin_np(pth_, nullptr))) {
+      ret = OB_EAGAIN;
+      LOG_WARN("pthread_tryjoin_np failed", K(pret), K(errno), K(ret));
+    } else {
+      destroy_stack();
     }
   }
+  return ret;
 }
 
 void Thread::destroy()

@@ -233,7 +233,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       ObTableItem table_item;
       table_item.database_name_ = arg.database_name_;
       table_item.table_name_ = index_table_schema->get_table_name();
-      table_item.is_hidden_ = arg.is_hidden_;
+      table_item.is_hidden_ = index_table_schema->is_user_hidden_table();
       obrpc::ObDDLRes ddl_res;
       obrpc::ObDropTableArg drop_table_arg;
       drop_table_arg.tenant_id_ = tenant_id;

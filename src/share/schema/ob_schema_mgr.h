@@ -795,6 +795,7 @@ public:
   int del_drop_tenant_info(const uint64_t tenant_id);
   // drop_tenant_info is invalid, indicating that the DDL of the drop tenant has not been read
   int get_drop_tenant_info(const uint64_t tenant_id, ObDropTenantInfo &drop_tenant_info) const;
+  int get_drop_tenant_ids(common::ObIArray<uint64_t> &drop_tenant_ids) const;
 
   /*schema statistics*/
   int get_schema_size(int64_t &total_size) const;

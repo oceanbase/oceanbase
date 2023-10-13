@@ -147,38 +147,6 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
-int ObColumnRedefinitionTask::wait_data_complement(const ObDDLTaskStatus next_task_status)
-{
-  int ret = OB_SUCCESS;
-  bool is_build_replica_end = false; 
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObColumnRedefinitionTask is not inited", K(ret));
-  } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
-    is_build_replica_end = true; // switch to fail.
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected snapshot", K(ret), KPC(this));
-  } else if (!is_sstable_complete_task_submitted_ && OB_FAIL(send_build_single_replica_request())) {
-    LOG_WARN("fail to send build single replica request", K(ret));
-  } else if (is_sstable_complete_task_submitted_ && OB_FAIL(check_build_single_replica(is_build_replica_end))) {
-    LOG_WARN("fail to check build single replica", K(ret), K(is_build_replica_end));
-  }
-  DEBUG_SYNC(COLUMN_REDEFINITION_REPLICA_BUILD);
-  if (is_build_replica_end) {
-    ret = complete_sstable_job_ret_code_;
-    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum(get_execution_id()))) {
-      LOG_WARN("fail to check the columns checkum between data table and hidden one", K(ret));
-    }
-    if (OB_FAIL(switch_status(next_task_status, true, ret))) {
-      LOG_WARN("fail to swith task status", K(ret));
-    }
-    LOG_INFO("wait data complement finished", K(ret), K(*this));
-  }
-  return ret;
-}
 
 // update sstable complement status for all leaders
 int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,

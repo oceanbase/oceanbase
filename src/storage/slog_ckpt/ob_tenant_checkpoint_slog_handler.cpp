@@ -690,7 +690,7 @@ int ObTenantCheckpointSlogHandler::record_ls_transfer_info(
     LOG_INFO("The log stream does not need to record transfer_info", "ls_id", ls->get_ls_id(), K(current_migration_status), K(new_migration_status));
   } else if (!tablet_transfer_info.has_transfer_table()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should has transfer table", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id), K(tablet_transfer_info));
+    LOG_WARN("tablet should have transfer table", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id), K(tablet_transfer_info));
   } else if (ls->get_ls_startup_transfer_info().is_valid()) {
     if (ls->get_ls_startup_transfer_info().ls_id_ != tablet_transfer_info.ls_id_
         || ls->get_ls_startup_transfer_info().transfer_start_scn_ != tablet_transfer_info.transfer_start_scn_) {
@@ -812,7 +812,7 @@ int ObTenantCheckpointSlogHandler::replay_create_tablets_per_task(
   ObTabletTransferInfo tablet_transfer_info;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_addr_arr.count(); i++) {
-    ObArenaAllocator allocator("ReplayTablet");
+    ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ReplayTablet"));
     const ObTabletMapKey &key = tablet_addr_arr.at(i).first;
     const ObMetaDiskAddr &addr = tablet_addr_arr.at(i).second;
     ObLSTabletService *ls_tablet_svr = nullptr;

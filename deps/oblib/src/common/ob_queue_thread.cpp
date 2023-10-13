@@ -15,6 +15,11 @@
 #include "common/ob_queue_thread.h"
 #include "lib/utility/utility.h"
 
+extern "C" {
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
+}
+
 namespace oceanbase
 {
 namespace common
@@ -161,7 +166,7 @@ void S2MQueueThread::destroy()
     tc.run_flag = false;
     tc.stop_flag = true;
     tc.queue_cond.signal();
-    pthread_join(tc.pd, NULL);
+    ob_pthread_join(tc.pd);
   }
   for (int64_t i = 0; i < thread_num_; i++) {
     ThreadConf &tc = thread_conf_array_[i];
@@ -323,7 +328,7 @@ int S2MQueueThread::sub_thread(const int64_t thread_num)
       tc.run_flag = false;
       tc.stop_flag = true;
       tc.queue_cond.signal();
-      pthread_join(tc.pd, NULL);
+      ob_pthread_join(tc.pd);
       tc.high_prio_task_queue.destroy();
       tc.spec_task_queue.destroy();
       tc.comm_task_queue.destroy();
@@ -398,10 +403,8 @@ int S2MQueueThread::launch_thread_(const int64_t thread_num, const int64_t task_
       _OB_LOG(WARN, "low prio task queue init fail, task_num_limit=%ld", task_num_limit);
       break;
     }
-    int tmp_ret = 0;
-    if (0 != (tmp_ret = pthread_create(&(tc.pd), NULL, thread_func_, &tc))) {
-      _OB_LOG(WARN, "pthread_create fail, ret=%d", tmp_ret);
-      ret = OB_ERR_UNEXPECTED;
+    if (OB_FAIL(ob_pthread_create(&(tc.pd), thread_func_, &tc))) {
+      _OB_LOG(WARN, "ob_pthread_create fail, ret=%d", ret);
       tc.high_prio_task_queue.destroy();
       tc.spec_task_queue.destroy();
       tc.comm_task_queue.destroy();
@@ -412,7 +415,7 @@ int S2MQueueThread::launch_thread_(const int64_t thread_num, const int64_t task_
     //CPU_ZERO(&cpu_set);
     //CPU_SET(thread_num_ % get_cpu_num(), &cpu_set);
     //tmp_ret = pthread_setaffinity_np(tc.pd, sizeof(cpu_set), &cpu_set);
-    _OB_LOG(INFO, "create thread succ, index=%ld tmp_ret=%d", thread_num_, tmp_ret);
+    _OB_LOG(INFO, "create thread succ, index=%ld ret=%d", thread_num_, ret);
     thread_num_ += 1;
   }
   return ret;
@@ -530,7 +533,7 @@ int64_t S2MQueueThread::get_thread_index() const
 const int64_t M2SQueueThread::QUEUE_WAIT_TIME = 100 * 1000;
 
 M2SQueueThread::M2SQueueThread() : inited_(false),
-                                   pd_(0),
+                                   pd_(nullptr),
                                    run_flag_(true),
                                    queue_cond_(),
                                    task_queue_(),
@@ -554,9 +557,8 @@ int M2SQueueThread::init(const int64_t task_num_limit,
     ret = OB_INIT_TWICE;
   } else if (OB_SUCCESS != (ret = task_queue_.init(task_num_limit))) {
     _OB_LOG(WARN, "task_queue init fail, ret=%d task_num_limit=%ld", ret, task_num_limit);
-  } else if (0 != (tmp_ret = pthread_create(&pd_, NULL, thread_func_, this))) {
-    ret = OB_ERR_UNEXPECTED;
-    _OB_LOG(WARN, "pthread_create fail, ret=%d", tmp_ret);
+  } else if (OB_FAIL(ob_pthread_create(&pd_, thread_func_, this))) {
+    _OB_LOG(WARN, "ob_pthread_create fail, ret=%d", ret);
   } else {
     inited_ = true;
     idle_interval_ = idle_interval;
@@ -570,11 +572,11 @@ int M2SQueueThread::init(const int64_t task_num_limit,
 
 void M2SQueueThread::destroy()
 {
-  if (0 != pd_) {
+  if (nullptr != pd_) {
     run_flag_ = false;
     queue_cond_.signal();
-    pthread_join(pd_, NULL);
-    pd_ = 0;
+    ob_pthread_join(pd_);
+    pd_ = nullptr;
   }
 
   task_queue_.destroy();

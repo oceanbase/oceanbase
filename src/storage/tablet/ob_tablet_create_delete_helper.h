@@ -112,7 +112,6 @@ public:
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle);
   static int prepare_create_msd_tablet();
-  static int push_msd_tablet_to_queue(ObTabletHandle &handle);
   static int create_msd_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle);

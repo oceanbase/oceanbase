@@ -1850,19 +1850,15 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
       continue;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObCharset::charset_convert(*allocator_,
-                                             select_item.expr_name_,
-                                             session_info_->get_local_collation_connection(),
-                                             CS_TYPE_UTF8MB4_BIN,
+      if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_,
+                                             session_info_->get_dtc_params(),
                                              select_item.expr_name_,
                                              ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
         LOG_WARN("fail to charset convert", K(ret));
-      } else if (OB_FAIL(ObCharset::charset_convert(*allocator_,
-                                                    select_item.alias_name_,
-                                                    session_info_->get_local_collation_connection(),
-                                                    CS_TYPE_UTF8MB4_BIN,
-                                                    select_item.alias_name_,
-                                                    ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
+      } else if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_,
+                                             session_info_->get_dtc_params(),
+                                             select_item.alias_name_,
+                                             ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
         LOG_WARN("fail to charset convert", K(ret));
       }
     }

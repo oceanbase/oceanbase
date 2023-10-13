@@ -924,6 +924,7 @@ public:
   static int all_virtual_wr_snapshot_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_statname_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_sysstat_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_connection_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_virtual_long_ops_status_mysql_sys_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_transfer_member_list_lock_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_timestamp_service_schema(share::schema::ObTableSchema &table_schema);
@@ -1507,6 +1508,8 @@ public:
   static int cdb_wr_statname_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_sysstat_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_wr_sysstat_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_kv_connections_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_kv_connections_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_locks_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_locks_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_log_restore_source_schema(share::schema::ObTableSchema &table_schema);
@@ -3341,6 +3344,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_wr_snapshot_schema,
   ObInnerTableSchema::all_virtual_wr_statname_schema,
   ObInnerTableSchema::all_virtual_wr_sysstat_schema,
+  ObInnerTableSchema::all_virtual_kv_connection_schema,
   ObInnerTableSchema::all_virtual_virtual_long_ops_status_mysql_sys_agent_schema,
   ObInnerTableSchema::all_virtual_ls_transfer_member_list_lock_info_schema,
   ObInnerTableSchema::all_virtual_timestamp_service_schema,
@@ -4018,6 +4022,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_wr_statname_schema,
   ObInnerTableSchema::dba_wr_sysstat_schema,
   ObInnerTableSchema::cdb_wr_sysstat_schema,
+  ObInnerTableSchema::gv_ob_kv_connections_schema,
+  ObInnerTableSchema::v_ob_kv_connections_schema,
   ObInnerTableSchema::gv_ob_locks_schema,
   ObInnerTableSchema::v_ob_locks_schema,
   ObInnerTableSchema::cdb_ob_log_restore_source_schema,
@@ -5020,6 +5026,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_WR_SNAPSHOT_TID,
   OB_ALL_VIRTUAL_WR_STATNAME_TID,
   OB_ALL_VIRTUAL_WR_SYSSTAT_TID,
+  OB_ALL_VIRTUAL_KV_CONNECTION_TID,
   OB_ALL_VIRTUAL_VIRTUAL_LONG_OPS_STATUS_MYSQL_SYS_AGENT_TID,
   OB_ALL_VIRTUAL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TID,
   OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_TID,
@@ -5523,6 +5530,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_WR_SNAPSHOT_TID,
   OB_DBA_WR_STATNAME_TID,
   OB_DBA_WR_SYSSTAT_TID,
+  OB_GV_OB_KV_CONNECTIONS_TID,
+  OB_V_OB_KV_CONNECTIONS_TID,
   OB_GV_OB_LOCKS_TID,
   OB_V_OB_LOCKS_TID,
   OB_DBA_OB_LOG_RESTORE_SOURCE_TID,
@@ -7326,6 +7335,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME,
   OB_ALL_VIRTUAL_WR_STATNAME_TNAME,
   OB_ALL_VIRTUAL_WR_SYSSTAT_TNAME,
+  OB_ALL_VIRTUAL_KV_CONNECTION_TNAME,
   OB_ALL_VIRTUAL_VIRTUAL_LONG_OPS_STATUS_MYSQL_SYS_AGENT_TNAME,
   OB_ALL_VIRTUAL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TNAME,
   OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_TNAME,
@@ -7829,6 +7839,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_WR_SNAPSHOT_TNAME,
   OB_DBA_WR_STATNAME_TNAME,
   OB_DBA_WR_SYSSTAT_TNAME,
+  OB_GV_OB_KV_CONNECTIONS_TNAME,
+  OB_V_OB_KV_CONNECTIONS_TNAME,
   OB_GV_OB_LOCKS_TNAME,
   OB_V_OB_LOCKS_TNAME,
   OB_DBA_OB_LOG_RESTORE_SOURCE_TNAME,
@@ -9060,6 +9072,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_THREAD_TID,
   OB_ALL_VIRTUAL_ARBITRATION_MEMBER_INFO_TID,
   OB_ALL_VIRTUAL_ARBITRATION_SERVICE_STATUS_TID,
+  OB_ALL_VIRTUAL_KV_CONNECTION_TID,
   OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_TID,
   OB_ALL_VIRTUAL_PX_P2P_DATAHUB_TID,
   OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_TID,
@@ -11512,11 +11525,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 257;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 737;
-const int64_t OB_SYS_VIEW_COUNT = 784;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1783;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 738;
+const int64_t OB_SYS_VIEW_COUNT = 786;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1786;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1786;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1789;
 
 } // end namespace share
 } // end namespace oceanbase

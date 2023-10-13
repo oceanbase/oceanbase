@@ -30,6 +30,10 @@
 #include "lib/thread/protected_stack_allocator.h"
 
 using namespace oceanbase::lib;
+extern "C" {
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
+}
 
 namespace oceanbase
 {
@@ -38,7 +42,7 @@ namespace common
 ObBaseLogWriter::ObBaseLogWriter()
   : has_stopped_(true),
     is_inited_(false),
-    flush_tid_(0),
+    flush_tid_(NULL),
     log_items_(NULL),
     max_buffer_item_cnt_(0),
     log_item_push_idx_(0),
@@ -108,25 +112,9 @@ int ObBaseLogWriter::start()
     LOG_STDERR("ObBaseLogWriter has started");
   } else {
     has_stopped_ = false;
-    pthread_attr_t attr;
-    int err_code = 0;
-    if (OB_UNLIKELY(0 != (err_code = pthread_attr_init(&attr)))) {
+    if (0 != ob_pthread_create(&flush_tid_, ObBaseLogWriter::flush_log_thread, this)) {
       ret = OB_ERR_SYS;
-      LOG_STDERR("failed to pthread_attr_init, err_code=%d.\n", err_code);
-      //PTHREAD_SCOPE_SYSTEM: The thread competes for resources with all other threads in
-      //                      all processes on the system that are in the same scheduling
-      //                      allocation domain (a group of one or more processors).
-      //PTHREAD_SCOPE_PROCESS: The thread competes for resources with all other threads in
-      //                       the same process that were also created with the
-      //                       PTHREAD_SCOPE_PROCESS contention scope
-    } else if (OB_UNLIKELY(0 != (err_code = pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM)))) {
-      ret = OB_ERR_SYS;
-      LOG_STDERR("failed to pthread_attr_setscope, err_code=%d.\n", err_code);
-    } else {
-      if (0 != pthread_create(&flush_tid_, NULL, ObBaseLogWriter::flush_log_thread, this)) {
-        ret = OB_ERR_SYS;
-        LOG_STDERR("Fail to create log flush thread.\n");
-      }
+      LOG_STDERR("Fail to create log flush thread.\n");
     }
   }
   if (OB_FAIL(ret)) {
@@ -164,9 +152,9 @@ void ObBaseLogWriter::stop()
 void ObBaseLogWriter::wait()
 {
   if (has_stopped_ && is_inited_) {
-    if (0 != flush_tid_) {
-      pthread_join(flush_tid_, NULL);
-      flush_tid_ = 0;
+    if (NULL != flush_tid_) {
+      ob_pthread_join(flush_tid_);
+      flush_tid_ = NULL;
     }
   }
 }
@@ -249,7 +237,6 @@ void *ObBaseLogWriter::flush_log_thread(void *arg)
   if (OB_ISNULL(arg)) {
     LOG_STDERR("invalid argument, arg = %p\n", arg);
   } else {
-    ObStackHeaderGuard stack_header_guard;
     pthread_cleanup_push(cleanup_log_thread, arg);
     ObBaseLogWriter *log_writer = reinterpret_cast<ObBaseLogWriter*> (arg);
     lib::set_thread_name(log_writer->thread_name_);

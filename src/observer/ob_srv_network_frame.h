@@ -15,13 +15,13 @@
 
 #include "rpc/frame/ob_net_easy.h"
 #include "rpc/frame/ob_req_handler.h"
-#include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "observer/mysql/obsm_handler.h"/*  */
 #include "observer/ob_srv_xlator.h"
 #include "observer/ob_srv_deliver.h"
 #include "observer/ob_server_struct.h"
 #include "observer/net/ob_ingress_bw_alloc_service.h"
+#include "observer/ob_srv_rpc_handler.h"
 
 namespace oceanbase {
 namespace rpc {
@@ -92,7 +92,7 @@ private:
   ObSrvDeliver deliver_;
 
   // rpc handler
-  obrpc::ObRpcHandler rpc_handler_;
+  ObSrvRpcHandler rpc_handler_;
   ObSMHandler mysql_handler_;
   rootserver::ObIngressBWAllocService ingress_service_;
 

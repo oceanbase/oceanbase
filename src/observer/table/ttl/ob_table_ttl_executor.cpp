@@ -269,8 +269,9 @@ int ObTableApiTTLExecutor::update_row_to_das()
       // current_datum_row_ 当前更新的新行
       if (NULL != constraint_value.baseline_datum_row_ &&
           NULL != constraint_value.current_datum_row_) {
-        OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(),
-                                                        eval_ctx_));
+        OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                               get_primary_table_upd_old_row(),
+                               eval_ctx_));
         OZ(delete_upd_old_row_to_das(constraint_rowkey,
                                      constraint_value,
                                      ttl_spec_.get_ctdef().upd_ctdef_,
@@ -340,8 +341,8 @@ int ObTableApiTTLExecutor::process_expire()
       ObConflictValue &old_row = start->second;
       if (NULL != old_row.baseline_datum_row_) {
         // 将旧行刷到表达式中，判断是否过期
-        if (OB_FAIL(old_row.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_))) {
-          LOG_WARN("fail to change store row to expr", K(ret));
+        if (OB_FAIL(stored_row_to_exprs(*old_row.baseline_datum_row_, get_primary_table_upd_old_row(), eval_ctx_))) {
+          LOG_WARN("fail to store row to exprs", K(ret));
         } else if (OB_FAIL(check_expired(is_expired_))) {
           LOG_WARN("fail to check expired", K(ret));
         } else if (is_expired_) { // 过期，删除旧行，写入新行

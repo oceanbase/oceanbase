@@ -238,6 +238,7 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
           ctx_addr_buffer_[0] = 0;
           snprintf(ctx_addr_buffer_, 18, "0x%lx", (uint64_t)tx_stat.tx_ctx_addr_);
           cur_row_.cells_[i].set_varchar(ctx_addr_buffer_);
+          cur_row_.cells_[i].set_default_collation_type();
           break;
         case MEM_CTX_ID:
           //TODO shanyan.g removed schema

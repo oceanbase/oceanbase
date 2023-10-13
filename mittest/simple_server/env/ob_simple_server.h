@@ -41,6 +41,7 @@ public:
   int simple_start();
   int simple_close();
   std::string get_local_ip();
+  int get_mysql_port() { return mysql_port_; }
   int bootstrap();
   void reset();
   common::ObMySQLProxy &get_sql_proxy() { return sql_proxy_; }

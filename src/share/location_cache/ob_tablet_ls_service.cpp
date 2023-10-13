@@ -27,6 +27,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace common::hash;
 
 namespace share
 {
@@ -49,6 +50,12 @@ int ObTabletLSService::init(common::ObMySQLProxy &sql_proxy)
   } else if (OB_FAIL(async_queue_.init(this, user_thread_cnt, user_queue_size, "TabletLSAUp"))) {
     LOG_WARN("async_queue init failed",
         KR(ret), K(user_thread_cnt), K(user_queue_size));
+  } else if (OB_FAIL(TG_SCHEDULE(
+      lib::TGDefIDs::ServerGTimer,
+      clear_expired_cache_task_,
+      CLEAR_EXPIRED_CACHE_INTERVAL_US,
+      true/*repeat*/))) {
+    LOG_WARN("schedule clear expired cache timer task failed", KR(ret));
   } else {
     sql_proxy_ = &sql_proxy;
     inited_ = true;
@@ -520,6 +527,76 @@ bool ObTabletLSService::belong_to_sys_ls_(
     const ObTabletID &tablet_id) const
 {
   return is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id) || tablet_id.is_sys_tablet();
+}
+
+class ObTabletLSService::IsDroppedTenantCacheFunctor
+{
+public:
+  explicit IsDroppedTenantCacheFunctor(
+      ObHashSet<uint64_t> &dropped_tenant_set_)
+      : dropped_tenant_set_(dropped_tenant_set_) {}
+  ~IsDroppedTenantCacheFunctor() {}
+  bool operator()(const ObTabletLSCache &cache)
+  {
+    int ret = OB_SUCCESS;
+    bool is_expired_cache = false;
+    const uint64_t tenant_id = cache.get_tenant_id();
+    ret = dropped_tenant_set_.exist_refactored(tenant_id);
+    if (OB_HASH_EXIST == ret) {
+      is_expired_cache = true;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      is_expired_cache = false;
+    } else {
+      LOG_WARN("error unexpected", KR(ret), K(tenant_id));
+    }
+    return is_expired_cache;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(IsDroppedTenantCacheFunctor);
+  ObHashSet<uint64_t> &dropped_tenant_set_;
+};
+
+// Only clear cache for dropped tenant now
+// TODO: need a better clear strategy for each tenant expired caches
+int ObTabletLSService::clear_expired_cache()
+{
+  int ret = OB_SUCCESS;
+  bool sys_tenant_schema_ready = false;
+  ObArray<uint64_t> dropped_tenant_ids;
+  ObHashSet<uint64_t> dropped_tenant_set;
+  const int64_t cache_size = inner_cache_.size();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("can not clear expiered cache because sys tenant schema is not ready", KR(ret), K(cache_size));
+  } else if (OB_FAIL(GCTX.schema_service_->get_dropped_tenant_ids(dropped_tenant_ids))) {
+    LOG_WARN("get tenant ids failed", KR(ret));
+  } else if (OB_FAIL(dropped_tenant_set.create(dropped_tenant_ids.count()))) {
+    LOG_WARN("create failed", KR(ret), "count", dropped_tenant_ids.count());
+  } else {
+    // use hashset to improve performance
+    ARRAY_FOREACH(dropped_tenant_ids, idx) {
+      const uint64_t tenant_id = dropped_tenant_ids.at(idx);
+      if (!is_user_tenant(tenant_id)) {
+        // skip
+      } else if (OB_FAIL(dropped_tenant_set.set_refactored(tenant_id))) {
+        // OB_HASH_EXIST is also unexpected
+        LOG_WARN("set_refactored failed", KR(ret), K(idx), K(tenant_id));
+      }
+    }
+    IsDroppedTenantCacheFunctor functor(dropped_tenant_set);
+    if (FAILEDx(inner_cache_.for_each_and_delete_if(functor))) {
+      LOG_WARN("for each and delete if is dropped tenant cache failed", KR(ret));
+    } else {
+      LOG_INFO("[TABLET_LOCATION] clear dropped tenant tablet ls cache successfully",
+          "cache_size_before_clear", cache_size, "cache_size_after_clear", inner_cache_.size());
+    }
+  }
+  return ret;
 }
 
 } // end namespace share

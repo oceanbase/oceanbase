@@ -3852,18 +3852,26 @@ int ObBackupSetFileDesc::assign(const ObBackupSetFileDesc &other)
   return ret;
 }
 
-int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf, char *buf, int64_t buf_len) const {
+int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf,  char *buf, int64_t buf_len) const {
   int64_t pos = 0;
   if (OB_ISNULL(min_restore_scn_str_buf) || OB_ISNULL(buf) || buf_len <= 0 || !is_valid()) {
     // do nothing
   } else {
     J_OBJ_START();
     ObQuoteSzString min_restore_scn_display(min_restore_scn_str_buf);
+    char tenant_compatible_str[OB_CLUSTER_VERSION_LENGTH] = { 0 };
+    char cluster_version_str[OB_CLUSTER_VERSION_LENGTH] = { 0 };
+    int64_t version_str_pos =  ObClusterVersion::print_version_str(
+      tenant_compatible_str, OB_CLUSTER_VERSION_LENGTH, tenant_compatible_);
+    version_str_pos =  ObClusterVersion::print_version_str(
+      cluster_version_str, OB_CLUSTER_VERSION_LENGTH, cluster_version_);
+    ObQuoteSzString tenant_compatible_display(tenant_compatible_str);
+    ObQuoteSzString cluster_version_display(cluster_version_str);
     J_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
       K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
-      K_(min_restore_scn), K(min_restore_scn_display), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
-      K_(cluster_version), K_(consistent_scn));
+      K_(min_restore_scn), K(min_restore_scn_display), K(tenant_compatible_display), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
+      K(cluster_version_display), K_(consistent_scn));
     J_OBJ_END();
   }
   return pos;

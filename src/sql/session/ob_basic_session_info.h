@@ -596,6 +596,7 @@ public:
   int get_div_precision_increment(int64_t &div_precision_increment) const;
   int get_character_set_client(common::ObCharsetType &character_set_client) const;
   int get_character_set_connection(common::ObCharsetType &character_set_connection) const;
+  int get_ncharacter_set_connection(common::ObCharsetType &ncharacter_set_connection) const;
   int get_character_set_database(common::ObCharsetType &character_set_database) const;
   int get_character_set_results(common::ObCharsetType &character_set_results) const;
   int get_character_set_server(common::ObCharsetType &character_set_server) const;
@@ -1123,7 +1124,7 @@ public:
   int set_init_connect(const common::ObString &init_sql);
   int save_trans_status();
   // 重置事务相关变量
-  virtual void reset_tx_variable();
+  virtual void reset_tx_variable(bool reset_next_scope = true);
   transaction::ObTxIsolationLevel get_tx_isolation() const;
   bool is_isolation_serializable() const;
   void set_tx_isolation(transaction::ObTxIsolationLevel isolation);
@@ -1284,6 +1285,8 @@ public:
   }
   inline void reset_first_need_txn_stmt_type() { first_need_txn_stmt_type_ = stmt::T_NONE; }
   inline stmt::StmtType get_first_need_txn_stmt_type() const { return first_need_txn_stmt_type_; }
+  inline void set_need_recheck_txn_readonly(bool need) { need_recheck_txn_readonly_ = need; }
+  inline bool need_recheck_txn_readonly() const { return need_recheck_txn_readonly_; }
   void set_stmt_type(stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
   stmt::StmtType get_stmt_type() const { return stmt_type_; }
 
@@ -1533,7 +1536,8 @@ public:
         runtime_filter_type_(0),
         runtime_filter_wait_time_ms_(0),
         runtime_filter_max_in_num_(0),
-        runtime_bloom_filter_max_size_(INT_MAX32)
+        runtime_bloom_filter_max_size_(INT_MAX32),
+        ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID)
 
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
@@ -1593,6 +1597,7 @@ public:
       runtime_filter_wait_time_ms_ = 0;
       runtime_filter_max_in_num_ = 0;
       runtime_bloom_filter_max_size_ = INT32_MAX;
+      ncharacter_set_connection_ = ObCharsetType::CHARSET_INVALID;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1635,7 +1640,8 @@ public:
             iso_nls_currency_ == other.iso_nls_currency_ &&
             ob_plsql_ccflags_ == other.ob_plsql_ccflags_ &&
             log_row_value_option_ == other.log_row_value_option_ &&
-            ob_max_read_stale_time_ == other.ob_max_read_stale_time_;
+            ob_max_read_stale_time_ == other.ob_max_read_stale_time_  &&
+            ncharacter_set_connection_ == other.ncharacter_set_connection_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -1803,6 +1809,8 @@ public:
     int64_t runtime_filter_wait_time_ms_;
     int64_t runtime_filter_max_in_num_;
     int64_t runtime_bloom_filter_max_size_;
+
+    ObCharsetType ncharacter_set_connection_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -1914,6 +1922,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_wait_time_ms);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_max_in_num);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_bloom_filter_max_size);
+    DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, ncharacter_set_connection);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -1981,6 +1990,7 @@ private:
         bool inc_runtime_filter_wait_time_ms_:1;
         bool inc_runtime_filter_max_in_num_:1;
         bool inc_runtime_bloom_filter_max_size_:1;
+        bool inc_ncharacter_set_connection_:1;
       };
     };
   };
@@ -2171,7 +2181,8 @@ private:
   // type of first stmt which need transaction
   // either transactional read or transactional write
   stmt::StmtType first_need_txn_stmt_type_;
-
+  // some Cmd like DDL will commit current transaction, and need recheck tx read only settings before run
+  bool need_recheck_txn_readonly_;
   //min_cluster_version_: 记录sql执行前当前集群最小的server版本号
   //解决的问题兼容性问题:
   //   2.2.3之前的版本会序列化所有的需要序列化的系统变量,

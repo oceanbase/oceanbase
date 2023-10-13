@@ -717,6 +717,7 @@ const char *const OB_SECURITY_AUDIT_DEFINITION = "security_audit_definition";
 const char *const OB_SYNONYM_IDS_LIST = "synonym_ids_list";
 const char *const OB_CREATE_SYNONYM_DEFINITION = "create_synonym_definition";
 const char *const OB_TIMEZONE_INFO_DEFINITION = "timezone_info_definition";
+const char *const OB_MASKED_STR = "***";
 
 enum ObCopySSTableType
 {
@@ -1772,6 +1773,7 @@ const int64_t OB_DUMP_ROOT_TABLE_TYPE = 1;
 const int64_t OB_DUMP_UNUSUAL_TABLET_TYPE = 2;
 const int64_t OB_MAX_SYS_VAR_NON_STRING_VAL_LENGTH = 128;
 const int64_t OB_MAX_SYS_VAR_VAL_LENGTH = 4096;//original 128 is too small
+const int64_t OB_MAX_TCP_INVITED_NODES_LENGTH = 64 * 1024; // 64K
 
 // bitset defines
 const int64_t OB_DEFAULT_BITSET_SIZE = OB_MAX_TABLE_NUM_PER_STMT;

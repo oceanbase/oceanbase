@@ -41,7 +41,7 @@ void ObDASRetryCtrl::tablet_location_retry_proc(ObDASRef &das_ref,
     loc_router.force_refresh_location_cache(true, task_op.get_errcode());
     need_retry = true;
     const ObDASTableLocMeta *loc_meta = tablet_loc->loc_meta_;
-    LOG_INFO("refresh tablet location cache and retry DAS task",
+    LOG_INFO("[DAS RETRY] refresh tablet location cache and retry DAS task",
              "errcode", task_op.get_errcode(), KPC(loc_meta), KPC(tablet_loc));
   }
 }

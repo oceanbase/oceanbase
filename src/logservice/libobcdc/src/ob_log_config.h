@@ -418,6 +418,8 @@ public:
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
   T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 0, 0, "trans msg sorter task count per thread");
+  // ignore delete tablets
+  T_DEF_BOOL(skip_delete_tablet_op, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
 
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios

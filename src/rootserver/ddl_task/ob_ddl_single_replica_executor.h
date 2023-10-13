@@ -103,7 +103,8 @@ private:
     {}
     ~ObPartitionBuildInfo() = default;
     bool need_schedule() const {
-      return ObPartitionBuildStat::BUILD_RETRY == stat_
+      return ObPartitionBuildStat::BUILD_INIT == stat_
+        || ObPartitionBuildStat::BUILD_RETRY == stat_
         || (ObPartitionBuildStat::BUILD_REQUESTED == stat_
           && ObTimeUtility::current_time() - heart_beat_time_ > PARTITION_BUILD_HEART_BEAT_TIME);
     }

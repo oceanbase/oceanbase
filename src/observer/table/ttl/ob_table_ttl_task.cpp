@@ -362,12 +362,7 @@ bool ObTableTTLDag::operator==(const ObIDag& other) const
                     !dag.info_.is_valid() || !dag.info_.is_valid())) {
       LOG_ERROR_RET(OB_ERR_SYS, "invalid argument", K_(param), K_(info), K(dag.param_), K(dag.info_));
     } else {
-      is_equal = (info_.tenant_id_ == dag.info_.tenant_id_) &&
-                 (info_.task_id_ == dag.info_.task_id_) &&
-                 (info_.table_id_ == dag.info_.table_id_) &&
-                 (info_.tablet_id_ == dag.info_.tablet_id_) &&
-                 (param_.ttl_ == dag.param_.ttl_) &&
-                 (param_.max_version_ == dag.param_.max_version_);
+      is_equal = ((info_ == dag.info_) && (param_ == dag.param_));
     }
   }
   return is_equal;

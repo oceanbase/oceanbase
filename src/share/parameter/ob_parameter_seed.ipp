@@ -360,7 +360,7 @@ DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // tenant memtable consumption related
-DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
+DEF_INT(memstore_limit_percentage, OB_TENANT_PARAMETER, "50", "(0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "
         "memstore_limit_percentage = memstore_limit / memory_size,memory_size, "
         "where MEMORY_SIZE is determined when the tenant is created. Range: (0, 100)",

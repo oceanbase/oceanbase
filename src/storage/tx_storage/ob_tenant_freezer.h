@@ -99,6 +99,11 @@ public:
   //                       unset success if the tablet is the one who slow the tenant.
   //                       else do nothing.
   int unset_tenant_slow_freeze(const common::ObTabletID &tablet_id);
+  // check whether the tenant mem limit, memstore limit has been changed.
+  // @param[in] curr_lower_limit, the new lower limit
+  // @param[in] curr_upper_limit, the new upper limit
+  bool is_tenant_mem_changed(const int64_t curr_lower_limit,
+                             const int64_t curr_upper_limit) const;
   // set tenant mem limit, both for min and max memory limit.
   // @param[in] lower_limit, the min memory limit will be set.
   // @param[in] upper_limit, the max memory limit will be set.
@@ -127,7 +132,7 @@ public:
   // used to print a log.
   static int rpc_callback();
   // update the memstore limit use sysconf.
-  void reload_config();
+  int reload_config();
   // print the tenant usage info into print_buf.
   // @param[out] print_buf, the buf is used to print.
   // @param[in] buf_len, the buf length.
@@ -142,7 +147,6 @@ public:
     retry_major_info_ = retry_major_info;
   }
   static int64_t get_freeze_trigger_interval() { return FREEZE_TRIGGER_INTERVAL; }
-  ObServerConfig *get_config() { return config_; }
   bool exist_ls_freezing();
 private:
   int check_memstore_full_(bool &last_result,
@@ -170,6 +174,7 @@ private:
   // @param[in] rollback_freeze_cnt, reduce the tenant's freeze count by 1, if true.
   int unset_tenant_freezing_(const bool rollback_freeze_cnt);
   static int64_t get_freeze_trigger_percentage_();
+  static int64_t get_memstore_limit_percentage_();
   int post_freeze_request_(const storage::ObFreezeType freeze_type,
                            const int64_t try_frozen_version);
   int retry_failed_major_freeze_(bool &triggered);
@@ -209,7 +214,6 @@ private:
   obrpc::ObCommonRpcProxy *common_rpc_proxy_;
   const share::ObRsMgr *rs_mgr_;
   ObAddr self_;
-  common::ObServerConfig *config_;
   ObRetryMajorInfo retry_major_info_;
   common::ObMemstoreAllocatorMgr *allocator_mgr_;
 

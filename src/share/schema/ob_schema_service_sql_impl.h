@@ -268,8 +268,19 @@ public:
       common::ObISQLClient &sql_client,
       ObMockFKParentTableSchema &mock_fk_parent_table_schema);
 
+  virtual int fetch_new_object_ids(
+              const uint64_t tenant_id,
+              const int64_t object_cnt,
+              uint64_t &max_object_id) override;
   virtual int fetch_new_partition_ids(
-              const uint64_t tenant_id, const int64_t partition_num, uint64_t &new_partition_id);
+              const uint64_t tenant_id,
+              const int64_t partition_num,
+              uint64_t &max_partition_id) override;
+  virtual int fetch_new_tablet_ids(
+              const uint64_t tenant_id,
+              const bool gen_normal_tablet,
+              const uint64_t size,
+              uint64_t &min_tablet_id) override;
   virtual int fetch_new_tenant_id(uint64_t &new_tenant_id);
   virtual int fetch_new_table_id(const uint64_t tenant_id, uint64_t &new_table_id);
   virtual int fetch_new_database_id(const uint64_t tenant_id, uint64_t &new_database_id);
@@ -297,13 +308,6 @@ public:
   virtual int fetch_new_profile_id(const uint64_t tenant_id, uint64_t &new_profile_id);
   virtual int fetch_new_audit_id(const uint64_t tenant_id, uint64_t &new_audit_id);
   virtual int fetch_new_directory_id(const uint64_t tenant_id, uint64_t &new_directory_id);
-  virtual int fetch_new_normal_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size);
-  virtual int fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size);
-  virtual int fetch_new_tablet_ids(
-              const uint64_t tenant_id,
-              const bool gen_normal_tablet,
-              const uint64_t size,
-              uint64_t &min_tablet_id) override;
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id);
   virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id);
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id);
@@ -796,9 +800,23 @@ public:
 
 private:
   bool check_inner_stat();
-  int fetch_new_schema_id(const uint64_t tenant_id, const share::ObMaxIdType max_id_type, uint64_t &new_schema_id);
-  int fetch_new_schema_ids(const uint64_t tenant_id, const share::ObMaxIdType max_id_type,
-                           uint64_t &new_schema_id, const uint64_t size = 1);
+  int fetch_new_normal_rowid_table_tablet_ids_(
+      const uint64_t tenant_id,
+      const uint64_t size,
+      uint64_t &min_tablet_id);
+  int fetch_new_extended_rowid_table_tablet_ids_(
+      const uint64_t tenant_id,
+      const uint64_t size,
+      uint64_t &min_tablet_id);
+  int fetch_new_schema_id_(
+      const uint64_t tenant_id,
+      const share::ObMaxIdType max_id_type,
+      uint64_t &new_schema_id);
+  int fetch_new_tablet_ids_(
+      const uint64_t tenant_id,
+      const share::ObMaxIdType max_id_type,
+      const uint64_t size,
+      uint64_t &min_tablet_id);
 
   int get_core_table_priorities(common::ObISQLClient &sql_client,
                                 const ObRefreshSchemaStatus &schema_status,
@@ -1188,6 +1206,8 @@ private:
       const char* tname,
       int64_t &timeout,
       int64_t &row_cnt);
+
+  bool in_parallel_ddl_thread_();
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;
@@ -1239,6 +1259,10 @@ private:
   ObClusterSchemaStatus cluster_schema_status_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> gen_schema_version_map_;
   const ObServerSchemaService *schema_service_;
+
+  lib::ObMutex object_ids_mutex_;
+  lib::ObMutex normal_tablet_ids_mutex_;
+  lib::ObMutex extended_tablet_ids_mutex_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaServiceSQLImpl);
 };

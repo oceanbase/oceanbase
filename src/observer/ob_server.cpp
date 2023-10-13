@@ -464,8 +464,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(imc_tasks_.init())) {
       LOG_ERROR("init imc tasks failed", KR(ret));
 #endif
-    } else if (OB_FAIL(unix_domain_listener_.init())) {
-      LOG_ERROR("init unix domain listener failed", KR(ret));
     } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.init(&sql_proxy_, &schema_service_))) {
       LOG_ERROR("init OB_PRIMARY_STANDBY_SERVICE failed", KR(ret));
     } else if (OB_FAIL(init_px_target_mgr())) {
@@ -948,7 +946,7 @@ int ObServer::start()
     }
 #endif
 
-    if (FAILEDx(unix_domain_listener_.run())) {
+    if (FAILEDx(unix_domain_listener_.start())) {
       LOG_ERROR("fail to start unix domain listener", KR(ret));
     } else {
       FLOG_INFO("success to start unix domain listener");

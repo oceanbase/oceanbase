@@ -217,6 +217,7 @@ ob_set_subtarget(oblib_lib thread
   thread/thread.cpp
   thread/threads.cpp
   thread/ob_tenant_hook.cpp
+  thread/ob_pthread.cpp
 )
 
 ob_set_subtarget(oblib_lib utility

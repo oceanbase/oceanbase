@@ -181,6 +181,21 @@ public:
                             ObFdItemSet &fd_item_set,
                             ObSqlBitSet<> &deduced_fd);
 
+  inline void destory()
+  {
+    DLIST_FOREACH_NORET(node, item_store_.get_obj_list()) {
+      if (node != NULL && node->get_obj() != NULL) {
+        node->get_obj()->~ObFdItem();
+      }
+    }
+    DLIST_FOREACH_NORET(node, item_set_store_.get_obj_list()) {
+      if (node != NULL && node->get_obj() != NULL) {
+        node->get_obj()->~ObFdItemSet();
+      }
+    }
+    parent_sets_.destroy();
+  }
+
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   TO_STRING_KV("", "");
 private:

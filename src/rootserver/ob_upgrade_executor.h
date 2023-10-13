@@ -105,6 +105,13 @@ private:
       common::ObIArray<uint64_t> &dst_tenant_ids);
   rootserver::ObRsJobType convert_to_job_type_(
       const obrpc::ObUpgradeJobArg::Action &action);
+
+  int fill_extra_info_(
+      const uint64_t tenant_id,
+      const int64_t specified_version,
+      const uint64_t current_data_version,
+      const int64_t buf_len,
+      char *buf);
 private:
   bool inited_;
   bool stopped_;

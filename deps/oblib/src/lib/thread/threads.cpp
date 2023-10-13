@@ -272,50 +272,13 @@ void Threads::destroy()
   }
 }
 
-
-extern "C" {
-int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg)
+int ObPThread::try_wait()
 {
   int ret = OB_SUCCESS;
-  ObPThread *thread = NULL;
-  // Temporarily set expect_run_wrapper to NULL for creating normal thread
-  IRunWrapper *expect_run_wrapper = Threads::get_expect_run_wrapper();
-  Threads::get_expect_run_wrapper() = NULL;
-  DEFER(Threads::get_expect_run_wrapper() = expect_run_wrapper);
-  OB_LOG(INFO, "ob_pthread_create start");
-  if (OB_ISNULL(thread = OB_NEW(ObPThread, SET_USE_500("PThread"), start_routine, arg))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    OB_LOG(WARN, "alloc memory failed", K(ret));
-  } else if (OB_FAIL(thread->start())) {
-    OB_LOG(WARN, "failed to start thread", K(ret));
-  }
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(thread)) {
-      OB_DELETE(ObPThread, SET_USE_500("PThread"), thread);
+  if (nullptr != threads_[0]) {
+    if (OB_FAIL(threads_[0]->try_wait())) {
+      LOG_WARN("ObPThread try_wait failed", K(ret));
     }
-  } else {
-    *ptr = thread;
-    OB_LOG(INFO, "ob_pthread_create succeed", KP(thread));
   }
   return ret;
 }
-void ob_pthread_join(void *ptr)
-{
-  if (OB_NOT_NULL(ptr)) {
-    ObPThread *thread = (ObPThread*) ptr;
-    thread->wait();
-    OB_LOG(INFO, "ob_pthread_join succeed", KP(thread));
-    OB_DELETE(ObPThread, SET_USE_500("PThread"), thread);
-  }
-}
-
-pthread_t ob_pthread_get_pth(void *ptr)
-{
-  pthread_t pth = 0;
-  if (OB_NOT_NULL(ptr)) {
-    ObPThread *thread = (ObPThread*) ptr;
-    pth = thread->get_pthread(0);
-  }
-  return pth;
-}
-} /* extern "C" */

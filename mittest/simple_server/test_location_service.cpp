@@ -35,12 +35,13 @@ class TestLocationService : public unittest::ObSimpleClusterTestBase
 {
 public:
   TestLocationService() : unittest::ObSimpleClusterTestBase("test_location_service") {}
-  int batch_create_table(ObMySQLProxy &sql_proxy, const int64_t TOTAL_NUM, ObIArray<ObTabletLSPair> &tablet_ls_pairs);
+  int batch_create_table(ObMySQLProxy &sql_proxy, const int64_t TOTAL_NUM, const bool oracle_mode, ObIArray<ObTabletLSPair> &tablet_ls_pairs);
 };
 
 int TestLocationService::batch_create_table(
     ObMySQLProxy &sql_proxy,
     const int64_t TOTAL_NUM,
+    const bool oracle_mode,
     ObIArray<ObTabletLSPair> &tablet_ls_pairs)
 {
   int ret = OB_SUCCESS;
@@ -50,26 +51,25 @@ int TestLocationService::batch_create_table(
   int64_t affected_rows = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < TOTAL_NUM; ++i) {
     sql.reset();
-    if (OB_FAIL(sql.assign_fmt("create table t%ld(c1 int)", i))) {
+    if (OB_FAIL(sql.assign_fmt("create table T%ld(c1 int)", i))) {
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
     }
   }
   // batch get table_id
   sql.reset();
-  if (OB_FAIL(sql.assign_fmt("select TABLET_ID, LS_ID from oceanbase.DBA_OB_TABLE_LOCATIONS where table_name in ("))) {
+  if (OB_FAIL(sql.assign_fmt("select TABLET_ID, LS_ID from %sDBA_OB_TABLE_LOCATIONS where table_name in (", oracle_mode ? "" : "oceanbase."))) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < TOTAL_NUM; ++i) {
-      if (OB_FAIL(sql.append_fmt("%s't%ld'", 0 == i ? "" : ",", i))) {}
+      if (OB_FAIL(sql.append_fmt("%s'T%ld'", 0 == i ? "" : ",", i))) {}
     }
     if (FAILEDx(sql.append_fmt(") order by TABLET_ID"))) {};
   }
   SMART_VAR(ObMySQLProxy::MySQLResult, result) {
     if (OB_FAIL(tablet_ls_pairs.reserve(TOTAL_NUM))) {
-    } else if (OB_UNLIKELY(!is_valid_tenant_id(g_tenant_id))) {
-      ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(sql_proxy.read(result, sql.ptr()))) {
     } else if (OB_ISNULL(result.get_result())) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null result", KR(ret), K(sql));
     } else {
       sqlclient::ObMySQLResult &res = *result.get_result();
       uint64_t tablet_id = ObTabletID::INVALID_TABLET_ID;
@@ -96,7 +96,7 @@ TEST_F(TestLocationService, prepare_data)
   ASSERT_EQ(OB_SUCCESS, get_tenant_id(g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
   ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-  ASSERT_EQ(OB_SUCCESS, batch_create_table(sql_proxy, TOTAL_NUM, g_tablet_ls_pairs));
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(sql_proxy, TOTAL_NUM, false, g_tablet_ls_pairs));
 }
 
 TEST_F(TestLocationService, test_ls_location_service)
@@ -185,7 +185,7 @@ TEST_F(TestLocationService, test_tablet_ls_service)
   ASSERT_TRUE(tablet_ls_caches.at(0).get_tablet_id() == g_tablet_ls_pairs.at(0).get_tablet_id());
   ASSERT_TRUE(tablet_ls_caches.at(0).get_ls_id() == g_tablet_ls_pairs.at(0).get_ls_id());
 
-  // duplicated tablet_id return error
+  // duplicated tablet_id return OB_SUCCESS
   tablet_list.reset();
   tablet_ls_caches.reset();
   ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(g_tablet_ls_pairs.at(0).get_tablet_id()));
@@ -299,6 +299,81 @@ TEST_F(TestLocationService, test_check_ls_exist)
   state.reset();
   ASSERT_EQ(OB_SUCCESS, ObLocationService::check_ls_exist(meta_tenant_id, SYS_LS, state));
   ASSERT_TRUE(state.is_uncreated());
+}
+
+TEST_F(TestLocationService, test_clear_tablet_ls_cache)
+{
+  int ret = OB_SUCCESS;
+  ASSERT_TRUE(g_tablet_ls_pairs.count() == TOTAL_NUM);
+  ASSERT_TRUE(is_valid_tenant_id(g_tenant_id));
+  ObLocationService *location_service = GCTX.location_service_;
+  ASSERT_TRUE(OB_NOT_NULL(location_service));
+  ObTabletLSService *tablet_ls_service = &(location_service->tablet_ls_service_);
+  ASSERT_TRUE(OB_NOT_NULL(tablet_ls_service));
+
+  // create tenant
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ASSERT_EQ(OB_SUCCESS, create_tenant("oracle", "2G", "2G", true));
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id, "oracle"));
+  ASSERT_TRUE(is_valid_tenant_id(tenant_id));
+
+  // create sql_proxy
+  common::sqlclient::ObSingleMySQLConnectionPool sql_conn_pool;
+  common::ObMySQLProxy oracle_sql_proxy;
+  sql_conn_pool.set_db_param("sys@oracle", "", "SYS");
+  ObConnPoolConfigParam param;
+  param.sqlclient_wait_timeout_ = 1000;
+  param.long_query_timeout_ = 300*1000*1000;
+  param.connection_refresh_interval_ = 200*1000;
+  param.connection_pool_warn_time_ = 10*1000*1000;
+  param.sqlclient_per_observer_conn_limit_ = 1000;
+  common::ObAddr db_addr;
+  db_addr.set_ip_addr(get_curr_simple_server().get_local_ip().c_str(), get_curr_simple_server().get_mysql_port());
+  ret = sql_conn_pool.init(db_addr, param);
+  if (OB_SUCC(ret)) {
+    sql_conn_pool.set_mode(common::sqlclient::ObMySQLConnection::DEBUG_MODE);
+    ret = oracle_sql_proxy.init(&sql_conn_pool);
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // create table
+  const int64_t TABLET_COUNT = 10;
+  ObSEArray<ObTabletLSPair, TABLET_COUNT> tablet_ls_pairs;
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
+  ASSERT_TRUE(TABLET_COUNT == tablet_ls_pairs.count());
+  const int64_t cache_size_before_renew = tablet_ls_service->inner_cache_.size();
+  ObArenaAllocator allocator;
+  ObList<ObTabletID, ObIAllocator> tablet_list(allocator);
+  ObSEArray<ObTabletLSCache, TABLET_COUNT> tablet_ls_caches;
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
+    ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(pair.get_tablet_id()));
+  }
+
+  // renew cache
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list, tablet_ls_caches));
+  int64_t cache_size = tablet_ls_service->inner_cache_.size();
+  ASSERT_TRUE(TABLET_COUNT == cache_size - cache_size_before_renew);
+
+  // test clear dropped tenant cache
+  ASSERT_EQ(OB_SUCCESS, delete_tenant("oracle"));
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size();
+  ASSERT_TRUE(cache_size == cache_size_before_renew);
+
+  // test 1 million cache clear
+  for (int64_t i = 0; i < 1000000; ++i) {
+    ObTabletLSCache cache;
+    ASSERT_EQ(OB_SUCCESS, cache.init(tenant_id, ObTabletID(i+300000), ObLSID(1002), ObClockGenerator::getClock(), 1));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache));
+  }
+  cache_size = tablet_ls_service->inner_cache_.size();
+  ASSERT_TRUE(1000000 == cache_size - cache_size_before_renew);
+  const int64_t start_time = ObTimeUtility::current_time();
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size();
+  ASSERT_TRUE(cache_size = cache_size_before_renew);
+  LOG_INFO("TEST: clear 1 million cache", "cost_time", ObTimeUtility::current_time() - start_time); // cost_time = 1.67s
 }
 
 } // namespace rootserver

@@ -1265,7 +1265,7 @@ public:
   uint64_t get_conn_res_user_id() const { return conn_res_user_id_; }
   int on_user_connect(share::schema::ObSessionPrivInfo &priv_info, const ObUserInfo *user_info);
   int on_user_disconnect();
-  virtual void reset_tx_variable();
+  virtual void reset_tx_variable(bool reset_next_scope = true);
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }

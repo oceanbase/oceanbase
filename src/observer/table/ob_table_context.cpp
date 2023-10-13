@@ -244,7 +244,7 @@ int ObTableCtx::get_expr_from_column_items(const ObString &col_name, ObRawExpr *
           LOG_WARN("item expr is null", K(ret), K(item));
         } else {
           found = true;
-          expr = item.expr_;
+          expr = item.raw_expr_;
         }
       }
     }

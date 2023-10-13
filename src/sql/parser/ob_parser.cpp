@@ -913,6 +913,7 @@ int ObParser::parse_sql(const ObString &stmt,
 {
   int ret = OB_SUCCESS;
   ObSQLParser sql_parser(*(ObIAllocator*)(parse_result.malloc_pool_), sql_mode_);
+  ObString stmt_str = stmt;
   if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
     // if is multi_values_parser opt not need retry
     if (lib::is_mysql_mode() && !parse_result.is_multi_values_parser_) {
@@ -922,8 +923,14 @@ int ObParser::parse_sql(const ObString &stmt,
         //do nothing.
       }
     }
+#ifdef NDEBUG
+    if (parse_result.may_contain_sensitive_data_) {
+      parse_result.contain_sensitive_data_ = true;
+      stmt_str = ObString(OB_MASKED_STR);
+    }
+#endif
     if (!no_throw_parser_error) {
-      LOG_INFO("failed to parse stmt as sql", K(stmt), K(ret));
+      LOG_INFO("failed to parse stmt as sql", K(stmt_str), K(ret));
     }
   } else if (parse_result.is_dynamic_sql_) {
     memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
@@ -932,21 +939,24 @@ int ObParser::parse_sql(const ObString &stmt,
     parse_result.no_param_sql_len_
       += parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_;
   } else { /*do nothing*/ }
+#ifndef NDEBUG
+  parse_result.contain_sensitive_data_ = false;
+#endif
   if (parse_result.is_fp_ || parse_result.is_multi_query_) {
     if (OB_FAIL(ret) && !no_throw_parser_error) {
-      LOG_WARN("failed to fast parameterize", K(stmt), K(ret));
+      LOG_WARN("failed to fast parameterize", K(stmt_str), K(ret));
     }
   }
   if (OB_SUCC(ret) &&
       parse_result.enable_compatible_comment_ &&
       parse_result.mysql_compatible_comment_) {
     ret = OB_ERR_PARSE_SQL;
-    LOG_WARN("the sql is invalid", K(ret), K(stmt));
+    LOG_WARN("the sql is invalid", K(ret), K(stmt_str));
   }
   if (OB_FAIL(ret) && !no_throw_parser_error) {
     auto err_charge_sql_mode = lib::is_oracle_mode();
     LOG_WARN("failed to parse the statement",
-             K(stmt),
+             K(stmt_str),
              K(parse_result.is_fp_),
              K(parse_result.is_multi_query_),
              K(parse_result.yyscan_info_),
@@ -1120,7 +1130,9 @@ int ObParser::parse(const ObString &query,
       if (OB_FAIL(parse_sql(stmt, parse_result, no_throw_parser_error))) {
         // if fail, regard /*! */ as comment, and retry;
         if (!no_throw_parser_error) {
-          LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+          LOG_WARN("failed to parse stmt as sql",
+                   "stmt", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : stmt,
+                   K(parse_mode), K(ret));
         }
       }
     } else {
@@ -1135,7 +1147,9 @@ int ObParser::parse(const ObString &query,
             (OB_ERR_PARSE_SQL == ret && is_mysql_comment)) {
           if (OB_FAIL(parse_sql(stmt, parse_result, no_throw_parser_error))) {
             if (!no_throw_parser_error) {
-              LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+              LOG_WARN("failed to parse stmt as sql",
+                  "stmt", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : stmt,
+                  K(parse_mode), K(ret));
             }
           }
         }

@@ -2777,7 +2777,7 @@ int PalfHandleImpl::ack_mode_meta(const common::ObAddr &server,
   } else if (OB_FAIL(mode_mgr_.ack_mode_meta(server, msg_proposal_id))) {
     PALF_LOG(WARN, "ack_mode_meta failed", KR(ret), KPC(this), K(server), K(msg_proposal_id));
   } else {
-    PALF_LOG(INFO, "ack_mode_meta success", KR(ret), KPC(this), K(server), K(msg_proposal_id));
+    PALF_LOG(TRACE, "ack_mode_meta success", KR(ret), KPC(this), K(server), K(msg_proposal_id));
   }
   return ret;
 }
@@ -5068,7 +5068,6 @@ void PalfHandleImpl::is_in_sync_(bool &is_log_sync, bool &is_use_cache)
       CLOG_LOG(WARN, "get_palf_max_scn failed", K(ret), K_(self), K_(palf_id));
       last_check_sync_time_us_ = OB_INVALID_TIMESTAMP;
     } else if (leader_max_scn.is_valid() && leader_end_lsn.is_valid()) {
-      local_max_scn = sw_.get_max_scn();
       sw_.get_committed_end_lsn(local_end_lsn);
       const bool is_scn_sync = (leader_max_scn.convert_to_ts() - local_max_scn.convert_to_ts() <= PALF_LOG_SYNC_DELAY_THRESHOLD_US);
       const bool is_log_size_sync = (leader_end_lsn - local_end_lsn) < 2 * PALF_BLOCK_SIZE;
