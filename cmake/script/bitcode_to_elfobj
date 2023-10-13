@@ -75,6 +75,12 @@ def shell_run_command(command_str, need_print_all=True, need_print_output=True, 
         if data == b'':
             if ps.poll() is not None:
                 break
+        # fix: python2->python3 subprocess shell bug
+        # 2023/09/21 jiangxf
+        try:
+            data = data.decode()
+        except:
+            pass
         result["return_message"].append(data)
 
         if not need_print_all:
