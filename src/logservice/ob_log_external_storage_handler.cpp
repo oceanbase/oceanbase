@@ -323,10 +323,7 @@ int ObLogExternalStorageHandler::wait_async_tasks_finished_(
   const int64_t DEFAULT_WAIT_US = 50 * 1000;
   int64_t print_log_interval = OB_INVALID_TIMESTAMP;
   // if async_task_ctx->wait return OB_SUCCESS, means there is no flying task.
-  // if async_task_ctx->wait return error except OB_TIMEOUT, we can not return
-  // the errno until async_task_ctx has no flying task.
-  while (OB_FAIL(async_task_ctx->wait(DEFAULT_WAIT_US))
-         && async_task_ctx->has_flying_async_task()) {
+  while (OB_FAIL(async_task_ctx->wait(DEFAULT_WAIT_US))) {
     if (palf::palf_reach_time_interval(500*1000, print_log_interval)) {
       CLOG_LOG(WARN, "wait ObLogExternalStorageIOTaskCtx failed", KPC(async_task_ctx));
     }

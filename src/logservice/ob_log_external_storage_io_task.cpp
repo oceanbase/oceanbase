@@ -100,7 +100,7 @@ int ObLogExternalStorageIOTaskCtx::wait(const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   ObThreadCondGuard guard(condition_);
-  while (OB_SUCC(ret) && flying_task_count_ > 0) {
+  while (flying_task_count_ > 0 && OB_SUCC(ret)) {
     ret = condition_.wait_us(timeout_us);
   }
   return ret;
