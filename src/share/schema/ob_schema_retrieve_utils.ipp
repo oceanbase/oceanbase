@@ -2688,9 +2688,6 @@ int ObSchemaRetrieveUtils::retrieve_system_variable_obj(
     SHARE_SCHEMA_LOG(WARN,"fail to extract data", K(ret));
   } else if (is_deleted) {
     ret = common::OB_ENTRY_NOT_EXIST;
-  } else if (OB_UNLIKELY(result_value.length() > common::OB_MAX_SYS_VAR_VAL_LENGTH)) {
-    ret = OB_SIZE_OVERFLOW;
-    SHARE_SCHEMA_LOG(WARN, "set sysvar value is overflow", "max length", OB_MAX_SYS_VAR_VAL_LENGTH, "value length", result_value.length());
   } else if (!result_value.empty() && OB_ISNULL(value_buf = static_cast<char*>(allocator.alloc(result_value.length())))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     SHARE_SCHEMA_LOG(WARN,"fail to alloc char array", K(ret));

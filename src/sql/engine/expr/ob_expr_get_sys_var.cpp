@@ -79,14 +79,27 @@ int ObExprGetSysVar::calc_result_type2(ObExprResType &type,
           }
           if (ob_is_string_type(data_type)) {
             type.set_collation_level(CS_LEVEL_SYSCONST);
-            type.set_length(OB_MAX_SYS_VAR_VAL_LENGTH);
-            if (is_oracle_mode()) {
-              type.set_collation_type(session->get_nls_collation());
-              type.set_length_semantics(session->get_actual_nls_length_semantics());
-            } else {
-              ObCollationType conn_coll = CS_TYPE_INVALID;
-              OZ(session->get_collation_connection(conn_coll));
-              OX(type.set_collation_type(conn_coll));
+
+            int64_t sys_var_val_length = OB_MAX_SYS_VAR_VAL_LENGTH;
+            if (0 == var_name.compare(OB_SV_TCP_INVITED_NODES)) {
+              uint64_t data_version = 0;
+              if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
+                LOG_WARN("fail to get sys data version", KR(ret));
+              } else if (data_version >= DATA_VERSION_4_2_1_1) {
+               sys_var_val_length = OB_MAX_TCP_INVITED_NODES_LENGTH;
+              }
+            }
+
+            if (OB_SUCC(ret)) {
+              type.set_length(sys_var_val_length);
+              if (is_oracle_mode()) {
+                type.set_collation_type(session->get_nls_collation());
+                type.set_length_semantics(session->get_actual_nls_length_semantics());
+              } else {
+                ObCollationType conn_coll = CS_TYPE_INVALID;
+                OZ(session->get_collation_connection(conn_coll));
+                OX(type.set_collation_type(conn_coll));
+              }
             }
           }
         }
