@@ -7015,7 +7015,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           if (OB_SUCC(ret) && table->is_varray()) {
             ObPLVArray *varray = static_cast<ObPLVArray*>(table);
             bool append_mode = (NULL == implicit_cursor ? false : implicit_cursor->get_in_forall());
-            int64_t new_count = append_mode ? table->get_count() + row_count : row_count;
+            int64_t new_count = append_mode ? (table->get_count() + row_count) : row_count;
             CK (OB_NOT_NULL(varray));
             if (OB_SUCC(ret) && new_count > varray->get_capacity()) {
               ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;

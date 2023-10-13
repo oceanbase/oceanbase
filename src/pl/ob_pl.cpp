@@ -3242,8 +3242,8 @@ do {                                                                  \
             OX (get_params().at(i) = tmp);
           } else {
             // same type, we already check this on resolve stage, here directly assign value to symbol.
-            get_params().at(i) = params->at(i);
             if (get_params().at(i).is_ref_cursor_type()) {
+              get_params().at(i) = params->at(i);
               get_params().at(i).set_is_ref_cursor_type(true);
             } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
               ObPLComposite *composite = NULL;
@@ -3252,6 +3252,8 @@ do {                                                                  \
               if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
                 composite->set_id(pl_type.get_user_type_id());
               }
+            } else {
+              get_params().at(i) = params->at(i);
             }
           }
         }
