@@ -588,6 +588,7 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     if (tx.addr_ == self_ || tx.xa_start_addr_ == self_) {
       abort_tx__(tx, cleanup);
     } else {
+      abort_participants_(tx);
       tx.flags_.DEFER_ABORT_ = true;
     }
     tx.state_ = ObTxDesc::State::ABORTED;
@@ -877,19 +878,33 @@ int ObTransService::interrupt(ObTxDesc &tx, int cause)
 int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransRpcResult &result)
 {
   int ret = OB_SUCCESS;
+  int ret_status = OB_SUCCESS;
   const ObTransID &tx_id = msg.tx_id_;
   ObTxDesc *tx = NULL;
+  bool do_response = true;
   if (OB_FAIL(tx_desc_mgr_.get(tx_id, tx)) &&
       OB_ENTRY_NOT_EXIST != ret) {
     TRANS_LOG(WARN, "get tx fail", K(ret), K(tx_id), K(msg));
+    ret_status = ret;
   } else if (OB_ISNULL(tx)) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
+    ret_status = OB_TRANS_CTX_NOT_EXIST;
   } else if (tx->is_committed() && tx_id == tx->tx_id_) {
-    ret = OB_TRANS_COMMITED;
+    ret_status = OB_TRANS_COMMITED;
   } else if (tx->is_rollbacked() && tx_id == tx->tx_id_) {
-    ret = OB_TRANS_ROLLBACKED;
+    ret_status = OB_TRANS_ROLLBACKED;
+  } else if (tx->is_aborted() && tx_id == tx->tx_id_) {
+    ret_status = OB_TRANS_KILLED;
   } else if (OB_SUCCESS != msg.status_) {
     TRANS_LOG(WARN, "tx participant in failed status", K(msg));
+    if (OB_TRANS_KILLED == msg.status_)  {
+      TRANS_LOG(INFO, "participant was killed, mark tx should abort", K(tx_id), K(msg.sender_));
+      tx->mark_part_abort(OB_TRANS_KILLED);
+      ret_status = OB_TRANS_NEED_ROLLBACK;
+    } else if (msg.status_ > 0) {
+      TRANS_LOG(INFO, "participant failed, mark tx should abort", K(tx_id), K(msg.status_), K(msg.sender_));
+      tx->mark_part_abort(msg.status_);
+      ret_status = OB_TRANS_NEED_ROLLBACK;
+    }
   }
   ObTxKeepaliveRespMsg resp;
   resp.cluster_version_ = GET_MIN_CLUSTER_VERSION();
@@ -900,7 +915,7 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
   resp.sender_addr_ = self_;
   resp.sender_ = share::SCHEDULER_LS;
   resp.receiver_ = msg.sender_;
-  resp.status_ = ret;
+  resp.status_ = ret_status;
   if (OB_FAIL(rpc_->post_msg(resp.receiver_, resp))) {
     TRANS_LOG(WARN, "post tx keepalive resp fail", K(ret), K(resp), KPC(this));
   }
@@ -1986,11 +2001,6 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
     // We donot respond with the abort response, because we think the abort is
     // eventually always successful if we have never send the commit request
     TRANS_LOG(WARN, "get transaction context error", KR(ret), K(abort_req.get_trans_id()));
-  } else if (ctx->get_scheduler() != abort_req.sender_addr_ && ctx->get_scheduler().is_valid()
-             // xa tmp scheduler will send abort when session is break
-             && !ctx->is_xa_trans()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "receive abort request not from scheduler.", K(ret), K(ctx->get_scheduler()));
   } else if (OB_FAIL(ctx->abort(abort_req.reason_))) {
     TRANS_LOG(WARN, "trans rollback error", KR(ret), K(abort_req));
   }
