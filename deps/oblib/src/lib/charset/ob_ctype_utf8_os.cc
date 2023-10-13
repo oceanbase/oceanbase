@@ -1707,6 +1707,7 @@ static int ob_wc_mb_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)),
     if(OB_LIKELY(len >=2)){
       ret = 2;
       r[1] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0xc0;
+      r[0] = (unsigned char) w_char;
     }
     else{
       ret = OB_CS_TOOSMALLN(2);
@@ -1715,6 +1716,8 @@ static int ob_wc_mb_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)),
     if(OB_LIKELY(len >=3)){
       ret = 3;
       r[2] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x800;
+      r[1] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0xc0;
+      r[0] = (unsigned char) w_char;
     }
     else{
       ret = OB_CS_TOOSMALLN(3);
@@ -1723,6 +1726,9 @@ static int ob_wc_mb_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)),
     if(OB_LIKELY(len >=4)){
       ret = 4;
       r[3] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x10000;
+      r[2] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0x800;
+      r[1] = (unsigned char) (0x80 | (w_char & 0x3f)); w_char >>= 6; w_char |= 0xc0;
+      r[0] = (unsigned char) w_char;
     }
     else{
       ret = OB_CS_TOOSMALLN(4);
