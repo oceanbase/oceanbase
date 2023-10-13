@@ -109,8 +109,6 @@ int ObDBMSSchedTableOperator::update_for_end(
   int ret = OB_SUCCESS;
 
   ObMySQLTransaction trans;
-  ObDMLSqlSplicer dml0;
-  ObSqlString sql0;
   ObDMLSqlSplicer dml1;
   ObSqlString sql1;
   ObDMLSqlSplicer dml2;
@@ -145,16 +143,10 @@ int ObDBMSSchedTableOperator::update_for_end(
   OX (job_info.flag_ = job_info.failures_ > 15 ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
   if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
     // when end_date is reach or no interval set, and auto_drop is set true, drop job.
-    OZ (dml0.add_gmt_modified(now));
-    OZ (dml0.add_pk_column("tenant_id",
-          ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-    OZ (dml0.add_pk_column("job_name", job_info.job_name_));
-    OZ (dml0.add_pk_column("job", 0));
-    OZ (dml0.splice_delete_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql0));
     OZ (dml1.add_gmt_modified(now));
     OZ (dml1.add_pk_column("tenant_id",
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-    OZ (dml1.add_pk_column("job", job_info.job_));
+    OZ (dml1.add_pk_column("job_name", job_info.job_name_));
     OZ (dml1.splice_delete_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql1));
   } else {
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
@@ -215,7 +207,6 @@ int ObDBMSSchedTableOperator::update_for_end(
 
   OZ (trans.start(sql_proxy_, tenant_id, true));
 
-  OZ (trans.write(tenant_id, sql0.ptr(), affected_rows));
   OZ (trans.write(tenant_id, sql1.ptr(), affected_rows));
   if (need_write_job_run_detail) {
     OZ (trans.write(tenant_id, sql2.ptr(), affected_rows));
