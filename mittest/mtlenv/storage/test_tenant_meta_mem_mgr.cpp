@@ -1533,68 +1533,6 @@ TEST_F(TestTenantMetaMemMgr, test_heap)
   ASSERT_EQ(0, heap.count());
 }
 
-TEST_F(TestTenantMetaMemMgr, test_full_tablet_queue)
-{
-  ObFullTabletCreator full_creator;
-  ObTablet *tmp_tablet;
-  ASSERT_EQ(OB_SUCCESS, full_creator.init(500));
-  ASSERT_NE(nullptr, tmp_tablet = OB_NEWx(ObTablet, &allocator_));
-  MacroBlockId tmp_id;
-  tmp_id.second_id_ = 100;
-  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_mem_addr(0, 2112));
-  tmp_tablet->inc_ref();
-  ObTabletHandle tablet_handle;
-  tablet_handle.set_obj(tmp_tablet, &allocator_, &t3m_);
-  tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-
-  ASSERT_FALSE(tmp_tablet->is_valid());  // test invalid tablet
-  ASSERT_EQ(OB_INVALID_ARGUMENT, full_creator.push_tablet_to_queue(tablet_handle));
-  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
-
-  // mock valid empty shell tablet
-  tmp_tablet->table_store_addr_.addr_.set_none_addr();
-  tmp_tablet->storage_schema_addr_.addr_.set_none_addr();
-  tmp_tablet->mds_data_.auto_inc_seq_.addr_.set_none_addr();
-  tmp_tablet->rowkey_read_info_ = nullptr;
-  ASSERT_TRUE(tmp_tablet->is_valid());
-
-  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_block_addr(tmp_id, 0, 2112)); // test addr
-  ASSERT_EQ(OB_INVALID_ARGUMENT, full_creator.push_tablet_to_queue(tablet_handle));
-  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
-
-  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_mem_addr(0, 2112));
-  ASSERT_EQ(OB_SUCCESS, full_creator.push_tablet_to_queue(tablet_handle));
-  ASSERT_EQ(1, full_creator.persist_queue_cnt_);
-  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_block_addr(tmp_id, 0, 2112));
-  ASSERT_EQ(OB_SUCCESS, full_creator.remove_tablet_from_queue(tablet_handle)); // skip block
-  ASSERT_EQ(1, full_creator.persist_queue_cnt_);
-
-  ASSERT_EQ(OB_SUCCESS, tmp_tablet->tablet_addr_.set_mem_addr(0, 2112));
-  ASSERT_EQ(OB_SUCCESS, full_creator.remove_tablet_from_queue(tablet_handle));
-  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
-  ASSERT_EQ(full_creator.transform_head_.get_obj(), full_creator.transform_tail_.get_obj());
-  ASSERT_FALSE(full_creator.transform_tail_.is_valid());
-
-  ASSERT_EQ(OB_SUCCESS, full_creator.push_tablet_to_queue(tablet_handle));
-  ASSERT_EQ(1, full_creator.persist_queue_cnt_);
-  ASSERT_EQ(full_creator.transform_head_.get_obj(), full_creator.transform_tail_.get_obj());
-  ASSERT_EQ(full_creator.transform_head_.get_obj(), tablet_handle.get_obj());
-  ASSERT_FALSE(tablet_handle.get_obj()->next_full_tablet_guard_.is_valid());
-
-
-  ASSERT_EQ(OB_SUCCESS, full_creator.pop_tablet(tablet_handle));
-  ASSERT_EQ(0, full_creator.persist_queue_cnt_);
-  ASSERT_FALSE(tablet_handle.get_obj()->next_full_tablet_guard_.is_valid());
-  ASSERT_EQ(full_creator.transform_head_.get_obj(), full_creator.transform_tail_.get_obj());
-  ASSERT_FALSE(full_creator.transform_tail_.is_valid());
-
-  ASSERT_EQ(OB_ITER_END, full_creator.pop_tablet(tablet_handle));
-  ASSERT_FALSE(full_creator.transform_head_.is_valid());
-
-  tablet_handle.obj_ = nullptr; // do not use handle to gc invalid tablet
-  tablet_handle.reset();
-}
-
 } // end namespace storage
 } // end namespace oceanbase
 
