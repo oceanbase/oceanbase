@@ -175,7 +175,7 @@ const char *ObGeoTypeUtil::get_geo_name_by_type(ObGeoType type)
       break;
     }
     case ObGeoType::GEOMETRYCOLLECTION:{
-      type_name = "GEOMCOLLECTION";
+      type_name = "GEOMETRYCOLLECTION";
       break;
     }
     default:{
