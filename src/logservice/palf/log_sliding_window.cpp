@@ -1641,67 +1641,12 @@ int LogSlidingWindow::try_advance_committed_lsn_(const LSN &end_lsn)
         get_committed_end_lsn_(old_committed_end_lsn);
       }
     }
-    if (end_lsn > old_committed_end_lsn) {
-      (void) try_advance_log_task_committed_ts_();
-    }
     PALF_LOG(TRACE, "try_advance_committed_lsn_ success", K_(palf_id), K_(self), K_(committed_end_lsn));
     if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, end_lsn_stat_time_us_)) {
       LSN curr_end_lsn;
       get_committed_end_lsn_(curr_end_lsn);
       PALF_LOG(INFO, "[PALF STAT COMMITTED LOG SIZE]", K_(palf_id), K_(self), "committed size", curr_end_lsn.val_ - last_record_end_lsn_.val_);
       last_record_end_lsn_ = curr_end_lsn;
-    }
-  }
-  return ret;
-}
-
-int LogSlidingWindow::try_advance_log_task_committed_ts_()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    LSN new_committed_end_lsn;
-    get_committed_end_lsn(new_committed_end_lsn);
-    const int64_t commit_ts = ObTimeUtility::current_time();
-    int64_t last_submit_log_id = get_last_submit_log_id_();
-    int64_t log_start_id = get_start_id();
-    LogTask *log_task = NULL;
-    for (int64_t tmp_log_id = last_submit_log_id; OB_SUCC(ret) && tmp_log_id >= log_start_id; tmp_log_id--) {
-      LogTaskGuard guard(this);
-      if (OB_FAIL(guard.get_log_task(tmp_log_id, log_task))) {
-        // the log_task may has been slided
-      } else if (!log_task->is_freezed() || log_task->get_end_lsn() > new_committed_end_lsn) {
-        continue;
-      } else if (OB_INVALID_TIMESTAMP == log_task->get_committed_ts()) {
-        log_task->set_committed_ts(commit_ts);
-      } else {
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
-int LogSlidingWindow::try_advance_log_task_first_ack_ts_(const LSN &end_lsn)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    const int64_t log_start_id = sw_.get_begin_sn();
-    LogTask *log_task = NULL;
-    for (int64_t tmp_log_id = last_submit_log_id_; OB_SUCC(ret) && tmp_log_id >= log_start_id; tmp_log_id--) {
-      LogTaskGuard guard(this);
-      if (OB_FAIL(guard.get_log_task(tmp_log_id, log_task))) {
-        // the log_task may has been slided
-      } else if (!log_task->is_freezed() || log_task->get_end_lsn() > end_lsn) {
-        continue;
-      } else if (OB_INVALID_TIMESTAMP == log_task->get_first_ack_ts()) {
-        log_task->set_first_ack_ts(ObTimeUtility::current_time());
-      } else {
-        break;
-      }
     }
   }
   return ret;
@@ -2160,8 +2105,6 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t log_freeze_ts = log_task->get_freeze_ts();
       const int64_t log_submit_ts = log_task->get_submit_ts();
       const int64_t log_flush_ts = log_task->get_flushed_ts();
-      const int64_t log_first_ack_ts = log_task->get_first_ack_ts();
-      const int64_t log_commit_ts = log_task->get_committed_ts();
       log_task->unlock();
 
       // Verifying accum_checksum firstly.
@@ -2191,34 +2134,24 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
         const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
         log_life_time_stat_.stat(log_life_time);
 
-        // Concurrency problem
-        // The first_ack_ts and committed_ts of log_task may havn't been updated when they were slided from sw.
-        if (OB_INVALID_TIMESTAMP != log_first_ack_ts && OB_INVALID_TIMESTAMP != log_commit_ts) {
-          const int64_t total_slide_log_cnt = ATOMIC_AAF(&accum_slide_log_cnt_, 1);
-          const int64_t total_log_gen_to_freeze_cost = ATOMIC_AAF(&accum_log_gen_to_freeze_cost_, log_freeze_ts - log_gen_ts);
-          const int64_t total_log_gen_to_submit_cost = ATOMIC_AAF(&accum_log_gen_to_submit_cost_, log_submit_ts - log_gen_ts);
-          const int64_t total_log_submit_to_flush_cost = ATOMIC_AAF(&accum_log_submit_to_flush_cost_, log_flush_ts - log_submit_ts);
-          const int64_t total_log_submit_to_first_ack_cost = ATOMIC_AAF(&accum_log_submit_to_first_ack_cost_, log_first_ack_ts - log_submit_ts);
-          const int64_t total_log_submit_to_commit_cost = ATOMIC_AAF(&accum_log_submit_to_commit_cost_, log_commit_ts - log_submit_ts);
-          const int64_t total_log_submit_to_slide_cost = ATOMIC_AAF(&accum_log_submit_to_slide_cost_, fs_cb_begin_ts - log_submit_ts);
-          if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, log_slide_stat_time_)) {
-            const int64_t avg_log_gen_to_freeze_time = total_log_gen_to_freeze_cost / total_slide_log_cnt;
-            const int64_t avg_log_gen_to_submit_time = total_log_gen_to_submit_cost / total_slide_log_cnt;
-            const int64_t avg_log_submit_to_flush_time = total_log_submit_to_flush_cost / total_slide_log_cnt;
-            const int64_t avg_log_submit_to_first_ack_time = total_log_submit_to_first_ack_cost / total_slide_log_cnt;
-            const int64_t avg_log_submit_to_commit_time = total_log_submit_to_commit_cost / total_slide_log_cnt;
-            const int64_t avg_log_submit_to_slide_time = total_log_submit_to_slide_cost / total_slide_log_cnt;
-            PALF_LOG(INFO, "[PALF STAT LOG TASK TIME]", K_(palf_id), K_(self), K(total_slide_log_cnt),
-                K(avg_log_gen_to_freeze_time), K(avg_log_gen_to_submit_time), K(avg_log_submit_to_flush_time),
-                K(avg_log_submit_to_first_ack_time), K(avg_log_submit_to_commit_time), K(avg_log_submit_to_slide_time));
-            ATOMIC_STORE(&accum_slide_log_cnt_, 0);
-            ATOMIC_STORE(&accum_log_gen_to_freeze_cost_, 0);
-            ATOMIC_STORE(&accum_log_gen_to_submit_cost_, 0);
-            ATOMIC_STORE(&accum_log_submit_to_flush_cost_, 0);
-            ATOMIC_STORE(&accum_log_submit_to_first_ack_cost_, 0);
-            ATOMIC_STORE(&accum_log_submit_to_commit_cost_, 0);
-            ATOMIC_STORE(&accum_log_submit_to_slide_cost_, 0);
-          }
+        const int64_t total_slide_log_cnt = ATOMIC_AAF(&accum_slide_log_cnt_, 1);
+        const int64_t total_log_gen_to_freeze_cost = ATOMIC_AAF(&accum_log_gen_to_freeze_cost_, log_freeze_ts - log_gen_ts);
+        const int64_t total_log_gen_to_submit_cost = ATOMIC_AAF(&accum_log_gen_to_submit_cost_, log_submit_ts - log_gen_ts);
+        const int64_t total_log_submit_to_flush_cost = ATOMIC_AAF(&accum_log_submit_to_flush_cost_, log_flush_ts - log_submit_ts);
+        const int64_t total_log_submit_to_slide_cost = ATOMIC_AAF(&accum_log_submit_to_slide_cost_, fs_cb_begin_ts - log_submit_ts);
+        if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, log_slide_stat_time_)) {
+          const int64_t avg_log_gen_to_freeze_time = total_log_gen_to_freeze_cost / total_slide_log_cnt;
+          const int64_t avg_log_gen_to_submit_time = total_log_gen_to_submit_cost / total_slide_log_cnt;
+          const int64_t avg_log_submit_to_flush_time = total_log_submit_to_flush_cost / total_slide_log_cnt;
+          const int64_t avg_log_submit_to_slide_time = total_log_submit_to_slide_cost / total_slide_log_cnt;
+          PALF_LOG(INFO, "[PALF STAT LOG TASK TIME]", K_(palf_id), K_(self), K(total_slide_log_cnt),
+              K(avg_log_gen_to_freeze_time), K(avg_log_gen_to_submit_time), K(avg_log_submit_to_flush_time),
+              K(avg_log_submit_to_slide_time));
+          ATOMIC_STORE(&accum_slide_log_cnt_, 0);
+          ATOMIC_STORE(&accum_log_gen_to_freeze_cost_, 0);
+          ATOMIC_STORE(&accum_log_gen_to_submit_cost_, 0);
+          ATOMIC_STORE(&accum_log_submit_to_flush_cost_, 0);
+          ATOMIC_STORE(&accum_log_submit_to_slide_cost_, 0);
         }
 
         if (log_life_time > 100 * 1000) {
@@ -4168,10 +4101,6 @@ int LogSlidingWindow::ack_log(const common::ObAddr &src_server, const LSN &end_l
     LSN old_committed_end_lsn;
     get_committed_end_lsn_(old_committed_end_lsn);
     LSN new_committed_end_lsn;
-    // first ack ts only needs to be updated when end_lsn >= old_committed_lsn
-    if (old_committed_end_lsn < end_lsn) {
-      (void) try_advance_log_task_first_ack_ts_(end_lsn);
-    }
     if (state_mgr_->is_leader_active()) {
       // Only leader with ACTIVE state can generate new committed_end_lsn.
       (void) gen_committed_end_lsn_(new_committed_end_lsn);
