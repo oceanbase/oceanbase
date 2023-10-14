@@ -52,10 +52,13 @@ ObBlockMetaTree::~ObBlockMetaTree()
 int ObBlockMetaTree::init(ObTablet &tablet,
                           const ObITable::TableKey &table_key,
                           const share::SCN &ddl_start_scn,
-                          const int64_t data_format_version)
+                          const int64_t data_format_version,
+                          const bool require_ddl_sstable/* = true */)
 {
   int ret = OB_SUCCESS;
   const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree");
+  ObTableStoreIterator ddl_table_iter;
+  ObITable *first_ddl_sstable = nullptr; // get compressor_type of macro block for query
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -65,10 +68,14 @@ int ObBlockMetaTree::init(ObTablet &tablet,
   } else if (FALSE_IT(arena_.set_attr(mem_attr))) {
   } else if (OB_FAIL(block_tree_.init())) {
     LOG_WARN("init block tree failed", K(ret));
+  } else if (OB_FAIL(tablet.get_ddl_sstables(ddl_table_iter))) {
+    LOG_WARN("get ddl sstable handles failed", K(ret));
+  } else if (require_ddl_sstable && OB_FAIL(ddl_table_iter.get_boundary_table(false/*is_last*/, first_ddl_sstable))) {
+    LOG_WARN("failed to get boundary table", K(ret));
   } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_data_desc(tablet,
                                                               table_key.get_snapshot_version(),
                                                               data_format_version,
-                                                              nullptr, // first ddl sstable
+                                                              static_cast<ObSSTable *>(first_ddl_sstable),
                                                               data_desc_))) {
       LOG_WARN("prepare data store desc failed", K(ret), K(table_key), K(data_format_version));
   } else {
@@ -445,7 +452,8 @@ int ObDDLKV::init(ObTablet &tablet,
                   const SCN &ddl_start_scn,
                   const int64_t snapshot_version,
                   const SCN &last_freezed_scn,
-                  const int64_t data_format_version)
+                  const int64_t data_format_version,
+                  const bool require_ddl_sstable/* = true */)
 
 {
   int ret = OB_SUCCESS;
@@ -474,7 +482,7 @@ int ObDDLKV::init(ObTablet &tablet,
     ddl_param.snapshot_version_ = snapshot_version;
     ddl_param.data_format_version_ = data_format_version;
     ObTabletCreateSSTableParam sstable_param;
-    if (OB_FAIL(block_meta_tree_.init(tablet, ddl_param.table_key_, ddl_start_scn, data_format_version))) {
+    if (OB_FAIL(block_meta_tree_.init(tablet, ddl_param.table_key_, ddl_start_scn, data_format_version, require_ddl_sstable))) {
       LOG_WARN("init mem index sstable failed", K(ret), K(ddl_param));
     } else if (OB_FAIL(init_sstable_param(tablet, ddl_param.table_key_, ddl_start_scn, sstable_param))) {
       LOG_WARN("init sstable param failed", K(ret));
