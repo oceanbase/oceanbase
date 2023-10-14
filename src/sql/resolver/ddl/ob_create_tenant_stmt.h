@@ -37,7 +37,6 @@ public:
   int add_zone(const common::ObString &zone);
   int set_comment(const common::ObString &commont);
   int set_locality(const common::ObString &locality);
-  int set_tcp_invited_nodes(common::ObString value);
   void set_primary_zone(const common::ObString &zone);
   void set_if_not_exist(const bool is_exist);
   void set_charset_type(const common::ObCharsetType type);

@@ -379,9 +379,18 @@ int check_sys_var_options(ObExecContext &ctx,
               EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
               EXPR_GET_VARCHAR_V2(value_obj, val_str);
               if (OB_SUCC(ret)) {
-                if(OB_UNLIKELY(val_str.length() > OB_MAX_SYS_VAR_VAL_LENGTH)) {
+                int64_t sys_var_val_length = OB_MAX_SYS_VAR_VAL_LENGTH;
+                if (set_var.var_name_ == OB_SV_TCP_INVITED_NODES) {
+                  uint64_t data_version = 0;
+                  if (OB_FAIL(GET_MIN_DATA_VERSION(set_var.actual_tenant_id_, data_version))) {
+                    LOG_WARN("fail to get sys data version", KR(ret));
+                  } else if (data_version >= DATA_VERSION_4_2_1_1) {
+                    sys_var_val_length = OB_MAX_TCP_INVITED_NODES_LENGTH;
+                  }
+                }
+                if (OB_SUCC(ret) && OB_UNLIKELY(val_str.length() > sys_var_val_length)) {
                   ret = OB_SIZE_OVERFLOW;
-                  LOG_WARN("set sysvar value is overflow", "max length", OB_MAX_SYS_VAR_VAL_LENGTH, "value length", val_str.length(), K(sys_id), K(val_str));
+                  LOG_WARN("set sysvar value is overflow", "max length", sys_var_val_length, "value length", val_str.length(), K(sys_id), K(val_str));
                 } else if (OB_FAIL(sys_var_list.push_back(obrpc::ObSysVarIdValue(sys_id, val_str)))) {
                   LOG_WARN("failed to push back", K(sys_id), K(val_str), K(ret));
                 }

@@ -715,9 +715,19 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
     EXPR_GET_VARCHAR_V2(val, val_str);
     ObSysVarSchema sysvar_schema;
-    if (OB_UNLIKELY(val_str.length() > OB_MAX_SYS_VAR_VAL_LENGTH)) {
+
+    int64_t sys_var_val_length = OB_MAX_SYS_VAR_VAL_LENGTH;
+    if (set_var.var_name_ == OB_SV_TCP_INVITED_NODES) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(set_var.actual_tenant_id_, data_version))) {
+        LOG_WARN("fail to get sys data version", KR(ret));
+      } else if (data_version >= DATA_VERSION_4_2_1_1) {
+        sys_var_val_length = OB_MAX_TCP_INVITED_NODES_LENGTH;
+      }
+    }
+    if (OB_SUCC(ret) && OB_UNLIKELY(val_str.length() > sys_var_val_length)) {
       ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("set sysvar value is overflow", "max length", OB_MAX_SYS_VAR_VAL_LENGTH,
+      LOG_WARN("set sysvar value is overflow", "max length", sys_var_val_length,
                "value length", val_str.length(), "name", set_var.var_name_, "value", val_str);
     } else if (OB_FAIL(sysvar_schema.set_name(set_var.var_name_))) {
       LOG_WARN("set sysvar schema name failed", K(ret));
