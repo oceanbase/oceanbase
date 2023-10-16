@@ -401,7 +401,8 @@ public:
         has_global_index_(false),
         error_log_info_(),
         has_instead_of_trigger_(false),
-        ab_stmt_id_expr_(nullptr)
+        ab_stmt_id_expr_(nullptr),
+        dml_source_from_join_(false)
   { }
   virtual ~ObDelUpdStmt() { }
   int deep_copy_stmt_struct(ObIAllocator &allocator,
@@ -465,6 +466,9 @@ public:
   int has_dml_table_info(const uint64_t table_id, bool &has) const;
   int check_dml_need_filter_null();
   int extract_need_filter_null_table(const JoinedTable *cur_table, ObIArray<uint64_t> &table_ids);
+  void set_dml_source_from_join(bool from_join) { dml_source_from_join_ = from_join; }
+  inline bool dml_source_from_join() const { return dml_source_from_join_; }
+  int check_dml_source_from_join();
 protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;
@@ -477,6 +481,7 @@ protected:
   // for insert and merge stmt
   common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> sharding_conditions_;
   ObRawExpr *ab_stmt_id_expr_; //for array binding batch execution to mark the stmt id
+  bool dml_source_from_join_;
 };
 }
 }
