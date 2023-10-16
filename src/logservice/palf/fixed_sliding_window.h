@@ -69,6 +69,7 @@ struct SlidingCond
   int ret_;
 };
 
+// static bool PALF_FIXED_SW_GET_HUNG = false;
 template <typename T = FixedSlidingWindowSlot>
 class FixedSlidingWindow
 {
@@ -174,6 +175,11 @@ public:
     } else if (OB_SUCC(check_id_in_range_(g_id))) {
       int64_t idx = calc_idx_(g_id);
       T *tmp_ptr = &(array_[idx]);
+      // for unittest
+      // while (true == PALF_FIXED_SW_GET_HUNG && g_id == 10) {
+      //   ob_usleep(1000);
+      //   PALF_LOG(TRACE, "sw get hung", K(g_id));
+      // }
       ATOMIC_INC(&(array_[idx].ref_));
       // double check to avoid array_[idx] has been slid
       // Note that we do not require begin_sn_ and end_dn_ have not changed during get(),
@@ -181,7 +187,7 @@ public:
       if (OB_SUCC(check_id_in_range_(g_id))) {
         val = tmp_ptr;
         PALF_LOG(TRACE, "get succ", K(g_id), K(array_[idx].ref_));
-      } else if (OB_SUCC(revert(g_id))) {
+      } else if (OB_SUCC(revert_(g_id))) {
         // begin_sn_ inc and greater than g_id, so dec ref count and return common::OB_ERR_OUT_OF_LOWER_BOUND
         // must call revert rather than ATOMIC_DEC(&array_[idx].ref_);
         PALF_LOG(INFO, "get fail and revert", K(g_id), K(begin_sn_), K(array_[idx].ref_));
@@ -209,8 +215,21 @@ public:
     if (IS_NOT_INIT) {
       ret = common::OB_NOT_INIT;
       PALF_LOG(WARN, "FixedSlidingWindow not init", KR(ret));
-      // if r_id >= end_sn_, then slidingwindow[r_id] must haven't be getted, and revert(r_id) makes no sense.
-    } else if (r_id >= get_end_sn_() || r_id < (get_begin_sn() - size_)) {
+    } else if (OB_UNLIKELY(r_id < (get_begin_sn() - size_))) {
+      ret = common::OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "FixedSlidingWindow revert error", KR(ret), K(r_id), K(begin_sn_), K(end_sn_));
+    } else {
+      ret = revert_(r_id);
+    }
+    return ret;
+  }
+
+private:
+  int revert_(const int64_t r_id)
+  {
+    int ret = common::OB_SUCCESS;
+    // if r_id >= end_sn_, then slidingwindow[r_id] must haven't be getted, and revert(r_id) makes no sense.
+    if (OB_UNLIKELY(r_id >= get_end_sn_())) {
       ret = common::OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "FixedSlidingWindow revert error", KR(ret), K(r_id), K(begin_sn_), K(end_sn_));
     } else {
@@ -225,7 +244,7 @@ public:
       int64_t idx = calc_idx_(r_id);
       int64_t tmp_id = r_id;
       int64_t curr_ref = common::OB_INVALID_COUNT;
-      if (0 > (curr_ref = ATOMIC_SAF(&(array_[idx].ref_), 1))) {
+      if (OB_UNLIKELY(0 > (curr_ref = ATOMIC_SAF(&(array_[idx].ref_), 1)))) {
         ret = common::OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "FixedSlidingWindow revert error", KR(ret), K(r_id), K(begin_sn_), K(end_sn_), K(curr_ref));
       } else if (0 == curr_ref) {
@@ -261,6 +280,7 @@ public:
     return ret;
   }
 
+public:
   // desc: slide the slidingwindow[begin_sn_] continuously until timeout
   // For each log, first execute sliding_cb() and then inc begin_sn_
   // @param[in] timeout_us: slide continuously until timeout
