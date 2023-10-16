@@ -747,6 +747,8 @@ public:
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
+  void post_keepalive_msg_(const int status);
+  void notify_scheduler_tx_killed_(const int kill_reason);
   int rollback_to_savepoint_(const ObTxSEQ from_scn, const ObTxSEQ to_scn);
   int submit_rollback_to_log_(const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObTxData *tx_data);
   int set_state_info_array_();

@@ -95,6 +95,10 @@ TEST_F(ObTestTxCtx, DelayAbort)
     ASSERT_EQ(false, tx_ctx->is_follower_());
     ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->revert_tx_ctx(tx_ctx));
   }
+  // disable keepalive msg, because switch to follower forcedly will send keepalive msg to notify
+  // scheduler abort tx
+  TRANS_LOG(INFO, "add drop KEEPALIVE msg");
+  n1->add_drop_msg_type(KEEPALIVE);
 
   ls_tx_ctx_mgr->switch_to_follower_forcedly();
 
