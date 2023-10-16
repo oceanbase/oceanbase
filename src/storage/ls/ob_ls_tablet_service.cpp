@@ -2603,6 +2603,7 @@ int ObLSTabletService::insert_rows(
           row_count, rows_info, tbl_rows, afct_num, dup_num))) {
         LOG_WARN("insert to each tablets fail", K(ret));
       }
+      lob_allocator.reuse();
     }
 
     if (OB_ITER_END == ret) {
@@ -2873,6 +2874,7 @@ int ObLSTabletService::update_rows(
       } else {
         afct_num++;
       }
+      lob_allocator.reuse();
       timeguard.click("Update");
     }
     if (OB_ITER_END == ret) {
@@ -2995,6 +2997,7 @@ int ObLSTabletService::put_rows(
         }
       }
       ++afct_num;
+      lob_allocator.reuse();
     }
 
     if (OB_ITER_END == ret) {
@@ -3059,6 +3062,7 @@ int ObLSTabletService::delete_rows(
       } else {
         ++afct_num;
       }
+      lob_allocator.reuse();
     }
     lob_allocator.reset();
     if (OB_ITER_END == ret) {
