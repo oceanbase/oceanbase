@@ -216,7 +216,7 @@ private:
 
 
   static bool is_valid_version(int64_t v);
-  bool is_valid_urowid() const;
+  int check_is_valid_urowid() const;
   
   static int set_heap_organized_table_rowid_content(const ObIArray<ObObj> &args,
                                                     uint8_t *buf,
