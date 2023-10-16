@@ -276,8 +276,8 @@ public:
   void logical_stop()
   {
     if (nullptr != th_) {
-      th_->runnable_->set_stop(true);
       th_->logical_stop();
+      th_->runnable_->set_stop(true);
     }
   }
   void logical_wait()
