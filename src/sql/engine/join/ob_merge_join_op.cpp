@@ -134,6 +134,8 @@ int ObMergeJoinOp::inner_open()
     const ExprFixedArray &left_outputs = left_->get_spec().output_;
     const ExprFixedArray &right_outputs = right_->get_spec().output_;
     const uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    match_groups_.set_attr(ObMemAttr(tenant_id, "SqlMJGroups"));
+    output_cache_.set_attr(ObMemAttr(tenant_id, "SqlMJOutput"));
     const ObIArray<ObMergeJoinSpec::EqualConditionInfo> &equal_cond_infos =
                                                           MY_SPEC.equal_cond_infos_;
     const int64_t left_width = left_->get_spec().width_;
