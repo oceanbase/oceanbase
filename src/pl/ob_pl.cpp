@@ -3003,11 +3003,12 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
     OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.allocator_));
   }
 
+  // init params may use exec stack, need append to pl context first
+  CK (OB_NOT_NULL(top_context_ = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
+  OZ (top_context_->get_exec_stack().push_back(this));
 
   OZ (init_params(params, is_anonymous));
 
-  CK (OB_NOT_NULL(top_context_ = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
-  OZ (top_context_->get_exec_stack().push_back(this));
   OX (top_context_->set_has_output_arguments(!func_.get_out_args().is_empty()));
 
   if (OB_SUCC(ret)) {

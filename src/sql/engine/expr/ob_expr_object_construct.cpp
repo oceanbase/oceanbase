@@ -138,6 +138,7 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
     int64_t init_size = OB_INVALID_SIZE;
     ObArenaAllocator tmp_alloc;
     const pl::ObUserDefinedType *user_type = NULL;
+    CK (OB_NOT_NULL(ns));
     OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
     CK (OB_NOT_NULL(user_type));
     OZ (user_type->newx(alloc, ns, ptr));
