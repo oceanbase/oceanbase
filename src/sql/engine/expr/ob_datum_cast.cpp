@@ -9437,7 +9437,7 @@ static int float_range_check(const ObCastMode &cast_mode,
   } else {
     IN_TYPE in_val = *(reinterpret_cast<const IN_TYPE*>(in_datum.ptr_));
     IN_TYPE out_val = in_val;
-    if (lib::is_oracle_mode() && 0.0 == in_val) {
+    if (lib::is_oracle_mode() && fabs(in_val) < FLT_EPSILON) {
       if (ObFloatTC == type_class) {
         res_datum.set_float(0.0);
       } else {
