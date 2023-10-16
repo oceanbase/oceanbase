@@ -35,6 +35,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -458,6 +459,7 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
   for (int64_t i = 0; OB_SUCC(ret) && i < old_tenants.count(); i++) {
     found = false;
     const ObUnitInfoGetter::ObTenantConfig &tenant_config = old_tenants.at(i);
+    const ObUnitInfoGetter::ObUnitStatus local_unit_status = tenant_config.unit_status_;
     for (int64_t j = 0; j < new_tenants.count(); j++) {
       if (tenant_config.tenant_id_ == new_tenants.at(j).tenant_id_) {
         new_tenants.at(j).create_timestamp_ = tenant_config.create_timestamp_;
@@ -499,19 +501,24 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
             // need wait gc in observer
             // NOTE: only update unit status when can not release resource
             if (!is_released) {
-              tenants.at(tenants.count() - 1).unit_status_ =
-                  ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
+              tenants.at(tenants.count() - 1).unit_status_ = ObUnitInfoGetter::UNIT_WAIT_GC_IN_OBSERVER;
+              // add a event when try to gc for the first time
+              if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
+                  local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+                SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_config.tenant_id_,
+                    "unit_id", tenant_config.unit_id_, "unit_status", "WAIT GC");
+              }
             }
 
             LOG_INFO("[DELETE_TENANT] tenant has been dropped. can not delete tenant",
-                K(is_released),
+                K(is_released), "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
                 "is_removed", tenant_config.is_removed_,
                 "create_timestamp", tenant_config.create_timestamp_,
                 K(life_time), K(tenant_config));
           }
         } else {
             LOG_INFO("[DELETE_TENANT] tenant has been dropped. can delete tenant",
-                K(is_released),
+                K(is_released), "local_unit_status", ObUnitInfoGetter::get_unit_status_str(local_unit_status),
                 "is_removed", tenant_config.is_removed_,
                 "create_timestamp", tenant_config.create_timestamp_,
                 K(life_time), K(tenant_config));
