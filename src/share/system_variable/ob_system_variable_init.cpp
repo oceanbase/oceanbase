@@ -3305,13 +3305,26 @@ static struct VarsInit{
     ObSysVars[233].alias_ = "OB_SV__OB_PROXY_WEAKREAD_FEEDBACK" ;
     }();
 
+    [&] (){
+      ObSysVars[234].default_value_ = "en_US" ;
+      ObSysVars[234].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
+      ObSysVars[234].name_ = "lc_time_names" ;
+      ObSysVars[234].data_type_ = ObVarcharType ;
+      ObSysVars[234].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[234].id_ = SYS_VAR_LC_TIME_NAMES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 234 ;
+      ObSysVars[234].base_value_ = "en_US" ;
+    ObSysVars[234].alias_ = "OB_SV_LC_TIME_NAMES" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 234;
+static int64_t var_amount = 235;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
