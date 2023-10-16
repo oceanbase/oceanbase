@@ -123,6 +123,9 @@ protected:
                                 sql::ObDMLRtCtx &dml_rtctx);
   int execute_das_task(sql::ObDMLRtCtx &dml_rtctx, bool del_task_ahead);
   void set_need_fetch_conflict(sql::ObDMLRtCtx &upd_rtctx,ObTableInsRtDef &ins_rtdef);
+  int stored_row_to_exprs(const ObChunkDatumStore::StoredRow &row,
+                          const common::ObIArray<ObExpr*> &exprs,
+                          ObEvalCtx &ctx);
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;

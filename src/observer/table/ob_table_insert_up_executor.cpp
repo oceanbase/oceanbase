@@ -262,8 +262,9 @@ int ObTableApiInsertUpExecutor::do_update(const ObRowkey &constraint_rowkey,
     if (NULL != constraint_value.baseline_datum_row_ &&
         NULL != constraint_value.current_datum_row_) {
       // base_line 和 curr_row 都存在
-      OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(),
-                                                       eval_ctx_));
+      OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                             get_primary_table_upd_old_row(),
+                             eval_ctx_));
       OZ(delete_upd_old_row_to_das(constraint_rowkey,
                                    constraint_value,
                                    insert_up_spec_.get_ctdef().upd_ctdef_,

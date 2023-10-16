@@ -188,8 +188,9 @@ int ObTableApiReplaceExecutor::do_delete(ObConflictRowMap *primary_map)
     ObConflictValue &constraint_value = start_row_iter->second;
     if (NULL != constraint_value.baseline_datum_row_) {
       //baseline row is not empty, delete it
-      if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr(get_primary_table_old_row(),
-                                                                eval_ctx_))) {
+      if (OB_FAIL(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                                      get_primary_table_old_row(),
+                                      eval_ctx_))) {
         LOG_WARN("fail to stored row to expr", K(ret));
       } else if (OB_FAIL(delete_row_to_das(ctdef.del_ctdef_, replace_rtdef_.del_rtdef_))) {
         LOG_WARN("fail to shuffle delete row", K(ret), K(constraint_value));
@@ -211,8 +212,8 @@ int ObTableApiReplaceExecutor::do_insert()
   if (OB_ISNULL(insert_row_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("insert row is null", K(ret));
-  } else if (OB_FAIL(insert_row_->to_expr(get_primary_table_new_row(), eval_ctx_))) {
-    LOG_WARN("stored row to expr faild", K(ret));
+  } else if (OB_FAIL(stored_row_to_exprs(*insert_row_, get_primary_table_new_row(), eval_ctx_))) {
+    LOG_WARN("stored row to exprs faild", K(ret));
   } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, replace_rtdef_.ins_rtdef_))) {
     LOG_WARN("shuffle insert row failed", K(ret));
   } else {

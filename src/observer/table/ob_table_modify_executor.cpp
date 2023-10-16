@@ -304,10 +304,11 @@ int ObTableApiModifyExecutor::get_next_conflict_rowkey(DASTaskIter &task_iter,
     } else if (OB_ISNULL(stored_row = ssr.get_store_row())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("stored row is null", K(ret));
-    } else if (OB_FAIL(stored_row->to_expr(conflict_checker.checker_ctdef_.data_table_rowkey_expr_,
-        conflict_checker.eval_ctx_))) {
+    } else if (OB_FAIL(stored_row_to_exprs(*stored_row,
+                                           conflict_checker.checker_ctdef_.data_table_rowkey_expr_,
+                                           conflict_checker.eval_ctx_))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next row from result iterator", K(ret));
+        LOG_WARN("fail to fill exprs by stored row", K(ret));
       }
     } else {
       got_row = true;
@@ -620,6 +621,25 @@ void ObTableApiModifyExecutor::set_need_fetch_conflict(sql::ObDMLRtCtx &upd_rtct
   dml_rtctx_.set_non_sub_full_task();
   upd_rtctx.set_pick_del_task_first();
   upd_rtctx.set_non_sub_full_task();
+}
+
+int ObTableApiModifyExecutor::stored_row_to_exprs(const ObChunkDatumStore::StoredRow &row,
+                                                  const ObIArray<ObExpr*> &exprs,
+                                                  ObEvalCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(row.cnt_ != exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("datum count mismatch", K(ret), K(row.cnt_), K(exprs.count()));
+  } else {
+    for (uint32_t i = 0; i < row.cnt_; ++i) {
+      exprs.at(i)->locate_expr_datum(ctx) = row.cells()[i];
+      exprs.at(i)->set_evaluated_projected(ctx);
+    }
+  }
+
+  return ret;
 }
 
 }  // namespace table

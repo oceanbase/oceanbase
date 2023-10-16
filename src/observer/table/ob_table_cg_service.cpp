@@ -247,8 +247,6 @@ int ObTableExprCgService::generate_current_timestamp_expr(ObTableCtx &ctx,
                                                               &ctx.get_session_info()))) {
       LOG_WARN("fail to build column conv expr", K(ret), K(item));
     } else {
-      // need clear IS_CONST_EXPR flag, cause StoredRow.to_expr will skip const expr in insertUp/replace executor
-      tmp_expr->clear_flag(IS_CONST_EXPR);
       expr = tmp_expr;
     }
   }
@@ -975,6 +973,7 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
         }
       } else if (!is_full_filled && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
         ObDatum *tmp_datum = nullptr;
+        expr->get_eval_info(eval_ctx).clear_evaluated_flag();
         if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
           LOG_WARN("fail to eval current timestamp expr", K(ret));
         } else {
@@ -1056,6 +1055,7 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
             }
           } else if (not_found && IS_DEFAULT_NOW_OBJ(item.default_value_)) {
             ObDatum *tmp_datum = nullptr;
+            expr->get_eval_info(eval_ctx).clear_evaluated_flag();
             if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {
               LOG_WARN("fail to eval current timestamp expr", K(ret));
             }
