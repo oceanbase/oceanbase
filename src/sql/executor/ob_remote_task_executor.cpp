@@ -100,13 +100,16 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
         }
       }
       // handle tx relative info if plan involved in transaction
-      int tmp_ret = handle_tx_after_rpc(handler->get_result(),
+      const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
+      if (plan && plan->is_need_trans()) {
+        int tmp_ret = handle_tx_after_rpc(handler->get_result(),
                                         session,
                                         has_sent_task,
                                         has_transfer_err,
-                                        plan_ctx->get_phy_plan(),
-                                        query_ctx);
-      ret = COVER_SUCC(tmp_ret);
+                                        plan,
+                                          query_ctx);
+        ret = COVER_SUCC(tmp_ret);
+      }
 
       if (OB_SUCC(ret)) {
         ObExecFeedbackInfo &fb_info = handler->get_result()->get_feedback_info();
