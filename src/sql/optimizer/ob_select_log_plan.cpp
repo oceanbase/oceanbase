@@ -2948,7 +2948,8 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
                                                               is_partition_wise))) {
       LOG_WARN("failed to check if match partition wise join", K(ret));
     } else if (is_partition_wise) {
-      if (left_child.is_exchange_allocated() == right_child.is_exchange_allocated()) {
+      if (left_child.is_exchange_allocated() == right_child.is_exchange_allocated()
+          && is_set_partition_wise_valid(left_child, right_child)) {
         set_dist_methods = DistAlgo::DIST_PARTITION_WISE;
         OPT_TRACE("plan will use partition wise method and prune other method");
       }
@@ -3384,9 +3385,6 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
         OB_ISNULL(right_plan = right_child->get_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(right_child), K(right_plan), K(ret));
-    } else if (DistAlgo::DIST_PARTITION_WISE == set_dist_algo &&
-               !is_set_partition_wise_valid(left_child, *right_child)) {
-      /*do nothing*/
     } else if (!is_set_repart_valid(left_child, *right_child, set_dist_algo)) {
       /*do nothing*/
     } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > (out_parallel = right_child->get_parallel())
@@ -3847,8 +3845,7 @@ int ObSelectLogPlan::inner_generate_hash_set_plans(const EqualSets &equal_sets,
           for (int64_t k = DistAlgo::DIST_BASIC_METHOD;
                OB_SUCC(ret) && k < DistAlgo::DIST_MAX_JOIN_METHOD; k = (k << 1)) {
             DistAlgo dist_algo = get_dist_algo(k);
-            if ((set_methods & k) && (DistAlgo::DIST_PARTITION_WISE != dist_algo ||
-                 is_set_partition_wise_valid(*left_best_plan, *right_best_plan)) &&
+            if ((set_methods & k) &&
                  is_set_repart_valid(*left_best_plan, *right_best_plan, dist_algo)) {
               if (OB_FAIL(create_hash_set_plan(equal_sets,
                                                left_best_plan,
