@@ -1000,7 +1000,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
         if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
           ret = OB_SUCCESS;
         } else {
-          if (!MTL_IS_PRIMARY_TENANT()) {
+          if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
             ret = OB_STANDBY_READ_ONLY;
           }
           TRANS_LOG(WARN, "get tx ctx fail",
@@ -1125,7 +1125,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   }
   // fail, rollback
   if (OB_FAIL(ret)) {
-    if (!MTL_IS_PRIMARY_TENANT()) {
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
       ret = OB_STANDBY_READ_ONLY;
     }
     if (OB_NOT_NULL(tx_ctx)) {
@@ -1460,7 +1460,7 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
     } else {
       if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
         TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
-      } else if (MTL_IS_PRIMARY_TENANT()) {
+      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
         ret = OB_NOT_MASTER;
       } else {
         ret = OB_REPLICA_NOT_READABLE;
@@ -1479,7 +1479,7 @@ bool ObTransService::check_ls_readable_(ObLS &ls,
   int ret = OB_SUCCESS;
   bool readable = false;
   SCN scn;
-  if (ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src || MTL_IS_PRIMARY_TENANT()) {
+  if (ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src || MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     readable = snapshot <= ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
   } else if (OB_FAIL(ls.get_ls_replica_readable_scn(scn))) {
     TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls.get_ls_id()));
@@ -1606,7 +1606,7 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   SCN snapshot0;
   SCN snapshot1;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
-  const bool can_elr = MTL_IS_PRIMARY_TENANT() ? true : false;
+  const bool can_elr = MTL_TENANT_ROLE_CACHE_IS_PRIMARY() ? true : false;
   ObLSHandle ls_handle;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
     TRANS_LOG(WARN, "get ls fail", K(ret), K(ls_id));
@@ -1632,10 +1632,10 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
       && OB_NOT_NULL(ls_handle.get_ls())) {
     dup_trx_status =
         ls_handle.get_ls()->get_tx_svr()->get_tx_ls_log_adapter()->get_committing_dup_trx_cnt(committing_dup_trx_cnt);
-    if (!MTL_IS_PRIMARY_TENANT()) {
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
       ret = OB_NOT_MASTER;
       TRANS_LOG(DEBUG, "the max_commmit_ts can not be used as a snapshot in standby tenant ",
-                K(ret), K(ls_id), K(snapshot), K(MTL_IS_PRIMARY_TENANT()),
+                K(ret), K(ls_id), K(snapshot), K(MTL_TENANT_ROLE_CACHE_IS_PRIMARY()),
                 K(committing_dup_trx_cnt));
     } else if (!ls_handle.get_ls()
                     ->get_tx_svr()
@@ -2393,7 +2393,7 @@ int ObTransService::gen_trans_id(ObTransID &trans_id)
   int ret = OB_SUCCESS;
 
   int retry_times = 0;
-  if (!MTL_IS_PRIMARY_TENANT()) {
+  if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     ret = OB_STANDBY_READ_ONLY;
     TRANS_LOG(WARN, "standby tenant support read only", K(ret));
   } else {

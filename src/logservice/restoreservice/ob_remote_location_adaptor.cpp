@@ -102,7 +102,7 @@ int ObRemoteLocationAdaptor::update_upstream(share::ObLogRestoreSourceItem &sour
 
 bool ObRemoteLocationAdaptor::is_tenant_primary_()
 {
-  return MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT;
+  return MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::PRIMARY_TENANT;
 }
 
 int ObRemoteLocationAdaptor::do_update_(const bool is_add_source, const share::ObLogRestoreSourceItem &item)

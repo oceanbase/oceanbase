@@ -344,7 +344,7 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
         } else if (ObTimeUtility::current_time() + MIN(i, MAX_SLEEP_US) >= lock_expire_ts) {
           ret = OB_ERR_SHARED_LOCK_CONFLICT;
           break;
-        } else if (!MTL_IS_PRIMARY_TENANT() && OB_SUCC(check_for_standby(tx_data.tx_id_))) {
+        } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID() && OB_SUCC(check_for_standby(tx_data.tx_id_))) {
           TRANS_LOG(INFO, "read by standby tenant success", K(tx_data), KPC(tx_cc_ctx), KPC(this));
           break;
         } else if (i < 10) {

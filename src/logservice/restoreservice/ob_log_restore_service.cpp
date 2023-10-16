@@ -167,7 +167,7 @@ void ObLogRestoreService::run1()
   } else {
     while (! has_set_stop()) {
       int64_t begin_stamp = ObTimeUtility::current_time();
-      const bool is_primary = MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT;
+      const bool is_primary = MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::PRIMARY_TENANT;
       const int64_t thread_interval = is_primary ? PRIMARY_THREAD_RUN_INTERVAL : STANDBY_THREAD_RUN_INTERVAL;
       do_thread_task_();
       int64_t end_tstamp = ObTimeUtility::fast_current_time();

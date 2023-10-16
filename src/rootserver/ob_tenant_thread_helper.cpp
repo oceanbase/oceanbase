@@ -304,7 +304,7 @@ int ObTenantThreadHelper::check_can_do_recovery_(const uint64_t tenant_id)
     LOG_WARN("only user tenant need check recovery", KR(ret), K(tenant_id));
   } else {
     MTL_SWITCH(tenant_id) {
-      share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE();
+      share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
       if (is_primary_tenant(tenant_role) || is_standby_tenant(tenant_role)) {
       } else if (is_restore_tenant(tenant_role)) {
         //need to check success to create init ls
@@ -324,6 +324,9 @@ int ObTenantThreadHelper::check_can_do_recovery_(const uint64_t tenant_id)
           ret = OB_NEED_WAIT;
           LOG_WARN("restore tenant not valid to recovery", KR(ret), K(job_info));
         }
+      } else if (is_invalid_tenant(tenant_role)) {
+        ret = OB_NEED_WAIT;
+        LOG_WARN("tenant role not ready, need wait", KR(ret), K(tenant_role));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected tenant role", KR(ret), K(tenant_role));

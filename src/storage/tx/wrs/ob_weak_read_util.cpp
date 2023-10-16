@@ -63,9 +63,10 @@ int ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id, SCN
       tenant_id,
       oceanbase::omt::ObTenantConfigMgr::default_fallback_tenant_id(),
       /* success */ [buffer_time, &tenant_config_exist, &max_stale_time](const omt::ObTenantConfig &config) mutable {
-      if (MTL_IS_PRIMARY_TENANT()) {
+      if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
         max_stale_time = config.max_stale_time_for_weak_consistency - buffer_time;
       } else {
+      //standby, restore, invalid
         max_stale_time = config.max_stale_time_for_weak_consistency + transaction::ObTimestampService::PREALLOCATE_RANGE_FOR_SWITHOVER - buffer_time;
       }
         tenant_config_exist = true;

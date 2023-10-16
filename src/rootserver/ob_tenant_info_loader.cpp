@@ -96,6 +96,8 @@ int ObTenantInfoLoader::start()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (!is_user_tenant(tenant_id_)) {
+    //meta and sys tenant is primary
+    MTL_SET_TENANT_ROLE_CACHE(ObTenantRole::PRIMARY_TENANT);
     LOG_INFO("not user tenant no need load", K(tenant_id_));
   } else if (OB_FAIL(logical_start())) {
     LOG_WARN("failed to start", KR(ret));
@@ -592,7 +594,7 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
     SpinWLockGuard guard(lock_);
     if (ora_rowscn >= ora_rowscn_) {
       if (ora_rowscn > ora_rowscn_) {
-        MTL_SET_TENANT_ROLE(new_tenant_info.get_tenant_role().value());
+        MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
         (void)tenant_info_.assign(new_tenant_info);
         ora_rowscn_ = ora_rowscn;
         content_changed = true;
@@ -631,7 +633,7 @@ int ObAllTenantInfoCache::update_tenant_info_cache(
       ret = OB_EAGAIN;
       LOG_WARN("my tenant_info is invalid, don't refresh", KR(ret), K_(tenant_info), K_(ora_rowscn));
     } else if (new_ora_rowscn > ora_rowscn_) {
-      MTL_SET_TENANT_ROLE(new_tenant_info.get_tenant_role().value());
+      MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
       (void)tenant_info_.assign(new_tenant_info);
       ora_rowscn_ = new_ora_rowscn;
       refreshed = true;

@@ -815,7 +815,7 @@ public:
         } else if (OB_FAIL(tx_stat_iter_.push(tx_stat))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStatIterator push trans stat error", K(ret));
         } else if (!tx_stat.xid_.empty() && tx_stat.coord_ == tx_stat.ls_id_ && (int64_t)ObTxState::REDO_COMPLETE == tx_stat.state_
-                   && (!MTL_IS_PRIMARY_TENANT() || (TxCtxRoleState::LEADER == tx_stat.role_state_
+                   && (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID() || (TxCtxRoleState::LEADER == tx_stat.role_state_
                    && tx_stat.last_request_ts_ < ObClockGenerator::getClock() - INSERT_INTERNAL_FOR_PRIMARY))) {
           (void)MTL(ObXAService *)->insert_record_for_standby(tx_stat.tenant_id_,
                                                               tx_stat.xid_,
@@ -1367,7 +1367,7 @@ public:
     } else if (!tx_ctx->is_inited()) {
       // not inited, don't need to traverse
     } else if (tx_ctx->is_xa_trans() && tx_ctx->is_root() && ObTxState::REDO_COMPLETE == tx_ctx->exec_info_.state_
-               && (!MTL_IS_PRIMARY_TENANT() || TxCtxRoleState::LEADER == tx_ctx->role_state_)) {
+               && (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID() || TxCtxRoleState::LEADER == tx_ctx->role_state_)) {
       ret =  MTL(ObXAService *)->insert_record_for_standby(tx_ctx->tenant_id_, tx_ctx->exec_info_.xid_, tx_id,
                                                            tx_ctx->ls_id_, tx_ctx->exec_info_.scheduler_);
     }
