@@ -1123,7 +1123,7 @@ public:
   int set_init_connect(const common::ObString &init_sql);
   int save_trans_status();
   // 重置事务相关变量
-  virtual void reset_tx_variable();
+  virtual void reset_tx_variable(bool reset_next_scope = true);
   transaction::ObTxIsolationLevel get_tx_isolation() const;
   bool is_isolation_serializable() const;
   void set_tx_isolation(transaction::ObTxIsolationLevel isolation);
@@ -1284,6 +1284,8 @@ public:
   }
   inline void reset_first_need_txn_stmt_type() { first_need_txn_stmt_type_ = stmt::T_NONE; }
   inline stmt::StmtType get_first_need_txn_stmt_type() const { return first_need_txn_stmt_type_; }
+  inline void set_need_recheck_txn_readonly(bool need) { need_recheck_txn_readonly_ = need; }
+  inline bool need_recheck_txn_readonly() const { return need_recheck_txn_readonly_; }
   void set_stmt_type(stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
   stmt::StmtType get_stmt_type() const { return stmt_type_; }
 
@@ -2171,7 +2173,8 @@ private:
   // type of first stmt which need transaction
   // either transactional read or transactional write
   stmt::StmtType first_need_txn_stmt_type_;
-
+  // some Cmd like DDL will commit current transaction, and need recheck tx read only settings before run
+  bool need_recheck_txn_readonly_;
   //min_cluster_version_: 记录sql执行前当前集群最小的server版本号
   //解决的问题兼容性问题:
   //   2.2.3之前的版本会序列化所有的需要序列化的系统变量,

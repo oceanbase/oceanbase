@@ -1026,7 +1026,10 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
         }
       // skip commit txn if this is txn free route temporary node
       } else if (false == orig_ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
-        if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false))) {
+        // set autocommit = 1 won't clear next scope transaction settings:
+        // `set transaction read only`
+        // `set transaction isolation level`
+        if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false, NULL, false))) {
           LOG_WARN("fail implicit commit trans", K(ret));
         }
       } else {
