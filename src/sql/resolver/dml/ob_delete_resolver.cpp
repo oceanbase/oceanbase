@@ -128,6 +128,8 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to check view deletable", K(ret));
       } else if (OB_FAIL(delete_stmt->check_dml_need_filter_null())) {
         LOG_WARN("failed to check dml need filter null", K(ret));
+      } else if (OB_FAIL(delete_stmt->check_dml_source_from_join())) {
+        LOG_WARN("failed to check dml source from join");
       } else if (OB_FAIL(check_safe_update_mode(delete_stmt, is_multi_table_delete))) {
         LOG_WARN("failed to check safe update mode", K(ret));
       } else { /*do nothing */ }
