@@ -21,3 +21,5 @@ ENV PATH /root/boot:$PATH
 
 WORKDIR /root
 CMD _boot
+
+EXPOSE 2881
