@@ -84,5 +84,22 @@ bool ObNetKeepAliveAdapter::in_black(const common::ObAddr &server)
   }
   return bool_ret;
 }
+
+int ObNetKeepAliveAdapter::get_last_resp_ts(const common::ObAddr &server,
+                                            int64_t &last_resp_ts)
+{
+  int ret = OB_SUCCESS;
+  if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(server));
+  } else if (OB_FAIL(net_keepalive_->get_last_resp_ts(server, last_resp_ts))) {
+    CLOG_LOG(WARN, "get_last_resp_ts failed", K(ret), K(server));
+  } else {
+    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      CLOG_LOG(TRACE, "get_last_resp_ts", K(server), K(last_resp_ts));
+    }
+  }
+  return ret;
+}
 } // end namespace logservice
 } // end namespace oceanbase

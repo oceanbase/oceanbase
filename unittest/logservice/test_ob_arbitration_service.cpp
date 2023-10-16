@@ -29,6 +29,7 @@ public:
   bool in_black_or_stopped(const common::ObAddr &server) override final {return false;}
   bool is_server_stopped(const common::ObAddr &server) override final {return false;}
   bool in_black(const common::ObAddr &server) override final {return false;}
+  int get_last_resp_ts(const common::ObAddr &server, int64_t &last_resp_ts) { return OB_SUCCESS; }
 };
 
 const ObAddr addr1(ObAddr::IPV4, "127.0.0.1", 1000);

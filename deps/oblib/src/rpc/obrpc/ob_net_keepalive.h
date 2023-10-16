@@ -66,6 +66,7 @@ public:
   int in_black(const easy_addr_t &addr, bool &in_blacklist, ObNetKeepAliveData *ka_data);
   int in_black(const common::ObAddr &addr, bool &in_blacklist, ObNetKeepAliveData *ka_data);
   virtual bool in_black(const easy_addr_t &addr);
+  int get_last_resp_ts(const common::ObAddr &addr, int64_t &last_resp_ts);
 private:
   void do_server_loop();
   void do_client_loop();
