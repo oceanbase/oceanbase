@@ -1552,11 +1552,9 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           db_id = parent_id;
         } else if (OB_FAIL(session_info.get_database_id(db_id))) {
           LOG_WARN("failed to get session database id", K(ret), K(db_id));
-        } else if (OB_INVALID_ID == db_id) {
-          ret = OB_ERR_NO_DB_SELECTED;
-          LOG_WARN("No database selected", K(ret));
         }
-        if (OB_SUCC(ret)) {
+
+        if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
           if (OB_FAIL(schema_guard.get_package_id(
               tenant_id, db_id, name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
             LOG_WARN("get package id failed", K(ret));
@@ -1590,23 +1588,26 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         } else {
           OZ (session_info.get_database_id(db_id));
         }
-        OZ (schema_guard.get_table_id(tenant_id, db_id, name, false,
-                                      schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
-        if (OB_FAIL(ret)) {
-        } else if (OB_INVALID_ID == table_id
-                  && ObSQLUtils::is_oracle_sys_view(name)
-                  && lib::is_oracle_mode()) {
-          // try sys view
-          OZ (schema_guard.get_table_id(tenant_id, ObString("SYS"), name, false,
+
+        if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
+          OZ (schema_guard.get_table_id(tenant_id, db_id, name, false,
                                         schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_INVALID_ID == table_id) {
-          type = ObPLExternalNS::INVALID_VAR;
-        } else {
-          type = TABLE_NS;
-          parent_id = db_id;
-          var_idx = table_id;
+          if (OB_FAIL(ret)) {
+          } else if (OB_INVALID_ID == table_id
+                    && ObSQLUtils::is_oracle_sys_view(name)
+                    && lib::is_oracle_mode()) {
+            // try sys view
+            OZ (schema_guard.get_table_id(tenant_id, ObString("SYS"), name, false,
+                                          schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_INVALID_ID == table_id) {
+            type = ObPLExternalNS::INVALID_VAR;
+          } else {
+            type = TABLE_NS;
+            parent_id = db_id;
+            var_idx = table_id;
+          }
         }
       }
       // then udt type
@@ -1619,38 +1620,40 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         } else {
           OZ (session_info.get_database_id(db_id));
         }
-        const ObUDTTypeInfo *udt_info = NULL;
-        OZ (schema_guard.get_udt_info(tenant_id, db_id, OB_INVALID_ID, name, udt_info));
-        // 尝试去系统租户下查找
-        if (NULL == udt_info
-            && (OB_INVALID_ID == parent_id
-                || is_oracle_sys_database_id(parent_id)
-                || is_oceanbase_sys_database_id(parent_id))) {
-          OZ (schema_guard.get_udt_info(OB_SYS_TENANT_ID,
-              OB_SYS_DATABASE_ID, OB_INVALID_ID, name, udt_info));
-          if (OB_SUCC(ret) && udt_info != NULL) {
-            parent_id = OB_SYS_DATABASE_ID;
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (NULL == udt_info) {
-          type = ObPLExternalNS::INVALID_VAR;
-        } else {
-          udt_id = udt_info->get_type_id();
-          type = ObPLExternalNS::ExternalType::UDT_NS;
-          parent_id = parent_id == OB_INVALID_ID ? db_id : parent_id;
-          var_idx = udt_id;
 
-          if (OB_SUCC(ret)) {
-            if (OB_NOT_NULL(dependency_table_)) {
-              ObSchemaObjVersion obj_version;
-              OX (obj_version.object_id_ = udt_id);
-              OX (obj_version.object_type_ = DEPENDENCY_TYPE);
-              OX (obj_version.version_ = udt_info->get_schema_version());
-              OZ (add_dependency_object(obj_version));
+        if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
+          const ObUDTTypeInfo *udt_info = NULL;
+          OZ (schema_guard.get_udt_info(tenant_id, db_id, OB_INVALID_ID, name, udt_info));
+          // 尝试去系统租户下查找
+          if (NULL == udt_info
+              && (OB_INVALID_ID == parent_id
+                  || is_oracle_sys_database_id(parent_id)
+                  || is_oceanbase_sys_database_id(parent_id))) {
+            OZ (schema_guard.get_udt_info(OB_SYS_TENANT_ID,
+                OB_SYS_DATABASE_ID, OB_INVALID_ID, name, udt_info));
+            if (OB_SUCC(ret) && udt_info != NULL) {
+              parent_id = OB_SYS_DATABASE_ID;
             }
           }
+          if (OB_FAIL(ret)) {
+          } else if (NULL == udt_info) {
+            type = ObPLExternalNS::INVALID_VAR;
+          } else {
+            udt_id = udt_info->get_type_id();
+            type = ObPLExternalNS::ExternalType::UDT_NS;
+            parent_id = parent_id == OB_INVALID_ID ? db_id : parent_id;
+            var_idx = udt_id;
 
+            if (OB_SUCC(ret)) {
+              if (OB_NOT_NULL(dependency_table_)) {
+                ObSchemaObjVersion obj_version;
+                OX (obj_version.object_id_ = udt_id);
+                OX (obj_version.object_type_ = DEPENDENCY_TYPE);
+                OX (obj_version.version_ = udt_info->get_schema_version());
+                OZ (add_dependency_object(obj_version));
+              }
+            }
+          }
         }
       }
       // then routine
@@ -1692,12 +1695,15 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         } else {
           OZ (session_info.get_database_id(db_id));
         }
-        OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
-        OZ (ObResolverUtils::resolve_synonym_object_recursively(
-          schema_checker, synonym_checker,
-          tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
-        if (exist) {
-          OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
+
+        if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
+          OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
+          OZ (ObResolverUtils::resolve_synonym_object_recursively(
+            schema_checker, synonym_checker,
+            tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
+          if (exist) {
+            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
+          }
         }
       }
       //then database name
