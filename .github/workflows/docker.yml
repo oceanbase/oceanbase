@@ -1,0 +1,30 @@
+name: Docker
+
+on:
+  push:
+    paths:
+      - .github/workflows/docker.yml
+      - tools/docker
+  pull_request:
+    paths:
+      - .github/workflows/docker.yml
+      - tools/docker
+
+jobs:
+  standalone:
+    name: standalone
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: build docker image
+        run: |
+          cd tools/docker/standalone
+          docker build --build-arg VERSION=4.2.1.0-100000102023092807 -t oceanbase-ce .
+      - name: start docker container
+        timeout-minutes: 5
+        run: |
+          docker run --name ob-slim -p 2881:2881 -e MODE=slim -d oceanbase-ce
+          eval 'while ! docker logs ob-slim | grep -q "boot success!"; do echo "booting..."; sleep 10; done'
+          echo "boot success!"
+      - name: test docker container
+        run: docker exec ob-slim obclient -h127.0.0.1 -P2881 -uroot -e 'select version()'
