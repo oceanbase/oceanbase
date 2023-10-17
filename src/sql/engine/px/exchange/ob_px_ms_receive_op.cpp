@@ -94,6 +94,10 @@ int ObPxMSReceiveOp::init_merge_sort_input(int64_t n_channel)
           msi->io_event_observer_ = &io_event_observer_;
           if (OB_FAIL(merge_inputs_.push_back(msi))) {
             LOG_WARN("push back merge sort input fail", K(idx), K(ret));
+            msi->clean_row_store(ctx_);
+            msi->destroy();
+            msi->~MergeSortInput();
+            mem_context_->get_malloc_allocator().free(msi);
           }
         }
       }
