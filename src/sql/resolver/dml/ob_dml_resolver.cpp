@@ -4766,12 +4766,13 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
       ObSchemaObjVersion table_version;
       share::schema::ObSchemaGetterGuard *schema_guard = NULL;
       uint64_t database_id = OB_INVALID_ID;
+      const ObString &database_name = udf->get_database_name().empty() ? session_info_->get_database_name() : udf->get_database_name();
       CK (OB_NOT_NULL(udf));
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", K(ret), K(schema_guard));
-      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf->get_database_name(), database_id))) {
+      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), database_name, database_id))) {
         LOG_WARN("failed to get database id", K(ret));
       } else if (udf->need_add_dependency()) {
         uint64_t dep_obj_id = view_ref_id_;

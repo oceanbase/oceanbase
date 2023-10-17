@@ -11720,8 +11720,6 @@ int ObPLResolver::resolve_udf_info(
         resolve_ctx_.session_info_.get_effective_tenant_id(), routine_info->get_database_id(), database_schema));
       CK (OB_NOT_NULL(database_schema));
       OX (db_name = database_schema->get_database_name_str());
-    } else {
-      OX (db_name = resolve_ctx_.session_info_.get_database_name());
     }
   }
 
