@@ -6091,6 +6091,7 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
 
       while (OB_SUCC(ret)) {
         tablet_info.reset();
+        user_data.reset();
         committed_flag = false;
         if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
           if (OB_ITER_END == ret) {
@@ -6103,7 +6104,11 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
         } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, committed_flag))) {
-          LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+          if (OB_EMPTY_RESULT == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+          }
         } else if (!committed_flag && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
           //TODO(muwei.ym) CAN NOT USE this condition when MDS supports uncommitted transaction
 
