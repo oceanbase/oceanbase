@@ -1343,7 +1343,11 @@ int ObLSService::get_restore_status_(
     LOG_WARN("not init", K(ret));
   } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
     restore_status = ObLSRestoreStatus::RESTORE_NONE;
-  } else if (FALSE_IT(restore_status = MTL_IS_RESTORE_TENANT() ?
+  } else if (share::ObTenantRole::INVALID_TENANT == MTL_GET_TENANT_ROLE_CACHE()) {
+    //tenant role not ready, need wait
+    ret = OB_NEED_WAIT;
+    LOG_WARN("tenant role is invalid now, need wait", KR(ret), K(tenant_id));
+  } else if (FALSE_IT(restore_status = MTL_TENANT_ROLE_CACHE_IS_RESTORE() ?
       ObLSRestoreStatus::RESTORE_START : ObLSRestoreStatus::RESTORE_NONE)) {
   }
   return ret;

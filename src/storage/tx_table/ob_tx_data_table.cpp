@@ -752,14 +752,15 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
     if (!min_end_scn.is_max()) {
       recycle_scn = min_end_scn;
-      if (!MTL_IS_PRIMARY_TENANT()) {
-        SCN snapshot_version;
-        MonotonicTs unused_ts(0);
-        if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), MonotonicTs(1), NULL, snapshot_version, unused_ts))) {
-          LOG_WARN("failed to get snapshot version", K(ret), K(MTL_ID()));
-        } else {
-          recycle_scn = std::min(recycle_scn, snapshot_version);
-        }
+      //Regardless of whether the primary or standby tenant is unified, refer to GTS.
+      //If the tenant role in memory is deferred,
+      //it may cause the standby tenant to commit and recycle when the primary is switched to standby.
+      SCN snapshot_version;
+      MonotonicTs unused_ts(0);
+      if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), MonotonicTs(1), NULL, snapshot_version, unused_ts))) {
+        LOG_WARN("failed to get snapshot version", K(ret), K(MTL_ID()));
+      } else {
+        recycle_scn = std::min(recycle_scn, snapshot_version);
       }
     }
   }

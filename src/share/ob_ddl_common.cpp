@@ -929,7 +929,7 @@ int ObDDLUtil::ddl_get_tablet(
 
 bool ObDDLUtil::need_remote_write(const int ret_code)
 {
-  return ObTenantRole::PRIMARY_TENANT == MTL_GET_TENANT_ROLE()
+  return ObTenantRole::PRIMARY_TENANT == MTL_GET_TENANT_ROLE_CACHE()
     && (OB_NOT_MASTER == ret_code
         || OB_NOT_RUNNING == ret_code
         || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code

@@ -281,7 +281,7 @@ bool ObBLService::check_need_skip_leader_(const uint64_t tenant_id)
   bool need_skip = true;
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
-    if (!MTL_IS_PRIMARY_TENANT()) {
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
       need_skip = false;
     }
   }

@@ -798,7 +798,7 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "Tenant is dropped and the log stream can be removed, try_check_and_set_wait_gc_ success",
           K(tenant_id), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
-    } else if (offline_scn.is_valid() && MTL_GET_TENANT_ROLE() == share::ObTenantRole::RESTORE_TENANT) {
+    } else if (offline_scn.is_valid() && MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::RESTORE_TENANT) {
       // restore tenant, not need gc delay
       if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
         CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));

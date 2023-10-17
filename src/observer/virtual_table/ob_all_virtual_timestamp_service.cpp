@@ -69,7 +69,7 @@ int ObAllVirtualTimestampService::get_next_tenant_id_info_()
         tenant_ids_index_++;
       } else {
         MTL(ObTimestampAccess *)->get_virtual_info(ts_value_, service_role_, role_, service_epoch_);
-        is_primary_ = MTL_IS_PRIMARY_TENANT();
+        is_primary_ = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID();
         tenant_ids_index_++;
       }
     } else {

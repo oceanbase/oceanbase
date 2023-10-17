@@ -780,7 +780,7 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
       if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, NULL, gts_cache))) {
         TRANS_LOG(WARN, "get ts sync error", K(ret), K(max_read_stale_us_for_user));
       } else {
-        const int64_t current_time_us = MTL_IS_PRIMARY_TENANT()
+        const int64_t current_time_us = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()
                 ? std::max(ObTimeUtility::current_time(), gts_cache.convert_to_ts())
                 : gts_cache.convert_to_ts();
         current_scn.convert_from_ts(current_time_us - max_read_stale_us_for_user);
