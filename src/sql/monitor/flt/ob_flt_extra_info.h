@@ -170,13 +170,13 @@ class FLTControlInfo : public FLTExtraInfo
   ~FLTControlInfo() {}
 
   bool is_valid() {
-    return level_ > 0 && sample_pct_>=0 && sample_pct_<=1 && rp_>0 && rp_<MAX_RECORD_POLICY;
+    return level_ > 0 && sample_pct_>0 && sample_pct_<=1 && rp_>0 && rp_<MAX_RECORD_POLICY;
   }
   bool is_valid() const {
-    return level_ > 0 && sample_pct_>=0 && sample_pct_<=1 && rp_>0 && rp_<MAX_RECORD_POLICY;
+    return level_ > 0 && sample_pct_>0 && sample_pct_<=1 && rp_>0 && rp_<MAX_RECORD_POLICY;
   }
   bool is_valid_sys_config() {
-    return print_sample_pct_ >= 0 && print_sample_pct_ <= 1 && slow_query_thres_ > 0;
+    return print_sample_pct_ > 0 && print_sample_pct_ <= 1 && slow_query_thres_ > 0;
   }
   bool is_equal(const FLTControlInfo &other) {
     return level_ == other.level_ &&
