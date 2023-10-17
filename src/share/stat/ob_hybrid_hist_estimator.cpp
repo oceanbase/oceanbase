@@ -58,7 +58,7 @@ int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
   ObOptStat src_opt_stat;
   src_opt_stat.table_stat_ = &tab_stat;
   ObIArray<ObOptColumnStat*> &src_col_stats = src_opt_stat.column_stats_;
-  ObArenaAllocator allocator("ObHybridHist");
+  ObArenaAllocator allocator("ObHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
   ObString raw_sql;
   ObString refine_raw_sql;
   int64_t refine_cnt = 0;
