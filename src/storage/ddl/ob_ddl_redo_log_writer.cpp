@@ -1338,7 +1338,7 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
           LOG_WARN("fail to switch to remote write", K(ret));
         }
       } else {
-        LOG_WARN("fail to write ddl redo clog", K(ret), K(MTL_GET_TENANT_ROLE()));
+        LOG_WARN("fail to write ddl redo clog", K(ret), K(MTL_GET_TENANT_ROLE_CACHE()));
       }
     }
   }

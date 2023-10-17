@@ -264,7 +264,7 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
             LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(replayable_scn));
           }
 
-          if (ls->is_sys_ls() && !MTL_IS_PRIMARY_TENANT()) {
+          if (ls->is_sys_ls() && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
             // nothing todo
             // sys ls of user standby/restore tenant is in ls_recovery
           } else if (OB_FAIL(update_ls_recovery(ls, sql_proxy_))) {

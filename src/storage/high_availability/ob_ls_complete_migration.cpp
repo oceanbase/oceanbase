@@ -1114,7 +1114,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
   SCN last_replay_scn;
   bool need_wait = false;
   bool is_done = false;
-  const bool is_primay_tenant = MTL_IS_PRIMARY_TENANT();
+  const bool is_primay_tenant = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID();
   share::SCN readable_scn;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;

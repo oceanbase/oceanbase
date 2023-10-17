@@ -80,7 +80,7 @@ int ObLogRestoreScheduler::modify_thread_count_(const share::ObLogRestoreSourceT
   int64_t restore_concurrency = 0;
   // for primary tenant, set restore_concurrency to 1.
   // otherwise, set restore_concurrency to tenant config.
-  if (MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT
+  if (MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::PRIMARY_TENANT
       || !share::is_location_log_source_type(source_type)) {
     restore_concurrency = 1;
   } else {

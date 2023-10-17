@@ -323,13 +323,17 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 // 获取租户ID
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
 // 获取是否为主租户
-#define MTL_IS_PRIMARY_TENANT() share::ObTenantEnv::get_tenant()->is_primary_tenant()
+#define MTL_TENANT_ROLE_CACHE_IS_PRIMARY() share::ObTenantEnv::get_tenant()->is_primary_tenant()
+//由于之前租户默认为主库，兼容性写法
+#define MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID() share::ObTenantEnv::get_tenant()->is_primary_or_invalid_tenant()
+//租户角色为初始化成功，未invalid
+#define MTL_TENANT_ROLE_CACHE_IS_INVALID() share::ObTenantEnv::get_tenant()->is_invalid_tenant()
 // 租户是否处于恢复中
-#define MTL_IS_RESTORE_TENANT() share::ObTenantEnv::get_tenant()->is_restore_tenant()
+#define MTL_TENANT_ROLE_CACHE_IS_RESTORE() share::ObTenantEnv::get_tenant()->is_restore_tenant()
 // 更新租户role
-#define MTL_SET_TENANT_ROLE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
+#define MTL_SET_TENANT_ROLE_CACHE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
 // 获取租户role
-#define MTL_GET_TENANT_ROLE() share::ObTenantEnv::get_tenant()->get_tenant_role()
+#define MTL_GET_TENANT_ROLE_CACHE() share::ObTenantEnv::get_tenant()->get_tenant_role()
 // 获取租户模块
 #define MTL_CTX() (share::ObTenantEnv::get_tenant())
 // 获取租户初始化参数,仅在初始化时使用
@@ -514,9 +518,21 @@ public:
     return share::is_primary_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
+  bool is_primary_or_invalid_tenant()
+  {
+    share::ObTenantRole::Role tenant_role = get_tenant_role();
+    return share::is_primary_tenant(tenant_role)
+           or share::is_invalid_tenant(tenant_role);
+  }
+
   bool is_restore_tenant()
   {
     return share::is_restore_tenant(ATOMIC_LOAD(&tenant_role_value_));
+  }
+
+  bool is_invalid_tenant()
+  {
+    return share::is_invalid_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
   template<class T>
