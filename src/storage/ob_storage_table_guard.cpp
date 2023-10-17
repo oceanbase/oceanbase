@@ -47,6 +47,7 @@ ObStorageTableGuard::ObStorageTableGuard(
     for_multi_source_data_(for_multi_source_data)
 {
   init_ts_ = ObTimeUtility::current_time();
+  get_thread_alloc_stat() = 0;
 }
 
 ObStorageTableGuard::~ObStorageTableGuard()
@@ -121,6 +122,11 @@ ObStorageTableGuard::~ObStorageTableGuard()
         left_interval -= sleep_interval;
         has_sleep = true;
         need_sleep = memstore_allocator->need_do_writing_throttle();
+      }
+      const int64_t finish_clock = memstore_allocator->get_clock();
+      if (finish_clock < seq) { // we has skip some time, need make the clock skip too.
+        const int64_t skip_clock = MIN(seq - finish_clock, get_thread_alloc_stat());
+        memstore_allocator->skip_clock(skip_clock);
       }
     }
 

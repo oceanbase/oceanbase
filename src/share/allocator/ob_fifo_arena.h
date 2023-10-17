@@ -172,6 +172,7 @@ public:
   bool check_clock_over_seq(const int64_t seq);
   int64_t get_clock();
   int64_t expected_wait_time(const int64_t seq) const;
+  void skip_clock(const int64_t skip_size);
   int64_t get_max_cached_memstore_size() const
   {
     return MAX_CACHED_GROUP_COUNT * ATOMIC_LOAD(&nway_) * (PAGE_SIZE + ACHUNK_PRESERVE_SIZE);

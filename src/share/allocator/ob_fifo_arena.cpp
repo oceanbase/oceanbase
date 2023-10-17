@@ -21,6 +21,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/alloc/alloc_struct.h"
 #include "lib/stat/ob_diagnose_info.h"
+#include "share/throttle/ob_throttle_common.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::omt;
@@ -315,6 +316,7 @@ void ObFifoArena::speed_limit(const int64_t cur_mem_hold, const int64_t alloc_si
     advance_clock();
     get_seq() = seq;
     tl_need_speed_limit() = need_speed_limit;
+    share::get_thread_alloc_stat() += alloc_size;
 
     if (need_speed_limit && REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
       COMMON_LOG(INFO, "report write throttle info", K(alloc_size), K(attr_), K(throttling_interval),
@@ -335,6 +337,22 @@ int64_t ObFifoArena::get_clock()
 {
   advance_clock();
   return clock_;
+}
+
+void ObFifoArena::skip_clock(const int64_t skip_size)
+{
+  int64_t ov = 0;
+  int64_t nv = ATOMIC_LOAD(&clock_);
+  while ((ov = nv) < ATOMIC_LOAD(&max_seq_)
+         && ov != (nv = ATOMIC_CAS(&clock_, ov, min(ATOMIC_LOAD(&max_seq_), ov + skip_size)))) {
+    PAUSE();
+    if (REACH_TIME_INTERVAL(100 * 1000L)) {
+      const int64_t max_seq = ATOMIC_LOAD(&max_seq_);
+      const int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
+      COMMON_LOG(INFO, "skip clock",
+                 K(clock_), K(max_seq_), K(skip_size), K(cur_mem_hold), K(attr_.tenant_id_));
+    }
+  }
 }
 
 void ObFifoArena::advance_clock()
