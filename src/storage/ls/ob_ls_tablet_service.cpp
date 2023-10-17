@@ -2603,6 +2603,7 @@ int ObLSTabletService::insert_rows(
           row_count, rows_info, tbl_rows, afct_num, dup_num))) {
         LOG_WARN("insert to each tablets fail", K(ret));
       }
+      lob_allocator.reuse();
     }
 
     if (OB_ITER_END == ret) {
@@ -2873,6 +2874,7 @@ int ObLSTabletService::update_rows(
       } else {
         afct_num++;
       }
+      lob_allocator.reuse();
       timeguard.click("Update");
     }
     if (OB_ITER_END == ret) {
@@ -2995,6 +2997,7 @@ int ObLSTabletService::put_rows(
         }
       }
       ++afct_num;
+      lob_allocator.reuse();
     }
 
     if (OB_ITER_END == ret) {
@@ -3059,6 +3062,7 @@ int ObLSTabletService::delete_rows(
       } else {
         ++afct_num;
       }
+      lob_allocator.reuse();
     }
     lob_allocator.reset();
     if (OB_ITER_END == ret) {
@@ -5096,15 +5100,16 @@ int ObLSTabletService::table_refresh_row(
       LOG_WARN("get row from single row col count not equal.", K(ret), K(row.get_count()), K(new_row->get_count()));
     } else {
       LOG_DEBUG("get new row success.", K(row), KPC(new_row));
+      // only write cells, not write row
       // passing fixed double scale from row to new_row
       for (int64_t i = 0; OB_SUCC(ret) && i < new_row->get_count(); ++i) {
         if (row.cells_[i].is_fixed_double()) {
           new_row->cells_[i].set_scale(row.cells_[i].get_scale());
+        } else if (OB_FAIL(ob_write_obj(run_ctx.lob_allocator_, new_row->cells_[i], row.cells_[i]))) {
+          LOG_WARN("copy ObObj error", K(ret), K(i), K(new_row->cells_[i]));
         }
       }
-      if (OB_FAIL(ob_write_row(run_ctx.lob_allocator_, *new_row, row))) {
-        LOG_WARN("failed to deep copy new row", K(ret));
-      } else {
+      if (OB_SUCC(ret)) {
         run_ctx.is_old_row_valid_for_lob_ = true;
       }
     }
