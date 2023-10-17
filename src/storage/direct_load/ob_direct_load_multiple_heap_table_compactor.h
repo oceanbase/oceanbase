@@ -64,6 +64,7 @@ private:
   common::ObArray<int64_t> base_data_fragment_idxs_;
   common::ObArray<ObDirectLoadMultipleHeapTableDataFragment> data_fragments_;
   ObDirectLoadTmpFileHandle compacted_index_file_handle_;
+  bool is_stop_;
   bool is_inited_;
 };
 

@@ -43,6 +43,8 @@ enum class ObDirectLoadControlCommandType
   GET_TRANS_STATUS = 12,
   INSERT_TRANS = 13,
 
+  HEART_BEAT = 14,
+
   MAX_TYPE
 };
 
@@ -252,6 +254,18 @@ public:
   int64_t task_id_;
 };
 
+class ObDirectLoadControlAbortRes final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObDirectLoadControlAbortRes() : is_stopped_(false) {}
+  TO_STRING_KV(K_(is_stopped));
+
+public:
+  bool is_stopped_;
+};
+
 class ObDirectLoadControlGetStatusArg final
 {
   OB_UNIS_VERSION(1);
@@ -278,6 +292,19 @@ public:
 public:
   table::ObTableLoadStatusType status_;
   int32_t error_code_;
+};
+
+class ObDirectLoadControlHeartBeatArg final
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObDirectLoadControlHeartBeatArg() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
+
+public:
+  uint64_t table_id_;
+  int64_t task_id_;
 };
 
 class ObDirectLoadControlPreStartTransArg final

@@ -194,6 +194,9 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlAbortArg,
                            table_id_,
                            task_id_);
 
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlAbortRes,
+                           is_stopped_);
+
 // get_status
 OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlGetStatusArg,
                            table_id_,
@@ -202,6 +205,11 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlGetStatusArg,
 OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlGetStatusRes,
                            status_,
                            error_code_);
+
+// heartbeat
+OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlHeartBeatArg,
+                           table_id_,
+                           task_id_);
 
 // pre_start_trans
 OB_SERIALIZE_MEMBER_SIMPLE(ObDirectLoadControlPreStartTransArg,

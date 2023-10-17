@@ -98,15 +98,17 @@ void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
     if (OB_FAIL(ctx->coordinator_ctx_->set_status_abort())) {
       LOG_WARN("fail to set coordinator status abort", KR(ret));
     }
-    // 2. mark all active trans abort
+    // 2. disable heart beat
+    ctx->coordinator_ctx_->set_enable_heart_beat(false);
+    // 3. mark all active trans abort
     if (OB_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(ret));
     }
-    // 3. abort peers ctx
+    // 4. abort peers ctx
     if (OB_FAIL(abort_peers_ctx(ctx))) {
       LOG_WARN("fail to abort peers ctx", KR(ret));
     }
-    // 4. abort redef table, release table lock
+    // 5. abort redef table, release table lock
     if (OB_FAIL(abort_redef_table(ctx))) {
       LOG_WARN("fail to abort redef table", KR(ret));
     }
@@ -148,19 +150,55 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
     LOG_WARN("fail to get all addr", KR(ret));
   } else {
     LOG_INFO("route_abort_peer_request begin", K(all_addr_array.count()));
+    static const int64_t max_retry_times = 100; // ensure store ctx detect heart beat timeout and abort
+    ObArray<ObAddr> addr_array1, addr_array2;
+    ObIArray<ObAddr> *curr_round = &addr_array1, *next_round = &addr_array2;
+    int64_t fail_cnt = 0;
+    int64_t tries = 0;
     ObDirectLoadControlAbortArg arg;
+    ObDirectLoadControlAbortRes res;
     arg.table_id_ = ctx->param_.table_id_;
     arg.task_id_ = ctx->ddl_param_.task_id_;
     for (int64_t i = 0; i < all_addr_array.count(); ++i) {
       const ObAddr &addr = all_addr_array.at(i);
-      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
-        ObTableLoadStore::abort_ctx(ctx);
-      } else { // 远端, 发送rpc
-        const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
-        THIS_WORKER.set_timeout_ts(INT64_MAX); // use default timeout value, avoid timeout now
-        TABLE_LOAD_CONTROL_RPC_CALL(abort, addr, arg);
-        THIS_WORKER.set_timeout_ts(origin_timeout_ts);
+      if (OB_FAIL(curr_round->push_back(addr))) {
+        LOG_WARN("fail to push back", KR(ret), K(addr));
       }
+    }
+    while (!curr_round->empty() && tries < max_retry_times) {
+      ret = OB_SUCCESS;
+      fail_cnt = 0;
+      for (int64_t i = 0; i < curr_round->count(); ++i) {
+        const ObAddr &addr = curr_round->at(i);
+        if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+          ObTableLoadStore::abort_ctx(ctx, res.is_stopped_);
+          ret = OB_SUCCESS;
+        } else { // 远端, 发送rpc
+          // use default timeout value, avoid timeout immediately
+          const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+          THIS_WORKER.set_timeout_ts(ObTimeUtil::current_time() + DEFAULT_TIMEOUT_US);
+          TABLE_LOAD_CONTROL_RPC_CALL(abort, addr, arg, res);
+          THIS_WORKER.set_timeout_ts(origin_timeout_ts);
+        }
+        if (OB_SUCC(ret) && res.is_stopped_) {
+          // peer is stopped
+        } else {
+          if (OB_FAIL(ret)) {
+            ++fail_cnt;
+            ret = OB_SUCCESS;
+          }
+          if (OB_FAIL(next_round->push_back(addr))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
+        }
+      }
+      ++tries;
+      if (tries % 10 == 0) {
+        LOG_WARN("retry too many times", K(tries), K(fail_cnt), KPC(next_round));
+      }
+      std::swap(curr_round, next_round);
+      next_round->reuse();
+      ob_usleep(WAIT_INTERVAL_US);
     }
   }
   return ret;
@@ -311,6 +349,8 @@ int ObTableLoadCoordinator::begin()
       LOG_WARN("fail to confirm begin peers", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->set_status_loading())) {
       LOG_WARN("fail to set coordinator status loading", KR(ret));
+    } else {
+      coordinator_ctx_->set_enable_heart_beat(true);
     }
   }
   return ret;
@@ -655,6 +695,7 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers())) {
       LOG_WARN("fail to commit peers", KR(ret));
+    } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(
                  drive_sql_stat(coordinator_ctx_->exec_ctx_->get_exec_ctx()))) {
@@ -686,6 +727,7 @@ int ObTableLoadCoordinator::px_commit_data()
       LOG_WARN("fail to check coordinator status", KR(ret));
     } else if (OB_FAIL(commit_peers())) {
       LOG_WARN("fail to commit peers", KR(ret));
+    } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(
                  drive_sql_stat(coordinator_ctx_->exec_ctx_->get_exec_ctx()))) {
@@ -759,6 +801,55 @@ int ObTableLoadCoordinator::get_status(ObTableLoadStatusType &status, int &error
   } else {
     LOG_INFO("coordinator get status");
     coordinator_ctx_->get_status(status, error_code);
+  }
+  return ret;
+}
+
+/**
+ * heart_beat
+ */
+
+int ObTableLoadCoordinator::heart_beat_peer()
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadArray<ObAddr> all_addr_array;
+  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
+    LOG_WARN("fail to get all addr", KR(ret));
+  } else {
+    LOG_DEBUG("route_heart_beat_peer_request begin", K(all_addr_array.count()));
+    ObDirectLoadControlHeartBeatArg arg;
+    arg.table_id_ = param_.table_id_;
+    arg.task_id_ = ctx_->ddl_param_.task_id_;
+    for (int64_t i = 0; i < all_addr_array.count(); ++i) {
+      const ObAddr &addr = all_addr_array.at(i);
+      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+        ObTableLoadStore store(ctx_);
+        if (OB_FAIL(store.init())) {
+          LOG_WARN("fail to init store", KR(ret));
+        } else if (OB_FAIL(store.heart_beat())) {
+          LOG_WARN("fail to heart beat store", KR(ret));
+        }
+      } else { // 远端, 发送rpc
+        const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+        THIS_WORKER.set_timeout_ts(ObTimeUtil::current_time() + HEART_BEAT_RPC_TIMEOUT_US);
+        TABLE_LOAD_CONTROL_RPC_CALL(heart_beat, addr, arg);
+        THIS_WORKER.set_timeout_ts(origin_timeout_ts);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadCoordinator::heart_beat()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
+  } else {
+    LOG_DEBUG("coordinator heart beat");
+    // 心跳是为了让数据节点感知控制节点存活, 控制节点不依赖心跳感知数据节点状态, 忽略失败
+    heart_beat_peer();
   }
   return ret;
 }
