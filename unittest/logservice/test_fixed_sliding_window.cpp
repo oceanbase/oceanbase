@@ -147,9 +147,18 @@ public:
     int64_t timeout_us = 1 * 1000 * 1000;
     LogTaskDummyCallBack cb;
     PALF_LOG(INFO, "before slide", K(th_id));
-    while (sw_->get_begin_sn() < 8193) {
+    int64_t start_sn = sw_->get_begin_sn();
+    while (start_sn < 8193) {
+      int get_ret = common::OB_SUCCESS;
+      LogDummyData *val = NULL;
+      get_ret = sw_->get(start_sn, val);
       EXPECT_EQ(common::OB_SUCCESS, sw_->slide(timeout_us, &cb));
-      usleep(1000);
+      usleep(500);
+      if (OB_SUCCESS == get_ret) {
+        sw_->revert(start_sn);
+      }
+      usleep(500);
+      start_sn = sw_->get_begin_sn();
     }
   }
   FixedSlidingWindow<LogDummyData> *sw_;
@@ -353,6 +362,76 @@ TEST(TestConcurrentSlidingWindow, test_concurrent_sliding_window)
 
   sw.destroy();
 }
+
+// reproduce bug
+// TEST(TestBaseSlidingWindow, test_concurrent_get_slide)
+// {
+//   // sliding window construct and destruct
+//   common::ObILogAllocator *alloc_mgr = NULL;
+//   ObTenantMutilAllocatorMgr::get_instance().init();
+//   EXPECT_EQ(common::OB_SUCCESS, TMA_MGR_INSTANCE.get_tenant_log_allocator(common::OB_SERVER_TENANT_ID, alloc_mgr));
+
+//   // 1. set [0, 128) can slide
+//   const int64_t size = 128;
+//   FixedSlidingWindow<LogDummyData> sw3;
+//   EXPECT_EQ(OB_SUCCESS, sw3.init(0, size, alloc_mgr));
+//   for (int64_t i = 0; i < size; ++i) {
+//     LogDummyData *val(NULL);
+//     EXPECT_EQ(common::OB_SUCCESS, sw3.get(i, val));
+//     EXPECT_NE((LogDummyData*)NULL, val);
+//     val->log_id = i;
+//     val->can_remove = true;
+//     EXPECT_EQ(common::OB_SUCCESS, sw3.revert(i));
+//   }
+
+//   // 2. create and run a thread to wait in get(10)
+//   PALF_FIXED_SW_GET_HUNG = true;
+//   GetRunnable get_thread;
+//   get_thread.cnt_ = 1;
+//   get_thread.start_ = 10;
+//   get_thread.sw_ = &sw3;
+//   get_thread.run();
+//   sleep(1);
+
+//   // 3. slide to [128, 256)
+//   LogTaskDummyCallBack cb;
+//   EXPECT_EQ(common::OB_SUCCESS, sw3.slide(10 * 1000 * 1000, &cb));
+//   EXPECT_EQ(128, sw3.get_begin_sn());
+//   EXPECT_EQ(256, sw3.get_end_sn());
+
+//   // 4. slide to [256, 384)
+//   for (int64_t i = size; i < 2 * size; ++i) {
+//     LogDummyData *val(NULL);
+//     EXPECT_EQ(common::OB_SUCCESS, sw3.get(i, val));
+//     EXPECT_NE((LogDummyData*)NULL, val);
+//     val->log_id = i;
+//     val->can_remove = true;
+//     EXPECT_EQ(common::OB_SUCCESS, sw3.revert(i));
+//   }
+//   EXPECT_EQ(common::OB_SUCCESS, sw3.slide(10 * 1000 * 1000, &cb));
+//   EXPECT_EQ(2 * size, sw3.get_begin_sn());
+//   EXPECT_EQ(3 * size, sw3.get_end_sn());
+
+//   // 5. resume the thread and join
+//   PALF_FIXED_SW_GET_HUNG = false;
+//   sleep(1);
+//   // 6. continue to slide
+//   for (int64_t j = 2; j < 100; j++) {
+//     for (int64_t i = j * size; i < (j+1) * size; ++i) {
+//       LogDummyData *val(NULL);
+//       EXPECT_EQ(common::OB_SUCCESS, sw3.get(i, val));
+//       EXPECT_NE((LogDummyData*)NULL, val);
+//       val->log_id = i;
+//       val->can_remove = true;
+//       EXPECT_EQ(common::OB_SUCCESS, sw3.revert(i));
+//     }
+//     EXPECT_EQ(common::OB_SUCCESS, sw3.slide(10 * 1000 * 1000, &cb));
+//     EXPECT_EQ((j+1) * size, sw3.get_begin_sn());
+//     EXPECT_EQ((j+2) * size, sw3.get_end_sn());
+//   }
+//   get_thread.join();
+//   sw3.destroy();
+// }
 
 } // end namespace unittest
 } // end namespace oceanbase
