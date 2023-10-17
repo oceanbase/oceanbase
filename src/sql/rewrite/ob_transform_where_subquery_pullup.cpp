@@ -1421,10 +1421,15 @@ int ObWhereSubQueryPullup::unnest_single_set_subquery(ObDMLStmt *stmt,
       LOG_WARN("failed to merge subquery stmt hint", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), query_expr))) {
       LOG_WARN("remove expr failed", K(ret));
-    } else if (OB_FAIL(stmt->replace_relation_exprs(query_refs, select_list))) {
-      LOG_WARN("failed to replace inner stmt expr", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize stmt", K(ret));
+    } else {
+      select_list.reuse();
+      if (OB_FAIL(subquery->get_select_exprs(select_list))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      } else if (OB_FAIL(stmt->replace_relation_exprs(query_refs, select_list))) {
+        LOG_WARN("failed to replace inner stmt expr", K(ret));
+      } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize stmt", K(ret));
+      }
     }
   }
   return ret;
