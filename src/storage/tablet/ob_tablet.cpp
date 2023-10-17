@@ -129,7 +129,6 @@ ObTablet::ObTablet()
     ddl_kvs_(nullptr),
     ddl_kv_count_(0),
     pointer_hdl_(),
-    next_full_tablet_guard_(),
     tablet_addr_(),
     allocator_(nullptr),
     memtables_lock_(),
@@ -142,8 +141,8 @@ ObTablet::ObTablet()
     tablet_status_cache_(),
     ddl_data_cache_()
 {
-#if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1632, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+#if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1576, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -165,7 +164,6 @@ void ObTablet::reset()
   tablet_meta_.reset();
   mds_data_.reset();
   tablet_addr_.reset();
-  next_full_tablet_guard_.reset();
   memtable_mgr_ = nullptr;
   log_handler_ = nullptr;
   pointer_hdl_.reset();
@@ -5029,7 +5027,6 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
          K_(storage_schema_addr),
          K_(next_tablet_guard),
          K_(pointer_hdl),
-         K_(next_full_tablet_guard),
          KP_(next_tablet),
          KP_(memtable_mgr),
          KP_(log_handler),

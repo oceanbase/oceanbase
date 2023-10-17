@@ -215,8 +215,6 @@ public:
 
   void set_tablet_addr(const ObMetaDiskAddr &tablet_addr);
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }
-  void set_next_full_tablet(const ObTabletHandle &next_tablet_guard) { next_full_tablet_guard_ = next_tablet_guard;}
-  ObTabletHandle &get_next_full_tablet() { return next_full_tablet_guard_; }
   void set_next_tablet(ObTablet* tablet) { next_tablet_ = tablet; }
   ObTablet *get_next_tablet() { return next_tablet_; }
   ObArenaAllocator *get_allocator() { return allocator_;}
@@ -758,7 +756,6 @@ private:
   ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;
   ObTabletPointerHandle pointer_hdl_;                        // size: 24B, alignment: 8B
-  ObTabletHandle next_full_tablet_guard_;                    // size: 56B, alignment: 8B
   ObMetaDiskAddr tablet_addr_;                               // size: 40B, alignment: 8B
   // NOTICE: these two pointers: memtable_mgr_ and log_handler_,
   // are considered as cache for tablet.
