@@ -45,6 +45,10 @@ public:
     if (hashmap_.created()) {
       hashmap_.destroy();
     }
+    if (nullptr != mem_entity_) {
+      DESTROY_CONTEXT(mem_entity_);
+      mem_entity_ = NULL;
+    }
   }
   enum RescanStatus
   {
