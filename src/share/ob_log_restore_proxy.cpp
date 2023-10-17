@@ -206,7 +206,6 @@ ObLogRestoreProxyUtil::ObLogRestoreProxyUtil() :
   connection_(),
   user_name_(),
   user_password_(),
-  db_name_(),
   sql_proxy_(),
   is_oracle_mode_(false)
 {}
@@ -283,7 +282,6 @@ void ObLogRestoreProxyUtil::destroy()
   server_prover_.destroy();
   user_name_.reset();
   user_password_.reset();
-  db_name_.reset();
   is_oracle_mode_ = false;
 }
 
@@ -300,11 +298,20 @@ int ObLogRestoreProxyUtil::refresh_conn(const common::ObIArray<common::ObAddr> &
       || OB_ISNULL(user_password)
       || OB_ISNULL(db_name)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (is_user_changed_(user_name, user_password, db_name)
-      && OB_FAIL(connection_.set_db_param(user_name, user_password, db_name))) {
-    LOG_WARN("set db param failed", K(user_name), K(user_password), K(db_name));
   } else if (OB_FAIL(server_prover_.set_restore_source_server(addr_array))) {
     LOG_WARN("set_restore_source_server failed", K(addr_array));
+  } else if (!is_user_changed_(user_name, user_password)) {
+    // do nothing
+  } else if (OB_FAIL(connection_.set_db_param(user_name, user_password, db_name))) {
+    LOG_WARN("set db param failed", K(user_name), K(user_password), K(db_name));
+  }
+  // fix string user_name_ and user_password_ is enough to hold these two params
+  else if (OB_FAIL(user_name_.assign(user_name))) {
+    LOG_ERROR("user_name_ assign failed", K(user_name));
+  } else if (OB_FAIL(user_password_.assign(user_password))) {
+    LOG_ERROR("user_password_ assign failed", K(user_password));
+  } else {
+    LOG_INFO("log restore proxy connection refresh", K(user_name_));
   }
   return ret;
 }
@@ -562,11 +569,17 @@ int ObLogRestoreProxyUtil::construct_server_ip_list(const common::ObSqlString &s
   }
   return ret;
 }
-bool ObLogRestoreProxyUtil::is_user_changed_(const char *user_name, const char *user_password, const char *db_name)
+
+bool ObLogRestoreProxyUtil::is_user_changed_(const char *user_name, const char *user_password)
 {
-  return user_name_ != common::ObFixedLengthString<common::OB_MAX_USER_NAME_BUF_LENGTH>(user_name)
-    || user_password_ != common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH + 1>(user_password)
-    || db_name_ != common::ObFixedLengthString<common::OB_MAX_DATABASE_NAME_BUF_LENGTH>(db_name);
+  bool changed =  user_name_ != common::ObFixedLengthString<common::OB_MAX_USER_NAME_BUF_LENGTH>(user_name)
+    || user_password_ != common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH + 1>(user_password);
+
+  if (changed) {
+    LOG_INFO("restore proxy user info changed", K(user_name_),
+        K(common::ObFixedLengthString<common::OB_MAX_USER_NAME_BUF_LENGTH>(user_name)));
+  }
+  return changed;
 }
 
 int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status)
