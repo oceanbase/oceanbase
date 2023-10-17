@@ -247,6 +247,11 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
         } else if (OB_FAIL(guard.set_source(location_source))) {
           LOG_WARN("remote source guard set source failed", KR(ret), K(ls_id));
         }
+
+        if (OB_FAIL(ret) && OB_NOT_NULL(location_source)) {
+          logservice::ObResSrcAlloctor::free(location_source);
+          location_source = nullptr;
+        }
         return ret;
       };
       logservice::ObRemoteLogGroupEntryIterator remote_group_iter(get_source_func);
