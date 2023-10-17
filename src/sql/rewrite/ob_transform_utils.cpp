@@ -3778,38 +3778,35 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    lib::ContextParam param;
-    param.set_mem_attr(session_info->get_effective_tenant_id(), "CheckUnique",
-                       ObCtxIds::DEFAULT_CTX_ID)
-       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
-       .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    CREATE_WITH_TEMP_CONTEXT(param) {
-      ObArenaAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
-      ObFdItemFactory fd_item_factory(alloc);
-      ObRawExprFactory expr_factory(alloc);
-      UniqueCheckHelper check_helper;
-      check_helper.alloc_ = &alloc;
-      check_helper.fd_factory_ = &fd_item_factory;
-      check_helper.expr_factory_ = &expr_factory;
-      check_helper.schema_checker_ = schema_checker;
-      check_helper.session_info_ = session_info;
-      UniqueCheckInfo res_info;
-      ObRelIds all_tables;
-      if (OB_FAIL(compute_tables_property(stmt, check_helper, table_items, conditions, res_info))) {
-        LOG_WARN("failed to compute tables property", K(ret));
-      } else if (OB_FAIL(get_rel_ids_from_tables(stmt, table_items, all_tables))) {
-        LOG_WARN("failed to add members", K(ret));
-      } else if (!is_strict && OB_FAIL(append(res_info.fd_sets_, res_info.candi_fd_sets_))) {
-        // is strict, use fd_item_set & candi_fd_set check unique
-        LOG_WARN("failed to append fd item sets", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
-                                                          res_info.equal_sets_,
-                                                          res_info.const_exprs_,
-                                                          is_unique))) {
-        LOG_WARN("failed to check is exprs unique", K(ret));
-      } else {
-        LOG_TRACE("get is unique result", K(exprs), K(table_items), K(is_unique));
-      }
+    ObArenaAllocator alloc("CheckUnique", OB_MALLOC_NORMAL_BLOCK_SIZE,
+                           session_info->get_effective_tenant_id(),
+                           ObCtxIds::DEFAULT_CTX_ID);
+    ObFdItemFactory fd_item_factory(alloc);
+    ObRawExprFactory expr_factory(alloc);
+    UniqueCheckHelper check_helper;
+    check_helper.alloc_ = &alloc;
+    check_helper.fd_factory_ = &fd_item_factory;
+    check_helper.expr_factory_ = &expr_factory;
+    check_helper.schema_checker_ = schema_checker;
+    check_helper.session_info_ = session_info;
+    UniqueCheckInfo res_info;
+    ObRelIds all_tables;
+    if (OB_FAIL(compute_tables_property(stmt, check_helper, table_items, conditions, res_info))) {
+      LOG_WARN("failed to compute tables property", K(ret));
+    } else if (OB_FAIL(get_rel_ids_from_tables(stmt, table_items, all_tables))) {
+      LOG_WARN("failed to add members", K(ret));
+    } else if (!is_strict && OB_FAIL(append(res_info.fd_sets_, res_info.candi_fd_sets_))) {
+      // is strict, use fd_item_set & candi_fd_set check unique
+      LOG_WARN("failed to append fd item sets", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
+                                                        res_info.equal_sets_,
+                                                        res_info.const_exprs_,
+                                                        is_unique))) {
+      LOG_WARN("failed to check is exprs unique", K(ret));
+    } else {
+      fd_item_factory.destory();
+      expr_factory.destory();
+      LOG_TRACE("get is unique result", K(exprs), K(table_items), K(is_unique));
     }
   }
   return ret;
@@ -3899,37 +3896,34 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   if (OB_FAIL(ret) || is_unique || !need_check) {
     /*do nothing*/
   } else {
-    lib::ContextParam param;
-    param.set_mem_attr(session_info->get_effective_tenant_id(), "CheckUnique",
-                       ObCtxIds::DEFAULT_CTX_ID)
-       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
-       .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    CREATE_WITH_TEMP_CONTEXT(param) {
-      ObArenaAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
-      ObFdItemFactory fd_item_factory(alloc);
-      ObRawExprFactory expr_factory(alloc);
-      UniqueCheckHelper check_helper;
-      check_helper.alloc_ = &alloc;
-      check_helper.fd_factory_ = &fd_item_factory;
-      check_helper.expr_factory_ = &expr_factory;
-      check_helper.schema_checker_ = schema_checker;
-      check_helper.session_info_ = session_info;
-      UniqueCheckInfo res_info;
-      ObRelIds all_tables;
-      if (OB_FAIL(compute_stmt_property(stmt, check_helper, res_info, extra_flags))) {
-        LOG_WARN("failed to compute stmt property", K(ret));
-      } else if (OB_FAIL(stmt->get_from_tables(all_tables))) {
-        LOG_WARN("failed to get from tables", K(ret));
-      } else if (!is_strict && OB_FAIL(append(res_info.fd_sets_, res_info.candi_fd_sets_))) {
-        // is strict, use fd_item_set & candi_fd_set check unique
-        LOG_WARN("failed to append fd item sets", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
-                                                          res_info.equal_sets_,
-                                                          res_info.const_exprs_, is_unique))) {
-        LOG_WARN("failed to check is exprs unique", K(ret));
-      } else {
-        LOG_TRACE("get is unique result", K(ret), K(is_unique));
-      }
+    ObArenaAllocator alloc("CheckUnique", OB_MALLOC_NORMAL_BLOCK_SIZE,
+                           session_info->get_effective_tenant_id(),
+                           ObCtxIds::DEFAULT_CTX_ID);
+    ObFdItemFactory fd_item_factory(alloc);
+    ObRawExprFactory expr_factory(alloc);
+    UniqueCheckHelper check_helper;
+    check_helper.alloc_ = &alloc;
+    check_helper.fd_factory_ = &fd_item_factory;
+    check_helper.expr_factory_ = &expr_factory;
+    check_helper.schema_checker_ = schema_checker;
+    check_helper.session_info_ = session_info;
+    UniqueCheckInfo res_info;
+    ObRelIds all_tables;
+    if (OB_FAIL(compute_stmt_property(stmt, check_helper, res_info, extra_flags))) {
+      LOG_WARN("failed to compute stmt property", K(ret));
+    } else if (OB_FAIL(stmt->get_from_tables(all_tables))) {
+      LOG_WARN("failed to get from tables", K(ret));
+    } else if (!is_strict && OB_FAIL(append(res_info.fd_sets_, res_info.candi_fd_sets_))) {
+      // is strict, use fd_item_set & candi_fd_set check unique
+      LOG_WARN("failed to append fd item sets", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
+                                                        res_info.equal_sets_,
+                                                        res_info.const_exprs_, is_unique))) {
+      LOG_WARN("failed to check is exprs unique", K(ret));
+    } else {
+      fd_item_factory.destory();
+      expr_factory.destory();
+      LOG_TRACE("get is unique result", K(ret), K(is_unique));
     }
   }
   return ret;
