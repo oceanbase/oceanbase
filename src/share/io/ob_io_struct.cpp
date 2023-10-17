@@ -781,6 +781,7 @@ int ObIOTuner::send_detect_task()
 {
   int ret = OB_SUCCESS;
   ObArray<MacroBlockId> macro_ids;
+  macro_ids.set_attr(ObMemAttr(OB_SYS_TENANT_ID, "back_io_detect"));
   if (OB_FAIL(OB_SERVER_BLOCK_MGR.get_all_macro_ids(macro_ids))) {
     LOG_WARN("fail to get macro ids", K(ret) ,K(macro_ids));
   } else if (OB_UNLIKELY(0 == macro_ids.count())) {
