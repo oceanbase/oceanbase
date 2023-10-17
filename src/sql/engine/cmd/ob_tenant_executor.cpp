@@ -382,8 +382,8 @@ int check_sys_var_options(ObExecContext &ctx,
                 int64_t sys_var_val_length = OB_MAX_SYS_VAR_VAL_LENGTH;
                 if (set_var.var_name_ == OB_SV_TCP_INVITED_NODES) {
                   uint64_t data_version = 0;
-                  if (OB_FAIL(GET_MIN_DATA_VERSION(set_var.actual_tenant_id_, data_version))) {
-                    LOG_WARN("fail to get sys data version", KR(ret));
+                  if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), data_version))) {
+                    LOG_WARN("fail to get tenant data version", KR(ret));
                   } else if (data_version >= DATA_VERSION_4_2_1_1) {
                     sys_var_val_length = OB_MAX_TCP_INVITED_NODES_LENGTH;
                   }
