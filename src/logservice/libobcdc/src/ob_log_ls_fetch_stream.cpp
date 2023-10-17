@@ -37,7 +37,7 @@ int64_t FetchStream::g_rpc_timeout = ObLogConfig::default_fetch_log_rpc_timeout_
 int64_t FetchStream::g_dml_progress_limit = ObLogConfig::default_progress_limit_sec_for_dml * _SEC_;
 int64_t FetchStream::g_ddl_progress_limit = ObLogConfig::default_progress_limit_sec_for_ddl * _SEC_;
 int64_t FetchStream::g_blacklist_survival_time = ObLogConfig::default_blacklist_survival_time_sec * _SEC_;
-int64_t FetchStream::g_check_switch_server_interval = ObLogConfig::default_check_switch_server_interval_min * _MIN_;
+int64_t FetchStream::g_check_switch_server_interval = ObLogConfig::default_check_switch_server_interval_sec * _SEC_;
 bool FetchStream::g_print_rpc_handle_info = ObLogConfig::default_print_rpc_handle_info;
 bool FetchStream::g_print_stream_dispatch_info = ObLogConfig::default_print_stream_dispatch_info;
 
@@ -256,7 +256,7 @@ void FetchStream::configure(const ObLogConfig &config)
   int64_t dml_progress_limit_sec = config.progress_limit_sec_for_dml;
   int64_t ddl_progress_limit_sec = config.progress_limit_sec_for_ddl;
   int64_t blacklist_survival_time_sec = config.blacklist_survival_time_sec;
-  int64_t check_switch_server_interval_min = config.check_switch_server_interval_min;
+  int64_t check_switch_server_interval_sec = config.check_switch_server_interval_sec;
   bool print_rpc_handle_info = config.print_rpc_handle_info;
   bool print_stream_dispatch_info = config.print_stream_dispatch_info;
 
@@ -268,8 +268,8 @@ void FetchStream::configure(const ObLogConfig &config)
   LOG_INFO("[CONFIG]", K(ddl_progress_limit_sec));
   ATOMIC_STORE(&g_blacklist_survival_time, blacklist_survival_time_sec * _SEC_);
   LOG_INFO("[CONFIG]", K(blacklist_survival_time_sec));
-  ATOMIC_STORE(&g_check_switch_server_interval, check_switch_server_interval_min * _MIN_);
-  LOG_INFO("[CONFIG]", K(check_switch_server_interval_min));
+  ATOMIC_STORE(&g_check_switch_server_interval, check_switch_server_interval_sec * _SEC_);
+  LOG_INFO("[CONFIG]", K(check_switch_server_interval_sec));
   ATOMIC_STORE(&g_print_rpc_handle_info, print_rpc_handle_info);
   LOG_INFO("[CONFIG]", K(print_rpc_handle_info));
   ATOMIC_STORE(&g_print_stream_dispatch_info, print_stream_dispatch_info);
@@ -1323,10 +1323,6 @@ const char *FetchStream::print_kick_out_reason_(const KickOutReason reason)
       str = "PROGRESS_TIMEOUT";
       break;
 
-    case PROGRESS_TIMEOUT_ON_LAGGED_REPLICA:
-      str = "PROGRESS_TIMEOUT_ON_LAGGED_REPLICA";
-      break;
-
     case NEED_SWITCH_SERVER:
       str = "NeedSwitchServer";
       break;
@@ -2147,7 +2143,6 @@ int FetchStream::check_fetch_timeout_(LSFetchCtx &task, KickOutInfo &kick_out_in
 {
   int ret = OB_SUCCESS;
   bool is_fetch_timeout = false;
-  bool is_fetch_timeout_on_lagged_replica = false;
   // For lagging replica, the timeout of partition
   int64_t fetcher_resume_tstamp = OB_INVALID_TIMESTAMP;
 
@@ -2157,12 +2152,11 @@ int FetchStream::check_fetch_timeout_(LSFetchCtx &task, KickOutInfo &kick_out_in
   } else {
     fetcher_resume_tstamp = stream_worker_->get_fetcher_resume_tstamp();
 
-    if (OB_FAIL(task.check_fetch_timeout(svr_, upper_limit_, fetcher_resume_tstamp,
-        is_fetch_timeout, is_fetch_timeout_on_lagged_replica))) {
+    if (OB_FAIL(task.check_fetch_timeout(svr_, upper_limit_, fetcher_resume_tstamp, is_fetch_timeout))) {
       LOG_ERROR("check fetch timeout fail", KR(ret), K_(svr),
           K(upper_limit_), "fetcher_resume_tstamp", TS_TO_STR(fetcher_resume_tstamp), K(task));
     } else if (is_fetch_timeout) {
-      KickOutReason reason = is_fetch_timeout_on_lagged_replica ? PROGRESS_TIMEOUT_ON_LAGGED_REPLICA : PROGRESS_TIMEOUT;
+      KickOutReason reason = PROGRESS_TIMEOUT;
       // If the partition fetch log times out, add it to the kick out collection
       if (OB_FAIL(set_(kick_out_info, task.get_tls_id(), reason))) {
         if (OB_ENTRY_EXIST == ret) {
@@ -2183,11 +2177,11 @@ int FetchStream::check_switch_server_(LSFetchCtx &task, KickOutInfo &kick_out_in
 {
   int ret = OB_SUCCESS;
 
-  if (exist_(kick_out_info, task.get_tls_id())) {
+  if (exist_(kick_out_info, task.get_tls_id()) && kick_out_info.need_kick_out()) {
     // Do not check for LS already located in kick_out_info
   } else if (task.need_switch_server(svr_)) {
-    LOG_DEBUG("exist higher priority server, need switch server", KR(ret), "key", task.get_tls_id(),
-             K_(svr));
+    LOG_INFO("exist higher priority server, need switch server", KR(ret), "key", task.get_tls_id(),
+        K_(svr));
     // If need to switch the stream, add it to the kick out collection
     if (OB_FAIL(set_(kick_out_info, task.get_tls_id(), NEED_SWITCH_SERVER))) {
       if (OB_ENTRY_EXIST == ret) {

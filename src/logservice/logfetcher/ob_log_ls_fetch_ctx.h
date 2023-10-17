@@ -214,8 +214,7 @@ public:
   int check_fetch_timeout(const common::ObAddr &svr,
       const int64_t upper_limit,
       const int64_t fetcher_resume_tstamp,
-      bool &is_fetch_timeout,                        // Is the log fetch timeout
-      bool &is_fetch_timeout_on_lagged_replica);     // Is the log fetch timeout on a lagged replica
+      bool &is_fetch_timeout);                        // Is the log fetch timeout
 
   // Get the progress of a transaction
   // 1. When there is a transaction ready to be sent, the timestamp of the transaction to be sent - 1 is taken as the progress of the sending
