@@ -3095,15 +3095,19 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
     int64_t curr_log_proposal_id = 0;
     const char *buf_each_round = NULL;
     int64_t buf_len_each_round = 0;
-    int64_t count = 0;
+    int64_t count = 0, success_count = 0;
     while (OB_SUCC(iterator.next())) {
       if (OB_FAIL(iterator.get_entry(buf_each_round, buf_len_each_round, curr_lsn_each_round, curr_log_proposal_id))) {
         PALF_LOG(ERROR, "get_entry failed", K(ret), KPC(this), K(iterator), KP(buf_each_round));
       } else if (OB_FAIL(receive_log_(server, FETCH_LOG_RESP, msg_proposal_id, prev_lsn_each_round,
             prev_log_proposal_id_each_round, curr_lsn_each_round, buf_each_round, buf_len_each_round))) {
-        PALF_LOG(WARN, "receive_log failed", K(ret), KPC(this), K(iterator), K(server), K(FETCH_LOG_RESP), K(msg_proposal_id),
-            K(prev_lsn_each_round), K(prev_log_proposal_id_each_round), K(curr_lsn_each_round), KP(buf_each_round),
-            K(buf_len_each_round));
+        if (REACH_TIME_INTERVAL(100 * 1000)) {
+          PALF_LOG(WARN, "receive_log failed", K(ret), KPC(this), K(iterator), K(server), K(FETCH_LOG_RESP),
+              K(msg_proposal_id), K(prev_lsn_each_round), K(prev_log_proposal_id_each_round),
+              K(curr_lsn_each_round), KP(buf_each_round), K(buf_len_each_round));
+        }
+      } else {
+        success_count++;
       }
       prev_lsn_each_round = curr_lsn_each_round;
       prev_log_proposal_id_each_round = curr_log_proposal_id;
@@ -3112,9 +3116,11 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
-    int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-    PALF_LOG(TRACE, "receive_batch_log finished", K(ret), KPC(this), K(server), K(count), K(prev_lsn), K(curr_lsn),
-        K(buf_len), K(cost_ts), K_(sw), K(iterator));
+    int64_t cost_us = ObTimeUtility::current_time() - start_ts;
+    if (cost_us > 200 * 1000) {
+      PALF_LOG(INFO, "receive_batch_log cost too much time", K(ret), KPC(this), K(server), K(count),
+        K(success_count), K(cost_us), K(prev_lsn), K(curr_lsn), K(buf_len), K_(sw), K(iterator));
+    }
   }
   return ret;
 }
