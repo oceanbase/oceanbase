@@ -78,6 +78,7 @@ public:
   bool in_black_or_stopped(const common::ObAddr &server) override final;
   bool is_server_stopped(const common::ObAddr &server) override final;
   bool in_black(const common::ObAddr &server) override final;
+  int get_last_resp_ts(const common::ObAddr &server, int64_t &last_resp_ts) override final;
 private:
   unittest::ObLogDeliver *log_deliver_;
 };

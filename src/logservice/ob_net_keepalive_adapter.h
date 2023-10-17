@@ -10,6 +10,7 @@
 
 #ifndef OCEANBASE_LOGSERVICE_OB_NET_KEEPALIVE_ADPATER_H_
 #define OCEANBASE_LOGSERVICE_OB_NET_KEEPALIVE_ADPATER_H_
+#include <stdint.h>  // for int64_t etc.
 
 namespace oceanbase
 {
@@ -30,6 +31,7 @@ public:
   virtual bool in_black_or_stopped(const common::ObAddr &server) = 0;
   virtual bool is_server_stopped(const common::ObAddr &server) = 0;
   virtual bool in_black(const common::ObAddr &server) = 0;
+  virtual int get_last_resp_ts(const common::ObAddr &server, int64_t &last_resp_ts) = 0;
 };
 
 class ObNetKeepAliveAdapter : public IObNetKeepAliveAdapter {
@@ -39,6 +41,7 @@ public:
   bool in_black_or_stopped(const common::ObAddr &server) override final;
   bool is_server_stopped(const common::ObAddr &server) override final;
   bool in_black(const common::ObAddr &server) override final;
+  int get_last_resp_ts(const common::ObAddr &server, int64_t &last_resp_ts) override final;
 private:
   int in_black_or_stopped_(const common::ObAddr &server,
                            bool &in_black,
