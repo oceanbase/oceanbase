@@ -533,12 +533,14 @@ int ObTableApiSessPool::create_and_add_node(ObTableApiCredential &credential)
   } else if (OB_FAIL(key_node_map_.set_refactored(credential.hash_val_, node))) {
     if (OB_HASH_EXIST != ret) {
       LOG_WARN("fail to add sess node to hash map", K(ret), K(credential), K(*node));
-    } else { // this node has been set by other thread, free it
-      ObLockGuard<ObSpinLock> guard(lock_);
-      node->~ObTableApiSessNode();
-      allocator_.free(node);
-      node = nullptr;
+    } else {
+      ret = OB_SUCCESS; // replace error code
     }
+    // this node has been set by other thread, free it
+    ObLockGuard<ObSpinLock> guard(lock_);
+    node->~ObTableApiSessNode();
+    allocator_.free(node);
+    node = nullptr;
   }
 
   return ret;

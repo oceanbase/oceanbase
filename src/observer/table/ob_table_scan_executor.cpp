@@ -270,7 +270,8 @@ int ObTableApiScanRowIterator::open(ObTableApiScanExecutor *executor)
   return ret;
 }
 
-int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
+// Memory of row is owned by iterator, and row cannot be used beyond iterator, unless you use deep copy.
+int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row, bool need_deep_copy /* =true */)
 {
   int ret = OB_SUCCESS;
   ObNewRow *tmp_row = nullptr;
@@ -297,6 +298,7 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
   } else {
     // 循环select_exprs,eval获取datum，并将datum转ObObj，最后组成ObNewRow
     tmp_row = new(row_buf)ObNewRow(cells, cells_cnt);
+    ObObj tmp_obj;
     ObDatum *datum = nullptr;
     ObEvalCtx &eval_ctx = scan_executor_->get_eval_ctx();
     if (tb_ctx.is_scan()) { // 转为用户select的顺序
@@ -310,16 +312,24 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
           LOG_WARN("query column id not found", K(ret), K(select_col_ids), K(col_id), K(query_col_ids));
         } else if (OB_FAIL(output_exprs.at(idx)->eval(eval_ctx, datum))) {
           LOG_WARN("fail to eval datum", K(ret));
-        } else if (OB_FAIL(datum->to_obj(cells[i], output_exprs.at(idx)->obj_meta_))) {
+        } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(idx)->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(idx)->obj_meta_), K(i), K(idx));
+        } else if (!need_deep_copy) {
+          cells[i] = tmp_obj;
+        } else if (ob_write_obj(allocator, tmp_obj, cells[i])) { // need_deep_copy
+          LOG_WARN("fail to deep copy ObObj", K(ret), K(tmp_obj));
         }
       }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < cells_cnt; i++) {
         if (OB_FAIL(output_exprs.at(i)->eval(eval_ctx, datum))) {
           LOG_WARN("fail to eval datum", K(ret));
-        } else if (OB_FAIL(datum->to_obj(cells[i], output_exprs.at(i)->obj_meta_))) {
+        } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(i)->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(i)->obj_meta_));
+        } else if (!need_deep_copy) {
+          cells[i] = tmp_obj;
+        } else if (ob_write_obj(allocator, tmp_obj, cells[i])) { // need_deep_copy
+          LOG_WARN("fail to deep copy ObObj", K(ret), K(tmp_obj));
         }
       }
     }

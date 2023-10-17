@@ -1406,6 +1406,23 @@ int ObTableQueryResult::assign_property_names(const ObIArray<ObString> &other)
   return properties_names_.assign(other);
 }
 
+int ObTableQueryResult::deep_copy_property_names(const ObIArray<ObString> &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(properties_names_.prepare_allocate(other.count()))) {
+    LOG_WARN("failed to prepare allocate properties names", K(ret), K(other));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.count(); i++) {
+    if (OB_FAIL(ob_write_string(allocator_, other.at(i), properties_names_.at(i)))) {
+      LOG_WARN("failed to write string", K(ret), K(other.at(i)));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableQueryResult::alloc_buf_if_need(const int64_t need_size)
 {
   int ret = OB_SUCCESS;

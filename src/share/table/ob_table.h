@@ -815,6 +815,8 @@ public:
   virtual int get_next_entity(const ObITableEntity *&entity) override;
   int add_property_name(const ObString &name);
   int assign_property_names(const common::ObIArray<common::ObString> &other);
+  // for aggregation
+  int deep_copy_property_names(const common::ObIArray<common::ObString> &other);
   void reset_property_names() { properties_names_.reset(); }
   int add_row(const common::ObNewRow &row);
   int add_row(const common::ObIArray<ObObj> &row);

@@ -92,7 +92,7 @@ public:
   virtual ~ObTableApiScanRowIterator() {};
 public:
   int open(ObTableApiScanExecutor *executor);
-  int get_next_row(common::ObNewRow *&row);
+  int get_next_row(common::ObNewRow *&row, bool need_deep_copy = true);
   int close();
 private:
   ObTableApiScanExecutor *scan_executor_;
