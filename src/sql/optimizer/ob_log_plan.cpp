@@ -3955,7 +3955,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
   } else if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create plan", K(ret), K(opt_ctx.get_query_ctx()->get_sql_stmt()));
-  } else if (OB_FAIL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan())) {
+  } else if (OB_FAIL(SMART_CALL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan()))) {
     LOG_WARN("failed to optimize sub-select", K(ret));
   } else {
     SubPlanInfo *info = static_cast<SubPlanInfo *>(get_allocator().alloc(sizeof(SubPlanInfo)));
