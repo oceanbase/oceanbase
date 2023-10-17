@@ -197,6 +197,26 @@ protected:
   int process() override;
 };
 
+// heart_beat
+class ObDirectLoadControlHeartBeatExecutor
+  : public ObTableLoadControlRpcExecutor<ObDirectLoadControlCommandType::HEART_BEAT>
+{
+  typedef ObTableLoadControlRpcExecutor<ObDirectLoadControlCommandType::HEART_BEAT> ParentType;
+
+public:
+  ObDirectLoadControlHeartBeatExecutor(common::ObIAllocator &allocator,
+                                       const ObDirectLoadControlRequest &request,
+                                       ObDirectLoadControlResult &result)
+    : ParentType(allocator, request, result)
+  {
+  }
+  virtual ~ObDirectLoadControlHeartBeatExecutor() = default;
+
+protected:
+  int check_args() override;
+  int process() override;
+};
+
 /// trans
 // pre_start_trans
 class ObDirectLoadControlPreStartTransExecutor

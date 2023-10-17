@@ -58,6 +58,8 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     next_session_id_(0),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
+    last_heart_beat_ts_(0),
+    enable_heart_beat_check_(false),
     is_inited_(false)
 {
 }
@@ -387,6 +389,16 @@ int ObTableLoadStoreCtx::check_status(ObTableLoadStatusType status) const
     }
   }
   return ret;
+}
+
+void ObTableLoadStoreCtx::heart_beat()
+{
+  last_heart_beat_ts_ = ObTimeUtil::current_time();
+}
+
+bool ObTableLoadStoreCtx::check_heart_beat_expired(const uint64_t expired_time_us)
+{
+  return ObTimeUtil::current_time() > (last_heart_beat_ts_ + expired_time_us);
 }
 
 int ObTableLoadStoreCtx::get_wa_memory_limit(int64_t &wa_mem_limit)
