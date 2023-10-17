@@ -377,12 +377,14 @@ public:
       trans_flags_.reset();
       tx_result_.reset();
       nested_count_ = -1;
+      xid_.reset();
     }
   public:
     transaction::ObTxDesc *tx_desc_;
     TransFlags trans_flags_;
     transaction::ObTxExecResult tx_result_;
     int64_t nested_count_;
+    transaction::ObXATransID xid_;
   };
 
 public:
