@@ -793,7 +793,7 @@ show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` PROCEDURE `chistics`()
     MODIFIES SQL DATA
-    INVOKER
+    SQL SECURITY INVOKER
     COMMENT 'Characteristics procedure test'
 insert into t1 values ("chistics", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop procedure chistics|
@@ -808,7 +808,7 @@ show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` FUNCTION `chistics`() RETURNS int(11)
     DETERMINISTIC
-    INVOKER
+    SQL SECURITY INVOKER
     COMMENT 'Characteristics procedure test'
 return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select chistics()|
@@ -822,7 +822,7 @@ Function	sql_mode	Create Function	character_set_client	collation_connection	Data
 chistics	STRICT_ALL_TABLES	CREATE DEFINER = `admin`@`%` FUNCTION `chistics`() RETURNS int(11)
     NO SQL
     DETERMINISTIC
-    INVOKER
+    SQL SECURITY INVOKER
     COMMENT 'Characteristics function test'
 return 42	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 drop function chistics|
