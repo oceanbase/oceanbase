@@ -149,28 +149,22 @@ int OMPKHandshakeResponse::decode()
                             LOG_WARN("fail to push back str_kv", K(str_kv), K(ret));
                           }
                       } else {
-                          ret = OB_INVALID_ARGUMENT;
-                          LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len), K((end -pos)));
+                        // skip error
                       }
                     } else {
-                      ret = OB_INVALID_ARGUMENT;
-                      LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len));
+                      // skip error
                     }
                   } else {
-                    ret = OB_INVALID_ARGUMENT;
-                    LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_inc_len));
+                    // skip error
                   }
               } else {
-                  ret = OB_INVALID_ARGUMENT;
-                  LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(key_len), K((end - pos)));
+                // skip error
               }
             } else {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(key_len));
+              // skip error
             }
           } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_ERROR("error", K(ret), K(all_attrs_len), K(key_inc_len));
+            // skip error
           }
         }
       } else {
