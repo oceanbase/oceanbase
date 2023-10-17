@@ -13240,10 +13240,10 @@ int ObDDLService::drop_aux_table_in_truncate(
     }
   } else if (table_type == AUX_LOB_META) {
     lob_meta_table_id = orig_table_schema.get_aux_lob_meta_tid();
-    N = orig_table_schema.has_lob_column() ? 1 : 0;
+    N = orig_table_schema.has_lob_aux_table() ? 1 : 0;
   } else if (table_type == AUX_LOB_PIECE) {
     lob_piece_table_id = orig_table_schema.get_aux_lob_piece_tid();
-    N = orig_table_schema.has_lob_column() ? 1 : 0;
+    N = orig_table_schema.has_lob_aux_table() ? 1 : 0;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table type is invalide", K(ret), K(table_type));
@@ -16609,7 +16609,7 @@ int ObDDLService::get_index_lob_table_schema(const ObTableSchema &orig_table_sch
     }
   }
   // get lob table id
-  if (OB_SUCC(ret) && orig_table_schema.has_lob_column()) {
+  if (OB_SUCC(ret) && orig_table_schema.has_lob_aux_table()) {
     uint64_t mtid = orig_table_schema.get_aux_lob_meta_tid();
     uint64_t ptid = orig_table_schema.get_aux_lob_piece_tid();
     if (OB_INVALID_ID == mtid || OB_INVALID_ID == ptid) {
@@ -18047,10 +18047,10 @@ int ObDDLService::flashback_aux_table(
     }
   } else if (table_type == AUX_LOB_META) {
     lob_meta_table_id = table_schema.get_aux_lob_meta_tid();
-    N = table_schema.has_lob_column() ? 1 : 0;
+    N = table_schema.has_lob_aux_table() ? 1 : 0;
   } else if (table_type == AUX_LOB_PIECE) {
     lob_piece_table_id = table_schema.get_aux_lob_piece_tid();
-    N = table_schema.has_lob_column() ? 1 : 0;
+    N = table_schema.has_lob_aux_table() ? 1 : 0;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid table type.", K(ret), K(table_type));

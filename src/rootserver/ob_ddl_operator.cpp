@@ -3616,10 +3616,10 @@ int ObDDLOperator::update_aux_table(
       }
     } else if (table_type == AUX_LOB_META) {
       lob_meta_table_id = new_table_schema.get_aux_lob_meta_tid();
-      N = new_table_schema.has_lob_column() ? 1 : 0;
+      N = new_table_schema.has_lob_aux_table() ? 1 : 0;
     } else if (table_type == AUX_LOB_PIECE) {
       lob_piece_table_id = new_table_schema.get_aux_lob_piece_tid();
-      N = new_table_schema.has_lob_column() ? 1 : 0;
+      N = new_table_schema.has_lob_aux_table() ? 1 : 0;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid table type", K(ret), K(table_type));
@@ -3759,7 +3759,7 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else {
-    bool update_index_table = false;
+    bool update_aux_table = false;
     ObTableSchema new_table_schema;
     if (OB_FAIL(new_table_schema.assign(table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
@@ -3773,7 +3773,7 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
     } else if (OB_FAIL(new_table_schema.set_table_name(new_table_name))) {
       RS_LOG(WARN, "failed to set new table name!", K(new_table_name), K(table_schema), K(ret));
     } else if (new_db_id != table_schema.get_database_id()) {
-      update_index_table = true;
+      update_aux_table = true;
       new_table_schema.set_database_id(new_db_id);
     }
 
@@ -3785,80 +3785,92 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
           OB_DDL_TABLE_RENAME,
           ddl_stmt_str))) {
         RS_LOG(WARN, "failed to alter table option!", K(ret));
-      } else if (update_index_table) {
-        ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-        if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
-          RS_LOG(WARN, "get_index_tid_array failed", K(ret));
-        } else {
-          HEAP_VAR(ObTableSchema, new_index_table_schema) {
-            for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-              const ObTableSchema *index_table_schema = NULL;
-              if (OB_FAIL(schema_guard.get_table_schema(
-                          tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
-                RS_LOG(WARN, "get_table_schema failed", K(tenant_id),
-                       "table id", simple_index_infos.at(i).table_id_, K(ret));
-              } else if (OB_ISNULL(index_table_schema)) {
-                ret = OB_ERR_UNEXPECTED;
-                RS_LOG(WARN, "table schema should not be null", K(ret));
-              } else {
-                new_index_table_schema.reset();
-                if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
-                  LOG_WARN("fail to assign schema", K(ret));
-                } else {
-                  new_index_table_schema.set_database_id(new_table_schema.get_database_id());
-                  new_index_table_schema.set_tablegroup_id(new_table_schema.get_tablegroup_id());
-                }
-                if (OB_FAIL(ret)) {
-                } else if (index_table_schema->is_in_recyclebin()) {
-                  const uint64_t tenant_id = index_table_schema->get_tenant_id();
-                  ObArray<ObRecycleObject> recycle_objs;
-                  ObRecycleObject::RecycleObjType recycle_type = ObRecycleObject::get_type_by_table_schema(*index_table_schema);
-                  new_index_table_schema.set_database_id(index_table_schema->get_database_id());
-                  if (OB_INVALID_ID == tenant_id) {
-                    ret = OB_INVALID_ARGUMENT;
-                    LOG_WARN("tenant_id is invalid", K(ret));
-                  } else if (OB_FAIL(schema_service->fetch_recycle_object(
-                          tenant_id,
-                          index_table_schema->get_table_name_str(),
-                          recycle_type,
-                          trans,
-                          recycle_objs))) {
-                    LOG_WARN("get recycle object failed", K(tenant_id), K(ret));
-                  } else if (recycle_objs.size() != 1) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("unexpected recycle object num", K(ret), K(*index_table_schema), "size", recycle_objs.size());
-                  } else if (OB_FAIL(schema_service->delete_recycle_object(
-                          tenant_id,
-                          recycle_objs.at(0),
-                          trans))) {
-                    LOG_WARN("delete recycle object failed", K(ret));
-                  } else {
-                    ObRecycleObject &recycle_obj = recycle_objs.at(0);
-                    recycle_obj.set_database_id(new_table_schema.get_database_id());
-                    recycle_obj.set_tablegroup_id(new_table_schema.get_tablegroup_id());
-                    if (OB_FAIL(schema_service->insert_recyclebin_object(recycle_obj, trans))) {
-                      LOG_WARN("insert recyclebin object failed", K(ret));
-                    }
-                  }
-                }
-                if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-                  LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-                } else {
-                  new_index_table_schema.set_schema_version(new_schema_version);
-                  if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
-                          trans,
-                          *index_table_schema,
-                          new_index_table_schema,
-                          OB_DDL_TABLE_RENAME))) {
-                    RS_LOG(WARN, "schema service update_table_options failed",
-                        K(*index_table_schema), K(ret));
-                  }
+      } else if (update_aux_table) {
+        HEAP_VAR(ObTableSchema, new_aux_table_schema) {
+          { // update index table
+            ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+            if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+              RS_LOG(WARN, "get_index_tid_array failed", K(ret));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+                if (OB_FAIL(rename_aux_table(new_table_schema,
+                                             simple_index_infos.at(i).table_id_,
+                                             schema_guard,
+                                             trans,
+                                             new_aux_table_schema))) {
+                  RS_LOG(WARN, "fail to rename update index table", K(ret));
                 }
               }
-            } //end for
+            }
+          }
+          if (OB_SUCC(ret) && table_schema.has_lob_aux_table()) {
+            uint64_t mtid = table_schema.get_aux_lob_meta_tid();
+            uint64_t ptid = table_schema.get_aux_lob_piece_tid();
+            if (OB_INVALID_ID == mtid || OB_INVALID_ID == ptid) {
+              ret = OB_ERR_UNEXPECTED;
+              RS_LOG(WARN, "Expect meta tid and piece tid valid", KR(ret), K(mtid), K(ptid));
+            } else if (OB_FAIL(rename_aux_table(new_table_schema,
+                                                mtid,
+                                                schema_guard,
+                                                trans,
+                                                new_aux_table_schema))) {
+              RS_LOG(WARN, "fail to rename update lob meta table", KR(ret), K(mtid));
+            } else if (OB_FAIL(rename_aux_table(new_table_schema,
+                                                ptid,
+                                                schema_guard,
+                                                trans,
+                                                new_aux_table_schema))) {
+              RS_LOG(WARN, "fail to rename update lob piece table", KR(ret), K(ptid));
+            }
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::rename_aux_table(
+    const ObTableSchema &new_table_schema,
+    const uint64_t table_id,
+    ObSchemaGetterGuard &schema_guard,
+    ObMySQLTransaction &trans,
+    ObTableSchema &new_aux_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  const ObTableSchema *aux_table_schema = NULL;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  if (OB_FAIL(schema_guard.get_table_schema(
+              tenant_id, table_id, aux_table_schema))) {
+    RS_LOG(WARN, "get_table_schema failed", K(tenant_id),
+            "table id", table_id, K(ret));
+  } else if (OB_ISNULL(aux_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    RS_LOG(WARN, "table schema should not be null", K(ret));
+  } else {
+    new_aux_table_schema.reset();
+    if (OB_FAIL(new_aux_table_schema.assign(*aux_table_schema))) {
+      LOG_WARN("fail to assign schema", K(ret));
+    } else {
+      new_aux_table_schema.set_database_id(new_table_schema.get_database_id());
+    }
+    if (OB_FAIL(ret)) {
+    } else if (aux_table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aux table is in recycle bin while main table not in", K(ret), KPC(aux_table_schema));
+    } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    } else {
+      new_aux_table_schema.set_schema_version(new_schema_version);
+      if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
+              trans,
+              *aux_table_schema,
+              new_aux_table_schema,
+              OB_DDL_TABLE_RENAME))) {
+        RS_LOG(WARN, "schema service update_table_options failed",
+            K(*aux_table_schema), K(ret));
       }
     }
   }
