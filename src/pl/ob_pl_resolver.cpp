@@ -29,6 +29,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
 #include "observer/ob_server_struct.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/schema/ob_trigger_info.h"
@@ -9613,6 +9614,10 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
     ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
     udf_expr->set_loc(line_number);
   }
+  if (is_mysql_mode()) {
+    ObRawExprWrapEnumSet enum_set_wrapper(expr_factory_, &resolve_ctx_.session_info_);
+    OZ (enum_set_wrapper.analyze_expr(expr));
+  }
   OZ (formalize_expr(*expr));
 
   // Step 4: check complex cast legal
@@ -13066,6 +13071,9 @@ int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_id
     OX (c_expr->set_result_type(res_type));
     OX (c_expr->set_enum_set_values(access_idxs.at(pos).elem_type_.get_type_info()));
     OZ (c_expr->add_flag(IS_DYNAMIC_PARAM));
+    if (OB_SUCC(ret) && ob_is_enum_or_set_type(res_type.get_type())) {
+      c_expr->add_flag(IS_ENUM_OR_SET);
+    }
     OZ (c_expr->extract_info());
     OX (expr = c_expr);
   } else if (ObObjAccessIdx::is_package_baisc_variable(access_idxs)
