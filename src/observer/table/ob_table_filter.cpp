@@ -249,7 +249,7 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
     LOG_WARN("one_result_ should not be null", K(ret));
   } else {
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       if (OB_FAIL(agg_calculator_.aggregate(*row))) {
         LOG_WARN("fail to aggregate", K(ret), K(*row));
       }
@@ -259,8 +259,8 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
       agg_calculator_.final_aggregate(); // agg sum/svg finally
       has_more_rows_ = false;
       one_result_->reset();
-      if (OB_FAIL(one_result_->assign_property_names(get_agg_calculator().get_agg_columns()))) {
-        LOG_WARN("fail to assign property names to one result", K(ret));
+      if (OB_FAIL(one_result_->deep_copy_property_names(get_agg_calculator().get_agg_columns()))) {
+        LOG_WARN("fail to deep copy property names to one result", K(ret));
       } else if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
         LOG_WARN("fail to add aggregation result", K(ret), K(agg_calculator_.get_aggregate_results()));
       } else {
@@ -293,7 +293,7 @@ int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResul
   if (OB_SUCC(ret)) {
     next_result = one_result_;
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       LOG_DEBUG("[yzfdebug] scan result", "row", *row);
       if (OB_FAIL(one_result_->add_row(*row))) {
         if (OB_SIZE_OVERFLOW == ret) {
@@ -392,7 +392,7 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
     const ObIArray<ObString> &select_columns = one_result_->get_select_columns();
     const int64_t N = select_columns.count();
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
-           OB_SUCC(scan_result_->get_next_row(row))) {
+           OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       if (N != row->get_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));
@@ -427,8 +427,8 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
       agg_calculator_.final_aggregate(); // agg sum/svg finally
       has_more_rows_ = false;
       one_result_->reset();
-      if (OB_FAIL(one_result_->assign_property_names(get_agg_calculator().get_agg_columns()))) {
-        LOG_WARN("fail to assign property names to one result", K(ret));
+      if (OB_FAIL(one_result_->deep_copy_property_names(get_agg_calculator().get_agg_columns()))) {
+        LOG_WARN("fail to deep copy property names to one result", K(ret));
       } else if (OB_FAIL(one_result_->add_row(agg_calculator_.get_aggregate_results()))) {
         LOG_WARN("fail to add aggregation result", K(ret), K(agg_calculator_.get_aggregate_results()));
       } else {
@@ -473,7 +473,7 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
     const int64_t N = select_columns.count();
 
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
-           OB_SUCC(scan_result_->get_next_row(row))) {
+           OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       if (N != row->get_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));
