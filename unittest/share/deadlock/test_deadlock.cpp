@@ -34,6 +34,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "share/deadlock/ob_deadlock_detector_rpc.h"
 #include "share/deadlock/mock_deadlock_rpc.h"
+#include "storage/memtable/ob_memtable_context.h"
 
 using namespace oceanbase::obrpc;
 using namespace std;
@@ -439,6 +440,25 @@ TEST_F(TestObDeadLockDetector, small_cycle_in_big_cycle_bad_case) {
   ASSERT_EQ(true, TestOperation::v_killed_node[0] == 2 || TestOperation::v_killed_node[0] == 5);
   ASSERT_EQ(true, TestOperation::v_killed_node[1] == 2 || TestOperation::v_killed_node[1] == 5);
 }
+
+// TEST_F(TestObDeadLockDetector, test_lock_conflict_print) {
+//   memtable::RetryInfo retry_info;
+//   while ((ObClockGenerator::getClock() % 1000000) < 100_ms);
+//   DETECT_LOG(INFO, "DEBUG1", K(ObClockGenerator::getClock()));
+//   ASSERT_EQ(retry_info.need_print(), true);
+//   retry_info.on_conflict();
+//   ASSERT_EQ(retry_info.need_print(), false);
+//   this_thread::sleep_for(std::chrono::milliseconds(100));
+//   DETECT_LOG(INFO, "DEBUG2", K(ObClockGenerator::getClock()));
+//   ASSERT_EQ(retry_info.need_print(), false);
+//   this_thread::sleep_for(std::chrono::milliseconds(1000));
+//   DETECT_LOG(INFO, "DEBUG", K(retry_info));
+//   ASSERT_EQ(retry_info.need_print(), true);
+//   for (int i = 0; i < 9; ++i) {
+//     retry_info.on_conflict();
+//   }
+//   ASSERT_EQ(retry_info.need_print(), true);
+// }
 
 // TEST_F(TestObDeadLockDetector, print_timestamp) {
 //   int64_t ts_ = 1623827288705600;

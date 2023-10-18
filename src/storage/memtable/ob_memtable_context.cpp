@@ -140,7 +140,7 @@ void ObMemtableCtx::reset()
     unsynced_cnt_ = 0;
     unsubmitted_cnt_ = 0;
     lock_mem_ctx_.reset();
-    mtstat_.reset();
+    retry_info_.reset();
     trans_mgr_.reset();
     log_gen_.reset();
     ref_ = 0;
@@ -298,12 +298,12 @@ int ObMemtableCtx::write_lock_yield()
 
 void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id)
 {
-  mtstat_.on_wlock_retry();
   #define USING_LOG_PREFIX TRANS
-  if (mtstat_.need_print()) {
+  if (retry_info_.need_print()) {
     FLOG_INFO("mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
   }
   #undef USING_LOG_PREFIX
+  retry_info_.on_conflict();
 }
 
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
@@ -311,10 +311,10 @@ void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
                                  const SCN max_trans_version,
                                  const transaction::ObTransID &conflict_tx_id)
 {
-  mtstat_.on_tsc_retry();
-  if (mtstat_.need_print()) {
+  if (retry_info_.need_print()) {
     TRANS_LOG_RET(WARN, OB_SUCCESS, "transaction_set_consistency conflict", K(key), K(snapshot_version), K(max_trans_version), K(conflict_tx_id), KPC(this));
   }
+  retry_info_.on_conflict();
 }
 
 void *ObMemtableCtx::old_row_alloc(const int64_t size)
