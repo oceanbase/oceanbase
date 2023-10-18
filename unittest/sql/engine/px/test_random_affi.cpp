@@ -49,10 +49,10 @@ TEST_F(ObRandomAffiTaskSplitTest, split_task_test) {
     int64_t parallel = 3;
     int64_t tenant_id = 1;
     ObPxTabletInfo px_part_info;
-    ObPxAffinityByRandom affinitize_rule;
+    ObPxAffinityByRandom affinitize_rule(true);
     for (int i = 0; i < 5; ++i) {
       px_part_info.physical_row_count_ = (10 - i) * 100;
-      affinitize_rule.add_partition(i,i,parallel,px_part_info);
+      affinitize_rule.add_partition(i,i,parallel,tenant_id,px_part_info);
     }
     affinitize_rule.do_random(true, tenant_id);
     const common::ObIArray<ObPxAffinityByRandom::TabletHashValue>& result = affinitize_rule.get_result();
@@ -70,18 +70,18 @@ TEST_F(ObRandomAffiTaskSplitTest, split_task_test) {
     int64_t parallel = 16;
     int64_t tenant_id = 1;
     ObPxTabletInfo px_part_info;
-    ObPxAffinityByRandom affinitize_rule;
+    ObPxAffinityByRandom affinitize_rule(true);
 
     px_part_info.physical_row_count_ = 3000;
-    affinitize_rule.add_partition(0,0,parallel,px_part_info);
+    affinitize_rule.add_partition(0,0,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 1000;
-    affinitize_rule.add_partition(1,1,parallel,px_part_info);
+    affinitize_rule.add_partition(1,1,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 2500;
-    affinitize_rule.add_partition(2,2,parallel,px_part_info);
+    affinitize_rule.add_partition(2,2,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 3500;
-    affinitize_rule.add_partition(3,3,parallel,px_part_info);
+    affinitize_rule.add_partition(3,3,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 2000;
-    affinitize_rule.add_partition(4,4,parallel,px_part_info);
+    affinitize_rule.add_partition(4,4,parallel,tenant_id,px_part_info);
 
     affinitize_rule.do_random(true, tenant_id);
 
@@ -100,18 +100,18 @@ TEST_F(ObRandomAffiTaskSplitTest, split_task_test) {
     int64_t parallel = 3;
     int64_t tenant_id = 1;
     ObPxTabletInfo px_part_info;
-    ObPxAffinityByRandom affinitize_rule;
+    ObPxAffinityByRandom affinitize_rule(true);
 
     px_part_info.physical_row_count_ = 3000;
-    affinitize_rule.add_partition(0,0,parallel,px_part_info);
+    affinitize_rule.add_partition(0,0,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 4000;
-    affinitize_rule.add_partition(1,1,parallel,px_part_info);
+    affinitize_rule.add_partition(1,1,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 2500;
-    affinitize_rule.add_partition(2,2,parallel,px_part_info);
+    affinitize_rule.add_partition(2,2,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 1500;
-    affinitize_rule.add_partition(3,3,parallel,px_part_info);
+    affinitize_rule.add_partition(3,3,parallel,tenant_id,px_part_info);
     px_part_info.physical_row_count_ = 2000;
-    affinitize_rule.add_partition(4,4,parallel,px_part_info);
+    affinitize_rule.add_partition(4,4,parallel,tenant_id,px_part_info);
 
     affinitize_rule.do_random(true, tenant_id);
 

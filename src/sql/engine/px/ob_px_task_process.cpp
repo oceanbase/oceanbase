@@ -163,7 +163,6 @@ int ObPxTaskProcess::process()
     arg_.exec_ctx_->set_sqc_handler(arg_.sqc_handler_);
     arg_.exec_ctx_->set_px_task_id(arg_.task_.get_task_id());
     arg_.exec_ctx_->set_px_sqc_id(arg_.task_.get_sqc_id());
-
     ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
 
@@ -268,7 +267,7 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
       need_fill_batch_info = true;
     }
     LOG_TRACE("trace run op spec root", K(&ctx), K(ctx.get_frames()),
-              K(batch_count), K(need_fill_batch_info));
+              K(batch_count), K(need_fill_batch_info), K(root_spec.get_id()), K(&(root->get_exec_ctx())));
     CK(IS_PX_TRANSMIT(root_spec.get_type()));
     for (int i = 0; i < batch_count && OB_SUCC(ret); ++i) {
       if (need_fill_batch_info) {
