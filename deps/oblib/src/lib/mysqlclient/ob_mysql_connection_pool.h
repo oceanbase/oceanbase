@@ -227,6 +227,8 @@ protected:
   ObMySQLServerProvider *server_provider_;
   volatile int64_t busy_conn_count_;
 
+  // user name or password or db maybe modify, add user_info_lock_ to protect user info
+  mutable obsys::ObRWLock user_info_lock_;
   char db_user_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_pass_[OB_MAX_PASSWORD_BUF_LENGTH];
   char db_name_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
