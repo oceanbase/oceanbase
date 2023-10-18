@@ -11721,6 +11721,26 @@ int ObPLResolver::resolve_udf_info(
         resolve_ctx_.session_info_.get_effective_tenant_id(), routine_info->get_database_id(), database_schema));
       CK (OB_NOT_NULL(database_schema));
       OX (db_name = database_schema->get_database_name_str());
+      if (OB_SUCC(ret) && routine_info->get_package_id() != OB_INVALID_ID) {
+        if (routine_info->is_udt_routine()) {
+          const share::schema::ObUDTTypeInfo *udt_info = NULL;
+          OZ (resolve_ctx_.schema_guard_.get_udt_info(
+            routine_info->get_tenant_id(), routine_info->get_package_id(), udt_info));
+          CK (OB_NOT_NULL(udt_info));
+          OX (package_name = udt_info->get_type_name());
+        } else {
+          const share::schema::ObPackageInfo *package_info = NULL;
+          OZ (resolve_ctx_.schema_guard_.get_package_info(
+            routine_info->get_tenant_id(), routine_info->get_package_id(), package_info));
+          CK (OB_NOT_NULL(package_info));
+          OX (package_name = package_info->get_package_name());
+        }
+      }
+      if (OB_SUCC(ret) &&
+          OB_NOT_NULL(udf_info.ref_expr_) &&
+          udf_info.ref_expr_->get_func_name().case_compare(routine_info->get_routine_name()) != 0) {
+        OX (udf_info.ref_expr_->set_func_name(routine_info->get_routine_name()));
+      }
     }
   }
 
