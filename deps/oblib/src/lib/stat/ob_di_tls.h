@@ -40,12 +40,14 @@ private:
 private:
   pthread_key_t key_;
   static __thread T *instance_;
-  static __thread bool in_create_;
+  static __thread bool disable_;
 };
 // NOTE: thread local diagnose information
 // TODO: check if multi-query execute within one thread.
-template <class T> __thread T *ObDITls<T>::instance_ = NULL;
-template <class T> __thread bool ObDITls<T>::in_create_ = false;
+template <class T>
+__thread T *ObDITls<T>::instance_ = NULL;
+template <class T>
+__thread bool ObDITls<T>::disable_ = false;
 
 template <class T>
 void ObDITls<T>::destroy_thread_data_(void* ptr)
@@ -54,7 +56,7 @@ void ObDITls<T>::destroy_thread_data_(void* ptr)
     T* tls = (T*)ptr;
     delete tls;
     instance_ = NULL;
-    in_create_ = false;
+    disable_ = true;
   }
 }
 
@@ -102,10 +104,10 @@ template <class T>
 T* ObDITls<T>::get_instance()
 {
   if (OB_UNLIKELY(NULL == instance_)) {
-    if (OB_LIKELY(!in_create_)) {
-      in_create_ = true;
+    if (OB_LIKELY(!disable_)) {
+      disable_ = true;
       instance_ = get_di_tls().new_instance();
-      in_create_ = false;
+      disable_ = false;
     }
   }
   return instance_;
