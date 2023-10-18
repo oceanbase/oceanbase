@@ -159,6 +159,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "auto_increment_increment",
   "auto_increment_offset",
   "autocommit",
+  "automatic_sp_privileges",
   "binlog_checksum",
   "binlog_format",
   "binlog_row_image",
@@ -291,6 +292,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "plsql_ccflags",
   "plsql_warnings",
   "plugin_dir",
+  "privilege_features_enable",
   "protocol_version",
   "query_cache_limit",
   "query_cache_min_res_unit",
@@ -397,6 +399,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_AUTO_INCREMENT_INCREMENT,
   SYS_VAR_AUTO_INCREMENT_OFFSET,
   SYS_VAR_AUTOCOMMIT,
+  SYS_VAR_AUTOMATIC_SP_PRIVILEGES,
   SYS_VAR_BINLOG_CHECKSUM,
   SYS_VAR_BINLOG_FORMAT,
   SYS_VAR_BINLOG_ROW_IMAGE,
@@ -529,6 +532,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PLSQL_CCFLAGS,
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
+  SYS_VAR_PRIVILEGE_FEATURES_ENABLE,
   SYS_VAR_PROTOCOL_VERSION,
   SYS_VAR_QUERY_CACHE_LIMIT,
   SYS_VAR_QUERY_CACHE_MIN_RES_UNIT,
@@ -833,7 +837,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "runtime_bloom_filter_max_size",
   "optimizer_features_enable",
   "_ob_proxy_weakread_feedback",
-  "ncharacter_set_connection"
+  "ncharacter_set_connection",
+  "automatic_sp_privileges",
+  "privilege_features_enable"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1237,6 +1243,8 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarOptimizerFeaturesEnable)
         + sizeof(ObSysVarObProxyWeakreadFeedback)
         + sizeof(ObSysVarNcharacterSetConnection)
+        + sizeof(ObSysVarAutomaticSpPrivileges)
+        + sizeof(ObSysVarPrivilegeFeaturesEnable)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3358,6 +3366,24 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_NCHARACTER_SET_CONNECTION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarNcharacterSetConnection));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutomaticSpPrivileges())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAutomaticSpPrivileges", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AUTOMATIC_SP_PRIVILEGES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarAutomaticSpPrivileges));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPrivilegeFeaturesEnable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPrivilegeFeaturesEnable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PRIVILEGE_FEATURES_ENABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPrivilegeFeaturesEnable));
       }
     }
 
@@ -5952,6 +5978,28 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarNcharacterSetConnection())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarNcharacterSetConnection", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AUTOMATIC_SP_PRIVILEGES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarAutomaticSpPrivileges)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarAutomaticSpPrivileges)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAutomaticSpPrivileges())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAutomaticSpPrivileges", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PRIVILEGE_FEATURES_ENABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPrivilegeFeaturesEnable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPrivilegeFeaturesEnable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPrivilegeFeaturesEnable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPrivilegeFeaturesEnable", K(ret));
       }
       break;
     }

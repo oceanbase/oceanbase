@@ -6303,6 +6303,8 @@ def_table_schema(
 # 487 : __wr_system_event
 # 488 : __wr_event_name
 # 489 : __all_tenant_scheduler_running_job
+# 490 : __all_routine_privilege
+# 491 : __all_routine_privilege_history
 #
 # 余留位置
 ################################################################################
@@ -29971,6 +29973,7 @@ def_table_schema(
 #21483 DBA_WR_EVENT_NAME
 #21484 CDB_WR_EVENT_NAME
 #21485 DBA_OB_FORMAT_OUTLINES
+#21486 mysql.procs_priv
 
 # 余留位置
 

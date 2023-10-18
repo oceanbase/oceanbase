@@ -3307,7 +3307,7 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[234].default_value_ = "0" ;
-      ObSysVars[234].info_ = "The national character set which should be translated to after receiving the statement" ;
+      ObSysVars[234].info_ = "The national character set which should be translated to response nstring data" ;
       ObSysVars[234].name_ = "ncharacter_set_connection" ;
       ObSysVars[234].data_type_ = ObIntType ;
       ObSysVars[234].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_charset" ;
@@ -3323,13 +3323,39 @@ static struct VarsInit{
     ObSysVars[234].alias_ = "OB_SV_NCHARACTER_SET_CONNECTION" ;
     }();
 
+    [&] (){
+      ObSysVars[235].default_value_ = "1" ;
+      ObSysVars[235].info_ = "the server automatically grants the EXECUTE and ALTER ROUTINE privileges to the creator of a stored routine" ;
+      ObSysVars[235].name_ = "automatic_sp_privileges" ;
+      ObSysVars[235].data_type_ = ObIntType ;
+      ObSysVars[235].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[235].id_ = SYS_VAR_AUTOMATIC_SP_PRIVILEGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTOMATIC_SP_PRIVILEGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AUTOMATIC_SP_PRIVILEGES] = 235 ;
+      ObSysVars[235].base_value_ = "1" ;
+    ObSysVars[235].alias_ = "OB_SV_AUTOMATIC_SP_PRIVILEGES" ;
+    }();
+
+    [&] (){
+      ObSysVars[236].default_value_ = "" ;
+      ObSysVars[236].info_ = "enabling a series of privilege features based on an OceanBase release number" ;
+      ObSysVars[236].name_ = "privilege_features_enable" ;
+      ObSysVars[236].data_type_ = ObVarcharType ;
+      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[236].id_ = SYS_VAR_PRIVILEGE_FEATURES_ENABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PRIVILEGE_FEATURES_ENABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PRIVILEGE_FEATURES_ENABLE] = 236 ;
+      ObSysVars[236].base_value_ = "" ;
+    ObSysVars[236].alias_ = "OB_SV_PRIVILEGE_FEATURES_ENABLE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 235;
+static int64_t var_amount = 237;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
