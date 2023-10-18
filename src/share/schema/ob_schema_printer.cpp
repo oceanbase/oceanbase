@@ -4300,7 +4300,7 @@ int ObSchemaPrinter::print_routine_definition_v2_mysql(
     OZ (databuff_printf(buf, buf_len, pos, "%s",
         routine_info.is_deterministic() ? "\n    DETERMINISTIC" : ""));
     OZ (databuff_printf(buf, buf_len, pos, "%s",
-        routine_info.is_invoker_right() ? "\n    INVOKER" : ""));
+        routine_info.is_invoker_right() ? "\n    SQL SECURITY INVOKER" : ""));
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info.get_comment())) {
       OZ (databuff_printf(buf, buf_len, pos, "\n    COMMENT '%.*s'",
           routine_info.get_comment().length(),
