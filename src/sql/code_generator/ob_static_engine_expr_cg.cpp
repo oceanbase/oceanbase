@@ -276,6 +276,11 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
           rt_expr->obj_meta_.set_has_lob_header();
         }
       }
+      // For bit type, `length_semantics_` is used as width in datum mate, and `scale_` is used
+      // as width in obj, so passing length meta to scale in obj_mate.
+      if (ob_is_bit_tc(result_meta.get_type())) {
+        rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.length_semantics_);
+      }
       // init max_length_
       rt_expr->max_length_ = raw_expr->get_result_type().get_length();
       // init obj_datum_map_
