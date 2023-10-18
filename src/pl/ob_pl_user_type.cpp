@@ -1797,6 +1797,19 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
           }
         }
       }
+      // 对于已经copy成功的new obj释放内存
+      if (OB_FAIL(ret) && OB_NOT_NULL(data)) {
+        for (int64_t j = 0; j <= k && j < src->get_count(); ++j) {
+          int tmp = ObUserDefinedType::destruct_obj(new_objs[j]);
+          if (OB_SUCCESS != tmp) {
+            LOG_WARN("fail torelease memory", K(ret), K(tmp));
+          }
+          new_objs[j].set_type(ObMaxType);
+        }
+        if (NULL == allocator) {
+          coll_allocator->reset();
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       set_allocator(coll_allocator);
