@@ -1559,7 +1559,7 @@ protected:
       }
     }
     SQL_LOG(DEBUG, "finish get_arith_operand", KPC(expr.args_[0]), KPC(expr.args_[1]),
-            K(result), K(is_finish));
+            K(is_finish));
     return ret;
   }
 
