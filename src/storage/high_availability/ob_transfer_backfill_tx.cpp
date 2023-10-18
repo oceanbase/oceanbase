@@ -324,6 +324,18 @@ int ObTransferWorkerMgr::process()
   int ret = OB_SUCCESS;
   bool is_exist = false;
   ObTransferBackfillTXParam param;
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_CHECK_TRANSFER_TASK_EXSIT) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_CHECK_TRANSFER_TASK_EXSIT", K(ret));
+        is_exist = true;
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer work not init", K(ret));
@@ -362,18 +374,6 @@ int ObTransferWorkerMgr::check_task_exist_(
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(scheduler->check_dag_net_exist(task_id, is_exist))) {
     LOG_WARN("failed to check dag net exist", K(ret), K(task_id));
-  } else {
-#ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_CHECK_TRANSFER_TASK_EXSIT) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_CHECK_TRANSFER_TASK_EXSIT", K(ret));
-        is_exist = true;
-        ret = OB_SUCCESS;
-      }
-    }
-#endif
-
   }
   return ret;
 }
