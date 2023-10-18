@@ -34,7 +34,7 @@
   } while(0);
 #endif
 
-#ifndef NDEBUG
+#ifdef NDEBUG
 #ifndef SET_LOG_CHECK_MODE
 #define SET_LOG_CHECK_MODE()                        \
   bool set_check_mode = false;                      \
