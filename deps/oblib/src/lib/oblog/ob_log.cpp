@@ -1407,7 +1407,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     for (int i = 0; i < ARRAYSIZEOF(per_log_limiters_); i++) {
       new (&per_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
     }
-    const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 2; // 512M
+    const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8; // 256M
     log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
     allocator_ = new (log_mem_limiter_ + 1) ObVSliceAlloc();
     error_allocator_ = new (allocator_ + 1) ObFIFOAllocator(OB_SERVER_TENANT_ID, false);
@@ -1647,7 +1647,8 @@ int ObLogger::check_tl_log_limiter(const uint64_t location_hash_val,
                                    const int32_t level,
                                    const int errcode,
                                    const int64_t log_size,
-                                   bool &allow)
+                                   bool &allow,
+                                   const char *&limiter_info)
 {
   int ret = OB_SUCCESS;
   allow = true;
@@ -1656,13 +1657,15 @@ int ObLogger::check_tl_log_limiter(const uint64_t location_hash_val,
     if (enable_log_limit_) {
       if (nullptr != log_limiter) {
         allow = OB_SUCCESS == log_limiter->try_acquire(log_size, level, errcode);
+        if (!allow) { limiter_info = " REACH SYSLOG RATE LIMIT [bandwidth]"; }
       }
       if (allow) {
         int64_t idx0 = (location_hash_val >> 32) % N_LIMITER;
         int64_t idx1 = ((location_hash_val << 32) >> 32) % N_LIMITER;
         bool r0 = OB_SUCCESS == per_log_limiters_[idx0].try_acquire(1, level, errcode);
         bool r1 = OB_SUCCESS == per_log_limiters_[idx1].try_acquire(1, level, errcode);
-        allow = r0 || r1;
+        allow = r0 && r1;
+        if (!allow) { limiter_info = " REACH SYSLOG RATE LIMIT [frequency]"; }
       }
       if (!allow && nullptr != log_limiter && log_limiter->is_force_allows()) {
         allow = true;
@@ -1725,6 +1728,7 @@ int ObLogger::async_audit_dump(const common::ObBasebLogPrint &info)
     //1. fill log buffer
     if (OB_FAIL(alloc_log_item(level, MAX_LOG_SIZE, log_item))) {
       LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
+      ret = OB_SUCCESS; // ignore alloc memory fails
     } else if (OB_ISNULL(log_item)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
