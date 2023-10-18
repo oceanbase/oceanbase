@@ -1739,7 +1739,7 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   const MonotonicTs now0 = get_req_receive_mts_();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
   int retry_times = 0;
-  const int MAX_RETRY_TIMES = 100;
+  const int MAX_RETRY_TIMES = 2000; // 2000 * 500us = 1s
   do {
     int64_t n = ObClockGenerator::getClock();
     MonotonicTs rts(0);
