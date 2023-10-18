@@ -700,7 +700,7 @@ int ObExprDiv::div_number(
           //          const int64_t new_scale2 = ROUND_UP(scale2);
           //          const int64_t calc_scale = ROUND_UP(new_scale1 + new_scale2 + div_pi);
           const int64_t calc_scale = expr.div_calc_scale_;
-          if (calc_scale > 0) {
+          if (calc_scale >= 0) {
             if (T_OP_AGG_DIV == expr.type_) {
               if (OB_FAIL(result_num.round(expr.datum_meta_.scale_))) {
                 LOG_WARN("failed to round result number", K(ret), K(result_num), K(calc_scale));
