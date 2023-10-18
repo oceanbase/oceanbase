@@ -274,6 +274,9 @@ int ObTTLUtil::update_ttl_task(uint64_t tenant_id,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affect_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql));
+    if (ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT) {
+      FLOG_INFO("fail to execute sql, this task/rowkey is locked by other thread, pls try again", K(ret), K(sql));
+    }
   } else if (affect_rows != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("execute sql, affect rows != 1", K(ret), K(sql));
