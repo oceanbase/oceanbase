@@ -161,6 +161,9 @@ public:
   int recover_tx_for_dblink_callback(ObTxDesc *&tx_desc);
   int revert_tx_for_dblink_callback(ObTxDesc *&tx_desc);
   bool has_tx_level_temp_table() { return has_tx_level_temp_table_; }
+  int start_check_stmt_lock(const ObXATransID &xid);
+  int stop_check_stmt_lock(const ObXATransID &xid);
+  OB_INLINE bool is_executing() const { return is_executing_; }
   
   TO_STRING_KV(K_(is_inited), K_(xid), K_(original_sche_addr), K_(is_exiting),
                K_(trans_id), K_(is_executing), K_(is_xa_end_trans), K_(tenant_id), 
@@ -168,7 +171,7 @@ public:
                K_(xa_branch_count), K_(xa_ref_count), K_(lock_grant),
                K_(is_tightly_coupled), K_(lock_xid), K_(xa_stmt_info),
                K_(is_terminated), K_(executing_xid), "uref", get_uref(),
-               K_(has_tx_level_temp_table), K_(local_lock_level));
+               K_(has_tx_level_temp_table), K_(local_lock_level), K_(need_stmt_lock));
 private:
   int register_timeout_task_(const int64_t interval_us);
   int unregister_timeout_task_();
@@ -327,6 +330,7 @@ private:
   //    4.1 if local_lock_level > 0, decrease the local_lock_level
   //    4.2 if local_lock_level == 0, execute the normal global lock release processing
   int64_t local_lock_level_;
+  bool need_stmt_lock_;
 };
 
 }//transaction
