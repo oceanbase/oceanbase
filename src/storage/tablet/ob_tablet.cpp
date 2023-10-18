@@ -3518,7 +3518,9 @@ int ObTablet::rebuild_memtables(const share::SCN scn)
       table_store_addr_.addr_.inc_seq();
       if (table_store_addr_.is_memory_object()) {
         ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-        if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+        if (OB_FAIL(table_store_addr_.get_ptr()->clear_memtables())) {
+          LOG_WARN("fail to clear memtables", K(ret));
+        } else if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
           LOG_WARN("inner get memtables fail", K(ret), K(*this));
         } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
           LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
