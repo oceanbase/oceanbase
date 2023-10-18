@@ -512,7 +512,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
     LOG_DEBUG("finish get next row", KR(ret), K(cur_del_rows_), K(limit_del_rows_));
   } else {
     bool is_expired = false;
-    while(OB_SUCC(ret) && !is_expired && OB_SUCC(ObTableApiScanRowIterator::get_next_row(row))) {
+    while(OB_SUCC(ret) && !is_expired && OB_SUCC(ObTableApiScanRowIterator::get_next_row(row, false/*need_deep_copy*/))) {
       last_row_ = row;
       // NOTE: For hbase table, the row expired if and only if
       // 1. The row's version exceed maxversion
