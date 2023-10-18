@@ -675,6 +675,7 @@ int ObTenantCheckpointSlogHandler::record_ls_transfer_info(
   bool is_need = false;
   ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ObLSRestoreStatus ls_restore_status(ObLSRestoreStatus::LS_RESTORE_STATUS_MAX);
   if (!ls_handle.is_valid() || !tablet_transfer_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_handle), K(tablet_transfer_info));
@@ -688,6 +689,10 @@ int ObTenantCheckpointSlogHandler::record_ls_transfer_info(
         K(current_migration_status), K(new_migration_status));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != new_migration_status) {
     LOG_INFO("The log stream does not need to record transfer_info", "ls_id", ls->get_ls_id(), K(current_migration_status), K(new_migration_status));
+  } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
+    LOG_WARN("failed to get ls restore status", K(ret), KPC(ls));
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore()) {
+    LOG_INFO("the log stream in restore and before quick restore, no need to record transfer info", "ls_id", ls->get_ls_id(), K(ls_restore_status));
   } else if (!tablet_transfer_info.has_transfer_table()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should have transfer table", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id), K(tablet_transfer_info));

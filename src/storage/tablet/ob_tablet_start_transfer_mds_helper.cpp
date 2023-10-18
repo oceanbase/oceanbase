@@ -422,6 +422,17 @@ int ObTabletStartTransferOutHelper::on_replay(
   } else if (!tx_start_transfer_out_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer out info is unexpected", K(ret), K(tx_start_transfer_out_info));
+  } else {
+#ifdef ERRSIM
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      const bool block_transfer_out_replay = tenant_config->block_transfer_out_replay;
+      if (block_transfer_out_replay) {
+        ret = OB_EAGAIN;
+        LOG_WARN("errsim block transfer out replay", K(ret));
+      }
+    }
+#endif
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "BEFORE_ON_REDO_START_TRANSFER_OUT",

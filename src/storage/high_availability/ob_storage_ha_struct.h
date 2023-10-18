@@ -105,12 +105,23 @@ private:
   static int check_transfer_dest_ls_status_for_ls_gc(
       const share::ObLSID &transfer_ls_id,
       const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
+      const bool need_wait_dest_ls_replay,
       bool &allow_gc);
-  static int check_transfer_dest_tablet_for_ls_gc(ObLS *ls, const ObTabletID &tablet_id, bool &allow_gc);
+  static int check_transfer_dest_tablet_for_ls_gc(
+      ObLS *ls,
+      const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
+      const bool need_wait_dest_ls_replay,
+      bool &allow_gc);
   static bool check_migration_status_is_fail_(const ObMigrationStatus &cur_status);
   static int set_ls_migrate_gc_status_(
       ObLS &ls,
       const ObMigrationStatus &migration_status);
+  static int check_ls_with_transfer_task_(
+      ObLS &ls,
+      bool &need_check_allow_gc,
+      bool &need_wait_dest_ls_replay);
 };
 
 enum ObMigrationOpPriority
