@@ -9406,7 +9406,7 @@ int ObBroadcastConsensusVersionArg::assign(const ObBroadcastConsensusVersionArg 
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_);
+OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_, err_code_);
 ObTTLResponseArg::ObTTLResponseArg()
     : tenant_id_(0),
       task_id_(OB_INVALID_ID),
