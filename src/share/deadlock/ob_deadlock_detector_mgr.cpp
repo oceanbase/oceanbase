@@ -319,7 +319,7 @@ int ObDeadLockDetectorMgr::unregister_key_(const UserBinaryKey &key)
     if (OB_FAIL(detector_map_.del(key))) {
       DETECT_LOG(WARN, "detector_map_ erase node failed", PRINT_WRAPPER);
     } else {
-      DETECT_LOG(INFO, "unregister key success", PRINT_WRAPPER);
+      DETECT_LOG(TRACE, "unregister key success", PRINT_WRAPPER);
     }
   }
   return ret;

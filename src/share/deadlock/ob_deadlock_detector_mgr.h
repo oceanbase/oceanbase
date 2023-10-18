@@ -280,7 +280,7 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
       detector_map_.revert(p_detector);
     } else {
       detector_map_.revert(p_detector);
-      DETECT_LOG(INFO, "register key success", PRINT_WRAPPER);
+      DETECT_LOG(TRACE, "register key success", PRINT_WRAPPER);
     }
   } else {
     DETECT_LOG(ERROR, "get key error, couldn't handle", PRINT_WRAPPER);
