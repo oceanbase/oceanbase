@@ -61,6 +61,7 @@ ObDirectLoadMultipleHeapTableCompactor::ObDirectLoadMultipleHeapTableCompactor()
     index_entry_count_(0),
     row_count_(0),
     max_data_block_size_(0),
+    is_stop_(false),
     is_inited_(false)
 {
 }
@@ -242,7 +243,10 @@ int ObDirectLoadMultipleHeapTableCompactor::compact()
       LOG_WARN("fail to init scan merge", KR(ret));
     }
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(scan_merge.get_next_index(idx, tablet_index))) {
+      if (OB_UNLIKELY(is_stop_)) {
+        ret = OB_CANCELED;
+        LOG_WARN("compact canceled", KR(ret));
+      } else if (OB_FAIL(scan_merge.get_next_index(idx, tablet_index))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next index", KR(ret));
         } else {
@@ -338,6 +342,7 @@ int ObDirectLoadMultipleHeapTableCompactor::get_table(ObIDirectLoadPartitionTabl
 
 void ObDirectLoadMultipleHeapTableCompactor::stop()
 {
+  is_stop_ = true;
 }
 
 } // namespace storage

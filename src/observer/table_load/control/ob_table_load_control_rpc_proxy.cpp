@@ -38,6 +38,7 @@ int ObTableLoadControlRpcProxy::dispatch(const ObDirectLoadControlRequest &reque
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::COMMIT);
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::ABORT);
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::GET_STATUS);
+    OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::HEART_BEAT);
     /// trans
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::PRE_START_TRANS);
     OB_TABLE_LOAD_CONTROL_RPC_DISPATCH(ObDirectLoadControlCommandType::CONFIRM_START_TRANS);

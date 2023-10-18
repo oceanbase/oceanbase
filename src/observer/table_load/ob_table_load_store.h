@@ -35,7 +35,7 @@ public:
     ObTableLoadTableCtx *ctx,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
-  static void abort_ctx(ObTableLoadTableCtx *ctx);
+  static void abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped);
   int init();
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
@@ -48,6 +48,7 @@ public:
   int start_merge();
   int commit(table::ObTableLoadResultInfo &result_info);
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
+  int heart_beat();
 private:
   int commit_sql_statistics(const table::ObTableLoadSqlStatistics &sql_statistics);
 private:
