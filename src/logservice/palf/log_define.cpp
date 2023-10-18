@@ -141,7 +141,7 @@ int GetBlockCountFunctor::func(const dirent *entry)
 		// restart will be failed, the solution is that read block.
     if (false == is_number(entry_name) && false == is_flashback_block(entry_name)) {
 			ret = OB_ERR_UNEXPECTED;
-			PALF_LOG(WARN, "this is block is not used for palf!!!", K(ret), K(entry_name));
+			LOG_DBA_ERROR(OB_ERR_UNEXPECTED, "Attention!!!", "This file is not used for palf", K(entry_name));
       // do nothing, skip invalid block like tmp
     } else {
 			count_ ++;
