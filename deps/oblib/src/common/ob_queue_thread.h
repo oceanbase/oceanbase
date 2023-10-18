@@ -57,7 +57,7 @@ class S2MQueueThread
 {
   struct ThreadConf
   {
-    pthread_t pd;
+    void *pd;
     uint64_t index;
     volatile bool run_flag;
     volatile bool stop_flag;
@@ -70,7 +70,7 @@ class S2MQueueThread
     ObFixedQueue<void> low_prio_task_queue;
     ObPriorityScheduler scheduler_;
     S2MQueueThread *host;
-    ThreadConf() : pd(0),
+    ThreadConf() : pd(nullptr),
                index(0),
                run_flag(true),
                stop_flag(false),
@@ -161,7 +161,7 @@ private:
   static void *thread_func_(void *data);
 private:
   bool inited_;
-  pthread_t pd_;
+  void *pd_;
   volatile bool run_flag_;
   M2SCond queue_cond_;
   ObFixedQueue<void> task_queue_;

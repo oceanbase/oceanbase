@@ -23,11 +23,13 @@
 extern int64_t global_thread_stack_size;
 namespace oceanbase {
 namespace lib {
+class ObPThread;
 
 class IRunWrapper;
 class Threads
 {
 public:
+  friend class ObPThread;
   explicit Threads(int64_t n_threads = 1)
       : n_threads_(n_threads),
         init_threads_(n_threads),
@@ -139,6 +141,7 @@ public:
   {
     start_routine_(arg_);
   }
+  int try_wait();
 private:
   void *(*start_routine_)(void *);
   void *arg_;

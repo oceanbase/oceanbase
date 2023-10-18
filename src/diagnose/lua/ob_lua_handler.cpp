@@ -113,52 +113,10 @@ int ObLuaHandler::process(const char* lua_code)
   return OB_SUCCESS;
 }
 
-ObUnixDomainListener::~ObUnixDomainListener()
-{
-  destroy();
-}
-
-void ObUnixDomainListener::stop()
-{
-  if (IS_INIT) {
-    ATOMIC_STORE(&stop_, true);
-  }
-}
-
-void ObUnixDomainListener::wait()
-{
-  if (IS_INIT && ATOMIC_LOAD(&running_)) {
-    worker_.join();
-    ATOMIC_STORE(&running_, false);
-  }
-}
-
-void ObUnixDomainListener::destroy()
-{
-  if (IS_INIT) {
-    is_inited_ = false;
-  }
-}
-
-int ObUnixDomainListener::init()
+void ObUnixDomainListener::run1()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    OB_LOG(ERROR, "ObUnixDomainListener init twice");
-  } else {
-    is_inited_ = true;
-    OB_LOG(INFO, "ObUnixDomainListener init");
-  }
-  return ret;
-}
-
-int ObUnixDomainListener::run()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if ((listen_fd_ = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0) {
+  if ((listen_fd_ = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0)) < 0) {
     OB_LOG(ERROR, "ObUnixDomainListener socket init failed", K(errno));
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -183,78 +141,72 @@ int ObUnixDomainListener::run()
       OB_LOG(ERROR, "ObUnixDomainListener add listen to epoll failed", K(errno));
       ret = OB_ERR_UNEXPECTED;
     } else {
-      ATOMIC_STORE(&running_, true);
-      worker_ = std::thread([=]() {
-        lib::set_thread_name("LuaHandler");
-        lib::ObStackHeaderGuard stack_header_guard;
-        constexpr int64_t EPOLL_EVENT_BUFFER_SIZE = 32;
-        constexpr int64_t TIMEOUT = 1000;
-        struct epoll_event events[EPOLL_EVENT_BUFFER_SIZE];
-        struct epoll_event conn_ev;
-        char *code_buffer = (char *)diagnose::alloc(CODE_BUFFER_SIZE);
-        while (OB_LIKELY(!ATOMIC_LOAD(&stop_))) {
-          int conn_fd = -1;
-          int ret = OB_SUCCESS;
-          lib::Thread::update_loop_ts();
-          int64_t event_cnt = ob_epoll_wait(epoll_fd, events, EPOLL_EVENT_BUFFER_SIZE, TIMEOUT);
-          if (event_cnt < 0) {
-            if (EINTR == errno) {
-              // timeout, ignore
-            } else {
-              OB_LOG(ERROR, "ObUnixDomainListener epoll wait failed", K(epoll_fd), K(errno));
-            }
-          }
-          for (int64_t i = 0; i < event_cnt; ++i) {
-            if (events[i].data.fd == listen_fd_) {
-              if ((conn_fd = accept(listen_fd_, NULL, NULL)) < 0) {
-                if (EAGAIN != errno) {
-                  ret = OB_ERR_UNEXPECTED;
-                  OB_LOG(ERROR, "ObUnixDomainListener accept failed", K(listen_fd_), K(errno));
-                }
-              } else {    
-                conn_ev.events = EPOLLIN;    
-                conn_ev.data.fd = conn_fd;
-                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_fd, &conn_ev) < 0) {
-                  OB_LOG(ERROR, "ObUnixDomainListener add event to epoll failed", K(epoll_fd), K(conn_fd), K(errno));
-                }
-              }
-            } else if (events[i].events & EPOLLIN) {
-              int rbytes = 0;
-              char *buffer = code_buffer;
-              int64_t size = CODE_BUFFER_SIZE;
-              memset(code_buffer, 0, CODE_BUFFER_SIZE);
-              while ((rbytes = read(events[i].data.fd, buffer, size)) > 0) {
-                buffer += rbytes;
-                size -= rbytes;
-              }
-              if (rbytes < 0) {
-                OB_LOG(ERROR, "ObUnixDomainListener read from socket failed", K(errno));
-              } else if (FALSE_IT(APIRegister::get_instance().set_fd(events[i].data.fd))) {
-                // do nothing
-              } else if (OB_FAIL(ObLuaHandler::get_instance().process(code_buffer))) {
-                OB_LOG(ERROR, "ObUnixDomainListener process failed", K(ret));
-              } else if (OB_FAIL(APIRegister::get_instance().flush())) {
-                OB_LOG(ERROR, "ObUnixDomainListener flush failed", K(ret));
-              } else {
-                // do nothing
-              }
-              if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, nullptr) < 0) {
-                OB_LOG(ERROR, "ObUnixDomainListener del failed", K(errno));
-              }
-              close(events[i].data.fd);
-              APIRegister::get_instance().set_fd(-1);
-            } else {
-              OB_LOG(ERROR, "unexpected type");
-            }
+      lib::set_thread_name("LuaHandler");
+      constexpr int64_t EPOLL_EVENT_BUFFER_SIZE = 32;
+      constexpr int64_t TIMEOUT = 1000;
+      struct epoll_event events[EPOLL_EVENT_BUFFER_SIZE];
+      struct epoll_event conn_ev;
+      char *code_buffer = (char *)diagnose::alloc(CODE_BUFFER_SIZE);
+      while (OB_LIKELY(!has_set_stop())) {
+        int conn_fd = -1;
+        int ret = OB_SUCCESS;
+        int64_t event_cnt = ob_epoll_wait(epoll_fd, events, EPOLL_EVENT_BUFFER_SIZE, TIMEOUT);
+        if (event_cnt < 0) {
+          if (EINTR == errno) {
+            // timeout, ignore
+          } else {
+            OB_LOG(ERROR, "ObUnixDomainListener epoll wait failed", K(epoll_fd), K(errno));
           }
         }
-        diagnose::free(code_buffer);
-        close(listen_fd_);
-        listen_fd_ = -1;
-        close(epoll_fd);
-      });
+        for (int64_t i = 0; i < event_cnt; ++i) {
+          if (events[i].data.fd == listen_fd_) {
+            if ((conn_fd = accept(listen_fd_, NULL, NULL)) < 0) {
+              if (EAGAIN != errno) {
+                ret = OB_ERR_UNEXPECTED;
+                OB_LOG(ERROR, "ObUnixDomainListener accept failed", K(listen_fd_), K(errno));
+              }
+            } else {
+              conn_ev.events = EPOLLIN;
+              conn_ev.data.fd = conn_fd;
+              if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_fd, &conn_ev) < 0) {
+                OB_LOG(ERROR, "ObUnixDomainListener add event to epoll failed", K(epoll_fd), K(conn_fd), K(errno));
+              }
+            }
+          } else if (events[i].events & EPOLLIN) {
+            int rbytes = 0;
+            char *buffer = code_buffer;
+            int64_t size = CODE_BUFFER_SIZE;
+            memset(code_buffer, 0, CODE_BUFFER_SIZE);
+            while ((rbytes = read(events[i].data.fd, buffer, size)) > 0) {
+              buffer += rbytes;
+              size -= rbytes;
+            }
+            if (rbytes < 0) {
+              OB_LOG(ERROR, "ObUnixDomainListener read from socket failed", K(errno));
+            } else if (FALSE_IT(APIRegister::get_instance().set_fd(events[i].data.fd))) {
+              // do nothing
+            } else if (OB_FAIL(ObLuaHandler::get_instance().process(code_buffer))) {
+              OB_LOG(ERROR, "ObUnixDomainListener process failed", K(ret));
+            } else if (OB_FAIL(APIRegister::get_instance().flush())) {
+              OB_LOG(ERROR, "ObUnixDomainListener flush failed", K(ret));
+            } else {
+              // do nothing
+            }
+            if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, nullptr) < 0) {
+              OB_LOG(ERROR, "ObUnixDomainListener del failed", K(errno));
+            }
+            close(events[i].data.fd);
+            APIRegister::get_instance().set_fd(-1);
+          } else {
+            OB_LOG(ERROR, "unexpected type");
+          }
+        }
+      }
+      diagnose::free(code_buffer);
+      close(listen_fd_);
+      listen_fd_ = -1;
+      close(epoll_fd);
       OB_LOG(INFO, "ObUnixDomainListener running");
     }
   }
-  return ret;
 }

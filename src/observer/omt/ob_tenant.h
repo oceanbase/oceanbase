@@ -539,7 +539,8 @@ protected:
   // workers can make progress.
   volatile bool shrink_ CACHE_ALIGNED;
   int64_t total_worker_cnt_;
-  pthread_t gc_thread_;
+  void *gc_thread_;
+  bool has_created_;
   int64_t stopped_;
   bool wait_mtl_finished_;
 

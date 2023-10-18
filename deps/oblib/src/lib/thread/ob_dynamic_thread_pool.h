@@ -27,7 +27,7 @@ class ObDynamicThreadPool;
 struct ObDynamicThreadInfo
 {
   ObDynamicThreadInfo();
-  pthread_t tid_;
+  void *tid_;
   int64_t idx_;
   ObDynamicThreadPool *pool_;
   bool is_stop_;
