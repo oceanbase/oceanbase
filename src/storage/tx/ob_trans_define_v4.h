@@ -713,7 +713,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
-  void mark_part_abort(const int abort_cause);
+  void mark_part_abort(const ObTransID tx_id, const int abort_cause);
   ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
