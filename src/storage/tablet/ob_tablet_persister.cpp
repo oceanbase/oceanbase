@@ -127,20 +127,32 @@ int ObTabletPersister::persist_and_transform_tablet(
   if (OB_NOT_NULL(old_tablet.allocator_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("this isn't supported for the tablet from allocator", K(ret), K(old_tablet));
+  } else if (OB_UNLIKELY(!old_tablet.hold_ref_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old tablet doesn't hold ref cnt", K(ret), K(old_tablet));
   } else {
     const ObTabletMeta &tablet_meta = old_tablet.get_tablet_meta();
     const ObTabletMapKey key(tablet_meta.ls_id_, tablet_meta.tablet_id_);
     const char* buf = reinterpret_cast<const char *>(&old_tablet);
     ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(const_cast<char *>(buf));
+    ObTabletMemberWrapper<share::ObTabletAutoincSeq> auto_inc_seq;
+    ObTabletTransformArg arg;
     ObTabletPoolType type;
     if (OB_FAIL(ObTenantMetaMemMgr::get_tablet_pool_type(buf_header.buf_len_, type))) {
       LOG_WARN("fail to get tablet pool type", K(ret), K(buf_header));
     } else if (OB_FAIL(acquire_tablet(type, key, true/*try_smaller_pool*/, new_handle))) {
       LOG_WARN("fail to acqurie tablet", K(ret), K(type), K(new_handle));
-    } else if (OB_FAIL(transform_tablet_memory_footprint(old_tablet, new_handle.get_buf(), new_handle.get_buf_len()))) {
-      LOG_WARN("fail to transform tablet memory footprint", K(ret), K(old_tablet), K(type));
-    } else if (OB_FAIL(new_handle.get_obj()->inc_macro_ref_cnt())) {
-      LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), K(new_handle));
+    } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, auto_inc_seq, arg))) {
+      LOG_WARN("fail to convert tablet to mem arg", K(ret), K(arg), K(old_tablet));
+    } else if (OB_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
+      LOG_WARN("fail to transform tablet", K(ret), K(arg), KP(new_handle.get_buf()),
+          K(new_handle.get_buf_len()), K(old_tablet));
+    } else {
+      new_handle.get_obj()->set_next_tablet_guard(old_tablet.next_tablet_guard_);
+      new_handle.get_obj()->set_tablet_addr(old_tablet.get_tablet_addr());
+      if (OB_FAIL(new_handle.get_obj()->inc_macro_ref_cnt())) {
+        LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), K(new_handle));
+      }
     }
   }
   return ret;
