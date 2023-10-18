@@ -678,9 +678,11 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &
   } else if (is_exiting_) {
     TRANS_LOG(INFO, "trans is existing when being killed", K(*this), K(arg));
   } else {
+    bool notify_scheduler_tx_killed = false;
     if (arg.graceful_) {
       if (is_in_2pc_()) {
         ret = OB_TRANS_CANNOT_BE_KILLED;
+      } else if (FALSE_IT(notify_scheduler_tx_killed = !is_follower_() && part_trans_action_ == ObPartTransAction::START)) {
       } else if (has_persisted_log_() || is_logging_()) {
         // submit abort_log and wait success
         if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
@@ -702,7 +704,7 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &
       if (OB_FAIL(do_local_tx_end_(TxEndAction::KILL_TX_FORCEDLY))) {
         TRANS_LOG(WARN, "kill trx forcedly failed", "context", *this, K(arg));
       }
-
+      notify_scheduler_tx_killed = !is_follower_() && part_trans_action_ == ObPartTransAction::START;
       // if ctx was killed gracefully or forcely killed
       // notify scheduler commit result, if in committing
       if (!is_follower_() && part_trans_action_ == ObPartTransAction::COMMIT &&
@@ -722,6 +724,9 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &
           }
         }
       }
+    }
+    if (notify_scheduler_tx_killed) {
+      notify_scheduler_tx_killed_(arg.graceful_ ? ObTxAbortCause::PARTICIPANT_KILLED_GRACEFULLY : ObTxAbortCause::PARTICIPANT_KILLED_FORCEDLY);
     }
   }
   TRANS_LOG(WARN, "trans is killed", K(ret), K(arg), K(cb_param), KPC(this));
@@ -1438,22 +1443,9 @@ int ObPartTransCtx::check_scheduler_status()
     if (sub_state_.is_force_abort()) {
       ctx_status = OB_TRANS_KILLED;
     }
+
     if (is_alive && need_check_scheduler) {
-      ObTxKeepaliveMsg msg;
-      msg.cluster_version_ = cluster_version_;
-      msg.tenant_id_ = tenant_id_;
-      msg.cluster_id_ = cluster_id_;
-      msg.request_id_ = ObClockGenerator::getClock();
-      msg.tx_id_ = trans_id_;
-      msg.sender_addr_ = addr_;
-      msg.sender_ = ls_id_;
-      msg.receiver_ = share::SCHEDULER_LS; // this just used to pass validation
-      msg.epoch_ = epoch_;
-      msg.status_ = ctx_status;
-      if (OB_FAIL(rpc_->post_msg(exec_info_.scheduler_, msg))) {
-        TRANS_LOG(WARN, "post tx keepalive msg fail", K(ret), K(msg), KPC(this));
-      }
-      // ignore msg postting result
+      post_keepalive_msg_(ctx_status);
       last_ask_scheduler_status_ts_ = ObClockGenerator::getClock();
     }
 
@@ -5490,8 +5482,11 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
             }
-          } else if (OB_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
-            TRANS_LOG(WARN, "abort tx failed", KR(ret), K(*this));
+          } else {
+            if (OB_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
+              TRANS_LOG(WARN, "abort tx failed", KR(ret), K(*this));
+            }
+            notify_scheduler_tx_killed_(ObTxAbortCause::PARTICIPANT_SWITCH_LEADER_DATA_INCOMPLETE);
           }
         } else {
           TRANS_LOG(ERROR, "unexpected trx which has not persisted log", K(*this));
@@ -5604,6 +5599,9 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
       if (OB_FAIL(ret) && need_cb_scheduler) {
         // recover commit_cb_ when failed
         commit_cb_.enable();
+      }
+      if (!need_cb_scheduler) {
+        notify_scheduler_tx_killed_(ObTxAbortCause::PARTICIPANT_SWITCH_FOLLOWER_FORCEDLY);
       }
       TRANS_LOG(INFO, "switch to follower forcely, txn aborted without persisted log", KPC(this));
     } else {
@@ -7491,7 +7489,7 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
     return ret;
   }
 
-  if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status) && can_be_recycled_()) {
+  if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status || OB_TRANS_KILLED == status) && can_be_recycled_()) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       TRANS_LOG(WARN, "[TRANS GC] tx has quit, local tx will be aborted",
                 K(status), KPC(this));
@@ -8275,6 +8273,30 @@ int ObPartTransCtx::handle_ask_tx_state_for_4377(bool &is_alive)
 void ObPartTransCtx::print_first_mvcc_callback_()
 {
   mt_ctx_.print_first_mvcc_callback();
+}
+
+void ObPartTransCtx::post_keepalive_msg_(const int status)
+{
+  ObTxKeepaliveMsg msg;
+  msg.cluster_version_ = cluster_version_;
+  msg.tenant_id_ = tenant_id_;
+  msg.cluster_id_ = cluster_id_;
+  msg.request_id_ = ObClockGenerator::getClock();
+  msg.tx_id_ = trans_id_;
+  msg.sender_addr_ = addr_;
+  msg.sender_ = ls_id_;
+  msg.receiver_ = share::SCHEDULER_LS; // this just used to pass validation
+  msg.epoch_ = epoch_;
+  msg.status_ = status;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rpc_->post_msg(exec_info_.scheduler_, msg))) {
+    TRANS_LOG(WARN, "post tx keepalive msg fail", K(ret), K(msg), KPC(this));
+  }
+}
+
+void ObPartTransCtx::notify_scheduler_tx_killed_(const int kill_reason)
+{
+  post_keepalive_msg_(kill_reason);
 }
 
 } // namespace transaction

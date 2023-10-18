@@ -196,7 +196,7 @@ int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
 void init_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
-void abort_tx__(ObTxDesc &tx, bool cleanup);
+void abort_tx__(ObTxDesc &tx, const bool cleanup);
 int finalize_tx_(ObTxDesc &tx);
 int find_parts_after_sp_(ObTxDesc &tx,
                          ObTxPartRefList &parts,
@@ -375,7 +375,7 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const int64_t expire_ts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
-int tx_sanity_check_(const ObTxDesc &tx);
+int tx_sanity_check_(ObTxDesc &tx);
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,
                         ObTxTableGuard &guard);

@@ -1833,7 +1833,7 @@ int ObTransService::release_tx_ref(ObTxDesc &tx)
   return tx_desc_mgr_.release_tx_ref(&tx);
 }
 
-OB_INLINE int ObTransService::tx_sanity_check_(const ObTxDesc &tx)
+OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
@@ -1847,8 +1847,13 @@ OB_INLINE int ObTransService::tx_sanity_check_(const ObTxDesc &tx)
     case ObTxDesc::State::IDLE:
     case ObTxDesc::State::ACTIVE:
     case ObTxDesc::State::IMPLICIT_ACTIVE:
-
-      break;
+      if (tx.flags_.PART_ABORTED_) {
+        TRANS_LOG(WARN, "some participant was aborted, abort tx now");
+        abort_tx_(tx, tx.abort_cause_);
+        // go through
+      } else {
+        break;
+      }
     case ObTxDesc::State::ABORTED:
       ret = tx.abort_cause_ < 0 ? tx.abort_cause_ : OB_TRANS_NEED_ROLLBACK;
       break;
