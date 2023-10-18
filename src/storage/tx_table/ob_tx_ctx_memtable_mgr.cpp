@@ -60,10 +60,12 @@ void ObTxCtxMemtableMgr::reset()
 
 int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
                                         const int64_t schema_version,
+                                        const SCN newest_clog_checkpoint_scn,
                                         const bool for_replay)
 {
   UNUSED(last_replay_scn);
   UNUSED(schema_version);
+  UNUSED(newest_clog_checkpoint_scn);
   UNUSED(for_replay);
 
   int ret = OB_SUCCESS;

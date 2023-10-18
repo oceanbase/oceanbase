@@ -82,10 +82,12 @@ void ObLockMemtableMgr::reset()
 
 int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                        const int64_t schema_version,
+                                       const SCN newest_clog_checkpoint_scn,
                                        const bool for_replay)
 {
   UNUSED(clog_checkpoint_scn);
   UNUSED(schema_version);
+  UNUSED(newest_clog_checkpoint_scn);
   UNUSED(for_replay);
 
   int ret = OB_SUCCESS;
