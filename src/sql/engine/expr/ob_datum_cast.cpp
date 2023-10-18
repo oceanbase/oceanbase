@@ -3336,8 +3336,8 @@ CAST_FUNC_NAME(text, raw)
       // empty blob treat as null in oracle
       if (lib::is_oracle_mode() && in_str.length() == 0) {
         res_datum.set_null();
-      } else {
-        res_datum.set_string(in_str.ptr(), in_str.length());
+      } else if (OB_FAIL(common_copy_string(expr, in_str, ctx, res_datum))) {
+        LOG_WARN("common_copy_string fail", K(ret), "length", in_str.length());
       }
     }
   }
