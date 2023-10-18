@@ -105,8 +105,25 @@ public:
 };
 
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> Int64FixedArray;
-typedef std::pair<int64_t, ObSqlArrayObj*> BNLJParamInfo;
-typedef common::ObFixedArray<BNLJParamInfo, common::ObIAllocator> FixedBNLJParamArray;
+struct GroupRescanParamInfo
+{
+  GroupRescanParamInfo()
+    : param_idx_(common::OB_INVALID_ID),
+      gr_param_(nullptr),
+      cur_param_()
+  { }
+  GroupRescanParamInfo(int64_t param_idx, ObSqlArrayObj *gr_param)
+  : param_idx_(param_idx),
+    gr_param_(gr_param)
+  { }
+  TO_STRING_KV(K_(param_idx),
+               KPC_(gr_param),
+               K_(cur_param));
+  int64_t param_idx_;
+  ObSqlArrayObj *gr_param_; //group rescan param
+  common::ObObjParam cur_param_; //current param in param store, used to restore paramstore state after the completion of group rescan.
+};
+typedef common::ObFixedArray<GroupRescanParamInfo, common::ObIAllocator> GroupRescanParamArray;
 struct ObTableScanCtDef
 {
   OB_UNIS_VERSION(1);
@@ -178,18 +195,30 @@ struct ObTableScanRtDef
   ObTableScanRtDef(common::ObIAllocator &allocator)
     : bnlj_params_(allocator),
       scan_rtdef_(),
-      lookup_rtdef_(nullptr)
+      lookup_rtdef_(nullptr),
+      range_buffers_(nullptr),
+      range_buffer_idx_(0),
+      group_size_(0),
+      max_group_size_(0)
   { }
 
   void prepare_multi_part_limit_param();
   bool has_lookup_limit() const
   { return lookup_rtdef_ != nullptr && lookup_rtdef_->limit_param_.is_valid(); }
   TO_STRING_KV(K_(scan_rtdef),
-               KPC_(lookup_rtdef));
+               KPC_(lookup_rtdef),
+               K_(group_size),
+               K_(max_group_size));
 
-  FixedBNLJParamArray bnlj_params_;
+  GroupRescanParamArray bnlj_params_;
   ObDASScanRtDef scan_rtdef_;
   ObDASScanRtDef *lookup_rtdef_;
+  // for equal_query_range opt
+  void *range_buffers_;
+  int64_t range_buffer_idx_;
+  // for equal_query_range opt end
+  int64_t group_size_;
+  int64_t max_group_size_;
 };
 
 // table scan operator input
@@ -469,7 +498,7 @@ protected:
   int report_ddl_column_checksum();
   int get_next_batch_with_das(int64_t &count, int64_t capacity);
   void replace_bnlj_param(int64_t batch_idx);
-  bool need_fetch_batch_result();
+  bool need_real_rescan();
   static int check_is_physical_rowid(ObIAllocator &allocator,
                                      ObRowkey &row_key,
                                      bool &is_physical_rowid,
@@ -500,6 +529,54 @@ protected:
     }
   }
   bool is_foreign_check_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_);}
+
+  class GroupRescanParamGuard
+  {
+  public:
+    GroupRescanParamGuard(ObTableScanRtDef &tsc_rtdef, ParamStore &param_store)
+      : tsc_rtdef_(tsc_rtdef),
+        param_store_(param_store),
+        range_buffer_idx_(0)
+    {
+      //Save the original state in param store.
+      //The param store may be modified during the execution of group rescan.
+      //After the execution is completed, the original state needs to be restored.
+      for (int64_t i = 0; i < tsc_rtdef_.bnlj_params_.count(); ++i) {
+        int64_t param_idx = tsc_rtdef_.bnlj_params_.at(i).param_idx_;
+        common::ObObjParam &cur_param = param_store_.at(param_idx);
+        tsc_rtdef_.bnlj_params_.at(i).cur_param_ = cur_param;
+      }
+      range_buffer_idx_ = tsc_rtdef_.range_buffer_idx_;
+    }
+
+    void switch_group_rescan_param(int64_t group_idx)
+    {
+      //replace real param to param store to execute group rescan in TSC
+      for (int64_t i = 0; i < tsc_rtdef_.bnlj_params_.count(); ++i) {
+        ObSqlArrayObj *array_obj = tsc_rtdef_.bnlj_params_.at(i).gr_param_;
+        int64_t param_idx = tsc_rtdef_.bnlj_params_.at(i).param_idx_;
+        common::ObObjParam &dst_param = param_store_.at(param_idx);
+        dst_param = array_obj->data_[group_idx];
+        dst_param.set_param_meta();
+      }
+      tsc_rtdef_.range_buffer_idx_ = group_idx;
+    }
+
+    ~GroupRescanParamGuard()
+    {
+      //restore the original state to param store
+      for (int64_t i = 0; i < tsc_rtdef_.bnlj_params_.count(); ++i) {
+        int64_t param_idx = tsc_rtdef_.bnlj_params_.at(i).param_idx_;
+        common::ObObjParam &cur_param = param_store_.at(param_idx);
+        cur_param = tsc_rtdef_.bnlj_params_.at(i).cur_param_;
+      }
+      tsc_rtdef_.range_buffer_idx_ = range_buffer_idx_;
+    }
+  private:
+    ObTableScanRtDef &tsc_rtdef_;
+    ParamStore &param_store_;
+    int64_t range_buffer_idx_;
+  };
 
 private:
   const ObTableScanSpec& get_tsc_spec() {return MY_SPEC;}
@@ -534,12 +611,6 @@ protected:
   common::ObFixedArray<uint64_t, common::ObIAllocator> column_checksum_;
   int64_t scan_task_id_;
   bool report_checksum_;
-  // for equal_query_range opt
-  void *range_buffers_;
-  int64_t range_buffer_idx_;
-  // for equal_query_range opt end
-  int64_t group_size_;
-  int64_t max_group_size_;
   bool in_rescan_;
   ObGlobalIndexLookupOpImpl *global_index_lookup_op_;
   ObSpatialIndexCache spat_index_;
