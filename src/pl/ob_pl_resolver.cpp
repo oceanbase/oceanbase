@@ -17337,7 +17337,9 @@ int ObPLResolver::get_udt_names(
     CK (OB_INVALID_ID != db_id);
     OZ (schema_guard.get_database_schema(tenant_id, db_id, db_schema));
     CK (OB_NOT_NULL(db_schema));
-    OX (database_name = db_schema->get_database_name_str());
+    if (OB_SUCC(ret) && resolve_ctx_.session_info_.get_database_name().case_compare(db_schema->get_database_name_str()) != 0) {
+      OX (database_name = db_schema->get_database_name_str());
+    }
     OX (udt_name = udt_info->get_type_name());
   }
   return ret;

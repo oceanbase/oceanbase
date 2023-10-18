@@ -1033,7 +1033,7 @@ a	f8()
 3	1
 drop function f1|
 select * from v1|
-ERROR 42000: FUNCTION f1 does not exist
+ERROR 42000: FUNCTION test.f1 does not exist
 create function f1() returns int
 return (select sum(data) from t1) + (select sum(data) from v1)|
 select f1()|
@@ -5951,7 +5951,7 @@ end|
 create view v1 as select 1 as one, f1() as days;
 show create view test.v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS select 1 AS `one`,`f1`() AS `days`	utf8mb4	utf8mb4_general_ci
+v1	CREATE VIEW `v1` AS select 1 AS `one`,`test`.`f1`() AS `days`	utf8mb4	utf8mb4_general_ci
 select column_name from information_schema.columns
 where table_name='v1' and table_schema='test';
 column_name
