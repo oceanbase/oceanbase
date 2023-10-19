@@ -660,7 +660,7 @@ int ObPxCleanDtlIntermResP::process()
           key.channel_id_ = ch_set.get_ch_info_set().at(ch_idx).chid_;
           for (int64_t batch_id = 0; batch_id < batch_size && OB_SUCC(ret); batch_id++) {
             key.batch_id_= batch_id;
-            if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+            if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
               if (OB_HASH_NOT_EXIST == ret) {
                 // interm result is written from batch_id = 0 to batch_size,
                 // if some errors happen when batch_id = i, no interm result of batch_id > i will be written.

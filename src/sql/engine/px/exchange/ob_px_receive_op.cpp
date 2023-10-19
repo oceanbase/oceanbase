@@ -382,7 +382,7 @@ int ObPxReceiveOp::inner_rescan()
       channel->reset_state();
       channel->set_batch_id(ctx_.get_px_batch_id());
       channel->reset_px_row_iterator();
-      release_channel_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key);
+      release_channel_ret = MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key);
       if (release_channel_ret != common::OB_SUCCESS) {
         LOG_WARN("fail to release recieve internal result", KR(release_channel_ret), K(ret));
       }
@@ -541,7 +541,7 @@ int ObPxReceiveOp::erase_dtl_interm_result()
       for (int64_t batch_id = ctx_.get_px_batch_id();
            batch_id < PX_RESCAN_BATCH_ROW_COUNT && OB_SUCC(ret); batch_id++) {
         key.batch_id_ = batch_id;
-        if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
           if (OB_HASH_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
             break;

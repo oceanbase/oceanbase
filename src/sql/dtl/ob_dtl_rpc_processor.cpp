@@ -42,8 +42,10 @@ int ObDtlSendMessageP::process_msg(ObDtlRpcDataResponse &response, ObDtlSendArgs
   ObDtlChannel *chan = nullptr;
   response.is_block_ = false;
   if (arg.buffer_.is_data_msg() && arg.buffer_.use_interm_result()) {
-    if (OB_FAIL(ObDTLIntermResultManager::process_interm_result(&arg.buffer_, arg.chid_))) {
-      LOG_WARN("fail to process internal result", K(ret));
+    MTL_SWITCH(arg.buffer_.tenant_id()) {
+      if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(&arg.buffer_, arg.chid_))) {
+        LOG_WARN("fail to process internal result", K(ret));
+      }
     }
   } else if (OB_FAIL(DTL.get_channel(arg.chid_, chan))) {
     int tmp_ret = ret;
@@ -164,7 +166,7 @@ int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
     ObPxBloomFilter *filter = NULL;
     if (OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(*buffer, header))) {
       LOG_WARN("fail to decode header of buffer", K(ret));
-    } 
+    }
     if (OB_SUCC(ret)) {
       const char *buf = buffer->buf();
       int64_t size = buffer->size();
@@ -172,13 +174,13 @@ int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
       if (OB_FAIL(common::serialization::decode(buf, size, pos, bf_data))) {
         LOG_WARN("fail to decode bloom filter data", K(ret));
       } else {
-        ObPXBloomFilterHashWrapper bf_key(bf_data.tenant_id_, bf_data.filter_id_, 
+        ObPXBloomFilterHashWrapper bf_key(bf_data.tenant_id_, bf_data.filter_id_,
             bf_data.server_id_, bf_data.px_sequence_id_, 0/*task_id*/);
         if (OB_FAIL(ObPxBloomFilterManager::instance().get_px_bf_for_merge_filter(
             bf_key, filter))) {
           LOG_WARN("fail to get px bloom filter", K(ret));
         }
-        // get_px_bf_for_merge_filter只有在成功后会增加filter的引用计数 
+        // get_px_bf_for_merge_filter只有在成功后会增加filter的引用计数
         if (OB_SUCC(ret) && OB_NOT_NULL(filter)) {
           if (OB_FAIL(filter->merge_filter(&bf_data.filter_))) {
             LOG_WARN("fail to merge filter", K(ret));
@@ -187,7 +189,7 @@ int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
           }
           // merge以及process操作完成之后, 需要减少其引用计数.
           (void)filter->dec_merge_filter_count();
-        } 
+        }
       }
     }
   }

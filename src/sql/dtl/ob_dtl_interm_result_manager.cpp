@@ -11,6 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_DTL
+#include "observer/omt/ob_tenant.h"
+#include "observer/omt/ob_multi_tenant.h"
+#include "observer/ob_server_struct.h"
 #include "ob_dtl_interm_result_manager.h"
 #include "storage/blocksstable/ob_tmp_file.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
@@ -22,45 +25,6 @@ using namespace oceanbase;
 using namespace common;
 using namespace sql;
 using namespace oceanbase::sql::dtl;
-
-
-
-void ObDTLIntermResultGC::runTimerTask()
-{
-  int ret = OB_SUCCESS;
-  cur_time_ = oceanbase::common::ObTimeUtility::current_time();
-  expire_keys_.reset();
-
-  // 之前放到了foreach里面，也就是每个元素会++一次，那这样，
-  // 如果缓存是一个比较大的质数，则可能需要好久，而且每次都在变，所以可能基本上走不进去,bigbig bug
-  ++dump_count_;
-  interm_cnt_ = 0;
-  // dump 每隔10秒 && 未超时 && 未使用 的row_store
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDTLIntermResultManager::getInstance().dump_result_info(*this))) {
-      LOG_WARN("fail to for each row store", K(ret));
-    } else {
-      int64_t dump_cost = oceanbase::common::ObTimeUtility::current_time() - cur_time_;
-      LOG_INFO("dump dtl interm result cost(us)", K(dump_cost), K(ret),
-        "interm count", interm_cnt_, "dump count", dump_count_);
-    }
-  }
-
-  clean_cnt_ = 0;
-  interm_cnt_ = 0;
-  cur_time_ = oceanbase::common::ObTimeUtility::current_time();
-  // 清理超时row_store
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDTLIntermResultManager::getInstance().clear_timeout_result_info(*this))) {
-      LOG_WARN("fail to for each row store", K(ret));
-    } else {
-      int64_t clear_cost = oceanbase::common::ObTimeUtility::current_time() - cur_time_;
-      LOG_INFO("clear dtl interm result cost(us)", K(clear_cost), K(ret),
-        K(expire_keys_.count()), "dump count", dump_count_,
-        "interm count", interm_cnt_, "clean count", clean_cnt_);
-    }
-  }
-}
 
 void ObDTLIntermResultGC::reset()
 {
@@ -77,9 +41,6 @@ int ObDTLIntermResultGC::operator() (common::hash::HashMapPair<ObDTLIntermResult
         OB_SUCCESS == entry.second->ret_ &&
         cur_time_ - entry.first.start_time_ > DUMP_TIME_THRESHOLD &&
         dis < 0) {
-      if (NULL != tenant_guard_) {
-        tenant_guard_->switch_to(entry.second->datum_store_->get_tenant_id());
-      }
       int64_t dump_time = oceanbase::common::ObTimeUtility::current_time();
       if (OB_FAIL(DTL_IR_STORE_DO(*entry.second, dump, false, true))) {
         LOG_WARN("fail to dump interm row store", K(ret));
@@ -95,7 +56,7 @@ int ObDTLIntermResultGC::operator() (common::hash::HashMapPair<ObDTLIntermResult
     if (OB_SUCCESS != ret) {
       entry.second->ret_ = ret;
       // free interm result info datum store in advance for memory optimization.
-      ObDTLIntermResultManager::getInstance().free_interm_result_info_store(entry.second);
+      ObDTLIntermResultManager::free_interm_result_info_store(entry.second);
     }
   }
 
@@ -166,47 +127,48 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
   }
 }
 
-int ObEraseTenantIntermResultInfo::operator() (common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo *> &entry)
-{
-  int ret = OB_SUCCESS;
-  if (entry.second->tenant_id_ == tenant_id_) {
-    if (OB_FAIL(expire_keys_.push_back(entry.first))) {
-      LOG_WARN("push back failed", K(ret));
-      ret_ = ret;
-    }
-  }
-  return OB_SUCCESS;
-}
-
-ObDTLIntermResultManager &ObDTLIntermResultManager::getInstance()
-{
-  static ObDTLIntermResultManager the_ir_manager;
-  return the_ir_manager;
-}
-
-
 int ObDTLIntermResultManager::init()
 {
   int ret = OB_SUCCESS;
-  auto attr = SET_USE_500("HashBuckDTLINT");
+  uint64_t tenant_id = MTL_ID();
+  ObMemAttr attr(tenant_id, "HashBuckDTLINT");
+  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(tenant_id);
+  double mem_factor = static_cast<double>(tenant_mem_limit) / lib::get_memory_limit();
+  // less memory for meta tenant
+  if (is_meta_tenant(tenant_id)) {
+    mem_factor = mem_factor * 0.01;
+  }
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(map_.create(BUCKET_NUM,
+  } else if (OB_FAIL(map_.create(static_cast<int64_t>(DEFAULT_BUCKET_NUM * mem_factor),
                                  attr, attr))) {
     LOG_WARN("create hash table failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, gc_,
-      ObDTLIntermResultGC::REFRESH_INTERVAL, true))) {
-    LOG_WARN("schedule interm result gc failed", K(ret));
   } else {
     is_inited_ = true;
   }
   return ret;
 }
 
+int ObDTLIntermResultManager::mtl_init(ObDTLIntermResultManager *&dtl_interm_result_manager)
+{
+  return dtl_interm_result_manager->init();
+}
+
 void ObDTLIntermResultManager::destroy()
 {
   if (IS_INIT) {
+    erase_tenant_interm_result_info();
     map_.destroy();
+  }
+}
+
+void ObDTLIntermResultManager::mtl_destroy(ObDTLIntermResultManager *&dtl_interm_result_manager)
+{
+  if (nullptr != dtl_interm_result_manager) {
+    dtl_interm_result_manager->destroy();
+    ob_delete(dtl_interm_result_manager);
+    dtl_interm_result_manager = nullptr;
   }
 }
 
@@ -228,20 +190,17 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     const ObDTLIntermResultMonitorInfo &monitor_info)
 {
   int ret = OB_SUCCESS;
-  void *ptr = NULL;
-  ObDTLIntermResultInfo *result_info = NULL;
   void *result_info_buf = NULL;
-  const int64_t size = sizeof(ObChunkDatumStore);
-  if (OB_ISNULL(result_info_buf =
-      static_cast<ObDTLIntermResultInfo *>(ob_malloc(sizeof(ObDTLIntermResultInfo), attr)))) {
+  void *datum_store_buf = NULL;
+  if (OB_ISNULL(result_info_buf = ob_malloc(sizeof(ObDTLIntermResultInfo), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc dtl interm result info", K(ret));
-  } else if (OB_ISNULL(ptr = ob_malloc(size, attr))) {
+  } else if (OB_ISNULL(datum_store_buf = ob_malloc(sizeof(ObChunkDatumStore), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ob chunk row store ret", K(ret));
+    LOG_WARN("fail to alloc ob chunk datum store", K(ret));
   } else {
-    result_info = new(result_info_buf) ObDTLIntermResultInfo();
-    result_info->datum_store_ = new(ptr) ObChunkDatumStore("DtlIntermRes");
+    ObDTLIntermResultInfo *result_info = new(result_info_buf) ObDTLIntermResultInfo();
+    result_info->datum_store_ = new(datum_store_buf) ObChunkDatumStore("DtlIntermRes");
     result_info->is_read_ = false;
     result_info->trace_id_ = *ObCurTraceId::get_trace_id();
     result_info->monitor_info_ = monitor_info;
@@ -252,8 +211,8 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     if (NULL != result_info_buf) {
       ob_free(result_info_buf);
     }
-    if (NULL != ptr) {
-      ob_free(ptr);
+    if (NULL != datum_store_buf) {
+      ob_free(datum_store_buf);
     }
   }
   return ret;
@@ -327,7 +286,7 @@ int ObDTLIntermResultManager::clear_timeout_result_info(ObDTLIntermResultGC &gc)
     if (OB_SUCC(ret)) {
       for (int i = 0; i < gc.expire_keys_.count(); ++i) {
         ObDTLIntermResultKey &key = gc.expire_keys_.at(i);
-        if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+        if (OB_FAIL(erase_interm_result_info(key))) {
           LOG_WARN("fail to erase row store", K(key), K(ret));
         }
       }
@@ -339,13 +298,10 @@ int ObDTLIntermResultManager::clear_timeout_result_info(ObDTLIntermResultGC &gc)
 int ObDTLIntermResultManager::dump_result_info(ObDTLIntermResultGC &gc)
 {
   int ret = OB_SUCCESS;
-  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   gc.gc_type_ = ObDTLIntermResultGC::DUMP;
-  gc.tenant_guard_ = &guard;
   if (OB_FAIL(map_.foreach_refactored(gc))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
   }
-  gc.tenant_guard_ = NULL;
   return ret;
 }
 
@@ -408,31 +364,23 @@ int ObDTLIntermResultManager::generate_monitor_info_rows(observer::ObDTLIntermRe
   return ret;
 }
 
-int ObDTLIntermResultManager::erase_tenant_interm_result_info(int64_t tenant_id)
+int ObDTLIntermResultManager::erase_tenant_interm_result_info()
 {
   int ret = OB_SUCCESS;
-  ObEraseTenantIntermResultInfo eraser;
-  eraser.tenant_id_ = tenant_id;
-  if (OB_FAIL(map_.foreach_refactored(eraser))) {
-    LOG_WARN("fail to get tenant result info in result manager", K(ret), K(tenant_id));
-  } else {
-    ret = eraser.ret_;
-    for (int i = 0; i < eraser.expire_keys_.count(); ++i) {
-      ObDTLIntermResultKey &key = eraser.expire_keys_.at(i);
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
-        if (OB_HASH_NOT_EXIST != tmp_ret) {
-          LOG_WARN("fail to erase result info", K(key), K(ret));
-          ret = tmp_ret;
-        }
+  for (auto iter = map_.begin(); iter != map_.end(); ++iter) {
+    ObDTLIntermResultKey &key = iter->first;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = erase_interm_result_info(key))) {
+      if (OB_HASH_NOT_EXIST != tmp_ret) {
+        LOG_WARN("fail to erase result info", K(key), K(tmp_ret));
+        ret = tmp_ret;
       }
     }
-    if (eraser.expire_keys_.count() < 100) {
-      LOG_INFO("erase_tenant_interm_result_info", K(tenant_id), K(eraser.expire_keys_));
-    } else {
-      LOG_INFO("erase_tenant_interm_result_info", K(tenant_id), K(eraser.expire_keys_.count()));
-    }
   }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("erase_tenant_interm_result_info", K(MTL_ID()), K(map_.size()));
+  }
+
   return ret;
 }
 
@@ -489,14 +437,13 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
 {
   int ret = OB_SUCCESS;
   ObDTLIntermResultInfo result_info;
-  if (OB_FAIL(ObDTLIntermResultManager::getInstance().get_interm_result_info(key,
-        result_info))) {
+  if (OB_FAIL(get_interm_result_info(key, result_info))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ObDTLIntermResultInfoGuard result_info_guard;
       ObMemAttr attr(buffer.tenant_id(), "DtlIntermRes", common::ObCtxIds::EXECUTE_CTX_ID);
       key.start_time_ = oceanbase::common::ObTimeUtility::current_time();
       ret = OB_SUCCESS;
-      if (OB_FAIL(ObDTLIntermResultManager::getInstance().create_interm_result_info(attr,
+      if (OB_FAIL(create_interm_result_info(attr,
             result_info_guard,
             ObDTLIntermResultMonitorInfo(buffer.get_dfo_key().qc_id_,
                 buffer.get_dfo_id(), buffer.get_sqc_id())))) {
@@ -505,7 +452,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
                   *result_info_guard.result_info_, init,
                   0, buffer.tenant_id(), common::ObCtxIds::EXECUTE_CTX_ID, "DtlIntermRes"))) {
         LOG_WARN("fail to init buffer", K(ret));
-      } else if (OB_FAIL(ObDTLIntermResultManager::getInstance().insert_interm_result_info(key, result_info_guard.result_info_))) {
+      } else if (OB_FAIL(insert_interm_result_info(key, result_info_guard.result_info_))) {
         LOG_WARN("fail to insert row store", K(ret));
       } else {
         int reg_dm_ret = ObDetectManagerUtils::single_dfo_register_check_item_into_dm(
@@ -526,7 +473,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
       LOG_WARN("out of index", K(ret), K(buffer.size()), K(start_pos), K(length));
     } else if (append_whole_block) {
       ObAtomicAppendBlockCall call(buffer.buf(), length, is_eof);
-      if (OB_FAIL(ObDTLIntermResultManager::getInstance().atomic_append_block(key, call))) {
+      if (OB_FAIL(atomic_append_block(key, call))) {
         if (OB_HASH_NOT_EXIST == ret &&
             oceanbase::common::ObTimeUtility::current_time() > key.time_us_) {
           ret = OB_TIMEOUT;
@@ -540,7 +487,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
       }
     } else {
       ObAtomicAppendPartBlockCall call(buffer.buf(), start_pos, length, rows, is_eof);
-      if (OB_FAIL(ObDTLIntermResultManager::getInstance().atomic_append_part_block(key, call))) {
+      if (OB_FAIL(atomic_append_part_block(key, call))) {
         if (OB_HASH_NOT_EXIST == ret &&
             oceanbase::common::ObTimeUtility::current_time() > key.time_us_) {
           ret = OB_TIMEOUT;
@@ -559,7 +506,7 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
     // 注意这里理论上也不会有并发问题，因为channel是点对点且串行发送的
     // 所以这个接收到了，肯定没有其他线程给这个channel发送
     // 尝试先从hash table中释放(尽早释放内存，其实也可以让timer来清理)
-    ObDTLIntermResultManager::getInstance().erase_interm_result_info(key);
+    erase_interm_result_info(key);
   }
   return ret;
 }
@@ -585,6 +532,46 @@ void ObDTLIntermResultManager::dec_interm_result_ref_count(ObDTLIntermResultInfo
   }
 }
 
+void ObDTLIntermResultManager::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  gc_.cur_time_ = oceanbase::common::ObTimeUtility::current_time();
+  gc_.expire_keys_.reset();
+
+  // Previously, it was placed inside a foreach loop,
+  // which means that each element would ++gc_.dump_count_.
+  // In this case, if the cache is a relatively large prime number,
+  // it may take a long time and it keeps changing,
+  // so it is unlikely to enter the loop, causing a big bug.
+  ++gc_.dump_count_;
+  gc_.interm_cnt_ = 0;
+  // dump every_10_seconds && not_expired && unused row_store
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dump_result_info(gc_))) {
+      LOG_WARN("fail to for each row store", K(ret));
+    } else {
+      int64_t dump_cost = oceanbase::common::ObTimeUtility::current_time() - gc_.cur_time_;
+      LOG_INFO("dump dtl interm result cost(us)", K(dump_cost), K(ret),
+        "interm count", gc_.interm_cnt_, "dump count", gc_.dump_count_);
+    }
+  }
+
+  gc_.clean_cnt_ = 0;
+  gc_.interm_cnt_ = 0;
+  gc_.cur_time_ = oceanbase::common::ObTimeUtility::current_time();
+  // Cleaning up expired row_store
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(clear_timeout_result_info(gc_))) {
+      LOG_WARN("fail to for each row store", K(ret));
+    } else {
+      int64_t clear_cost = oceanbase::common::ObTimeUtility::current_time() - gc_.cur_time_;
+      LOG_INFO("clear dtl interm result cost(us)", K(clear_cost), K(ret),
+        K(gc_.expire_keys_.count()), "dump count", gc_.dump_count_,
+        "interm count", gc_.interm_cnt_, "clean count", gc_.clean_cnt_);
+    }
+  }
+}
+
 void ObDTLIntermResultInfoGuard::set_result_info(ObDTLIntermResultInfo &result_info)
 {
   if (&result_info != result_info_) {
@@ -600,4 +587,38 @@ void ObDTLIntermResultInfoGuard::reset()
     ObDTLIntermResultManager::dec_interm_result_ref_count(result_info_);
     result_info_ = NULL;
   }
+}
+
+int ObDTLIntermResultManager::mtl_start(ObDTLIntermResultManager *&dtl_interm_result_manager)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
+    if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task(),
+                            ObDTLIntermResultGCTask::REFRESH_INTERVAL, true))) {
+      LOG_WARN("failed to scheduler flush all task", K(ret));
+    } else {
+      dtl_interm_result_manager->get_gc_task().disable_timeout_check();
+      dtl_interm_result_manager->get_gc_task().dtl_interm_result_manager_ = dtl_interm_result_manager;
+    }
+  }
+  return ret;
+}
+
+void ObDTLIntermResultManager::mtl_stop(ObDTLIntermResultManager *&dtl_interm_result_manager)
+{
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task());
+  }
+}
+
+void ObDTLIntermResultManager::mtl_wait(ObDTLIntermResultManager *&dtl_interm_result_manager)
+{
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
+    TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task());
+  }
+}
+
+void ObDTLIntermResultGCTask::runTimerTask()
+{
+  dtl_interm_result_manager_->runTimerTask();
 }
