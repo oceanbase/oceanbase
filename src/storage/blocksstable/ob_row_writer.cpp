@@ -238,7 +238,7 @@ int ObRowWriter::write(
   len = 0;
   if (OB_UNLIKELY(nullptr != update_idx && update_idx->count() > row.row_val_.count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update idx is invalid", K(ret), KPC(update_idx), K(row), K(rowkey_column_count));
+    LOG_WARN("update idx is invalid", K(ret), KPC(update_idx), K_(row.row_val_.count), K(rowkey_column_count));
   } else {
     do {
       if (OB_FAIL(alloc_buf_and_init(OB_BUF_NOT_ENOUGH == ret))) {
@@ -254,7 +254,7 @@ int ObRowWriter::write(
     } while (OB_BUF_NOT_ENOUGH == ret && row_buffer_.is_buf_extendable());
 
     if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH == ret)) {
-      LOG_WARN("fail to append row due to buffer not enough", K(ret), K(row_buffer_), K(row), K(rowkey_column_count));
+      LOG_WARN("fail to append row due to buffer not enough", K(ret), K_(row_buffer), K(rowkey_column_count));
     }
   }
   return ret;
