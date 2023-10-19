@@ -1362,17 +1362,6 @@ int ObComplementMergeTask::process()
     LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
   } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->dest_tenant_id_));
-  } else if (param_->use_new_checksum() && OB_FAIL(context_->get_column_checksum(report_col_checksums, report_col_ids))) {
-    LOG_WARN("get column checksum failed", K(ret));
-  } else if (param_->use_new_checksum() && OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
-          param_->orig_table_id_,
-          param_->task_id_,
-          report_col_checksums,
-          report_col_ids,
-          1/*execution_id*/,
-          param_->orig_tablet_id_.id(),
-          *GCTX.sql_proxy_))) {
-    LOG_WARN("fail to report origin table checksum", K(ret));
   } else if (context_->is_major_sstable_exist_) {
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     const ObSSTable *first_major_sstable = nullptr;
@@ -1410,6 +1399,17 @@ int ObComplementMergeTask::process()
         LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
       }
     }
+  } else if (param_->use_new_checksum() && OB_FAIL(context_->get_column_checksum(report_col_checksums, report_col_ids))) {
+    LOG_WARN("get column checksum failed", K(ret));
+  } else if (param_->use_new_checksum() && OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
+          param_->orig_table_id_,
+          param_->task_id_,
+          report_col_checksums,
+          report_col_ids,
+          1/*execution_id*/,
+          param_->orig_tablet_id_.id(),
+          *GCTX.sql_proxy_))) {
+    LOG_WARN("fail to report origin table checksum", K(ret));
   } else if (OB_FAIL(add_build_hidden_table_sstable())) {
     LOG_WARN("fail to build new sstable and write macro redo", K(ret));
   }
