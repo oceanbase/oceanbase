@@ -1004,6 +1004,7 @@ public:
     px_join_skew_minfreq_(30),
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
+    enable_spf_batch_rescan_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1045,6 +1046,7 @@ public:
   int8_t px_join_skew_minfreq_;
   uint64_t min_cluster_version_;
   bool is_enable_px_fast_reclaim_;
+  bool enable_spf_batch_rescan_;
 
 private:
   // current cluster config version_
