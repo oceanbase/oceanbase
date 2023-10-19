@@ -2016,13 +2016,19 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
-  if (OB_ISNULL(spi_cursor_)) {
+  if (OB_ISNULL(spi_cursor_) || !last_stream_cursor_) {
     OV (OB_NOT_NULL(get_allocator()));
+    if (OB_SUCC(ret) && OB_NOT_NULL(spi_cursor_) && OB_NOT_NULL(static_cast<ObSPICursor*>(spi_cursor_))) {
+      static_cast<ObSPICursor*>(spi_cursor_)->~ObSPICursor();
+      get_allocator()->free(spi_cursor_);
+      spi_cursor_ = NULL;
+    }
     OX (spi_cursor_ = get_allocator()->alloc(sizeof(ObSPIResultSet)));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
   OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
+  OX (last_stream_cursor_ = true);
   return ret;
 }
 
@@ -2044,6 +2050,7 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
   OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator));
+  OX (last_stream_cursor_ = false);
   if (OB_SUCC(ret)) {
     if (OB_INVALID_SIZE == mem_limit) {
       mem_limit = GCONF._chunk_row_store_mem_limit;
