@@ -1133,7 +1133,7 @@ int ObSubPlanFilterOp::inner_get_next_batch(const int64_t max_row_cnt)
   int ret = OB_SUCCESS;
   int64_t op_max_batch_size = min(max_row_cnt, MY_SPEC.max_batch_size_);
   if (need_init_before_get_row_) {
-    OZ(SMART_CALL(prepare_onetime_exprs()));
+    OZ(prepare_onetime_exprs());
   }
   //从主表中获取一行数据
   clear_evaluated_flag();
