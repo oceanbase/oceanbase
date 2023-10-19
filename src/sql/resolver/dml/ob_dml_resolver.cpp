@@ -14698,14 +14698,37 @@ int ObDMLResolver::add_fake_schema(ObSelectStmt *left_stmt)
         }
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
-          ObRawExpr *expr = select_stmt->get_select_item(i).expr_;
+          ObRawExpr *&expr = select_stmt->get_select_item(i).expr_;
+          ObColumnSchemaV2 *new_col = static_cast<ObColumnSchemaV2 *>(
+            allocator_->alloc(sizeof(ObColumnSchemaV2)));
           if (OB_ISNULL(expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is null", K(ret), K(expr));
-          } else {
-            ObColumnRefRawExpr *select_expr = static_cast<ObColumnRefRawExpr *>(expr);
-            ObColumnSchemaV2 *new_col = static_cast<ObColumnSchemaV2 *>(
-              allocator_->alloc(sizeof(ObColumnSchemaV2)));
+          } else if (OB_ISNULL(new_col)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory", K(ret));
+          } else if (lib::is_mysql_mode() &&
+                     expr->get_result_type().is_null()) {
+            ObRawExpr *new_expr = NULL;
+            ObExprResType bin_type;
+            bin_type.set_binary();
+            bin_type.set_length(0);
+            bin_type.set_collation_level(CS_LEVEL_IMPLICIT);
+            if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(params_.expr_factory_,
+                                                                session_info_,
+                                                                *expr,
+                                                                bin_type,
+                                                                new_expr))) {
+              LOG_WARN("create cast expr for null expr failed", K(ret));
+            } else if (expr == new_expr) {
+              /*do nothing*/
+            } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+              LOG_WARN("failed to add flag", K(ret));
+            } else {
+              expr = new_expr;
+            }
+          }
+          if (OB_SUCC(ret)) {
             new_col = new (new_col) ObColumnSchemaV2(allocator_);
             new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
             new_col->set_tenant_id(tbl_schema->get_tenant_id());
@@ -14713,7 +14736,7 @@ int ObDMLResolver::add_fake_schema(ObSelectStmt *left_stmt)
             new_col->set_column_id(magic_col_id+i);
             new_col->set_meta_type(expr->get_result_type());
             new_col->set_accuracy(expr->get_accuracy());
-            new_col->set_collation_type(select_expr->get_collation_type());
+            new_col->set_collation_type(expr->get_collation_type());
             new_col->set_extended_type_info(expr->get_enum_set_values());
             new_col->add_column_flag(CTE_GENERATED_COLUMN_FLAG);
             if (OB_FAIL(tbl_schema->add_column(*new_col))) {
