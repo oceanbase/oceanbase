@@ -54,14 +54,17 @@ public:
   void reset();
   void reuse();
 public:
+  void set_base_ts(const share::SCN &base_ts) { base_ts_ = base_ts; }
+  const share::SCN &get_base_ts() const { return base_ts_; }
   int set_log_ts(const share::SCN &log_ts);
   const share::SCN &get_log_ts() const { return log_ts_; }
   int set_lsn(const palf::LSN &lsn);
   palf::LSN get_lsn() const { return lsn_; }
   void set_submit_ts(const int64_t submit_ts) { submit_ts_ = submit_ts; }
   int64_t get_submit_ts() const { return submit_ts_; }
-  TO_STRING_KV(K_(log_ts), K_(lsn), K_(submit_ts));
+  TO_STRING_KV(K_(base_ts), K_(log_ts), K_(lsn), K_(submit_ts));
 protected:
+  share::SCN base_ts_;
   share::SCN log_ts_;
   palf::LSN lsn_;
   int64_t submit_ts_;
