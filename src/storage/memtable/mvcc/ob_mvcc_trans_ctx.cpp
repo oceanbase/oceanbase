@@ -1054,7 +1054,7 @@ int ObMvccRowCallback::trans_commit()
         if (OB_FAIL(value_.trans_commit(ctx_.get_commit_version(), *tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K_(ctx), K_(value));
         } else if (FALSE_IT(tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn()))) {
-        } else if (!ctx_.is_for_replay() && FALSE_IT(wakeup_row_waiter_if_need_())) {
+        } else if (FALSE_IT(wakeup_row_waiter_if_need_())) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == get_dml_flag()) {
           unlink_trans_node();
         } else {
