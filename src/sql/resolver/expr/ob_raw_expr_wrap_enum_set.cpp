@@ -175,7 +175,20 @@ int ObRawExprWrapEnumSet::analyze_all_expr(ObDMLStmt &stmt)
     LOG_WARN("get relation exprs failed", K(ret));
   } else if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
     LOG_WARN("get child stmt failed", K(ret));
-  } else {/*do nothing*/}
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
+      const TableItem *table_item = stmt.get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table_item is null", K(i));
+      } else if (table_item->is_temp_table()) {
+        if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+          LOG_WARN("store child stmt failed", K(ret));
+        }
+      }
+    }
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
     if (OB_FAIL(analyze_expr(relation_exprs.at(i)))) {
       LOG_WARN("failed to analyze expr", K(ret));
@@ -618,6 +631,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(ObRawExpr &right_expr, int64_t row_di
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("should not come here", K(right_expr), K(ret));
   }
+  LOG_TRACE("succeed to visit right expr", K(root_type), K(row_dimension), K(right_expr));
   return ret;
 }
 
@@ -777,6 +791,7 @@ bool ObRawExprWrapEnumSet::can_wrap_type_to_str(const ObRawExpr &expr) const
       }
     }
   }
+  LOG_TRACE("succeed to check can wrap type to str", K(bret), K(expr));
   return bret;
 }
 
