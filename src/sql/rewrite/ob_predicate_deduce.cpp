@@ -526,6 +526,7 @@ int ObPredicateDeduce::check_type_safe(int64_t first, int64_t second, bool &type
 int ObPredicateDeduce::deduce_general_predicates(ObTransformerCtx &ctx,
                                                 ObIArray<ObRawExpr *> &target_exprs,
                                                 ObIArray<ObRawExpr *> &general_preds,
+                                                ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &lossless_cast_preds,
                                                 ObIArray<ObRawExpr *> &result)
 {
   int ret = OB_SUCCESS;
@@ -551,6 +552,51 @@ int ObPredicateDeduce::deduce_general_predicates(ObTransformerCtx &ctx,
       } else {
         new_pred->get_param_expr(0) = equal_exprs.at(j);
         if (OB_FAIL(new_pred->formalize(ctx.session_info_))) {
+          LOG_WARN("failed to formalize expr", K(ret));
+        } else if (OB_FAIL(new_pred->pull_relation_id())) {
+          LOG_WARN("failed to pull relation id and levels", K(ret));
+        } else if (OB_FAIL(result.push_back(new_pred))) {
+          LOG_WARN("failed to push back new pred", K(ret));
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < lossless_cast_preds.count(); ++i) {
+    ObRawExpr *cast_expr = NULL;
+    ObRawExpr *pred = NULL;
+    const ObRawExpr *column_expr = NULL;
+    int64_t param_idx = -1;
+    if (OB_ISNULL(cast_expr = lossless_cast_preds.at(i).first) ||
+        OB_ISNULL(pred = lossless_cast_preds.at(i).second)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(cast_expr, column_expr))) {
+      LOG_WARN("fail to get real expr", K(ret), K(cast_expr));
+    } else if (!ObOptimizerUtil::find_item(input_exprs_, column_expr, &param_idx)) {
+      // do nothing
+    } else {
+      ObSEArray<const ObRawExpr *, 4> equal_exprs;
+      for (int64_t j = 0; OB_SUCC(ret) && j < N; ++j) {
+        const ObRawExpr *expr = input_exprs_.at(j);
+        if (!has(graph_, param_idx, j, EQ) || j == param_idx) {
+          // do nothing
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("input expr is null", K(ret));
+        } else if (!expr->is_column_ref_expr()) {
+          // do nothing
+        } else if (OB_FAIL(equal_exprs.push_back(expr))) {
+          LOG_WARN("failed to push back exprs");
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < equal_exprs.count(); ++j) {
+        ObRawExpr *new_pred = NULL;
+        ObRawExprCopier copier(*ctx.expr_factory_);
+        if (OB_FAIL(copier.add_replaced_expr(cast_expr, equal_exprs.at(j)))) {
+          LOG_WARN("failed to add replaced expr", K(ret));
+        } else if (OB_FAIL(copier.copy_on_replace(pred, new_pred))) {
+          LOG_WARN("failed to copy expr node", K(ret));
+        } else if (OB_FAIL(new_pred->formalize(ctx.session_info_))) {
           LOG_WARN("failed to formalize expr", K(ret));
         } else if (OB_FAIL(new_pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
@@ -974,4 +1020,49 @@ bool ObPredicateDeduce::has_raw_const_equal_condition(int64_t param_idx)
     }
   }
   return has_const_condition;
+}
+
+int ObPredicateDeduce::check_lossless_cast_table_filter(ObRawExpr *expr,
+                                                        ObRawExpr *&cast_expr,
+                                                        bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *left_expr = NULL;
+  ObRawExpr *right_expr = NULL;
+  cast_expr = NULL;
+  is_valid = true;
+  ObRawExpr *check_expr = NULL;
+  if (OB_ISNULL(expr) ||
+      OB_UNLIKELY(expr->get_param_count() != 2) ||
+      OB_ISNULL(left_expr = expr->get_param_expr(0)) ||
+      OB_ISNULL(right_expr = expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr), K(left_expr), K(right_expr));
+  } else if (expr->get_expr_type() != T_OP_EQ) {
+    is_valid = false;
+  } else if (left_expr->is_const_expr()) {
+    check_expr = right_expr;
+  } else if (right_expr->is_const_expr()) {
+    check_expr = left_expr;
+  } else {
+    is_valid = false;
+  }
+  if (OB_SUCC(ret) && is_valid) {
+    const ObRawExpr *column_expr = NULL;
+    bool is_lossless = false;
+    if (check_expr->get_expr_type() != T_FUN_SYS_CAST) {
+      is_valid = false;
+    } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(check_expr, column_expr))) {
+      LOG_WARN("failed to get real expr without cast", K(ret));
+    } else if (!column_expr->is_column_ref_expr()) {
+      is_valid = false;
+    } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(check_expr, is_lossless))) {
+      LOG_WARN("failed to check expr is lossless column cast", K(ret));
+    } else if (!is_lossless) {
+      is_valid = false;
+    } else {
+      cast_expr = check_expr;
+    }
+  }
+  return ret;
 }

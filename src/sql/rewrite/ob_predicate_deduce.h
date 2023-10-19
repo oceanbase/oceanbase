@@ -42,6 +42,7 @@ public:
   int deduce_general_predicates(ObTransformerCtx &ctx,
                                 ObIArray<ObRawExpr *> &target_exprs,
                                 ObIArray<ObRawExpr *> &other_preds,
+                                ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &lossless_preds,
                                 ObIArray<ObRawExpr *> &result);
 
   int deduce_aggr_bound_predicates(ObTransformerCtx &ctx,
@@ -82,6 +83,9 @@ public:
            expr.has_flag(CNT_DYNAMIC_USER_VARIABLE);
   }
 
+  static int check_lossless_cast_table_filter(ObRawExpr *expr,
+                                              ObRawExpr *&cast_expr,
+                                              bool &is_valid);
 private:
 
   int init();
