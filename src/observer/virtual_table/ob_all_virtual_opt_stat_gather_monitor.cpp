@@ -157,6 +157,14 @@ int ObAllVirtualOptStatGatherMonitor::inner_get_next_row(ObNewRow *&row)
           cells[cell_idx].set_int(stat_array_.at(index_).get_running_table_duration_time());
           break;
         }
+        case SPARE1: {
+          cells[cell_idx].set_null();
+          break;
+        }
+        case SPARE2: {
+          cells[cell_idx].set_null();
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(cell_idx),
