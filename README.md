@@ -116,9 +116,7 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 # System architecture
 
-![oceanbase architecture](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
-
-[Learn More](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
+[Introduction to system architecture](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
 
 # Contributing
 
