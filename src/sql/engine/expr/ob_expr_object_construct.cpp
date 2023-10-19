@@ -49,10 +49,11 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
   CK (param_num == elem_types_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
     if ((ObExtendType == elem_types_.at(i).get_type()
-          && types[i].get_type() != ObExtendType && types[i].get_type() != ObNullType)
+          && types[i].get_type() != ObExtendType
+          && types[i].get_type() != ObNullType)
         ||(ObExtendType == types[i].get_type() && elem_types_.at(i).get_type() != ObExtendType)) {
       ret = OB_ERR_CALL_WRONG_ARG;
-      LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret), K(types[i]), K(elem_types_.at(i)), K(i));
     } else {
       types[i].set_calc_accuracy(elem_types_.at(i).get_accuracy());
       types[i].set_calc_meta(elem_types_.at(i).get_obj_meta());
