@@ -159,13 +159,16 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
       } else {
         finish = true;
       }
-      if (OB_FAIL(ret) && is_retryable(ret)) {
-        const bool need_refresh_leader = OB_NOT_MASTER == ret || OB_LS_NOT_EXIST == ret || OB_TABLET_NOT_EXIST == ret;
-        ob_usleep<common::ObWaitEventIds::STORAGE_AUTOINC_FETCH_RETRY_SLEEP>(RETRY_INTERVAL);
-        res.reset();
-        if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
-          LOG_WARN("failed to check status", K(ret));
-        } else if (need_refresh_leader) {
+      if (OB_FAIL(ret)) {
+        const bool force_refresh_leader = OB_NOT_MASTER == ret || OB_LS_NOT_EXIST == ret || OB_TABLET_NOT_EXIST == ret || OB_TENANT_NOT_IN_SERVER == ret;
+        if (is_retryable(ret)) {
+          ob_usleep<common::ObWaitEventIds::STORAGE_AUTOINC_FETCH_RETRY_SLEEP>(RETRY_INTERVAL);
+          res.reset();
+          if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
+            LOG_WARN("failed to check status", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && force_refresh_leader) {
           if (OB_FAIL(location_service->get(param.tenant_id_, tablet_id, INT64_MAX/*expire_renew_time*/, is_cache_hit, arg.ls_id_))) {
             LOG_WARN("fail to get log stream id", K(ret), K(ret), K(tablet_id));
           } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id,
@@ -175,6 +178,8 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
                                                           leader_addr))) {
             LOG_WARN("force get leader failed", K(ret), K(ret), K(arg.ls_id_));
           }
+        } else {
+          (void)location_service->renew_tablet_location(param.tenant_id_, tablet_id, ret, true/*is_nonblock*/);
         }
       }
     }
