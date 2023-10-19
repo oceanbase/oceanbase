@@ -4534,12 +4534,21 @@ int ObLogicalOperator::cal_runtime_filter_compare_func(
     ObRawExpr *join_create_expr)
 {
   int ret = OB_SUCCESS;
+  common::ObCollationType cs_type = join_use_expr->get_collation_type();
   if (ob_is_string_or_lob_type(join_use_expr->get_result_type().get_type())
       || ob_is_string_or_lob_type(join_create_expr->get_result_type().get_type())) {
     if (OB_UNLIKELY(join_use_expr->get_collation_type() != join_create_expr->get_collation_type())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("collation type not match", K(join_use_expr->get_result_type()),
-          K(join_create_expr->get_result_type()));
+      // it's ok if one side of the join is a null type because null types can always be compared.
+      if (ob_is_null(join_use_expr->get_result_type().get_type())) {
+        // use create's cs_type
+        cs_type = join_create_expr->get_collation_type();
+      } else if (ob_is_null(join_create_expr->get_result_type().get_type())) {
+        // use use's cs_type
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("collation type not match", K(join_use_expr->get_result_type()),
+            K(join_create_expr->get_result_type()));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -4552,7 +4561,7 @@ int ObLogicalOperator::cal_runtime_filter_compare_func(
                                   join_use_expr->get_data_type(),
                                   join_create_expr->get_data_type(),
                                   lib::is_oracle_mode()? NULL_LAST : NULL_FIRST,
-                                  join_use_expr->get_collation_type(),
+                                  cs_type,
                                   scale,
                                   lib::is_oracle_mode(),
                                   has_lob_header);
