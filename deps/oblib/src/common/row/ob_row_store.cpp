@@ -502,7 +502,6 @@ void ObRowStore::reset()
 {
   clear_rows();
   reserved_columns_.reset();
-  tenant_id_ = OB_SERVER_TENANT_ID;
   pre_alloc_block_ = false;
 }
 
