@@ -5907,6 +5907,9 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
   OX (trans_flags_.reset());
   OX (saved_value.nested_count_ = nested_count_);
   OX (nested_count_ = -1);
+  OX (saved_value.xid_ = xid_);
+  OX (xid_.reset());
+  OX (associated_xa_ = false);
   return ret;
 }
 
@@ -5931,6 +5934,10 @@ int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
   if (OB_TMP_FAIL(base_restore_session(saved_value))) {
     LOG_WARN("failed to restore base session", K(tmp_ret));
     ret = COVER_SUCC(tmp_ret);
+  }
+  xid_ = saved_value.xid_;
+  if (!xid_.empty()) {
+    associated_xa_ = true;
   }
   return ret;
 }
