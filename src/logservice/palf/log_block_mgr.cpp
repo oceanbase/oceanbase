@@ -490,19 +490,11 @@ int LogBlockMgr::do_scan_dir_(const char *dir,
 int LogBlockMgr::do_rename_and_fsync_(const char *old_block_path, const char *new_block_path)
 {
   int ret = OB_SUCCESS;
-  do {
-    if (-1 == ::renameat(dir_fd_, old_block_path, dir_fd_, new_block_path)) {
-      ret = convert_sys_errno();
-      PALF_LOG(ERROR, "::rename at failed", K(ret), KPC(this), K(old_block_path), K(new_block_path));
-    } else if (-1 == ::fsync(dir_fd_)) {
-      ret = convert_sys_errno();
-      PALF_LOG(ERROR, "::fsync failed", K(ret), KPC(this), K(old_block_path), K(new_block_path));
-    } else {
-      ret = OB_SUCCESS;
-      break;
-    }
-    ob_usleep(SLEEP_TS_US);
-  } while (OB_FAIL(ret));
+  if (OB_FAIL(renameat_with_retry(dir_fd_, old_block_path, dir_fd_, new_block_path))) {
+    PALF_LOG(ERROR, "renameat_with_retry failed", K(ret), KPC(this), K(old_block_path), K(new_block_path));
+  } else if (OB_FAIL(fsync_with_retry(dir_fd_))) {
+    PALF_LOG(ERROR, "fsync_with_retry failed", K(ret), KPC(this), K(old_block_path), K(new_block_path));
+  } else {}
   return ret;
 }
 

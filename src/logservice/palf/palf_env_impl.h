@@ -33,6 +33,7 @@
 #include "log_io_worker_wrapper.h"
 #include "block_gc_timer_task.h"
 #include "log_updater.h"
+#include "log_io_utils.h"
 namespace oceanbase
 {
 namespace common
