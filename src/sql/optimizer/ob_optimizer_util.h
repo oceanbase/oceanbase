@@ -1507,6 +1507,9 @@ public:
                                          ObSqlTempTableInfo &temp_table_info,
                                          ObRawExpr *&temp_table_filter,
                                          ObSelectStmt *temp_table_query = NULL);
+
+  static int check_contains_assignment(const ObDMLStmt* stmt,
+                                       bool &contains_assignment);
 private:
   //disallow construct
   ObOptimizerUtil();
