@@ -1854,7 +1854,7 @@ int ObLSDupTabletsMgr::try_to_confirm_tablets(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  SpinRLockGuard guard(dup_tablets_lock_);
+  SpinWLockGuard guard(dup_tablets_lock_);
   if (!lease_valid_follower_max_replayed_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid confirm ts", KR(ret), K(lease_valid_follower_max_replayed_scn));
@@ -2856,6 +2856,7 @@ int ObLSDupTabletsMgr::try_exec_special_op_(DupTabletChangeMap *op_tablet_set,
     if (OB_FAIL(clean_readable_tablets_(min_reserve_tablet_scn))) {
       DUP_TABLE_LOG(WARN, "clean readable tablets failed", K(ret), K(min_reserve_tablet_scn));
     }
+  } else if (op_tablet_set->get_common_header().need_clean_data_confirming_set()) {
     if (OB_FAIL(clean_durable_confirming_tablets_(min_reserve_tablet_scn))) {
       DUP_TABLE_LOG(WARN, "clean unreadable tablets failed", K(ret), K(min_reserve_tablet_scn));
     }
