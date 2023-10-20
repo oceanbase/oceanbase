@@ -109,9 +109,11 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow *&row)
             } else {
               session_iter_++;
               collect_->lock_.unlock();
+              collect_ = nullptr;
             }
           } else {
             session_iter_++;
+            collect_ = nullptr;
           }
         }
       }
@@ -120,7 +122,9 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow *&row)
       if (OB_ITER_END == (iter_ret = history_iter_.get_next(event_desc))) {
         session_iter_++;
         event_iter_ = 0;
-        collect_->lock_.unlock();
+        if (OB_NOT_NULL(collect_)) {
+          collect_->lock_.unlock();
+        }
         while (OB_SUCCESS == ret && session_iter_ < session_status_.count()) {
           collect_ = session_status_.at(session_iter_).second;
           if (NULL != collect_ && OB_SUCCESS == collect_->lock_.try_rdlock()) {
