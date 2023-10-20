@@ -8676,3 +8676,12 @@ int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_exp
   return ret;
 }
 
+bool ObOptimizerUtil::find_superset(const ObRelIds &rel_ids,
+                                    const ObIArray<ObRelIds> &single_table_ids)
+{
+  bool bret = false;
+  for (int64_t i = 0; !bret && i < single_table_ids.count(); ++i) {
+    bret = (single_table_ids.at(i).is_superset(rel_ids));
+  }
+  return bret;
+}

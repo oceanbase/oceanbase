@@ -4756,17 +4756,17 @@ Query Plan
 ==========================================================
 |ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SORT                     |     |1190    |1013        |
-|1 | SUBPLAN SCAN            |rw   |1190    |643         |
-|2 |  RECURSIVE UNION ALL    |     |1190    |640         |
+|0 |SORT                     |     |1190    |1010        |
+|1 | SUBPLAN SCAN            |rw   |1190    |640         |
+|2 |  RECURSIVE UNION ALL    |     |1190    |637         |
 |3 |   HASH JOIN             |     |62      |25          |
 |4 |    HASH JOIN            |     |17      |13          |
 |5 |     TABLE SCAN          |e    |5       |5           |
 |6 |     TABLE SCAN          |n1   |17      |5           |
 |7 |    TABLE SCAN           |n2   |17      |5           |
-|8 |   NESTED-LOOP SEMI JOIN |     |1128    |612         |
-|9 |    HASH JOIN            |     |3383    |165         |
-|10|     MATERIAL            |     |17      |19          |
+|8 |   NESTED-LOOP SEMI JOIN |     |1128    |610         |
+|9 |    HASH JOIN            |     |3383    |162         |
+|10|     MATERIAL            |     |17      |17          |
 |11|      HASH JOIN          |     |17      |15          |
 |12|       TABLE SCAN        |n    |17      |5           |
 |13|       TABLE SCAN        |e    |1       |5           |
@@ -4871,18 +4871,18 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                       |NAME   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SORT                           |       |1190    |1110        |
-|1 | SUBPLAN SCAN                  |rw     |1190    |741         |
-|2 |  RECURSIVE UNION ALL          |       |1190    |738         |
+|0 |SORT                           |       |1190    |1108        |
+|1 | SUBPLAN SCAN                  |rw     |1190    |738         |
+|2 |  RECURSIVE UNION ALL          |       |1190    |735         |
 |3 |   HASH JOIN                   |       |62      |25          |
 |4 |    HASH JOIN                  |       |17      |13          |
 |5 |     TABLE SCAN                |e      |5       |5           |
 |6 |     TABLE SCAN                |n1     |17      |5           |
 |7 |    TABLE SCAN                 |n2     |17      |5           |
-|8 |   NESTED-LOOP SEMI JOIN       |       |1128    |710         |
-|9 |    NESTED-LOOP JOIN CARTESIAN |       |3383    |263         |
-|10|     HASH JOIN                 |       |3383    |165         |
-|11|      MATERIAL                 |       |17      |19          |
+|8 |   NESTED-LOOP SEMI JOIN       |       |1128    |707         |
+|9 |    NESTED-LOOP JOIN CARTESIAN |       |3383    |260         |
+|10|     HASH JOIN                 |       |3383    |162         |
+|11|      MATERIAL                 |       |17      |17          |
 |12|       HASH JOIN               |       |17      |15          |
 |13|        TABLE SCAN             |n      |17      |5           |
 |14|        TABLE SCAN             |e      |1       |5           |

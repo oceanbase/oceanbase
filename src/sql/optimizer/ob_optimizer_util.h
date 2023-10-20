@@ -1445,6 +1445,8 @@ public:
 
   static int check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
 
+  static bool find_superset(const ObRelIds &rel_ids,
+                           const ObIArray<ObRelIds> &single_table_ids);
 private:
   //disallow construct
   ObOptimizerUtil();

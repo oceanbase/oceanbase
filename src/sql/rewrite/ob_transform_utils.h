@@ -1749,6 +1749,10 @@ public:
                                                      const ObIArray<ObRawExpr *> &set_op_exprs,
                                                      ObIArray<ObRawExpr *> &parent_exprs,
                                                      bool &is_valid);
+
+  static int get_explicated_ref_columns(const uint64_t table_id,
+                                        ObDMLStmt *stmt,
+                                        ObIArray<ObRawExpr*> &table_cols);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
