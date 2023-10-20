@@ -75,7 +75,7 @@ public:
     int cnt = deliver_.get_mysql_login_thread_count_to_set(static_cast<int32_t>(GCONF.sql_login_thread_count));
     return deliver_.set_mysql_login_thread_count(cnt);
   }
-  int reload_rpc_auth_method();
+  static int reload_rpc_auth_method();
 
   rootserver::ObIngressBWAllocService *get_ingress_service();
   int net_endpoint_register(const ObNetEndpointKey &endpoint_key, int64_t expire_time);
