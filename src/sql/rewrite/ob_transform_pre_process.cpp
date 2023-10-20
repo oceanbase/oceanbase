@@ -4436,10 +4436,14 @@ int ObTransformPreProcess::transform_for_merge_into(ObDMLStmt *&stmt, bool &tran
     ObMergeStmt *merge_stmt = static_cast<ObMergeStmt*>(stmt);
     TableItem *target_table = stmt->get_table_item(TARGET_TABLE_IDX);
     TableItem *source_table = stmt->get_table_item(SOURCE_TABLE_IDX);
+    bool is_valid = false;
     if (OB_ISNULL(target_table) || OB_ISNULL(source_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid table item", K(target_table), K(source_table), K(ret));
-    } else if (!merge_stmt->has_update_clause() && merge_stmt->has_insert_clause()) {
+    } else if (OB_FAIL(check_can_transform_insert_only_merge_into(merge_stmt,
+                                                                  is_valid))) {
+      LOG_WARN("failed to check can transform insert only merge into", K(ret));
+    } else if (is_valid) {
       ObDMLStmt* insert_stmt = NULL;
       if (OB_FAIL(transform_insert_only_merge_into(stmt, insert_stmt))) {
         LOG_WARN("failed to transform for insert only merge into", K(ret));
@@ -10026,6 +10030,30 @@ int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<
         } else if (OB_FAIL(exec_param->clear_flag(BE_USED))) {
           LOG_WARN("failed to clear flag", K(ret));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_can_transform_insert_only_merge_into(const ObMergeStmt *merge_stmt,
+                                                                      bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_ISNULL(merge_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (merge_stmt->has_update_clause() || !merge_stmt->has_insert_clause()) {
+    is_valid = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < merge_stmt->get_values_vector().count(); ++i) {
+      const ObRawExpr *expr = merge_stmt->get_values_vector().at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (expr->is_static_const_expr()) {
+        is_valid = false;
       }
     }
   }
