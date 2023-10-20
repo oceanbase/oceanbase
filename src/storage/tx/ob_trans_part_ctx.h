@@ -850,6 +850,7 @@ private:
   // | end_log_ts = n+10 | ----------------> |                                 | -------------------> |       | --> |    (0<m<10)     | --> |                      |
   // +-------------------+                   +---------------------------------+                      +-------+     +-----------------+     +----------------------+
   bool is_incomplete_replay_ctx_;
+  bool is_replay_commit_log_succ_;
   // set true when submitting redo log for freezing and reset after freezing
   bool is_submitting_redo_log_for_freeze_;
   share::SCN start_replay_ts_; // replay debug

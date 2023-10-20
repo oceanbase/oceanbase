@@ -322,6 +322,7 @@ void ObPartTransCtx::default_init_()
   start_replay_ts_.reset();
   start_recover_ts_.reset();
   is_incomplete_replay_ctx_ = false;
+  is_replay_commit_log_succ_ = false;
   is_submitting_redo_log_for_freeze_ = false;
   start_working_log_ts_ = SCN::min_scn();
   max_2pc_commit_scn_.reset();
@@ -4979,6 +4980,16 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
 
   CtxLockGuard guard(lock_);
 
+  if (is_replay_commit_log_succ_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "replay commit log twice", K(ret), K(commit_log), K(offset), K(timestamp));
+    if (ObServerConfig::get_instance().ignore_replay_checksum_error) {
+      TRANS_LOG(ERROR, "ignore replay error", K(ret));
+      // rewrite ret
+      ret = OB_SUCCESS;
+    }
+    return ret;
+  }
   // TODO replace participants_ with prepare_log_info_arr_ for transfer
   if (OB_FAIL(check_replay_avaliable_(offset, timestamp, part_log_no, need_replay))) {
     TRANS_LOG(WARN, "check replay available failed", KR(ret), K(offset), K(timestamp), K(*this));
@@ -5092,6 +5103,9 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
     TRANS_LOG(INFO, "[Replay Tx] replay commit log", K(ret), K(used_time), K(timestamp), K(offset),
               K(commit_log), K(*this));
 #endif
+  }
+  if (OB_SUCCESS == ret) {
+    is_replay_commit_log_succ_ = true;
   }
   return ret;
 }
