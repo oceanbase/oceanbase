@@ -608,7 +608,7 @@ int ObDBMSSchedJobMaster::register_new_jobs(uint64_t tenant_id, bool is_oracle_t
       int tmp = alive_jobs_.exist_refactored(job_id_by_tenant);
       if (OB_HASH_EXIST == tmp) {
         // do nothing ...
-        LOG_INFO("job exist", K(alive_jobs_), K(job_id_by_tenant));
+        LOG_DEBUG("job exist", K(alive_jobs_), K(job_id_by_tenant));
       } else if (OB_HASH_NOT_EXIST == tmp) {
         OZ (register_job(job_info));
         OZ (alive_jobs_.set_refactored(job_id_by_tenant));
