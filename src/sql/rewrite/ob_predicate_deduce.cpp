@@ -72,6 +72,8 @@ int ObPredicateDeduce::check_deduce_validity(ObRawExpr *cond, bool &is_valid)
   } else if (!left_expr->get_result_type().is_valid() ||
              !right_expr->get_result_type().is_valid()) {
     is_valid = false;
+  } else if (left_expr->get_expr_type() == T_OP_ROW || right_expr->get_expr_type() == T_OP_ROW) {
+    is_valid = false;
   } else if (left_expr == right_expr || left_expr->same_as(*right_expr)) {
     is_valid = false;
   }
