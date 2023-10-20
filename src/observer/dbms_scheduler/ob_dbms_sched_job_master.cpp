@@ -375,7 +375,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
   CK (OB_LIKELY(inited_));
   CK (OB_NOT_NULL(job_key));
   CK (OB_LIKELY(job_key->is_valid()));
-
+  JobIdByTenant job_id_by_tenant(job_key->get_tenant_id(), job_key->get_job_id());
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to scheduler job", K(ret), KPC(job_key));
   } else {
@@ -384,7 +384,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), allocator, job_info));
 
     if (OB_FAIL(ret) || !job_info.valid()) {
-      int tmp = alive_jobs_.erase_refactored(job_key->get_job_id_with_tenant());
+      int tmp = alive_jobs_.erase_refactored(job_id_by_tenant);
       if (tmp != OB_SUCCESS) {
         LOG_ERROR("failed delete invalid job from hash set", K(tmp), K(ret), K(job_info), KPC(job_key));
       } else {
@@ -411,7 +411,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       // always add job to queue. we need this to check job status changes.
       if (OB_SUCCESS != (tmp_ret = register_job(job_info, job_key, ignore_nextdate))) {
         LOG_WARN("failed to register job to job queue", K(tmp_ret), K(job_info));
-        int tmp = alive_jobs_.erase_refactored(job_info.get_job_id_with_tenant());
+        int tmp = alive_jobs_.erase_refactored(job_id_by_tenant);
         if (tmp != OB_SUCCESS) {
           LOG_ERROR("failed delete invalid job from hash set", K(tmp), K(job_info));
         } else {
@@ -599,15 +599,19 @@ int ObDBMSSchedJobMaster::register_new_jobs(uint64_t tenant_id, bool is_oracle_t
 {
   int ret = OB_SUCCESS;
   ObDBMSSchedJobInfo job_info;
+  JobIdByTenant job_id_by_tenant;
   for (int64_t i = 0; OB_SUCC(ret) && i < job_infos.count(); i++) {
     job_info = job_infos.at(i);
     if (job_info.valid()) {
-      int tmp = alive_jobs_.exist_refactored(job_info.get_job_id_with_tenant());
+      job_id_by_tenant.set_tenant_id(job_info.get_tenant_id());
+      job_id_by_tenant.set_job_id(job_info.get_job_id());
+      int tmp = alive_jobs_.exist_refactored(job_id_by_tenant);
       if (OB_HASH_EXIST == tmp) {
         // do nothing ...
-      } else if (OB_HASH_NOT_EXIST) {
+        LOG_INFO("job exist", K(alive_jobs_), K(job_id_by_tenant));
+      } else if (OB_HASH_NOT_EXIST == tmp) {
         OZ (register_job(job_info));
-        OZ (alive_jobs_.set_refactored(job_info.get_job_id_with_tenant()));
+        OZ (alive_jobs_.set_refactored(job_id_by_tenant));
         LOG_INFO("register new job", K(ret), K(tenant_id), K(job_info));
       } else {
         LOG_ERROR("dbms sched job master check job exist failed", K(ret), K(job_info));

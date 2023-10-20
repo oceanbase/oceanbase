@@ -171,6 +171,49 @@ public:
 
   virtual ~ObDBMSSchedJobMaster() { alive_jobs_.destroy(); };
 
+  class JobIdByTenant
+  {
+  public:
+    JobIdByTenant()
+        : tenant_id_(OB_INVALID_TENANT_ID),
+          job_id_(OB_INVALID_ID) {}
+    JobIdByTenant(const int64_t tenant_id, const int64_t job_id)
+      : tenant_id_(tenant_id),
+        job_id_(job_id) {}
+    ~JobIdByTenant() {}
+    bool operator ==(const JobIdByTenant &other) const
+    {
+      return tenant_id_ == other.tenant_id_ && job_id_ == other.job_id_;
+    }
+    bool operator !=(const JobIdByTenant &other) const
+    {
+      return !(*this == other);
+    }
+    uint64_t hash() const
+    {
+      uint64_t hash_val = 0;
+
+      hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
+      hash_val = murmurhash(&job_id_, sizeof(job_id_), hash_val);
+
+      return hash_val;
+    }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
+    void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
+    void set_job_id(int64_t job_id) { job_id_ = job_id; }
+    int64_t get_tenant_id() { return tenant_id_; }
+    int64_t get_job_id() { return job_id_; }
+    TO_STRING_KV(K_(tenant_id),
+      K_(job_id));
+  private:
+    int64_t tenant_id_;
+    int64_t job_id_;
+  };
+
   static ObDBMSSchedJobMaster &get_instance();
 
   bool is_inited() { return inited_; }
@@ -224,7 +267,7 @@ private:
   common::ObSpinLock lock_;
   common::ObArenaAllocator allocator_;
 
-  common::hash::ObHashSet<uint64_t> alive_jobs_;
+  common::hash::ObHashSet<JobIdByTenant> alive_jobs_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedJobMaster);
