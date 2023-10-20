@@ -1284,6 +1284,8 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
     //do nothing
   } else if (is_virtual_table(table_meta->get_ref_table_id()) && !is_ds_virtual_table(table_meta->get_ref_table_id())) {
     //do nothing
+  } else if (table_meta->get_table_type() == EXTERNAL_TABLE) {
+    //do nothing TODO [EXTERNAL TABLE]
   } else if (OB_FAIL(get_valid_dynamic_sampling_level(ctx.get_session_info(),
                                                       log_plan->get_log_plan_hint().get_dynamic_sampling_hint(table_meta->get_table_id()),
                                                       ctx.get_global_hint().get_dynamic_sampling(),
