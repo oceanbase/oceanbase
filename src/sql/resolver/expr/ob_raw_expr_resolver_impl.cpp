@@ -2172,7 +2172,7 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
 {
   int ret = OB_SUCCESS;
   if (T_QUESTIONMARK == left_node.type_) {
-    // quesitonmark in obj access ref muse be top node
+    // quesitonmark in obj access ref must be top node
     CK (q_name.access_idents_.count() <= 0);
     OZ (q_name.access_idents_.push_back(ObObjAccessIdent(ObString(""), left_node.value_)));
     OX (q_name.access_idents_.at(q_name.access_idents_.count() - 1).set_pl_var());

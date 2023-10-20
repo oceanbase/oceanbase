@@ -6376,7 +6376,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
             spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
             OZ (GCTX.sql_engine_->handle_pl_execute(
                     ps_sql, *session, exec_params, *spi_result.get_result_set(), spi_result.get_sql_ctx(),
-                    true /* is_prepare_protocol */, false /* is_dynamic_sql */), exec_params);
+                    true /* is_prepare_protocol */, false /* is_dynamic_sql */),
+                K(ps_sql), K(exec_params));
             OZ (adjust_out_params(*spi_result.get_result_set(), out_params));
           }
         }

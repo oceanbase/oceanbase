@@ -11713,34 +11713,36 @@ int ObPLResolver::resolve_udf_info(
 #endif
 
   // adjust routine database name, will set to ObUDFRawExpr later.
-  if (OB_SUCC(ret) && db_name.empty() && OB_NOT_NULL(routine_info)) {
-    if (routine_info->get_database_id() != OB_INVALID_ID &&
-        routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
+  if (OB_SUCC(ret)
+      && db_name.empty()
+      && OB_NOT_NULL(routine_info)
+      && routine_info->get_database_id() != OB_INVALID_ID) {
+    if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
       const ObDatabaseSchema *database_schema = NULL;
       OZ (resolve_ctx_.schema_guard_.get_database_schema(
         resolve_ctx_.session_info_.get_effective_tenant_id(), routine_info->get_database_id(), database_schema));
       CK (OB_NOT_NULL(database_schema));
       OX (db_name = database_schema->get_database_name_str());
-      if (OB_SUCC(ret) && routine_info->get_package_id() != OB_INVALID_ID) {
-        if (routine_info->is_udt_routine()) {
-          const share::schema::ObUDTTypeInfo *udt_info = NULL;
-          OZ (resolve_ctx_.schema_guard_.get_udt_info(
-            routine_info->get_tenant_id(), routine_info->get_package_id(), udt_info));
-          CK (OB_NOT_NULL(udt_info));
-          OX (package_name = udt_info->get_type_name());
-        } else {
-          const share::schema::ObPackageInfo *package_info = NULL;
-          OZ (resolve_ctx_.schema_guard_.get_package_info(
-            routine_info->get_tenant_id(), routine_info->get_package_id(), package_info));
-          CK (OB_NOT_NULL(package_info));
-          OX (package_name = package_info->get_package_name());
-        }
+    }
+    if (OB_SUCC(ret) && routine_info->get_package_id() != OB_INVALID_ID) {
+      if (routine_info->is_udt_routine()) {
+        const share::schema::ObUDTTypeInfo *udt_info = NULL;
+        OZ (resolve_ctx_.schema_guard_.get_udt_info(
+          routine_info->get_tenant_id(), routine_info->get_package_id(), udt_info));
+        CK (OB_NOT_NULL(udt_info));
+        OX (package_name = udt_info->get_type_name());
+      } else {
+        const share::schema::ObPackageInfo *package_info = NULL;
+        OZ (resolve_ctx_.schema_guard_.get_package_info(
+          routine_info->get_tenant_id(), routine_info->get_package_id(), package_info));
+        CK (OB_NOT_NULL(package_info));
+        OX (package_name = package_info->get_package_name());
       }
-      if (OB_SUCC(ret) &&
-          OB_NOT_NULL(udf_info.ref_expr_) &&
-          udf_info.ref_expr_->get_func_name().case_compare(routine_info->get_routine_name()) != 0) {
-        OX (udf_info.ref_expr_->set_func_name(routine_info->get_routine_name()));
-      }
+    }
+    if (OB_SUCC(ret) &&
+        OB_NOT_NULL(udf_info.ref_expr_) &&
+        udf_info.ref_expr_->get_func_name().case_compare(routine_info->get_routine_name()) != 0) {
+      OX (udf_info.ref_expr_->set_func_name(routine_info->get_routine_name()));
     }
   }
 
@@ -13157,7 +13159,7 @@ int ObPLResolver::resolve_name(ObQualifiedName &q_name,
                                        access_idxs,
                                        func,
                                        access_ident.is_pl_udf()))) {
-        LOG_IN_CHECK_MODE("match var idents failed", K(ret), K(i), K(q_name.access_idents_));
+        LOG_IN_CHECK_MODE("failed to resolve access ident", K(ret), K(i), K(q_name.access_idents_));
       }
     }
   }
@@ -14048,12 +14050,12 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
         int64_t var_idx = access_ident.access_index_;
         const ObPLVar *local_var = NULL;
         CK (OB_NOT_NULL(sym_tbl));
-        OV (var_idx >= 0 && var_idx < sym_tbl->get_count(),
-            OB_ERR_UNEXPECTED, K(var_idx), K(sym_tbl->get_count()));
-        CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
-        OX (pl_data_type = local_var->get_type());
-        OX (type = ObPLExternalNS::LOCAL_VAR);
-        OX (var_index = var_idx);
+        if (OB_SUCC(ret) && var_idx >= 0 && var_idx < sym_tbl->get_count()) {
+          CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
+          OX (pl_data_type = local_var->get_type());
+          OX (type = ObPLExternalNS::LOCAL_VAR);
+          OX (var_index = var_idx);
+        }
       } else {
         OZ (ns.resolve_symbol(access_ident.access_name_,
                               type,
