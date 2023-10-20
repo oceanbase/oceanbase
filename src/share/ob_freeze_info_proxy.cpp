@@ -169,6 +169,52 @@ int ObFreezeInfoProxy::get_freeze_info_larger_or_equal_than(
   return ret;
 }
 
+int ObFreezeInfoProxy::get_frozen_scn_larger_or_equal_than(
+    ObISQLClient &sql_proxy,
+    const SCN &frozen_scn,
+    ObIArray<uint64_t> &frozen_scn_vals)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    const uint64_t frozen_scn_val = frozen_scn.get_val_for_inner_table_field();
+    if (OB_FAIL(sql.assign_fmt("SELECT frozen_scn FROM %s WHERE frozen_scn >= %lu ORDER BY frozen_scn",
+        OB_ALL_FREEZE_INFO_TNAME, frozen_scn_val))) {
+      LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K(frozen_scn));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id_, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(sql), K_(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get sql result", KR(ret), K(sql), K_(tenant_id));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next row", KR(ret), K_(tenant_id));
+          }
+        } else {
+          uint64_t frozen_scn_val = OB_INVALID_SCN_VAL;
+          EXTRACT_UINT_FIELD_MYSQL(*result, "frozen_scn", frozen_scn_val, uint64_t);
+          if (OB_SUCC(ret)) {
+            if (OB_UNLIKELY(OB_INVALID_SCN_VAL == frozen_scn_val)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid frozen scn val", KR(ret), K(frozen_scn_val), K_(tenant_id), K(sql));
+            } else if (OB_FAIL(frozen_scn_vals.push_back(frozen_scn_val))) {
+              LOG_WARN("fail to push back", KR(ret), K(frozen_scn_val), K_(tenant_id));
+            }
+          }
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  LOG_INFO("finish load frozen scn", KR(ret), K_(tenant_id), K(sql));
+  return ret;
+}
+
 int ObFreezeInfoProxy::get_max_frozen_scn_smaller_or_equal_than(
     ObISQLClient &sql_proxy,
     const SCN &compaction_scn,

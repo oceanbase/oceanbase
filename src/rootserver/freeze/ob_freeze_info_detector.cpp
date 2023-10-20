@@ -350,7 +350,10 @@ int ObFreezeInfoDetector::try_adjust_global_merge_info(const int64_t expected_ep
 {
   int ret = OB_SUCCESS;
   bool is_initial = false;
-  if (!is_primary_service() && !is_global_merge_info_adjusted_) {
+  // both primary and standby tenants should adjust global_merge_info to skip unnecessary major freeze
+  // primary tenants:
+  // standby tenants:
+  if (!is_global_merge_info_adjusted_) {
     bool is_restore = false;
     if (OB_FAIL(check_tenant_is_restore(tenant_id_, is_restore))) {
       LOG_WARN("fail to check tenant is restore", KR(ret), K_(tenant_id), K_(is_primary_service));
@@ -367,9 +370,12 @@ int ObFreezeInfoDetector::try_adjust_global_merge_info(const int64_t expected_ep
       LOG_WARN("fail to try adjust global merge info, freeze info manager is null", KR(ret),
                K_(tenant_id), K_(is_primary_service));
     } else if (OB_FAIL(freeze_info_mgr_->adjust_global_merge_info(expected_epoch))) {
-      LOG_WARN("fail to adjust global merge info", KR(ret), K_(tenant_id), K_(is_primary_service));
+      LOG_WARN("fail to adjust global merge info", KR(ret), K_(tenant_id), K_(is_primary_service),
+               K(expected_epoch));
     } else {
       is_global_merge_info_adjusted_ = true;
+      LOG_INFO("succ to adjust global merge info", K_(tenant_id), K_(is_primary_service),
+               K(expected_epoch));
     }
   }
   return ret;

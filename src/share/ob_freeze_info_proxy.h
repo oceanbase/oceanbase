@@ -133,6 +133,11 @@ public:
       const SCN &frozen_scn,
       common::ObIArray<ObSimpleFrozenStatus> &frozen_statuses);
 
+  int get_frozen_scn_larger_or_equal_than(
+      common::ObISQLClient &sql_proxy,
+      const SCN &frozen_scn,
+      common::ObIArray<uint64_t> &frozen_scn_vals);
+
   // get the maximum frozen_scn which is smaller than or equal to the given @compaction_scn
   int get_max_frozen_scn_smaller_or_equal_than(
       common::ObISQLClient &sql_proxy,
