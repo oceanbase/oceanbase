@@ -3068,11 +3068,22 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
                            *this,
                            false,
                            OB_INVALID_COUNT);
-  if (OB_FAIL(drv.response_query_header(cursor.get_field_columns(),
-                                        false,
-                                        false,
-                                        true))) {
-    LOG_WARN("fail to get autocommit", K(ret));
+  if (0 == cursor.get_field_columns().count()) {
+    // SELECT * INTO OUTFILE return null field, and only response ok packet
+    ObOKPParam ok_param;
+    ok_param.affected_rows_ = 0;
+    ok_param.is_partition_hit_ = session.partition_hit().get_bool();
+    ok_param.has_more_result_ = false;
+    if (OB_FAIL(send_ok_packet(session, ok_param))) {
+      LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+    }
+  } else {
+    if (OB_FAIL(drv.response_query_header(cursor.get_field_columns(),
+                                          false,
+                                          false,
+                                          true))) {
+      LOG_WARN("fail to get autocommit", K(ret));
+    }
   }
   return ret;
 }
