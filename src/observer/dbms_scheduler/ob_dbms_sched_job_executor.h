@@ -35,7 +35,7 @@ public:
   virtual ~ObDBMSSchedJobExecutor() {}
   int init(
     common::ObMySQLProxy *sql_proxy, share::schema::ObMultiVersionSchemaService *schema_service);
-  int run_dbms_sched_job(uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id);
+  int run_dbms_sched_job(uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const ObString &job_name);
 
 private:
   static int init_session(

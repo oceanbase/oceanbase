@@ -268,7 +268,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
   return ret;
 }
 
-int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id)
+int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const ObString &job_name)
 {
   int ret = OB_SUCCESS;
   ObDBMSSchedJobInfo job_info;
@@ -276,7 +276,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
 
   THIS_WORKER.set_timeout_ts(INT64_MAX);
 
-  OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, allocator, job_info));
+  OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
     OZ (table_operator_.update_for_start(tenant_id, job_info));
