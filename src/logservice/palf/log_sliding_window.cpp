@@ -3316,7 +3316,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
   const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || NULL == buf || buf_len <= 0) {
+  } else if (!lsn.is_valid() || NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BUFFER_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn),
         KP(buf), K(buf_len));

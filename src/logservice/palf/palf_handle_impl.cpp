@@ -3127,7 +3127,7 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || NULL == buf || buf_len <= 0) {
+  } else if (!lsn.is_valid() || NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BUFFER_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), KP(buf), K(buf_len));
   } else {
