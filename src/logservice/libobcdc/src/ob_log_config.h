@@ -158,6 +158,9 @@ public:
   // libobcdc filters REDO data from deleted historical data scenarios by default
   DEF_STR(cluster_id_black_list, OB_CLUSTER_PARAMETER, "|", "cluster id black list");
 
+  // lsn black list, using vertical line separation
+  DEF_STR(lsn_black_list, OB_CLUSTER_PARAMETER, "|", "lsn black list");
+
   // minimum value of default cluster id blacklist value
   // The minimum value is: 2^31 - 10000 = 2147473648
   // This definition can only be a literal value

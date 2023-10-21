@@ -45,7 +45,8 @@ ObLogPartTransResolverFactory::~ObLogPartTransResolverFactory()
 int ObLogPartTransResolverFactory::init(TaskPool &task_pool,
     IObLogEntryTaskPool &log_entry_task_pool,
     IObLogFetcherDispatcher &dispatcher,
-    IObLogClusterIDFilter &cluster_id_filter)
+    IObLogClusterIDFilter &cluster_id_filter,
+    IObLogLsnFilter &lsn_filter)
 {
   int ret = OB_SUCCESS;
   const int64_t obj_size = sizeof(ObCDCPartTransResolver);
@@ -63,6 +64,7 @@ int ObLogPartTransResolverFactory::init(TaskPool &task_pool,
     log_entry_task_pool_ = &log_entry_task_pool;
     dispatcher_ = &dispatcher;
     cluster_id_filter_ = &cluster_id_filter;
+    lsn_filter_ = &lsn_filter;
     inited_ = true;
   }
   return ret;
@@ -75,6 +77,7 @@ void ObLogPartTransResolverFactory::destroy()
   log_entry_task_pool_ = NULL;
   dispatcher_ = NULL;
   cluster_id_filter_ = NULL;
+  lsn_filter_ = NULL;
   (void)allocator_.destroy();
   (void)task_map_.destroy();
 }
@@ -84,8 +87,8 @@ int ObLogPartTransResolverFactory::alloc(const char *tls_id_str,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(task_pool_) || OB_ISNULL(dispatcher_) || OB_ISNULL(cluster_id_filter_)) {
-    LOG_ERROR("not init", K(task_pool_), K(dispatcher_), K(cluster_id_filter_));
+  if (OB_ISNULL(task_pool_) || OB_ISNULL(dispatcher_) || OB_ISNULL(cluster_id_filter_) || OB_ISNULL(lsn_filter_)) {
+    LOG_ERROR("not init", K(task_pool_), K(dispatcher_), K(cluster_id_filter_), K(lsn_filter_));
     ret = OB_NOT_INIT;
   } else {
     void *obj = allocator_.alloc();
@@ -94,7 +97,7 @@ int ObLogPartTransResolverFactory::alloc(const char *tls_id_str,
       LOG_ERROR("allocate memory for ObCDCPartTransResolver fail", K(obj));
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      ptr = new(obj) ObCDCPartTransResolver(tls_id_str, *task_pool_, task_map_, *dispatcher_, *cluster_id_filter_);
+      ptr = new(obj) ObCDCPartTransResolver(tls_id_str, *task_pool_, task_map_, *dispatcher_, *cluster_id_filter_, *lsn_filter_);
     }
   }
 
