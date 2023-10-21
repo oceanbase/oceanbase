@@ -402,7 +402,7 @@ class ObBar
 {
   static const int CONST_V;
 }
-// in the implenmentation file
+// in the implementation file
 const int ObBar::CONST_V = 1;
 ```
 
@@ -860,7 +860,7 @@ The function definitions in the .cpp file should be as consistent as possible wi
 The reason why the constant definition should be placed in front of the function definition (constructor/destructor, member function) instead of in the data member is because the constant may be referenced by the function.
 
 ## 4.12 Summary
-1. The constructor only does trival initialization. Each class needs to define at least one constructor, and the destructor with virtual function or subclass is declared as virtual.
+1. The constructor only does trivial initialization. Each class needs to define at least one constructor, and the destructor with virtual function or subclass is declared as virtual.
 2. In order to avoid implicit type conversion, the single-argument constructor needs to be declared as explicit.
 3. **In principle, the copy constructor shall not be used (except for the base classes that have been defined and used)**. If it must be violated, please discuss and approve it in advance, and explain the reasons in detail.
 4. Use `DISALLOW_COPY_AND_ASSIGN` to avoid abuse of copy constructor and assignment operation;
@@ -1606,7 +1606,7 @@ struct NoInt {
 **Allowed**. This feature is like tailor-made for OceanBase; the function of disabling a certain function is also very useful.
 ## 6.28 Type Alias (Alias Declaration)
 **What is**
-Use the new alias declration syntax to define an alias of a type, similar to the previous typedef; moreover, you can also define an alias template.
+Use the new alias declaration syntax to define an alias of a type, similar to the previous typedef; moreover, you can also define an alias template.
 **Example**
 ```cpp
 // C++11
@@ -2527,7 +2527,7 @@ Since the new log supports module and range settings, it will be more effective 
 5. **It is forbidden to declare non-simple variables in the loop body**. If it must be violated, please obtain the consent of the group leader in advance, and explain the reason in detail.
 6. **Resource management follows the principle of "who applies for release"**. If resources need to be released, release them before the function returns or at the end of the outermost else branch. So if you need to restore the input parameters, do so before the function returns. If it must be violated, please obtain the consent of the group leader in advance, and explain the reason in detail.
 ## 12.2 Class
-1. The constructor only does trival initialization. Each class needs to define at least one constructor, and the destructor with virtual functions or subclasses is declared as virtual.
+1. The constructor only does trivial initialization. Each class needs to define at least one constructor, and the destructor with virtual functions or subclasses is declared as virtual.
 2. In order to avoid implicit type conversion, the single-parameter constructor needs to be declared as explicit.
 3. **In principle, the copy constructor must not be used (except for the basic classes that have been defined and used)**. If it must be violated, please obtain the consent of the group leader in advance, and explain the reason in detail.
 4. Use `DISALLOW_COPY_AND_ASSIGN` to avoid abuse of copy constructor and assignment operation;
