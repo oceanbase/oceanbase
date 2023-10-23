@@ -594,10 +594,13 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
         if (GCONF.enable_perf_event) {
           uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
           bool read_only = false;
-          if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
+          if ((pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_)) {
+            // do nothing
+          } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id,
+                                                                                 read_only))) {
             LOG_WARN("failed to check read_only privilege", K(ret));
           } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->check_read_only_privilege(
-                             read_only, pc_ctx.sql_traits_))) {
+                       read_only, pc_ctx.sql_traits_))) {
             LOG_WARN("failed to check read_only privilege", K(ret));
           }
         }
@@ -2175,7 +2178,6 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
   int ret = OB_SUCCESS;
   ObGlobalReqTimeService::check_req_timeinfo();
   UNUSED(stmt_id);
-  ObSqlTraits sql_traits;
   pc_ctx.handle_id_ = guard.ref_handle_;
   int64_t original_param_cnt = 0;
 
@@ -2228,10 +2230,12 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
   if (OB_SUCC(ret) && GCONF.enable_perf_event) {
     uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
     bool read_only = false;
-    if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
+    if ((pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_)) {
+      // do nothing
+    } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
       SQL_PC_LOG(WARN, "fail to get tenant read only attribute", K(tenant_id), K(ret));
     } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->check_read_only_privilege(read_only,
-                                                                                sql_traits))) {
+                                                                                pc_ctx.sql_traits_))) {
       SQL_PC_LOG(WARN, "failed to check read_only privilege", K(ret));
     }
   }

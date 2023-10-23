@@ -634,7 +634,8 @@ public:
     struct {
       uint32_t enable_strict_defensive_check_: 1; //TRUE if the _enable_defensive_check is '2'
       uint32_t enable_user_defined_rewrite_ : 1;//TRUE if enable_user_defined_rewrite_rules is open
-      uint32_t reserved_ : 30;
+      uint32_t is_from_pl_ : 1;
+      uint32_t reserved_ : 29;
     };
   };
 private:
