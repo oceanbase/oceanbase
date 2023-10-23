@@ -129,7 +129,7 @@ void ObArchiveSequencer::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveSequencer thread start");
   lib::set_thread_name("ArcSeq");
-  const int64_t THREAD_RUN_INTERVAL = 5 * 1000 * 1000L;
+  const int64_t THREAD_RUN_INTERVAL = 100 * 1000L;
 
   lib::set_thread_name("ArcSeq");
   ObCurTraceId::init(GCONF.self_addr_);
@@ -257,7 +257,7 @@ int GenFetchTaskFunctor::get_commit_index_(const ObLSID &id, LSN &lsn)
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(WARN, "invalid log offset", K(ret), K(id), K(lsn));
   } else {
-    ARCHIVE_LOG(INFO, "get commit index succ");
+    ARCHIVE_LOG(TRACE, "get commit index succ", K(id), K(lsn));
   }
   return ret;
 }
@@ -274,7 +274,7 @@ void GenFetchTaskFunctor::cal_end_lsn_(const LSN &base_lsn,
   } else {
     end_lsn = LSN((base_lsn.val_ / MAX_ARCHIVE_FILE_SIZE + 1) * MAX_ARCHIVE_FILE_SIZE);
   }
-  ARCHIVE_LOG(INFO, "print cal_end_lsn_", K(base_lsn), K(fetch_lsn), K(commit_lsn), K(end_lsn));
+  ARCHIVE_LOG(TRACE, "print cal_end_lsn_", K(base_lsn), K(fetch_lsn), K(commit_lsn), K(end_lsn));
 }
 
 int GenFetchTaskFunctor::generate_log_fetch_task_(const ObLSID &id,
