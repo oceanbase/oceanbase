@@ -4348,11 +4348,12 @@ int ObTransformUtils::add_cast_for_replace_if_need(ObRawExprFactory &expr_factor
     const ObExprResType &dst_type = to_expr->get_result_type();
     bool need_length_cast = (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_rowid_tc(dst_type.get_type()))
                             ? (src_type.get_length() != dst_type.get_length()) : false;
+    bool need_zerofill_cast = from_expr->get_result_type().has_result_flag(ZEROFILL_FLAG) &&
+                              !to_expr->get_result_type().has_result_flag(ZEROFILL_FLAG);
     bool need_cast = (src_type.get_type() != dst_type.get_type()) ||
                      (src_type.get_precision() != dst_type.get_precision()) ||
                      (src_type.get_scale() != dst_type.get_scale()) ||
-                     from_expr->get_result_type().has_result_flag(ZEROFILL_FLAG) ||
-                     need_length_cast;
+                     need_zerofill_cast || need_length_cast;
     if (ob_is_string_or_lob_type(src_type.get_type())) {
       need_cast |= (src_type.get_collation_type() != dst_type.get_collation_type()) ||
                    (src_type.get_collation_level() != dst_type.get_collation_level());
