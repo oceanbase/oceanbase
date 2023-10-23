@@ -18,6 +18,7 @@
 #include "storage/tx/wrs/ob_weak_read_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_xa_service.h"
+#include "observer/omt/ob_tenant.h"
 // ------------------------------------------------------------------------------------------
 // Implimentation notes:
 // there are two relation we need care:
@@ -1628,6 +1629,12 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
   retries = 0;
   int64_t min_retry_intval = 10 * 1000; // 10 ms
   expire_ts = std::max(ObTimeUtility::current_time() + MIN_WAIT_TIME, expire_ts);
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = static_cast<omt::ObTenant *>(tenant_base);
+  if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "get tenant is null", K(ret));
+  }
   while (OB_SUCC(ret)) {
     int64_t retry_intval = std::min(min_retry_intval * (1 + retries), max_retry_intval);
     int64_t waittime = std::min(expire_ts - ObTimeUtility::current_time(), retry_intval);
@@ -1658,7 +1665,7 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
           int rpc_ret = OB_SUCCESS;
           if (OB_FAIL(tx.rpc_cond_.wait(waittime, rpc_ret))) {
             TRANS_LOG(WARN, "tx rpc condition wakeup", K(ret),
-                      K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
+                      K(tx.tx_id_), K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
                       K_(tx.state));
             // if trans is terminated, rollback savepoint should be terminated
             // NOTE that this case is only for xa trans
@@ -1668,6 +1675,9 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
             // 3. branch 1 receives callback of rollback savepoint
             if (tx.is_terminated()) {
               ret = OB_TRANS_HAS_DECIDED;
+            } else if (retries > 10 && tenant->has_stopped()) {
+              ret = OB_TENANT_NOT_IN_SERVER;
+              TRANS_LOG(WARN, "tenant has been stopped", K(ret));
             } else {
               ret = OB_SUCCESS;
             }

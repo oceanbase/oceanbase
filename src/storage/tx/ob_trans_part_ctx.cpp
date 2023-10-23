@@ -1150,6 +1150,7 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       } else {
         TRANS_LOG(ERROR, "unexpected sub state", K(*this));
       }
+      const int64_t GET_GTS_AHEAD_INTERVAL = GCONF._ob_get_gts_ahead_interval;
       set_trans_need_wait_wrap_(receive_gts_ts, GET_GTS_AHEAD_INTERVAL);
       // the same as before prepare
       mt_ctx_.set_trans_version(gts);
