@@ -561,7 +561,7 @@ int ObDbmsWorkloadRepository::usec_to_string(
 const char *NULL_CHAR = "";
 const int NULL_CHAR_LENGTH = 0;
 const char *FILTER_EVENT_STR =
-    "CASE WHEN wait_class_id = 100 OR TIME_WAITED != 0 THEN 1 ELSE 0 END";
+    "1";
 const char *ASH_VIEW_SQL =
     "SELECT * FROM ( SELECT a.sample_id, a.sample_time,  a.svr_ip, "
     " a.svr_port,  a.con_id,  a.user_id,  a.session_id,  a.session_type, a.session_state,  "
@@ -811,25 +811,25 @@ int ObDbmsWorkloadRepository::print_ash_top_user_event_info(
   } else {
     common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
     const uint64_t tenant_id = MTL_ID();
-    const char *table_top[] = {"-", "-", "-", "-"};
-    const int64_t column_widths[] = {40, 20, 10, 9};
-    const char *column_headers[] = {"Event", "WAIT_CLASS", "EVENT_CNT", "% Event"};
+    const char *table_top[] = {"-", "-", "-"};
+    const int64_t column_widths[] = {40, 20, 9};
+    const char *column_headers[] = {"Event", "WAIT_CLASS", "% Event"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
       ObMySQLResult *result = nullptr;
-      if (OB_FAIL(format_row(4 /*column_size*/, table_top, column_widths, "-", "+", buff))) {
+      if (OB_FAIL(format_row(3 /*column_size*/, table_top, column_widths, "-", "+", buff))) {
         LOG_WARN("failed to format row", K(ret));
       } else if (OB_FAIL(format_row(
-                     4 /*column_size*/, column_headers, column_widths, " ", "|", buff))) {
+                     3 /*column_size*/, column_headers, column_widths, " ", "|", buff))) {
         LOG_WARN("failed to format row", K(ret));
-      } else if (OB_FAIL(format_row(4 /*column_size*/, table_top, column_widths, "-", "+", buff))) {
+      } else if (OB_FAIL(format_row(3 /*column_size*/, table_top, column_widths, "-", "+", buff))) {
         LOG_WARN("failed to format row", K(ret));
       } else if (OB_FAIL(sql_string.append("SELECT /*+ MONITOR */ EVENT,  WAIT_CLASS, COUNT(1)"
                                            " EVENT_CNT FROM ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
-      } else if (OB_FAIL(sql_string.append(") top_event  GROUP BY EVENT, WAIT_CLASS"))) {
+      } else if (OB_FAIL(sql_string.append(") top_event GROUP BY EVENT, WAIT_CLASS ORDER BY EVENT_CNT DESC"))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("failed to fetch ash begin time and ash end time", KR(ret), K(tenant_id),
@@ -851,7 +851,6 @@ int ObDbmsWorkloadRepository::print_ash_top_user_event_info(
             int64_t event_cnt = 0;
             char event[64] = "";
             char wait_class[64] = "";
-            char event_cnt_char[64] = "";
             char event_radio_char[64] = "";
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "EVENT", event, 64, tmp_real_str_len);
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
@@ -859,13 +858,12 @@ int ObDbmsWorkloadRepository::print_ash_top_user_event_info(
             EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "EVENT_CNT", event_cnt, int64_t);
             double event_radio = static_cast<double>(event_cnt) / num_events;
             event_radio = round(10000 * event_radio) / 100;
-            sprintf(event_cnt_char, "%ld", event_cnt);
             sprintf(event_radio_char, "%.2f%%", event_radio);
 
             if (OB_SUCC(ret)) {
-              const char *column_content[] = {event, wait_class, event_cnt_char, event_radio_char};
+              const char *column_content[] = {event, wait_class, event_radio_char};
               if (OB_FAIL(format_row(
-                      4 /*column_size*/, column_content, column_widths, " ", "|", buff))) {
+                      3 /*column_size*/, column_content, column_widths, " ", "|", buff))) {
                 LOG_WARN("failed to format row", K(ret));
               }
             }
@@ -873,7 +871,7 @@ int ObDbmsWorkloadRepository::print_ash_top_user_event_info(
         }  // end while
 
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(format_row(4 /*column_size*/, table_top, column_widths, "-", "+", buff))) {
+          if (OB_FAIL(format_row(3 /*column_size*/, table_top, column_widths, "-", "+", buff))) {
             LOG_WARN("failed to format row", K(ret));
           }
         }
@@ -1591,13 +1589,13 @@ int ObDbmsWorkloadRepository::print_ash_top_session_info(const AshReportParams &
       } else if (OB_FAIL(append_fmt_ash_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
       } else if (OB_FAIL(sql_string.append(
-                     ") top_event  GROUP BY SESSION_ID, USER_ID, EVENT HAVING COUNT(1) / "))) {
+                     ") top_event  GROUP BY SESSION_ID, USER_ID, EVENT "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
-                     "%ld > 0.005 ORDER BY SAMPLE_CNT DESC) LIMIT 100) ash  ", num_samples))) {
+                     "ORDER BY SAMPLE_CNT DESC) LIMIT 100) ash  "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append(
-                     " LEFT JOIN oceanbase.__all_user u ON u.USER_ID = ash.USER_ID"))) {
+                     " LEFT JOIN oceanbase.__all_user u ON u.USER_ID = ash.USER_ID ORDER BY SAMPLE_CNT DESC"))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("failed to fetch ash begin time and ash end time", KR(ret), K(tenant_id),
@@ -1727,11 +1725,10 @@ int ObDbmsWorkloadRepository::print_ash_top_blocking_session_info(
                                            "SESSION_ID, USER_ID, EVENT "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
-                     "HAVING COUNT(1) / %ld > 0.005 ORDER BY SAMPLE_CNT DESC) LIMIT 100) ash ",
-                     num_samples))) {
+                     "ORDER BY SAMPLE_CNT DESC) LIMIT 100) ash "))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_string.append(
-                     " LEFT JOIN oceanbase.__all_user u ON u.USER_ID = ash.USER_ID"))) {
+                     " LEFT JOIN oceanbase.__all_user u ON u.USER_ID = ash.USER_ID ORDER BY SAMPLE_CNT DESC"))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("failed to fetch ash begin time and ash end time", KR(ret), K(tenant_id),
@@ -1843,9 +1840,8 @@ int ObDbmsWorkloadRepository::print_ash_top_latches_info(
       } else if (OB_FAIL(sql_string.append(" ) top_event  WHERE wait_class_id = 104 AND"
                                            " SUBSTR(event, 1, 6) = 'latch:' "))) {
         LOG_WARN("append sql failed", K(ret));
-      } else if (OB_FAIL(sql_string.append_fmt("GROUP BY EVENT HAVING COUNT(1) / %ld > 0.005 "
-                                               "ORDER BY SAMPLE_CNT DESC) LIMIT 100",
-                     num_samples))) {
+      } else if (OB_FAIL(sql_string.append_fmt("GROUP BY EVENT "
+                                               "ORDER BY SAMPLE_CNT DESC) LIMIT 100"))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("failed to fetch ash begin time and ash end time", KR(ret), K(tenant_id),
