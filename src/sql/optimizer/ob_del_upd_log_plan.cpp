@@ -994,16 +994,10 @@ int ObDelUpdLogPlan::create_pdml_delete_plan(ObLogicalOperator *&top,
                                              IndexDMLInfo *index_dml_info)
 {
   int ret = OB_SUCCESS;
-  bool need_exchange = true;
   if (OB_ISNULL(source_table_partition)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(source_table_partition), K(ret));
-  } else if (!is_index_maintenance &&
-             OB_FAIL(check_need_exchange_for_pdml_del_upd(top, exch_info,
-                                                          source_table_partition->get_table_id(),
-                                                          need_exchange))) {
-    LOG_WARN("failed to check whether pdml need exchange for del upd", K(ret));
-  } else if (need_exchange && OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+  } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
     LOG_WARN("failed to allocate exchange as top", K(ret));
   } else if (OB_FAIL(allocate_pdml_delete_as_top(top,
                                                  is_index_maintenance,
@@ -1496,16 +1490,10 @@ int ObDelUpdLogPlan::create_pdml_update_plan(ObLogicalOperator *&top,
                                              IndexDMLInfo *index_dml_info)
 {
   int ret = OB_SUCCESS;
-  bool need_exchange = true;
   if (OB_ISNULL(source_table_partition)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(source_table_partition), K(ret));
-  } else if (!is_index_maintenance &&
-             OB_FAIL(check_need_exchange_for_pdml_del_upd(top, exch_info,
-                                                          source_table_partition->get_table_id(),
-                                                          need_exchange))) {
-    LOG_WARN("failed to check pdml need exchange for del upd", K(ret));
-  } else if (OB_FAIL(need_exchange && allocate_exchange_as_top(top, exch_info))) {
+  } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
     LOG_WARN("failed to allocate exchange as top", K(ret));
   } else if (OB_FAIL(allocate_pdml_update_as_top(top,
                                                  is_index_maintenance,
