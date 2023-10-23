@@ -367,7 +367,7 @@ do {                                                                  \
 }
 
 int ObDBMSSchedTableOperator::get_dbms_sched_job_info(
-  uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
+  uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
   ObIAllocator &allocator, ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
@@ -378,8 +378,20 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_info(
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
   CK (OB_LIKELY(job_id != OB_INVALID_ID));
 
-  OZ (sql.append_fmt("select * from %s where tenant_id = %lu and job = %ld",
-      OB_ALL_TENANT_SCHEDULER_JOB_TNAME, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), job_id));
+  if (!job_name.empty()) {
+    OZ (sql.append_fmt("select * from %s where tenant_id = %lu and job_name = \'%.*s\' and job = %ld",
+        OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+        ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+        job_name.length(),
+        job_name.ptr(),
+        job_id));
+  } else {
+    OZ (sql.append_fmt("select * from %s where tenant_id = %lu and job = %ld",
+        OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+        ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+        job_id));
+  }
+
 
   if (OB_SUCC(ret)) {
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
