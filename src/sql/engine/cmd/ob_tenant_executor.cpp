@@ -925,10 +925,10 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
         total_purge_count += affected_rows;
       }
       int64_t cost_time = ObTimeUtility::current_time() - start_time;
-      LOG_INFO("purge recycle objects", K(ret), K(cost_time), K(total_purge_count),
-          K(purge_recyclebin_arg), K(affected_rows), K(is_tenant_finish));
+      LOG_INFO("purge recycle objects", KR(ret), K(cost_time), K(cal_timeout),
+               K(total_purge_count), K(purge_recyclebin_arg), K(affected_rows), K(is_tenant_finish));
     }
-    LOG_INFO("purge recyclebin success", K(purge_recyclebin_arg), K(total_purge_count), K(ret));
+    LOG_INFO("purge recyclebin success", KR(ret), K(purge_recyclebin_arg), K(total_purge_count));
   }
   return ret;
 }
