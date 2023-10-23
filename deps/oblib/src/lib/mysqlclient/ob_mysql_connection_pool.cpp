@@ -91,6 +91,7 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
     tg_id_(-1),
     server_provider_(NULL),
     busy_conn_count_(0),
+    user_info_lock_(obsys::WRITE_PRIORITY),
     config_(),
     get_lock_(obsys::WRITE_PRIORITY),
     dblink_pool_lock_(obsys::WRITE_PRIORITY),
@@ -154,6 +155,7 @@ int ObMySQLConnectionPool::set_db_param(const char *db_user, const char *db_pass
 {
   int ret = OB_SUCCESS;
   int64_t w_len = 0;
+  obsys::ObWLockGuard lock(user_info_lock_);
   if (OB_ISNULL(db_user) || OB_ISNULL(db_pass) || OB_ISNULL(db_name)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid db param", KP(db_user), KP(db_pass), KP(db_name), K(ret));
@@ -186,6 +188,7 @@ int ObMySQLConnectionPool::set_db_param(const ObString &db_user, const ObString 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("db param buffer is not enough", K(db_user), K(db_pass), K(db_name), K(ret));
   } else {
+    obsys::ObWLockGuard lock(user_info_lock_);
     MEMCPY(db_user_, db_user.ptr(), db_user.length());
     db_user_[db_user.length()] = '\0';
     MEMCPY(db_pass_, db_pass.ptr(), db_pass.length());
@@ -509,12 +512,23 @@ int ObMySQLConnectionPool::do_acquire(const uint64_t tenant_id, ObMySQLConnectio
 int ObMySQLConnectionPool::try_connect(ObMySQLConnection *connection)
 {
   int ret = OB_SUCCESS;
+  char db_user[OB_MAX_USER_NAME_BUF_LENGTH] = {0};
+  char db_pass[OB_MAX_PASSWORD_BUF_LENGTH] = {0};
+  char db_name[OB_MAX_DATABASE_NAME_BUF_LENGTH] = {0};
+  // copy db_user infos within lock
+  {
+    obsys::ObRLockGuard lock(user_info_lock_);
+    MEMCPY(db_user, db_user_, OB_MAX_USER_NAME_BUF_LENGTH);
+    MEMCPY(db_pass, db_pass_, OB_MAX_PASSWORD_BUF_LENGTH);
+    MEMCPY(db_name, db_name_, OB_MAX_DATABASE_NAME_BUF_LENGTH);
+  }
+
   if (OB_ISNULL(connection)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("connection must not null", K(ret));
   } else if (connection->is_closed()) {
     connection->set_timeout(config_.sqlclient_wait_timeout_);
-    if (OB_FAIL(connection->connect(db_user_, db_pass_, db_name_, is_use_ssl_))) {
+    if (OB_FAIL(connection->connect(db_user, db_pass, db_name, is_use_ssl_))) {
       LOG_WARN("fail to connect to server",
                K(connection->get_server()), K(ret));
     } else if ('\0' != init_sql_[0]) {
