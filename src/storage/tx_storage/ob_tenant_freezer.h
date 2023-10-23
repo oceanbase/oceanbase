@@ -121,6 +121,9 @@ public:
                                int64_t &memstore_limit,
                                int64_t &freeze_cnt,
                                const bool force_refresh = true);
+  // get the tenant memstore used
+  int get_tenant_memstore_used(int64_t &total_memstore_used,
+                               const bool force_refresh = true);
   // get the tenant memstore limit.
   int get_tenant_memstore_limit(int64_t &mem_limit);
   // this is used to check if the tenant's memstore is out at user side.
@@ -149,6 +152,12 @@ public:
   static int64_t get_freeze_trigger_interval() { return FREEZE_TRIGGER_INTERVAL; }
   bool exist_ls_freezing();
 private:
+  int get_tenant_memstore_cond_(int64_t &active_memstore_used,
+                                int64_t &total_memstore_used,
+                                int64_t &memstore_freeze_trigger,
+                                int64_t &memstore_limit,
+                                int64_t &freeze_cnt,
+                                const bool force_refresh = true);
   int check_memstore_full_(bool &last_result,
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
