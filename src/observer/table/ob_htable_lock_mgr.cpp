@@ -24,10 +24,9 @@ const char *OB_HTABLE_LOCK_MANAGER = "hTableLockMgr";
 int ObHTableLockMgr::mtl_init(ObHTableLockMgr *&htable_lock_mgr)
 {
   int ret = OB_SUCCESS;
-  htable_lock_mgr = OB_NEW(ObHTableLockMgr, ObMemAttr(MTL_ID(), OB_HTABLE_LOCK_MANAGER));
   if (OB_ISNULL(htable_lock_mgr)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for ObHTableLockMgr", K(ret));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("htable_lock_mgr is null", K(ret));
   } else if (OB_FAIL(htable_lock_mgr->init())) {
     LOG_WARN("failed to init htable lock manager", K(ret));
   }
