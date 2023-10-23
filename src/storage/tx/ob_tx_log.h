@@ -949,62 +949,119 @@ private:
 class ObTxAdaptiveLogBuf
 {
 public:
-  ObTxAdaptiveLogBuf() : buf_(NULL), use_default_buf_(false)
+  ObTxAdaptiveLogBuf() : buf_(default_buf_), len_(sizeof(default_buf_))
   {
-    default_buf_[0]='\0';
+    default_buf_[0] = '\0';
   }
   ~ObTxAdaptiveLogBuf() { reset(); }
-  int init(const bool use_local_buf)
+  int init(const int64_t suggested_buf_size)
   {
     int ret = OB_SUCCESS;
-
-    if (use_local_buf) {
-      // for performance optimization
-      use_default_buf_ = true;
-    } else {
-      if (OB_ISNULL(buf_ = ClogBufFactory::alloc())) {
+    char *ptr = NULL;
+    if (suggested_buf_size <= MIN_LOG_BUF_SIZE) {
+      // do nothing
+    } else if (suggested_buf_size <= NORMAL_LOG_BUF_SIZE) {
+      if (OB_ISNULL(ptr = alloc_normal_buf_())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        TRANS_LOG(ERROR, "alloc clog buffer error", KR(ret));
       } else {
-        use_default_buf_ = false;
+        buf_ = ptr;
+        len_ = NORMAL_LOG_BUF_SIZE;
+      }
+    } else {
+      if (OB_ISNULL(ptr = alloc_big_buf_())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        buf_ = ptr;
+        len_ = BIG_LOG_BUF_SIZE;
       }
     }
-
+    return ret;
+  }
+  int extend_and_copy(const int64_t pos)
+  {
+    int ret = OB_SUCCESS;
+    char *ptr = NULL;
+    if (buf_ == default_buf_) {
+      if (OB_ISNULL(ptr = alloc_normal_buf_())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        if (pos > 0) {
+          memcpy(ptr, buf_, pos);
+        }
+        buf_ = ptr;
+        len_ = NORMAL_LOG_BUF_SIZE;
+      }
+    // it will be enabled after clog support big clog
+    // } else if (NORMAL_LOG_BUF_SIZE == len_) {
+    //   if (OB_ISNULL(ptr = alloc_big_buf_())) {
+    //     ret = OB_ALLOCATE_MEMORY_FAILED;
+    //   } else {
+    //     if (pos > 0) {
+    //       memcpy(ptr, buf_, pos);
+    //     }
+    //     free_buf_(buf_);
+    //     buf_ = ptr;
+    //     len_ = BIG_LOG_BUF_SIZE;
+    //   }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+    }
     return ret;
   }
   void reset()
   {
-    if (NULL != buf_) {
-      ClogBufFactory::release(buf_);
+    if (NULL != buf_ && buf_ != default_buf_) {
+      free_buf_(buf_);
       buf_ = NULL;
     }
-    default_buf_[0]='\0';
-    use_default_buf_ = false;
+    default_buf_[0] = '\0';
+    len_ = 0;
   }
   char *get_buf()
   {
-    char *buf = NULL;
-
-    if (use_default_buf_) {
-      buf = default_buf_;
-    } else if (NULL != buf_) {
-      buf = buf_->get_buf();
-    }
-    return buf;
+    return buf_;
   }
   int64_t get_length() const
   {
-    return use_default_buf_ ? DEFAULT_MIN_LOG_BUF_SIZE : common::OB_MAX_LOG_ALLOWED_SIZE;
+    return len_;
   }
-  bool is_use_local_buf() const { return use_default_buf_; }
-  TO_STRING_KV(KP_(buf), K_(use_default_buf));
-public:
-  static const int64_t DEFAULT_MIN_LOG_BUF_SIZE = 2048;
+  TO_STRING_KV(KP_(buf), KP_(default_buf), K_(len));
 private:
-  ClogBuf *buf_;
-  char default_buf_[DEFAULT_MIN_LOG_BUF_SIZE];
-  bool use_default_buf_;
+  char *alloc_normal_buf_()
+  {
+    int ret = OB_ALLOCATE_MEMORY_FAILED;
+    char *ptr = NULL;
+    if (OB_ISNULL(ptr = static_cast<char *>(ob_malloc(NORMAL_LOG_BUF_SIZE, "NORMAL_CLOG_BUF")))) {
+      TRANS_LOG(WARN, "alloc clog normal buffer failed", K(ret));
+    }
+    return ptr;
+  }
+  char *alloc_big_buf_()
+  {
+    int ret = OB_ALLOCATE_MEMORY_FAILED;
+    char *ptr = NULL;
+    if (OB_ISNULL(ptr = static_cast<char *>(ob_malloc(BIG_LOG_BUF_SIZE, "BIG_CLOG_BUF")))) {
+      TRANS_LOG(WARN, "alloc clog big buffer failed", K(ret));
+    }
+    return ptr;
+  }
+  void free_buf_(char *buf)
+  {
+    if (OB_NOT_NULL(buf)) {
+      ob_free(buf);
+    }
+  }
+public:
+  static const int64_t MIN_LOG_BUF_SIZE = 2048;
+  static const int64_t NORMAL_LOG_BUF_SIZE = common::OB_MAX_LOG_ALLOWED_SIZE;
+  static const int64_t BIG_LOG_BUF_SIZE = 3 * 1024 * 1024 + 512 * 1024;
+  STATIC_ASSERT((BIG_LOG_BUF_SIZE > 3 * 1024 * 1024 && BIG_LOG_BUF_SIZE < 4 * 1024 * 1024), "unexpected big log buf size");
+private:
+  char *buf_;
+  int64_t len_;
+  char default_buf_[MIN_LOG_BUF_SIZE];
 };
+
 
 class ObTxLogBlock
 {
@@ -1020,7 +1077,7 @@ public:
   int reuse(const int64_t replay_hint, const ObTxLogBlockHeader &block_header);
   int init(const int64_t replay_hint,
            const ObTxLogBlockHeader &block_header,
-           const bool use_local_buf = false);
+           const int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE);
   int init_with_header(const char *buf,
                        const int64_t &size,
                        int64_t &replay_hint,
@@ -1042,13 +1099,12 @@ public:
   // fill RedoLog and mutator_buf
   int prepare_mutator_buf(ObTxRedoLog &redo);
   int finish_mutator_buf(ObTxRedoLog &redo, const int64_t &mutator_size);
+  int extend_log_buf();
 
   //rewrite base log header at the head of log block.
   //It is a temporary interface for create/remove tablet which can not be used for any other target
   int rewrite_barrier_log_block(int64_t replay_hint,
                                 const enum logservice::ObReplayBarrierType barrier_type);
-
-  bool is_use_local_buf() const { return fill_buf_.is_use_local_buf(); }
   TO_STRING_KV(K(fill_buf_),
                KP(replay_buf_),
                K(len_),
@@ -1139,18 +1195,28 @@ int ObTxLogBlock::add_new_log(T &tx_log_body, ObTxBigSegmentBuf *big_segment_buf
     TRANS_LOG(DEBUG, "insert redo_log type into cb_arg_array_", K(tx_log_body), KPC(this));
   } else if (OB_FAIL(tx_log_body.before_serialize())) {
     TRANS_LOG(WARN, "before serialize failed", K(ret), K(tx_log_body), K(*this));
-  } else if (ObTxLogTypeChecker::can_be_spilt(T::LOG_TYPE)
-             && BIG_SEGMENT_SPILT_SIZE
-                    < header.get_serialize_size() + tx_log_body.get_serialize_size() + tmp_pos) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else if (len_ < header.get_serialize_size() + tx_log_body.get_serialize_size() + tmp_pos) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_FAIL(header.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {
-    TRANS_LOG(WARN, "serialize log header error", K(ret), K(header), K(*this));
-  } else if (OB_FAIL(tx_log_body.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {
-    TRANS_LOG(WARN, "serialize tx_log_body error", K(ret), K(tx_log_body), K(*this));
   } else {
-    // do nothing
+    const int64_t serialize_size = header.get_serialize_size() + tx_log_body.get_serialize_size();
+    if (ObTxLogTypeChecker::can_be_spilt(T::LOG_TYPE) && BIG_SEGMENT_SPILT_SIZE < serialize_size + tmp_pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      while (OB_SUCC(ret) && len_ < serialize_size + tmp_pos) {
+        if (OB_FAIL(extend_log_buf())) {
+          ret = OB_BUF_NOT_ENOUGH;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (len_ < serialize_size + tmp_pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else if (OB_FAIL(header.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {
+        TRANS_LOG(WARN, "serialize log header error", K(ret), K(header), K(*this));
+      } else if (OB_FAIL(tx_log_body.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {
+        TRANS_LOG(WARN, "serialize tx_log_body error", K(ret), K(tx_log_body), K(*this));
+      } else {
+        // do nothing
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -1160,7 +1226,7 @@ int ObTxLogBlock::add_new_log(T &tx_log_body, ObTxBigSegmentBuf *big_segment_buf
     } else {
       pos_ = tmp_pos;
     }
-  } else if (OB_BUF_NOT_ENOUGH == ret && !is_use_local_buf() && cb_arg_array_.empty()
+  } else if (OB_BUF_NOT_ENOUGH == ret && cb_arg_array_.empty()
              && ObTxLogTypeChecker::can_be_spilt(T::LOG_TYPE)) {
     // use big segment
     if (OB_ISNULL(big_segment_buf)) {
