@@ -1000,6 +1000,25 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
       }
       break;
     }
+    case ObBitType: {
+      // using bit as char array to do cast.
+      uint64_t in_val = datum.get_uint64();
+      char *bit_buf = nullptr;
+      const int32_t bit_buf_len = (OB_MAX_BIT_LENGTH + 7) / 8;
+      int64_t bit_buf_pos = 0;
+      if (OB_ISNULL(bit_buf = static_cast<char*>(allocator->alloc(bit_buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate bit buf fail", K(ret), K(type), K(bit_buf_len));
+      } else if (OB_FAIL(bit_to_char_array(in_val, scale, bit_buf, bit_buf_len, bit_buf_pos))) {
+        LOG_WARN("bit_to_char_array fail", K(ret), K(in_val), K(scale), KP(bit_buf), K(bit_buf_len), K(bit_buf_pos));
+      } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonOpaque)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate ObJsonOpaque fail", K(ret), K(type), "size", sizeof(ObJsonOpaque));
+      } else {
+        json_node = (ObJsonOpaque *)new(buf)ObJsonOpaque(ObString(bit_buf_pos, bit_buf), type);
+      }
+      break;
+    }
     default:
     {
       ret = OB_INVALID_ARGUMENT;
