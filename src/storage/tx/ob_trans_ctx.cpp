@@ -157,7 +157,7 @@ void ObTransCtx::set_exiting_()
     } else {
       ls_tx_ctx_mgr_->del_tx_ctx(this);
       TRANS_LOG(DEBUG, "transaction exiting", "context", *this, K(lbt()));
-      REC_TRANS_TRACE_EXT2(tlog_, exiting, OB_ID(ctx_ref), ctx_ref, OB_ID(arg1), session_id_);
+      REC_TRANS_TRACE_EXT2(tlog_, exiting, OB_ID(ref), ctx_ref, OB_ID(arg1), session_id_);
     }
   }
 }
@@ -271,7 +271,7 @@ int ObTransCtx::register_timeout_task_(const int64_t interval_us)
   }
   if (OB_FAIL(ret)) {
     REC_TRANS_TRACE_EXT2(tlog_, register_timeout_task, OB_ID(ret), ret,
-                         OB_ID(ctx_ref), get_ref());
+                         OB_ID(ref), get_ref());
   }
   return ret;
 }
@@ -299,7 +299,7 @@ int ObTransCtx::unregister_timeout_task_()
   }
   if (OB_FAIL(ret)) {
     REC_TRANS_TRACE_EXT2(tlog_, unregister_timeout_task, OB_ID(ret), ret,
-                         OB_ID(ctx_ref), get_ref());
+                         OB_ID(ref), get_ref());
   }
   return ret;
 }
