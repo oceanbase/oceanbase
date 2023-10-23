@@ -48446,6 +48446,8 @@ def_table_schema(
 # 25269: DBA_WR_SYSTEM_EVENT
 # 25270: DBA_WR_EVENT_NAME
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
+# 25272: DBA_OB_FORMAT_OUTLINES
+
 # 余留位置
 
 #### End Data Dictionary View
@@ -54536,7 +54538,6 @@ def_table_schema(
 # 28199: V$OB_PL_CACHE_OBJECT
 # 28200: GV$OB_CGROUP_CONFIG
 # 28201: V$OB_CGROUP_CONFIG
-# 28202: DBA_OB_FORMAT_OUTLINES
 
 ################################################################################
 # Lob Table (50000, 70000)
