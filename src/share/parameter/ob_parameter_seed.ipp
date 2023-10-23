@@ -1376,6 +1376,11 @@ DEF_BOOL(_enable_new_sql_nio, OB_CLUSTER_PARAMETER, "true",
 "specifies whether SQL serial network is turned on. Turned on to support mysql_send_long_data"
 "The default value is FALSE. Value: TRUE: turned on FALSE: turned off",
 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
+// Add a config to enable use das if the sql statement has variable assignment
+DEF_BOOL(_enable_var_assign_use_das, OB_TENANT_PARAMETER, "True",
+         "enable use das if the sql statement has variable assignment",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // query response time
 DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "False",
     "Enable or disable QUERY_RESPONSE_TIME statistics collecting"

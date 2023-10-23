@@ -4476,6 +4476,16 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(alias_node->type_), K(ret));
   }
+
+  bool enable_var_assign_use_das = true;
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(session_info_)) {
+      enable_var_assign_use_das = session_info_->is_var_assign_use_das_enabled();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is null", K(ret));
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (column_alias_node != NULL &&
              OB_FAIL(refine_generate_table_column_name(*column_alias_node, *ref_stmt))) {
@@ -4485,9 +4495,32 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
     LOG_WARN("check duplicated column failed", K(ret));
   } else if (OB_FAIL(resolve_generate_table_item(ref_stmt, alias_name, table_item))) {
     LOG_WARN("resolve generate table item failed", K(ret));
+  } else if (enable_var_assign_use_das && OB_FAIL(extract_var_init_exprs(ref_stmt, params_.query_ctx_->var_init_exprs_))) {
+    // Extract the var assign expr in generated table, This is to be compatible with some of mysql's uses of variables
+    // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
+    LOG_WARN("extract var init exprs failed", K(ret));
   } else {
     LOG_DEBUG("finish do_resolve_generate_table", K(alias_name), KPC(table_item),
                                                   KPC(table_item->ref_query_));
+  }
+  return ret;
+}
+
+int ObDMLResolver::extract_var_init_exprs(ObSelectStmt *ref_query, ObIArray<ObRawExpr*> &assign_exprs)
+{
+  // Extract the var assign expr in generated table, This is to be compatible with some of mysql's uses of variables
+  // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ref_query)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is nullptr", KR(ret));
+  } else if (ref_query->get_from_item_size() <= 0) {
+    for (int i = 0; OB_SUCC(ret) && i < ref_query->get_select_item_size(); ++i) {
+      const SelectItem &select_item = ref_query->get_select_item(i);
+      if (OB_FAIL(ObRawExprUtils::extract_var_assign_exprs(select_item.expr_, assign_exprs))) {
+        LOG_WARN("extract var assign exprs failed", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -6510,11 +6543,18 @@ int ObDMLResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &ord
     SQL_RESV_LOG(WARN, "index order item not support in update");
   } else if (OB_FAIL(resolve_sql_expr(*(sort_node.children_[0]), expr))) {
     SQL_RESV_LOG(WARN, "resolve sql expression failed", K(ret));
-  } else if (expr->has_flag(CNT_ASSIGN_EXPR)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Not supported variable assignment in order by item", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable assignment in order by item");
   } else {
+    // check if order by item has var assign expr, which will cause uncertain behavior
+    if (OB_NOT_NULL(expr) && expr->has_flag(CNT_ASSIGN_EXPR)) {
+      LOG_USER_WARN(OB_ERR_DEPRECATED_SYNTAX, "Setting user variables within expressions",
+        "SET variable=expression, ... or SELECT expression(s) INTO variables(s)");
+      if (OB_NOT_NULL(session_info_) && OB_NOT_NULL(session_info_->get_cur_exec_ctx()) &&
+          OB_NOT_NULL(session_info_->get_cur_exec_ctx()->get_sql_ctx())) {
+        const ObSqlCtx *sql_ctx = session_info_->get_cur_exec_ctx()->get_sql_ctx();
+        LOG_ERROR("Variable assignment in order by items will cause uncertain behavior",
+                  K(ObString(sql_ctx->sql_id_)));
+      }
+    }
     order_item.expr_ = expr;
   }
   return ret;

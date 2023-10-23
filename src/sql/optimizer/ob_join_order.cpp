@@ -1509,6 +1509,16 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     }
   }
 
+  bool enable_var_assign_use_das = true;
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session_info = NULL;
+    if (OB_NOT_NULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+      enable_var_assign_use_das = session_info->is_var_assign_use_das_enabled();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is null", K(ret));
+    }
+  }
   if(OB_SUCC(ret)) {
     bool hint_force_das = false;
     bool hint_force_no_das = false;
@@ -1518,7 +1528,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     get_plan()->get_optimizer_context().has_cursor_expression() ||
-                    get_plan()->get_optimizer_context().has_var_assign() ||
+                    (get_plan()->get_optimizer_context().has_var_assign() && enable_var_assign_use_das) ||
                     is_batch_update_table;
     if (EXTERNAL_TABLE == table_item->table_type_) {
       create_das_path = false;
