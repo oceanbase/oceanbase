@@ -1089,6 +1089,11 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
           && tx.active_scn_ >= savepoint  // rollback all dirty state
           && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
         reset_tx = true;
+        /*
+         * Avoid lock conflicts between first stmt retry and tx async abort(end first stmt caused)
+         * Add a sync rollback process before async abort tx.
+         */
+        normal_rollback = true;
       } else {
         normal_rollback = true;
       }
@@ -1115,7 +1120,9 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                            expire_ts))) {
       TRANS_LOG(WARN, "do savepoint rollback fail", K(ret));
     }
-    if (OB_FAIL(ret)) {
+    // reset tx ignore rollback ret
+    if (reset_tx) {
+    } else if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "rollback savepoint fail, abort tx",
                 K(ret), K(savepoint), KP(extra_touched_ls), K(parts), K(tx));
       // advance op_sequence to reject further rollback resp messsages
