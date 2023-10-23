@@ -272,7 +272,7 @@ int ObAdminDumpBlock::parse_single_log_entry_(const LogEntry &entry,
   if (OB_FAIL(parser_le.parse())) {
     LOG_WARN("ObAdminParserLogEntry failed", K(ret), K(entry), K(block_name), K(lsn));
   } else {
-    LOG_INFO("parse_single_log_entry_ success",K(entry), K(str_arg_));
+    LOG_TRACE("parse_single_log_entry_ success",K(entry), K(str_arg_));
   }
   return ret;
 }
