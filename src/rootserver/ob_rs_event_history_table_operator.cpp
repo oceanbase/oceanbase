@@ -44,20 +44,9 @@ int ObRsEventHistoryTableOperator::async_delete()
   int ret = OB_SUCCESS;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
-    SHARE_LOG(WARN, "not init", K(ret));
-  } else {
-    const int64_t now = ObTimeUtility::current_time();
-    ObSqlString sql;
-    const bool is_delete = true;
-    if (OB_SUCCESS == ret) {
-      const int64_t rs_delete_timestap = now - GCONF.ob_event_history_recycle_interval;
-      if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE gmt_create < usec_to_time(%ld) LIMIT 1024",
-                                 share::OB_ALL_ROOTSERVICE_EVENT_HISTORY_TNAME, rs_delete_timestap))) {
-        SHARE_LOG(WARN, "assign_fmt failed", K(ret));
-      } else if (OB_FAIL(add_task(sql, is_delete))) {
-        SHARE_LOG(WARN, "add_task failed", K(sql), K(is_delete), K(ret));
-      }
-    }
+    SHARE_LOG(WARN, "not init", KR(ret));
+  } else if (OB_FAIL(default_async_delete())) {
+    SHARE_LOG(WARN, "failed to default async delete", KR(ret));
   }
   return ret;
 }

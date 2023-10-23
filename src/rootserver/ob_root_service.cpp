@@ -5345,6 +5345,7 @@ int ObRootService::load_server_manager()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERROR_EVENT_TABLE_CLEAR_INTERVAL);
 int ObRootService::start_timer_tasks()
 {
   int ret = OB_SUCCESS;
@@ -5354,11 +5355,12 @@ int ObRootService::start_timer_tasks()
   }
 
   if (OB_SUCCESS == ret && !task_queue_.exist_timer_task(event_table_clear_task_)) {
-    const int64_t delay = ObEventHistoryTableOperator::EVENT_TABLE_CLEAR_INTERVAL;
+    const int64_t delay = ERROR_EVENT_TABLE_CLEAR_INTERVAL ? 10 * 1000 * 1000 :
+      ObEventHistoryTableOperator::EVENT_TABLE_CLEAR_INTERVAL;
     if (OB_FAIL(task_queue_.add_repeat_timer_task_schedule_immediately(event_table_clear_task_, delay))) {
       LOG_WARN("start event table clear task failed", K(delay), K(ret));
     } else {
-      LOG_INFO("added event_table_clear_task");
+      LOG_INFO("added event_table_clear_task", K(delay));
     }
   }
 
