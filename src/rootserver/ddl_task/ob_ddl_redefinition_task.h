@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_DDL_REDEFINITION_TASK_H
 
 #include "rootserver/ddl_task/ob_ddl_task.h"
+#include "share/stat/ob_opt_stat_manager.h"
 
 namespace oceanbase
 {
@@ -172,6 +173,31 @@ protected:
   int check_update_autoinc_end(bool &is_end);
   int check_check_table_empty_end(bool &is_end);
   int sync_stats_info();
+  int sync_stats_info_in_same_tenant(common::ObMySQLTransaction &trans,
+                                     ObSchemaGetterGuard *src_tenant_schema_guard,
+                                     const ObTableSchema &data_table_schema,
+                                     const ObTableSchema &new_table_schema);
+  int sync_stats_info_accross_tenant(common::ObMySQLTransaction &trans,
+                                     ObSchemaGetterGuard *dst_tenant_schema_guard,
+                                     const ObTableSchema &data_table_schema,
+                                     const ObTableSchema &new_table_schema);
+  // get source table and partition level stats.
+  int get_src_part_stats(const ObTableSchema &data_table_schema,
+                         ObIArray<ObOptTableStat> &part_stats);
+  // get source table and partition level column stats.
+  int get_src_column_stats(const ObTableSchema &data_table_schema,
+                           ObIAllocator &allocator,
+                           ObIArray<ObOptKeyColumnStat> &column_stats);
+  int sync_part_stats_info_accross_tenant(common::ObMySQLTransaction &trans,
+                                          const ObTableSchema &data_table_schema,
+                                          const ObTableSchema &new_table_schema,
+                                          const ObIArray<ObOptTableStat> &part_stats);
+  int sync_column_stats_info_accross_tenant(common::ObMySQLTransaction &trans,
+                                            ObSchemaGetterGuard *dst_tenant_schema_guard,
+                                            const ObTableSchema &data_table_schema,
+                                            const ObTableSchema &new_table_schema,
+                                            const ObIArray<ObOptKeyColumnStat> &column_stats);
+
   int sync_table_level_stats_info(common::ObMySQLTransaction &trans,
                                   const ObTableSchema &data_table_schema,
                                   const bool need_sync_history = true);
@@ -222,6 +248,7 @@ protected:
   int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
   int64_t get_build_replica_request_time();
 protected:
+  static const int64_t MAP_BUCKET_NUM = 1024;
   struct DependTaskStatus final
   {
   public:

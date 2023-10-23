@@ -185,6 +185,10 @@ public:
     return instance_;
   }
   bool is_inited() const { return inited_; }
+  ObOptStatSqlService &get_stat_sql_service()
+  {
+    return stat_service_.get_sql_service();
+  }
   int check_stat_tables_ready(share::schema::ObSchemaGetterGuard &schema_guard,
                               const uint64_t tenant_id,
                               bool &are_stat_tables_ready);

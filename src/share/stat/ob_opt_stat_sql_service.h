@@ -90,7 +90,8 @@ public:
                        ObIArray<ObOptKeyColumnStat> &key_col_stats);
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
-                        ObIArray<ObOptKeyColumnStat> &key_col_stats);
+                        ObIArray<ObOptKeyColumnStat> &key_col_stats,
+                        bool is_accross_tenant_query = false);
 
   int update_table_stat(const uint64_t tenant_id,
                         const ObOptTableStat *tab_stat,

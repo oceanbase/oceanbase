@@ -1249,7 +1249,8 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
 
 int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
                                            ObIAllocator &allocator,
-                                           ObIArray<ObOptKeyColumnStat> &key_col_stats)
+                                           ObIArray<ObOptKeyColumnStat> &key_col_stats,
+                                           bool is_accross_tenant_query)
 {
   int ret = OB_SUCCESS;
   ObSqlString keys_list_str;
@@ -1257,6 +1258,8 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
   if (key_col_stats.empty()) {
   } else if (OB_FAIL(generate_specified_keys_list_str_for_column(tenant_id, key_col_stats, keys_list_str))) {
     LOG_WARN("failed to generate specified keys list str for column", K(ret), K(key_col_stats));
+  } else if (OB_FAIL(key_index_map.create(key_col_stats.count(), "OptKeyColStat", "OptColStatNode", !is_accross_tenant_query ? tenant_id : OB_SERVER_TENANT_ID))) {
+    LOG_WARN("fail to create hash map", K(ret), K(key_col_stats.count()));
   } else if (OB_FAIL(generate_key_index_map(tenant_id, key_col_stats, key_index_map))) {
     LOG_WARN("failed to init key index map", K(ret));
   } else if (OB_UNLIKELY(key_col_stats.count() < 1) || OB_ISNULL(key_col_stats.at(0).key_)) {
@@ -1696,24 +1699,20 @@ int ObOptStatSqlService::generate_key_index_map(const uint64_t tenant_id,
                                                 hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(key_index_map.create(key_col_stats.count(), "OptKeyColStat", "OptColStatNode", tenant_id))) {
-    LOG_WARN("fail to create hash map", K(ret), K(key_col_stats.count()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < key_col_stats.count(); ++i) {
-      if (OB_ISNULL(key_col_stats.at(i).key_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(key_col_stats.at(i).key_));
-      } else {
-        const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-        const uint64_t pure_table_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id,
-                                                                            key_col_stats.at(i).key_->table_id_);
-        ObOptKeyInfo key_info(pure_table_id,
-                              key_col_stats.at(i).key_->partition_id_,
-                              key_col_stats.at(i).key_->column_id_);
-        if (OB_FAIL(key_index_map.set_refactored(key_info, i))) {
-          LOG_WARN("fail to set refactored for hashmap", K(ret), K(key_info));
-        } else {/*do nothing*/}
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < key_col_stats.count(); ++i) {
+    if (OB_ISNULL(key_col_stats.at(i).key_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(key_col_stats.at(i).key_));
+    } else {
+      const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+      const uint64_t pure_table_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id,
+                                                                          key_col_stats.at(i).key_->table_id_);
+      ObOptKeyInfo key_info(pure_table_id,
+                            key_col_stats.at(i).key_->partition_id_,
+                            key_col_stats.at(i).key_->column_id_);
+      if (OB_FAIL(key_index_map.set_refactored(key_info, i))) {
+        LOG_WARN("fail to set refactored for hashmap", K(ret), K(key_info));
+      } else {/*do nothing*/}
     }
   }
   return ret;
