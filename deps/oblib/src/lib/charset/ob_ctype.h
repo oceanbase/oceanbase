@@ -116,9 +116,9 @@
 #define	_MY_B	0100	
 #define	_MY_X	0200	
 
-#define ob_toupper(s, c) (uchar)((s)->to_upper[(uchar)(c)])
-#define ob_tolower(s, c) (uchar)((s)->to_lower[(uchar)(c)])
-#define ob_sort_order(s,c) (uchar)((s)->sort_order[(uchar)(c)])
+#define ob_toupper(s, c) (unsigned char)((s)->to_upper[(unsigned char)(c)])
+#define ob_tolower(s, c) (unsigned char)((s)->to_lower[(unsigned char)(c)])
+#define ob_sort_order(s,c) (unsigned char)((s)->sort_order[(unsigned char)(c)])
 
 #define is_valid_ascii(e) (0x00<=(uchar)(e) && (uchar)(e)<=0x7F)
 
@@ -127,13 +127,13 @@ struct ObUCAInfo;
 struct ObContractions;
 
 typedef struct ObCharsetLoader {
-  uint errcode;
+  unsigned int errcode;
   char errarg[192];
   void *(*once_alloc)(size_t);
   void *(*mem_malloc)(size_t);
   void *(*mem_realloc)(void *, size_t);
   void (*mem_free)(void *);
-  void (*reporter)(enum loglevel, uint errcode, ...);
+  void (*reporter)(enum loglevel, unsigned int errcode, ...);
   int (*add_collation)(ObCharsetInfo *cs);
 } ObCharsetLoader;
 
@@ -157,25 +157,25 @@ typedef char        ob_bool; /* Small bool */
 
 /* Some typedef to make it easy for C++ to make function pointers */
 typedef int (*ob_charset_conv_mb_wc)(const struct ObCharsetInfo *,
-                                     ob_wc_t *, const uchar *, const uchar *);
+                                     ob_wc_t *, const unsigned char *, const unsigned char *);
 typedef int (*ob_charset_conv_wc_mb)(const struct ObCharsetInfo *, ob_wc_t,
-                                     uchar *, uchar *);
+                                     unsigned char *, unsigned char *);
 typedef size_t (*ob_charset_conv_case)(const struct ObCharsetInfo *,
                                        char *, size_t, char *, size_t);
 
 int init_gb18030_2022();
 
 extern ObUCAInfo ob_uca_v400;
-extern uchar ob_uca520_length[4352];
+extern unsigned char ob_uca520_length[4352];
 extern uint16 *ob_uca520_weight[4352];
-extern uchar ob_uca_length[256];
+extern unsigned char ob_uca_length[256];
 extern uint16 *ob_uca_weight[256];
 
 typedef struct
 {
-  uint beg;
-  uint end;
-  uint mb_len;
+  unsigned int beg;
+  unsigned int end;
+  unsigned int mb_len;
 } ob_match_t;
 
 typedef struct ObUnicaseInfoChar
@@ -192,86 +192,13 @@ typedef struct ObUnicaseInfo
   const ObUnicaseInfoChar **page;
 } ObUnicaseInfo;
 
-#ifdef OB_BUILD_FULL_CHARSET
-// OB_CHARSET_HANDLER
-// ==================
-
-// OB_CHARSET_HANDLER is a collection of character-set
-// related routines. Defined in m_ctype.h. Have the
-// following set of functions:
-
-// Multi-byte routines
-// ------------------
-// ismbchar()  - detects whether the given string is a multi-byte sequence
-// mbcharlen() - returns length of multi-byte sequence starting with
-//               the given character
-// numchars()  - returns number of characters in the given string, e.g.
-//               in SQL function CHAR_LENGTH().
-// charpos()   - calculates the offset of the given position in the string.
-//               Used in SQL functions LEFT(), RIGHT(), SUBSTRING(),
-//               INSERT()
-
-// well_formed_len()
-//             - returns length of a given multi-byte string in bytes
-//               Used in INSERTs to shorten the given string so it
-//               a) is "well formed" according to the given character set
-//               b) can fit into the given data type
-
-// lengthsp()  - returns the length of the given string without trailing spaces.
-
-
-// Unicode conversion routines
-// ---------------------------
-// mb_wc       - converts the left multi-byte sequence into its Unicode code.
-// mc_mb       - converts the given Unicode code into multi-byte sequence.
-
-
-// Case and sort conversion
-// ------------------------
-// caseup_str  - converts the given 0-terminated string to uppercase
-// casedn_str  - converts the given 0-terminated string to lowercase
-// caseup      - converts the given string to lowercase using length
-// casedn      - converts the given string to lowercase using length
-
-// Number-to-string conversion routines
-// ------------------------------------
-// snprintf()
-// long10_to_str()
-// longlong10_to_str()
-
-// The names are pretty self-describing.
-
-// String padding routines
-// -----------------------
-// fill()     - writes the given Unicode value into the given string
-//              with the given length. Used to pad the string, usually
-//              with space character, according to the given charset.
-
-// String-to-number conversion routines
-// ------------------------------------
-// strntol()
-// strntoul()
-// strntoll()
-// strntoull()
-// strntod()
-
-// These functions are almost the same as their STDLIB counterparts,
-// but also:
-//   - accept length instead of 0-terminator
-//   - are character set dependent
-
-// Simple scanner routines
-// -----------------------
-// scan()    - to skip leading spaces in the given string.
-//             Used when a string value is inserted into a numeric field.
-#endif
 typedef struct ObCharsetHandler
 {
   //my_bool (*init)(struct ObCharsetInfo *, MY_CHARSET_LOADER *loader);
   /* Multibyte routines */
-  uint    (*ismbchar)(const struct ObCharsetInfo *, const char *,
+  unsigned int    (*ismbchar)(const struct ObCharsetInfo *, const char *,
                       const char *);
-  uint    (*mbcharlen)(const struct ObCharsetInfo *, uint c);
+  unsigned int    (*mbcharlen)(const struct ObCharsetInfo *, unsigned int c);
   size_t  (*numchars)(const struct ObCharsetInfo *, const char *b,
                       const char *e);
   size_t  (*charpos)(const struct ObCharsetInfo *, const char *b,
@@ -292,7 +219,7 @@ typedef struct ObCharsetHandler
 
   /* CTYPE scanner */
   int (*ctype)(const struct ObCharsetInfo *cs, int *ctype,
-               const uchar *s, const uchar *e);
+               const unsigned char *s, const unsigned char *e);
 
   /* Functions for case and sort conversion */
   /*size_t  (*caseup_str)(const struct ObCharsetInfo *, char *);
@@ -332,22 +259,7 @@ typedef struct ObCharsetHandler
   size_t        (*scan)(const struct ObCharsetInfo *, const char *b,
                         const char *e, int sq);
 } ObCharsetHandler;
-#ifdef OB_BUILD_FULL_CHARSET
-// OB_COLLATION_HANDLER
-// ====================
-// strnncoll()   - compares two strings according to the given collation
-// strnncollsp() - like the above but ignores trailing spaces for PAD SPACE
-//                 collations. For NO PAD collations, identical to strnncoll.
-// strnxfrm()    - makes a sort key suitable for memcmp() corresponding
-//                 to the given string
-// like_range()  - creates a LIKE range, for optimizer
-// wildcmp()     - wildcard comparison, for LIKE
-// strcasecmp()  - 0-terminated string comparison
-// instr()       - finds the first substring appearance in the string
-// hash_sort()   - calculates hash value taking into account
-//                 the collation rules, e.g. case-insensitivity,
-//                 accent sensitivity, etc.
-#endif
+
 static const int HASH_BUFFER_LENGTH = 128;
 
 typedef uint64_t (*hash_algo)(const void* input, uint64_t length, uint64_t seed);
@@ -359,21 +271,21 @@ typedef struct ObCollationHandler
   /* Collation routines */
   // 进行字符串比较的函数
   int     (*strnncoll)(const struct ObCharsetInfo *,
-               const uchar *, size_t, const uchar *, size_t, bool);
+               const unsigned char *, size_t, const unsigned char *, size_t, bool);
   // 字符串比较时忽略尾部空格
   int     (*strnncollsp)(const struct ObCharsetInfo *,
-                         const uchar *, size_t, const uchar *, size_t,
+                         const unsigned char *, size_t, const unsigned char *, size_t,
                          bool diff_if_only_endspace_difference);
   // makes a sort key suitable for memcmp() corresponding to the given string
   size_t  (*strnxfrm)(const struct ObCharsetInfo *,
-                      uchar *dst, size_t dstlen, uint nweights,
-                      const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode);
+                      unsigned char *dst, size_t dstlen, unsigned int nweights,
+                      const unsigned char *src, size_t srclen, unsigned int flags, bool *is_valid_unicode);
   // 获取weight_string结果的长度
   size_t (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
   // makes a sortkey suitable for memcmp() corresponding to the given variable length string
   size_t  (*strnxfrm_varlen)(const struct ObCharsetInfo*,
-                             uchar* dst, size_t dst_len, uint nweights,
-                             const uchar *src, size_t srclen,
+                             unsigned char* dst, size_t dst_len, unsigned int nweights,
+                             const unsigned char *src, size_t srclen,
                              bool is_memcmp, bool *is_valid_unicode);
   //size_t    (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
 
@@ -394,63 +306,54 @@ typedef struct ObCollationHandler
                      const char *);
 
   // finds the first substring appearance in the string
-  uint (*instr)(const struct ObCharsetInfo *,
+  unsigned int (*instr)(const struct ObCharsetInfo *,
                 const char *b, size_t b_length,
                 const char *s, size_t s_length,
-                ob_match_t *match, uint nmatch);
+                ob_match_t *match, unsigned int nmatch);
 
   /* Hash calculation */
   // calculates hash value taking into account the collation rules, e.g. case-insensitivity
-  void (*hash_sort)(const struct ObCharsetInfo *cs, const uchar *key, size_t len, ulong *nr1,
+  void (*hash_sort)(const struct ObCharsetInfo *cs, const unsigned char *key, size_t len, ulong *nr1,
                     ulong *nr2, const bool calc_end_space, hash_algo hash_algo);
-  bool (*propagate)(const struct ObCharsetInfo *cs, const uchar *str,
+  bool (*propagate)(const struct ObCharsetInfo *cs, const unsigned char *str,
                        size_t len);
 } ObCollationHandler;
 
 struct ObCharsetInfo
 {
-  uint      number;
-  uint      primary_number;
-  uint      binary_number;
-  uint      state;
+  unsigned int      number;
+  unsigned int      primary_number;
+  unsigned int      binary_number;
+  unsigned int      state;
   const char *csname;
   const char *name;
   const char *comment;
   const char *tailoring;
   struct Coll_param *coll_param;
-  uchar    *ctype;
-  uchar    *to_lower;
-  uchar    *to_upper;
-  uchar    *sort_order;
+  unsigned char    *ctype;
+  unsigned char    *to_lower;
+  unsigned char    *to_upper;
+  unsigned char    *sort_order;
   ObUCAInfo *uca;
   //uint16      *tab_to_uni;
   //MY_UNI_IDX  *tab_from_uni;
   ObUnicaseInfo *caseinfo;
-  uchar     *state_map;
-  uchar     *ident_map;
-  uint      strxfrm_multiply;
-  uchar     caseup_multiply;
-  uchar     casedn_multiply;
-  uint      mbminlen;
-  uint      mbmaxlen;
+  unsigned char     *state_map;
+  unsigned char     *ident_map;
+  unsigned int      strxfrm_multiply;
+  unsigned char     caseup_multiply;
+  unsigned char     casedn_multiply;
+  unsigned int      mbminlen;
+  unsigned int      mbmaxlen;
   ob_wc_t   min_sort_char;
   ob_wc_t   max_sort_char; /* For LIKE optimization */
-  uchar     pad_char;
+  unsigned char     pad_char;
   bool   escape_with_backslash_is_dangerous;
-  uchar     levels_for_compare;
-  uchar     levels_for_order;
+  unsigned char     levels_for_compare;
+  unsigned char     levels_for_order;
 
   ObCharsetHandler *cset;
   ObCollationHandler *coll;
-#ifdef OB_BUILD_FULL_CHARSET
-  /**
-    If this collation is PAD_SPACE, it collates as if all inputs were
-    padded with a given number of spaces at the end (see the "num_codepoints"
-    flag to strnxfrm). NO_PAD simply compares unextended strings.
-
-    Note that this is fundamentally about the behavior of coll->strnxfrm.
-  */
-#endif
   enum ObCharsetPadAttr pad_attribute;
 };
 
@@ -459,17 +362,17 @@ struct ObCharsetInfo
 #define	ob_toascii(c)	((c) & 0177)
 #define ob_tocntrl(c)	((c) & 31)
 #define ob_toprint(c)	((c) | 64)
-#define	ob_isalpha(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & (_MY_U | _MY_L) : 0)
-#define	ob_isupper(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_U : 0)
-#define	ob_islower(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_L : 0)
-#define	ob_isdigit(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_NMR : 0)
-#define	ob_isxdigit(s, c) ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_X : 0)
-#define	ob_isalnum(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & (_MY_U | _MY_L | _MY_NMR) : 0)
-#define	ob_isspace(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_SPC : 0)
-#define	ob_ispunct(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_PNT : 0)
-#define	ob_isprint(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR | _MY_B) : 0)
-#define	ob_isgraph(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR) : 0)
-#define	ob_iscntrl(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_CTR : 0)
+#define	ob_isalpha(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & (_MY_U | _MY_L) : 0)
+#define	ob_isupper(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_U : 0)
+#define	ob_islower(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_L : 0)
+#define	ob_isdigit(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_NMR : 0)
+#define	ob_isxdigit(s, c) ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_X : 0)
+#define	ob_isalnum(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & (_MY_U | _MY_L | _MY_NMR) : 0)
+#define	ob_isspace(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_SPC : 0)
+#define	ob_ispunct(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_PNT : 0)
+#define	ob_isprint(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR | _MY_B) : 0)
+#define	ob_isgraph(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR) : 0)
+#define	ob_iscntrl(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(unsigned char) (c)] & _MY_CTR : 0)
 
 /* Some macros that should be cleaned up a little */
 #define ob_isvar(s,c)                 (my_isalnum(s,c) || (c) == '_')
@@ -488,13 +391,13 @@ struct ObCharsetInfo
 
 
 #define use_mb(s)                     ((s)->cset->ismbchar != NULL)
-static inline uint ob_ismbchar(const ObCharsetInfo *cs, const char *str,
+static inline unsigned int ob_ismbchar(const ObCharsetInfo *cs, const char *str,
                                const char *strend) {
   return cs->cset->ismbchar(cs, str, strend);
 }
 
-static inline uint ob_ismbchar(const ObCharsetInfo *cs, const uchar *str,
-                               const uchar *strend) {
+static inline unsigned int ob_ismbchar(const ObCharsetInfo *cs, const unsigned char *str,
+                               const unsigned char *strend) {
   return cs->cset->ismbchar(cs, (const char *)(str), (const char *)(strend));
 }
 #define ob_mbcharlen(s, a)            ((s)->cset->mbcharlen((s),(a)))
@@ -503,8 +406,8 @@ static inline uint ob_ismbchar(const ObCharsetInfo *cs, const uchar *str,
 
 typedef struct ob_uni_ctype
 {
-  uchar  pctype;
-  uchar  *ctype;
+  unsigned char  pctype;
+  unsigned char  *ctype;
 } ObUniCtype;
 
 extern ObUniCtype ob_uni_ctype[256];
@@ -534,7 +437,6 @@ extern ObCharsetInfo ob_charset_gb18030_2022_radical_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_ci;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_bin;
-#ifdef OB_BUILD_FULL_CHARSET
 extern ObCharsetInfo ob_charset_utf8mb4_unicode_ci;
 extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_zh_0900_as_cs;
@@ -543,7 +445,6 @@ extern ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs;
 extern ObCharsetInfo ob_charset_utf8mb4_0900_bin;
 extern ObCharsetInfo ob_charset_latin1;
 extern ObCharsetInfo ob_charset_latin1_bin;
-#endif
 
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
@@ -590,17 +491,17 @@ bool  ob_like_range_simple(const ObCharsetInfo *cs,
 			      char *min_str, char *max_str,
 			      size_t *min_length, size_t *max_length);
 
-bool ob_propagate_simple(const ObCharsetInfo *cs, const uchar *str,
+bool ob_propagate_simple(const ObCharsetInfo *cs, const unsigned char *str,
                             size_t len);
-bool ob_propagate_complex(const ObCharsetInfo *cs, const uchar *str,
+bool ob_propagate_complex(const ObCharsetInfo *cs, const unsigned char *str,
                              size_t len);
 
-void ob_strxfrm_desc_and_reverse(uchar *str, uchar *strend,
-                                 uint flags, uint level);
+void ob_strxfrm_desc_and_reverse(unsigned char *str, unsigned char *strend,
+                                 unsigned int flags, unsigned int level);
 
 size_t ob_strxfrm_pad_desc_and_reverse(const ObCharsetInfo *cs,
-                                       uchar *str, uchar *frmend, uchar *strend,
-                                       uint nweights, uint flags, uint level);
+                                       unsigned char *str, unsigned char *frmend, unsigned char *strend,
+                                       unsigned int nweights, unsigned int flags, unsigned int level);
 extern "C" int64_t ob_strntoll(const char *ptr, size_t len, int base, char **end, int *err);
 extern "C" int64_t ob_strntoull(const char *ptr, size_t len, int base, char **end, int *err);
 
@@ -621,17 +522,17 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
                        const char *wildstr,const char *wildend,
                        int escape, int w_one, int w_many, int recurse_level);
 
-uint ob_instr_mb(const ObCharsetInfo *cs,
+unsigned int ob_instr_mb(const ObCharsetInfo *cs,
                  const char *b, size_t b_length,
                  const char *s, size_t s_length,
-                 ob_match_t *match, uint nmatch);
+                 ob_match_t *match, unsigned int nmatch);
 
 void ob_hash_sort_simple(const ObCharsetInfo *cs,
-				const uchar *key, size_t len,
+				const unsigned char *key, size_t len,
                 ulong *nr1, ulong *nr2,
         const bool calc_end_space, hash_algo hash_algo);
 
-const uchar *skip_trailing_space(const uchar *ptr,size_t len, bool is_utf16);
+const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16);
 
 size_t ob_numchars_mb(const ObCharsetInfo *cs __attribute__((unused)), const char *pos, const char *end);
 
@@ -640,7 +541,7 @@ size_t ob_charpos_mb(const ObCharsetInfo *cs __attribute__((unused)), const char
 size_t ob_max_bytes_charpos_mb(const ObCharsetInfo *cs __attribute__((unused)), const char *pos, const char *end, size_t max_bytes, size_t *char_len);
 
 int ob_mb_ctype_mb(const ObCharsetInfo *cs __attribute__((unused)), int *ctype,
-                   const uchar *s, const uchar *e);
+                   const unsigned char *s, const unsigned char *e);
 
 size_t ob_caseup_mb(const ObCharsetInfo *, char *src, size_t srclen,
                                          char *dst, size_t dstlen);
@@ -661,18 +562,18 @@ size_t ob_lengthsp_8bit(const ObCharsetInfo *cs __attribute__((unused)),
                         const char *ptr, size_t length);
 
 int ob_strnncoll_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
-                    const uchar *s, size_t slen,
-                    const uchar *t, size_t tlen,
+                    const unsigned char *s, size_t slen,
+                    const unsigned char *t, size_t tlen,
                         bool t_is_prefix);
 
 int ob_strnncollsp_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
-                      const uchar *a, size_t a_length,
-                      const uchar *b, size_t b_length,
+                      const unsigned char *a, size_t a_length,
+                      const unsigned char *b, size_t b_length,
                           bool diff_if_only_endspace_difference);
 
 size_t ob_strnxfrm_mb(const ObCharsetInfo *,
-                      uchar *dst, size_t dstlen, uint nweights,
-                      const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode);
+                      unsigned char *dst, size_t dstlen, unsigned int nweights,
+                      const unsigned char *src, size_t srclen, unsigned int flags, bool *is_valid_unicode);
 
 int ob_wildcmp_mb_bin(const ObCharsetInfo *cs,
                   const char *str,const char *str_end,
@@ -680,22 +581,22 @@ int ob_wildcmp_mb_bin(const ObCharsetInfo *cs,
                       int escape, int w_one, int w_many);
 
 void ob_hash_sort_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
-                         const uchar *key, size_t len, ulong *nr1, ulong *nr2,
+                         const unsigned char *key, size_t len, ulong *nr1, ulong *nr2,
                          const bool calc_end_space, hash_algo hash_algo);
 
 uint32 ob_convert(char *to, uint32 to_length, const ObCharsetInfo *to_cs,
                   const char *from, uint32 from_length,
                   const ObCharsetInfo *from_cs,
                   bool trim_incomplete_tail,
-                  const ob_wc_t replaced_char, uint *errors);
+                  const ob_wc_t replaced_char, unsigned int *errors);
 
 size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo *cs,
-                             uchar *dst, size_t dstlen, uint nweights,
-                             const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode);
+                             unsigned char *dst, size_t dstlen, unsigned int nweights,
+                             const unsigned char *src, size_t srclen, unsigned int flags, bool *is_valid_unicode);
 
 size_t ob_strnxfrm_unicode_full_bin_varlen(const struct ObCharsetInfo* cs,
-                             uchar* dst, size_t dst_len, uint nweights,
-                             const uchar *src, size_t srclen,
+                             unsigned char* dst, size_t dst_len, unsigned int nweights,
+                             const unsigned char *src, size_t srclen,
                              bool is_memcmp, bool *is_valid_unicode);
 
 bool ob_like_range_generic(const ObCharsetInfo *cs, const char *ptr,
@@ -705,12 +606,12 @@ bool ob_like_range_generic(const ObCharsetInfo *cs, const char *ptr,
                               size_t *max_length);
 
 size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
-                    uchar *dst, size_t dstlen, uint nweights,
-                    const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode);
+                    unsigned char *dst, size_t dstlen, unsigned int nweights,
+                    const unsigned char *src, size_t srclen, unsigned int flags, bool *is_valid_unicode);
 
 size_t ob_strnxfrm_unicode_varlen(const struct ObCharsetInfo* cs,
-                             uchar* dst, size_t dst_len, uint nweights,
-                             const uchar *src, size_t srclen,
+                             unsigned char* dst, size_t dst_len, unsigned int nweights,
+                             const unsigned char *src, size_t srclen,
                              bool is_memcmp, bool *is_valid_unicode);
 
 int ob_wildcmp_unicode(const ObCharsetInfo *cs,
@@ -719,8 +620,8 @@ int ob_wildcmp_unicode(const ObCharsetInfo *cs,
                    int escape, int w_one, int w_many,
                    ObUnicaseInfo *weights);
 
-size_t ob_strxfrm_pad(const ObCharsetInfo *cs, uchar *str, uchar *frmend,
-                      uchar *strend, uint nweights, uint flags);
+size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char *frmend,
+                      unsigned char *strend, unsigned int nweights, unsigned int flags);
 
 size_t ob_strnxfrmlen_simple(const struct ObCharsetInfo *, size_t);
 
@@ -728,8 +629,8 @@ size_t ob_strnxfrmlen_unicode_full_bin(const struct ObCharsetInfo *, size_t);
 
 size_t ob_strnxfrmlen_utf8mb4(const struct ObCharsetInfo *, size_t);
 
-uint ob_mbcharlen_8bit(const ObCharsetInfo *cs __attribute__((unused)),
-                      uint c __attribute__((unused)));
+unsigned int ob_mbcharlen_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+                      unsigned int c __attribute__((unused)));
 
 size_t ob_numchars_8bit(const ObCharsetInfo *cs __attribute__((unused)),
 		      const char *b, const char *e);
@@ -750,7 +651,7 @@ size_t ob_lengthsp_binary(const ObCharsetInfo *cs __attribute__((unused)),
                           size_t length);
 
 int ob_mb_ctype_8bit(const ObCharsetInfo *cs, int *ctype,
-                   const uchar *s, const uchar *e);
+                   const unsigned char *s, const unsigned char *e);
 
 size_t ob_well_formed_len_8bit(const ObCharsetInfo *cs __attribute__((unused)),
                                const char *start, const char *end,

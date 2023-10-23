@@ -81,7 +81,7 @@ int ObSetNamesExecutor::execute(ObExecContext &ctx, ObSetNamesStmt &stmt)
           if (CS_TYPE_INVALID == cs_coll_type || CS_TYPE_INVALID == coll_type) {
             ret = OB_ERR_UNEXPECTED;
             SQL_ENG_LOG(ERROR, "cs coll type or coll type is invalid", K(ret), K(cs_coll_type), K(coll_type));
-          } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(collation_type),
+          } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(ObCharset::charset_type(charset),
                                                                             session->get_effective_tenant_id()))) {
             SQL_EXE_LOG(WARN, "failed to check charset data version valid", K(ret));
           } else if (OB_FAIL(session->update_sys_variable(SYS_VAR_CHARACTER_SET_CLIENT,
@@ -102,7 +102,7 @@ int ObSetNamesExecutor::execute(ObExecContext &ctx, ObSetNamesStmt &stmt)
           ObObj database_charset;
           ObObj database_collation;
           ObCollationType cs_coll_type = ObCharset::get_default_collation(ObCharset::charset_type(charset));
-          if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(cs_coll_type),
+          if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(ObCharset::charset_type(charset),
                                                                      session->get_effective_tenant_id()))) {
             SQL_EXE_LOG(WARN, "failed to check charset data version valid", K(ret));
           } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_CHARACTER_SET_DATABASE,

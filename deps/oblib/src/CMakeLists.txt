@@ -85,14 +85,6 @@ if(OB_BUILD_AUDIT_SECURITY)
   )
 endif()
 
-if(OB_BUILD_ORACLE_XML)
-  target_include_directories(
-    oblib_base_base_base INTERFACE
-    ${CMAKE_SOURCE_DIR}/close_modules/charset
-    ${CMAKE_SOURCE_DIR}/close_modules/charset/deps/oblib/src/
-  )
-endif()
-
 if(OB_USE_BABASSL)
   target_include_directories(
     oblib_base_base_base INTERFACE
