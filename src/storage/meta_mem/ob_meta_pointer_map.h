@@ -516,7 +516,15 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
     int64_t buf_len = 0;
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-      if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
+      ObMetaPointerHandle<Key, T> tmp_ptr_hdl(*this);
+      // check whether the tablet has been deleted
+      if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
+        if (common::OB_ENTRY_NOT_EXIST != ret) {
+          STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
+        } else {
+          STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
+        }
+      } else if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
         STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
       } else {
         t->tablet_addr_ = load_addr;
@@ -554,7 +562,15 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
     int64_t buf_len = 0;
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-      if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
+      ObMetaPointerHandle<Key, T> tmp_ptr_hdl(*this);
+      // check whether the tablet has been deleted
+      if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
+        if (common::OB_ENTRY_NOT_EXIST != ret) {
+          STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
+        } else {
+          STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
+        }
+      } else if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
         STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
       } else {
         t->tablet_addr_ = load_addr;

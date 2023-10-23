@@ -5323,7 +5323,7 @@ int ObTablet::read_mds_table_medium_info_list(
       LOG_WARN("failed to traverse mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (!op.dumped()) {
       ret = OB_EMPTY_RESULT;
-      LOG_INFO("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
+      LOG_DEBUG("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
     }
   }
 
