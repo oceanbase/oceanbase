@@ -503,33 +503,17 @@ int ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(cons
                                                                            const share::ObLSID ls_id, 
                                                                            ObAddr &scheduler_addr)
 {
-  #define PRINT_WRAPPER KR(ret), KR(tmp_ret), K(trans_id), K(ls_id), K(scheduler_addr)
+  #define PRINT_WRAPPER KR(ret), K(trans_id), K(ls_id), K(scheduler_addr)
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObTransService *tx_service = MTL(ObTransService*);
-  transaction::ObPartTransCtx *part_trans_ctx = nullptr;
-  if (OB_ISNULL(tx_service)) {
+  ObLSService *ls_service = MTL(ObLSService*);
+  ObLSHandle ls_handle;
+  if (OB_ISNULL(ls_service)) {
     ret = OB_BAD_NULL_ERROR;
-    DETECT_LOG(ERROR, "tx_service is NULL", PRINT_WRAPPER);
-  } else if (OB_FAIL(tx_service->get_tx_ctx_mgr().get_tx_ctx(ls_id, trans_id, false, part_trans_ctx))) {
-    if (ret == OB_TRANS_CTX_NOT_EXIST) {
-      DETECT_LOG(INFO, "conflict trans_id's ctx is not exist anymore",PRINT_WRAPPER);
-      scheduler_addr.reset();
-    } else {
-      DETECT_LOG(WARN, "get part_trans_ctx failed", PRINT_WRAPPER);
-    }
-  } else if (OB_ISNULL(part_trans_ctx)) {
-    ret = OB_BAD_NULL_ERROR;
-    DETECT_LOG(WARN, "pat_trans_ctx is NULL", PRINT_WRAPPER);
-  } else {
-    scheduler_addr = part_trans_ctx->get_scheduler();
-    if (!scheduler_addr.is_valid()) {
-      ret = OB_TRANS_CTX_NOT_EXIST;
-      DETECT_LOG(WARN, "scheduler on part trans ctx is invalid", PRINT_WRAPPER);
-    }
-    if (OB_TMP_FAIL(tx_service->get_tx_ctx_mgr().revert_tx_ctx(part_trans_ctx))) {
-      DETECT_LOG(ERROR, "revert tx ctx failed", PRINT_WRAPPER, KPC(part_trans_ctx));
-    }
+    DETECT_LOG(ERROR, "ls_service is NULL", PRINT_WRAPPER);
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DEADLOCK_MOD))) {
+    DETECT_LOG(WARN, "fail to get ls", PRINT_WRAPPER);
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tx_scheduler(trans_id, scheduler_addr))) {
+    DETECT_LOG(WARN, "fail to get tx scheduler", PRINT_WRAPPER);
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -678,9 +662,14 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     desc->reset_conflict_txs();
   }
   int exec_ctx_err_code = exec_ctx.get_errcode();
-  if (OB_SUCCESS != exec_ctx_err_code) {
-    if ((OB_ITER_END != exec_ctx_err_code) && (2 != step)) {
-      DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
+  if (OB_SUCC(ret)) {
+    if (OB_SUCCESS != exec_ctx_err_code) {
+      if ((OB_ITER_END != exec_ctx_err_code) && (2 != step)) {
+        if (session->get_retry_info().get_retry_cnt() <= 1 ||// first time lock conflict or other error
+            session->get_retry_info().get_retry_cnt() % 10 == 0) {// other wise, control log print frequency
+          DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
+        }
+      }
     }
   }
   return ret;
@@ -712,7 +701,7 @@ int ObTransDeadlockDetectorAdapter::register_local_execution_to_deadlock_detecto
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->block(self_trans_id, func))) {
     DETECT_LOG(WARN, "fail to block on call back function", PRINT_WRAPPER);
   } else {
-    DETECT_LOG(INFO, "local execution register to deadlock detector waiting for row success", PRINT_WRAPPER);
+    DETECT_LOG(TRACE, "local execution register to deadlock detector waiting for row success", PRINT_WRAPPER);
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -839,7 +828,7 @@ void ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(const ObT
       ret = OB_SUCCESS;// it's ok if detector not exist
     }
   } else {
-    DETECT_LOG(INFO, "unregister from deadlock detector success", K(self_trans_id), K(to_string(path)));
+    DETECT_LOG(TRACE, "unregister from deadlock detector success", K(self_trans_id), K(to_string(path)));
   }
 }
 

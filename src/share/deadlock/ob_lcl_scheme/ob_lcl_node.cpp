@@ -67,7 +67,7 @@ ObLCLNode::ObLCLNode(const UserBinaryKey &user_key,
                               on_collect_operation.is_valid();
   created_time_ = ObClockGenerator::getRealClock();
   allow_detect_time_ = created_time_ + start_delay;
-  DETECT_LOG_(INFO, "new detector instance created", PRINT_WRAPPER);
+  DETECT_LOG_(TRACE, "new detector instance created", PRINT_WRAPPER);
   #undef PRINT_WRAPPER
   ATOMIC_INC(&(ObIDeadLockDetector::total_constructed_count));
 }
