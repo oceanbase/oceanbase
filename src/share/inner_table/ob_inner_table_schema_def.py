@@ -55341,6 +55341,10 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_kv_ttl_task_history'])
 
+# 101095 : placeholder for index of __all_mview_refresh_run_stats
+# 101096 : placeholder for index of __all_mview_refresh_stats
+# 101097 : placeholder for index of __all_mview_refresh_stats
+
 ################################################################################
 # Oracle Agent table Index
 def_agent_index_table(
