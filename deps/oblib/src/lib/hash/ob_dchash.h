@@ -311,9 +311,13 @@ public:
 
   int64_t count() const { return node_count_.value(); }
   Node* next(Node* node) {
+    get_qsync().acquire_ref();
     while(NULL != (node = next_node(node))
-          && node->is_dummy_node())
-      ;
+          && node->is_dummy_node()) {
+      // add usleep for dummy node test
+      // usleep(1 * 1000 * 1000);
+    }
+    get_qsync().release_ref();
     return node;
   }
 private:
