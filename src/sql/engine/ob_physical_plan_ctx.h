@@ -468,7 +468,6 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalPlanCtx);
 private:
-  static const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
   static const int64_t ESTIMATE_TRANS_RESERVE_TIME = 70 * 1000;
   //oracle calc time during running, not before running.
   //oracle datetime func has two categories: sysdate/systimestamp, current_date/current_timestamp/localtimestamp
