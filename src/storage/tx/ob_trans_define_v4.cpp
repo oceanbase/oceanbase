@@ -1573,10 +1573,10 @@ ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
   int64_t seq = ObSequence::inc_and_get_max_seq_no();
   return ObTxSEQ::mk_v0(seq);
 }
-void ObTxDesc::mark_part_abort(const int abort_cause)
+void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
 {
   ObSpinLockGuard guard(lock_);
-  if (state_ < State::IN_TERMINATE && !flags_.PART_ABORTED_) {
+  if (tx_id == tx_id_ && state_ < State::IN_TERMINATE && !flags_.PART_ABORTED_) {
     flags_.PART_ABORTED_ = true;
     abort_cause_ = abort_cause;
   }

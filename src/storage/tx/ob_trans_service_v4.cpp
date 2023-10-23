@@ -898,11 +898,11 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
     TRANS_LOG(WARN, "tx participant in failed status", K(msg));
     if (OB_TRANS_KILLED == msg.status_)  {
       TRANS_LOG(INFO, "participant was killed, mark tx should abort", K(tx_id), K(msg.sender_));
-      tx->mark_part_abort(OB_TRANS_KILLED);
+      tx->mark_part_abort(tx_id, OB_TRANS_KILLED);
       ret_status = OB_TRANS_NEED_ROLLBACK;
     } else if (msg.status_ > 0) {
       TRANS_LOG(INFO, "participant failed, mark tx should abort", K(tx_id), K(msg.status_), K(msg.sender_));
-      tx->mark_part_abort(msg.status_);
+      tx->mark_part_abort(tx_id, msg.status_);
       ret_status = OB_TRANS_NEED_ROLLBACK;
     }
   }
