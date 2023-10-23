@@ -3476,7 +3476,7 @@ int ObTablet::inner_create_memtable(
     }
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->create_memtable(clog_checkpoint_scn, schema_version, for_replay))) {
+  } else if (OB_FAIL(memtable_mgr->create_memtable(clog_checkpoint_scn, schema_version, tablet_meta_.clog_checkpoint_scn_, for_replay))) {
     if (OB_ENTRY_EXIST != ret && OB_MINOR_FREEZE_NOT_ALLOW != ret) {
       LOG_WARN("failed to create memtable for tablet", K(ret), K(ls_id), K(tablet_id),
           K(clog_checkpoint_scn), K(schema_version), K(for_replay));

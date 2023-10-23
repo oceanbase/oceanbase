@@ -221,10 +221,12 @@ public:
 
   virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
+                              const share::SCN newest_clog_checkpoint_scn,
                               const bool for_replay = false)
   {
     UNUSED(clog_checkpoint_scn);
     UNUSED(schema_version);
+    UNUSED(newest_clog_checkpoint_scn);
     UNUSED(for_replay);
     return OB_NOT_SUPPORTED;
   }

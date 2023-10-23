@@ -59,6 +59,7 @@ public:
   // create_memtable is used for creating the only memtable for CheckpointMgr
   virtual int create_memtable(const share::SCN last_replay_scn,
                               const int64_t schema_version,
+                              const share::SCN newest_clog_checkpoint_scn,
                               const bool for_replay=false) override;
 
   const ObTxCtxMemtable *get_tx_ctx_memtable_(const int64_t pos) const;
