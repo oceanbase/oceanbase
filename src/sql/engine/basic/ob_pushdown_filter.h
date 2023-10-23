@@ -153,6 +153,10 @@ public:
   virtual int postprocess() override;
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterNode", ObPushdownFilterNode,
                        K_(column_exprs), K_(filter_exprs));
+
+private:
+  int64_t get_filter_expr_count()
+  { return filter_exprs_.empty() ? 1 : filter_exprs_.count(); }
 public:
   ExprFixedArray column_exprs_; // 列对应的表达式
   ExprFixedArray filter_exprs_; // 下压filters
