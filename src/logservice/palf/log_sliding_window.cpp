@@ -391,9 +391,11 @@ bool LogSlidingWindow::leader_can_submit_group_log_(const LSN &lsn, const int64_
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
   //     group_buffer被uncommitted log填满而无法滑出
   if (!group_buffer_.can_handle_new_log(lsn, group_log_size, curr_committed_end_lsn)) {
-    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
-        K(lsn), K(group_log_size), K(curr_committed_end_lsn),
-        "start_id", get_start_id(), "max_log_id", get_max_log_id());
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
+          K(lsn), K(group_log_size), K(curr_committed_end_lsn),
+          "start_id", get_start_id(), "max_log_id", get_max_log_id());
+    }
   } else {
     bool_ret = true;
   }
@@ -2176,9 +2178,6 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
         }
       }
     }
-    if (0 == log_id % 100) {
-      PALF_LOG(INFO, "sliding_cb finished", K(ret), K_(palf_id), K_(self), K(ret), K(log_id));
-    }
   }
   return ret;
 }
@@ -3352,7 +3351,9 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
       } else {
         ret = OB_EAGAIN;
       }
-      PALF_LOG(WARN, "leader cannot submit group log", K(ret), K_(palf_id), K_(self), K(lsn), K(buf_len));
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        PALF_LOG(WARN, "leader cannot submit group log", K(ret), K_(palf_id), K_(self), K(lsn), K(buf_len));
+      }
     } else if (!group_entry_header.check_integrity(buf + LogGroupEntryHeader::HEADER_SER_SIZE,
           buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, group_log_data_checksum)) {
       ret = OB_INVALID_DATA;
