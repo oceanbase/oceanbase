@@ -13,7 +13,6 @@
 #include "log_define.h"
 #include "lib/list/ob_dlist.h"
 #include "share/ob_errno.h"
-#include "linux/falloc.h" // FALLOC_FL_ZERO_RANGE for linux kernel 4.9
 #include "log_block_pool_interface.h"
 
 namespace oceanbase
