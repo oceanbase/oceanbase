@@ -408,22 +408,23 @@ static void print_all_thread(const char* desc)
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
       char *tid = entry->d_name;
-      if (tid[0] == '.')
-        continue;  // pass . and ..
-      char path[256];
-      sprintf(path, "/proc/self/task/%s/comm", tid);
-      FILE *file = fopen(path, "r");
-      if (file == NULL) {
-        MPRINT("fail to print thread tid: %s", tid);
+      if (tid[0] != '.') { // pass . and ..
+        char path[256];
+        sprintf(path, "/proc/self/task/%s/comm", tid);
+        FILE *file = fopen(path, "r");
+        if (file == NULL) {
+          MPRINT("fail to print thread tid: %s", tid);
+        } else {
+          char name[256];
+          fgets(name, 256, file);
+          size_t len = strlen(name);
+          if (len > 0 && name[len - 1] == '\n') {
+            name[len - 1] = '\0';
+          }
+          MPRINT("[%s] detect unstopped thread, tid: %s, name: %s", desc, tid, name);
+          fclose(file);
+        }
       }
-      char name[256];
-      fgets(name, 256, file);
-      size_t len = strlen(name);
-      if (len > 0 && name[len - 1] == '\n') {
-        name[len - 1] = '\0';
-      }
-      MPRINT("[%s] detect unstopped thread, tid: %s, name: %s", desc, tid, name);
-      fclose(file);
     }
   }
   closedir(dir);
