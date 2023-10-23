@@ -779,6 +779,7 @@ public:
   common::ObSArray<ObPCConstParamInfo, common::ModulePageAllocator, true> all_plan_const_param_constraints_;
   common::ObSArray<ObPCConstParamInfo, common::ModulePageAllocator, true> all_possible_const_param_constraints_;
   common::ObSArray<ObPCParamEqualInfo, common::ModulePageAllocator, true> all_equal_param_constraints_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> var_init_exprs_;
   common::ObDList<ObPreCalcExprConstraint> all_pre_calc_constraints_;
   common::ObSArray<ObExprConstraint, common::ModulePageAllocator, true> all_expr_constraints_;
   common::ObSArray<ObPCPrivInfo, common::ModulePageAllocator, true> all_priv_constraints_;

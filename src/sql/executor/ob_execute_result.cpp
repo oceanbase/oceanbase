@@ -103,6 +103,17 @@ int ObExecuteResult::open() const
     if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
       LOG_WARN("open operator failed", K(ret));
     }
+  } else if (!static_engine_root_->get_spec().plan_->var_init_exprs_.empty()) {
+    // Evaluate the var init expr in generated table, This is to be compatible with some of mysql's uses of variables
+    // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
+    const ExprFixedArray &var_init_exprs = static_engine_root_->get_spec().plan_->var_init_exprs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < var_init_exprs.count(); i++) {
+      ObDatum *datum = NULL;
+      ObExpr *expr = var_init_exprs.at(i);
+      if (OB_FAIL(expr->eval(static_engine_root_->get_eval_ctx(), datum))) {
+        LOG_WARN("expr evaluate failed", K(ret));
+      }
+    }
   }
   return ret;
 }

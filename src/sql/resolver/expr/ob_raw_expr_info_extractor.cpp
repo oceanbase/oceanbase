@@ -39,7 +39,17 @@ int ObRawExprInfoExtractor::visit(ObConstRawExpr &expr)
   int ret = OB_SUCCESS;
   ObItemType type = expr.get_expr_type();
   switch (type) {
-  //case T_USER_VARIABLE_IDENTIFIER:
+  case T_USER_VARIABLE_IDENTIFIER: {
+    ObUserVarIdentRawExpr &var_expr = static_cast<ObUserVarIdentRawExpr&>(expr);
+    if (var_expr.get_is_contain_assign() || var_expr.get_query_has_udf()) {
+      if (OB_FAIL(var_expr.add_flag(IS_DYNAMIC_USER_VARIABLE))) {
+        LOG_WARN("add flag to user var ident raw expr failed", KR(ret));
+      }
+    } else if (OB_FAIL(var_expr.add_flag(IS_CONST))) {
+      LOG_WARN("failed to add flag IS_CONST", K(ret));
+    }
+    break;
+  }
   case T_SYSTEM_VARIABLE:
   case T_QUESTIONMARK: {
     if (OB_FAIL(expr.add_flag(IS_STATIC_PARAM))) {
@@ -58,10 +68,8 @@ int ObRawExprInfoExtractor::visit(ObConstRawExpr &expr)
   default:
     break;
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(expr.add_flag(IS_CONST))) {
+  if (OB_SUCC(ret) && T_USER_VARIABLE_IDENTIFIER != type) {
+    if (OB_FAIL(expr.add_flag(IS_CONST))) {
       LOG_WARN("failed to add flag IS_CONST", K(ret));
     }
   }

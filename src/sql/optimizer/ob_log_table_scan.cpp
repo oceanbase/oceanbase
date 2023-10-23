@@ -537,7 +537,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push UDF filter store non-pushdown filter failed", K(ret), K(i));
         }
-      } else if (filters.at(i)->has_flag(CNT_ASSIGN_EXPR)) {
+      } else if (filters.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push variable assign filter store non-pushdown filter failed", K(ret), K(i));
         }

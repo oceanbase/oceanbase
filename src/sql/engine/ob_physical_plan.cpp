@@ -99,6 +99,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     need_drive_dml_query_(false),
     tx_id_(-1),
     tm_sessid_(-1),
+    var_init_exprs_(allocator_),
     is_returning_(false),
     is_late_materialized_(false),
     is_dep_base_table_(false),
@@ -222,6 +223,7 @@ void ObPhysicalPlan::reset()
   stat_.minimal_worker_map_.destroy();
   tx_id_ = -1;
   tm_sessid_ = -1;
+  var_init_exprs_.reset();
   need_record_plan_info_ = false;
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;

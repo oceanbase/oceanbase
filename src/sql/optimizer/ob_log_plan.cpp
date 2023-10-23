@@ -5431,12 +5431,25 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
     } else {
       out_subquery_path_op = subplan_scan;
     }
+    bool enable_var_assign_use_das = true;
+    if (OB_SUCC(ret)) {
+      ObSQLSessionInfo *session_info = NULL;
+      if (OB_NOT_NULL(session_info = get_optimizer_context().get_session_info())) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
+        if (tenant_config.is_valid()) {
+          enable_var_assign_use_das = tenant_config->_enable_var_assign_use_das;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       bool contains_assignment = false;
       if (OB_FAIL(ObOptimizerUtil::check_contains_assignment(table_item->ref_query_,
                                                              contains_assignment))) {
         LOG_WARN("failed to check contains assignment", K(ret));
-      } else if (contains_assignment &&
+      } else if (contains_assignment && enable_var_assign_use_das &&
                  OB_FAIL(allocate_material_as_top(out_subquery_path_op))) {
         LOG_WARN("failed to allocate meterail as top", K(ret));
       }
