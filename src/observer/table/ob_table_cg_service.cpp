@@ -1434,8 +1434,15 @@ int ObTableDmlCgService::generate_upd_assign_infos(ObTableCtx &ctx,
   ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
   int64_t assign_cnt = assigns.count();
   ColContentFixedArray &assign_infos = udp_ctdef.assign_columns_;
+  ObSEArray<uint64_t, 64> column_ids;
+  const ObTableSchema *table_schema = ctx.get_table_schema();
 
-  if (OB_FAIL(assign_infos.init(assign_cnt))) {
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (OB_FAIL(table_schema->get_column_ids(column_ids))) {
+    LOG_WARN("fail to get column ids", K(ret));
+  } else if (OB_FAIL(assign_infos.init(assign_cnt))) {
     LOG_WARN("fail to init assign info array", K(ret), K(assign_cnt));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < assign_cnt; ++i) {
@@ -1450,9 +1457,9 @@ int ObTableDmlCgService::generate_upd_assign_infos(ObTableCtx &ctx,
                                 assign.column_expr_->get_column_name(),
                                 column_content.column_name_))) {
       LOG_WARN("fail to copy column name", K(ret), K(assign.column_expr_->get_column_name()));
-    } else if (!has_exist_in_array(udp_ctdef.das_ctdef_.column_ids_, assign.column_expr_->get_column_id(), &idx)) {
+    } else if (!has_exist_in_array(column_ids, assign.column_expr_->get_column_id(), &idx)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("assign column not exists in old column", K(ret), KPC(assign.column_expr_));
+      LOG_WARN("assign column not exists in schema columns", K(ret), KPC(assign.column_expr_), K(column_ids));
     } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
       //do nothing
     } else if (OB_FAIL(assign_infos.push_back(column_content))) {
@@ -1579,20 +1586,25 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
   ObSEArray<ObObjMeta, 8> rowkey_column_types;
 
-  if (OB_FAIL(get_rowkey_exprs(ctx, rowkey_exprs))) {
-    LOG_WARN("fail to get rowkey exprs", K(ret), K(ctx));
-  } else if (items.count() < rowkey_exprs.count()) {
-    ret = OB_ERR_UNDEFINED;
-    LOG_WARN("invalid column item count", K(ret), K(items), K(rowkey_exprs));
-  }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
-    const ObTableColumnItem &item = items.at(i);
-    ObRawExpr *expr = rowkey_exprs.at(i);
-    if (OB_FAIL(rowkey_column_ids.push_back(item.column_id_))) {
-      LOG_WARN("fail to push base column id", K(ret), K(item));
-    } else if (OB_FAIL(rowkey_column_types.push_back(item.expr_->get_result_type()))) {
-      LOG_WARN("fail to push column type", K(ret), K(item));
+  if (OB_FAIL(get_rowkey_exprs(ctx, rowkey_exprs))) {
+    LOG_WARN("fail to get table rowkey exprs", K(ret), K(ctx));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); i++) {
+      const ObTableColumnItem *item = nullptr;
+      if (OB_FAIL(ctx.get_column_item_by_expr(rowkey_exprs.at(i), item))) {
+        LOG_WARN("fail to get column item", K(ret), K(rowkey_exprs), K(i));
+      } else if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item is null", K(ret));
+      } else if (OB_FAIL(rowkey_column_ids.push_back(item->column_id_))) {
+        LOG_WARN("fail to push base column id", K(ret), KPC(item));
+      } else if (OB_ISNULL(item->expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column ref expr is null", K(ret), KPC(item));
+      } else if (OB_FAIL(rowkey_column_types.push_back(item->expr_->get_result_type()))) {
+        LOG_WARN("fail to push column type", K(ret), KPC(item));
+      }
     }
   }
 
@@ -1613,16 +1625,23 @@ int ObTableDmlCgService::generate_table_rowkey_info(ObTableCtx &ctx,
 int ObTableDmlCgService::get_rowkey_exprs(ObTableCtx &ctx, ObIArray<ObRawExpr*> &rowkey_exprs)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 64> rowkey_column_ids;
   const ObTableSchema *table_schema = ctx.get_table_schema();
 
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
+  } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_column_ids))) {
+    LOG_WARN("fail to get rowkey column ids", K(ret));
   } else {
-    const int rowkey_cnt = table_schema->get_rowkey_column_num();
-    const ObIArray<ObRawExpr *> &all_exprs = ctx.get_all_exprs_array();
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; i++) {
-      if (OB_FAIL(rowkey_exprs.push_back(all_exprs.at(i)))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); i++) {
+      const ObTableColumnItem *item = nullptr;
+      if (OB_FAIL(ctx.get_column_item_by_column_id(rowkey_column_ids.at(i), item))) {
+        LOG_WARN("fail to get column item", K(ret), K(rowkey_column_ids), K(i));
+      } else if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item is null", K(ret));
+      } else if (OB_FAIL(rowkey_exprs.push_back(item->raw_expr_))) {
         LOG_WARN("fail to push back rowkey expr", K(ret), K(i));
       }
     }

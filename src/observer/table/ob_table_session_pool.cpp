@@ -374,12 +374,14 @@ int ObTableApiSessPool::move_node_to_retired_list(ObTableApiSessNode *node)
   1. remove session val in free_list.
   2. remove session node from retired_nodes_ when node is empty.
   3. free node memory.
+  4. delete 1000 session nodes per times
 */
 int ObTableApiSessPool::evict_retired_sess()
 {
   int ret = OB_SUCCESS;
+  int64 delete_count = 0;
 
-  DLIST_FOREACH(node, retired_nodes_) {
+  DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
     if (OB_FAIL(node->remove_unused_sess())) {
       LOG_WARN("fail to remove unused sess", K(ret), K(*node));
     } else {
@@ -390,6 +392,7 @@ int ObTableApiSessPool::evict_retired_sess()
           rm_node->~ObTableApiSessNode();
           allocator_.free(rm_node);
           rm_node = nullptr;
+          delete_count++;
         }
       }
     }
