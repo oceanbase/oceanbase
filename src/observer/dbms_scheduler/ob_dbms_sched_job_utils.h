@@ -90,6 +90,7 @@ public:
 
   TO_STRING_KV(K(tenant_id_),
                K(job_),
+               K(job_name_),
                K(lowner_),
                K(powner_),
                K(cowner_),
@@ -129,7 +130,7 @@ public:
   int64_t  get_last_date() { return last_date_; }
   int64_t  get_last_modify() { return last_modify_; }
   int64_t  get_interval_ts() { return interval_ts_; }
-  int64_t  get_max_run_duration() { return max_run_duration_; }
+  int64_t  get_max_run_duration() { return (max_run_duration_ == 0) ? 30 : max_run_duration_ ; } // 30s by default
 
   bool is_broken() { return 0x1 == (flag_ & 0x1); }
   bool is_running(){ return this_date_ != 0; }

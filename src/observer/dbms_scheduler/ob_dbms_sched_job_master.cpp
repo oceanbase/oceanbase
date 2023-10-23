@@ -381,7 +381,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
   } else {
     ObArenaAllocator allocator;
     OZ (table_operator_.get_dbms_sched_job_info(
-      job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), allocator, job_info));
+      job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), job_key->get_job_name(), allocator, job_info));
 
     if (OB_FAIL(ret) || !job_info.valid()) {
       int tmp = alive_jobs_.erase_refactored(job_key->get_job_id_with_tenant());
@@ -401,7 +401,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
           OZ (table_operator_.update_for_start(
             job_info.get_tenant_id(), job_info));
           OZ (job_rpc_proxy_->run_dbms_sched_job(
-            job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), execute_addr, self_addr_));
+            job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), job_key->get_job_name(), execute_addr, self_addr_));
         } else {
           LOG_INFO("avoid duplicate job", K(ret), K(job_info), K(can_running));
         }
@@ -434,7 +434,7 @@ int ObDBMSSchedJobMaster::destroy()
 
 int ObDBMSSchedJobMaster::alloc_job_key(
   ObDBMSSchedJobKey *&job_key,
-  uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
+  uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const ObString &job_name,
   uint64_t execute_at, uint64_t delay,
   bool check_job)
 {
@@ -446,7 +446,7 @@ int ObDBMSSchedJobMaster::alloc_job_key(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret), K(ptr));
   } else if (OB_ISNULL(job_key =
-    new(ptr)ObDBMSSchedJobKey(tenant_id, is_oracle_tenant, job_id,
+    new(ptr)ObDBMSSchedJobKey(tenant_id, is_oracle_tenant, job_id, job_name,
                          execute_at, delay,
                          check_job))) {
     ret = OB_ERR_UNEXPECTED;
@@ -657,6 +657,7 @@ int ObDBMSSchedJobMaster::register_job(
       job_info.get_tenant_id(),
       job_info.is_oracle_tenant(),
       job_info.get_job_id(),
+      job_info.get_job_name(),
       execute_at,
       delay,
       check_job));
@@ -665,6 +666,7 @@ int ObDBMSSchedJobMaster::register_job(
   } else {
     CK (job_key->get_tenant_id() == job_info.get_tenant_id());
     CK (job_key->get_job_id() == job_info.get_job_id());
+    CK (job_key->get_job_name() == job_info.get_job_name());
     OX (job_key->set_execute_at(execute_at));
     OX (job_key->set_delay(delay));
     OX (job_key->set_check_job(check_job));

@@ -51,21 +51,27 @@ class ObDBMSSchedJobKey : public common::ObLink
 {
 public:
   ObDBMSSchedJobKey(
-    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
+    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
     uint64_t execute_at, uint64_t delay,
     bool check_job)
   : tenant_id_(tenant_id),
     is_oracle_tenant_(is_oracle_tenant),
     job_id_(job_id),
+    job_name_(),
     execute_at_(execute_at),
     delay_(delay),
-    check_job_(check_job) {}
+    check_job_(check_job) {
+      job_name_.assign_buffer(job_name_buf_, JOB_NAME_MAX_SIZE);
+      job_name_.write(job_name.ptr(), job_name.length());
+    }
 
   virtual ~ObDBMSSchedJobKey() {}
 
+  static constexpr int64_t JOB_NAME_MAX_SIZE = 128;
   OB_INLINE uint64_t get_job_id_with_tenant() const { return common::combine_two_ids(tenant_id_, job_id_); }
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
   OB_INLINE uint64_t get_job_id() const { return job_id_; }
+  OB_INLINE common::ObString &get_job_name() { return job_name_; }
   OB_INLINE uint64_t get_execute_at() const { return execute_at_;}
   OB_INLINE uint64_t get_delay() const { return delay_; }
 
@@ -96,6 +102,7 @@ public:
     K_(tenant_id),
     K_(is_oracle_tenant),
     K_(job_id),
+    K_(job_name),
     K_(execute_at),
     K_(delay),
     K_(check_job));
@@ -104,6 +111,8 @@ private:
   uint64_t tenant_id_;
   bool is_oracle_tenant_;
   uint64_t job_id_;
+  char job_name_buf_[JOB_NAME_MAX_SIZE];
+  common::ObString job_name_;
   uint64_t execute_at_;
   uint64_t delay_;
 
@@ -186,7 +195,7 @@ public:
 
   int alloc_job_key(
     ObDBMSSchedJobKey *&job_key,
-    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
+    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
     uint64_t execute_at, uint64_t delay,
     bool check_job = false);
 
