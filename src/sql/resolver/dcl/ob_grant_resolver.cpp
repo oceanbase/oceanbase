@@ -1057,8 +1057,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
     bool is_all_role = true;
     CHECK_COMPATIBILITY_MODE(session_info_);
     if (!lib::is_oracle_mode()) {
-      need_create_user = (0 == (params_.session_info_->get_sql_mode()
-            & SMO_NO_AUTO_CREATE_USER));
+      need_create_user = !is_no_auto_create_user(params_.session_info_->get_sql_mode());
     }
     grant_stmt->set_need_create_user(need_create_user);
     if (users_node->num_child_ > 0) {
@@ -1323,8 +1322,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
           bool need_create_user = false;
           CHECK_COMPATIBILITY_MODE(session_info_);
           if (!lib::is_oracle_mode()) {
-            need_create_user = (0 == (params_.session_info_->get_sql_mode()
-                  & SMO_NO_AUTO_CREATE_USER));
+            need_create_user = !is_no_auto_create_user(params_.session_info_->get_sql_mode());
           }
           grant_stmt->set_need_create_user(need_create_user);
           if (users_node->num_child_ > 0) {
