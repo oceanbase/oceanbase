@@ -1712,6 +1712,20 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PRIVILEGE_FEATURES_ENABLE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(236); }
 };
+class ObSysVarPrivControl : public ObVarcharSysVar
+{
+public:
+  ObSysVarPrivControl() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__PRIV_CONTROL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(237); }
+};
+class ObSysVarEnableMysqlPlPrivCheck : public ObBoolSysVar
+{
+public:
+  ObSysVarEnableMysqlPlPrivCheck() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(238); }
+};
 
 
 class ObSysVarFactory
@@ -1732,7 +1746,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 140;
+  const static int64_t OB_SYS_VARS_COUNT = 142;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

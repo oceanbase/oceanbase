@@ -13009,7 +13009,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12440: __all_virtual_wr_system_event
 # 12441: __all_virtual_wr_event_name
 # 12442: __all_tenant_scheduler_running_job
-#
+# 12443: __all_virtual_routine_privilege
+# 12444: __all_virtual_routine_privilege_history
 # 余留位置
 #
 

@@ -3341,12 +3341,38 @@ static struct VarsInit{
       ObSysVars[236].info_ = "enabling a series of privilege features based on an OceanBase release number" ;
       ObSysVars[236].name_ = "privilege_features_enable" ;
       ObSysVars[236].data_type_ = ObVarcharType ;
-      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[236].id_ = SYS_VAR_PRIVILEGE_FEATURES_ENABLE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PRIVILEGE_FEATURES_ENABLE)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_PRIVILEGE_FEATURES_ENABLE] = 236 ;
       ObSysVars[236].base_value_ = "" ;
     ObSysVars[236].alias_ = "OB_SV_PRIVILEGE_FEATURES_ENABLE" ;
+    }();
+
+    [&] (){
+      ObSysVars[237].default_value_ = "" ;
+      ObSysVars[237].info_ = "whether turn on mysql privilege check" ;
+      ObSysVars[237].name_ = "_priv_control" ;
+      ObSysVars[237].data_type_ = ObVarcharType ;
+      ObSysVars[237].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[237].id_ = SYS_VAR__PRIV_CONTROL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PRIV_CONTROL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PRIV_CONTROL] = 237 ;
+      ObSysVars[237].base_value_ = "" ;
+    ObSysVars[237].alias_ = "OB_SV__PRIV_CONTROL" ;
+    }();
+
+    [&] (){
+      ObSysVars[238].default_value_ = "0" ;
+      ObSysVars[238].info_ = "specifies whether check the mysql routine priv" ;
+      ObSysVars[238].name_ = "_enable_mysql_pl_priv_check" ;
+      ObSysVars[238].data_type_ = ObIntType ;
+      ObSysVars[238].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[238].id_ = SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK] = 238 ;
+      ObSysVars[238].base_value_ = "0" ;
+    ObSysVars[238].alias_ = "OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -3355,7 +3381,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 237;
+static int64_t var_amount = 239;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
