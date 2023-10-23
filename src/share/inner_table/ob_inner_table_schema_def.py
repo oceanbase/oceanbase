@@ -29943,6 +29943,7 @@ def_table_schema(
 
 #21479 GV$OB_CGROUP_CONFIG
 #21480 V$OB_CGROUP_CONFIG
+#21481 DBA_OB_FORMAT_OUTLINES
 
 # 余留位置
 
@@ -48412,6 +48413,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+# 25268: DBA_OB_FORMAT_OUTLINES
 
 # 余留位置
 
