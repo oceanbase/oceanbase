@@ -6291,9 +6291,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         if (OB_FAIL(ret)) {
         } else if (is_mysql_recursive_union) {
           if (left_type.is_null()) {
-            res_type.set_binary();
-            res_type.set_length(0);
-            res_type.set_collation_level(CS_LEVEL_IMPLICIT);
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected rcte type", K(ret), K(left_stmts));
           } else {
             res_type = left_type;
           }
