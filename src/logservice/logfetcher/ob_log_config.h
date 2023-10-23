@@ -149,11 +149,6 @@ public:
   // LS fetch progress update timeout in seconds
   // If the logs are not fetched after a certain period of time, the stream will be cut
   T_DEF_INT_INFT(ls_fetch_progress_update_timeout_sec, OB_CLUSTER_PARAMETER, 15, 1, "logstream fetch progress update timeout in seconds");
-  // Timeout time for lagging replica logstreams
-  //
-  // If logs are not fetched for more than a certain period of time on a lagging copy, cut the stream
-  T_DEF_INT_INFT(ls_fetch_progress_update_timeout_sec_for_lagged_replica, OB_CLUSTER_PARAMETER, 3, 1,
-      "fetch progress update timeout for lagged replica in seconds");
 
   T_DEF_INT_INFT(log_router_background_refresh_interval_sec, OB_CLUSTER_PARAMETER, 10, 1,
                  "log_route_service background_refresh_time in seconds");
@@ -196,7 +191,7 @@ public:
   T_DEF_INT_INFT(blacklist_history_clear_interval_min, OB_CLUSTER_PARAMETER, 20, 10, "blacklist history clear interval in minute");
 
   // Check the need for active cut-off cycles, in minutes
-  T_DEF_INT_INFT(check_switch_server_interval_min, OB_CLUSTER_PARAMETER, 10, 1, "check switch server interval in minute");
+  T_DEF_INT_INFT(check_switch_server_interval_sec, OB_CLUSTER_PARAMETER, 60, 1, "check switch server interval in seconds");
 
   // Print the number of LSs with the slowest progress of the Fetcher module
   T_DEF_INT_INFT(print_fetcher_slowest_ls_num, OB_CLUSTER_PARAMETER, 10, 1, "print fetcher slowest ls num");
