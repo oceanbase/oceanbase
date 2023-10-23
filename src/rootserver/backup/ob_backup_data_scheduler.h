@@ -190,7 +190,7 @@ class ObBackupJobMgrAlloctor
 {
 public:
   static int alloc(const uint64_t tenant_id, ObIBackupJobMgr *&job_mgr);
-  static void free(ObIBackupJobMgr *job_mgr);
+  static void free(const uint64_t tenant_id, ObIBackupJobMgr *job_mgr);
 };
 
 }
