@@ -3735,12 +3735,7 @@ OB_INLINE int ObSql::init_exec_context(const ObSqlCtx &context, ObExecContext &e
   if (OB_FAIL(exec_ctx.create_physical_plan_ctx())) {
     LOG_WARN("faile to create physical plan ctx", K(ret));
   } else {
-    ObMemAttr mem_attr;
-    mem_attr.label_ = ObModIds::OB_SQL_EXEC_CONTEXT;
-    mem_attr.tenant_id_ = context.session_info_->get_effective_tenant_id();
-    mem_attr.ctx_id_ = ObCtxIds::EXECUTE_CTX_ID;
     exec_ctx.set_my_session(context.session_info_);
-    exec_ctx.set_mem_attr(mem_attr);
     exec_ctx.set_sql_ctx(const_cast<ObSqlCtx*>(&context));
     if (OB_NOT_NULL(exec_ctx.get_physical_plan_ctx()) && OB_NOT_NULL(context.session_info_)) {
       int64_t query_timeout = 0;
