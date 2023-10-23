@@ -11,7 +11,6 @@
  */
 
 #include "ob_server_log_block_mgr.h"
-#include <cstdio>                               // renameat
 #include <fcntl.h>                              // IO operation
 #include <type_traits>                          // decltype
 #include <regex>                                // std::regex
@@ -33,6 +32,7 @@
 #include "share/unit/ob_unit_resource.h"        // UNIT_MIN_LOG_DISK_SIZE
 #include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
+#include "logservice/palf/log_io_utils.h"       // renameat_with_retry
 namespace oceanbase
 {
 using namespace palf;
@@ -1348,17 +1348,9 @@ int ObServerLogBlockMgr::unlinkat_until_success_(const palf::FileDesc &src_dir_f
 int ObServerLogBlockMgr::fsync_until_success_(const FileDesc &dest_dir_fd)
 {
   int ret = OB_SUCCESS;
-  do {
-    if (-1 == ::fsync(dest_dir_fd)) {
-      ret = convert_sys_errno();
-      CLOG_LOG(ERROR, "fsync dest dir failed", K(ret), KPC(this), K(dest_dir_fd));
-      ob_usleep(SLEEP_TS_US);
-    } else {
-      ret = OB_SUCCESS;
-      CLOG_LOG(TRACE, "fsync_until_success_ success", K(ret), KPC(this), K(dest_dir_fd));
-      break;
-    }
-  } while (OB_FAIL(ret));
+  if (OB_FAIL(fsync_with_retry(dest_dir_fd))) {
+    CLOG_LOG(ERROR, "fsync_with_retry failed", KR(ret), KPC(this), K(dest_dir_fd));
+  }
   return ret;
 }
 
@@ -1368,17 +1360,10 @@ int ObServerLogBlockMgr::renameat_until_success_(const FileDesc &dest_dir_fd,
                                                  const char *src_block_path)
 {
   int ret = OB_SUCCESS;
-  do {
-    if (-1 == ::renameat(src_dir_fd, src_block_path, dest_dir_fd, dest_block_path)) {
-      ret = convert_sys_errno();
-      CLOG_LOG(ERROR, "::renameat failed", K(ret), KPC(this), K(dest_dir_fd),
-               K(dest_block_path), K(src_dir_fd), K(src_block_path));
-      ob_usleep(SLEEP_TS_US);
-    } else {
-      ret = OB_SUCCESS;
-      break;
-    }
-  } while (OB_FAIL(ret));
+  if (OB_FAIL(renameat_with_retry(src_dir_fd, src_block_path, dest_dir_fd, dest_block_path))) {
+    CLOG_LOG(ERROR, "renameat_with_retry failed", K(ret), KPC(this), K(dest_dir_fd),
+             K(dest_block_path), K(src_dir_fd), K(src_block_path));
+  }
   return ret;
 }
 
