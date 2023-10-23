@@ -52,8 +52,7 @@ public:
   int init(ObTablet &tablet,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
-           const int64_t data_format_version,
-           const bool require_ddl_sstable = true);
+           const int64_t data_format_version);
   void destroy();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
                          const blocksstable::ObDatumRowkey *rowkey,
@@ -120,8 +119,7 @@ public:
            const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
-           const int64_t data_format_version,
-           const bool require_ddl_sstable = true);
+           const int64_t data_format_version);
   void reset();
   int set_macro_block(ObTablet &tablet, const ObDDLMacroBlock &macro_block);
 
