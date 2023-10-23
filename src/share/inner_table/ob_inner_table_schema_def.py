@@ -48413,7 +48413,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
-# 25268: DBA_OB_FORMAT_OUTLINES
+# 25272: DBA_OB_FORMAT_OUTLINES
 
 # 余留位置
 
