@@ -254,7 +254,7 @@
   "sql_mode": {
     "id": 15,
     "name": "sql_mode",
-    "default_value": "12582912",
+    "default_value": "281018368",
     "base_value": "12582912",
     "data_type": "uint",
     "on_update_func": "ObSysVarOnUpdateFuncs::update_sql_mode",

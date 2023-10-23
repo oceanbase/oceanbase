@@ -291,7 +291,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[15].default_value_ = "12582912" ;
+      ObSysVars[15].default_value_ = "281018368" ;
       ObSysVars[15].on_update_func_ = "ObSysVarOnUpdateFuncs::update_sql_mode" ;
       ObSysVars[15].name_ = "sql_mode" ;
       ObSysVars[15].data_type_ = ObUInt64Type ;
