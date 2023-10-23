@@ -92,11 +92,19 @@ public:
                                           const int64_t msg_proposal_id,
                                           const int64_t accepted_mode_pid);
   int leader_do_loop_work();
-  TO_STRING_KV(K_(palf_id), K_(self), K_(applied_mode_meta), K_(accepted_mode_meta),
-      K_(last_submit_mode_meta), "state", state2str_(state_), K_(new_proposal_id), K_(local_max_lsn),
-      K_(local_max_log_pid), K_(max_majority_accepted_pid), K_(max_majority_lsn),
-      K_(max_majority_accepted_mode_meta), K_(follower_list), K_(ack_list), K_(majority_cnt),
-      K_(last_submit_req_ts), K_(resend_mode_meta_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    common::ObSpinLockGuard guard(lock_);
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(palf_id), K_(self), K_(applied_mode_meta), K_(accepted_mode_meta),
+        K_(last_submit_mode_meta), "state", state2str_(state_), K_(new_proposal_id), K_(local_max_lsn),
+        K_(local_max_log_pid), K_(max_majority_accepted_pid), K_(max_majority_lsn),
+        K_(max_majority_accepted_mode_meta), K_(follower_list), K_(ack_list), K_(majority_cnt),
+        K_(last_submit_req_ts), K_(resend_mode_meta_list));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   void reset_status_();
