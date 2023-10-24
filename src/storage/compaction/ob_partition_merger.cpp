@@ -1452,7 +1452,7 @@ int ObPartitionMinorMerger::try_remove_ghost_iters(MERGE_ITER_ARRAY &merge_iters
       // not the first row, we need keep at least one ghost row for last row flag
       if (minimum_iters.count() == merge_iters.count() && !rowkey_first_row) {
       } else {
-        FLOG_INFO("try to remove useless row which consists of ghost rows only",
+        LOG_TRACE("try to remove useless row which consists of ghost rows only",
             KPC(minimum_iters.at(0)), K(rowkey_first_row), K(iter_idxs));
         if (OB_FAIL(move_and_remove_unused_iters(merge_iters, minimum_iters, iter_idxs))) {
           STORAGE_LOG(WARN, "Failed to move and remove iters", K(ret));
