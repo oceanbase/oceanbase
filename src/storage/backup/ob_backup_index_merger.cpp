@@ -241,6 +241,11 @@ int ObIBackupMultiLevelIndexBuilder::build_and_flush_index_tree_()
       if (OB_ISNULL(dummy_)) {
         dummy_ = next_node;
       }
+      next_node = NULL;
+    }
+    if (OB_NOT_NULL(next_node)) {
+      next_node->~ObBackupIndexBufferNode();
+      next_node = NULL;
     }
   }
   if (OB_SUCC(ret)) {
@@ -276,6 +281,11 @@ int ObIBackupMultiLevelIndexBuilder::alloc_new_buffer_node_(const uint64_t tenan
     LOG_WARN("failed to init index buffer node", K(ret), K(tenant_id), K(block_type), K(node_level));
   } else {
     new_node = tmp_node;
+    tmp_node = NULL;
+  }
+  if (OB_NOT_NULL(tmp_node)) {
+    tmp_node->~ObBackupIndexBufferNode();
+    tmp_node = NULL;
   }
   return ret;
 }
