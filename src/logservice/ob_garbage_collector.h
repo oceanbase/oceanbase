@@ -277,7 +277,8 @@ public:
                K(gc_seq_invalid_member_),
                K(gc_start_ts_),
                K(block_tx_ts_),
-               K(block_log_debug_time_));
+               K(block_log_debug_time_),
+               K(log_sync_stopped_));
 
 private:
   typedef common::SpinRWLock RWLock;
