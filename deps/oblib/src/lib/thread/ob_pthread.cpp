@@ -12,6 +12,8 @@
 
 #include "lib/thread/threads.h"
 #include "lib/oblog/ob_log.h"
+
+using namespace oceanbase;
 using namespace oceanbase::lib;
 
 extern "C" {

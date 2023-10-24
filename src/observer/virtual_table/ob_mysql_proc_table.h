@@ -14,6 +14,7 @@
 #define OCEANBASE_SRC_OBSERVER_VIRTUAL_TABLE_OB_MYSQL_PROC_TABLE_H_
 
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "sql/session/ob_basic_session_info.h"
 
 namespace oceanbase
 {

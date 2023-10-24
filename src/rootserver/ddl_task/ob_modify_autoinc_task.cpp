@@ -18,6 +18,7 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "storage/ddl/ob_ddl_lock.h"
+#include "share/ob_rpc_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -475,7 +476,7 @@ int ObModifyAutoincTask::rollback_schema()
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else {
     ObArenaAllocator allocator;
-    SMART_VAR(ObAlterTableArg, alter_table_arg) {
+    SMART_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
       if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
         LOG_WARN("deep copy table arg failed", K(ret));
       } else {

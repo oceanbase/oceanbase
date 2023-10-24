@@ -24,7 +24,6 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_ddl_trans_controller.h"
 #include "share/schema/ob_ddl_epoch.h"
-#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {

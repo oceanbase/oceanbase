@@ -678,17 +678,5 @@ int ObMediumCompactionInfoList::get_max_sync_medium_scn(int64_t &max_sync_medium
   return ret;
 }
 
-bool ObMediumCompactionInfoList::could_schedule_next_round(const int64_t last_major_snapshot) const
-{
-  bool exist = false;
-  DLIST_FOREACH_NORET(info, get_list()) {
-    if (info->medium_snapshot_ > last_major_snapshot) {
-      exist = true;
-      break;
-    }
-  }
-  return !need_check_finish() && !exist;
-}
-
 } //namespace compaction
 } // namespace oceanbase

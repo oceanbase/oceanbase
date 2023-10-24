@@ -13,6 +13,7 @@
 #include "share/restore/ob_import_table_arg.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log_module.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {

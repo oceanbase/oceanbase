@@ -72,6 +72,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 
 namespace oceanbase
 {

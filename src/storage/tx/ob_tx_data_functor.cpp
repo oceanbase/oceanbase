@@ -22,6 +22,7 @@
 #include "logservice/leader_coordinator/ob_failure_detector.h"
 #include "observer/virtual_table/ob_all_virtual_tx_data.h"
 #include "logservice/ob_garbage_collector.h"
+#include "storage/high_availability/ob_tablet_group_restore.h"
 
 namespace oceanbase
 {
@@ -322,7 +323,7 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   int ret = OB_ERR_SHARED_LOCK_CONFLICT;
   const int64_t MAX_RETRY_CNT = 1000;
   const int64_t MAX_SLEEP_US = 1000;
-  ObMvccAccessCtx &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
+  memtable::ObMvccAccessCtx &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
   int64_t lock_expire_ts = acc_ctx.eval_lock_expire_ts();
   // check lock_for_read blocked or not every 1ms * 1000 = 1s
   int64_t retry_cnt = 0;

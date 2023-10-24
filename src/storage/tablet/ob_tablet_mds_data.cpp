@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_i_tablet_mds_interface.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 
 #define USING_LOG_PREFIX MDS
 

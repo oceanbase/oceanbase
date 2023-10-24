@@ -15,6 +15,8 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_ls_member_list_service.h"
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/tablet/ob_tablet_iterator.h"
 
 namespace oceanbase
 {

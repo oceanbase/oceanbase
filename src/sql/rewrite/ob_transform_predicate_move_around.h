@@ -15,6 +15,8 @@
 
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/rewrite/ob_stmt_comparer.h"
+
 namespace oceanbase
 {
 namespace sql

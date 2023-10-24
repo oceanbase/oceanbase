@@ -18,6 +18,8 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "share/scn.h"
+#include "share/ob_errno.h"
+
 
 namespace oceanbase
 {

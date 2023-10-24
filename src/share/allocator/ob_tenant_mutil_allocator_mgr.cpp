@@ -16,6 +16,7 @@
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "ob_gmemstore_allocator.h"
 #include "ob_memstore_allocator_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {

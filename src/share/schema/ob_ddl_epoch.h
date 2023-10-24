@@ -14,6 +14,7 @@
 #define OCEANBASE_DDL_EPOCH_H
 
 #include "lib/container/ob_se_array.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 namespace oceanbase
 {

@@ -22,6 +22,7 @@
 #include "share/restore/ob_recover_table_persist_helper.h"
 #include "sql/parser/parse_node.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
+#include "share/restore/ob_import_table_persist_helper.h"
 
 using namespace oceanbase;
 using namespace share::schema;

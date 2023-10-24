@@ -13,6 +13,8 @@
 #include <linux/falloc.h> // FALLOC_FL_ZERO_RANGE for linux kernel 3.15
 #include "log_block_pool_interface.h"
 #include "share/ob_errno.h"
+#include "logservice/ob_server_log_block_mgr.h"
+
 namespace oceanbase
 {
 namespace palf

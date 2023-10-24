@@ -24,6 +24,7 @@
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "rootserver/ob_ls_service_helper.h"//ObTenantLSInfo
 #include "rootserver/ob_ls_recovery_reportor.h"//update_ls_recovery
+#include "rootserver/ob_tenant_info_loader.h"
 
 namespace oceanbase
 {

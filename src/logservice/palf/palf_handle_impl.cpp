@@ -25,6 +25,7 @@
 #include "election/interface/election_priority.h"
 #include "palf_iterator.h"                             // Iterator
 #include "palf_env_impl.h"                             // IPalfEnvImpl::
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {

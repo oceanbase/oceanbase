@@ -212,6 +212,8 @@
 #include "observer/virtual_table/ob_virtual_flt_config.h"
 
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
+#include "observer/virtual_table/ob_tenant_show_restore_preview.h"
+
 namespace oceanbase
 {
 using namespace common;

@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_TABLET_LS_MAP
 #define OCEANBASE_SHARE_OB_TABLET_LS_MAP
 
+#include "lib/lock/ob_qsync_lock.h"
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSKey, ObTabletLSCache
 
 namespace oceanbase
