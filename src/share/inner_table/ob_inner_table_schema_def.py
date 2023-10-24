@@ -6305,6 +6305,7 @@ def_table_schema(
 # 489 : __all_tenant_scheduler_running_job
 # 490 : __all_routine_privilege
 # 491 : __all_routine_privilege_history
+# 492 : __wr_sqlstat
 #
 # 余留位置
 ################################################################################
@@ -13011,6 +13012,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12442: __all_tenant_scheduler_running_job
 # 12443: __all_virtual_routine_privilege
 # 12444: __all_virtual_routine_privilege_history
+# 12445: __all_virtual_sqlstat
+# 12446: __all_virtual_wr_sqlstat
 # 余留位置
 #
 
@@ -13424,6 +13427,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
 # 15423: __all_tenant_scheduler_running_job
+# 15424: __all_virtual_sqlstat
+# 15425: __all_virtual_wr_sqlstat
 # 余留位置
 
 ################################################################################
@@ -29975,6 +29980,10 @@ def_table_schema(
 #21484 CDB_WR_EVENT_NAME
 #21485 DBA_OB_FORMAT_OUTLINES
 #21486 mysql.procs_priv
+#21487 GV$SQLSTAT
+#21488 V$SQLSTAT
+#21489 DBA_WR_SQLSTAT
+#21490 CDB_WR_SQLSTAT
 
 # 余留位置
 
@@ -48448,7 +48457,7 @@ def_table_schema(
 # 25270: DBA_WR_EVENT_NAME
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
 # 25272: DBA_OB_FORMAT_OUTLINES
-
+# 25273: DBA_WR_SQLSTAT
 # 余留位置
 
 #### End Data Dictionary View
@@ -54539,6 +54548,8 @@ def_table_schema(
 # 28199: V$OB_PL_CACHE_OBJECT
 # 28200: GV$OB_CGROUP_CONFIG
 # 28201: V$OB_CGROUP_CONFIG
+# 28203: GV$SQLSTAT
+# 28204: V$SQLSTAT
 
 ################################################################################
 # Lob Table (50000, 70000)
