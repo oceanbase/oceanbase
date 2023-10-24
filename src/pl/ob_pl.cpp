@@ -2603,7 +2603,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
   if (OB_SUCC(ret) && NULL != params) {
     for (int64_t i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
       const ObPLDataType &dest_type = func_.get_variables().at(i);
-      if (params->at(i).is_null()) {
+      if (params->at(i).is_null() ||
+          params->at(i).is_pl_mock_default_param()) {
         // need not check
       } else if (!params->at(i).is_ext()) { // basic type
         if (!dest_type.is_obj_type()) {
