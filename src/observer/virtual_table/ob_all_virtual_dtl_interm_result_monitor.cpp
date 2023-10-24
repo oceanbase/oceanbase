@@ -232,10 +232,10 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
   } else {
     uint64_t cur_tenant_id = MTL_ID();
     if(is_sys_tenant(cur_tenant_id)) {
-      omt::TenantList &list = GCTX.omt_->get_tenant_list();
-      uint64_t tmp_tenant_id = 0;
-      for (omt::TenantList::iterator it = list.begin(); it != list.end() && OB_SUCC(ret); it++) {
-        tmp_tenant_id = (*it)->id();
+      omt::TenantIdList all_tenants;
+      GCTX.omt_->get_tenant_ids(all_tenants);
+      for (int i = 0; i < all_tenants.size(); ++i) {
+        uint64_t tmp_tenant_id = all_tenants[i];
         if(!is_virtual_tenant_id(tmp_tenant_id)) {
           ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
                                   cur_row_, *addr_, ipstr, tmp_tenant_id);
@@ -243,6 +243,10 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
             if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
               SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
             }
+          } else {
+            // During the iteration process, tenants may be deleted,
+            // so we need to ignore the error code of MTL_SWITCH.
+            ret = OB_SUCCESS;
           }
         }
       }
