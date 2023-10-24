@@ -753,6 +753,7 @@ typedef enum {
   RLS_CONTEXT_SCHEMA = 38,
   CONSTRAINT_SCHEMA = 39,   // not dependent schema
   FOREIGN_KEY_SCHEMA = 40,  // not dependent schema
+  ROUTINE_PRIV = 41,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
