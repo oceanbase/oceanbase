@@ -277,7 +277,7 @@ int ObExprToOutfileRow::print_field(char *buf, const int64_t buf_len, int64_t &p
       return ret;
     };
     ObString tmp_str(out_info.tmp_buf_len_, tmp_pos, out_info.tmp_buf_);
-    OZ(ObCharsetUtils::foreach_char(tmp_str, out_info.print_params_.cs_type_, escape_func));
+    OZ(ObCharsetUtils::foreach_char(tmp_str, out_info.print_params_.cs_type_, escape_func, true));
   }
   if (need_enclose) {
     OZ(out_info.enclose_.print_plain_str_literal(buf, buf_len, pos, out_info.print_params_));
