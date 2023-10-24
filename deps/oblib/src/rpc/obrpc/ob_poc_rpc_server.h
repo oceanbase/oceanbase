@@ -60,7 +60,7 @@ public:
     RATELIMIT_PNIO_GROUP = 2,
     END_GROUP
   };
-  ObPocRpcServer() : has_start_(false){}
+  ObPocRpcServer() : has_start_(false), start_as_client_(false){}
   ~ObPocRpcServer() {}
   int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
   int start_net_client(int net_thread_count);
@@ -74,6 +74,7 @@ public:
   uint64_t get_ratelimit_rxbytes();
 private:
   bool has_start_;
+  bool start_as_client_;
 };
 
 extern ObPocRpcServer global_poc_server;
