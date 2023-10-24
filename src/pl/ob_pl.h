@@ -1147,6 +1147,7 @@ private:
                            ParamStore &params,
                            ParseNode &node,
                            ObCacheObjGuard& cacheobj_guard,
+                           const uint64_t stmt_id,
                            bool is_anonymous_text = false);
 
   // for normal routine
@@ -1202,11 +1203,14 @@ public:
 
   static int check_trigger_arg(const ParamStore &params, const ObPLFunction &func);
 
+  ObBucketLock& get_jit_lock() { return jit_lock_; }
+
 private:
   common::ObMySQLProxy *sql_proxy_;
   ObPLPackageManager package_manager_;
   ObPLInterfaceService interface_service_;
   common::ObBucketLock codegen_lock_;
+  common::ObBucketLock jit_lock_;
 };
 
 class LinkPLStackGuard

@@ -50,6 +50,7 @@ public:
   virtual ~ObPLCompiler() {}
 
   int compile(const ObStmtNodeTree *block,
+              const uint64_t stmt_id,
               ObPLFunction &func,
               ParamStore *params,
               bool is_prepare_protocol); //匿名块接口
