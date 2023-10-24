@@ -20,6 +20,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
 
@@ -239,7 +240,9 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
   } else {
     type.set_type(types[0].get_type());
     type.set_collation_type(types[1].get_collation_type());
-    type.set_collation_level(common::CS_LEVEL_IMPLICIT);
+    // set collation level
+    ObCollationLevel coll_level = ObRawExprUtils::get_column_collation_level(types[0].get_type());
+    type.set_collation_level(coll_level);
     type.set_accuracy(types[2].get_accuracy());
     if (types[3].is_not_null_for_read()) {
       type.set_result_flag(NOT_NULL_FLAG | NOT_NULL_WRITE_FLAG);

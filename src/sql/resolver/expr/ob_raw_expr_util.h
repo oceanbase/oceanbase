@@ -768,6 +768,7 @@ public:
                                     int64_t project_index,
                                     ObAliasRefRawExpr *&alias_expr);
   static int init_column_expr(const share::schema::ObColumnSchemaV2 &column_schema, ObColumnRefRawExpr &column_expr);
+  static ObCollationLevel get_column_collation_level(const common::ObObjType &type);
   /* 计算基本列的flag */
   static uint32_t calc_column_result_flag(const share::schema::ObColumnSchemaV2 &column_schema);
   static int expr_is_order_consistent(const ObRawExpr *from, const ObRawExpr *to, bool &is_consistent);
