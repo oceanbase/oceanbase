@@ -54,7 +54,7 @@ protected:
   int64_t affected_rows_;
   common::ObArray<ObOptColumnStat*> column_stat_array_;
   common::ObArenaAllocator allocator_;
-  volatile bool is_stop_;
+  bool is_stop_;
   bool is_inited_;
 };
 

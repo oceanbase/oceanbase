@@ -23,6 +23,7 @@ class ObTableLoadCoordinator
 {
   static const int64_t WAIT_INTERVAL_US = 1LL * 1000 * 1000; // 1s
   static const int64_t DEFAULT_TIMEOUT_US = 10LL * 1000 * 1000; // 10s
+  static const int64_t HEART_BEAT_RPC_TIMEOUT_US = 1LL * 1000 * 1000; // 1s
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
@@ -44,6 +45,7 @@ public:
   int px_commit_data();
   int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
+  int heart_beat();
 private:
   int pre_begin_peers();
   int confirm_begin_peers();
@@ -52,6 +54,7 @@ private:
   int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
   int commit_redef_table();
   int drive_sql_stat(sql::ObExecContext *ctx, table::ObTableLoadSqlStatistics &sql_statistics);
+  int heart_beat_peer();
 private:
   int add_check_merge_result_task();
   int check_peers_merge_result(bool &is_finish);

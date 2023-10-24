@@ -296,14 +296,16 @@ int ObDirectLoadControlAbortExecutor::process()
   ObTableLoadTableCtx *table_ctx = nullptr;
   ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
   if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
+    } else {
+      ret = OB_SUCCESS;
+      res_.is_stopped_ = true;
     }
   } else {
-    if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+    ObTableLoadStore::abort_ctx(table_ctx, res_.is_stopped_);
+    if (res_.is_stopped_ && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
       LOG_WARN("fail to remove table ctx", KR(ret), K(key));
-    } else {
-      ObTableLoadStore::abort_ctx(table_ctx);
     }
   }
   if (OB_NOT_NULL(table_ctx)) {
@@ -341,6 +343,44 @@ int ObDirectLoadControlGetStatusExecutor::process()
         LOG_WARN("fail to init store", KR(ret));
       } else if (OB_FAIL(store.get_status(res_.status_, res_.error_code_))) {
         LOG_WARN("fail to store get status", KR(ret));
+      }
+    }
+    if (OB_NOT_NULL(table_ctx)) {
+      ObTableLoadService::put_ctx(table_ctx);
+      table_ctx = nullptr;
+    }
+  }
+  return ret;
+}
+
+// heart_beath
+int ObDirectLoadControlHeartBeatExecutor::check_args()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.task_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObDirectLoadControlHeartBeatExecutor::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObTableLoadTableCtx *table_ctx = nullptr;
+    ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
+    if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
+      LOG_WARN("fail to get table ctx", KR(ret), K(key));
+    } else {
+      ObTableLoadStore store(table_ctx);
+      if (OB_FAIL(store.init())) {
+        LOG_WARN("fail to init store", KR(ret));
+      } else if (OB_FAIL(store.heart_beat())) {
+        LOG_WARN("fail to heart beat store", KR(ret));
       }
     }
     if (OB_NOT_NULL(table_ctx)) {

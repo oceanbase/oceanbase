@@ -27,6 +27,7 @@ class ObDirectLoadControlStartMergeExecutor;
 class ObDirectLoadControlCommitExecutor;
 class ObDirectLoadControlAbortExecutor;
 class ObDirectLoadControlGetStatusExecutor;
+class ObDirectLoadControlHeartBeatExecutor;
 /// trans
 class ObDirectLoadControlPreStartTransExecutor;
 class ObDirectLoadControlConfirmStartTransExecutor;
@@ -153,12 +154,17 @@ public:
                                    ObDirectLoadControlCommitRes);
   // abort
   OB_DEFINE_TABLE_LOAD_CONTROL_RPC(abort, ObDirectLoadControlCommandType::ABORT,
-                                   ObDirectLoadControlAbortExecutor, ObDirectLoadControlAbortArg);
+                                   ObDirectLoadControlAbortExecutor, ObDirectLoadControlAbortArg,
+                                   ObDirectLoadControlAbortRes);
   // get_status
   OB_DEFINE_TABLE_LOAD_CONTROL_RPC(get_status, ObDirectLoadControlCommandType::GET_STATUS,
                                    ObDirectLoadControlGetStatusExecutor,
                                    ObDirectLoadControlGetStatusArg,
                                    ObDirectLoadControlGetStatusRes);
+  // heart_beat
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(heart_beat, ObDirectLoadControlCommandType::HEART_BEAT,
+                                   ObDirectLoadControlHeartBeatExecutor,
+                                   ObDirectLoadControlHeartBeatArg);
 
   /// trans
   // pre_start_trans
