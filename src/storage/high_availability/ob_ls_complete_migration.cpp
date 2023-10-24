@@ -31,6 +31,7 @@ using namespace share;
 using namespace storage;
 
 ERRSIM_POINT_DEF(WAIT_CLOG_SYNC_FAILED);
+ERRSIM_POINT_DEF(SERVER_STOP_BEFORE_UPDATE_MIGRATION_STATUS);
 /******************ObLSCompleteMigrationCtx*********************/
 ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
   : ObIHADagNetCtx(),
@@ -347,6 +348,7 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
   }
   return ret;
 }
+
 int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
@@ -377,6 +379,17 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       bool need_update_status = true;
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = SERVER_STOP_BEFORE_UPDATE_MIGRATION_STATUS ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake SERVER_STOP_BEFORE_UPDATE_MIGRATION_STATUS", K(ret));
+        break;
+      }
+    }
+#endif
+
       if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
         LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
@@ -441,6 +454,14 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       if (OB_FAIL(ret)) {
         ob_usleep(UPDATE_MIGRATION_STATUS_INTERVAL_MS);
       }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    const bool need_retry = false;
+    if (OB_SUCCESS != (tmp_ret = ctx_.set_result(ret, need_retry))) {
+      LOG_ERROR("failed to set result", K(ret), K(ret), K(tmp_ret), K(ctx_));
     }
   }
   return ret;
