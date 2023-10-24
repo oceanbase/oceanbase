@@ -343,7 +343,7 @@ int ObStorageHAUtils::check_disk_space()
   return ret;
 }
 
-bool ObTransferUtils::is_need_retry_error(const int err)
+bool ObTransferUtils::is_need_retry_error(const int err, int64_t &retry_count)
 {
   bool bool_ret = false;
   //white list
@@ -355,6 +355,11 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   case OB_TRANS_TIMEOUT:
   case OB_TIMEOUT:
   case OB_EAGAIN:
+      bool_ret = true;
+      retry_count++;
+      break;
+  // Only retry without add retry count
+  case OB_ERR_EXCLUSIVE_LOCK_CONFLICT:
       bool_ret = true;
       break;
     default:

@@ -223,12 +223,10 @@ int ObTransferHandler::fetch_transfer_task_from_inner_table_by_src_ls_(
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
   } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
     LOG_WARN("failed to convert from transfer task", K(ret), K(task));
-  } else if (!task_info.status_.is_start_status()
-      && !task_info.status_.is_aborted_status()) {
-    // task not exist
-  } else {
-    task_exist = true;
+  } else if (OB_FAIL(check_task_exist_(task_info.status_, true/*find_by_src_ls*/, task_exist))) {
+    LOG_WARN("failed to get task exist", K(ret), K(task_info.status_));
   }
+
   if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
     task_exist = false;
     ret = OB_SUCCESS;
@@ -251,10 +249,8 @@ int ObTransferHandler::fetch_transfer_task_from_inner_table_by_dest_ls_(
     LOG_WARN("failed to get transfer task by dest ls", K(ret), K(tenant_id), K(dest_ls_id));
   } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
     LOG_WARN("failed to convert from transfer task", K(ret), K(task));
-  } else if (!task_info.status_.is_doing_status()) {
-    // task not exist
-  } else {
-    task_exist = true;
+  } else if (OB_FAIL(check_task_exist_(task_info.status_, false/*find_by_src_ls*/, task_exist))) {
+    LOG_WARN("failed to get task exist", K(ret), K(task_info.status_));
   }
   if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
     task_exist = false;
@@ -1727,6 +1723,7 @@ int ObTransferHandler::update_transfer_status_aborted_(
   const share::ObTransferStatus next_status(ObTransferStatus::ABORTED);
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
+  bool is_leader = true;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
@@ -1739,6 +1736,17 @@ int ObTransferHandler::update_transfer_status_aborted_(
     const SCN scn = task_info.start_scn_;
     if (OB_FAIL(lock_transfer_task_(task_info, trans))) {
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+    }
+    // There is still a possibility of the old leader change task status to ABORT
+    // when switching leader occurs after check_self_is_leader_ and before commit.
+    // But check_self_is_leader_ occuring after row lock competition
+    // is maximize interceptions of old leader change task status to ABORT.
+    // It greatly reduce the probability of old leader change task status to ABORT
+    else if (OB_FAIL(check_self_is_leader_(is_leader))) {
+      LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+    } else if (!is_leader) {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("ls leader has been changed", K(ret), K(task_info));
     } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
       LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
     }
@@ -1770,8 +1778,9 @@ bool ObTransferHandler::can_retry_(
     bool_ret = true;
     retry_count_++;
   } else if (ObTransferStatus::START == task_info.status_) {
-    if (ObTransferUtils::is_need_retry_error(result) && retry_count_ < max_transfer_start_retry_count) {
-      retry_count_++;
+    int64_t tmp_retry_count = retry_count_;
+    if (ObTransferUtils::is_need_retry_error(result, tmp_retry_count) && retry_count_ < max_transfer_start_retry_count) {
+      retry_count_ = tmp_retry_count;
       bool_ret = true;
     } else {
       bool_ret = false;
@@ -2209,6 +2218,24 @@ int ObTransferHandler::check_config_version_(
   } else if (config_version != current_config_version) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ls leader has been changed", K(ret), KPC(ls_), K(config_version), K(current_config_version));
+  }
+  return ret;
+}
+
+int ObTransferHandler::check_task_exist_(
+    const ObTransferStatus &status, const bool find_by_src_ls, bool &task_exist) const
+{
+  int ret = OB_SUCCESS;
+  task_exist = false;
+  if (!status.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(status));
+  } else if (find_by_src_ls && (status.is_start_status() || status.is_aborted_status())) {
+    task_exist = true;
+  } else if (!find_by_src_ls && status.is_doing_status()) {
+    task_exist = true;
+  } else {
+    task_exist = false;
   }
   return ret;
 }
