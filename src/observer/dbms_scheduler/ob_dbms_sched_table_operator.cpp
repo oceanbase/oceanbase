@@ -102,6 +102,24 @@ int ObDBMSSchedTableOperator::update_nextdate(
   return ret;
 }
 
+int ObDBMSSchedTableOperator::seperate_job_id_from_name(ObString &job_name, int64_t &job_id)
+{
+  int ret = OB_SUCCESS;
+  const char* prefix = "JOB$_";
+  if (job_name.prefix_match(prefix)) {
+    char nptr[JOB_NAME_MAX_SIZE];
+    char *endptr = NULL;
+    snprintf(nptr, JOB_NAME_MAX_SIZE, "%.*s", job_name.length(), job_name.ptr());
+    job_id = strtoll(nptr + strlen(prefix), &endptr, 10);
+    if (job_id <= 0) {
+      LOG_WARN("job_id is not right", K(job_name), K(nptr), K(job_id));
+    } else if (*endptr != '\0' || job_id <= JOB_ID_OFFSET) {
+      job_id = 0; // use job_info.job_ when job_id is not formal
+    }
+  }
+  return ret;
+}
+
 
 int ObDBMSSchedTableOperator::update_for_end(
   uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg)
@@ -194,7 +212,12 @@ int ObDBMSSchedTableOperator::update_for_end(
     OZ (dml2.add_gmt_create(now));
     OZ (dml2.add_gmt_modified(now));
     OZ (dml2.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-    OZ (dml2.add_pk_column("job", job_info.job_));
+    int64_t job_id = 0;
+    OZ (seperate_job_id_from_name(job_info.get_job_name(), job_id));
+    if (job_id <= 0) {
+      job_id = job_info.get_job_id();
+    }
+    OZ (dml2.add_pk_column("job", job_id));
     OZ (dml2.add_time_column("time", now));
     OZ (dml2.add_column("code", err));
     OZ (dml2.add_column(
