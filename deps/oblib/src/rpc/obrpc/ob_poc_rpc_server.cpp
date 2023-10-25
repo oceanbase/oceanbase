@@ -30,7 +30,8 @@ namespace obrpc
 extern const int easy_head_size;
 ObPocRpcServer global_poc_server;
 ObListener* global_ob_listener;
-bool __attribute__((weak)) enable_pkt_nio() {
+bool __attribute__((weak)) enable_pkt_nio(bool start_as_client) {
+  UNUSED(start_as_client);
   return false;
 }
 int64_t  __attribute__((weak)) get_max_rpc_packet_size() {
@@ -270,6 +271,7 @@ int ObPocRpcServer::start_net_client(int net_thread_count)
       RPC_LOG(WARN, "pn_provision for RATELIMIT_PNIO_GROUP error", K(count), K(net_thread_count));
     } else {
       has_start_ = true;
+      start_as_client_ = true;
     }
   }
   return ret;
@@ -316,7 +318,7 @@ uint64_t ObPocRpcServer::get_ratelimit_rxbytes() {
   return pn_get_rxbytes(RATELIMIT_PNIO_GROUP);
 }
 bool ObPocRpcServer::client_use_pkt_nio() {
-  return has_start() && enable_pkt_nio();
+  return has_start() && enable_pkt_nio(start_as_client_);
 }
 
 extern "C" {
