@@ -1123,7 +1123,7 @@ bool ObTenantIOConfig::is_valid() const
     int64_t sum_min_percent = 0;
     int64_t sum_weight_percent = 0;
     for (int64_t i = 0; i < group_num_; ++i) {
-      if (group_configs_.at(i).is_valid() && !group_configs_.at(i).deleted_) {
+      if (group_configs_.at(i).is_valid() && !group_configs_.at(i).deleted_ && !group_configs_.at(i).cleared_) {
         sum_min_percent += group_configs_.at(i).min_percent_;
         sum_weight_percent += group_configs_.at(i).weight_percent_;
       }
