@@ -436,7 +436,7 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
     const ObTenantIOConfig::GroupConfig &cur_config = io_config.group_configs_.at(index);
     if (!group_clocks_.at(index).is_inited()) {
       LOG_WARN("clock is not init", K(ret), K(index), K(group_clocks_.at(index)));
-    } else if (group_clocks_.at(index).is_stop() || cur_config.deleted_) {
+    } else if (group_clocks_.at(index).is_stop() || cur_config.deleted_ || cur_config.cleared_) {
       // group has been deleted, ignore
     } else if (!cur_config.is_valid()) {
       LOG_WARN("config is not valid", K(ret), K(index), K(cur_config), K(group_clocks_.at(index)));
