@@ -154,6 +154,7 @@ public:  // ObTxDataMemtable
       deleted_cnt_(0),
       write_ref_(0),
       occupied_size_(),
+      total_undo_node_cnt_(),
       last_insert_ts_(0),
       state_(ObTxDataMemtable::State::INVALID),
       arena_allocator_(),
@@ -214,6 +215,7 @@ public:  // ObTxDataMemtable
   int get_iter_start_and_count(const transaction::ObTransID &tx_id, ObTxDataLinkNode *&start_node, int64_t &iterate_row_cnt);
 
   share::ObLSID get_ls_id() const;
+  int64_t get_total_undo_node_cnt() const;
 
   /**
    * @brief dump tx data memtable to file
@@ -235,7 +237,8 @@ public:  // ObTxDataMemtable
                        K_(inserted_cnt),
                        K_(deleted_cnt),
                        K_(write_ref),
-                       K_(occupied_size),
+                       "occupy_size", get_occupied_size(),
+                       "total_undo_node_cnt", get_total_undo_node_cnt(),
                        K_(state),
                        K_(stat_change_ts),
                        KP_(tx_data_map),
@@ -448,6 +451,7 @@ private:  // ObTxDataMemtable
   int64_t write_ref_;
 
   int64_t occupied_size_[MAX_TX_DATA_TABLE_CONCURRENCY];
+  int64_t total_undo_node_cnt_[MAX_TX_DATA_TABLE_CONCURRENCY];
 
   int64_t last_insert_ts_;
   StateChangeTime stat_change_ts_;
