@@ -36,7 +36,7 @@
 
 English | [中文版](README_CN.md)
 
-**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
+**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 # Key features
 
@@ -46,7 +46,7 @@ English | [中文版](README_CN.md)
 
 - **Ultra-fast Performance**
     
-    The only distributed database that has refreshed both TPC-C record, at 707 million tmpC, and TPC-H record, at 15.26 million QphH @30000GB.
+    The only distributed database that has refreshed both the TPC-C record, at 707 million tmpC, and the TPC-H record, at 15.26 million QphH @30000GB.
 
 - **Real-time Operational Analytics**
     
@@ -54,7 +54,7 @@ English | [中文版](README_CN.md)
 
 - **Continuous Availability**
     
-    OceanBase Database adopts Paxos Consensus algorithm to achieve Zero RPO and less than 8 seconds of RTO. Supports intra-city/remote disaster recovery, enabling multi-activity in multiple locations and zero data loss.
+    OceanBase Database adopts the Paxos Consensus algorithm to achieve Zero RPO and less than 8 seconds of RTO. Supports intra-city/remote disaster recovery, enabling multi-activity in multiple locations and zero data loss.
 
 - **MySQL Compatible**
      
