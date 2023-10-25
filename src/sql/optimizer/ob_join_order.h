@@ -602,7 +602,8 @@ struct EstimateCostInfo {
         range_prefix_count_(0),
         table_opt_info_(),
         for_update_(false),
-        use_skip_scan_(OptSkipScanState::SS_UNSET)
+        use_skip_scan_(OptSkipScanState::SS_UNSET),
+        is_valid_inner_path_(false)
     {
     }
     virtual ~AccessPath() {
@@ -672,6 +673,8 @@ struct EstimateCostInfo {
       }
       return ret;
     }
+    // compute current path is inner path and contribute query ranges
+    int compute_valid_inner_path();
 
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
@@ -694,7 +697,8 @@ struct EstimateCostInfo {
                  K_(range_prefix_count),
                  K_(for_update),
                  K_(use_das),
-                 K_(use_skip_scan));
+                 K_(use_skip_scan),
+                 K_(is_valid_inner_path));
   public:
     //member variables
     uint64_t table_id_;
@@ -722,6 +726,8 @@ struct EstimateCostInfo {
     BaseTableOptInfo *table_opt_info_;
     bool for_update_;
     OptSkipScanState use_skip_scan_;
+    // mark this access path is inner path and contribute query range
+    bool is_valid_inner_path_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
