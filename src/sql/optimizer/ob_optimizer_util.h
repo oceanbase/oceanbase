@@ -1510,6 +1510,7 @@ public:
 
   static int check_contains_assignment(const ObDMLStmt* stmt,
                                        bool &contains_assignment);
+  static int check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj);
 private:
   //disallow construct
   ObOptimizerUtil();
