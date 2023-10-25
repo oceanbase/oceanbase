@@ -12329,9 +12329,9 @@ static const _error _error_OB_ERR_DEPENDENT_BY_PARTITION_FUNC = {
       .sqlstate              = "HY000",
       .str_error             = "Column has a partitioning function dependency and cannot be dropped or renamed.",
       .str_user_error        = "Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed.",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5502, Column has a partitioning function dependency and cannot be dropped or renamed.",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5502, Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+      .oracle_errno          = 12984,
+      .oracle_str_error      = "ORA-12984: cannot drop partitioning column",
+      .oracle_str_user_error = "ORA-12984: cannot drop partitioning column '%.*s'"
 };
 static const _error _error_OB_ERR_VIEW_SELECT_CONTAIN_INTO = {
       .error_name            = "OB_ERR_VIEW_SELECT_CONTAIN_INTO",

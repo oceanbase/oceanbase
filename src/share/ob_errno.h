@@ -4949,7 +4949,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FUNCTIONAL_INDEX_ON_FIELD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5499, Functional index on a column is not supported. Consider using a regular index instead."
 #define OB_ERR_GENCOL_LEGIT_CHECK_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5500, Legitimacy check failed for generated columns."
 #define OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY__ORA_USER_ERROR_MSG "ORA-30481: GROUPING function only supported with GROUP BY CUBE or ROLLUP"
-#define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5502, Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+#define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__ORA_USER_ERROR_MSG "ORA-12984: cannot drop partitioning column '%.*s'"
 #define OB_ERR_VIEW_SELECT_CONTAIN_INTO__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5503, View's SELECT contains a 'INTO' clause."
 #define OB_ERR_DEFAULT_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-54025: Virtual column cannot have a default value"
 #define OB_ERR_MODIFY_REALCOL_TO_GENCOL__ORA_USER_ERROR_MSG "ORA-54026: Real column cannot have an expression"
