@@ -1150,8 +1150,7 @@ DEFINE_ERROR(OB_ERR_GENCOL_LEGIT_CHECK_FAILED, -5500, -1, "HY000", "Legitimacy c
 
 DEFINE_ORACLE_ERROR(OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY, -5501, -1, "42000", "GROUPING function only supported with GROUP BY CUBE or ROLLUP", 30481, "GROUPING function only supported with GROUP BY CUBE or ROLLUP");
 // for rename column in mysql mode
-DEFINE_ERROR_EXT(OB_ERR_DEPENDENT_BY_PARTITION_FUNC, -5502, ER_DEPENDENT_BY_PARTITION_FUNC, "HY000", "Column has a partitioning function dependency and cannot be dropped or renamed.", "Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed.");
-
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_DEPENDENT_BY_PARTITION_FUNC, -5502, ER_DEPENDENT_BY_PARTITION_FUNC, "HY000", "Column has a partitioning function dependency and cannot be dropped or renamed.", "Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed.", 12984, "cannot drop partitioning column", "cannot drop partitioning column '%.*s'");
 DEFINE_ERROR(OB_ERR_VIEW_SELECT_CONTAIN_INTO, -5503, ER_VIEW_SELECT_CLAUSE, "HY000", "View's SELECT contains a 'INTO' clause.");
 DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_ALLOWED, -5504, -1, "HY000", "Virtual column cannot have a default value", 54025, "Virtual column cannot have a default value");
 DEFINE_ORACLE_ERROR(OB_ERR_MODIFY_REALCOL_TO_GENCOL, -5505, -1, "HY000", "Real column cannot have an expression", 54026, "Real column cannot have an expression");
