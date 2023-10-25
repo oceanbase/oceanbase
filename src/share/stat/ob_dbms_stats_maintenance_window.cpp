@@ -100,21 +100,39 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
       } else if (OB_UNLIKELY(start_usec == -1 || job_action.empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(start_usec), K(job_action));
-      } else if (OB_FAIL(get_stat_window_job_sql(is_oracle_mode,
-                                                 tenant_id,
-                                                 job_id++,
-                                                 windows_name[i],
-                                                 exec_env,
-                                                 start_usec,
-                                                 job_action,
-                                                 tmp_sql))) {
-        LOG_WARN("failed to get stat window job sql", K(ret));
-      } else if (OB_FAIL(raw_sql.append_fmt("%s(%s)", (i == 0 ? "" : ","), tmp_sql.ptr()))) {
-        LOG_WARN("failed to append sql", K(ret));
       } else {
-        ++ expected_affected_rows;
-        tmp_sql.reset();
-        job_action.reset();
+        if (OB_FAIL(get_stat_window_job_sql(is_oracle_mode,
+                                                  tenant_id,
+                                                  job_id++,
+                                                  windows_name[i],
+                                                  exec_env,
+                                                  start_usec,
+                                                  job_action,
+                                                  tmp_sql))) {
+          LOG_WARN("failed to get stat window job sql", K(ret));
+        } else if (OB_FAIL(raw_sql.append_fmt("%s(%s)", (i == 0 ? "" : ","), tmp_sql.ptr()))) {
+          LOG_WARN("failed to append sql", K(ret));
+        } else {
+          ++ expected_affected_rows;
+          tmp_sql.reset();
+          job_action.reset();
+          if (OB_FAIL(get_stat_window_job_sql(is_oracle_mode,
+                                                    tenant_id,
+                                                    0,
+                                                    windows_name[i],
+                                                    exec_env,
+                                                    start_usec,
+                                                    job_action,
+                                                    tmp_sql))) {
+            LOG_WARN("failed to get stat window job sql", K(ret));
+          } else if (OB_FAIL(raw_sql.append_fmt("%s(%s)", ",", tmp_sql.ptr()))) {
+            LOG_WARN("failed to append sql", K(ret));
+          } else {
+            ++ expected_affected_rows;
+            tmp_sql.reset();
+            job_action.reset();
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -127,7 +145,17 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
       } else {
          ++ expected_affected_rows;
          tmp_sql.reset();
+        if (OB_FAIL(get_stats_history_manager_job_sql(is_oracle_mode, tenant_id,
+                                                      0, exec_env, tmp_sql))) {
+          LOG_WARN("failed to get stats history manager job sql", K(ret));
+        } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
+          LOG_WARN("failed to append sql", K(ret));
+        } else {
+          ++ expected_affected_rows;
+          tmp_sql.reset();
+        }
       }
+
       //set dummy guard job
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(get_dummy_guard_job_sql(tenant_id, job_id, tmp_sql))) {
