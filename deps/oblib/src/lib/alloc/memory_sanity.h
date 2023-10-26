@@ -69,7 +69,12 @@ private:
   const bool bak_;
 };
 
-static constexpr int64_t sanity_min_canonical_addr = 0x100000000000;
+static constexpr int64_t sanity_min_canonical_addr =
+#ifdef __x86_64__
+  0x200000000000;
+#else
+  0x100000000000;
+#endif
 static constexpr int64_t sanity_max_canonical_addr = 0x4f210376cf1c;
 
 static inline bool sanity_addr_in_range(const void *ptr)
