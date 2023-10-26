@@ -184,7 +184,7 @@ public:
                      const dblink_param_ctx &param_ctx,
                      ObMySQLConnection *&dblink_conn,
                      uint32_t sessid = 0, int64_t
-                     sql_request_level = 0);
+                     sql_request_level = 0, bool async = false);
   virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0) override { return OB_NOT_SUPPORTED; }
   int release_dblink(ObMySQLConnection *dblink_conn, uint32_t sessid = 0);
   virtual int do_acquire_dblink(uint64_t dblink_id,
@@ -196,7 +196,7 @@ public:
                         ObMySQLConnection *&dblink_conn,
                         uint32_t sessid);
   virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0) override { return OB_NOT_SUPPORTED; }
-  int try_connect_dblink(ObMySQLConnection *dblink_conn, int64_t sql_request_level = 0);
+  int try_connect_dblink(ObMySQLConnection *dblink_conn, int64_t sql_request_level = 0, bool async = false);
   int create_all_dblink_pool();
   int get_dblink_pool(uint64_t dblink_id, ObServerConnectionPool *&dblink_pool);
   void set_check_read_consistency(bool need_check) { check_read_consistency_ = need_check; }

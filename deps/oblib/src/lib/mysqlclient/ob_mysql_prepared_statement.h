@@ -71,6 +71,7 @@ public:
    */
   int execute_query(ObMySQLResult *&result, bool enable_use_result);
   int execute_query_async();
+  int get_async_read_result(ObMySQLResult *&result);  
   const char *get_stmt_sql() const;
 
 private:

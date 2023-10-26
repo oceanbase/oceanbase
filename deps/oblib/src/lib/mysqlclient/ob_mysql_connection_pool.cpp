@@ -833,12 +833,12 @@ int ObMySQLConnectionPool::create_all_dblink_pool()
   return ret;
 }
 
-int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx, ObMySQLConnection *&dblink_conn, uint32_t sessid, int64_t sql_request_level)
+int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx, ObMySQLConnection *&dblink_conn, uint32_t sessid, int64_t sql_request_level, bool async)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(do_acquire_dblink(dblink_id, param_ctx, dblink_conn, sessid))) {
     LOG_WARN("fail to acquire dblink", K(ret), K(dblink_id));
-  } else if (OB_FAIL(try_connect_dblink(dblink_conn, sql_request_level))) {
+  } else if (OB_FAIL(try_connect_dblink(dblink_conn, sql_request_level, async))) {
     LOG_WARN("fail to try connect dblink", K(ret), K(dblink_id));
     int release_ret = release_dblink(dblink_conn, sessid);
     if (release_ret != OB_SUCCESS) {
@@ -908,7 +908,7 @@ int ObMySQLConnectionPool::do_acquire_dblink(uint64_t dblink_id, const dblink_pa
   return ret;
 }
 
-int ObMySQLConnectionPool::try_connect_dblink(ObMySQLConnection *dblink_conn, int64_t sql_request_level)
+int ObMySQLConnectionPool::try_connect_dblink(ObMySQLConnection *dblink_conn, int64_t sql_request_level, bool async)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn)) {
@@ -917,7 +917,7 @@ int ObMySQLConnectionPool::try_connect_dblink(ObMySQLConnection *dblink_conn, in
   } else if (dblink_conn->is_closed()) {
     dblink_conn->set_timeout(config_.sqlclient_wait_timeout_);
     LOG_TRACE("set dblink timeout and sql request level", K(sql_request_level), K(config_.sqlclient_wait_timeout_), K(lbt()), K(ret));
-    if (OB_FAIL(dblink_conn->connect_dblink(is_use_ssl_, sql_request_level))) {
+    if (OB_FAIL(dblink_conn->connect_dblink(is_use_ssl_, sql_request_level, async))) {
       LOG_WARN("fail to connect dblink", K(dblink_conn->get_server()), K(ret));
     } else if (OB_FAIL(dblink_conn->set_timeout_variable(config_.long_query_timeout_,
                                                          DEFAULT_TRANSACTION_TIMEOUT_US))) {

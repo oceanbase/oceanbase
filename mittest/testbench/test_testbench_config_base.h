@@ -1,5 +1,6 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
+#include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 #include "logservice/libobcdc/src/ob_log_mysql_connector.h"
 #include "gtest/gtest.h"
 

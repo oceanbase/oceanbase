@@ -1,7 +1,7 @@
 #include "share/ob_thread_mgr.h"
 #include "test_testbench_config_base.h"
 #include "testbench/ob_testbench_server_provider.h"
-#include "gtest/gtest.h"
+#include <chrono>
 
 namespace oceanbase {
 namespace unittest {
@@ -56,7 +56,7 @@ void TestMySQLConnectionPool::TestBasicRead(
   conn->execute_read(sql, res);
   common::sqlclient::ObMySQLResult *result = res.mysql_result();
   EXPECT_EQ(OB_SUCCESS, result->next());
-  int64_t col_val;
+  int64_t col_val = 0;
   EXPECT_EQ(OB_SUCCESS, result->get_int("column_value", col_val));
   EXPECT_GE(col_val, 0);
 }
@@ -104,16 +104,17 @@ TEST_F(TestMySQLConnectionPool, create_dblink_pool) {
       uint64_t dblink_id =
           common::sqlclient::DblinkKey(tenant_name_str, server).hash();
       for (int64_t conn_idx = 0; conn_idx < CONCURRENT_LINKS; ++conn_idx) {
-        common::sqlclient::ObISQLConnection *conn = nullptr;
+        common::sqlclient::ObMySQLConnection *conn = nullptr;
         EXPECT_EQ(OB_SUCCESS,
                   sql_conn_pool.acquire_dblink(
                       dblink_id, common::sqlclient::dblink_param_ctx(), conn));
         EXPECT_EQ(OB_SUCCESS, conn_array.push_back(conn));
       }
       for (int64_t conn_idx = 0; conn_idx < CONCURRENT_LINKS; ++conn_idx) {
-        TestBasicRead((common::sqlclient::ObMySQLConnection *)conn_array.at(conn_idx));
+        TestBasicRead(
+            (common::sqlclient::ObMySQLConnection *)conn_array.at(conn_idx));
       }
-      common::sqlclient::ObISQLConnection *conn = nullptr;
+      common::sqlclient::ObMySQLConnection *conn = nullptr;
       EXPECT_NE(OB_SUCCESS,
                 sql_conn_pool.acquire_dblink(
                     dblink_id, common::sqlclient::dblink_param_ctx(), conn));
@@ -121,11 +122,79 @@ TEST_F(TestMySQLConnectionPool, create_dblink_pool) {
         EXPECT_EQ(
             OB_SUCCESS,
             sql_conn_pool.release(
-                (common::sqlclient::ObISQLConnection *)conn_array.at(conn_idx),
+                (common::sqlclient::ObMySQLConnection *)conn_array.at(conn_idx),
                 true));
       }
     }
   }
+  sql_conn_pool.stop();
+}
+
+TEST_F(TestMySQLConnectionPool, dblink_pool_performance) {
+  int64_t get_dblink_times = 10000;
+  ::testing::Test::RecordProperty("get dblink times", get_dblink_times);
+  ::testing::Test::RecordProperty("current links", CONCURRENT_LINKS);
+  ASSERT_EQ(OB_SUCCESS, sql_conn_pool.create_all_dblink_pool());
+  ObSEArray<ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1>, 16>
+      tenant_name_array("OBMySQLConnPool", OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ObSEArray<uint64_t, 16> tenant_array("OBMySQLConnPool",
+                                       OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ASSERT_EQ(OB_SUCCESS, server_provider.get_tenants(tenant_name_array));
+  ASSERT_EQ(OB_SUCCESS, server_provider.get_tenant_ids(tenant_array));
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name;
+  ASSERT_EQ(OB_SUCCESS, tenant_name_array.at(0, tenant_name));
+  ASSERT_EQ(OB_SUCCESS, tenant_array.at(0, tenant_id));
+  ObString tenant_name_str = tenant_name.str();
+  ObSEArray<ObAddr, 16> server_array("OBMySQLConnPool",
+                                     OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ObAddr server;
+  ASSERT_EQ(OB_SUCCESS,
+            server_provider.get_tenant_servers(tenant_id, server_array));
+  ASSERT_EQ(OB_SUCCESS, server_array.at(0, server));
+  uint64_t dblink_id =
+      common::sqlclient::DblinkKey(tenant_name_str, server).hash();
+
+  ObArray<void *> conn_array;
+  int64_t conn_idx = 0;
+  for (int64_t conn_idx = 0; conn_idx < CONCURRENT_LINKS; ++conn_idx) {
+    common::sqlclient::ObMySQLConnection *conn = nullptr;
+    ASSERT_EQ(OB_SUCCESS,
+              sql_conn_pool.acquire_dblink(
+                  dblink_id, common::sqlclient::dblink_param_ctx(), conn));
+    ASSERT_EQ(OB_SUCCESS, conn_array.push_back(conn));
+  }
+  auto start_time = std::chrono::high_resolution_clock::now();
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      end_time - start_time);
+  for (int64_t time = 0; time < get_dblink_times; ++time) {
+    start_time = std::chrono::high_resolution_clock::now();
+    conn_idx = (conn_idx + 1) % CONCURRENT_LINKS;
+    common::sqlclient::ObMySQLConnection *conn = nullptr;
+    ASSERT_EQ(
+        OB_SUCCESS,
+        sql_conn_pool.release(
+            (common::sqlclient::ObMySQLConnection *)conn_array.at(conn_idx),
+            true));
+    ASSERT_EQ(OB_SUCCESS,
+              sql_conn_pool.acquire_dblink(
+                  dblink_id, common::sqlclient::dblink_param_ctx(), conn));
+    conn_array[conn_idx] = conn;
+    end_time = std::chrono::high_resolution_clock::now();
+    duration += std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
+  }
+  for (int64_t conn_idx = 0; conn_idx < CONCURRENT_LINKS; ++conn_idx) {
+    ASSERT_EQ(
+        OB_SUCCESS,
+        sql_conn_pool.release(
+            (common::sqlclient::ObMySQLConnection *)conn_array.at(conn_idx),
+            true));
+  }
+  ::testing::Test::RecordProperty("average acquire release latency",
+                                  static_cast<double>(duration.count()) /
+                                      get_dblink_times);
   sql_conn_pool.stop();
 }
 
@@ -134,6 +203,6 @@ TEST_F(TestMySQLConnectionPool, create_dblink_pool) {
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("ERROR");
   return RUN_ALL_TESTS();
 }
