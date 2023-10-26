@@ -1268,7 +1268,7 @@ OB_INLINE bool is_inner_keystore_id(const uint64_t keystore_id)
 
 /*
  * ################################################################################
- * OBJECT_ID FOR KEYSTORE/MASTER KEY (202100, 202200)
+ * OBJECT_ID FOR PROFILE (202200, 202300)
  * ################################################################################
  */
 const uint64_t OB_MIN_INNER_PROFILE_ID           = 202200;
