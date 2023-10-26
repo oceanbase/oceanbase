@@ -70,6 +70,7 @@ int ObDBMSSchedTableOperator::update_for_start(
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_time_column("this_date", job_info.this_date_));
   OZ (dml.add_column("state", "SCHEDULED"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
@@ -95,6 +96,7 @@ int ObDBMSSchedTableOperator::update_nextdate(
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_time_column("next_date", job_info.next_date_));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
@@ -183,6 +185,7 @@ int ObDBMSSchedTableOperator::update_for_end(
     OZ (dml1.add_pk_column("tenant_id",
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
     OZ (dml1.add_pk_column("job", job_info.job_));
+    OZ (dml1.add_pk_column("job_name", job_info.job_name_));
     OZ (dml1.add_column(true, "this_date"));
     OZ (dml1.add_time_column("last_date", job_info.this_date_));
     OZ (dml1.add_time_column("next_date", job_info.next_date_));
