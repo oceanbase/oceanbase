@@ -29,15 +29,17 @@ public:
   void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
   void set_lock_handle(ObHTableLockHandle *lock_handle);
 protected:
+  void check_callback_timeout();
+protected:
+  int64_t create_ts_;
+  ObCurTraceId::TraceId trace_id_;
   transaction::ObTxDesc *tx_desc_;
+  ObHTableLockHandle *lock_handle_; // hbase row lock handle
 private:
   int32_t ref_count_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableAPITransCb);
-protected:
-  ObHTableLockHandle *lock_handle_; // hbase row lock handle
 };
-
 
 class ObTableExecuteEndTransCb: public ObTableAPITransCb
 {
