@@ -40,6 +40,7 @@ int ObExprSoundex::calc_result_type1(
   ObCollationType res_cs_type = CS_TYPE_INVALID;
   int64_t res_length = OB_INVALID_SIZE;
   const ObLengthSemantics res_len_semantics = LS_CHAR;
+  ObRawExpr *raw_expr = NULL;
   if (OB_ISNULL(session = type_ctx.get_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -58,12 +59,19 @@ int ObExprSoundex::calc_result_type1(
       param_calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
     }
     res_length = oracle_result_length;
+  } else if (OB_ISNULL(raw_expr = get_raw_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("raw expr is null", K(ret));
   } else {
-    if (type1.is_string_type()) {
+    if (type1.is_string_type() || type1.is_enum_or_set()) {
       if (ObCharset::is_cs_nonascii(type1.get_collation_type())) {
         param_calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
       }
-      if (type1.is_character_type()) {
+      if (type1.is_enum_or_set()) {
+        res_type = ObVarcharType;
+        res_length = MAX(MIN_RESULT_LENGTH, type1.get_length());
+        param_calc_type = ObVarcharType;
+      } else if (type1.is_character_type()) {
         res_type = ObVarcharType;
         // min length of result is 4.
         res_length = MAX(MIN_RESULT_LENGTH, type1.get_length());
@@ -74,7 +82,19 @@ int ObExprSoundex::calc_result_type1(
         res_type = ObLongTextType;
         res_length = OB_MAX_LONGTEXT_LENGTH;
       }
-      res_cs_type = type1.get_collation_type();
+      if (0 == raw_expr->get_extra()) {
+        // calc result type for first time, record collation_type of original param.
+        res_cs_type = type1.get_collation_type();
+        raw_expr->set_extra(static_cast<uint64_t>(res_cs_type));
+      } else if (OB_UNLIKELY(raw_expr->get_extra() >= static_cast<uint64_t>(CS_TYPE_MAX))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected collationt type", K(ret), K(raw_expr->get_extra()));
+      } else {
+        // If collation_type of param is nonascii, implicit cast will be added above it to cast to utf8.
+        // To avoid set res_cs_type to utf8, which is different from the last one and makes calc_result_type unstable,
+        // we store the res_cs_type in raw_expr->extra_.
+        res_cs_type = static_cast<ObCollationType>(raw_expr->get_extra());
+      }
     } else {
       param_calc_type = ObVarcharType;
       param_calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
