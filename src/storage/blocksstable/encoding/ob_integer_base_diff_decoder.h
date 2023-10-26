@@ -72,6 +72,13 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
+
+  virtual int get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const override;
 private:
   int batch_get_bitpacked_values(
       const ObColumnDecoderCtx &ctx,

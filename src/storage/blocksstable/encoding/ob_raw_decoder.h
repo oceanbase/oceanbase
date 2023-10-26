@@ -51,6 +51,12 @@ typedef void (*fix_filter_func)(
             const uint64_t node_value,
             sql::ObBitVector &res);
 
+typedef void (*raw_fix_int_get_min_or_max_func)(
+            const char *base_data,
+            const int64_t *row_ids,
+            const int64_t row_cap,
+            bool is_min,
+            ObDatum &datum);        
 class ObRawDecoder : public ObIColumnDecoder
 {
 public:
@@ -112,9 +118,17 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
+
+  virtual int get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const override;
 private:
   bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const;
 
+  bool fast_agg_valid(const ObColumnDecoderCtx &ctx) const;
   bool fast_filter_valid(
       const ObColumnDecoderCtx &ctx,
       const ObObjType &filter_value_type,

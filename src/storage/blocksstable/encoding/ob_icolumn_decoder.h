@@ -23,6 +23,7 @@
 #include "ob_encoding_util.h"
 #include "ob_row_index.h"
 #include "storage/blocksstable/ob_micro_block_header.h"
+#include "storage/blocksstable/ob_imicro_block_reader.h"
 
 namespace oceanbase
 {
@@ -197,6 +198,18 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const;
+
+  virtual int get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const; 
+
+  virtual int update_agg_from_obj(
+      const common::ObObj cell,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum datum_buf) const; 
 
 protected:
   int get_null_count_from_extend_value(

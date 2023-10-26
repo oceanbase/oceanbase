@@ -64,6 +64,13 @@ public:
       const int64_t row_cap,
       int64_t &null_count) const override;
 
+  virtual int get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const override;
+
   virtual int pushdown_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,

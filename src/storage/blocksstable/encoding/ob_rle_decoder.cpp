@@ -120,6 +120,70 @@ int ObRLEDecoder::get_null_count(
   return ret;
 }
 
+int ObRLEDecoder::get_aggregate_result(
+    const ObColumnDecoderCtx &ctx,
+    const int64_t *row_ids,
+    const int64_t row_cap,
+    ObMicroBlockAggInfo<ObDatum> &agg_info,
+    ObDatum *datum_buf) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
+  const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
+  if (dict_count > 0) {
+    if(row_cap == ctx.micro_block_header_->row_count_){
+      if(OB_FAIL(dict_decoder_.get_aggregate_result(ctx, row_ids, row_cap, agg_info, datum_buf))){
+        LOG_WARN("failed to decode whole dict_decoder in rle", K(ret), K(dict_decoder_));
+      }
+    } else {
+      const ObIntArrayFuncTable &row_id_array
+          = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
+      const ObIntArrayFuncTable &ref_array
+          = ObIntArrayFuncTable::instance(meta_header_->ref_byte_);
+      const int64_t ref_count = meta_header_->count_;
+
+      common::ObObj cell;
+      cell.set_meta_type(ctx.obj_meta_);
+      // Generate dict refs with minimum binary search call
+      int64_t row_id = 0;
+      int64_t ref_table_pos = 0;
+      int64_t next_ref_row_id = row_id_array.at_(meta_header_->payload_, ref_table_pos);
+      int64_t curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos);
+      // Traverse @row_ids by direction that row_id is monotonically increasing
+      bool monotonic_inc = true;
+      if (row_cap > 1) {
+        monotonic_inc = row_ids[1] > row_ids[0];
+      }
+      const int64_t step = monotonic_inc ? 1 : -1;
+      int64_t trav_idx = monotonic_inc ? 0 : row_cap - 1;
+      int64_t trav_cnt = 0;
+      ObDictDecoderIterator begin_it = dict_decoder_.begin(&ctx, dict_meta_length);
+      while (OB_SUCC(ret) && trav_cnt < row_cap) {
+        row_id = row_ids[trav_idx];
+        if (ref_table_pos != ref_count && row_id >= next_ref_row_id) {
+          if (row_id == next_ref_row_id) {
+            ++ref_table_pos;
+          } else {
+            ref_table_pos =
+                row_id_array.upper_bound_(meta_header_->payload_, 0, ref_count, row_id);          
+          }
+          if (ref_table_pos < ref_count) {
+            next_ref_row_id = row_id_array.at_(meta_header_->payload_, ref_table_pos);
+          }  
+          curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
+          if (OB_FAIL(dict_decoder_.decode(ctx.obj_meta_, cell, curr_ref, dict_meta_length))) {
+            LOG_WARN("failed to decode dict", K(ret), K(curr_ref));
+          } else if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(cell, agg_info, datum_buf[trav_cnt]))){
+            LOG_WARN("Failed to update_min_or_max");
+          }
+        }
+        ++trav_cnt;
+        trav_idx += step;
+      }
+    }
+  }
+  return ret;
+}
 int ObRLEDecoder::pushdown_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,

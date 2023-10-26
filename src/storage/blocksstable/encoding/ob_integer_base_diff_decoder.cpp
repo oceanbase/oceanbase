@@ -600,6 +600,85 @@ int ObIntegerBaseDiffDecoder::get_null_count(
   }
   return ret;
 }
+int ObIntegerBaseDiffDecoder::get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const 
+{
+  int ret = OB_SUCCESS;
+  uint32_t datum_len = 0;
+  if (OB_FAIL(get_uint_data_datum_len(
+      ObDatum::get_obj_datum_map_type(ctx.obj_meta_.get_type()),
+      datum_len))) {
+    LOG_WARN("Failed to get datum length of int/uint data", K(ret));
+  } else if (agg_info.get_is_min() && (row_cap == ctx.micro_block_header_->row_count_)){
+    MEMCPY(const_cast<char *>(datum_buf[0].ptr_), &base_, datum_len);
+    datum_buf[0].pack_ = datum_len;
+    if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
+      LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+    }
+  } else if (ctx.obj_meta_.get_type_class() == ObFloatTC
+            || ctx.obj_meta_.get_type_class() == ObDoubleTC) {
+    // Can't compare by uint directly, support this later with float point number compare later
+    ret = OB_NOT_SUPPORTED;
+    LOG_DEBUG("Double/Float with INT_DIFF encoding, back to retro path", K(ctx));
+  } else {
+    int64_t data_offset = 0;
+    const unsigned char *col_data = reinterpret_cast<const unsigned char *>(header_)
+                                    + ctx.col_header_->length_;
+
+    if (ctx.has_extend_value()) {
+      data_offset = ctx.micro_block_header_->row_count_
+          * ctx.micro_block_header_->extend_value_bit_;
+      if (OB_FAIL(set_null_datums_from_fixed_column(
+          ctx, row_ids, row_cap, col_data, datum_buf))) {
+        LOG_WARN("Failed to set null datums from fixed data", K(ret), K(ctx));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (ctx.is_bit_packing()) {
+      if (OB_FAIL(batch_get_bitpacked_values(
+          ctx, row_ids, row_cap, datum_len, data_offset, datum_buf))) {
+        LOG_WARN("Failed to batch unpack delta values", K(ret), K(ctx));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && (i < row_cap); ++i) {
+        if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
+          LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+        }
+      }
+    } else {
+      // Fixed store data
+      data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
+      int64_t row_id = 0;
+      uint64_t value = 0;
+      uint64_t res_value = 0;
+      bool is_min = agg_info.get_is_min();
+      for (int64_t i = 0; OB_SUCC(ret) && (i < row_cap); ++i) {
+        if (ctx.has_extend_value()) {
+          // Skip
+        } else {
+          row_id = row_ids[i];
+          value = 0;
+          MEMCPY(&value, col_data + data_offset + row_id * header_->length_, header_->length_);
+          if (( is_min && value < res_value) || (!is_min && value > res_value)){
+            res_value = value;
+          }
+        }
+      }
+      
+      if(OB_SUCC(ret)){
+        res_value += base_;
+        datum_buf[0].set_int(res_value);
+        if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
+          LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 } // end namespace blocksstable
 } // end namespace oceanbase

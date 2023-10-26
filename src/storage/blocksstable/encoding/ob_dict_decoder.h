@@ -18,6 +18,7 @@
 #include "ob_integer_array.h"
 #include "ob_dict_encoder.h"
 #include "sql/engine/ob_bit_vector.h"
+#include "storage/blocksstable/ob_imicro_block_reader.h"
 
 namespace oceanbase
 {
@@ -82,6 +83,13 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
+
+  virtual int get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const override;
 
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
 

@@ -641,15 +641,34 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
   }
 }
 
+
+TEST_F(TestConstDecoder, get_min_or_max_test_tt)
+{
+  agg_min_or_max_test(true, true);
+}
+TEST_F(TestConstDecoder, get_min_or_max_test_ft)
+{
+  agg_min_or_max_test(false, true);
+}
+TEST_F(TestConstDecoder, get_min_or_max_test_tf)
+{
+  agg_min_or_max_test(true, false);
+}
+TEST_F(TestConstDecoder, get_min_or_max_test_ff)
+{
+  agg_min_or_max_test(false, false);
+}
+
 TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
 {
   batch_decode_to_datum_test();
 }
 
-// TEST_F(TestConstDecoder, batch_get_row_perf_test)
-// {
-//   batch_get_row_perf_test();
-// }
+
+TEST_F(TestConstDecoder, batch_get_row_perf_test)
+{
+  batch_get_row_perf_test();
+}
 
 } // namespace blocksstable
 } // namespace oceanbase

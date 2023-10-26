@@ -601,6 +601,87 @@ int ObDictDecoder::get_null_count(
   return ret;
 }
 
+int ObDictDecoder::get_aggregate_result(
+    const ObColumnDecoderCtx &ctx,
+    const int64_t *row_ids,
+    const int64_t row_cap,
+    ObMicroBlockAggInfo<ObDatum> &agg_info,
+    ObDatum *datum_buf) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Dict decoder not inited", K(ret));
+  } else if(row_cap == ctx.micro_block_header_->row_count_){
+    ObDictDecoderIterator begin_it = begin(&ctx, ctx.col_header_->length_);
+    ObDictDecoderIterator end_it = end(&ctx, ctx.col_header_->length_);
+    ObDictDecoderIterator traverse_it = begin_it;
+    if (meta_header_->is_sorted_dict()) {
+      if (!agg_info.get_is_min()) {
+        traverse_it = end_it;
+        if((*traverse_it).is_null()){
+          traverse_it = end_it - 1;
+        }
+      } else if ((*traverse_it).is_null()) {
+        traverse_it = begin_it + 1;
+      }
+        if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(*traverse_it, agg_info, datum_buf[0]))){
+          LOG_WARN("Failed to update_min_or_max");
+        }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && traverse_it != end_it; ++traverse_it, ++i ){
+        if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(*traverse_it, agg_info, datum_buf[i]))){
+          LOG_WARN("Failed to update_min_or_max");
+        }
+      }   
+    }  
+  } else {
+    const unsigned char *col_data = reinterpret_cast<unsigned char *>(
+        const_cast<ObDictMetaHeader *>(meta_header_)) + ctx.col_header_->length_;
+    const int64_t count = meta_header_->count_;
+    int64_t row_id = 0;
+    int64_t ref = 0;
+    ObObj cell;
+    cell.set_meta_type(ctx.obj_meta_);
+    if(meta_header_->is_sorted_dict()){
+      const bool is_min = agg_info.get_is_min();
+      int64_t res_ref = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+        row_id = row_ids[i];
+        ref = 0;
+        if (OB_FAIL(read_ref(row_id, ctx.is_bit_packing(), col_data, ref))) {
+            LOG_WARN("Failed to read reference for dictionary", K(ret), K(col_data), K(row_id));
+        } else if ((!is_min && res_ref < ref) || (is_min && res_ref > ref)){
+                res_ref = ref;
+        }
+      }
+      if(OB_FAIL(decode(ctx.obj_meta_, cell, res_ref, ctx.col_header_->length_))){
+        LOG_WARN("Failed to decode", K(ret), K(res_ref), K(ctx.obj_meta_));
+      } else if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(cell, agg_info, datum_buf[0]))){
+        LOG_WARN("Failed to update_min_or_max");
+      }
+    } else {
+      ObBitmap ref_map(*ctx.allocator_);
+      ref_map.init(count,false);
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
+        row_id = row_ids[i];
+        ref = 0;
+        if (OB_FAIL(read_ref(row_id, ctx.is_bit_packing(), col_data, ref))) {
+            LOG_WARN("Failed to read reference for dictionary", K(ret), K(col_data), K(row_id));
+        } else if ((ref < count) && !ref_map.test(ref)){
+          if(OB_FAIL(decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_))){
+            LOG_WARN("Failed to decode", K(ret), K(ref), K(ctx.obj_meta_));
+          } else if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(cell, agg_info, datum_buf[0]))){
+            LOG_WARN("Failed to update_min_or_max");
+          }
+          ref_map.set(ref);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDictDecoder::update_pointer(const char *old_block, const char *cur_block)
 {
   int ret = OB_SUCCESS;
