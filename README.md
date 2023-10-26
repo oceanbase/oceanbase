@@ -58,7 +58,7 @@ English | [中文版](README_CN.md)
 
 - **MySQL Compatible**
      
-     OceanBase Database is highly compatible with MySQL, which ensures that zero or few modification is needed for migration.
+     OceanBase Database is highly compatible with MySQL, which ensures that zero or few modifications is needed for migration.
 
 - **Cost Efficiency**
 
@@ -110,7 +110,7 @@ For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issu
 
 # Case study
 
-OceanBase has been serving more than 400 customers upgrade their database from different industries, including Financial Services, Telecom, Retail, Internet and more.
+OceanBase has been serving more than 400 customers upgrade their databases from different industries, including Financial Services, Telecom, Retail, Internet and more.
 
 See also [success stories](https://en.oceanbase.com/customer/home) and [Who is using OceanBase](https://github.com/oceanbase/oceanbase/issues/1301) for more details.
 
@@ -120,7 +120,7 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 # Contributing
 
-Contributions are highly appreciated. Read the [development guide](docs/README.md) to getting started.
+Contributions are highly appreciated. Read the [development guide](docs/README.md) to get started.
 
 # License
 
