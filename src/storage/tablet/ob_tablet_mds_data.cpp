@@ -1386,6 +1386,13 @@ int ObTabletMdsData::build_tablet_status(
       node->user_data_.assign(buffer, serialize_size);
     }
 
+    // set tablet status cache
+    if (OB_FAIL(ret)) {
+    } else if (tx_data.is_in_tx()) {
+    } else if (OB_FAIL(mds_data.tablet_status_cache_.assign(user_data))) {
+      LOG_WARN("failed to set tablet status cache", K(ret), K(user_data));
+    }
+
     if (OB_FAIL(ret) && OB_NOT_NULL(buffer)) {
       allocator.free(buffer);
     }
@@ -1491,6 +1498,13 @@ int ObTabletMdsData::build_aux_tablet_info(
       LOG_WARN("user data serialize failed", K(ret), K(user_data));
     } else {
       node->user_data_.assign(buffer, serialize_size);
+    }
+
+    // set aux tablet info cache
+    if (OB_FAIL(ret)) {
+    } else if (tx_data.is_in_tx()) {
+    } else if (OB_FAIL(mds_data.aux_tablet_info_cache_.assign(user_data))) {
+      LOG_WARN("failed to set aux tablet info cache", K(ret), K(user_data));
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(buffer)) {
