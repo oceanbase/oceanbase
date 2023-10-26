@@ -9,7 +9,7 @@ The framework is designed and implentmented for evaluating PALF performance in a
 
 ## Usage
 
-1. Use your own IP and wrok directory
+1. Use your own IP and work directory
 
 **IP**
 - `mittest/palf_cluster/test_palf_bench_server.cpp:45`
