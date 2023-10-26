@@ -16198,8 +16198,6 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
     LOG_WARN("failed to build hidden index table map", K(ret));
   } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to check if oralce compat mode", K(ret));
-  } else if (!hidden_table_schema.get_foreign_key_infos().empty()) {
-    // not empty means already rebuilt.
   } else if (OB_FAIL(get_rebuild_foreign_key_infos(alter_table_arg,
                                                   orig_table_schema,
                                                   rebuild_child_table_fk,
@@ -16357,6 +16355,8 @@ int ObDDLService::rebuild_hidden_table_foreign_key_in_trans(ObAlterTableArg &alt
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
+    } else if (!hidden_table_schema->get_foreign_key_infos().empty()) {
+      // not empty means already rebuilt.
     } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
                                                         *orig_table_schema,
                                                         *hidden_table_schema,
