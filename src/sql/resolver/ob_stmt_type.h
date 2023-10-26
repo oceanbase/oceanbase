@@ -288,7 +288,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_RECOVER_TABLE, get_sys_tenant_alter_system_priv, 2
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CANCEL_RECOVER_TABLE, get_sys_tenant_alter_system_priv, 289)
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CREATE_TENANT_SNAPSHOT, get_sys_tenant_alter_system_priv, 290)
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_DROP_TENANT_SNAPSHOT, get_sys_tenant_alter_system_priv, 291)
-
+// OB_STMT_TYPE_DEF(T_ALTER_SYSTEM_RESET_PARAMETER, get_sys_tenant_alter_system_priv, 292, ACTION_TYPE_ALTER_SYSTEM)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 
