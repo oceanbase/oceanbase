@@ -38,7 +38,7 @@ int64_t calc_extra_payload_size()
   return payload;
 }
 
-int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t pos)
+int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (!g_runtime_enabled) {
