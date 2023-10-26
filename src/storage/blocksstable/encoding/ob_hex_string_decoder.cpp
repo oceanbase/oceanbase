@@ -248,11 +248,12 @@ int ObHexStringDecoder::pushdown_operator(
     const sql::ObWhiteFilterExecutor &filter,
     const char* meta_data,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   // No enough meta data to improve comparison operation, so only implement is null, not null operator here
   // Other pushdown operators will retrograde to row-wise decode and compare
-  UNUSEDx(parent, meta_data);
+  UNUSEDx(parent, meta_data, pd_filter_info);
   int ret = OB_SUCCESS;
   const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
   const char *col_data = reinterpret_cast<const char *>(header_) + col_ctx.col_header_->length_;

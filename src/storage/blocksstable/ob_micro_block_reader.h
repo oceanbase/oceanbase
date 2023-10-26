@@ -23,7 +23,6 @@ namespace oceanbase
 using namespace common;
 using namespace storage;
 namespace storage {
-struct PushdownFilterInfo;
 class ObAggCell;
 }
 namespace blocksstable
@@ -88,7 +87,7 @@ public:
   int filter_pushdown_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
-      const storage::PushdownFilterInfo &pd_filter_info,
+      const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
   int get_rows(
     const common::ObIArray<int32_t> &cols_projector,

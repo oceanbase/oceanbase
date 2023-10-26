@@ -221,6 +221,7 @@ int ObIntegerBaseDiffDecoder::pushdown_operator(
     const sql::ObWhiteFilterExecutor &filter,
     const char* meta_data,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   UNUSEDx(meta_data, row_index);
@@ -261,7 +262,7 @@ int ObIntegerBaseDiffDecoder::pushdown_operator(
                   col_data,
                   filter,
                   result_bitmap))) {
-        LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        LOG_WARN("Failed on COMPARISON operator", K(ret), K(col_ctx));
       }
       break;
     }
@@ -272,7 +273,7 @@ int ObIntegerBaseDiffDecoder::pushdown_operator(
       break;
     }
     case sql::WHITE_OP_IN: {
-      if (OB_FAIL(in_operator(parent, col_ctx, col_data, filter, result_bitmap))) {
+      if (OB_FAIL(in_operator(parent, col_ctx, col_data, filter, pd_filter_info, result_bitmap))) {
         LOG_WARN("Failed on IN operator", K(ret), K(col_ctx));
       }
       break;
@@ -334,108 +335,55 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
-  uint64_t delta_value = 0;
-  uint64_t param_delta_value = 0;
-  if (OB_UNLIKELY(col_ctx.micro_block_header_->row_count_ != result_bitmap.size()
-                          || NULL == col_data
-                          || filter.get_objs().count() != 1)) {
+  ObObjTypeStoreClass column_sc = get_store_class_map()[col_ctx.obj_meta_.get_type_class()];
+  if (OB_UNLIKELY(NULL == col_data
+                  || result_bitmap.size() != col_ctx.micro_block_header_->row_count_ 
+                  || filter.get_objs().count() != 1
+                  || filter.get_op_type() > sql::WHITE_OP_NE
+                  || filter.null_param_contained())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Filter Pushdown Operator: Invalid argument", K(ret), K(col_ctx));
   } else if (OB_UNLIKELY(col_ctx.obj_meta_.get_type() != filter.get_objs().at(0).get_type())) {
     // Filter type not match with column type, back to retro path
     ret = OB_NOT_SUPPORTED;
     LOG_DEBUG("Type not match, back to retrograde path", K(col_ctx), K(filter));
-  } else if (col_ctx.obj_meta_.get_type_class() == ObFloatTC
-            || col_ctx.obj_meta_.get_type_class() == ObDoubleTC) {
-    // Can't compare by uint directly, support this later with float point number compare later
-    ret = OB_NOT_SUPPORTED;
-    LOG_DEBUG("Double/Float with INT_DIFF encoding, back to retro path", K(col_ctx));
+  } else if (OB_UNLIKELY((column_sc != ObIntSC) && (column_sc != ObUIntSC))) { 
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Integer base encoding should only encode data as IntSC or UIntSC", K(ret), K(filter));
   } else {
-    const ObObj &ref_obj = filter.get_objs().at(0);
     ObObj base_obj;
     base_obj.copy_meta_type(col_ctx.obj_meta_);
     base_obj.v_.uint64_ = base_;
-    ObObjTypeStoreClass column_sc = get_store_class_map()[col_ctx.obj_meta_.get_type_class()];
-    bool filter_obj_smaller_than_base = ref_obj < base_obj;
+    bool filter_obj_smaller_than_base = filter.get_objs().at(0) < base_obj;
 
     ObFPIntCmpOpType cmp_op_type = get_white_op_int_op_map()[filter.get_op_type()];
     if (filter_obj_smaller_than_base) {
       // Do not need to decode the data
-      if ((filter_obj_smaller_than_base
-              && (cmp_op_type == FP_INT_OP_GE || cmp_op_type == FP_INT_OP_GT))
-          || cmp_op_type == FP_INT_OP_NE) {
+      if ((cmp_op_type == FP_INT_OP_GE || cmp_op_type == FP_INT_OP_GT) ||
+          cmp_op_type == FP_INT_OP_NE) {
         // All rows except null value are true
         if (OB_FAIL(result_bitmap.bit_not())) {
           LOG_WARN("Failed to flip all bits in bitmap", K(ret));
         }
-      } else  {
+      } else {
         // All rows are false;
         result_bitmap.reuse();
       }
     } else {
-      uint8_t cell_len = header_->length_;
-      int64_t data_offset = 0;
-      bool null_value_contained = result_bitmap.popcnt() > 0;
-      bool exist_parent_filter = nullptr != parent;
-      if (col_ctx.has_extend_value()) {
-        data_offset = col_ctx.micro_block_header_->row_count_
-            * col_ctx.micro_block_header_->extend_value_bit_;
-      }
-      if (ObIntSC == column_sc) {
-        if (OB_FAIL(get_delta<int64_t>(ref_obj, param_delta_value))) {
-          LOG_WARN("Failed to get delta value", K(ret), K(ref_obj));
-        }
-      } else if (ObUIntSC == column_sc) {
-        if (OB_FAIL(get_delta<uint64_t>(ref_obj, param_delta_value))) {
-          LOG_WARN("Failed to get delta value", K(ret), K(ref_obj));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected Store type for int_diff decoder", K(ret), K(column_sc));
-      }
-
+      // traverse and decode all data
+      // do compare row by row
       if (OB_FAIL(ret)) {
-      } else if (col_ctx.is_bit_packing()) {
-        for (int64_t row_id = 0;
-            OB_SUCC(ret) && row_id < col_ctx.micro_block_header_->row_count_;
-            ++row_id) {
-          if (exist_parent_filter && parent->can_skip_filter(row_id)) {
-          } else if (null_value_contained && result_bitmap.test(row_id)) {
-            if (OB_FAIL(result_bitmap.set(row_id, false))) {
-              LOG_WARN("Failed to set row with null object to false", K(ret));
-            }
-          } else if (OB_FAIL(ObBitStream::get(
-                col_data, data_offset + row_id * cell_len, cell_len, delta_value))) {
-              LOG_WARN("Failed to get bit packing value", K(ret), K_(header));
-          } else {
-            bool cmp_result = fp_int_cmp<uint64_t>(delta_value, param_delta_value, cmp_op_type);
-            if (cmp_result) {
-              if (OB_FAIL(result_bitmap.set(row_id))) {
-                LOG_WARN("Failed to set result bitmap", K(ret), K(row_id), K(filter));
-              }
-            }
-          }
-        }
-      } else {
-        data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
-        for (int64_t row_id = 0;
-            OB_SUCC(ret) && row_id < col_ctx.micro_block_header_->row_count_;
-            ++row_id) {
-          if (exist_parent_filter && parent->can_skip_filter(row_id)) {
-          } else if (null_value_contained && result_bitmap.test(row_id)) {
-            if (OB_FAIL(result_bitmap.set(row_id, false))) {
-              LOG_WARN("Failed to set row with null object to false", K(ret));
-            }
-          } else {
-            MEMCPY(&delta_value, col_data + data_offset + row_id * cell_len, cell_len);
-            bool cmp_result = fp_int_cmp<uint64_t>(delta_value, param_delta_value, cmp_op_type);
-            if (cmp_result) {
-              if (OB_FAIL(result_bitmap.set(row_id))) {
-                LOG_WARN("Failed to set result bitmap", K(ret), K(row_id), K(filter));
-              }
-            }
-          }
-        }
+      } else if (OB_FAIL(traverse_all_data(
+                     parent, col_ctx, col_data, filter, result_bitmap,
+                     cmp_op_type,
+                     [](const ObObj &cur_obj,
+                        const sql::ObWhiteFilterExecutor &filter,
+                        bool &result,
+                        const ObFPIntCmpOpType &cmp_op_type) -> int {
+                       result = fp_int_cmp<ObObj>(cur_obj, filter.get_objs().at(0), cmp_op_type);
+                       return OB_SUCCESS;
+                     }))) {
+        LOG_WARN("Failed to traverse all data in micro block", K(ret));
       }
     }
   }
@@ -450,41 +398,58 @@ int ObIntegerBaseDiffDecoder::bt_operator(
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(col_ctx.micro_block_header_->row_count_ != result_bitmap.size()
-                          || NULL == col_data
-                          || filter.get_objs().count() != 2)) {
+  ObObjTypeStoreClass column_sc = get_store_class_map()[col_ctx.obj_meta_.get_type_class()];
+  const ObObj &obj_left = filter.get_objs().at(0);
+  const ObObj &obj_right = filter.get_objs().at(1);
+  if (OB_UNLIKELY(NULL == col_data
+                  || result_bitmap.size() != col_ctx.micro_block_header_->row_count_
+                  || filter.get_objs().count() != 2
+                  || filter.get_op_type() != sql::WHITE_OP_BT
+                  || filter.null_param_contained())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Filter pushdown operator: Invalid argument", K(ret), K(col_ctx));
-  } else if (col_ctx.obj_meta_.get_type_class() == ObFloatTC
-            || col_ctx.obj_meta_.get_type_class() == ObDoubleTC) {
-    // Can't compare by uint directly, support this later with float point number compare later
-    ret = OB_NOT_SUPPORTED;
-    LOG_DEBUG("Double/Float with INT_DIFF encoding, back to retro path", K(col_ctx));
-  } else if (ObUIntSC == get_store_class_map()[filter.get_objs().at(0).get_type_class()]) {
-    if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data, filter, result_bitmap,
-                [](uint64_t &cur_int,
-                const sql::ObWhiteFilterExecutor &filter,
-                bool &result) -> int {
-                  result = (cur_int >= filter.get_objs().at(0).v_.uint64_)
-                            && (cur_int <= filter.get_objs().at(1).v_.uint64_);
-                  return OB_SUCCESS;
-                }))) {
-      LOG_WARN("Failed to traverse all data in micro block", K(ret));
-    }
-  } else if (ObIntSC == get_store_class_map()[filter.get_objs().at(0).get_type_class()]) {
-    if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data, filter, result_bitmap,
-                [](uint64_t &cur_int,
-                const sql::ObWhiteFilterExecutor &filter,
-                bool &result) -> int {
-                  result = (cur_int >= filter.get_objs().at(0).v_.int64_)
-                            && (cur_int <= filter.get_objs().at(1).v_.int64_);
-                  return OB_SUCCESS;
-                }))) {
-      LOG_WARN("Failed to traverse all data in micro block", K(ret));
-    }
-  } else {
+  } else if (OB_UNLIKELY((column_sc != ObIntSC) && (column_sc != ObUIntSC))) { 
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Integer base encoding should only encode data as IntSC", K(ret), K(filter));
+    LOG_WARN("Integer base encoding should only encode data as IntSC or UIntSC", K(ret), K(filter));
+  } else if (OB_UNLIKELY((col_ctx.obj_meta_.get_type() != filter.get_objs().at(0).get_type())
+                         || (col_ctx.obj_meta_.get_type() != filter.get_objs().at(1).get_type()))) {
+    // Filter type not match with column type or obj0 type not match with obj1
+    // back to retro path
+    ret = OB_NOT_SUPPORTED;
+    LOG_DEBUG("Type not match, back to retrograde path", K(col_ctx), K(filter));
+  } else if (obj_left > obj_right){
+    // Between left bound large than right bound
+    // return all-false bitmap
+    result_bitmap.reuse();
+    LOG_DEBUG("Hit shortcut, obj_left > obj_right, return all-false bitmap", K(obj_right), K(obj_right));
+  } else {
+    ObObj base_obj;
+    base_obj.copy_meta_type(col_ctx.obj_meta_);
+    base_obj.v_.uint64_ = base_;
+    bool filter_obj_smaller_than_base = obj_right < base_obj;
+
+    if (filter_obj_smaller_than_base) {
+      // Do not need to decode the data
+      // All rows are false
+      result_bitmap.reuse();
+      LOG_DEBUG("Hit shortcut, obj_right < base_obj, return all-false bitmap", K(obj_right), K(base_obj));
+    } else {
+      // traverse and decode all data
+      // do compare row by row
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(traverse_all_data(
+                     parent, col_ctx, col_data, filter, result_bitmap, FP_INT_OP_MAX,
+                     [](const ObObj &cur_obj,
+                        const sql::ObWhiteFilterExecutor &filter,
+                        bool &result,
+                        const ObFPIntCmpOpType &cmp_op_type) -> int {
+                       result = (cur_obj >= filter.get_objs().at(0))
+                                 && (cur_obj <= filter.get_objs().at(1));
+                       return OB_SUCCESS;
+                     }))) {
+        LOG_WARN("Failed to traverse all data in micro block", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -494,26 +459,87 @@ int ObIntegerBaseDiffDecoder::in_operator(
     const ObColumnDecoderCtx &col_ctx,
     const unsigned char* col_data,
     const sql::ObWhiteFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(filter.get_objs().count() == 0
-                  || result_bitmap.size() != col_ctx.micro_block_header_->row_count_)) {
+  ObObjTypeStoreClass column_sc = get_store_class_map()[col_ctx.obj_meta_.get_type_class()];
+  if (OB_UNLIKELY(NULL == col_data
+                  || result_bitmap.size() != col_ctx.micro_block_header_->row_count_
+                  || filter.get_objs().count() == 0
+                  || filter.get_op_type() != sql::WHITE_OP_IN
+                  || filter.null_param_contained())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Pushdown in operator: Invalid arguments");
-  } else if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data, filter, result_bitmap,
-                      [](uint64_t &cur_int,
-                          const sql::ObWhiteFilterExecutor &filter,
-                          bool &result) -> int {
-                        int ret = OB_SUCCESS;
-                        ObObj cur_obj(filter.get_objs().at(0));
-                        cur_obj.v_.uint64_ = cur_int;
-                        if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-                          LOG_WARN("Failed to check object in hashset", K(ret), K(cur_obj));
-                        }
-                        return ret;
-                      }))) {
-    LOG_WARN("Failed to traverse all data in micro block", K(ret));
+  } else if (OB_UNLIKELY((column_sc != ObIntSC) && (column_sc != ObUIntSC))) { 
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Integer base encoding should only encode data as IntSC or UIntSC", K(ret), K(filter));
+  } else {
+    ObObj base_obj;
+    base_obj.copy_meta_type(col_ctx.obj_meta_);
+    base_obj.v_.uint64_ = base_;
+    // use max(obj_set) compare with base
+    bool filter_obj_smaller_than_base = filter.get_max_param() < base_obj;
+    ObDatum *datums = nullptr;
+
+    if (filter_obj_smaller_than_base) {
+      // Do not need to decode the data
+      // All rows are false
+      result_bitmap.reuse();
+      LOG_DEBUG("Hit shortcut, max(obj_set) < base_obj, return all-false bitmap", K(base_obj));
+    } else if (OB_FAIL(filter.get_datums_from_column(datums))) {
+      LOG_WARN("Failed to get datums from column for batch decode", K(ret));
+    } else if (OB_ISNULL(datums)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Get null datums from column for batch decode", K(ret));
+    } else {
+      // prepare arguments
+      int64_t cur_row_id = 0;
+      int64_t end_row_id = col_ctx.micro_block_header_->row_count_;
+      int64_t last_start = cur_row_id;
+      int64_t row_cap = 0;
+      bool null_value_contained = (result_bitmap.popcnt() > 0);
+      ObObj cur_obj;
+      bool result = false;
+      // filter by batch
+      while (OB_SUCC(ret) && cur_row_id < end_row_id) {
+        last_start = cur_row_id;
+        row_cap = min(pd_filter_info.batch_size_, end_row_id - cur_row_id);
+        cur_row_id += row_cap;
+        // 1. prepare row_ids
+        for (int64_t i = 0; i < row_cap; ++i) {
+          pd_filter_info.row_ids_[i] = last_start + i;
+        }
+        // 2. batch decode
+        if (OB_FAIL(batch_decode(col_ctx, NULL, pd_filter_info.row_ids_,
+                                pd_filter_info.cell_data_ptrs_, row_cap,
+                                datums))) {
+          LOG_WARN("Failed to batch decode", K(ret), K(row_cap));
+        } else {
+          // 3. traverse all datums row by row
+          for (int64_t row_id = last_start; OB_SUCC(ret) && row_id < cur_row_id; ++row_id) {
+            const int64_t buf_id = row_id - last_start;
+            if (nullptr != parent && parent->can_skip_filter(row_id)) {
+              continue;
+            } else if (null_value_contained && result_bitmap.test(row_id)) {
+              // object in this row is null
+              if (OB_FAIL(result_bitmap.set(row_id, false))) {
+                LOG_WARN("Failed to set null value to false", K(ret));
+              }
+            } else {
+              if (OB_FAIL(datums[buf_id].to_obj(cur_obj, col_ctx.obj_meta_))) {
+                LOG_WARN("Failed to transform datum to obj", K(ret), K(datums[buf_id]));
+              } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
+                LOG_WARN("Failed to check object in obj set", K(ret), K(cur_obj));
+              } else if (result && OB_FAIL(result_bitmap.set(row_id))) {
+                LOG_WARN("Failed to set result bitmap", K(ret), K(row_id), K(filter));
+              }
+            }
+          }
+        }
+      }
+      LOG_TRACE("in_operator use batch decode successfully", K(ret), K(col_ctx.is_fix_length()));
+    }
   }
   return ret;
 }
@@ -524,14 +550,16 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
     const unsigned char* col_data,
     const sql::ObWhiteFilterExecutor &filter,
     ObBitmap &result_bitmap,
+    const ObFPIntCmpOpType &cmp_op_type,
     int (*lambda)(
-        uint64_t &cur_int,
+        const ObObj &cur_obj,
         const sql::ObWhiteFilterExecutor &filter,
-        bool &result)) const
+        bool &result,
+        const ObFPIntCmpOpType &cmp_op_type)) const
 {
   int ret = OB_SUCCESS;
   uint64_t v = 0;
-  uint64_t cur_int = 0;
+  ObObj cur_obj;
   uint8_t cell_len = header_->length_;
   int64_t data_offset = 0;
   if (col_ctx.has_extend_value()) {
@@ -543,6 +571,10 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
   }
   bool null_value_contained = (result_bitmap.popcnt() > 0);
   bool exist_parent_filter = nullptr != parent;
+  sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
+
+  // copy meta, include storage type (Int64/UInt64)
+  cur_obj.copy_meta_type(col_ctx.obj_meta_);
   for (int64_t row_id = 0;
        OB_SUCC(ret) && row_id < col_ctx.micro_block_header_->row_count_;
        ++row_id) {
@@ -561,11 +593,11 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
         MEMCPY(&v, col_data + data_offset + row_id * cell_len, cell_len);
       }
       if (OB_SUCC(ret)) {
-        cur_int = base_ + v;
+        cur_obj.v_.uint64_ = base_ + v;
         // use lambda here to filter and set result bitmap
         bool result = false;
-        if (OB_FAIL(lambda(cur_int, filter, result))) {
-          LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_int));
+        if (OB_FAIL(lambda(cur_obj, filter, result, cmp_op_type))) {
+          LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_obj.v_.uint64_));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(row_id))) {
             LOG_WARN("Failed to set result bitmap", K(ret), K(row_id), K(filter));

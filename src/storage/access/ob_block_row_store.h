@@ -15,6 +15,7 @@
 
 #include "common/object/ob_object.h"
 #include "lib/container/ob_bitmap.h"
+#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/ob_table_store_stat_mgr.h"
 
 namespace oceanbase
@@ -37,25 +38,6 @@ struct ObTableAccessContext;
 struct ObTableAccessParam;
 struct ObTableIterParam;
 struct ObStoreRow;
-struct PushdownFilterInfo
-{
-  PushdownFilterInfo() :
-      is_pd_filter_(false),
-      start_(-1),
-      end_(-1),
-      col_capacity_(0),
-      col_buf_(nullptr),
-      datum_buf_(nullptr),
-      filter_(nullptr) {}
-  bool is_pd_filter_;
-  int64_t start_;
-  int64_t end_;
-  int64_t col_capacity_;
-  // TODO remove col_buf_ later
-  common::ObObj *col_buf_;
-  blocksstable::ObStorageDatum *datum_buf_;
-  sql::ObPushdownFilterExecutor *filter_;
-};
 
 class ObBlockRowStore
 {
@@ -99,7 +81,7 @@ protected:
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter);
   bool is_inited_;
-  PushdownFilterInfo pd_filter_info_;
+  sql::PushdownFilterInfo pd_filter_info_;
   ObTableAccessContext &context_;
 private:
   bool can_blockscan_;

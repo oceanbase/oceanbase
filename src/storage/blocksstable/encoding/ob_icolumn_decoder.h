@@ -132,9 +132,10 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const
   {
-    UNUSEDx(parent, col_ctx, filter, meta_data, row_index, result_bitmap);
+    UNUSEDx(parent, col_ctx, filter, meta_data, row_index, pd_filter_info, result_bitmap);
     return common::OB_NOT_SUPPORTED;
   }
 

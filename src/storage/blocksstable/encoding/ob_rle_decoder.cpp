@@ -126,9 +126,10 @@ int ObRLEDecoder::pushdown_operator(
     const sql::ObWhiteFilterExecutor &filter,
     const char* meta_data,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
-  UNUSEDx(meta_data, row_index);
+  UNUSEDx(meta_data, row_index, pd_filter_info);
   int ret = OB_SUCCESS;
   const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
   if (OB_UNLIKELY(!is_inited())) {
@@ -270,6 +271,7 @@ int ObRLEDecoder::comparison_operator(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(result_bitmap.size() != col_ctx.micro_block_header_->row_count_
                   || filter.get_objs().count() != 1
+                  || filter.get_op_type() > sql::WHITE_OP_NE
                   || filter.null_param_contained())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument for comparison operator", K(ret),
@@ -317,7 +319,8 @@ int ObRLEDecoder::bt_operator(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(result_bitmap.size() != col_ctx.micro_block_header_->row_count_
                 || filter.get_objs().count() != 2
-                || filter.get_op_type() != sql::WHITE_OP_BT)) {
+                || filter.get_op_type() != sql::WHITE_OP_BT
+                || filter.null_param_contained())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid argument for BT operator",
           K(ret), K(result_bitmap.size()), K(filter.get_objs()));
@@ -360,31 +363,45 @@ int ObRLEDecoder::in_operator(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(result_bitmap.size() != col_ctx.micro_block_header_->row_count_
                   || filter.get_objs().count() == 0
-                  || filter.get_op_type() != sql::WHITE_OP_IN)) {
-    LOG_WARN("Invalid argument for BT operator", K(ret),
+                  || filter.get_op_type() != sql::WHITE_OP_IN
+                  || filter.null_param_contained())) {
+    LOG_WARN("Invalid argument for IN operator", K(ret),
              K(result_bitmap.size()), K(filter));
   } else {
-    const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
-    if (dict_count > 0) {
-      bool found = false;
+    const ObDictMetaHeader* dict_meta_header = dict_decoder_.get_dict_header();
+    if (OB_UNLIKELY(OB_ISNULL(dict_meta_header))) {
+      LOG_WARN("dict meta header is NULL", K(ret));
+    } else if (dict_meta_header->count_ > 0) {
       const int64_t dict_meta_length = col_ctx.col_header_->length_ - meta_header_->offset_;
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
-      const int64_t ref_bitset_size = dict_count + 1;
+      // iterators
+      ObDictDecoderIterator left_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator right_it = dict_decoder_.end(&col_ctx, dict_meta_length);
+      // init ref_bitset
+      const int64_t ref_bitset_size = dict_meta_header->count_ + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
       ref_bitset->init(ref_bitset_size);
-      int64_t dict_ref = 0;
-      bool is_exist = false;
-      while (OB_SUCC(ret) && traverse_it != end_it) {
-        if (OB_FAIL(filter.exist_in_obj_set(*traverse_it, is_exist))) {
-          LOG_WARN("Failed to check object in hashset", K(ret), K(*traverse_it));
-        } else if (is_exist) {
-          found = true;
-          ref_bitset->set(dict_ref);
+      // common variables
+      bool found = false;
+      bool is_hit_shortcut = false;
+      bool is_sorted_dict = dict_meta_header->is_sorted_dict();
+
+      if (is_sorted_dict) {
+        // Sorted dictionary, binary search here to find boundary element
+        left_it = std::lower_bound(left_it, right_it, filter.get_min_param());
+        right_it = std::upper_bound(left_it, right_it, filter.get_max_param());
+        if (left_it == right_it) {
+          is_hit_shortcut = true;
+          LOG_DEBUG("Hit shortcut, no cross, return all-false bitmap", K(*left_it));
         }
-        ++traverse_it;
-        ++dict_ref;
+      }
+
+      if (!is_hit_shortcut &&
+          OB_FAIL(dict_decoder_.set_ref_exist_in_objs(
+              left_it, right_it,
+              dict_decoder_.begin(&col_ctx, dict_meta_length), is_sorted_dict,
+              filter, *ref_bitset, found))) {
+        LOG_WARN("Failed to check object in objs", K(ret));
       }
       if (found && OB_FAIL(set_res_with_bitset(parent, col_ctx, ref_bitset, result_bitmap))) {
         LOG_WARN("Failed to set result_bitmap", K(ret));
@@ -417,10 +434,8 @@ int ObRLEDecoder::cmp_ref_and_set_res(
       next_row_id = i != meta_header_->count_ - 1
                           ? row_ids.at_(meta_header_->payload_, i + 1)
                           : col_ctx.micro_block_header_->row_count_;
-      for (int64_t idx = row_id; OB_SUCC(ret) && idx < next_row_id; ++idx) {
-        if (OB_FAIL(result_bitmap.set(idx, flag))) {
-          LOG_WARN("Failed to set result_bitmap", K(ret), K(row_id), K(next_row_id), K(idx));
-        }
+      if (OB_FAIL(result_bitmap.set_n(row_id, next_row_id - row_id, flag))) {
+        LOG_WARN("Failed to set_n result_bitmap", K(ret), K(row_id), K(next_row_id));
       }
     }
   }
@@ -447,10 +462,8 @@ int ObRLEDecoder::set_res_with_bitset(
       next_row_id = i != meta_header_->count_ - 1
                           ? row_ids.at_(meta_header_->payload_, i + 1)
                           : col_ctx.micro_block_header_->row_count_;
-      for (int64_t idx = row_id; OB_SUCC(ret) && idx < next_row_id; ++idx) {
-        if (OB_FAIL(result_bitmap.set(idx))) {
-          LOG_WARN("Failed to set result_bitmap", K(ret), K(row_id), K(next_row_id), K(idx));
-        }
+      if (OB_FAIL(result_bitmap.set_n(row_id, next_row_id - row_id))) {
+        LOG_WARN("Failed to set_n result_bitmap", K(ret), K(row_id), K(next_row_id));
       }
     }
   }

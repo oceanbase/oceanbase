@@ -494,7 +494,7 @@ int ObIMicroBlockRowScanner::locate_range_pos(
 int ObIMicroBlockRowScanner::filter_pushdown_filter(
     sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor *filter,
-    storage::PushdownFilterInfo &pd_filter_info,
+    sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &bitmap)
 {
   int ret = OB_SUCCESS;

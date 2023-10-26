@@ -1886,7 +1886,7 @@ int ObMicroBlockDecoder::get_multi_version_info(
 int ObMicroBlockDecoder::filter_pushdown_filter(
     const sql::ObPushdownFilterExecutor *parent,
     sql::ObBlackFilterExecutor &filter,
-    const storage::PushdownFilterInfo &pd_filter_info,
+    const sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
@@ -1944,7 +1944,7 @@ int ObMicroBlockDecoder::filter_pushdown_filter(
 int ObMicroBlockDecoder::filter_pushdown_filter(
     const sql::ObPushdownFilterExecutor *parent,
     sql::ObWhiteFilterExecutor &filter,
-    const storage::PushdownFilterInfo &pd_filter_info,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
@@ -1991,6 +1991,7 @@ int ObMicroBlockDecoder::filter_pushdown_filter(
                 filter,
                 meta_data_,
                 row_index_,
+                pd_filter_info,
                 result_bitmap))) {
       if (OB_LIKELY(ret == OB_NOT_SUPPORTED)) {
         LOG_TRACE("[PUSHDOWN] Column specific operator failed, switch to retrograde filter pushdown",
@@ -2023,7 +2024,7 @@ int ObMicroBlockDecoder::filter_pushdown_filter(
 int ObMicroBlockDecoder::filter_pushdown_retro(
     const sql::ObPushdownFilterExecutor *parent,
     sql::ObWhiteFilterExecutor &filter,
-    const storage::PushdownFilterInfo &pd_filter_info,
+    const sql::PushdownFilterInfo &pd_filter_info,
     const int32_t col_offset,
     const share::schema::ObColumnParam *col_param,
     common::ObObj &decoded_obj,
