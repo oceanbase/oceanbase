@@ -80,6 +80,13 @@ OB_INLINE ObThrottleStat &get_throttle_stat()
   return throttle_stat_;
 }
 
+// record the alloc size of current thread
+OB_INLINE int64_t &get_thread_alloc_stat()
+{
+  RLOCAL_INLINE(int64_t, allock_stat);
+  return allock_stat;
+}
+
 } // end namespace share
 } // end namespace oceanbase
 #endif
