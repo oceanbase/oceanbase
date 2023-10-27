@@ -178,6 +178,7 @@ protected:
   void reset_macro_block_desc() { curr_block_desc_.reset(); curr_block_meta_.reset(); curr_block_desc_.macro_meta_ = &curr_block_meta_; }
   virtual int next_range();
 protected:
+  common::ObArenaAllocator exister_allocator_;
   blocksstable::ObIMacroBlockIterator *macro_block_iter_;
   blocksstable::ObMacroBlockDesc curr_block_desc_;
   blocksstable::ObDataMacroBlockMeta curr_block_meta_;
