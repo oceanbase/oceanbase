@@ -32,6 +32,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_leak_checker.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
@@ -5349,7 +5350,7 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
 
       ObTxBufferNode &node = exec_info_.multi_data_source_.at(i);
       if (nullptr != node.data_.ptr()) {
-        mtl_free(node.data_.ptr());
+        MultiTxDataFactory::free(node.data_.ptr());
         node.data_.assign_ptr(nullptr, 0);
         node.get_buffer_ctx_node().destroy_ctx();
       }
@@ -6108,7 +6109,7 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
     for (int64_t i = 0; OB_SUCC(ret) && i < mds_array.count(); ++i) {
       const ObTxBufferNode &node = mds_array.at(i);
       len = node.data_.length();
-      if (OB_ISNULL(ptr = mtl_malloc(len, "MultiTxData"))) {
+      if (OB_ISNULL(ptr = MultiTxDataFactory::alloc(len, trans_id_, (uint64_t)this))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(*this), K(len));
       } else {
@@ -6123,14 +6124,14 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
                                          data,
                                          node.mds_base_scn_,
                                          new_ctx))) {
-          mtl_free(data.ptr());
+          MultiTxDataFactory::free(data.ptr());
           if (OB_NOT_NULL(new_ctx)) {
             MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
           }
           TRANS_LOG(WARN, "init new node failed", KR(ret), K(*this));
         } else if (OB_FAIL(tmp_buf_arr.push_back(new_node))) {
-          mtl_free(data.ptr());
+          MultiTxDataFactory::free(data.ptr());
           if (OB_NOT_NULL(new_ctx)) {
             MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
@@ -6142,7 +6143,7 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < tmp_buf_arr.count(); ++i) {
-        mtl_free(tmp_buf_arr[i].data_.ptr());
+        MultiTxDataFactory::free(tmp_buf_arr[i].data_.ptr());
         tmp_buf_arr[i].buffer_ctx_node_.destroy_ctx();
       }
       tmp_buf_arr.reset();
@@ -6155,7 +6156,7 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
     for (int64_t i = 0; i < exec_info_.multi_data_source_.count(); ++i) {
       if (nullptr != exec_info_.multi_data_source_[i].data_.ptr()) {
-        mtl_free(exec_info_.multi_data_source_[i].data_.ptr());
+        MultiTxDataFactory::free(exec_info_.multi_data_source_[i].data_.ptr());
       }
       exec_info_.multi_data_source_[i].buffer_ctx_node_.destroy_ctx();
     }
@@ -6528,7 +6529,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
     } else if (is_committing_()) {
       ret = OB_TRANS_HAS_DECIDED;
       TRANS_LOG(WARN, "can not register mds in committing part_ctx", K(ret), KPC(this));
-    } else if (OB_ISNULL(ptr = mtl_malloc(len, "MultiTxData"))) {
+    } else if (OB_ISNULL(ptr = MultiTxDataFactory::alloc(len, trans_id_, (uint64_t)this))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(data_source_type), K(len));
     } else if (FALSE_IT(MEMCPY(ptr, buf, len))) {
@@ -6561,7 +6562,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
       }
 
       if (OB_FAIL(ret)) {
-        mtl_free(ptr);
+        MultiTxDataFactory::free(ptr);
         if (OB_NOT_NULL(buffer_ctx)) {
           MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(buffer_ctx);
         }

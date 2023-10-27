@@ -17,6 +17,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_leak_checker.h"
 
 namespace oceanbase
 {
@@ -94,6 +95,9 @@ void ObTxLoopWorker::run1()
 
   while (!has_set_stop()) {
     start_time_us = ObTimeUtility::current_time();
+    if (REACH_TIME_INTERVAL(60000000)) {
+      ObLeakChecker::dump();
+    }
 
     // tx gc, interval = 5s
     if (common::ObClockGenerator::getClock() - last_tx_gc_ts_ > TX_GC_INTERVAL) {
