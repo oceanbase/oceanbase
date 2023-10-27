@@ -196,6 +196,7 @@ int ObTabletAutoincSeq::set_autoinc_seq_value(
     intervals_count_ = 1;
     void *buf = nullptr;
     if(OB_ISNULL(buf = allocator.alloc(sizeof(share::ObTabletAutoincInterval) * intervals_count_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret));
     } else {
       intervals_ = new (buf) ObTabletAutoincInterval[intervals_count_];

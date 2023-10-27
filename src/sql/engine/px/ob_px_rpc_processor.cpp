@@ -66,7 +66,7 @@ int ObInitSqcP::process()
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
-
+  result_.sqc_order_gi_tasks_ = true;
   /**
    * 只要能进process，after process一定会被调用，所以可以用中断覆盖整个
    * SQC的生命周期。
@@ -112,15 +112,18 @@ int ObInitSqcP::process()
       UNSET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
       unregister_interrupt_ = false;
     }
+
+    //
+    if (is_schema_error(ret)) {
+      ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
+    }
+
     int report_ret = OB_SUCCESS;
+    // DO NOT use sqc_handler after release_handler!!!
     ObPxSqcHandler::release_handler(sqc_handler, report_ret);
     arg_.sqc_handler_ = nullptr;
   }
 
-  //
-  if (OB_SUCCESS != ret && is_schema_error(ret) && OB_NOT_NULL(sqc_handler)) {
-    ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
-  }
   // 非rpc框架的错误内容设置到response消息中
   // rpc框架的错误码在process中返回OB_SUCCESS
   result_.rc_ = ret;
@@ -657,7 +660,7 @@ int ObPxCleanDtlIntermResP::process()
           key.channel_id_ = ch_set.get_ch_info_set().at(ch_idx).chid_;
           for (int64_t batch_id = 0; batch_id < batch_size && OB_SUCC(ret); batch_id++) {
             key.batch_id_= batch_id;
-            if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+            if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
               if (OB_HASH_NOT_EXIST == ret) {
                 // interm result is written from batch_id = 0 to batch_size,
                 // if some errors happen when batch_id = i, no interm result of batch_id > i will be written.

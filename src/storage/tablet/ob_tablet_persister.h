@@ -83,6 +83,10 @@ public:
   static int persist_and_transform_tablet(
       const ObTablet &old_tablet,
       ObTabletHandle &new_handle);
+  // copy from old tablet
+  static int copy_from_old_tablet(
+      const ObTablet &old_tablet,
+      ObTabletHandle &new_handle);
   // change tablet memory footprint
   //  - degrade larger tablet objects to relatively smaller tablet objects, reducing the memory footprint.
   //  - upgrade smaller tablet objects to relatively larger tablet objects, achieving more performance.
@@ -90,6 +94,7 @@ public:
       const ObTablet &old_tablet,
       char *buf,
       const int64_t len);
+  static int transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle);
 private:
   static int check_tablet_meta_ids(
       const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,

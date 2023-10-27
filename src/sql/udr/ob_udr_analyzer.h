@@ -1,8 +1,14 @@
-// Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
-// Author:
-//     LuoFan
-// Normalizer:
-//     LuoFan
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 
 #ifndef OB_SQL_UDR_OB_UDR_ANALYZER_H_
@@ -20,10 +26,10 @@ class ObUDRAnalyzer
 public:
   ObUDRAnalyzer(common::ObIAllocator &allocator,
                 ObSQLMode mode,
-                common::ObCollationType conn_collation)
+                ObCharsets4Parser charsets4parser)
     : allocator_(allocator),
       sql_mode_(mode),
-      connection_collation_(conn_collation)
+      charsets4parser_(charsets4parser)
   {}
   static bool check_is_allow_stmt_type(stmt::StmtType stmt_type);
   int parse_and_check(const common::ObString &pattern,
@@ -64,7 +70,7 @@ private:
 private:
   common::ObIAllocator &allocator_;
   ObSQLMode sql_mode_;
-  common::ObCollationType connection_collation_;
+  ObCharsets4Parser charsets4parser_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDRAnalyzer);
 };

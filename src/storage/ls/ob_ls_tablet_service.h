@@ -242,6 +242,9 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
+  int update_tablet_release_memtable_for_offline(
+      const common::ObTabletID &tablet_id,
+      const SCN scn);
   int update_tablet_report_status(const common::ObTabletID &tablet_id);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
@@ -501,6 +504,8 @@ private:
       const ObMigrationTabletParam &mig_tablet_param,
       ObTabletHandle &handle);
   int delete_all_tablets();
+  int offline_build_tablet_without_memtable_();
+  int offline_destroy_memtable_and_mds_table_();
 private:
   static int check_real_leader_for_4377_(const ObLSID ls_id);
   static int check_need_rollback_in_transfer_for_4377_(const transaction::ObTxDesc *tx_desc,
@@ -714,9 +719,6 @@ private:
   int create_empty_shell_tablet(
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
-  int no_lock_update_tablet_to_empty_shell(
-      const ObTabletMapKey &key,
-      ObTabletHandle &new_tablet_handle);
 
 private:
   int direct_insert_rows(const uint64_t table_id,

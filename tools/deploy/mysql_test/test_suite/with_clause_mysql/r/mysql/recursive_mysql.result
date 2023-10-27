@@ -1844,22 +1844,22 @@ Outputs & filters:
   4 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   5 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  6 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c +
+  6 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
       1)]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
-  7 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c +
+  7 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c + 
       1)]), filter([cte2.a < 10]), rowset=256
       access([cte2.a], [cte2.b], [cte2.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
-  8 - output([column_conv(BIGINT,PS:(1,0),NULL,cte3.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.c +
+  8 - output([column_conv(BIGINT,PS:(1,0),NULL,cte3.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.c + 
       1)]), filter(nil), rowset=256
       conds([cte3.a < cte2.b]), nl_params_(nil), use_batch=false
   9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256
       access([cte3.a], [cte3.b], [cte3.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
  10 - output([cte2.b]), filter(nil), rowset=256
  11 - output([cte2.b]), filter([cte2.a < 3]), rowset=256
@@ -1868,15 +1868,15 @@ Outputs & filters:
  13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
  14 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
- 15 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c +
+ 15 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
       1)]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
- 16 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c +
+ 16 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c + 
       1)]), filter([cte2.a < 10]), rowset=256
       access([cte2.a], [cte2.b], [cte2.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
  17 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
  18 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
@@ -1884,10 +1884,10 @@ Outputs & filters:
  19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
  20 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
- 21 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c +
+ 21 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
       1)]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
 
 set ob_query_timeout = 100000000;

@@ -18,6 +18,7 @@
 #include "storage/tx/wrs/ob_weak_read_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_xa_service.h"
+#include "observer/omt/ob_tenant.h"
 // ------------------------------------------------------------------------------------------
 // Implimentation notes:
 // there are two relation we need care:
@@ -780,7 +781,7 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
       if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, NULL, gts_cache))) {
         TRANS_LOG(WARN, "get ts sync error", K(ret), K(max_read_stale_us_for_user));
       } else {
-        const int64_t current_time_us = MTL_IS_PRIMARY_TENANT()
+        const int64_t current_time_us = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()
                 ? std::max(ObTimeUtility::current_time(), gts_cache.convert_to_ts())
                 : gts_cache.convert_to_ts();
         current_scn.convert_from_ts(current_time_us - max_read_stale_us_for_user);
@@ -1089,6 +1090,11 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
           && tx.active_scn_ >= savepoint  // rollback all dirty state
           && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
         reset_tx = true;
+        /*
+         * Avoid lock conflicts between first stmt retry and tx async abort(end first stmt caused)
+         * Add a sync rollback process before async abort tx.
+         */
+        normal_rollback = true;
       } else {
         normal_rollback = true;
       }
@@ -1115,7 +1121,9 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                            expire_ts))) {
       TRANS_LOG(WARN, "do savepoint rollback fail", K(ret));
     }
-    if (OB_FAIL(ret)) {
+    // reset tx ignore rollback ret
+    if (reset_tx) {
+    } else if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "rollback savepoint fail, abort tx",
                 K(ret), K(savepoint), KP(extra_touched_ls), K(parts), K(tx));
       // advance op_sequence to reject further rollback resp messsages
@@ -1583,15 +1591,20 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
     ret = sync_rollback_savepoint__(tx, msg, tx.brpc_mask_set_,
                                     expire_ts, max_retry_intval, retries);
     tx.lock_.lock();
-    tx.flags_.BLOCK_ = false;
     // restore state
     if (OB_SUCC(ret) && tx.is_tx_active()) {
       tx.state_ = save_state;
     }
     // mask_set need clear
     tx.brpc_mask_set_.reset();
+    // check interrupt
+    if (OB_SUCC(ret) && tx.flags_.INTERRUPTED_) {
+      ret = OB_ERR_INTERRUPTED;
+      TRANS_LOG(WARN, "rollback savepoint was interrupted", K(ret));
+    }
     // clear interrupt flag
     tx.clear_interrupt();
+    tx.flags_.BLOCK_ = false;
   }
   if (OB_NOT_NULL(tmp_tx_desc)) {
     msg.tx_ptr_ = NULL;
@@ -1623,6 +1636,12 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
   retries = 0;
   int64_t min_retry_intval = 10 * 1000; // 10 ms
   expire_ts = std::max(ObTimeUtility::current_time() + MIN_WAIT_TIME, expire_ts);
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = static_cast<omt::ObTenant *>(tenant_base);
+  if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "get tenant is null", K(ret));
+  }
   while (OB_SUCC(ret)) {
     int64_t retry_intval = std::min(min_retry_intval * (1 + retries), max_retry_intval);
     int64_t waittime = std::min(expire_ts - ObTimeUtility::current_time(), retry_intval);
@@ -1653,7 +1672,7 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
           int rpc_ret = OB_SUCCESS;
           if (OB_FAIL(tx.rpc_cond_.wait(waittime, rpc_ret))) {
             TRANS_LOG(WARN, "tx rpc condition wakeup", K(ret),
-                      K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
+                      K(tx.tx_id_), K(waittime), K(rpc_ret), K(expire_ts), K(remain), K(remain_cnt), K(retries),
                       K_(tx.state));
             // if trans is terminated, rollback savepoint should be terminated
             // NOTE that this case is only for xa trans
@@ -1663,6 +1682,9 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
             // 3. branch 1 receives callback of rollback savepoint
             if (tx.is_terminated()) {
               ret = OB_TRANS_HAS_DECIDED;
+            } else if (retries > 10 && tenant->has_stopped()) {
+              ret = OB_TENANT_NOT_IN_SERVER;
+              TRANS_LOG(WARN, "tenant has been stopped", K(ret));
             } else {
               ret = OB_SUCCESS;
             }
@@ -1828,7 +1850,7 @@ int ObTransService::release_tx_ref(ObTxDesc &tx)
   return tx_desc_mgr_.release_tx_ref(&tx);
 }
 
-OB_INLINE int ObTransService::tx_sanity_check_(const ObTxDesc &tx)
+OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
@@ -1842,8 +1864,13 @@ OB_INLINE int ObTransService::tx_sanity_check_(const ObTxDesc &tx)
     case ObTxDesc::State::IDLE:
     case ObTxDesc::State::ACTIVE:
     case ObTxDesc::State::IMPLICIT_ACTIVE:
-
-      break;
+      if (tx.flags_.PART_ABORTED_) {
+        TRANS_LOG(WARN, "some participant was aborted, abort tx now");
+        abort_tx_(tx, tx.abort_cause_);
+        // go through
+      } else {
+        break;
+      }
     case ObTxDesc::State::ABORTED:
       ret = tx.abort_cause_ < 0 ? tx.abort_cause_ : OB_TRANS_NEED_ROLLBACK;
       break;

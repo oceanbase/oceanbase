@@ -1,6 +1,14 @@
-// Copyright 2014 Alibaba Inc. All Rights Reserved.
-// Author:
-//
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SQL
 #include "ob_external_table_access_service.h"
@@ -142,15 +150,16 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
   } else if (get_storage_type() == OB_STORAGE_FILE) {
     OZ (file_dirs.push_back(path));
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
-      ObFullPathArrayOp dir_op(file_dirs, file_dirs.at(i), allocator);
-      ObFullPathArrayOp file_op(file_urls, file_dirs.at(i), allocator);
+      ObString file_dir = file_dirs.at(i);
+      ObFullPathArrayOp dir_op(file_dirs, file_dir, allocator);
+      ObFullPathArrayOp file_op(file_urls, file_dir, allocator);
       dir_op.set_dir_flag();
-      if (file_dirs.at(i).case_compare(".") == 0
-          || file_dirs.at(i).case_compare("..") == 0) {
+      if (file_dir.case_compare(".") == 0
+          || file_dir.case_compare("..") == 0) {
         //do nothing
-      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dirs.at(i)), file_op))) {
+      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), file_op))) {
         LOG_WARN("scan dir failed", K(ret));
-      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dirs.at(i)), dir_op))) {
+      } else if (OB_FAIL(device_handle_->scan_dir(to_cstring(file_dir), dir_op))) {
         LOG_WARN("scan dir failed", K(ret));
       } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
         ret = OB_ERR_UNEXPECTED;

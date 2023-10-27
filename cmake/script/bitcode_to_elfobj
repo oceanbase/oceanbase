@@ -69,10 +69,11 @@ def shell_run_command(command_str, need_print_all=True, need_print_output=True, 
                           stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT,
                           shell=True,
-                          close_fds=True)
+                          close_fds=True,
+                          universal_newlines=True)
     while True:
         data = ps.stdout.readline()
-        if data == b'':
+        if not data:
             if ps.poll() is not None:
                 break
         result["return_message"].append(data)

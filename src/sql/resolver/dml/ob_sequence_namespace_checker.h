@@ -15,6 +15,7 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_array.h"
 #include "lib/string/ob_string.h"
+#include "pl/dblink/ob_pl_dblink_guard.h"
 namespace oceanbase
 {
 namespace sql
@@ -54,7 +55,7 @@ private:
                                               const ObSchemaChecker *schema_checker,
                                               bool &exists,
                                               uint64_t &sequence_id);
-  int check_link_sequence_exists(const ObDbLinkSchema *dblink_schema,
+  int check_link_sequence_exists(const pl::ObDbLinkSchema *dblink_schema,
                                 sql::ObSQLSessionInfo *session_info,
                                 const ObString &database_name,
                                 const ObString &sequence_name,

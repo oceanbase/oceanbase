@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #define PNIO_TCP_SYNCNT 3
 int check_connect_result(int fd) {
   int err = 0;
@@ -39,18 +51,27 @@ int async_connect(addr_t dest, uint64_t dispatch_id) {
 }
 
 int listen_create(addr_t src) {
-  int fd = 0;
+  int fd = -1;
+  int err = 0;
   struct sockaddr_in sin;
-  ef((fd = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0)) < 0);
-  ef(set_tcp_reuse_addr(fd));
-  ef(bind(fd, (const struct sockaddr*)make_sockaddr(&sin, src), sizeof(sin)));
-  ef(ussl_listen(fd, 1024));
-  return fd;
-  el();
-  if (fd >= 0) {
-    ussl_close(fd);
+  if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0)) < 0) {
+    rk_warn("create socket failed, src=%s, errno=%d", T2S(addr, src), errno);
+    err = PNIO_LISTEN_ERROR;
+  } else if (set_tcp_reuse_addr(fd) != 0) {
+    err = PNIO_LISTEN_ERROR;
+    rk_warn("reuse_addr failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
+  } else if (bind(fd,  (const struct sockaddr*)make_sockaddr(&sin, src), sizeof(sin)) != 0) {
+    err = PNIO_LISTEN_ERROR;
+    rk_warn("bind failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
+  } else if (ussl_listen(fd, 1024) != 0) {
+    err = PNIO_LISTEN_ERROR;
+    rk_warn("listen failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
   }
-  return -1;
+  if (err != 0 && fd >= 0) {
+    ussl_close(fd);
+    fd = -1;
+  }
+  return fd;
 }
 
 int tcp_accept(int fd) {

@@ -23,6 +23,7 @@
 #include "observer/mysql/obmp_packet_sender.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/ob_malloc_callback.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,7 @@ protected:
   bool need_flush_buffer() const;
   int update_transmission_checksum_flag(const sql::ObSQLSessionInfo &session);
   int update_proxy_sys_vars(sql::ObSQLSessionInfo &session);
+  int update_charset_sys_vars(ObSMConnection &conn, sql::ObSQLSessionInfo &sess_info);
 
   int build_encode_param_(obmysql::ObProtoEncodeParam &param,
                           obmysql::ObMySQLPacket *pkt, const bool is_last);
@@ -154,13 +156,44 @@ public:
   ObProcessMallocCallback(int64_t cur_used, int64_t &max_used)
     : cur_used_(cur_used), max_used_(max_used) {
       max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
-    }
+  }
+  virtual ~ObProcessMallocCallback() {}
+
   virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
   {
-    UNUSED(attr);
+    //You can use:
+    //alter system set_tp tp_no=405, error_code=label_high64, frequency=1;
+    //alter system set_tp tp_no=406, error_code=label_low64, frequency=1;
+    //to inject a monitored ObLabel.
+    //When this injection takes effect,
+    //the maximum memory usage will only be counted for the specified label.
+    //tp_no=405 and tp_no=406 need to be used at the same time
+
+    //To obtain the label_high64 and label_low64 values of an ObLabel,
+    //you can use the tool './label2int64 LabelName' to easily retrieve them.
+    //If you don't have access to this tool,
+    //you can map a string that conforms to the ObLabel format into two int64_t integer values,
+    //ensuring consistency with the endianness of the target machine.
+    int64_t label_high64 = - EVENT_CODE(EventTable::EN_SQL_MEMORY_LABEL_HIGH64);
     if (OB_UNLIKELY(ObLabel("SqlDtlBuf") == attr.label_
                     || ObCtxIds::MEMSTORE_CTX_ID == attr.ctx_id_)) {
       // do nothing
+    } else if (label_high64 != 0) {
+      int64_t label_low64 = - EVENT_CODE(EventTable::EN_SQL_MEMORY_LABEL_LOW64);
+      char trace_label[16] = {'\0'};
+      MEMSET(trace_label, 0, sizeof(trace_label));
+      MEMCPY(trace_label, &label_high64, sizeof(int64_t));
+      MEMCPY(trace_label + 8, &label_low64, sizeof(int64_t));
+      if (ObLabel(trace_label) == attr.label_) {
+        cur_used_ += add_size;
+        max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
+#ifdef ERRSIM
+        int64_t dynamic_leak_size = - EVENT_CODE(EventTable::EN_SQL_MEMORY_DYNAMIC_LEAK_SIZE);
+        if (dynamic_leak_size > 0 && max_used_ >= dynamic_leak_size) {
+          abort();
+        }
+#endif //end of ERRSIM
+      }
     } else {
       cur_used_ += add_size;
       max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;

@@ -76,14 +76,6 @@ int BRQueue::push(ObLogBR *data, const int64_t timeout)
     int64_t end_time = timeout + get_timestamp();
     int record_type = br_data->recordType();
 
-    if (EDDL == record_type) {
-      ATOMIC_INC(&ddl_br_count_);
-    } else if (HEARTBEAT != record_type && EBEGIN != record_type && ECOMMIT != record_type) {
-      ATOMIC_INC(&dml_br_count_);
-    } else {
-      // do nothing
-    }
-
     while (true) {
       ret = queue_.push(data);
 
@@ -106,6 +98,14 @@ int BRQueue::push(ObLogBR *data, const int64_t timeout)
         LOG_ERROR("push data into fixed queue fail", KR(ret), K(data));
       }
     } else {
+      if (EDDL == record_type) {
+        ATOMIC_INC(&ddl_br_count_);
+      } else if (HEARTBEAT != record_type && EBEGIN != record_type && ECOMMIT != record_type) {
+        ATOMIC_INC(&dml_br_count_);
+      } else {
+        // do nothing
+      }
+
       cond_.signal();
     }
   }

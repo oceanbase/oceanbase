@@ -14,6 +14,7 @@
 
 #include "lib/oblog/ob_log.h"
 #include "share/ob_thread_mgr.h"
+#include "share/ob_errno.h"
 #include "storage/checkpoint/ob_data_checkpoint.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"

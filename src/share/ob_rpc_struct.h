@@ -42,7 +42,6 @@
 #include "share/schema/ob_dependency_info.h"
 #include "share/schema/ob_trigger_info.h"
 #include "share/ob_storage_format.h"
-#include "share/restore/ob_restore_args.h"  // ObRestoreArgs
 #include "share/io/ob_io_calibration.h"  // ObIOBenchResult
 #include "rootserver/ob_rs_job_table_operator.h"
 #include "sql/executor/ob_task_id.h"
@@ -245,6 +244,7 @@ public:
   virtual bool is_allow_in_standby() const
   { return !is_user_tenant(exec_tenant_id_); }
   virtual int assign(const ObDDLArg &other);
+  virtual bool contain_sensitive_data() const { return false; }
   void reset()
   {
     ddl_stmt_str_.reset();
@@ -256,8 +256,7 @@ public:
     task_id_ = 0;
     consumer_group_id_ = 0;
   }
-  TO_STRING_KV(K_(ddl_stmt_str), K_(exec_tenant_id), K_(ddl_id_str), K_(sync_from_primary), K_(based_schema_object_infos),
-               K_(parallelism), K_(task_id), K_(consumer_group_id));
+  DECLARE_TO_STRING;
 
   common::ObString ddl_stmt_str_;
   uint64_t exec_tenant_id_;
@@ -4614,6 +4613,7 @@ public:
   {}
   bool is_valid() const;
   int assign(const ObCreateUserArg &other);
+  virtual bool contain_sensitive_data() const { return true; }
   TO_STRING_KV(K_(tenant_id), K_(user_infos));
 
   uint64_t tenant_id_;
@@ -4690,6 +4690,7 @@ public:
   { }
   virtual ~ObSetPasswdArg() {}
   bool is_valid() const;
+  virtual bool contain_sensitive_data() const { return true; }
   TO_STRING_KV(K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type),
                K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
                K_(max_connections_per_hour), K_(max_user_connections));
@@ -4819,6 +4820,7 @@ public:
   bool is_valid() const;
   int assign(const ObGrantArg &other);
   virtual bool is_allow_when_disable_ddl() const;
+  virtual bool contain_sensitive_data() const { return true; }
 
   TO_STRING_KV(K_(tenant_id), K_(priv_level), K_(db), K_(table), K_(priv_set),
                K_(users_passwd), K_(hosts), K_(need_create_user), K_(has_create_user_priv),
@@ -6030,6 +6032,7 @@ public:
   ObCreateDbLinkArg() : ObDDLArg(), dblink_info_() {}
   virtual ~ObCreateDbLinkArg() {}
   bool is_valid() const;
+  virtual bool contain_sensitive_data() const { return true; }
   TO_STRING_KV(K_(dblink_info));
   share::schema::ObDbLinkInfo dblink_info_;
 };
@@ -7945,6 +7948,7 @@ public:
   bool is_valid() const;
   virtual bool is_allow_when_disable_ddl() const;
   virtual bool is_allow_when_upgrade() const { return false; }
+  virtual bool contain_sensitive_data() const { return true; }
   DDLType type_;
   share::schema::ObKeystoreSchema schema_;
   bool is_kms_;

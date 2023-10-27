@@ -60,6 +60,7 @@ public:
   }
 
   int get_hidden_table_key(ObITable::TableKey &table_key) const;
+  bool use_new_checksum() const { return data_format_version_ >= DATA_VERSION_4_2_1_1; }
   void destroy()
   {
     is_inited_ = false;
@@ -124,6 +125,8 @@ public:
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);
   void destroy();
   int write_start_log(const ObComplementDataParam &param);
+  int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
+  int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
   TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder), K_(ddl_kv_mgr_handle), K_(row_scanned), K_(row_inserted));
 public:
   bool is_inited_;
@@ -137,6 +140,8 @@ public:
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
   int64_t row_scanned_;
   int64_t row_inserted_;
+  ObArray<int64_t> report_col_checksums_;
+  ObArray<int64_t> report_col_ids_;
 };
 
 class ObComplementPrepareTask;

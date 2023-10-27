@@ -412,7 +412,7 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
   uint64_t tenant_id = get_tenant_id();
   share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
   int64_t cluster_id = GCONF.cluster_id;
-  ObLSID server_ls_id = ls_id_.id() == 0 ? ObLSID(ObLSID::SYS_LS_ID) : ls_id_;
+  ObLSID server_ls_id = execute_on_sys_server_() ? ObLSID(ObLSID::SYS_LS_ID) : ls_id_;
   if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));

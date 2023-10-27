@@ -98,6 +98,13 @@ public:
   int set_status_error(int error_code);
   int set_status_abort();
   int check_status(table::ObTableLoadStatusType status) const;
+  OB_INLINE bool enable_heart_beat_check() const { return enable_heart_beat_check_; }
+  OB_INLINE void set_enable_heart_beat_check(bool enable_heart_beat_check)
+  {
+    enable_heart_beat_check_ = enable_heart_beat_check;
+  }
+  void heart_beat();
+  bool check_heart_beat_expired(const uint64_t expired_time_us);
 private:
   int advance_status(table::ObTableLoadStatusType status);
 public:
@@ -183,6 +190,8 @@ private:
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
   common::ObSEArray<ObTableLoadTransStore *, 64> committed_trans_store_array_;
+  uint64_t last_heart_beat_ts_;
+  bool enable_heart_beat_check_;
   bool is_inited_;
 };
 

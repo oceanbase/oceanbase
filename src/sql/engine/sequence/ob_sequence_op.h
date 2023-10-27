@@ -15,6 +15,7 @@
 #include "sql/engine/ob_operator.h"
 #include "share/sequence/ob_sequence_cache.h"
 #include "share/schema/ob_schema_struct.h"
+#include "lib/mysqlclient/ob_isql_connection_pool.h"
 
 namespace oceanbase
 {
@@ -107,10 +108,7 @@ public:
   virtual int inner_open() override;
   virtual int inner_close() override;
 
-  void reset()
-  {
-    seq_executors_.reset();
-  }
+  void reset() { }
 
   virtual void destroy() override;
 private:

@@ -132,12 +132,14 @@
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
 #include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
 #endif
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -514,6 +516,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     MTL_BIND(ObDetectManager::mtl_init, ObDetectManager::mtl_destroy);
     MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObDTLIntermResultManager::mtl_init, ObDTLIntermResultManager::mtl_start,
+    ObDTLIntermResultManager::mtl_stop, ObDTLIntermResultManager::mtl_wait, ObDTLIntermResultManager::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
                 mtl_wait_default, mtl_destroy_default);
@@ -1259,11 +1263,14 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
   } else {
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tenant_id))) {
-      if (OB_SUCCESS != (tmp_ret = update_palf_config())) {
+      if (OB_TMP_FAIL(update_palf_config())) {
         LOG_WARN("failed to update palf disk config", K(tmp_ret), K(tenant_id));
       }
-      if (OB_SUCCESS != (tmp_ret = update_tenant_dag_scheduler_config())) {
+      if (OB_TMP_FAIL(update_tenant_dag_scheduler_config())) {
         LOG_WARN("failed to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
+      }
+      if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
+        LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
     }
   }
@@ -1298,41 +1305,33 @@ int ObMultiTenant::update_tenant_dag_scheduler_config()
   return ret;
 }
 
-int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
-                                                const int64_t tenant_min_mem,
-                                                const int64_t tenant_max_mem)
+int ObMultiTenant::update_tenant_freezer_config_()
 {
   int ret = OB_SUCCESS;
-  int64_t before_min_mem = 0;
-  int64_t before_max_mem = 0;
+  ObTenantFreezer *freezer = MTL(ObTenantFreezer*);
+  if (NULL == freezer) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant freezer should not be null", K(ret));
+  } else if (OB_FAIL(freezer->reload_config())) {
+    LOG_WARN("tenant freezer config update failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
+                                                   const int64_t tenant_min_mem,
+                                                   const int64_t tenant_max_mem)
+{
+  int ret = OB_SUCCESS;
 
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObTenantFreezer *freezer = nullptr;
-  if (OB_SUCC(ret)) {
-    if (tenant_id != MTL_ID() && OB_FAIL(guard.switch_to(tenant_id))) {
-      LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+  if (tenant_id != MTL_ID() && OB_FAIL(guard.switch_to(tenant_id))) {
+    LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   } else if (FALSE_IT(freezer = MTL(ObTenantFreezer *))) {
-  } else if (OB_FAIL(freezer->get_tenant_mem_limit(before_min_mem, before_max_mem))) {
-    if (OB_NOT_REGISTERED == ret) {//tenant mem limit has not been setted
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("get tenant memory fail", K(tenant_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (before_min_mem != tenant_min_mem
-        || before_max_mem != tenant_max_mem) {
-      LOG_INFO("tenant memory changed",
-               "before_min", before_min_mem,
-               "before_max", before_max_mem,
-               "after_min",  tenant_min_mem,
-               "after_max", tenant_max_mem);
-      freezer->set_tenant_mem_limit(tenant_min_mem, tenant_max_mem);
+  } else if (freezer->is_tenant_mem_changed(tenant_min_mem, tenant_max_mem)) {
+    if (OB_FAIL(freezer->set_tenant_mem_limit(tenant_min_mem, tenant_max_mem))) {
+      LOG_WARN("set tenant mem limit failed", K(ret));
     }
   }
   return ret;
@@ -1691,11 +1690,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_WARN("failed to delete_tenant_usage_stat", K(ret), K(tenant_id));
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_tenant_interm_result_info(tenant_id))) {
-      LOG_WARN("failed to erase_tenant_interm_result_info", K(ret), K(tenant_id));
-    }
-  }
 
   if (OB_SUCC(ret)) {
     // only report event when ret = success
@@ -1767,44 +1761,56 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("hidden tenant can't be deleted", K(ret), K(tenant_id));
   } else  {
+    const ObUnitInfoGetter::ObTenantConfig local_unit = tenant->get_unit();
+    const ObUnitInfoGetter::ObUnitStatus local_unit_status = local_unit.unit_status_;
+    // add a event when try to gc for the first time
+    if (local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER &&
+        local_unit_status != ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+      SERVER_EVENT_ADD("unit", "start unit gc", "tenant_id", tenant_id,
+          "unit_id", local_unit.unit_id_, "unit_status", "DELETING");
+    }
+
     // Ensure to write delete_tenant_prepare_slog only once
-    ObUnitInfoGetter::ObUnitStatus old_unit_status = tenant->get_unit_status();
-    if (old_unit_status != ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER) {
+    if (local_unit_status != ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER) {
       tenant->set_unit_status(ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER);
       tenant->set_create_status(ObTenantCreateStatus::DELETING);
       if (OB_FAIL(write_delete_tenant_prepare_slog(tenant_id))) {
-        LOG_WARN("fail to write delete tenant slog", K(ret), K(tenant_id), K(old_unit_status));
-        tenant->set_unit_status(old_unit_status);
+        LOG_WARN("fail to write delete tenant slog", K(ret), K(tenant_id), K(local_unit_status));
+        tenant->set_unit_status(local_unit_status);
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    do {
-      // 保证remove_tenant, clear_persistent_data可以幂等重试,
-      // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
-      // 即使这个过程中宕机重启, 重启回放日志时会继续删除并且补一条delete commit log
-      bool remove_tenant_succ = false;
-      if (OB_FAIL(remove_tenant(tenant_id, remove_tenant_succ))) {
-        LOG_WARN("fail to remove tenant", K(ret), K(tenant_id));
-        // If lock failed, the tenant is not removed from tenants_list,
-        // Here can break and leave ObTenantNodeBalancer::check_del_tenant to retry again,
-        // in this case, the deletion of other tenants does not get stuck.
-        // Otherwise it will have to retry indefinitely here, because the tenant cannot be obtained
-        if (false == remove_tenant_succ) {
-          break;
-        } else {
-          SLEEP(1);
-        }
-      } else if (OB_FAIL(clear_persistent_data(tenant_id))) {
-        LOG_ERROR("fail to clear persistent_data", K(ret), K(tenant_id));
-        SLEEP(1);
-      } else if (OB_FAIL(write_delete_tenant_commit_slog(tenant_id))) {
-        LOG_WARN("fail to write delete tenant commit slog", K(ret), K(tenant_id));
-      }
-    } while (OB_FAIL(ret));
     if (OB_SUCC(ret)) {
-      lib::ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+      do {
+        // 保证remove_tenant, clear_persistent_data可以幂等重试,
+        // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
+        // 即使这个过程中宕机重启, 重启回放日志时会继续删除并且补一条delete commit log
+        bool remove_tenant_succ = false;
+        if (OB_FAIL(remove_tenant(tenant_id, remove_tenant_succ))) {
+          LOG_WARN("fail to remove tenant", K(ret), K(tenant_id));
+          // If lock failed, the tenant is not removed from tenants_list,
+          // Here can break and leave ObTenantNodeBalancer::check_del_tenant to retry again,
+          // in this case, the deletion of other tenants does not get stuck.
+          // Otherwise it will have to retry indefinitely here, because the tenant cannot be obtained
+          if (false == remove_tenant_succ) {
+            break;
+          } else {
+            SLEEP(1);
+          }
+        } else if (OB_FAIL(clear_persistent_data(tenant_id))) {
+          LOG_ERROR("fail to clear persistent_data", K(ret), K(tenant_id));
+          SLEEP(1);
+        } else if (OB_FAIL(write_delete_tenant_commit_slog(tenant_id))) {
+          LOG_WARN("fail to write delete tenant commit slog", K(ret), K(tenant_id));
+        }
+      } while (OB_FAIL(ret));
+
+      if (OB_SUCC(ret)) {
+        lib::ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+        // add a event when finish gc unit
+        SERVER_EVENT_ADD("unit", "finish unit gc", "tenant_id", tenant_id,
+            "unit_id", local_unit.unit_id_, "unit_status", "DELETED");
+      }
     }
   }
 

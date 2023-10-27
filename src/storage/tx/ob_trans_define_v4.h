@@ -119,18 +119,22 @@ public:
 };
 
 
-#define OB_TX_ABORT_CAUSE_LIST                  \
-  _XX(PARTICIPANT_IS_CLEAN)                     \
-  _XX(TX_RESULT_INCOMPLETE)                     \
-  _XX(IN_CONSIST_STATE)                         \
-  _XX(SAVEPOINT_ROLLBACK_FAIL)                  \
-  _XX(IMPLICIT_ROLLBACK)                        \
-  _XX(SESSION_DISCONNECT)                       \
-  _XX(STOP)                                     \
-  _XX(PARTICIPANT_STATE_INCOMPLETE)             \
-  _XX(PARTICIPANTS_SET_INCOMPLETE)              \
-  _XX(END_STMT_FAIL)                            \
-  _XX(EXPLICIT_ROLLBACK)                        \
+#define OB_TX_ABORT_CAUSE_LIST                          \
+  _XX(PARTICIPANT_IS_CLEAN)                             \
+  _XX(TX_RESULT_INCOMPLETE)                             \
+  _XX(IN_CONSIST_STATE)                                 \
+  _XX(SAVEPOINT_ROLLBACK_FAIL)                          \
+  _XX(IMPLICIT_ROLLBACK)                                \
+  _XX(SESSION_DISCONNECT)                       /*5*/   \
+  _XX(STOP)                                             \
+  _XX(PARTICIPANT_STATE_INCOMPLETE)                     \
+  _XX(PARTICIPANTS_SET_INCOMPLETE)                      \
+  _XX(PARTICIPANT_KILLED_FORCEDLY)                      \
+  _XX(PARTICIPANT_KILLED_GRACEFULLY)            /*10*/  \
+  _XX(PARTICIPANT_SWITCH_FOLLOWER_FORCEDLY)             \
+  _XX(PARTICIPANT_SWITCH_LEADER_DATA_INCOMPLETE)        \
+  _XX(END_STMT_FAIL)                                    \
+  _XX(EXPLICIT_ROLLBACK)                                \
 
 enum ObTxAbortCause
 {
@@ -430,10 +434,11 @@ protected:
       bool INTERRUPTED_: 1;          // a single for blocking operation
       bool RELEASED_: 1;             // after released, commit can give up
       bool BLOCK_: 1;                // tx is blocking within some loop
-      bool PARTS_INCOMPLETE_: 1;     // participants set incomplete (must abort)
+      bool PARTS_INCOMPLETE_: 1;     // participants set incomplete (trans must abort)
       bool PART_EPOCH_MISMATCH_: 1;  // participant's born epoch mismatched
       bool WITH_TEMP_TABLE_: 1;      // with txn level temporary table
       bool DEFER_ABORT_: 1;          // need do abort in txn start node
+      bool PART_ABORTED_: 1;         // some participant is aborted or in delay-abort state (trans must abort)
     };
     void switch_to_idle_();
     FLAG update_with(const FLAG &flag);
@@ -484,7 +489,7 @@ protected:
 
 private:
   // FOLLOWING are runtime auxiliary fields
-  ObSpinLock lock_;
+  mutable ObSpinLock lock_;
   ObSpinLock commit_cb_lock_;       // protect commit_cb_ field
   ObITxCallback *commit_cb_;        // async commit callback
   int64_t exec_info_reap_ts_;       // the time reaping incremental tx exec info
@@ -708,6 +713,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
+  void mark_part_abort(const ObTransID tx_id, const int abort_cause);
   ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;

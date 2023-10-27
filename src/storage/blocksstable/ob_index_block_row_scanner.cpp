@@ -619,7 +619,9 @@ int ObIndexBlockRowScanner::locate_range(
                                                       is_right_border,
                                                       begin_idx,
                                                       end_idx))) {
-      LOG_WARN("locate rowkey failed", K(ret), K(range));
+      if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+        LOG_WARN("locate rowkey failed", K(ret), K(range));
+      }
     }
   } else {
     ret = OB_NOT_SUPPORTED;

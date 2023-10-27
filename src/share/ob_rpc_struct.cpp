@@ -84,6 +84,20 @@ int ObDDLArg::assign(const ObDDLArg &other)
   return ret;
 }
 
+DEF_TO_STRING(ObDDLArg)
+{
+  int64_t pos = 0;
+  J_KV("ddl_stmt_str", contain_sensitive_data() ? ObString(OB_MASKED_STR) : ddl_stmt_str_,
+       K_(exec_tenant_id),
+       K_(ddl_id_str),
+       K_(sync_from_primary),
+       K_(based_schema_object_infos),
+       K_(parallelism),
+       K_(task_id),
+       K_(consumer_group_id));
+  return pos;
+}
+
 DEF_TO_STRING(ObGetRootserverRoleResult)
 {
   int64_t pos = 0;
@@ -9406,7 +9420,7 @@ int ObBroadcastConsensusVersionArg::assign(const ObBroadcastConsensusVersionArg 
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_);
+OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_, err_code_);
 ObTTLResponseArg::ObTTLResponseArg()
     : tenant_id_(0),
       task_id_(OB_INVALID_ID),

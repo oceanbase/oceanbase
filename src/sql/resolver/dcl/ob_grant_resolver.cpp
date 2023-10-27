@@ -33,6 +33,7 @@ ObGrantResolver::~ObGrantResolver()
 
 int ObGrantResolver::resolve_grantee_clause(
     const ParseNode *grantee_clause,
+    ObSQLSessionInfo *session_info,
     ObIArray<ObString> &user_name_array,
     ObIArray<ObString> &host_name_array)
 {
@@ -61,7 +62,7 @@ int ObGrantResolver::resolve_grantee_clause(
         } else {
           ObString user_name;
           ObString host_name(OB_DEFAULT_HOST_NAME);
-          if (OB_FAIL(resolve_grant_user(grant_user, user_name, host_name))) {
+          if (OB_FAIL(resolve_grant_user(grant_user, session_info, user_name, host_name))) {
             LOG_WARN("failed to resolve grant_user", K(ret), K(grant_user));
           } else {
             OZ(user_name_array.push_back(user_name));
@@ -77,7 +78,7 @@ int ObGrantResolver::resolve_grantee_clause(
       } else {
         ObString user_name;
         ObString host_name(OB_DEFAULT_HOST_NAME);
-        if (OB_FAIL(resolve_grant_user(grant_user, user_name, host_name))) {
+        if (OB_FAIL(resolve_grant_user(grant_user, session_info, user_name, host_name))) {
           LOG_WARN("failed to resolve grant_user", K(ret), K(grant_user));
         } else {
           OZ(user_name_array.push_back(user_name));
@@ -91,17 +92,18 @@ int ObGrantResolver::resolve_grantee_clause(
 
 int ObGrantResolver::resolve_grant_user(
     const ParseNode *grant_user,
+    ObSQLSessionInfo *session_info,
     ObString &user_name,
     ObString &host_name)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(grant_user)) {
+  if (OB_ISNULL(grant_user) || OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("resolve grant_user error", K(ret));
   } else {
     if (grant_user->type_ == T_CREATE_USER_SPEC) {
-      if (grant_user->num_child_ != 4) {
+      if (OB_UNLIKELY(lib::is_oracle_mode() && 4 != grant_user->num_child_) ||
+          OB_UNLIKELY(lib::is_mysql_mode() && 5 != grant_user->num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Parse node error in grentee ", K(ret));
       } else {
@@ -111,6 +113,19 @@ int ObGrantResolver::resolve_grant_user(
           // host name is not default 
           host_name.assign_ptr(const_cast<char *>(grant_user->children_[3]->str_value_),
             static_cast<int32_t>(grant_user->children_[3]->str_len_));
+        }
+        if (lib::is_mysql_mode() && NULL != grant_user->children_[4]) {
+          /* here code is to mock a auth plugin check. */
+          ObString auth_plugin(static_cast<int32_t>(grant_user->children_[4]->str_len_),
+                                grant_user->children_[4]->str_value_);
+          ObString default_auth_plugin;
+          if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                     default_auth_plugin))) {
+            LOG_WARN("fail to get block encryption variable", K(ret));
+          } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+            ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+            LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
+          } else {/* do nothing */}
         }
       }
     } else {
@@ -164,7 +179,8 @@ int ObGrantResolver::resolve_grant_role_to_ur(
       grant_stmt->set_masked_sql(masked_sql);
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(resolve_grantee_clause(grantee_clause, user_name_array, host_name_array))) {
+    } else if (OB_FAIL(resolve_grantee_clause(grantee_clause, params_.session_info_,
+                                              user_name_array, host_name_array))) {
       LOG_WARN("resolve grentee fail", K(ret));
     } else {
       if (user_name_array.count() != host_name_array.count()) {
@@ -412,7 +428,8 @@ int ObGrantResolver::resolve_grant_sys_priv_to_ur(
     }
     ObSArray<ObString> user_name_array;
     ObSArray<ObString> host_name_array;
-    if (OB_FAIL(resolve_grantee_clause(grantee_clause, user_name_array, host_name_array))){
+    if (OB_FAIL(resolve_grantee_clause(grantee_clause, params_.session_info_,
+                                       user_name_array, host_name_array))){
       LOG_WARN("resolve grantee_clause failed", K(ret));
     } else {
       if (user_name_array.count() != host_name_array.count()) {
@@ -692,7 +709,8 @@ int ObGrantResolver::resolve_grantee_clause(
     }
     // resolve grantee_clause to get user_name_array and host_name_array
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(resolve_grantee_clause(grantee_clause, user_name_array, host_name_array))) {
+      if (OB_FAIL(resolve_grantee_clause(grantee_clause, params_.session_info_, user_name_array,
+                                         host_name_array))) {
         LOG_WARN("resolve_grantee_clause fail", K(ret));
       } else {
         CK (user_name_array.count() == host_name_array.count());
@@ -1039,8 +1057,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
     bool is_all_role = true;
     CHECK_COMPATIBILITY_MODE(session_info_);
     if (!lib::is_oracle_mode()) {
-      need_create_user = (0 == (params_.session_info_->get_sql_mode()
-            & SMO_NO_AUTO_CREATE_USER));
+      need_create_user = !is_no_auto_create_user(params_.session_info_->get_sql_mode());
     }
     grant_stmt->set_need_create_user(need_create_user);
     if (users_node->num_child_ > 0) {
@@ -1069,7 +1086,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           host_name.assign_ptr(OB_DEFAULT_HOST_NAME, 
                                 static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
           pwd = ObString("");
-        } else if (4 != user_node->num_child_) {
+        } else if (OB_UNLIKELY(lib::is_oracle_mode() && 4 != user_node->num_child_) ||
+                   OB_UNLIKELY(lib::is_mysql_mode() && 5 != user_node->num_child_)) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("User specification's child node num error", K(ret));
         } else if (OB_ISNULL(user_node->children_[0])) {
@@ -1085,7 +1103,21 @@ int ObGrantResolver::resolve_grant_obj_privileges(
             host_name.assign_ptr(user_node->children_[3]->str_value_,
                 static_cast<int32_t>(user_node->children_[3]->str_len_));
           }
-          if (user_node->children_[1] != NULL) {
+          if (lib::is_mysql_mode() && NULL != user_node->children_[4]) {
+            /* here code is to mock a auth plugin check. */
+            ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
+                                 user_node->children_[4]->str_value_);
+            ObString default_auth_plugin;
+            if (OB_FAIL(params_.session_info_->get_sys_variable(
+                                                       share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                       default_auth_plugin))) {
+              LOG_WARN("fail to get block encryption variable", K(ret));
+            } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+              ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+              LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
+            } else {/* do nothing */}
+          }
+          if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
             if (0 != user_name.compare(session_info_->get_user_name())) {
               grant_stmt->set_need_create_user_priv(true);
             }
@@ -1290,8 +1322,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
           bool need_create_user = false;
           CHECK_COMPATIBILITY_MODE(session_info_);
           if (!lib::is_oracle_mode()) {
-            need_create_user = (0 == (params_.session_info_->get_sql_mode()
-                  & SMO_NO_AUTO_CREATE_USER));
+            need_create_user = !is_no_auto_create_user(params_.session_info_->get_sql_mode());
           }
           grant_stmt->set_need_create_user(need_create_user);
           if (users_node->num_child_ > 0) {
@@ -1313,7 +1344,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
               if (OB_ISNULL(user_node)) {
                 ret = OB_ERR_PARSE_SQL;
                 LOG_WARN("Parse SQL error, user node should not be NULL", K(user_node), K(ret));
-              } else if (4 != user_node->num_child_) {
+              } else if (OB_UNLIKELY(lib::is_oracle_mode() && 4 != user_node->num_child_) ||
+                         OB_UNLIKELY(lib::is_mysql_mode() && 5 != user_node->num_child_)) {
                 ret = OB_ERR_PARSE_SQL;
                 LOG_WARN("User specification's child node num error", K(ret));
               } else if (OB_ISNULL(user_node->children_[0])) {
@@ -1328,7 +1360,21 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   host_name.assign_ptr(user_node->children_[3]->str_value_,
                       static_cast<int32_t>(user_node->children_[3]->str_len_));
                 }
-                if (user_node->children_[1] != NULL) {
+                if (lib::is_mysql_mode() && NULL != user_node->children_[4]) {
+                  /* here code is to mock a auth plugin check. */
+                  ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
+                                      user_node->children_[4]->str_value_);
+                  ObString default_auth_plugin;
+                  if (OB_FAIL(params_.session_info_->get_sys_variable(
+                                                       share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                       default_auth_plugin))) {
+                    LOG_WARN("fail to get block encryption variable", K(ret));
+                  } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+                    ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+                    LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
+                  } else {/* do nothing */}
+                }
+                if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
                   if (0 != user_name.compare(session_info_->get_user_name())) {
                     grant_stmt->set_need_create_user_priv(true);
                   }

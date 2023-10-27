@@ -4890,7 +4890,7 @@ int ObMultiVersionSchemaService::cal_purge_table_timeout_(
     }
     if (OB_SUCC(ret)) {
       //100 tablet 2s,default 2s
-      cal_table_timeout += (part_num / 100 + part_num % 100 == 0 ? 0 : 1) * GCONF.rpc_timeout;
+      cal_table_timeout += (part_num / 100 + (part_num % 100 == 0 ? 0 : 1)) * GCONF.rpc_timeout;
     }
   }
   return ret;
@@ -5146,6 +5146,28 @@ int ObMultiVersionSchemaService::batch_fetch_tablet_to_table_history_(
   return ret;
 }
 
+int ObMultiVersionSchemaService::get_dropped_tenant_ids(
+    common::ObIArray<uint64_t> &dropped_tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  dropped_tenant_ids.reset();
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    SpinRLockGuard guard(schema_manager_rwlock_);
+    ObSchemaGetterGuard schema_guard;
+    if (OB_UNLIKELY(!is_tenant_full_schema(OB_SYS_TENANT_ID))) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("sys schema is not full", KR(ret));
+    } else if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("get sys tenant schema guard failed", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_dropped_tenant_ids(dropped_tenant_ids))) {
+      LOG_WARN("get dropped tenant ids failed", KR(ret));
+    }
+  }
+  return ret;
+}
 
 }//end of namespace schema
 }//end of namespace share

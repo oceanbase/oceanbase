@@ -1720,7 +1720,6 @@ public:
   bool is_sub2pc_;
 };
 
-static const int64_t GET_GTS_AHEAD_INTERVAL = 300;
 static const int64_t USEC_PER_SEC = 1000 * 1000;
 
 struct ObMulSourceDataNotifyArg

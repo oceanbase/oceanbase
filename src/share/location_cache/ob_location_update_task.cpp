@@ -14,6 +14,7 @@
 
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/location_cache/ob_ls_location_service.h"
+#include "share/location_cache/ob_tablet_ls_service.h"
 
 namespace oceanbase
 {
@@ -322,6 +323,20 @@ int ObVTableLocUpdateTask::assign_when_equal(
 {
   UNUSED(other);
   return OB_NOT_SUPPORTED;
+}
+
+ObClearTabletLSCacheTimerTask::ObClearTabletLSCacheTimerTask(
+    ObTabletLSService &tablet_ls_service)
+    : tablet_ls_service_(tablet_ls_service)
+{
+}
+
+void ObClearTabletLSCacheTimerTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tablet_ls_service_.clear_expired_cache())) {
+    LOG_WARN("fail to clear expired cache", KR(ret));
+  }
 }
 
 } // end namespace share

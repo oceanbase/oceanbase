@@ -523,6 +523,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
       ObObj &value = tmp_row.get_cell(i);
       ObCharsetType charset_type = CHARSET_INVALID;
+      ObCharsetType ncharset_type = CHARSET_INVALID;
       // need at ps mode
       if (value.get_type() != fields->at(i).type_.get_type()) {
         ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
@@ -537,7 +538,15 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
+      } else if (OB_FAIL(session.get_ncharacter_set_connection(ncharset_type))) {
+        LOG_WARN("fail to get result charset", K(ret));
       } else {
+        if (lib::is_oracle_mode()
+            && (value.is_nchar() || value.is_nvarchar2())
+            && ncharset_type != CHARSET_INVALID
+            && ncharset_type != CHARSET_BINARY) {
+          charset_type = ncharset_type;
+        }
         if (ob_is_string_tc(value.get_type())
             && CS_TYPE_INVALID != value.get_collation_type()
             && OB_FAIL(value.convert_string_value_charset(charset_type, allocator))) {
@@ -603,6 +612,30 @@ int ObMPBase::process_extra_info(sql::ObSQLSessionInfo &session,
               OB_FAIL(ObSessInfoVerify::verify_session_info(session,
               sess_info_verification))) {
     LOG_WARN("fail to verify sess info", K(ret));
+  }
+  return ret;
+}
+
+int ObMPBase::update_charset_sys_vars(ObSMConnection &conn, ObSQLSessionInfo &sess_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t cs_type = conn.client_cs_type_;
+  const int64_t LATIN1_CS = 8;
+  //background: mysqltest give a default connect_charset=latin1
+  //            but for history reason, oceanbase use utf8 as
+  //            default charset for mysqltest
+  //TODO: after obclient&mysqltest support default charset = utf8
+  //      login for cs_type != LATIN1_CS would be deleted
+  if (ObCharset::is_valid_collation(cs_type)) {
+    if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_CLIENT, cs_type))) {
+      SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+    } else if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_RESULTS, cs_type))) {
+      SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+    } else if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_CONNECTION, cs_type))) {
+      SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+    } else if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_COLLATION_CONNECTION, cs_type))) {
+      SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+    }
   }
   return ret;
 }

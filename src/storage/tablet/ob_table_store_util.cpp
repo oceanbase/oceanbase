@@ -78,7 +78,6 @@ int ObSSTableArray::init(ObArenaAllocator &allocator, const blocksstable::ObSSTa
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("try to init sstable array with an unserialized sstable", K(ret), KPC(sstable));
   } else {
-    cnt_ = 1;
     sstable_array_ = reinterpret_cast<ObSSTable **>(allocator.alloc(sizeof(ObSSTable *)));
     if (OB_ISNULL(sstable_array_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -86,6 +85,7 @@ int ObSSTableArray::init(ObArenaAllocator &allocator, const blocksstable::ObSSTa
     } else if (OB_FAIL(sstable->deep_copy(allocator, sstable_array_[0]))) {
       LOG_WARN("fail to deep copy sstable address", K(ret), KPC(sstable));
     } else {
+      cnt_ = 1;
       is_inited_ = true;
     }
   }

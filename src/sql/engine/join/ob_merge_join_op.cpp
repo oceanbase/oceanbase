@@ -973,8 +973,14 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_batch(const int64_t max_row_cnt)
     } else {
       const int64_t restore_cnt = MIN(max_row_cnt, remain_backup_rows);
       for (int64_t i = 0; i < backup_datums_.count(); i++) {
-        ObDatum *datum = all_exprs_->at(i)->locate_batch_datums(merge_join_op_.eval_ctx_);
-        MEMCPY(datum, backup_datums_.at(i) + backup_rows_used_, sizeof(ObDatum) * restore_cnt);
+        const ObExpr *expr = all_exprs_->at(i);
+        if (expr->is_const_expr()) {
+          continue;
+        } else {
+          ObDatum *datum = all_exprs_->at(i)->locate_batch_datums(merge_join_op_.eval_ctx_);
+          MEMCPY(datum, backup_datums_.at(i) + backup_rows_used_, sizeof(ObDatum) * restore_cnt);
+          all_exprs_->at(i)->set_evaluated_projected(merge_join_op_.eval_ctx_);
+        }
       }
       brs_.size_ = restore_cnt;
       brs_.end_ = false;
@@ -1019,8 +1025,11 @@ int ObMergeJoinOp::ChildBatchFetcher::backup_remain_rows()
   } else if (backup_datums_.empty()) {
     int64_t alloc_size = sizeof(ObDatum) * merge_join_op_.spec_.max_batch_size_;
     for (int64_t i = 0; i < all_exprs_->count() && OB_SUCC(ret); i++) {
+      const ObExpr *expr = all_exprs_->at(i);
       ObDatum *datum = NULL;
-      if (OB_ISNULL(datum = static_cast<ObDatum *>(allocator.alloc(alloc_size)))) {
+      // if expr is const, use NULL datum pointer as padding.
+      if (!expr->is_const_expr() &&
+            OB_ISNULL(datum = static_cast<ObDatum *>(allocator.alloc(alloc_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       } else if (OB_FAIL(backup_datums_.push_back(datum))) {
@@ -1034,17 +1043,22 @@ int ObMergeJoinOp::ChildBatchFetcher::backup_remain_rows()
       LOG_WARN("count mismatch", K(ret), K(all_exprs_->count()), K(backup_datums_.count()));
     } else {
       for (int64_t i = 0; i < all_exprs_->count() && OB_SUCC(ret); i++) {
-        backup_rows_cnt_ = 0;
-        backup_rows_used_ = 0;
-        ObDatumVector src_datum = all_exprs_->at(i)->locate_expr_datumvector(merge_join_op_.eval_ctx_);
-        ObDatum *datum = backup_datums_.at(i);
-        if (OB_ISNULL(datum)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("backup datums memory is null", K(ret), K(i), K(all_exprs_->count()));
+        const ObExpr *expr = all_exprs_->at(i);
+        if (expr->is_const_expr()) {
+          continue;
         } else {
-          for (int64_t j = cur_idx_; j < brs_.size_ && OB_SUCC(ret); j++) {
-            if (!brs_.skip_->contain(j)) {
-              datum[backup_rows_cnt_++] = *src_datum.at(j);
+          backup_rows_cnt_ = 0;
+          backup_rows_used_ = 0;
+          ObDatumVector src_datum = expr->locate_expr_datumvector(merge_join_op_.eval_ctx_);
+          ObDatum *datum = backup_datums_.at(i);
+          if (OB_ISNULL(datum)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("backup datums memory is null", K(ret), K(i), K(all_exprs_->count()));
+          } else {
+            for (int64_t j = cur_idx_; j < brs_.size_ && OB_SUCC(ret); j++) {
+              if (!brs_.skip_->contain(j)) {
+                datum[backup_rows_cnt_++] = *src_datum.at(j);
+              }
             }
           }
         }
@@ -1117,7 +1131,6 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_small_group(int64_t &cmp_res)
       }
     }
     if (OB_SUCC(ret) && cur_idx_ < brs_.size_) {
-      merge_join_op_.clear_evaluated_flag();
       if (OB_FAIL(merge_join_op_.calc_equal_conds_with_batch_idx(cmp_res))) {
         LOG_WARN("calc equal conds with batch index failed", K(ret));
       } else {
@@ -1161,7 +1174,6 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_equal_group(JoinRowList &row_list
       }
 
       if (OB_SUCC(ret) && !all_batch_finished) {
-        merge_join_op_.clear_evaluated_flag();
         if (OB_FAIL(merge_join_op_.calc_equal_conds_with_stored_row<!is_left>(
                                         stored_row, cur_idx_, cmp_res))) {
           LOG_WARN("calc equal conds failed", K(ret));
@@ -1383,7 +1395,6 @@ int ObMergeJoinOp::iterate_both_chidren(ObEvalCtx::BatchInfoScopeGuard &guard)
   } else if (OB_FAIL(match_groups_.push_back(std::make_pair(l_row_list, r_row_list)))) {
     LOG_WARN("match group push back failed", K(ret));
   } else if (!left_brs_fetcher_.iter_end() && !right_brs_fetcher_.iter_end()) {
-    clear_evaluated_flag();
     if (OB_FAIL(calc_equal_conds_with_batch_idx(cmp_res_))) {
       LOG_WARN("calc equal cond with batch index failed", K(ret));
     }
@@ -1730,6 +1741,7 @@ int ObMergeJoinOp::output_side_rows(ChildBatchFetcher &batch_fetcher,
     batch_join_state_ = BJS_JOIN_END;
   } else if (OB_FAIL(batch_fetcher.brs_holder_.restore())) {
     LOG_WARN("fetcher restore failed", K(ret));
+  } else if (FALSE_IT(clear_evaluated_flag())) {
   } else if (OB_FAIL(batch_fetcher.get_next_batch(max_row_cnt))) {
     LOG_WARN("get child next batch failed", K(ret));
   } else if (OB_UNLIKELY(batch_fetcher.iter_end())) {

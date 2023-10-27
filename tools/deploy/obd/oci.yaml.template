@@ -1,0 +1,36 @@
+oceanbase-ce:
+  servers:
+    - name: server1
+      ip: 127.0.0.1
+  server1:
+    mysql_port: ${mysql_port}
+    rpc_port: ${rpc_port}
+    home_path: ${home_path}
+    zone: zone1
+    # The directory for data storage. The default value is home_path/store.
+    # data_dir: /data
+    # The directory for clog, ilog, and slog. The default value is the same as the data_dir value.
+    # redo_dir: /redo
+
+  tag: latest
+  include: obd/observer.include.yaml
+  global:
+    log_disk_size: '240G'
+    # for default system config used by farm, please see tools/deploy/obd/observer.include.yaml
+    # You can also specify the configuration directly below (stored locally, switching the working directory and redeploying will still take effect)
+    home_path: /data/{user}/{deploy_name}/observer/{server}
+    production_mode: false
+    memory_limit: '80G'
+    system_memory: '10G'
+    datafile_size: '40G'
+    # cpu_count: '24'
+obproxy-ce:
+  servers:
+    - 127.0.0.1
+  global:
+    listen_port: ${proxy_listen_port}
+    prometheus_listen_port: ${prometheus_listen_port}
+    home_path: ${proxy_home_path}
+  include: obd/obproxy.include.yaml
+  depends:
+    - oceanbase-ce

@@ -786,6 +786,9 @@ constexpr int OB_ERR_CASCADE_CONSTRAINTS_MUST_BE_SPECIFIED_TO_PERFORM_THIS_REVOK
 constexpr int OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF = -5384;
 constexpr int OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN = -5385;
 constexpr int OB_TABLE_DEFINITION_CHANGED = -5386;
+constexpr int OB_ERR_NO_ROUTINE_PRIVILEGE = -5387;
+constexpr int OB_ERR_USER_REFFERD_AS_DEFINER = -5388;
+constexpr int OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER = -5389;
 constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
@@ -868,6 +871,7 @@ constexpr int OB_ERR_FK_COLUMN_NOT_NULL = -5512;
 constexpr int OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN = -5513;
 constexpr int OB_JSON_PROCESSING_ERROR = -5514;
 constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
+constexpr int OB_ERR_DEPRECATED_SYNTAX = -5516;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1777,9 +1781,11 @@ constexpr int OB_ERR_TABLE_OUT_OF_RANGE = -9750;
 constexpr int OB_ERR_WRONG_USAGE = -9751;
 constexpr int OB_ERR_FORALL_ON_REMOTE_TABLE = -9752;
 constexpr int OB_ERR_SEQUENCE_NOT_DEFINE = -9753;
+constexpr int OB_ERR_DEBUG_ID_NOT_EXIST = -9754;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
+constexpr int OB_ERR_PLUGIN_IS_NOT_LOADED = -11003;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2713,6 +2719,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF__USER_ERROR_MSG "you may not GRANT/REVOKE privileges to/from yourself"
 #define OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN__USER_ERROR_MSG "miss mandatory column %.*s of error log table"
 #define OB_TABLE_DEFINITION_CHANGED__USER_ERROR_MSG "Unable to read data -- Table definition has changed"
+#define OB_ERR_NO_ROUTINE_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
+#define OB_ERR_USER_REFFERD_AS_DEFINER__USER_ERROR_MSG "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
+#define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__USER_ERROR_MSG "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__USER_ERROR_MSG "object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
@@ -2829,6 +2838,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN__USER_ERROR_MSG " Cannot define foreign key with ON DELETE SET NULL clause on a generated column"
 #define OB_JSON_PROCESSING_ERROR__USER_ERROR_MSG " JSON processing error"
 #define OB_ERR_TABLE_WITHOUT_ALIAS__USER_ERROR_MSG "Every table function must have an alias"
+#define OB_ERR_DEPRECATED_SYNTAX__USER_ERROR_MSG "%s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -3907,9 +3917,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_WRONG_USAGE__USER_ERROR_MSG "Incorrect usage of %s"
 #define OB_ERR_FORALL_ON_REMOTE_TABLE__USER_ERROR_MSG "FORALL INSERT/UPDATE/DELETE not support on remote tables"
 #define OB_ERR_SEQUENCE_NOT_DEFINE__USER_ERROR_MSG "sequence is not yet defined in this session"
+#define OB_ERR_DEBUG_ID_NOT_EXIST__USER_ERROR_MSG "debug_session_id = %u does not exist"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
+#define OB_ERR_PLUGIN_IS_NOT_LOADED__USER_ERROR_MSG "Plugin '%.*s' is not loaded"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4843,6 +4855,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF__ORA_USER_ERROR_MSG "ORA-01749: you may not GRANT/REVOKE privileges to/from yourself"
 #define OB_ERR_MISS_ERR_LOG_MANDATORY_COLUMN__ORA_USER_ERROR_MSG "ORA-38900: miss mandatory column %.*s of error log table"
 #define OB_TABLE_DEFINITION_CHANGED__ORA_USER_ERROR_MSG "ORA-01466: Unable to read data -- Table definition has changed"
+#define OB_ERR_NO_ROUTINE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5387, %.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
+#define OB_ERR_USER_REFFERD_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5388, User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
+#define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5389, Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-04043: object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
@@ -4945,7 +4960,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FUNCTIONAL_INDEX_ON_FIELD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5499, Functional index on a column is not supported. Consider using a regular index instead."
 #define OB_ERR_GENCOL_LEGIT_CHECK_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5500, Legitimacy check failed for generated columns."
 #define OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY__ORA_USER_ERROR_MSG "ORA-30481: GROUPING function only supported with GROUP BY CUBE or ROLLUP"
-#define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5502, Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+#define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__ORA_USER_ERROR_MSG "ORA-12984: cannot drop partitioning column '%.*s'"
 #define OB_ERR_VIEW_SELECT_CONTAIN_INTO__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5503, View's SELECT contains a 'INTO' clause."
 #define OB_ERR_DEFAULT_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-54025: Virtual column cannot have a default value"
 #define OB_ERR_MODIFY_REALCOL_TO_GENCOL__ORA_USER_ERROR_MSG "ORA-54026: Real column cannot have an expression"
@@ -4959,6 +4974,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN__ORA_USER_ERROR_MSG "ORA-54036: cannot define referential constraint with ON DELETE SET NULL clause on virtual column"
 #define OB_JSON_PROCESSING_ERROR__ORA_USER_ERROR_MSG "ORA-40444:  JSON processing error"
 #define OB_ERR_TABLE_WITHOUT_ALIAS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5515, Every table function must have an alias"
+#define OB_ERR_DEPRECATED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5516, %s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -6037,9 +6053,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9751, Incorrect usage of %s"
 #define OB_ERR_FORALL_ON_REMOTE_TABLE__ORA_USER_ERROR_MSG "PLS-00739: FORALL INSERT/UPDATE/DELETE not support on remote tables"
 #define OB_ERR_SEQUENCE_NOT_DEFINE__ORA_USER_ERROR_MSG "ORA-08002: sequence is not yet defined in this session"
+#define OB_ERR_DEBUG_ID_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9754, debug_session_id = %u does not exist"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11002, Incorrect partition name '%.*s'"
+#define OB_ERR_PLUGIN_IS_NOT_LOADED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11003, Plugin '%.*s' is not loaded"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6050,7 +6068,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2126];
+extern int g_all_ob_errnos[2132];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

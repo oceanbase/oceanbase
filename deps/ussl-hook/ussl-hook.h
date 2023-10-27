@@ -51,7 +51,6 @@ enum CtxLevelOptName {
   SO_OB_CTX_SET_SSL_CONFIG,
 };
 
-static int ussl_is_stopped = 0;
 void ussl_stop();
 void ussl_wait();
 

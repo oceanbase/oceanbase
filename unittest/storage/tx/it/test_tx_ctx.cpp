@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #include <gtest/gtest.h>
 #include <thread>
 #define private public
@@ -95,6 +107,10 @@ TEST_F(ObTestTxCtx, DelayAbort)
     ASSERT_EQ(false, tx_ctx->is_follower_());
     ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->revert_tx_ctx(tx_ctx));
   }
+  // disable keepalive msg, because switch to follower forcedly will send keepalive msg to notify
+  // scheduler abort tx
+  TRANS_LOG(INFO, "add drop KEEPALIVE msg");
+  n1->add_drop_msg_type(KEEPALIVE);
 
   ls_tx_ctx_mgr->switch_to_follower_forcedly();
 

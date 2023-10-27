@@ -1307,6 +1307,28 @@ int ObSchemaMgr::get_drop_tenant_info(const uint64_t tenant_id, ObDropTenantInfo
   return ret;
 }
 
+int ObSchemaMgr::get_drop_tenant_ids(common::ObIArray<uint64_t> &drop_tenant_ids) const
+{
+  int ret = OB_SUCCESS;
+  drop_tenant_ids.reset();
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(drop_tenant_ids.reserve(drop_tenant_infos_.count()))) {
+    LOG_WARN("reserve failed", KR(ret), "count", drop_tenant_infos_.count());
+  } else {
+    for (ConstDropTenantInfoIterator iter = drop_tenant_infos_.begin();
+        OB_SUCC(ret) && iter != drop_tenant_infos_.end();
+        iter++) {
+      const ObDropTenantInfo &drop_tenant_info = *(*iter);
+      if (OB_FAIL(drop_tenant_ids.push_back(drop_tenant_info.get_tenant_id()))) {
+        LOG_WARN("push back failed", KR(ret), K(drop_tenant_info));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaMgr::get_synonym_schema(
     const uint64_t tenant_id,
     const uint64_t synonym_id,

@@ -142,6 +142,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       is_tenant_killed_(0),
       reused_count_(0),
       first_need_txn_stmt_type_(stmt::T_NONE),
+      need_recheck_txn_readonly_(false),
       exec_min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
       stmt_type_(stmt::T_NONE),
       labels_(),
@@ -425,6 +426,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   // 不要重置release_to_pool_，原因见属性声明位置的注释。
   is_tenant_killed_ = 0;
   first_need_txn_stmt_type_ = stmt::T_NONE;
+  need_recheck_txn_readonly_ = false;
   exec_min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   labels_.reuse();
   thread_id_ = 0;
@@ -3383,7 +3385,11 @@ int ObBasicSessionInfo::get_charset_sys_var(const ObSysVarClassType sys_var_id,
     } else if (OB_FAIL(val->get_value().get_int(coll_int64))) {
       LOG_ERROR("fail to get int from value", K(*val), K(ret));
     } else if (OB_UNLIKELY(false == ObCharset::is_valid_collation(coll_int64))) {
-      LOG_ERROR("invalid collation", K(sys_var_id), K(coll_int64), K(*val));
+      if (SYS_VAR_NCHARACTER_SET_CONNECTION == sys_var_id && coll_int64 == 0) {
+        //do nothing
+      } else {
+        LOG_ERROR("invalid collation", K(sys_var_id), K(coll_int64), K(*val));
+      }
     } else {
       cs_type = ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64));
     }
@@ -3787,6 +3793,7 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
     case SYS_VAR_OB_PROXY_PARTITION_HIT:
     case SYS_VAR_VERSION_COMMENT:
     case SYS_VAR_OB_LAST_SCHEMA_VERSION:
+    case SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK:
       not_need_serialize = true;
       break;
     default:
@@ -3977,14 +3984,12 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
         LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
       } else if (sys_var->is_influence_plan()
                 && FALSE_IT(is_influence_plan_cache_sys_var = true)) {
-        // do nothing.
+        // add all deserialize sys_var id.
+      } else if (!is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       } else {
         LOG_TRACE("deserialize sync sys var", K(sys_var_id), K(*sys_var),
                    K(sessid_), K(proxy_sessid_));
-      }
-      // add all deserialize sys_var id.
-      if (OB_SUCC(ret) && !is_error_sync && OB_FAIL(tmp_sys_var_inc_info.add_sys_var_id(sys_var_id))) {
-        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
       }
     }
     if (OB_SUCC(ret) && !is_error_sync) {
@@ -4475,8 +4480,6 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
         if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
           LOG_WARN("fail to deserialize sys var id", K(data_len), K(pos), K(ret));
         } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
-        } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
-          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
         } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
           if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
             // 可能是版本不同，为了兼容，跳过这段数据，并继续循环
@@ -4492,6 +4495,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
           } else {
             LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
           }
+        } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
         } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
           LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
         } else if (OB_ISNULL(sys_var)) {
@@ -5165,6 +5170,14 @@ int ObBasicSessionInfo::get_character_set_connection(ObCharsetType &character_se
   return OB_SUCCESS;
 }
 
+int ObBasicSessionInfo::get_ncharacter_set_connection(ObCharsetType &ncharacter_set_connection) const
+{
+  if (CHARSET_INVALID == (ncharacter_set_connection = sys_vars_cache_.get_ncharacter_set_connection())) {
+    get_charset_sys_var(SYS_VAR_NCHARACTER_SET_CONNECTION, ncharacter_set_connection);
+  }
+  return OB_SUCCESS;
+}
+
 int ObBasicSessionInfo::get_character_set_database(ObCharsetType &character_set_database) const
 {
   return get_charset_sys_var(SYS_VAR_CHARACTER_SET_DATABASE, character_set_database);
@@ -5346,12 +5359,14 @@ int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
   return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
 }
 
-void ObBasicSessionInfo::reset_tx_variable()
+void ObBasicSessionInfo::reset_tx_variable(bool reset_next_scope)
 {
   LOG_DEBUG("reset tx variable", K(lbt()));
   reset_first_need_txn_stmt_type();
-  reset_tx_isolation();
-  reset_tx_read_only();
+  if (reset_next_scope) {
+    reset_tx_isolation();
+    reset_tx_read_only();
+  }
   reset_trans_flags();
   clear_app_trace_id();
 }
@@ -5428,18 +5443,33 @@ void ObBasicSessionInfo::reset_tx_read_only()
 int ObBasicSessionInfo::check_tx_read_only_privilege(const ObSqlTraits &sql_traits)
 {
   int ret = OB_SUCCESS;
-  if (sql_traits.is_cause_implicit_commit_) {
-    reset_tx_read_only();
-  } else {}
-  // pl call stmt and anonymous does not check here,
-  // will be check in ObTransService::start_stmt_sanity_check_
-  if (get_tx_read_only() && !sql_traits.is_readonly_stmt_
+  set_need_recheck_txn_readonly(false);
+  bool read_only = tx_desc_ && tx_desc_->is_in_tx() ? tx_desc_->is_rdonly() : get_tx_read_only();
+  if (!sql_traits.is_readonly_stmt_
       && sql_traits.stmt_type_ != ObItemType::T_SP_CALL_STMT
       && sql_traits.stmt_type_ != ObItemType::T_SP_ANONYMOUS_BLOCK
       && sql_traits.stmt_type_ != ObItemType::T_EXPLAIN) {
-    ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
-
-  } else {}
+    if (sql_traits.is_cause_implicit_commit_ && !sql_traits.is_commit_stmt_) {
+      if (sys_vars_cache_.get_tx_read_only()) {
+        // should implicit commit current transaction before report error
+        //
+        // example case:
+        //
+        // set session transaction read only;
+        // set transaction read write;
+        // start transaction;
+        // insert into t values(1);
+        // create table t1(id int); -- error: OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION
+        // rollback;
+        // select * from t where id = 1; -- 1 row found
+        //
+        set_need_recheck_txn_readonly(true);
+      }
+    } else if (read_only) {
+      ret = OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION;
+    }
+  }
+  LOG_DEBUG("CHECK readonly", KP(this), K(sessid_), K(sql_traits.is_readonly_stmt_), K(get_tx_read_only()));
   return ret;
 }
 
@@ -5889,6 +5919,9 @@ int ObBasicSessionInfo::trans_save_session(TransSavedValue &saved_value)
   OX (trans_flags_.reset());
   OX (saved_value.nested_count_ = nested_count_);
   OX (nested_count_ = -1);
+  OX (saved_value.xid_ = xid_);
+  OX (xid_.reset());
+  OX (associated_xa_ = false);
   return ret;
 }
 
@@ -5913,6 +5946,10 @@ int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
   if (OB_TMP_FAIL(base_restore_session(saved_value))) {
     LOG_WARN("failed to restore base session", K(tmp_ret));
     ret = COVER_SUCC(tmp_ret);
+  }
+  xid_ = saved_value.xid_;
+  if (!xid_.empty()) {
+    associated_xa_ = true;
   }
   return ret;
 }

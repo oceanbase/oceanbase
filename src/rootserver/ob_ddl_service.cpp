@@ -178,7 +178,8 @@ ObDDLService::ObDDLService()
     unit_mgr_(NULL),
     snapshot_mgr_(NULL),
     ddl_lock_(),
-    index_name_checker_()
+    index_name_checker_(),
+    non_partitioned_tablet_allocator_()
 {
 }
 
@@ -197,6 +198,8 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
     LOG_WARN("init twice", KR(ret));
   } else if (OB_FAIL(index_name_checker_.init(sql_proxy))) {
     LOG_WARN("fail to init index name checker", KR(ret));
+  } else if (OB_FAIL(non_partitioned_tablet_allocator_.init(sql_proxy))) {
+    LOG_WARN("fail to init non partitioned tablet allocator", KR(ret));
   } else {
     rpc_proxy_ = &rpc_proxy;
     common_rpc_ = &common_rpc;
@@ -15413,7 +15416,10 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
               if (is_recover_restore_table) {
                 if (OB_FAIL(new_index_schema.set_encryption_str(hidden_table_schema.get_encryption_str()))) {
                   LOG_WARN("set encryption str failed", K(ret), K(hidden_table_schema.get_encryption_str()));
+                } else if (OB_FAIL(new_index_schema.set_encrypt_key(hidden_table_schema.get_encrypt_key()))) {
+                  LOG_WARN("set encrypt key failed", K(ret), K(hidden_table_schema.get_encrypt_key()));
                 } else {
+                  new_index_schema.set_master_key_id(hidden_table_schema.get_master_key_id());
                   new_index_schema.set_tablespace_id(hidden_table_schema.get_tablespace_id());
                 }
               }
@@ -16192,8 +16198,6 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
     LOG_WARN("failed to build hidden index table map", K(ret));
   } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to check if oralce compat mode", K(ret));
-  } else if (!hidden_table_schema.get_foreign_key_infos().empty()) {
-    // not empty means already rebuilt.
   } else if (OB_FAIL(get_rebuild_foreign_key_infos(alter_table_arg,
                                                   orig_table_schema,
                                                   rebuild_child_table_fk,
@@ -16351,6 +16355,8 @@ int ObDDLService::rebuild_hidden_table_foreign_key_in_trans(ObAlterTableArg &alt
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
+    } else if (!hidden_table_schema->get_foreign_key_infos().empty()) {
+      // not empty means already rebuilt.
     } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
                                                         *orig_table_schema,
                                                         *hidden_table_schema,
@@ -24835,11 +24841,23 @@ int ObDDLService::record_tenant_locality_event_history(
     // ALTER_LOCALITY, ROLLBACK_ALTER_LOCALITY(only 4.2), NOP_LOCALITY_OP
     job_type =  ObRsJobType::JOB_TYPE_INVALID == job_type ?
                 ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY : job_type;
-    ret = RS_JOB_CREATE_WITH_RET(job_id, job_type, trans,
+    const int64_t extra_info_len = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    HEAP_VAR(char[extra_info_len], extra_info) {
+      memset(extra_info, 0, extra_info_len);
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(extra_info, extra_info_len, pos,
+              "FROM: '%.*s', TO: '%.*s'", tenant_schema.get_previous_locality_str().length(),
+              tenant_schema.get_previous_locality_str().ptr(), tenant_schema.get_locality_str().length(),
+              tenant_schema.get_locality_str().ptr()))) {
+        LOG_WARN("format extra_info failed", KR(ret), K(tenant_schema));
+      } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(job_id, job_type, trans,
         "tenant_name", tenant_schema.get_tenant_name(),
         "tenant_id", tenant_schema.get_tenant_id(),
         "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-        "extra_info", tenant_schema.get_previous_locality_str());
+        "extra_info", ObHexEscapeSqlStr(extra_info)))) {
+        LOG_WARN("failed to create new rs job", KR(ret), K(job_type), K(tenant_schema), K(extra_info));
+      }
+    }
     FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] create a new rs job", KR(ret),
         "tenant_id", tenant_schema.get_tenant_id(), K(job_id), K(alter_locality_op));
   }
@@ -25006,6 +25024,13 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
                            recycle_objs.at(0),
                            trans))) {
           LOG_WARN("delete_recycle_object failed", KR(ret), KPC(tenant_schema));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(reset_parallel_cache(meta_tenant_id))) {
+          LOG_WARN("fail to reset parallel cache", KR(ret), K(meta_tenant_id));
+        } else if (OB_FAIL(reset_parallel_cache(user_tenant_id))) {
+          LOG_WARN("fail to reset parallel cache", KR(ret), K(user_tenant_id));
         }
       }
     } else {// put tenant into recyclebin
@@ -32909,6 +32934,22 @@ ObDDLSQLTransaction::~ObDDLSQLTransaction()
   }
 }
 
+int ObDDLService::reset_parallel_cache(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(index_name_checker_.reset_cache(tenant_id))) {
+    ret = OB_FAIL(ret) ? ret : tmp_ret;
+    LOG_ERROR("reset cache failed", KR(tmp_ret), KR(ret), K(tenant_id));
+  }
+
+  if (OB_TMP_FAIL(non_partitioned_tablet_allocator_.reset_cache(tenant_id))) {
+    ret = OB_FAIL(ret) ? ret : tmp_ret;
+    LOG_ERROR("reset cache failed", KR(tmp_ret), KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 /*
  * @description:
  * start transaction for DDL, lock and check schema has refreshed
@@ -32987,30 +33028,16 @@ int ObDDLSQLTransaction::start(
   return ret;
 }
 
-int ObDDLSQLTransaction::lock_ddl_epoch(ObISQLClient *proxy)
+int ObDDLSQLTransaction::lock_ddl_epoch_(common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  int64_t ddl_epoch_local = trans_start_ddl_epoch_;
-  int64_t ddl_epoch_core = 0;
-  int64_t tenant_id = tenant_id_;
-
-  ObGlobalStatProxy global_stat_proxy(*proxy, tenant_id);
-  if (OB_FAIL(global_stat_proxy.select_ddl_epoch_for_update(*proxy, tenant_id, ddl_epoch_core))) {
-    LOG_WARN("fail to get ddl epoch from inner table", K(ret));
-    if (OB_ERR_NULL_VALUE == ret) {
-      // ignore ret
-      (void)schema_service_->get_ddl_epoch_mgr().remove_ddl_epoch(tenant_id);
-    }
-  } else {
-    if (ddl_epoch_local == ddl_epoch_core) {
-    } else {
-      ret = OB_RS_NOT_MASTER;
-      LOG_WARN("ddl epoch unexpected", K(ret), K(ddl_epoch_local), K(ddl_epoch_core));
-      // ignore ret
-      (void)schema_service_->get_ddl_epoch_mgr().remove_ddl_epoch(tenant_id);
-    }
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_ddl_epoch_mgr().check_and_lock_ddl_epoch(
+             trans, tenant_id_, trans_start_ddl_epoch_))) {
+    LOG_WARN("fail to check and lock ddl epoch", KR(ret), K_(tenant_id), K_(trans_start_ddl_epoch));
   }
-
   return ret;
 }
 
@@ -33023,13 +33050,9 @@ int ObDDLSQLTransaction::end(const bool commit)
     if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("root_service is null", KR(ret));
-    } else {
-      ObIndexNameChecker &checker = GCTX.root_service_
-                                      ->get_ddl_service()
-                                        .get_index_name_checker();
-      if (OB_FAIL(checker.reset_cache(tenant_id_))) {
-        LOG_ERROR("reset cache failed", KR(ret), K(tenant_id_));
-      }
+    } else if (OB_FAIL(GCTX.root_service_->get_ddl_service()
+                       .reset_parallel_cache(tenant_id_))) {
+      LOG_WARN("fail to reset parallel cache", KR(ret), K_(tenant_id));
     }
   }
 
@@ -33042,7 +33065,7 @@ int ObDDLSQLTransaction::end(const bool commit)
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema service is null", K(ret));
-  } else if (commit && enable_check_ddl_epoch_ && OB_FAIL(lock_ddl_epoch(this))) {
+  } else if (commit && enable_check_ddl_epoch_ && OB_FAIL(lock_ddl_epoch_(*this))) {
     // compare ddl_epoch promise execute on master
     LOG_WARN("lock_ddl_epoch fail", K(ret));
   } else if (commit && need_end_signal_) {

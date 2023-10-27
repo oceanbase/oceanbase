@@ -516,7 +516,7 @@ int ObInnerTableSchema::user_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("reference_priv", //column_name
+    ADD_COLUMN_SCHEMA("references_priv", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -1222,7 +1222,7 @@ int ObInnerTableSchema::db_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("reference_priv", //column_name
+    ADD_COLUMN_SCHEMA("references_priv", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -2112,7 +2112,7 @@ int ObInnerTableSchema::proc_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("collation_database", //column_name
+    ADD_COLUMN_SCHEMA("db_collation", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

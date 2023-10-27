@@ -138,7 +138,7 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
         if (lib::is_oracle_mode()) {
           type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
         } else {
-          type.set_length(OB_MAX_VARCHAR_LENGTH);
+          type.set_length(result_type_.get_length());
         }
       }
     }
@@ -463,7 +463,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 
   CK (OB_NOT_NULL(session = ctx.exec_ctx_.get_my_session()));
   CK (OB_NOT_NULL(pl_engine = session->get_pl_engine()));
-  OZ (expr.eval_param_value(ctx));
+  OZ (SMART_CALL(expr.eval_param_value(ctx)));
   OZ (build_udf_ctx(udf_ctx_id, expr.arg_cnt_, ctx.exec_ctx_, udf_ctx));
   CK (OB_NOT_NULL(udf_params = udf_ctx->get_param_store()));
 

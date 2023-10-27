@@ -68,7 +68,8 @@ public:
   class ObEventTableUpdateTask : public common::IObDedupTask
   {
   public:
-    ObEventTableUpdateTask(ObEventHistoryTableOperator &table_operator, const bool is_delete);
+    ObEventTableUpdateTask(ObEventHistoryTableOperator &table_operator, const bool is_delete,
+        const int64_t create_time);
     virtual ~ObEventTableUpdateTask() {}
     int init(const char *ptr, const int64_t buf_size);
     bool is_valid() const;
@@ -82,11 +83,12 @@ public:
     void assign_ptr(char *ptr, const int64_t buf_size)
     { sql_.assign_ptr(ptr, static_cast<int32_t>(buf_size));}
 
-    TO_STRING_KV(K_(sql), K_(is_delete));
+    TO_STRING_KV(K_(sql), K_(is_delete), K_(create_time));
   private:
     ObEventHistoryTableOperator &table_operator_;
     common::ObString sql_;
     bool is_delete_;
+    int64_t create_time_;
 
     DISALLOW_COPY_AND_ASSIGN(ObEventTableUpdateTask);
   };
@@ -139,6 +141,7 @@ public:
 
   virtual int async_delete() = 0;
 protected:
+  virtual int default_async_delete();
   // recursive begin
   template <int Floor, typename Name, typename Value, typename ...Rest>
   int sync_add_event_helper_(share::ObDMLSqlSplicer &dml, Name &&name, Value &&value, Rest &&...others);
@@ -160,7 +163,8 @@ protected:
   const common::ObAddr &get_addr() const { return self_addr_; }
   void set_event_table(const char* tname) { event_table_name_ = tname; }
   const char *get_event_table() const { return event_table_name_; }
-  int add_task(const common::ObSqlString &sql, const bool is_delete = false);
+  int add_task(const common::ObSqlString &sql, const bool is_delete = false,
+      const int64_t create_time = OB_INVALID_TIMESTAMP);
   int gen_event_ts(int64_t &event_ts);
 protected:
   static constexpr const char * names[7] = {"name1", "name2", "name3", "name4", "name5", "name6", "extra_info"}; // only valid in compile time
@@ -170,12 +174,9 @@ protected:
   static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t TASK_MAP_SIZE = 20 * 1024;
   static const int64_t TASK_QUEUE_SIZE = 20 *1024;
-  static const int64_t RS_EVENT_HISTORY_DELETE_TIME = 7L * 24L * 3600L * 1000L * 1000L; // 7DAY
-  static const int64_t SERVER_EVENT_HISTORY_DELETE_TIME = 2L * 24L * 3600L * 1000L * 1000L; // 2DAY
-  static const int64_t UNIT_LOAD_HISTORY_DELETE_TIME = 7L * 24L * 3600L * 1000L * 1000L; // 2DAY
   static const int64_t MAX_RETRY_COUNT = 12;
 
-  virtual int process_task(const common::ObString &sql, const bool is_delete);
+  virtual int process_task(const common::ObString &sql, const bool is_delete, const int64_t create_time);
 private:
   bool inited_;
   volatile bool stopped_;

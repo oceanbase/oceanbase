@@ -33,27 +33,30 @@ class ObDBMSSchedJobArg
 public:
   ObDBMSSchedJobArg():
     tenant_id_(OB_INVALID_ID), job_id_(OB_INVALID_ID), server_addr_(), master_addr_(),
-    is_oracle_tenant_(true) {}
+    is_oracle_tenant_(true), job_name_() {}
 
   ObDBMSSchedJobArg(uint64_t tenant_id,
                uint64_t job_id,
                common::ObAddr &server_addr,
                common::ObAddr &master_addr,
-               bool is_oracle_tenant)
+               bool is_oracle_tenant,
+               common::ObString &job_name)
     : tenant_id_(tenant_id), job_id_(job_id), server_addr_(server_addr), master_addr_(master_addr),
-      is_oracle_tenant_(is_oracle_tenant)
+      is_oracle_tenant_(is_oracle_tenant), job_name_(job_name)
   {}
 
   inline bool is_valid() const
   {
     return common::is_valid_tenant_id(tenant_id_)
         && job_id_ != common::OB_INVALID_ID
+        && !job_name_.empty()
         && server_addr_.is_valid()
         && master_addr_.is_valid();
   }
 
   TO_STRING_KV(K_(tenant_id),
                K_(job_id),
+               K_(job_name),
                K_(server_addr),
                K_(master_addr),
                K_(is_oracle_tenant));
@@ -63,6 +66,7 @@ public:
   common::ObAddr server_addr_;
   common::ObAddr master_addr_;
   bool is_oracle_tenant_;
+  common::ObString job_name_;
 };
 
 class ObDBMSSchedJobResult
@@ -137,7 +141,7 @@ public:
 
 public:
   int run_dbms_sched_job(
-    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
+    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, common::ObString &job_name,
     common::ObAddr server_addr, common::ObAddr master_addr);
 };
 

@@ -26,7 +26,7 @@ public:
   {
     running_ = true;
     ++task_run_count_;
-    ::usleep(50000);
+    ::usleep(500000);
     running_ = false;
   }
 
@@ -41,9 +41,9 @@ TEST(TG, timer)
   // start
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_SCHEDULE(tg_id, task, 0, true));
-  ::usleep(40000);
+  ::usleep(250000);
   ASSERT_TRUE(task.running_);
-  ::usleep(60000);
+  ::usleep(750000);
   ASSERT_EQ(1, task.task_run_count_);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   TG_WAIT_ONLY(tg_id);
@@ -55,9 +55,9 @@ TEST(TG, timer)
   // restart
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_SCHEDULE(tg_id, task, 0, true));
-  ::usleep(40000);
+  ::usleep(250000);
   ASSERT_TRUE(task.running_);
-  ::usleep(60000);
+  ::usleep(750000);
   ASSERT_EQ(2, task.task_run_count_);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));

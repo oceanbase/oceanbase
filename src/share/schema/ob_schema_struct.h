@@ -753,6 +753,7 @@ typedef enum {
   RLS_CONTEXT_SCHEMA = 38,
   CONSTRAINT_SCHEMA = 39,   // not dependent schema
   FOREIGN_KEY_SCHEMA = 40,  // not dependent schema
+  ROUTINE_PRIV = 41,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -5236,8 +5237,7 @@ public:
                        K_(cluster_name), K_(tenant_name), K_(database_name), K_(user_name),
                        K_(host_addr),
                        K_(driver_proto), K_(flag), K_(service_name), K_(conn_string),
-                       K_(authusr), K_(authpwd), K_(passwordx), K_(authpwdx),
-                       K_(password), K_(encrypted_password), K_(plain_password),
+                       K_(authusr), K_(encrypted_password),
                        K_(reverse_cluster_name),
                        K_(reverse_tenant_name), K_(reverse_user_name),
                        K_(reverse_password), K_(plain_reverse_password),
@@ -6633,7 +6633,6 @@ public:
                        K_(tenant_id),
                        K_(keystore_id),
                        K_(schema_version),
-                       K_(password),
                        K_(status),
                        K_(master_key_id),
                        K_(master_key),

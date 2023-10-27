@@ -376,8 +376,6 @@ private:
                                       const int64_t &proposal_id,
                                       const int64_t accum_checksum);
   int try_advance_committed_lsn_(const LSN &end_lsn);
-  int try_advance_log_task_committed_ts_();
-  int try_advance_log_task_first_ack_ts_(const LSN &end_lsn);
   void get_last_submit_log_info_(LSN &lsn,
                                  LSN &end_lsn,
                                  int64_t &log_id,

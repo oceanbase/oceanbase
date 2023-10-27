@@ -1283,6 +1283,11 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
         OV (package_id != OB_INVALID_ID, OB_ERR_UNEXPECTED, KPC(this));
         OV (expr_idx != OB_INVALID_INDEX, OB_ERR_UNEXPECTED, KPC(this));
         OZ (sql::ObSPIService::spi_calc_package_expr_v1(resolve_ctx, exec_ctx, obj_allocator, package_id, expr_idx, &result));
+        if (OB_SUCC(ret) && result.is_pl_extend()) {
+          ObObj tmp;
+          OZ (ObUserDefinedType::deep_copy_obj(obj_allocator, result, tmp));
+          OX (result = tmp);
+        }
         OX (*member = result);
       } else {
         if (get_member(i)->is_obj_type()) {
@@ -2238,7 +2243,6 @@ int ObCollectionType::deserialize(
       OZ (ObSPIService::spi_set_collection(
         OB_INVALID_ID, &resolve_ctx, *table->get_allocator(), *table, count, true));
     }
-    // CK (OB_NOT_NULL(table->get_data()));
 
     if (OB_SUCC(ret)) {
       char *table_data = reinterpret_cast<char*>(table->get_data());
@@ -2251,6 +2255,7 @@ int ObCollectionType::deserialize(
           ObPLComposite* composite = reinterpret_cast<ObPLComposite*>(obj->get_ext());
           CK (OB_NOT_NULL(composite));
           if (OB_SUCC(ret) && composite->get_type() == PL_INVALID_TYPE) {
+            obj->set_extend(obj->get_ext(), PL_INVALID_TYPE);
             obj->set_type(ObMaxType);
           }
         }
@@ -2471,6 +2476,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             OX (table_data_pos_tmp += sizeof(ObObj));
           }
         }
+        int64_t n = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
           if (ObSMUtils::update_from_bitmap(null_value, bitmap, i)) { // null value
             ObObj* value = reinterpret_cast<ObObj*>(table_data + table_data_pos);
@@ -2492,8 +2498,20 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
               LOG_WARN("deserialize element failed", K(ret), K(i), K(element_init_size), K(count));
             }
           }
+          OX(++n);
           LOG_DEBUG("deserialize element done", K(ret), KPC(this), K(i), K(element_init_size), K(count),
             K(src), K(table_data), K(table_data_len), K(table_data_pos));
+        }
+        if (OB_FAIL(ret)) {
+          for (int64_t j = 0; j <= n; ++j) {
+            ObObj* value = reinterpret_cast<ObObj*>(table_data + j);
+            int tmp = ObUserDefinedType::destruct_obj(*value);
+            if (OB_SUCCESS != tmp) {
+              LOG_WARN("fail torelease memory", K(ret), K(tmp));
+            }
+            value->set_type(ObMaxType);
+          }
+          collection_allocator->reset();
         }
       }
       if (OB_SUCC(ret)) {
@@ -3500,17 +3518,18 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
         } else {
           if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
             old_obj.set_type(ObExtendType);
-            CK (old_obj.is_pl_extend());
           }
           OX (new (&new_objs[k])ObObj());
-          OZ (ObPLComposite::copy_element(old_obj,
-                                          new_objs[k],
-                                          *coll_allocator,
-                                          NULL, /*ns*/
-                                          NULL, /*session*/
-                                          NULL, /*dest_type*/
-                                          true, /*need_new_allocator*/
-                                          ignore_del_element));
+          if (OB_SUCC(ret) && ((src->is_of_composite() && old_obj.is_pl_extend()) || !src->is_of_composite())) {
+            OZ (ObPLComposite::copy_element(old_obj,
+                                            new_objs[k],
+                                            *coll_allocator,
+                                            NULL, /*ns*/
+                                            NULL, /*session*/
+                                            NULL, /*dest_type*/
+                                            true, /*need_new_allocator*/
+                                            ignore_del_element));
+          }
           OX (++k);
           if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
             new_objs[i].set_type(ObMaxType);

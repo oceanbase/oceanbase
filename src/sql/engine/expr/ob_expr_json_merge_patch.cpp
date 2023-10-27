@@ -294,24 +294,45 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
     if (has_null) {
       res.set_null();
     } else {
-      ObJsonBuffer jbuf(&temp_allocator);
+      ObJsonBuffer* jbuf = nullptr;
       ObString res_string;
       bool is_res_blob = expr.datum_meta_.cs_type_ == CS_TYPE_BINARY && dst_type == ObLongTextType;
 
-      if (dst_type == ObJsonType) {
+      if (OB_ISNULL( jbuf = OB_NEWx(ObJsonBuffer, &temp_allocator, &temp_allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to construct jbuf", K(ret));
+      } else if (dst_type == ObJsonType) {
         if (OB_FAIL(j_base->get_raw_binary(res_string, &temp_allocator))) {
           LOG_WARN("failed: get json raw binary", K(ret));
         }
       } else {
+        ObString tmp_val;
+        ObString result_str;
         bool is_quote = j_base->json_type() == ObJsonNodeType::J_STRING;
-        if (OB_FAIL(j_base->print(jbuf, is_quote, is_pretty > 0))) {
+
+        if (OB_FAIL(j_base->print(*jbuf, is_quote, is_pretty > 0))) {
           LOG_WARN("json binary to string failed", K(ret));
-        } else if (jbuf.empty()) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory for result failed", K(ret));
+        } else if (jbuf->empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("jbuf should not empty", K(ret));
+        } else {
+          tmp_val = jbuf->string();
+          ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+          ObCollationType dst_cs_type = expr.obj_meta_.get_collation_type();
+          result_str = tmp_val;
+
+          if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(in_cs_type,
+                                                                      dst_cs_type,
+                                                                      &temp_allocator,
+                                                                      tmp_val,
+                                                                      result_str))) {
+            LOG_WARN("fail to convert string result", K(ret));
+          } else {
+            tmp_val = result_str;
+          }
         }
 
-        ObString tmp_val(jbuf.length(), jbuf.ptr());
+
         if (OB_SUCC(ret) && is_asc && !is_res_blob /* clob varchar */ ) {
           if (OB_FAIL(ObJsonExprHelper::character2_ascii_string(&temp_allocator, expr, ctx, tmp_val, 1))) {
             LOG_WARN("fail to transform string 2 ascii character", K(ret));

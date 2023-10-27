@@ -1477,11 +1477,12 @@ int handle_oss_file_name(const char* file_name_data, int file_name_len,
    dirent entry;
    entry.d_type = DT_REG;
 
-   if (PATH_MAX < file_name_len) {
+   if (NAME_MAX < file_name_len) {
      ret = OB_INVALID_ARGUMENT;
      OB_LOG(WARN, "file name is too long", K(file_name_len));
    } else {
-     STRCPY(entry.d_name, file_name_data);
+     MEMCPY(entry.d_name, file_name_data, file_name_len);
+     entry.d_name[file_name_len] = '\0'; // set str end
      if (OB_FAIL(op.func(&entry))) { 
       OB_LOG(WARN, "fail to exe application callback", K(ret));
      }

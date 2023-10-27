@@ -55,24 +55,33 @@ int ObTableLoadStore::init_ctx(
   return ret;
 }
 
-void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx)
+void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(ctx));
+    is_stopped = true;
   } else if (OB_UNLIKELY(nullptr == ctx->store_ctx_ || !ctx->store_ctx_->is_valid())) {
     // store ctx not init, do nothing
+    is_stopped = true;
   } else {
     LOG_INFO("store abort");
     // 1. mark status abort, speed up background task exit
     if (OB_FAIL(ctx->store_ctx_->set_status_abort())) {
       LOG_WARN("fail to set store status abort", KR(ret));
     }
-    // 2. mark all active trans abort
+    // 2. disable heart beat check
+    ctx->store_ctx_->set_enable_heart_beat_check(false);
+    // 3. mark all active trans abort
     if (OB_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(ret));
     }
+    // 4. stop merger
+    ctx->store_ctx_->merger_->stop();
+    // 5. stop task_scheduler
+    ctx->store_ctx_->task_scheduler_->stop();
+    is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped();
   }
 }
 
@@ -145,6 +154,9 @@ int ObTableLoadStore::confirm_begin()
     LOG_INFO("store confirm begin");
     if (OB_FAIL(store_ctx_->set_status_loading())) {
       LOG_WARN("fail to set store status loading", KR(ret));
+    } else {
+      store_ctx_->heart_beat(); // init heart beat
+      store_ctx_->set_enable_heart_beat_check(true);
     }
   }
   return ret;
@@ -316,6 +328,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {
+      store_ctx_->set_enable_heart_beat_check(false);
       result_info = store_ctx_->result_info_;
     }
   }
@@ -359,6 +372,19 @@ int ObTableLoadStore::get_status(ObTableLoadStatusType &status, int &error_code)
   } else {
     LOG_INFO("store get status");
     store_ctx_->get_status(status, error_code);
+  }
+  return ret;
+}
+
+int ObTableLoadStore::heart_beat()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
+  } else {
+    LOG_DEBUG("store heart beat");
+    store_ctx_->heart_beat();
   }
   return ret;
 }

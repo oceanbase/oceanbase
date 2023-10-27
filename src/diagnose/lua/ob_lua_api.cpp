@@ -141,7 +141,7 @@ static constexpr const char *usage_str =
 "{{row1}, {row2}, ...} = select_schema_slot()\n"
 "{{row1}, {row2}, ...} = dump_thread_info()\n"
 "{{row1}, {row2}, ...} = select_malloc_sample_info()\n"
-"int = enable_system_tenant_memory_limit(boolean)\n"
+"int = set_system_tenant_limit_mode(int)\n"
 ;
 
 class LuaVtableGenerator
@@ -1917,14 +1917,22 @@ int dump_thread_info(lua_State *L)
             }
           } else if (sizeof(ObAddr) == process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0)
                      && addr.is_valid()) {
-            int ret = 0;
-            if ((ret = snprintf(wait_event, BUF_LEN, "rpc to ")) > 0) {
-              IGNORE_RETURN addr.to_string(wait_event + ret, BUF_LEN - ret);
+            GET_OTHER_TSI_ADDR(pcode, &Thread::pcode_);
+            int64_t pos1 = 0;
+            int64_t pos2 = 0;
+            if (((pos1 = snprintf(wait_event, 37, "rpc 0x%X(%s", pcode, obrpc::ObRpcPacketSet::instance().name_of_idx(obrpc::ObRpcPacketSet::instance().idx_of_pcode(pcode)) + 3)) > 0)
+                && ((pos2 = snprintf(wait_event + std::min(36L, pos1), 6, ") to ")) > 0)) {
+              int64_t pos = std::min(36L, pos1) + std::min(5L, pos2);
+              pos += addr.to_string(wait_event + pos, BUF_LEN - pos);
             }
           } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "tenant worker request");
           } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "IO events");
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_LOCAL_RETRY & event))) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "local retry");
+          } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_PX_MSG & event))) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "px message");
           } else if (0 != sleep_us) {
             IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", sleep_us);
           } else if (0 != blocking_ts) {
@@ -1990,19 +1998,19 @@ int select_malloc_sample_info(lua_State *L)
   return 1;
 }
 
-// int = enable_system_tenant_memory_limit(boolean)
-int enable_system_tenant_memory_limit(lua_State* L)
+// int = set_system_tenant_limit_mode(int)
+int set_system_tenant_limit_mode(lua_State* L)
 {
   int ret = OB_SUCCESS;
   int argc = lua_gettop(L);
   if (1 != argc) {
-    OB_LOG(ERROR, "call enable_system_tenant_memory_limit() failed, bad arguments count, should be 1.");
+    OB_LOG(ERROR, "call set_system_tenant_limit_mode() failed, bad arguments count, should be 1.");
     ret = OB_INVALID_ARGUMENT;
   } else {
-    luaL_checktype(L, 1, LUA_TBOOLEAN);
-    int enable = lua_toboolean(L, 1);
+    luaL_checktype(L, 1, LUA_TNUMBER);
+    const int64_t limit_mode = lua_tointeger(L, 1);
 #ifdef ENABLE_500_MEMORY_LIMIT
-    ObMallocAllocator::get_instance()->set_500_tenant_limit(!enable/*unlimited*/);
+    GMEMCONF.set_500_tenant_limit(limit_mode);
 #endif
     lua_pushinteger(L, 1);
   }
@@ -2140,7 +2148,7 @@ void APIRegister::register_api(lua_State* L)
   lua_register(L, "select_schema_slot", select_schema_slot);
   lua_register(L, "dump_thread_info", dump_thread_info);
   lua_register(L, "select_malloc_sample_info", select_malloc_sample_info);
-  lua_register(L, "enable_system_tenant_memory_limit", enable_system_tenant_memory_limit);
+  lua_register(L, "set_system_tenant_limit_mode", set_system_tenant_limit_mode);
 }
 
 int APIRegister::flush()

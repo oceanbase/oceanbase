@@ -327,11 +327,6 @@ public:
   // LS fetch progress update timeout in seconds
   // If the logs are not fetched after a certain period of time, the stream will be cut
   T_DEF_INT_INFT(ls_fetch_progress_update_timeout_sec, OB_CLUSTER_PARAMETER, 15, 1, "logstream fetch progress update timeout in seconds");
-  // Timeout time for lagging replica logstreams
-  //
-  // If logs are not fetched for more than a certain period of time on a lagging copy, cut the stream
-  T_DEF_INT_INFT(ls_fetch_progress_update_timeout_sec_for_lagged_replica, OB_CLUSTER_PARAMETER, 3, 1,
-      "fetch progress update timeout for lagged replica in seconds");
 
   T_DEF_INT_INFT(log_router_background_refresh_interval_sec, OB_CLUSTER_PARAMETER, 10, 1,
                  "log_route_service background_refresh_time in seconds");
@@ -378,7 +373,7 @@ public:
   T_DEF_INT_INFT(blacklist_history_clear_interval_min, OB_CLUSTER_PARAMETER, 2, 1, "blacklist history clear interval in minute");
 
   // Check the need for active cut-off cycles, in minutes
-  T_DEF_INT_INFT(check_switch_server_interval_min, OB_CLUSTER_PARAMETER, 10, 1, "check switch server interval in minute");
+  T_DEF_INT_INFT(check_switch_server_interval_sec, OB_CLUSTER_PARAMETER, 60, 1, "check switch server interval in seconds");
 
   // Print the number of LSs with the slowest progress of the Fetcher module
   T_DEF_INT_INFT(print_fetcher_slowest_ls_num, OB_CLUSTER_PARAMETER, 10, 1, "print fetcher slowest ls num");
@@ -413,10 +408,13 @@ public:
   DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "0KB", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
   T_DEF_INT(pause_redo_dispatch_task_count_threshold, OB_CLUSTER_PARAMETER, 80, 0, 100, "task cound percent threshold for pause redo dispatch");
   T_DEF_INT(memory_usage_warn_threshold, OB_CLUSTER_PARAMETER, 85, 10, 100, "memory usage wan threshold, may pause fetch while reach the threshold");
+  T_DEF_INT_INFT(queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 500, 0, "lowest threshold of queue_backlog that will touch redo_dispatch flow controll");
   // sorter thread num
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
   T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 0, 0, "trans msg sorter task count per thread");
+  // ignore delete tablets
+  T_DEF_BOOL(skip_delete_tablet_op, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
 
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios

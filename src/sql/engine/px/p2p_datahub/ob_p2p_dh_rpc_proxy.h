@@ -22,6 +22,7 @@ struct ObPxP2PDatahubArg
 {
   OB_UNIS_VERSION(1);
 public:
+  ObPxP2PDatahubArg() : msg_(nullptr) {}
   void destroy_arg();
 public:
   ObP2PDatahubMsgBase *msg_;
@@ -32,6 +33,8 @@ struct ObPxP2PDatahubMsgResponse
 {
   OB_UNIS_VERSION(1);
 public:
+  ObPxP2PDatahubMsgResponse() : rc_(0) {}
+public:
   int rc_;
   TO_STRING_KV(K_(rc));
 };
@@ -39,6 +42,8 @@ public:
 struct ObPxP2PClearMsgArg
 {
   OB_UNIS_VERSION(1);
+public:
+  ObPxP2PClearMsgArg() : p2p_dh_ids_(), px_seq_id_(0) {}
 public:
   ObSArray<int64_t> p2p_dh_ids_;
   int64_t px_seq_id_;

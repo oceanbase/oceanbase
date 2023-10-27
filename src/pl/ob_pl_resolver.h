@@ -34,7 +34,7 @@
   } while(0);
 #endif
 
-#ifndef NDEBUG
+#ifdef NDEBUG
 #ifndef SET_LOG_CHECK_MODE
 #define SET_LOG_CHECK_MODE()                        \
   bool set_check_mode = false;                      \
@@ -422,6 +422,13 @@ public:
                                const ObSQLSessionInfo &session_info,
                                const ObIArray<ObObjAccessIdent> &access_idents,
                                ObPLExternTypeInfo *extern_type_info);
+  static void pl_reset_warning_buffer()
+  {
+    ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
+    if (NULL != buf) {
+      buf->reset();
+    }
+  }
   static bool is_object_not_exist_error(int ret)
   {
     return OB_ERR_SP_DOES_NOT_EXIST == ret
@@ -1073,10 +1080,10 @@ private:
                                    ObPLFunctionAST &func,
                                    int64_t &idx);
   int check_update_column(const ObPLBlockNS &ns, const ObIArray<ObObjAccessIdx>& access_idxs);
-  static int get_udt_names(ObSchemaGetterGuard &schema_guard,
-                           const uint64_t udt_id,
-                           ObString &database_name,
-                           ObString &udt_name);
+  int get_udt_names(ObSchemaGetterGuard &schema_guard,
+                    const uint64_t udt_id,
+                    ObString &database_name,
+                    ObString &udt_name);
   static int get_udt_database_name(ObSchemaGetterGuard &schema_guard,
                                    const uint64_t udt_id, ObString &db_name);
   static bool check_with_rowid(const ObString &routine_name,

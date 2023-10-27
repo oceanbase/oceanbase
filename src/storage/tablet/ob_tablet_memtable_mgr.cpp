@@ -164,6 +164,7 @@ int ObTabletMemtableMgr::reset_storage_recorder()
 // 2. create the new memtable after freezing the old memtable
 int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                          const int64_t schema_version,
+                                         const SCN new_clog_checkpoint_scn,
                                          const bool for_replay)
 {
   ObTimeGuard time_guard("ObTabletMemtableMgr::create_memtable", 10 * 1000);
@@ -178,7 +179,6 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   memtable::ObMemtable *active_memtable = nullptr;
   uint32_t memtable_freeze_clock = UINT32_MAX;
   share::ObLSID ls_id;
-  SCN new_clog_checkpoint_scn;
   int64_t memtable_count = get_memtable_count_();
   if (has_memtable && OB_NOT_NULL(active_memtable = get_active_memtable_())) {
     memtable_freeze_clock = active_memtable->get_freeze_clock();
@@ -204,8 +204,6 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                 K(get_memtable_count_()),
                 KPC(first_frozen_memtable.get_table()));
     }
-  } else if (OB_FAIL(get_newest_clog_checkpoint_scn(new_clog_checkpoint_scn))) {
-    LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id_), K(new_clog_checkpoint_scn));
   } else if (for_replay && clog_checkpoint_scn != new_clog_checkpoint_scn) {
     ret = OB_EAGAIN;
     LOG_INFO("clog_checkpoint_scn changed, need retry to replay", K(ls_id), K(tablet_id_), K(clog_checkpoint_scn), K(new_clog_checkpoint_scn));

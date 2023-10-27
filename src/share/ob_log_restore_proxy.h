@@ -151,7 +151,8 @@ public:
   // get ls from dba_ob_ls
   int is_ls_existing(const ObLSID &id);
 private:
-  bool is_user_changed_(const char *user_name, const char *user_password, const char *db_name);
+  // check if user or password changed
+  bool is_user_changed_(const char *user_name, const char *user_password);
   void destroy_tg_();
   int detect_tenant_mode_(common::sqlclient::ObMySQLServerProvider *server_provider, const char *user_name, const char *user_password);
 private:
@@ -163,7 +164,6 @@ private:
   ObLogRestoreConnectionPool connection_;
   common::ObFixedLengthString<common::OB_MAX_USER_NAME_BUF_LENGTH> user_name_;
   common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH + 1> user_password_;
-  common::ObFixedLengthString<common::OB_MAX_DATABASE_NAME_BUF_LENGTH> db_name_;
   common::ObMySQLProxy sql_proxy_;
   bool is_oracle_mode_;
 

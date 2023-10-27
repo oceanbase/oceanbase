@@ -866,10 +866,10 @@ int ObTenantTabletTTLMgr::get_ttl_para_from_schema(const schema::ObTableSchema *
   return ret;
 }
 
+// task already lock in ObTenantTabletTTLMgr::sync_sys_table
 int ObTenantTabletTTLMgr::try_schedule_prepare_task(ObTabletID& tablet_id)
 {
   int ret = OB_SUCCESS;
-  common::ObSpinLockGuard guard(lock_);
   ObTTLTaskCtx* ctx = get_one_tablet_ctx(tablet_id);
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_NULL_VALUE;
@@ -920,6 +920,8 @@ int ObTenantTabletTTLMgr::sync_sys_table(ObTabletID& tablet_id)
   }
 
   // lock task ctx for update
+  // must not hold lock_ any more in this following code, which will cause deadlock
+  // beause dag thread hold lock_ first, and ctx->lock_ second at report_task_status
   common::ObSpinLockGuard ctx_guard(ctx->lock_);
   if (OB_SUCC(ret) && OB_UNLIKELY(ctx->need_refresh_)) {
     switch (ctx->task_status_) {
@@ -1195,10 +1197,13 @@ int ObTenantTabletTTLMgr::try_schedule_remaining_tasks(const ObTTLTaskCtx *curre
         LOG_ERROR("fatal err, ttl ctx in map is null", KR(ret), K(local_tenant_task_.tenant_id_));
       } else if (current_ctx == ctx) {
         // do nothing
-      } else if (can_schedule_task(*ctx)) {
-        if (OB_FAIL(try_schedule_task(ctx))) {
-          if (OB_SIZE_OVERFLOW != ret) {
-            LOG_WARN("fail to schedule task", KR(ret));
+      } else {
+        common::ObSpinLockGuard guard(ctx->lock_);
+        if (can_schedule_task(*ctx)) {
+          if (OB_FAIL(try_schedule_task(ctx))) {
+            if (OB_SIZE_OVERFLOW != ret) {
+              LOG_WARN("fail to schedule task", KR(ret));
+            }
           }
         }
       }

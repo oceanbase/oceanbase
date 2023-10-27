@@ -49,7 +49,6 @@ ObMemtableCtx::ObMemtableCtx()
       ref_(0),
       query_allocator_(),
       ctx_cb_allocator_(),
-      log_conflict_interval_(LOG_CONFLICT_INTERVAL),
       ctx_(NULL),
       truncate_cnt_(0),
       lock_for_read_retry_count_(0),
@@ -141,9 +140,7 @@ void ObMemtableCtx::reset()
     unsynced_cnt_ = 0;
     unsubmitted_cnt_ = 0;
     lock_mem_ctx_.reset();
-    //FIXME: ctx_ is not reset
-    log_conflict_interval_.reset();
-    mtstat_.reset();
+    retry_info_.reset();
     trans_mgr_.reset();
     log_gen_.reset();
     ref_ = 0;
@@ -301,10 +298,12 @@ int ObMemtableCtx::write_lock_yield()
 
 void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id)
 {
-  mtstat_.on_wlock_retry();
   #define USING_LOG_PREFIX TRANS
-  FLOG_INFO("mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
+  if (retry_info_.need_print()) {
+    FLOG_INFO("mvcc_write conflict", K(key), "tx_id", get_tx_id(), K(conflict_tx_id), KPC(this));
+  }
   #undef USING_LOG_PREFIX
+  retry_info_.on_conflict();
 }
 
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
@@ -312,10 +311,10 @@ void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
                                  const SCN max_trans_version,
                                  const transaction::ObTransID &conflict_tx_id)
 {
-  mtstat_.on_tsc_retry();
-  if (log_conflict_interval_.reach()) {
+  if (retry_info_.need_print()) {
     TRANS_LOG_RET(WARN, OB_SUCCESS, "transaction_set_consistency conflict", K(key), K(snapshot_version), K(max_trans_version), K(conflict_tx_id), KPC(this));
   }
+  retry_info_.on_conflict();
 }
 
 void *ObMemtableCtx::old_row_alloc(const int64_t size)

@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_i_tablet_mds_interface.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -689,8 +690,7 @@ int ObTabletMdsData::init_single_complex_addr_and_extra_info(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (nullptr == ptr
-      || finish_medium_scn < src_addr_extra_info.last_medium_scn_
+  } else if (finish_medium_scn < src_addr_extra_info.last_medium_scn_
       || src_addr_extra_info.last_medium_scn_ < src_data_extra_info.last_medium_scn_) {
     dst_extra_info.last_compaction_type_ = src_data_extra_info.last_compaction_type_;
     dst_extra_info.last_medium_scn_ = src_data_extra_info.last_medium_scn_;
@@ -1387,6 +1387,13 @@ int ObTabletMdsData::build_tablet_status(
       node->user_data_.assign(buffer, serialize_size);
     }
 
+    // set tablet status cache
+    if (OB_FAIL(ret)) {
+    } else if (tx_data.is_in_tx()) {
+    } else if (OB_FAIL(mds_data.tablet_status_cache_.assign(user_data))) {
+      LOG_WARN("failed to set tablet status cache", K(ret), K(user_data));
+    }
+
     if (OB_FAIL(ret) && OB_NOT_NULL(buffer)) {
       allocator.free(buffer);
     }
@@ -1492,6 +1499,13 @@ int ObTabletMdsData::build_aux_tablet_info(
       LOG_WARN("user data serialize failed", K(ret), K(user_data));
     } else {
       node->user_data_.assign(buffer, serialize_size);
+    }
+
+    // set aux tablet info cache
+    if (OB_FAIL(ret)) {
+    } else if (tx_data.is_in_tx()) {
+    } else if (OB_FAIL(mds_data.aux_tablet_info_cache_.assign(user_data))) {
+      LOG_WARN("failed to set aux tablet info cache", K(ret), K(user_data));
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(buffer)) {

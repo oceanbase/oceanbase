@@ -520,6 +520,7 @@ public:
   enum CONVERT_FLAG : int64_t {
     COPY_STRING_ON_SAME_CHARSET = 1<<0,
     REPLACE_UNKNOWN_CHARACTER = 1<<1,
+    REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET = 1<<2,
   };
   static int charset_convert(ObIAllocator &alloc,
                              const ObString &in,
@@ -577,7 +578,8 @@ public:
   template<typename foreach_char_func>
   static int foreach_char(const common::ObString &str,
                    common::ObCollationType collation_type,
-                   foreach_char_func &func)
+                   foreach_char_func &func,
+                   bool ignore_invalid_character = false)
   {
     int ret = common::OB_SUCCESS;
     int32_t wchar = 0;
@@ -586,8 +588,19 @@ public:
 
     for (common::ObString temp_str = str; OB_SUCC(ret) && !temp_str.empty(); temp_str+=length) {
       if (OB_FAIL(ObCharset::mb_wc(collation_type, temp_str.ptr(), temp_str.length(), length, wchar))) {
-        COMMON_LOG(WARN, "fail to call mb_wc", K(ret), KPHEX(temp_str.ptr(), temp_str.length()));
-      } else {
+        COMMON_LOG(WARN, "fail to call mb_wc", K(ret), KPHEX(temp_str.ptr(), temp_str.length()), K(ignore_invalid_character));
+        if (OB_ERR_INCORRECT_STRING_VALUE == ret && ignore_invalid_character) {
+          ret = common::OB_SUCCESS;
+          wchar = INT32_MAX;
+          length = ObCharset::is_mbchar(collation_type, temp_str.ptr(), temp_str.ptr() + temp_str.length());
+          if (length <= 0) {
+            int64_t min_len = 0;
+            ObCharset::get_mbminlen_by_coll(collation_type, min_len);
+            length = static_cast<int32_t>(min_len);
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
         encoding.assign_ptr(temp_str.ptr(), length);
         if (OB_FAIL(func(encoding, wchar))) {
           COMMON_LOG(WARN, "fail to call func", K(ret), K(encoding),

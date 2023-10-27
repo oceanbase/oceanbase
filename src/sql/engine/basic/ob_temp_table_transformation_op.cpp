@@ -240,7 +240,7 @@ int ObTempTableTransformationOp::destory_local_interm_results(ObIArray<uint64_t>
   LOG_TRACE("destory interm results", K(get_exec_ctx().get_addr()), K(result_ids));
   for (int64_t i = 0; OB_SUCC(ret) && i < result_ids.count(); ++i) {
     dtl_int_key.channel_id_ = result_ids.at(i);
-    if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(
+    if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(
                                                                             dtl_int_key))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;

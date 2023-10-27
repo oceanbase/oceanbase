@@ -33,7 +33,8 @@ public:
   void reset();
   void destroy();
 
-  int insert_mds_node(const ObTxBufferNode &buf_node);
+  int try_recover_max_register_no(const ObTxBufferNodeArray & node_array);
+  int insert_mds_node(ObTxBufferNode &buf_node);
   int rollback_last_mds_node();
   int fill_mds_log(ObPartTransCtx *ctx,
                    ObTxMultiDataSourceLog &mds_log,
@@ -61,10 +62,11 @@ public:
   void set_need_retry_submit_mds(bool need_retry) { need_retry_submit_mds_ = need_retry; };
   bool need_retry_submit_mds() { return need_retry_submit_mds_; }
 
-  TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()));
+  TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()), K(max_register_no_));
 
 private:
   // TransModulePageAllocator allocator_;
+  uint64_t max_register_no_;
   bool need_retry_submit_mds_;
   int64_t unsubmitted_size_;
   ObTxBufferNodeList mds_list_;

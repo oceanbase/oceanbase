@@ -1163,7 +1163,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
     if (OB_SUCC(ret)) {
       if (ObStmt::is_write_stmt(stmt->get_stmt_type(), stmt->has_global_variable())
-          && !MTL_IS_PRIMARY_TENANT()) {
+          && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
         ret = OB_STANDBY_READ_ONLY;
         TRANS_LOG(WARN, "standby tenant support read only", K(ret), K(stmt));
       }

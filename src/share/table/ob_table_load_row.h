@@ -49,7 +49,13 @@ public:
   {
     return seq_no_;
   }
-  TO_STRING_KV(K_(count));
+
+  int64_t to_string(char* buf, const int64_t buf_len) const {
+    int64_t pos = 0;
+    databuff_printf(buf, buf_len, pos, "seq=%lu ", seq_no_.sequence_no_);
+    databuff_print_obj_array(buf, buf_len, pos, cells_, count_);
+    return pos;
+  }
 
 private:
   static int allocate_cells(T *&cells, int64_t count,

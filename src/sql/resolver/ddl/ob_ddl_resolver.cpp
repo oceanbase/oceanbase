@@ -7190,14 +7190,20 @@ int ObDDLResolver::check_is_json_contraint(ObTableSchema &t_table_schema, ObIArr
       }
       for (ObTableSchema::const_constraint_iterator iter = t_table_schema.constraint_begin(); OB_SUCC(ret) &&
                           iter != t_table_schema.constraint_end(); iter ++) {
-        if (OB_ISNULL((*iter)->get_check_expr_str().ptr())) {
-        } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
-                  (*iter)->get_check_expr_str(), *allocator_, node))) {
-          LOG_WARN("parse expr node from string failed", K(ret));
-        } else {
-          if (node->type_ == T_FUN_SYS_IS_JSON) {
-            ret = OB_ERR_ADDITIONAL_IS_JSON;
-            LOG_WARN("cannot add additional is json check constraint", K(ret));
+        ObConstraint *cst = *iter;
+        for (ObConstraint::const_cst_col_iterator cst_col_iter = cst->cst_col_begin();
+                OB_SUCC(ret) && (cst_col_iter != cst->cst_col_end()); ++cst_col_iter) {
+          if (*cst_col_iter == col_id) {
+            if (OB_ISNULL(cst->get_check_expr_str().ptr())) {
+            } else if (OB_FAIL(ObRawExprUtils::parse_bool_expr_node_from_str(
+                  cst->get_check_expr_str(), *allocator_, node))) {
+              LOG_WARN("parse expr node from string failed", K(ret));
+            } else {
+              if (node->type_ == T_FUN_SYS_IS_JSON) {
+                ret = OB_ERR_ADDITIONAL_IS_JSON;
+                LOG_WARN("cannot add additional is json check constraint", K(ret));
+              }
+            }
           }
         }
       }

@@ -1118,7 +1118,7 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
           LOG_WARN("failed to load medium info list", K(ret), K(tablet));
         } else if (ObMediumCompactionInfo::MAJOR_COMPACTION == medium_list->get_last_compaction_type()
             && inner_table_merged_version < medium_list->get_last_compaction_scn()
-            && !MTL_IS_PRIMARY_TENANT()) { // for STANDBY/RESTORE TENANT
+            && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) { // for STANDBY/RESTORE TENANT
           ObTabletCompactionScnInfo ret_info;
           // for standby/restore tenant, need select inner_table to check RS status before schedule new round
           if (!scheduler_called) { // should not visit inner table, wait for scheduler loop

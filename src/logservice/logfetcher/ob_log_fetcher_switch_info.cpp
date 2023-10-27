@@ -48,10 +48,6 @@ const char *print_switch_reason(const KickOutReason reason)
       str = "PROGRESS_TIMEOUT";
       break;
 
-    case PROGRESS_TIMEOUT_ON_LAGGED_REPLICA:
-      str = "PROGRESS_TIMEOUT_ON_LAGGED_REPLICA";
-      break;
-
     case NEED_SWITCH_SERVER:
       str = "NeedSwitchServer";
       break;

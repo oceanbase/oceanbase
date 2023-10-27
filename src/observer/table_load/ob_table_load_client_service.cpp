@@ -490,6 +490,21 @@ int ObTableLoadClientService::get_task(const ObTableLoadKey &key,
   return ret;
 }
 
+int ObTableLoadClientService::exist_task(const ObTableLoadUniqueKey &key, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    if (OB_FAIL(service->get_client_service().exist_client_task(key, is_exist))) {
+      LOG_WARN("fail to check exist client task", KR(ret), K(key));
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadClientService::commit_task(ObTableLoadClientTask *client_task)
 {
   int ret = OB_SUCCESS;
@@ -528,34 +543,27 @@ int ObTableLoadClientService::abort_task(ObTableLoadClientTask *client_task)
   return ret;
 }
 
-int ObTableLoadClientService::wait_task_finish(ObTableLoadClientTask *client_task,
-                                               ObTableLoadClientStatus client_status)
+int ObTableLoadClientService::wait_task_finish(const ObTableLoadUniqueKey &key)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == client_task)) {
+  if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KPC(client_task));
-  } else if (OB_FAIL(client_task->check_status(client_status))) {
-    LOG_WARN("fail to check status", KR(ret), KPC(client_task), K(client_status));
+    LOG_WARN("invalid args", KR(ret), K(key));
   } else {
+    bool is_exist = true;
     ObTimeoutCtx ctx;
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, 10LL * 1000 * 1000))) {
       LOG_WARN("fail to set default timeout ctx", KR(ret));
     }
-    while (OB_SUCC(ret)) {
+    while (OB_SUCC(ret) && is_exist) {
       if (ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
         LOG_WARN("timeouted", KR(ret), K(ctx));
-      } else {
-        ObTableLoadClientStatus client_status = client_task->get_status();
-        if (client_task->get_ref_count() > 2) {
-          // wait
-          ob_usleep(100LL * 1000);
-        } else if (OB_FAIL(remove_task(client_task))) {
-          LOG_WARN("fail to remove client task", KR(ret), KPC(client_task));
-        } else {
-          break;
-        }
+      } else if (OB_FAIL(exist_task(key, is_exist))) {
+        LOG_WARN("fail to check exist client task", KR(ret), K(key));
+      } else if (is_exist) {
+        // wait
+        ob_usleep(100LL * 1000);
       }
     }
   }
@@ -726,6 +734,30 @@ int ObTableLoadClientService::get_client_task_by_table_id(uint64_t table_id,
       }
     } else {
       client_task->inc_ref_count();
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadClientService::exist_client_task(const ObTableLoadUniqueKey &key, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadClientService not init", KR(ret), KP(this));
+  } else {
+    obsys::ObRLockGuard guard(rwlock_);
+    ObTableLoadClientTask *client_task = nullptr;
+    if (OB_FAIL(client_task_map_.get_refactored(key, client_task))) {
+      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("fail to get refactored", KR(ret), K(key));
+      } else {
+        ret = OB_SUCCESS;
+        is_exist = false;
+      }
+    } else {
+      is_exist = true;
     }
   }
   return ret;

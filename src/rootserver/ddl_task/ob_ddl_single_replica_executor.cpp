@@ -32,43 +32,49 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else {
     ObSpinLockGuard guard(lock_);
-    if (OB_FAIL(source_tablet_ids_.assign(param.source_tablet_ids_))) {
-      LOG_WARN("fail to assign tablet ids", K(ret));
-    } else if (OB_FAIL(dest_tablet_ids_.assign(param.dest_tablet_ids_))) {
-      LOG_WARN("fail to assign tablet ids", K(ret));
-    } else {
-      tenant_id_ = param.tenant_id_;
-      dest_tenant_id_ = param.dest_tenant_id_;
-      type_ = param.type_;
-      source_table_id_ = param.source_table_id_;
-      dest_table_id_ = param.dest_table_id_;
-      schema_version_ = param.schema_version_;
-      dest_schema_version_ = param.dest_schema_version_;
-      snapshot_version_ = param.snapshot_version_;
-      task_id_ = param.task_id_;
-      execution_id_ = param.execution_id_;
-      parallelism_ = param.parallelism_;
-      data_format_version_ = param.data_format_version_;
-      consumer_group_id_ = param.consumer_group_id_;
+    tenant_id_ = param.tenant_id_;
+    dest_tenant_id_ = param.dest_tenant_id_;
+    type_ = param.type_;
+    source_table_id_ = param.source_table_id_;
+    dest_table_id_ = param.dest_table_id_;
+    schema_version_ = param.schema_version_;
+    dest_schema_version_ = param.dest_schema_version_;
+    snapshot_version_ = param.snapshot_version_;
+    task_id_ = param.task_id_;
+    execution_id_ = param.execution_id_;
+    parallelism_ = param.parallelism_;
+    data_format_version_ = param.data_format_version_;
+    consumer_group_id_ = param.consumer_group_id_;
 
-      common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
-      const common::ObIArray<ObTabletID> &tablet_ids = source_tablet_ids_;
-      if (0 == build_infos.count()) {   // first time init
-        for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-          ObPartitionBuildInfo build_info_tmp;
-          build_info_tmp.stat_ = ObPartitionBuildStat::BUILD_INIT;
-          if (OB_FAIL(build_infos.push_back(build_info_tmp))) {
-            LOG_WARN("fail to push back build info", K(ret));
-          } else if (OB_FAIL(tablet_task_ids_.push_back(i + 1))) {
-            LOG_WARN("fail to push tablet task id", K(ret));
-          }
+    common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
+    const common::ObIArray<ObTabletID> &tablet_ids = param.source_tablet_ids_;
+    if (0 == build_infos.count()) {   // first time init
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+        ObPartitionBuildInfo build_info_tmp;
+        build_info_tmp.stat_ = ObPartitionBuildStat::BUILD_INIT;
+        if (OB_FAIL(build_infos.push_back(build_info_tmp))) {
+          LOG_WARN("fail to push back build info", K(ret));
+        } else if (OB_FAIL(tablet_task_ids_.push_back(i + 1))) {
+          LOG_WARN("fail to push tablet task id", K(ret));
         }
-      } else {      // timeout, need reset task status
-        for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); ++i) {
-          ObPartitionBuildInfo &build_info = build_infos.at(i);
-          if (ObPartitionBuildStat::BUILD_REQUESTED == build_info.stat_) {
-            build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
-          }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(source_tablet_ids_.assign(param.source_tablet_ids_))) {
+        LOG_WARN("fail to assign tablet ids", K(ret));
+      } else if (OB_FAIL(dest_tablet_ids_.assign(param.dest_tablet_ids_))) {
+        LOG_WARN("fail to assign tablet ids", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        source_tablet_ids_.reset();
+        dest_tablet_ids_.reset();
+        build_infos.reset();
+        tablet_task_ids_.reset();
+      }
+    } else {      // timeout, need reset task status
+      for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); ++i) {
+        ObPartitionBuildInfo &build_info = build_infos.at(i);
+        if (ObPartitionBuildStat::BUILD_REQUESTED == build_info.stat_) {
+          build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
         }
       }
     }
@@ -94,7 +100,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     ObDDLBuildSingleReplicaRequestProxy proxy(*rpc_proxy,
         &obrpc::ObSrvRpcProxy::build_ddl_single_replica_request);
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
-    ObArray<int64_t> idxs;
+    ObArray<int64_t> idxs; // to record the tablets position in build_infos that need to be scheduled.
     const int64_t current_time = ObTimeUtility::current_time();
     int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
     const bool force_renew = true;
@@ -112,15 +118,15 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       // send rpc request may cost too much time, thus set some status before rpc request under lock.
       for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); i++) {
         ObPartitionBuildInfo &build_info = build_infos.at(i);
-        if (ObPartitionBuildStat::BUILD_INIT == build_info.stat_|| build_info.need_schedule()) {
+        if (build_info.need_schedule()) {
           if (OB_FAIL(request_source_tablet_ids.push_back(source_tablet_ids_.at(i)))) {
             LOG_WARN("push backed failed", K(ret));
           } else if (OB_FAIL(request_dest_tablet_ids.push_back(dest_tablet_ids_.at(i)))) {
             LOG_WARN("push back failed", K(ret));
           } else if (OB_FAIL(request_tablet_task_ids.push_back(tablet_task_ids_.at(i)))) {
             LOG_WARN("push back failed", K(ret));
-          } else {
-            build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
+          } else if (OB_FAIL(idxs.push_back(i))) {
+            LOG_WARN("fail to push back idx", K(ret));
           }
         }
       }
@@ -165,8 +171,6 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       } else if (FALSE_IT(arg.dest_ls_id_ = dest_ls_id)) {
       } else if (OB_FAIL(proxy.call(dest_leader_addr, rpc_timeout, dest_tenant_id_, arg))) {
         LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
-      } else if (OB_FAIL(idxs.push_back(i))) {
-        LOG_WARN("fail to push back idx", K(ret));
       } else {
         LOG_INFO("send build single replica request", K(arg), K(dest_leader_addr));
       }
@@ -183,7 +187,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       ObSpinLockGuard guard(lock_);
       for (int64_t i = 0; OB_SUCC(ret) && i < ret_array.count(); ++i) {
         const int64_t idx = idxs.at(i);
-        if (ObPartitionBuildStat::BUILD_INIT != build_infos.at(idx).stat_ ) {   // already handle respone rpc
+        if (!build_infos.at(idx).need_schedule()) { // already handle respone rpc
           continue;
         } else if (OB_SUCCESS == ret_array.at(i)) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_REQUESTED;
@@ -216,10 +220,10 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
   is_end = false;
   bool has_fail = false;
   bool need_schedule = false;
-  const common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
   int64_t succ_cnt = 0;
   {
     ObSpinLockGuard guard(lock_);
+    const common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
     for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count() && !has_fail; ++i) {
       has_fail = (ObPartitionBuildStat::BUILD_FAILED == build_infos.at(i).stat_);
       if (has_fail) {

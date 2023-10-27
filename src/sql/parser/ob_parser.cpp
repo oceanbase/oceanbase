@@ -26,11 +26,11 @@ using namespace oceanbase::common;
 
 ObParser::ObParser(common::ObIAllocator &allocator,
                    ObSQLMode mode,
-                   ObCollationType conn_collation,
+                   ObCharsets4Parser charsets4parser,
                    QuestionMarkDefNameCtx *ctx)
     :allocator_(&allocator),
      sql_mode_(mode),
-     connection_collation_(conn_collation),
+     charsets4parser_(charsets4parser),
      def_name_ctx_(ctx)
 {}
 
@@ -913,6 +913,7 @@ int ObParser::parse_sql(const ObString &stmt,
 {
   int ret = OB_SUCCESS;
   ObSQLParser sql_parser(*(ObIAllocator*)(parse_result.malloc_pool_), sql_mode_);
+  ObString stmt_str = stmt;
   if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
     // if is multi_values_parser opt not need retry
     if (lib::is_mysql_mode() && !parse_result.is_multi_values_parser_) {
@@ -922,8 +923,14 @@ int ObParser::parse_sql(const ObString &stmt,
         //do nothing.
       }
     }
+#ifdef NDEBUG
+    if (parse_result.may_contain_sensitive_data_) {
+      parse_result.contain_sensitive_data_ = true;
+      stmt_str = ObString(OB_MASKED_STR);
+    }
+#endif
     if (!no_throw_parser_error) {
-      LOG_INFO("failed to parse stmt as sql", K(stmt), K(ret));
+      LOG_INFO("failed to parse stmt as sql", K(stmt_str), K(ret));
     }
   } else if (parse_result.is_dynamic_sql_) {
     memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
@@ -932,21 +939,24 @@ int ObParser::parse_sql(const ObString &stmt,
     parse_result.no_param_sql_len_
       += parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_;
   } else { /*do nothing*/ }
+#ifndef NDEBUG
+  parse_result.contain_sensitive_data_ = false;
+#endif
   if (parse_result.is_fp_ || parse_result.is_multi_query_) {
     if (OB_FAIL(ret) && !no_throw_parser_error) {
-      LOG_WARN("failed to fast parameterize", K(stmt), K(ret));
+      LOG_WARN("failed to fast parameterize", K(stmt_str), K(ret));
     }
   }
   if (OB_SUCC(ret) &&
       parse_result.enable_compatible_comment_ &&
       parse_result.mysql_compatible_comment_) {
     ret = OB_ERR_PARSE_SQL;
-    LOG_WARN("the sql is invalid", K(ret), K(stmt));
+    LOG_WARN("the sql is invalid", K(ret), K(stmt_str));
   }
   if (OB_FAIL(ret) && !no_throw_parser_error) {
     auto err_charge_sql_mode = lib::is_oracle_mode();
     LOG_WARN("failed to parse the statement",
-             K(stmt),
+             K(stmt_str),
              K(parse_result.is_fp_),
              K(parse_result.is_multi_query_),
              K(parse_result.yyscan_info_),
@@ -1026,8 +1036,8 @@ int ObParser::parse(const ObString &query,
   parse_result.is_dbms_sql_ = (DBMS_SQL_MODE == parse_mode);
   parse_result.is_for_udr_ = (UDR_SQL_MODE == parse_mode);
   parse_result.is_batched_multi_enabled_split_ = is_batched_multi_stmt_split_on;
-  parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
-        (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
+  parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(charsets4parser_.string_collation_) ?
+        (ObCharset::charset_type_by_coll(charsets4parser_.string_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.malloc_pool_ = allocator_;
   if (lib::is_oracle_mode()) {
     parse_result.sql_mode_ = sql_mode_ | SMO_ORACLE;
@@ -1038,8 +1048,10 @@ int ObParser::parse(const ObString &query,
                          || FP_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
   parse_result.minus_ctx_.pos_ = -1;
   parse_result.minus_ctx_.raw_sql_offset_ = -1;
-  parse_result.charset_info_ = ObCharset::get_charset(connection_collation_);
-  parse_result.connection_collation_ = connection_collation_;
+  parse_result.charset_info_ = ObCharset::get_charset(charsets4parser_.string_collation_);
+  parse_result.charset_info_oracle_db_ = ObCharset::is_valid_collation(charsets4parser_.nls_collation_) ?
+        ObCharset::get_charset(charsets4parser_.nls_collation_) : NULL;
+  parse_result.connection_collation_ = charsets4parser_.string_collation_;
   parse_result.mysql_compatible_comment_ = false;
   parse_result.enable_compatible_comment_ = true;
   if (nullptr != def_name_ctx_) {
@@ -1058,6 +1070,11 @@ int ObParser::parse(const ObString &query,
     } else {
       parse_result.ins_multi_value_res_ = new(buffer)InsMultiValuesResult();
     }
+  }
+
+  if (OB_SUCC(ret) && stmt.empty()) {
+    ret = OB_ERR_EMPTY_QUERY;
+    LOG_WARN("query is empty", K(ret));
   }
 
   if (OB_SUCC(ret) && (parse_result.is_fp_ || parse_result.is_dynamic_sql_)) {
@@ -1086,10 +1103,10 @@ int ObParser::parse(const ObString &query,
   if (OB_SUCC(ret) && OB_ISNULL(parse_result.charset_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("charset info is null", K(ret),
-             "connection charset", ObCharset::charset_name(connection_collation_));
+             "connection charset", ObCharset::charset_name(charsets4parser_.string_collation_));
   } else {
     LOG_DEBUG("check parse_result param",
-              "connection charset", ObCharset::charset_name(connection_collation_));
+              "connection charset", ObCharset::charset_name(charsets4parser_.string_collation_));
   }
   if (OB_SUCC(ret)) {
     bool is_create_func = false;
@@ -1118,11 +1135,13 @@ int ObParser::parse(const ObString &query,
       if (OB_FAIL(parse_sql(stmt, parse_result, no_throw_parser_error))) {
         // if fail, regard /*! */ as comment, and retry;
         if (!no_throw_parser_error) {
-          LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+          LOG_WARN("failed to parse stmt as sql",
+                   "stmt", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : stmt,
+                   K(parse_mode), K(ret));
         }
       }
     } else {
-      ObPLParser pl_parser(*(ObIAllocator*)(parse_result.malloc_pool_), connection_collation_, sql_mode_);
+      ObPLParser pl_parser(*(ObIAllocator*)(parse_result.malloc_pool_), charsets4parser_, sql_mode_);
       if (OB_FAIL(pl_parser.parse(stmt, stmt, parse_result, is_pl_inner_parse))) {
         LOG_WARN("failed to parse stmt as pl", K(stmt), K(ret));
         // may create ddl func, try it.
@@ -1133,7 +1152,9 @@ int ObParser::parse(const ObString &query,
             (OB_ERR_PARSE_SQL == ret && is_mysql_comment)) {
           if (OB_FAIL(parse_sql(stmt, parse_result, no_throw_parser_error))) {
             if (!no_throw_parser_error) {
-              LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+              LOG_WARN("failed to parse stmt as sql",
+                  "stmt", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : stmt,
+                  K(parse_mode), K(ret));
             }
           }
         }

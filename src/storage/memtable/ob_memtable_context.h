@@ -15,8 +15,11 @@
 
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/checksum/ob_crc64.h"
+#include "lib/list/ob_dlist.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/lock/ob_small_spin_lock.h"
+#include "lib/utility/ob_macro_utils.h"
+#include "ob_clock_generator.h"
 #include "share/ob_define.h"
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/memtable/ob_memtable_mutator.h"
@@ -42,23 +45,33 @@ struct ObTableLockInfo;
 namespace memtable
 {
 
-class MemtableCtxStat
+struct RetryInfo
 {
-public:
-  MemtableCtxStat(): wlock_retry_(0), tsc_retry_(0) {}
-  ~MemtableCtxStat() {}
-  void reset()
-  {
-    wlock_retry_ = 0;
-    tsc_retry_ = 0;
+  RetryInfo() : retry_cnt_(0), last_retry_ts_(0) {}
+  int64_t to_string(char *buf, const int64_t buf_len) const {
+    int64_t pos = 0;
+    int64_t retry_cnt = ATOMIC_LOAD(&retry_cnt_);
+    (void) databuff_printf(buf, buf_len, pos, "retry_cnt:%ld, last_retry_ts:%s",
+                           retry_cnt, ObTime2Str::ob_timestamp_str(last_retry_ts_));
+    return pos;
   }
-  void on_wlock_retry() { (void)ATOMIC_FAA(&wlock_retry_, 1); }
-  void on_tsc_retry() { (void)ATOMIC_FAA(&tsc_retry_, 1); }
-  int32_t get_wlock_retry_count() { return ATOMIC_LOAD(&wlock_retry_); }
-  int32_t get_tsc_retry_count() { return ATOMIC_LOAD(&tsc_retry_); }
-private:
-  int32_t wlock_retry_;
-  int32_t tsc_retry_;
+  void reset() { retry_cnt_ = 0; last_retry_ts_ = 0; }
+  void on_conflict() {
+    ATOMIC_AAF(&retry_cnt_, 1);
+    last_retry_ts_ = ObClockGenerator::getClock();
+  }
+  bool need_print() const {
+    bool ret = false;
+    int64_t ts = ObClockGenerator::getClock();
+    if (ATOMIC_LOAD(&retry_cnt_) % 10 == 0 ||// retry cnt more than specified times
+        ts - last_retry_ts_ >= 1_s ||// retry interval more than specified interval seconds
+        last_retry_ts_ == 0) {// retry ts is invalid
+      ret = true;
+    }
+    return ret;
+  }
+  int64_t retry_cnt_;
+  int64_t last_retry_ts_;
 };
 
 // 1. When fill redo log, if there is a big row, the meta info should record
@@ -524,8 +537,7 @@ private:
   ObQueryAllocator query_allocator_;
   ObMemtableCtxCbAllocator ctx_cb_allocator_;
   ObRedoLogGenerator log_gen_;
-  MemtableCtxStat mtstat_;
-  ObTimeInterval log_conflict_interval_;
+  RetryInfo retry_info_;
   transaction::ObPartTransCtx *ctx_;
   int64_t truncate_cnt_;
   // the retry count of lock for read

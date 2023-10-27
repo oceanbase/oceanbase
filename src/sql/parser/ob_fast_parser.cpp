@@ -113,8 +113,8 @@ ObFastParserBase::ObFastParserBase(
   question_mark_ctx_.by_ordinal_ = false;
   question_mark_ctx_.by_name_ = false;
   question_mark_ctx_.name_ = nullptr;
-  charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.conn_coll_);
-  charset_info_ = ObCharset::get_charset(fp_ctx.conn_coll_);
+  charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.charsets4parser_.string_collation_);
+  charset_info_ = ObCharset::get_charset(fp_ctx.charsets4parser_.string_collation_);
 }
 
 int ObFastParserBase::parse(const ObString &stmt,
@@ -2955,7 +2955,9 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
         int64_t str_len = tmp_buf_len_;
         need_mem_size += str_len + 1; // '\0'
         if ('n' == raw_sql_.char_at(cur_token_begin_pos_) ||
-            'N' == raw_sql_.char_at(cur_token_begin_pos_)) {
+            'N' == raw_sql_.char_at(cur_token_begin_pos_) ||
+            'u' == raw_sql_.char_at(cur_token_begin_pos_) ||
+            'U' == raw_sql_.char_at(cur_token_begin_pos_)) {
           param_type = T_NCHAR;
         }
         // allocate all the memory needed at once
@@ -2979,6 +2981,11 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
             node->raw_sql_offset_ = cur_token_begin_pos_ + 1;
           } else {
             node->raw_sql_offset_ = cur_token_begin_pos_;
+          }
+
+          if ('u' == raw_sql_.char_at(cur_token_begin_pos_) ||
+              'U' == raw_sql_.char_at(cur_token_begin_pos_)) {
+            node->value_ = -1;
           }
           lex_store_param(node, buf);
         }
@@ -3074,7 +3081,11 @@ int ObFastParserOracle::process_identifier(bool is_number_begin)
       }
       case 'u': // update
       case 'U': {
-        CHECK_AND_PROCESS_HINT("pdate", 5);
+        if ('\'' == raw_sql_.char_at(raw_sql_.cur_pos_)) {
+          OZ (process_string(false));
+        } else {
+          CHECK_AND_PROCESS_HINT("pdate", 5);
+        }
         break;
       }
       case 'i': // insert or interval

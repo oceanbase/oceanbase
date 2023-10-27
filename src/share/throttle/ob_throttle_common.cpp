@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "share/throttle/ob_throttle_common.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase {
 namespace share {
@@ -32,7 +33,7 @@ int64_t ObThrottleStat::to_string(char *buf, const int64_t buf_len) const
 bool ObThrottleStat::need_log(const bool is_throttle_now)
 {
   bool is_need_log = false;
-  const int64_t cur_ts = common::ObTimeUtility::current_time();
+  const int64_t cur_ts = ObClockGenerator::getClock();
   if (cur_ts - last_log_timestamp > MAX_LOG_INTERVAL) {
     is_need_log = true;
   }

@@ -89,8 +89,7 @@ void ObReplayServiceTask::set_fatal_err_info(const int ret_code,
 
 bool ObReplayServiceTask::need_replay_immediately() const
 {
-  return (OB_SUCCESS == err_info_.ret_code_
-          || OB_EAGAIN == err_info_.ret_code_);
+  return (OB_SUCCESS == err_info_.ret_code_);
 }
 
 //---------------ObReplayServiceSubmitTask---------------//

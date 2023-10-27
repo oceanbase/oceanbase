@@ -205,13 +205,14 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
            "tenant_id", result.get_session().get_effective_tenant_id(),
            "execution_id", result.get_session().get_current_execution_id());
 #endif
-  NG_TRACE_EXT(parse_begin, OB_ID(stmt), trunc_stmt.string(), OB_ID(stmt_len), stmt.length());
+  NG_TRACE(parse_begin);
   //1 check inited
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
   } else if (OB_FAIL(handle_text_query(stmt, context, result))) {
     if (OB_EAGAIN != ret && OB_ERR_PROXY_REROUTE != ret) {
-      LOG_WARN("fail to handle text query", K(stmt), K(ret));
+      LOG_WARN("fail to handle text query",
+               "stmt", context.is_sensitive_ ? ObString(OB_MASKED_STR) : stmt, K(ret));
     }
   }
   CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, true);
@@ -229,6 +230,9 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   }
   FLT_SET_TAG(database_id, result.get_session().get_database_id(),
                 sql_id, context.sql_id_);
+  NG_TRACE_EXT(stmt_query_end, OB_ID(stmt),
+               context.is_sensitive_ ? ObString(OB_MASKED_STR) : trunc_stmt.string(),
+               OB_ID(stmt_len), stmt.length());
 
   return ret;
 }
@@ -739,8 +743,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           if ((T_FUN_SET_TO_STR != expr->get_expr_type() &&
               T_FUN_ENUM_TO_STR != expr->get_expr_type()) &&
               (T_FUN_SYS_CALC_UROWID == expr->get_expr_type() ||
-              ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
-                                    static_cast<ObColumnRefRawExpr *>(expr)->get_column_name()))) {
+               (lib::is_oracle_mode() &&
+                ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+                                                  static_cast<ObColumnRefRawExpr *>(expr)->get_column_name())))) {
             //Although the current implement of rowid does not use mock a column schema, it should
             //be as normal column when displayed externally.
             if (T_FUN_SYS_CALC_UROWID == expr->get_expr_type()) {
@@ -1008,7 +1013,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
-  ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+  ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
   ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
                          (context.is_dynamic_sql_  || !is_inner_sql) ? DYNAMIC_SQL_MODE :
                          session.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
@@ -1031,7 +1036,8 @@ int ObSql::do_real_prepare(const ObString &sql,
   } else if (OB_FAIL(parser.parse(sql,
                                   parse_result,
                                   parse_mode))) {
-    LOG_WARN("generate syntax tree failed", K(sql), K(ret));
+    LOG_WARN("generate syntax tree failed",
+             "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql, K(ret));
   } else if (is_mysql_mode()
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
     ret = OB_ER_UNSUPPORTED_PS;
@@ -1039,6 +1045,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   } else {
     ps_status_guard.is_varparams_sql_prepare(is_from_pl, parse_result.question_mark_ctx_.count_ > 0 ? true : false);
   }
+  context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
   OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
 
@@ -1093,7 +1100,7 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                   pc_ctx,
                                                                   parse_result.result_tree_,
                                                                   param_store,
-                                                                  session.get_local_collation_connection()))) {
+                                                                  session.get_charsets4parser()))) {
         LOG_INFO("parameterize syntax tree failed", K(ret));
         pc_ctx.ps_need_parameterized_ = false;
         ret = OB_SUCCESS;
@@ -1149,7 +1156,8 @@ int ObSql::do_real_prepare(const ObString &sql,
     }
 
     LOG_INFO("generate new stmt", K(ret), K(param_cnt), K(stmt_type), K(info_ctx.no_param_sql_),
-             K(info_ctx.normalized_sql_), K(sql), K(info_ctx.num_of_returning_into_));
+             K(info_ctx.normalized_sql_), K(info_ctx.num_of_returning_into_),
+             "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql);
   }
   if (OB_SUCC(ret)) {
     info_ctx.param_cnt_ = param_cnt;
@@ -1265,7 +1273,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
   CK (OB_NOT_NULL(pl_prepare_result.result_set_));
   if (OB_SUCC(ret)) {
     ObIAllocator &allocator = *pl_prepare_result.get_allocator();
-    ObParser parser(allocator, sess.get_sql_mode(), sess.get_local_collation_connection());
+    ObParser parser(allocator, sess.get_sql_mode(), sess.get_charsets4parser());
     ParseMode parse_mode = pl_prepare_ctx.is_dbms_sql_ ? DBMS_SQL_MODE :
                           pl_prepare_ctx.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
                           sess.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
@@ -1303,13 +1311,15 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
-            LOG_WARN("generate syntax tree failed", K(sql), K(ret));
+            LOG_WARN("generate syntax tree failed", K(ret),
+                     "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
             ret = OB_ER_UNSUPPORTED_PS;
             LOG_WARN("This command is not supported in the prepared statement protocol yet", K(ret));
           } else if (NULL == pl_prepare_ctx.secondary_ns_ && !pl_prepare_ctx.is_dynamic_sql_) {
             result.set_simple_ps_protocol();
           }
+          context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
           if (OB_FAIL(ret)) {
             // do nothing
@@ -1474,7 +1484,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
  * params: 当前sql语句的参数列表
  * res: 直接结果集
  */
-// TODO baixian.zr/hr351303, remove is_prepare_protocol and is_dynamic_sql
+// TODO remove is_prepare_protocol and is_dynamic_sql
 int ObSql::handle_pl_execute(const ObString &sql,
                              ObSQLSessionInfo &session,
                              ParamStore &params,
@@ -1502,6 +1512,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
     context.cur_sql_ = sql;
     context.is_dynamic_sql_ = is_dynamic_sql;
     context.is_prepare_protocol_ = is_prepare_protocol;
+    context.spm_ctx_.bl_key_.db_id_ = session.get_database_id();
     context.disable_privilege_check_ = OB_SYS_TENANT_ID == session.get_priv_tenant_id()
                                           ? PRIV_CHECK_FLAG_DISABLE
                                           : PRIV_CHECK_FLAG_IN_PL;
@@ -1524,7 +1535,9 @@ int ObSql::handle_pl_execute(const ObString &sql,
     result.set_simple_ps_protocol();
   }
 
-  LOG_TRACE("arrive handle pl execute", K(ret), K(sql), K(is_prepare_protocol), K(is_dynamic_sql), K(lbt()));
+  LOG_TRACE("arrive handle pl execute", K(ret),
+            "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql,
+            K(is_prepare_protocol), K(is_dynamic_sql), K(lbt()));
 
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(pctx)) {
@@ -2203,19 +2216,25 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
           context.is_execute_call_stmt_ = true;
         }
         ObParser parser(allocator, session.get_sql_mode(),
-                        session.get_local_collation_connection());
+                        session.get_charsets4parser());
         ParseResult parse_result;
         ObSqlTraits sql_traits;
         ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
                                 context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
                                 (context.session_info_->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
         if (OB_FAIL(parser.parse(sql, parse_result, parse_mode))) {
-          LOG_WARN("failed to parse sql", K(ret), K(sql), K(stmt_type));
+          LOG_WARN("failed to parse sql", K(ret), K(stmt_type),
+                   "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
+        }
+        context.is_sensitive_ |= parse_result.contain_sensitive_data_;
+
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(check_read_only_privilege(parse_result, ectx, *schema_guard, sql_traits))) {
           LOG_WARN("failed to check read only privilege", K(ret));
         } else if (OB_FAIL(generate_physical_plan(parse_result, NULL, context, result,
             false /*is_begin_commit_stmt*/, PC_PS_MODE))) {
-          LOG_WARN("generate physical plan failed", K(ret), K(sql), K(stmt_type));
+          LOG_WARN("generate physical plan failed", K(ret),
+                   "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql, K(stmt_type));
         } // TODO 生成物理计划的路径可x需q区分
       }
     }
@@ -2296,7 +2315,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
       //切割出来的query最后走batched multi stmt的逻辑去查询plan cache和生成计划
       ObParser parser(allocator,
                       session->get_sql_mode(),
-                      session->get_local_collation_connection(),
+                      session->get_charsets4parser(),
                       pc_ctx->def_name_ctx_);
       ObMPParseStat parse_stat;
       if (OB_FAIL(parser.split_multiple_stmt(remote_sql_info.remote_sql_, queries, parse_stat))) {
@@ -2759,33 +2778,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, tmp_node, stmt);
       } else {
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
-        ObItemType resolve_type = parse_result.result_tree_->children_[0]->type_;
-        switch (resolve_type) {
-          case T_ALTER_SYSTEM_SET:
-          case T_ALTER_SYSTEM_SET_PARAMETER:
-          case T_CREATE_USER:
-          case T_SET_PASSWORD:
-          case T_GRANT:
-          case T_CREATE_ROLE:
-          case T_ALTER_ROLE:
-          case T_SET_ROLE_PASSWORD:
-          case T_SYSTEM_GRANT:
-          case T_GRANT_ROLE: {
-            context.is_sensitive_ = true;
-            break;
-          }
-          case T_CREATE_TABLE: {
-            ParseNode *special_type_node = parse_result.result_tree_->children_[0]->children_[0];
-            if (OB_NOT_NULL(special_type_node) && T_EXTERNAL == special_type_node->type_) {
-              //external table location may contain sensitive access info
-              context.is_sensitive_ = true;
-            }
-            break;
-          }
-          default: {
-            break;
-          }
-        }
       }
       // set const param constraint after resolving
       context.all_plan_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_plan_const_param_constraints_);
@@ -3280,7 +3272,7 @@ int ObSql::generate_stmt_with_reconstruct_sql(ObDMLStmt* &stmt,
     ParseResult parse_result;
     ObParser parser(pc_ctx->allocator_,
                     session->get_sql_mode(),
-                    session->get_local_collation_connection(),
+                    session->get_charsets4parser(),
                     pc_ctx->def_name_ctx_);
     stmt->get_query_ctx()->global_dependency_tables_.reuse();
     if (OB_FAIL(parser.parse(sql, parse_result))) {
@@ -3735,12 +3727,7 @@ OB_INLINE int ObSql::init_exec_context(const ObSqlCtx &context, ObExecContext &e
   if (OB_FAIL(exec_ctx.create_physical_plan_ctx())) {
     LOG_WARN("faile to create physical plan ctx", K(ret));
   } else {
-    ObMemAttr mem_attr;
-    mem_attr.label_ = ObModIds::OB_SQL_EXEC_CONTEXT;
-    mem_attr.tenant_id_ = context.session_info_->get_effective_tenant_id();
-    mem_attr.ctx_id_ = ObCtxIds::EXECUTE_CTX_ID;
     exec_ctx.set_my_session(context.session_info_);
-    exec_ctx.set_mem_attr(mem_attr);
     exec_ctx.set_sql_ctx(const_cast<ObSqlCtx*>(&context));
     if (OB_NOT_NULL(exec_ctx.get_physical_plan_ctx()) && OB_NOT_NULL(context.session_info_)) {
       int64_t query_timeout = 0;
@@ -3764,7 +3751,7 @@ int ObSql::execute_get_plan(ObPlanCache &plan_cache,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
-    // TODO baixian.zr, change pl mode hit cache as text mode.
+    // TODO change pl mode hit cache as text mode.
     ObPsStmtId stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
     guard.init(PS_EXEC_HANDLE);
     if (OB_FAIL(plan_cache.get_ps_plan(guard, stmt_id, pc_ctx))) {
@@ -3946,7 +3933,7 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   }
 
   if (OB_SUCC(ret) && !outline_content.empty()) {
-    ObParser parser(pc_ctx.allocator_, session->get_sql_mode(), session->get_local_collation_connection(), pc_ctx.def_name_ctx_);
+    ObParser parser(pc_ctx.allocator_, session->get_sql_mode(), session->get_charsets4parser(), pc_ctx.def_name_ctx_);
     ObSqlString sql_helper;
     ObString temp_outline_sql;
     if (OB_FAIL(sql_helper.assign_fmt("select %.*s 1 from dual", outline_content.length(),
@@ -4076,17 +4063,19 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
   } else {
     pctx->reset_datum_param_store();
     pctx->get_param_store_for_update().reuse();
-    ObParser parser(allocator, session->get_sql_mode(), session->get_local_collation_connection(), pc_ctx.def_name_ctx_);
+    ObParser parser(allocator, session->get_sql_mode(), session->get_charsets4parser(), pc_ctx.def_name_ctx_);
     if (OB_FAIL(parser.parse(outlined_stmt, parse_result,
                              pc_ctx.is_rewrite_sql_ ? UDR_SQL_MODE : STD_MODE,
                              pc_ctx.sql_ctx_.handle_batched_multi_stmt(),
                              false, lib::is_mysql_mode() && NULL != session->get_pl_context()))) {
-      LOG_WARN("Generate syntax tree failed", K(outlined_stmt), K(ret));
+      LOG_WARN("Generate syntax tree failed", K(ret),
+               "outlined_stmt", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : outlined_stmt);
     } else if ((PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
       && OB_FAIL(construct_param_store_from_parameterized_params(
                     pc_ctx, pctx->get_param_store_for_update()))) {
       LOG_WARN("construct param store failed", K(ret));
     }
+    pc_ctx.sql_ctx_.is_sensitive_ |= parse_result.contain_sensitive_data_;
     if (OB_SUCC(ret)) {
       // parser返回成功
       if (OB_ISNULL(parse_result.result_tree_)) {
@@ -4233,7 +4222,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                                                                   pc_ctx,
                                                                   parse_result.result_tree_,
                                                                   pctx->get_param_store_for_update(),
-                                                                  session->get_local_collation_connection()))) {
+                                                                  session->get_charsets4parser()))) {
         bool need_retry_param = true;
         int tmp_ret = OB_SUCCESS;
         tmp_ret = OB_E(EventTable::EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR) OB_SUCCESS;
@@ -4330,9 +4319,12 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     plan_added = (OB_SUCCESS == ret);
 
     if (is_batch_exec) {
-      // 只有完整的插入了计划，才做batch优化执行，否则都认为需要回退成单行逐行执行
-      if (OB_FAIL(ret)) {
-        LOG_WARN("fail to add batch_execute_plan", K(ret));
+      // Batch optimization cannot continue for errors other than OB_SQL_PC_PLAN_DUPLICATE.
+      if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("this plan has been added by others, need not add again", K(phy_plan));
+      } else if (OB_FAIL(ret)) {
+        LOG_WARN("some unexpected error occured", K(ret));
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
       } else {
         pc_ctx.sql_ctx_.self_add_plan_ = true;
@@ -4383,7 +4375,7 @@ void ObSql::check_template_sql_can_be_prepare(ObPlanCacheCtx &pc_ctx, ObPhysical
     ParseResult parse_result;
     ObParser parser(pc_ctx.allocator_,
                     session->get_sql_mode(),
-                    session->get_local_collation_connection(),
+                    session->get_charsets4parser(),
                     pc_ctx.def_name_ctx_);
     if (OB_FAIL(parser.parse(temp_sql, parse_result))) {
       LOG_DEBUG("generate syntax tree failed", K(temp_sql), K(ret));
@@ -4629,7 +4621,7 @@ int ObSql::pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
   tmp_pc_ctx.rule_name_ = pc_ctx.rule_name_;
   const ObUDRItem *rule_item = item_guard.get_ref_obj();
   ObParser parser(allocator, session.get_sql_mode(),
-                  session.get_local_collation_connection(),
+                  session.get_charsets4parser(),
                   pc_ctx.def_name_ctx_);
   if (OB_ISNULL(rule_item)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4647,7 +4639,7 @@ int ObSql::pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
                                                                      tmp_pc_ctx,
                                                                      parse_result.result_tree_,
                                                                      param_store,
-                                                                     session.get_local_collation_connection()))) {
+                                                                     session.get_charsets4parser()))) {
     LOG_WARN("parameterize syntax tree failed", K(ret));
   } else if (OB_FAIL(pc_add_plan(tmp_pc_ctx, result, outline_state, plan_cache, plan_added))) {
     LOG_WARN("failed to add plan", K(ret));
@@ -4904,7 +4896,8 @@ int ObSql::handle_parser(const ObString &sql,
     LOG_WARN("invalid argument", K(ret), KP(pctx), KP(pc_ctx.sql_ctx_.session_info_));
   } else if (OB_FAIL(parser_and_check(sql, exec_ctx, pc_ctx, parse_result,
                                       get_plan_err, add_plan_to_pc, is_enable_transform_tree))) {
-    LOG_WARN("fail to parser normal query", K(sql), K(ret));
+    LOG_WARN("fail to parser normal query",
+             "sql", pc_ctx.sql_ctx_.is_sensitive_ ? ObString(OB_MASKED_STR) : sql, K(ret));
   }
   if (OB_SUCC(ret)) {
     if (exec_ctx.has_dynamic_values_table()) {

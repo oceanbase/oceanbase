@@ -360,7 +360,7 @@ DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // tenant memtable consumption related
-DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
+DEF_INT(memstore_limit_percentage, OB_TENANT_PARAMETER, "50", "(0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "
         "memstore_limit_percentage = memstore_limit / memory_size,memory_size, "
         "where MEMORY_SIZE is determined when the tenant is created. Range: (0, 100)",
@@ -589,9 +589,9 @@ DEF_TIME(log_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s",
         "Range: [1s,300s]",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(ls_gc_delay_time, OB_TENANT_PARAMETER, "1h",
+DEF_TIME(ls_gc_delay_time, OB_TENANT_PARAMETER, "0s",
         "[0s,)",
-        "The max delay time for ls gc when log archive is off. The default value is 3600s. Range: [0s, +∞). "
+        "The max delay time for ls gc when log archive is off. The default value is 0s. Range: [0s, +∞). "
         "The ls delay deletion mechanism will no longer take effect when the tenant is dropped.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -1376,6 +1376,11 @@ DEF_BOOL(_enable_new_sql_nio, OB_CLUSTER_PARAMETER, "true",
 "specifies whether SQL serial network is turned on. Turned on to support mysql_send_long_data"
 "The default value is FALSE. Value: TRUE: turned on FALSE: turned off",
 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
+// Add a config to enable use das if the sql statement has variable assignment
+DEF_BOOL(_enable_var_assign_use_das, OB_TENANT_PARAMETER, "True",
+         "enable use das if the sql statement has variable assignment",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // query response time
 DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "False",
     "Enable or disable QUERY_RESPONSE_TIME statistics collecting"
@@ -1603,6 +1608,12 @@ DEF_TIME(_schema_memory_recycle_interval, OB_CLUSTER_PARAMETER, "15m", "[0s,)",
 DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_system_tenant_limit_mode, OB_CLUSTER_PARAMETER, "1", "[0,2]",
+        "specifies the limit mode for the memory hold of system tenant, "
+        "0: not limit the memory hold of system tenant, "
+        "1: only limit the DEFAULT_CTX_ID memory of system tenant, "
+        "2: besides limit the DEFAULT_CTX_ID memory, the total hold of system tenant is also limited.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
 DEF_BOOL(_force_malloc_for_absent_tenant, OB_CLUSTER_PARAMETER, "False",
          "force malloc even if tenant does not exist in observer",
@@ -1638,6 +1649,11 @@ ERRSIM_DEF_DBL(errsim_module_error_percentage, OB_TENANT_PARAMETER, "0", "[0,100
         "the percentage of the error happened to errsim module. "
         "Range: [0, 100] in percentage",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+
+
+ERRSIM_DEF_BOOL(block_transfer_out_replay, OB_TENANT_PARAMETER, "False",
+         "errsim to block transfer out clog replay",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // ttl
 DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "", common::ObTTLDutyDurationChecker,

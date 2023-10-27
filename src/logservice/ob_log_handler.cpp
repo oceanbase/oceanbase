@@ -1205,7 +1205,9 @@ int ObLogHandler::unlock_config_change(const int64_t lock_owner, const int64_t t
 {
   int ret = OB_SUCCESS;
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us / 2;
-  WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
+  // Note: rlock is safe, the deps_lock_ is used to protect states of ObLogHandler
+  // such as is_in_stop_state_.
+  RLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(ret)) {

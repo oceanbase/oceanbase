@@ -15,6 +15,8 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_ls_member_list_service.h"
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/tablet/ob_tablet_iterator.h"
 
 namespace oceanbase
 {
@@ -206,7 +208,7 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
           STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(key));
           ret = OB_SUCCESS;
         } else if (OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-          if (MTL_IS_PRIMARY_TENANT()) {
+          if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
             STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(tablet_id));
             break;
           } else {
@@ -325,11 +327,14 @@ int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> 
 int ObLSMemberListService::check_ls_transfer_scn_validity_(palf::LogConfigVersion &leader_config_version)
 {
   int ret = OB_SUCCESS;
-  if (MTL_IS_PRIMARY_TENANT()) {
+  if (MTL_TENANT_ROLE_CACHE_IS_INVALID()) {
+    ret = OB_NEED_RETRY;
+    STORAGE_LOG(WARN, "tenant role is invalid, need retry", KR(ret));
+  } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     if (OB_FAIL(check_ls_transfer_scn_validity_for_primary_(leader_config_version))) {
       STORAGE_LOG(WARN, "failed to check ls transfer scn validity for primary", K(ret), KP_(ls));
     }
-  } else {
+  } else {//standby restore
     if (OB_FAIL(check_ls_transfer_scn_validity_for_standby_(leader_config_version))) {
       STORAGE_LOG(WARN, "failed to check ls transfer scn validity for standby", K(ret), KP_(ls));
     }

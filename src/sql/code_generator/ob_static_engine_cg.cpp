@@ -1037,6 +1037,13 @@ int ObStaticEngineCG::generate_spec(
       if (OB_ISNULL(raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("null pointer", K(ret));
+      } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == raw_expr->get_data_type()
+                                                 || ObLobType == raw_expr->get_data_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("select distinct lob not allowed", K(ret));
+      } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
+        ret = OB_ERR_INVALID_CMP_OP;
+        LOG_WARN("select distinct json not allowed", K(ret));
       } else if (raw_expr->is_const_expr()) {
           // distinct const value, 这里需要注意：distinct 1被跳过了，
           // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -1105,6 +1112,13 @@ int ObStaticEngineCG::generate_spec(
         if (OB_ISNULL(raw_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("null pointer", K(ret));
+        } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == raw_expr->get_data_type()
+                                                   || ObLobType == raw_expr->get_data_type())) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("select distinct lob not allowed", K(ret));
+        } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
+          ret = OB_ERR_INVALID_CMP_OP;
+          LOG_WARN("select distinct json not allowed", K(ret));
         } else if (raw_expr->is_const_expr()) {
             // distinct const value, 这里需要注意：distinct 1被跳过了，
             // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -1693,6 +1707,13 @@ int ObStaticEngineCG::fill_sort_funcs(
         // other udt types not supported, xmltype does not have order or map member function
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == expr->datum_meta_.type_
+                                                 || ObLobType == expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("order by lob not allowed", K(ret));
+      } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_CMP_OP;
+        LOG_WARN("order by json not allowed", K(ret));
       } else {
         ObSortCmpFunc cmp_func;
         cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -3979,7 +4000,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     }
     root = root->and_next_;
   }
-  // TODO @baixian.zr the above optimization is overrode by ObTscCgService::generate_tsc_ctdef before this commit
+  // TODO the above optimization is overrode by ObTscCgService::generate_tsc_ctdef before this commit
   // but after the deep copy of pre_query_range_ is removed in ObTscCgService::generate_tsc_ctdef,
   // error is returned in such sql 'set global x=y', should fix this;
   // spec.tsc_ctdef_.pre_query_range_.set_is_equal_and(is_equal_and);
@@ -6923,6 +6944,13 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   //set user and system variables
   if (OB_SUCC(ret)) {
     ret = phy_plan.set_vars(log_plan.get_stmt()->get_query_ctx()->variables_);
+  }
+
+  if (OB_SUCC(ret) && !log_plan.get_stmt()->is_explain_stmt()) {
+    if (OB_FAIL(generate_rt_exprs(log_plan.get_stmt()->get_query_ctx()->var_init_exprs_,
+                                  phy_plan.var_init_exprs_))) {
+      LOG_WARN("generate var init exprs failed", KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {

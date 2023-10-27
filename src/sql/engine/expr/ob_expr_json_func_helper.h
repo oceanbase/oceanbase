@@ -98,7 +98,7 @@ public:
                                     bool format_json = false, bool is_strict = false, bool is_bin = false);
 
   static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
-                                ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false);
+                                ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false, bool is_absent_null = false);
  
   /*
   replace json_old with json_new in json_doc
@@ -163,11 +163,11 @@ public:
 
   static bool is_cs_type_bin(ObCollationType &cs_type);
   static int get_timestamp_str_in_oracle_mode(ObEvalCtx &ctx,
-                                                                const ObDatum &datum,
-                                                                ObObjType type,
-                                                                ObScale scale,
-                                                                const ObTimeZoneInfo *tz_info,
-                                                                ObJsonBuffer &j_buf);
+                                              const ObDatum &datum,
+                                              ObObjType type,
+                                              ObScale scale,
+                                              const ObTimeZoneInfo *tz_info,
+                                              ObJsonBuffer &j_buf);
 
   static bool is_convertible_to_json(ObObjType &type);
   static int is_valid_for_json(ObExprResType* types_stack, uint32_t index, const char* func_name);
@@ -176,6 +176,11 @@ public:
   static void set_type_for_value(ObExprResType* types_stack, uint32_t index);
   static int ensure_collation(ObObjType type, ObCollationType cs_type);
   static ObJsonInType get_json_internal_type(ObObjType type);
+  static int convert_string_collation_type(ObCollationType in,
+                                           ObCollationType dst,
+                                           ObIAllocator* allocator,
+                                           ObString& in_str,
+                                           ObString &out_str);
   template <typename T>
   static int pack_json_str_res(const ObExpr &expr,
                                ObEvalCtx &ctx,

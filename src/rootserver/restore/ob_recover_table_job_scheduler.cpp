@@ -436,6 +436,12 @@ void ObRecoverTableJobScheduler::user_process_(share::ObRecoverTableJob &job)
       }
       break;
     }
+    case ObRecoverTableStatus::Status::ACTIVE_AUX_TENANT: {
+      if (OB_FAIL(active_aux_tenant_(job))) {
+        LOG_WARN("failed to do user active aux tenant work", K(ret), K(job));
+      }
+      break;
+    }
     case ObRecoverTableStatus::Status::GEN_IMPORT_JOB: {
       if (OB_FAIL(gen_import_job_(job))) {
         LOG_WARN("failed to do user import work", K(ret), K(job));
@@ -548,8 +554,6 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
       job.get_result().set_result(false, restore_history_info.comment_);
     } else if (OB_FAIL(check_aux_tenant_(job, aux_tenant_id))) {
       LOG_WARN("failed to check aux tenant", K(ret), K(aux_tenant_id));
-    } else if (OB_FAIL(failover_to_leader_(job, aux_tenant_id))) {
-      LOG_WARN("failed to failover to leader", K(ret));
     }
 
     int tmp_ret = OB_SUCCESS;
@@ -560,7 +564,43 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
   return ret;
 }
 
-int ObRecoverTableJobScheduler::failover_to_leader_(
+int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObRestorePersistHelper restore_helper;
+  ObHisRestoreJobPersistInfo restore_history_info;
+  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to init retore helper", K(ret));
+  } else if (OB_FAIL(restore_helper.get_restore_job_history(
+      *sql_proxy_, job.get_initiator_job_id(), job.get_initiator_tenant_id(), restore_history_info))) {
+      LOG_WARN("failed to get restore job history", K(ret),
+        "initiator_job_id", job.get_job_id(), "initiator_tenant_id", job.get_tenant_id());
+  } else if (OB_FAIL(failover_to_primary_(job, restore_history_info.restore_tenant_id_))) {
+    LOG_WARN("failed to failover to primary", K(ret), K(restore_history_info));
+  }
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    schema::ObSchemaGetterGuard guard;
+    if (OB_TMP_FAIL(ObImportTableUtil::get_tenant_schema_guard(*schema_service_,
+                                                               restore_history_info.restore_tenant_id_,
+                                                               guard))) {
+      if (OB_TENANT_NOT_EXIST == tmp_ret) {
+        ret = tmp_ret;
+      }
+      LOG_WARN("failed to get tenant schema guard", K(tmp_ret));
+    }
+  }
+
+  if (OB_SUCC(ret) || OB_TENANT_NOT_EXIST == ret) {
+    if (OB_SUCCESS != (tmp_ret = try_advance_status_(job, ret))) {
+      LOG_WARN("failed to advance status", K(tmp_ret), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableJobScheduler::failover_to_primary_(
     share::ObRecoverTableJob &job, const uint64_t aux_tenant_id)
 {
   int ret = OB_SUCCESS;

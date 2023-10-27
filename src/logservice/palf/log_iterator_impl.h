@@ -774,7 +774,7 @@ int LogIteratorImpl<ENTRY>::verify_accum_checksum_(const LogGroupEntry &entry,
     PALF_LOG(WARN, "invalid data", K(ret), KPC(this), K(entry));
   } else if (-1 == accumulate_checksum_) {
     new_accumulate_checksum = expected_verify_checksum;
-    PALF_LOG(INFO, "init accumulate_checksum to first LogGroupEntry", K(entry), KPC(this),
+    PALF_LOG(TRACE, "init accumulate_checksum to first LogGroupEntry", K(entry), KPC(this),
         K(new_accumulate_checksum));
   } else if (OB_FAIL(LogChecksum::verify_accum_checksum(
                 accumulate_checksum_, data_checksum,

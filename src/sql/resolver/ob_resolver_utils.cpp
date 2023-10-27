@@ -40,6 +40,7 @@
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/parser/ob_parser_utils.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "sql/engine/expr/ob_expr_unistr.h"
 
 namespace oceanbase
 {
@@ -2032,6 +2033,16 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_SHOW_RECYCLEBIN);
       SET_STMT_TYPE(T_SHOW_TENANT);
       SET_STMT_TYPE(T_SHOW_SEQUENCES);
+      SET_STMT_TYPE(T_SHOW_STATUS);
+      SET_STMT_TYPE(T_SHOW_CREATE_TENANT);
+      SET_STMT_TYPE(T_SHOW_TRACE);
+      SET_STMT_TYPE(T_SHOW_ENGINES);
+      SET_STMT_TYPE(T_SHOW_PRIVILEGES);
+      SET_STMT_TYPE(T_SHOW_CREATE_PROCEDURE);
+      SET_STMT_TYPE(T_SHOW_CREATE_FUNCTION);
+      SET_STMT_TYPE(T_SHOW_PROCEDURE_STATUS);
+      SET_STMT_TYPE(T_SHOW_FUNCTION_STATUS);
+      SET_STMT_TYPE(T_SHOW_CREATE_TABLEGROUP);
       SET_STMT_TYPE(T_CREATE_SAVEPOINT);
       SET_STMT_TYPE(T_RELEASE_SAVEPOINT);
       SET_STMT_TYPE(T_ROLLBACK_SAVEPOINT);
@@ -2340,38 +2351,57 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
 
         // 对于字符，此处使用的是连接里设置的字符集，在Oracle模式下，需要
         // 转换成server使用的字符集，MySQL不需要
-        if (OB_SUCC(ret) &&
-            lib::is_oracle_mode()) {
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (lib::is_oracle_mode()) {
           ObCollationType target_collation = CS_TYPE_INVALID;
           if (T_NVARCHAR2 == node->type_ || T_NCHAR == node->type_) {
             target_collation = nchar_collation;
           } else {
             target_collation = server_collation;
           }
-
-          // 为了解决部分gbk字符因为转换函数中不包含对应unicode字符导致全gbk链路中字符解析错误的问题，
-          // 当两个ObCollationType的CharsetType相同时，跳过 mb_wc, wc_mb 的转换过程，
-          // 直接设置结果的collation_type
-          if (ObCharset::charset_type_by_coll(connection_collation) ==
-              ObCharset::charset_type_by_coll(target_collation)) {
-            val.set_collation_type(target_collation);
+          ObString str;
+          val.get_string(str);
+          char *buf = nullptr;
+          /* OB目前支持utf8、utf16、和gbk
+          * utf8mb4是1~4个字节，gbk是1到2，utf16是2或者4
+          * 进行转换，极限情况是1个字节转成4个，所以这里放大了4倍
+          */
+          const int CharConvertFactorNum = 4;
+          int32_t buf_len = str.length() * CharConvertFactorNum;
+          uint32_t result_len = 0;
+          uint32_t incomplete_len = 0;
+          if (0 == buf_len) {
+            //do nothing
+          } else if (CS_TYPE_INVALID == target_collation) {
+            ret = OB_ERR_UNEXPECTED;
+          }
+          if (OB_FAIL(ret)) {
+          } else if (node->value_ == -1) {
+            // process u'string': connection_char->unicode->target_char
+            if (OB_UNLIKELY(node->type_ != T_NCHAR)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("u string is not nchar", K(ret));
+            } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
+            } else if (OB_FAIL(ObExprUnistr::calc_unistr(str, connection_collation, target_collation, buf, buf_len,
+                                                                                (int32_t &)(result_len)))) {
+              LOG_WARN("calc unistr failed", K(ret));
+            } else {
+              str.assign_ptr(buf, result_len);
+              val.set_string(val.get_type(), buf, result_len);
+              val.set_collation_type(nchar_collation);
+              val.set_collation_level(CS_LEVEL_COERCIBLE);
+            }
           } else {
-            ObString str;
-            val.get_string(str);
-            char *buf = nullptr;
-            /* OB目前支持utf8、utf16、和gbk
-             * utf8mb4是1~4个字节，gbk是1到2，utf16是2或者4
-             * 进行转换，极限情况是1个字节转成4个，所以这里放大了4倍
-             */
-            int32_t buf_len = str.length() * ObCharset::CharConvertFactorNum;
-            uint32_t result_len = 0;
-            uint32_t incomplete_len = 0;
-            if (0 == buf_len) {
-              //do nothing
-            } else if (CS_TYPE_INVALID == target_collation) {
-              ret = OB_ERR_UNEXPECTED;
-            } else if (OB_UNLIKELY(nullptr == (buf =
-                    static_cast<char*>(allocator.alloc(buf_len))))) {
+            // 为了解决部分gbk字符因为转换函数中不包含对应unicode字符导致全gbk链路中字符解析错误的问题，
+            // 当两个ObCollationType的CharsetType相同时，跳过 mb_wc, wc_mb 的转换过程，
+            // 直接设置结果的collation_type
+            if (ObCharset::charset_type_by_coll(connection_collation) ==
+                ObCharset::charset_type_by_coll(target_collation)) {
+              val.set_collation_type(target_collation);
+            } else if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
             } else {
@@ -4298,7 +4328,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allocator is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-                expr_str, params.session_info_->get_local_collation_connection(),
+                expr_str, params.session_info_->get_charsets4parser(),
                 *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
   } else if (OB_FAIL(resolve_generated_column_expr(params, expr_node, tbl_schema,
@@ -4338,7 +4368,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     LOG_WARN("allocator or session is null", K(ret),
              KP(params.allocator_), KP(params.session_info_));
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-                      expr_str, params.session_info_->get_local_collation_connection(),
+                      expr_str, params.session_info_->get_charsets4parser(),
                       *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
   } else if (OB_FAIL(resolve_generated_column_expr(params,
@@ -4757,7 +4787,7 @@ int ObResolverUtils::resolve_generated_column_info(const ObString &expr_str,
   int ret = OB_SUCCESS;
   const ParseNode *node = NULL;
   if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-              expr_str, CS_TYPE_UTF8MB4_BIN,
+              expr_str, ObCharsets4Parser(),
               allocator, node))) {
     LOG_WARN("parse expr node from string failed", K(ret), K(expr_str));
   } else if (OB_ISNULL(node)) {
@@ -4863,7 +4893,7 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allocator or session is null", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(
-              expr_str, params.session_info_->get_local_collation_connection(),
+              expr_str, params.session_info_->get_charsets4parser(),
               *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
   } else if (OB_FAIL(resolve_default_expr_v2_column_expr(params, expr_node,  default_expr_v2_column, expr, allow_sequence))) {

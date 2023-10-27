@@ -36,7 +36,7 @@ int ObUDRUtils::match_udr_item(const ObString &pattern,
   sql::ObUDRMgr *rule_mgr = MTL(sql::ObUDRMgr*);
   ObUDRAnalyzer analyzer(allocator,
                         session_info.get_sql_mode(),
-                        session_info.get_local_collation_connection());
+                        session_info.get_charsets4parser());
   if (OB_FAIL(analyzer.parse_sql_to_gen_match_param_infos(pattern,
                                                           rule_ctx.normalized_pattern_,
                                                           rule_ctx.raw_param_list_))) {
@@ -146,8 +146,8 @@ int ObUDRUtils::cons_udr_param_store(const DynamicParamInfoArray& dynamic_param_
       LOG_WARN("invalid argument", K(ret), K(pc_ctx.sql_ctx_.session_info_));
     } else if (PC_PS_MODE == pc_ctx.mode_) {
       ObSQLMode sql_mode = pc_ctx.sql_ctx_.session_info_->get_sql_mode();
-      ObCollationType conn_coll = pc_ctx.sql_ctx_.session_info_->get_local_collation_connection();
-      FPContext fp_ctx(conn_coll);
+      ObCharsets4Parser charsets4parser = pc_ctx.sql_ctx_.session_info_->get_charsets4parser();
+      FPContext fp_ctx(charsets4parser);
       fp_ctx.enable_batched_multi_stmt_ = pc_ctx.sql_ctx_.handle_batched_multi_stmt();
       fp_ctx.sql_mode_ = sql_mode;
       if (OB_FAIL(ObSqlParameterization::fast_parser(allocator,

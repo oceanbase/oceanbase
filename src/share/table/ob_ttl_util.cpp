@@ -274,6 +274,9 @@ int ObTTLUtil::update_ttl_task(uint64_t tenant_id,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affect_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql));
+    if (ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT) {
+      FLOG_INFO("fail to execute sql, this task/rowkey is locked by other thread, pls try again", K(ret), K(sql));
+    }
   } else if (affect_rows != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("execute sql, affect rows != 1", K(ret), K(sql));
@@ -1098,16 +1101,11 @@ int ObTTLUtil::get_all_user_tenant_ttl(ObIArray<ObSimpleTTLInfo> &ttl_info_array
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 32> tenant_ids;
-  {
-    share::schema::ObSchemaGetterGuard schema_guard;
-    if (OB_ISNULL(GCTX.schema_service_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid GCTX", KR(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-      LOG_WARN("fail to get schema guard", KR(ret));
-    } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
-      LOG_WARN("fail to get tenant ids", KR(ret));
-    }
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid GCTX", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_ids(tenant_ids))) {
+    LOG_WARN("fail to get tenant ids", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
     if (is_user_tenant(tenant_ids[i])) {

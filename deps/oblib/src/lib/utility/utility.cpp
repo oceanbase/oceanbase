@@ -1272,67 +1272,27 @@ int ob_alloc_printf(ObString &result, ObIAllocator &alloc, const char* fmt, ...)
 
 int64_t ObTimeGuard::to_string(char *buf, const int64_t buf_len) const
 {
+  int ret = OB_SUCCESS;
   int64_t pos = 0;
   if (!need_record_log_) {
-    databuff_printf(buf, buf_len, pos, "time guard have no click events for optimization");
+    ret = databuff_printf(buf, buf_len, pos, "time guard have no click events for optimization");
   } else {
     int64_t i = 0;
-    bool has_click_str = (click_count_ > 0 && NULL != click_str_[0]);
 
-    databuff_printf(buf, buf_len, pos, "time guard '%s' cost too much time, used=%ld%s",
+    ret = databuff_printf(buf, buf_len, pos, "time guard '%s' cost too much time, used=%ld%s",
         owner_, common::ObTimeUtility::fast_current_time() - start_ts_,
         click_count_ > 0 ? ", time_dist: " : "");
 
-    while ((i + 8) <= click_count_) {
-      databuff_printf(buf, buf_len, pos, FSTR FSTR FSTR FSTR FSTR FSTR FSTR FSTR,
-          VSTR(i), VSTR(i+1), VSTR(i+2), VSTR(i+3), VSTR(i+4), VSTR(i+5), VSTR(i+6), VSTR(i+7));
-      i = i + 8;
+    if (OB_SUCC(ret) && click_count_ > 0) {
+      ret = databuff_printf(buf, buf_len, pos, "%s=%d", click_str_[0], click_[0]);
     }
-    switch (click_count_ - i) {
-      case 0: {
-        break;
-      }
-      case 1: {
-        databuff_printf(buf, buf_len, pos, FSTR, VSTR(i));
-        break;
-      }
-      case 2: {
-        databuff_printf(buf, buf_len, pos, FSTR FSTR, VSTR(i), VSTR(i+1));
-        break;
-      }
-      case 3: {
-        databuff_printf(buf, buf_len, pos, FSTR FSTR FSTR, VSTR(i), VSTR(i+1), VSTR(i+2));
-        break;
-      }
-      case 4: {
-        databuff_printf(buf, buf_len, pos, FSTR FSTR FSTR FSTR, VSTR(i), VSTR(i+1), VSTR(i+2),
-            VSTR(i+3));
-        break;
-      }
-      case 5: {
-        databuff_printf(buf, buf_len, pos, FSTR FSTR FSTR FSTR FSTR, VSTR(i), VSTR(i+1), VSTR(i+2),
-            VSTR(i+3), VSTR(i+4));
-        break;
-      }
-      case 6: {
-        databuff_printf(buf, buf_len, pos, FSTR FSTR FSTR FSTR FSTR FSTR, VSTR(i), VSTR(i+1), VSTR(i+2),
-            VSTR(i+3), VSTR(i+4), VSTR(i+5));
-        break;
-      }
-      case 7: {
-        databuff_printf(buf, buf_len, pos, FSTR FSTR FSTR FSTR FSTR FSTR FSTR, VSTR(i), VSTR(i+1), VSTR(i+2),
-            VSTR(i+3), VSTR(i+4), VSTR(i+5), VSTR(i+6));
-        break;
-      }
-      default: {
-        // do nothing
-      }
-    }
-    // Remove the last comma
-    if (click_count_ > 0) {
-      pos -= COMMA_STR_LEN;
+    for (int i = 1; OB_SUCC(ret) && i < click_count_; i++) {
+      ret = databuff_printf(buf, buf_len, pos, ", %s=%d", click_str_[i], click_[i]);
     }
   }
+
+  if (OB_FAIL(ret)) pos = 0;
+
   return pos;
 }
 

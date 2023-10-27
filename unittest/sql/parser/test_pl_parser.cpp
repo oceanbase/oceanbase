@@ -57,7 +57,7 @@ void TestPLParser::TearDown()
 
 TEST_F(TestPLParser, basic_test)
 {
-  ObPLParser parser(allocator_, CS_TYPE_UTF8MB4_BIN);
+  ObPLParser parser(allocator_, ObCharsets4Parser());
   ParseResult parse_result;
 //  const char *query_str = "CREATE PROCEDURE sp (a varchar(10), b int(10)) BEGIN DECLARE c int default 1; DECLARE d, e varchar(11); IF 1=1 THEN select * from t1; ELSE IF 2=1 THEN select * from t1; ELSE select 1; END IF; END";
 //  const char *query_str = "create procedure sp() begin declare i bigint; if(i=1) then select 1 from dual; end if; end";

@@ -184,7 +184,29 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
         LOG_WARN("fail to get refactored", KR(ret), K(major_merge_special_table_id));
       } else if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_at_table_level(stop, pairs,
                    global_broadcast_scn, cur_compaction_info, major_merge_special_table_id, expected_epoch))) {
-        LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
+        if (OB_ITEM_NOT_MATCH == ret) {
+          bool is_exist = false;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ObTabletReplicaChecksumOperator::is_higher_ver_tablet_rep_ckm_exist(
+              tenant_id_, global_broadcast_scn, major_merge_special_table_id, *sql_proxy_, is_exist))) {
+            LOG_WARN("fail to check is higher version tablet replica checksum exist", KR(tmp_ret),
+              K_(tenant_id), K(global_broadcast_scn), K(major_merge_special_table_id));
+          } else if (is_exist) {
+            // 1. one restore standby tenant switchover to primary tenant, launch one lower version
+            // of major compaction, tablet replica checksum is overwritten by higher version.
+            // 2. one lower version of major compaction is not finished, another higher version of
+            // medium compaction is launched, leading to tablet replica checksum is overwritten by
+            // higher version.
+            LOG_ERROR("already exist higher version tablet checksum of first table", KR(ret),
+              K(global_broadcast_scn), K(major_merge_special_table_id), K(expected_epoch));
+            ret = OB_SUCCESS; // ignore ret, so as to let this round of major freeze finish
+          } else {
+            LOG_ERROR("no higher version tablet checksum of first table exist", KR(ret),
+              K(global_broadcast_scn), K(major_merge_special_table_id), K(expected_epoch));
+          }
+        } else {
+          LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
+        }
       } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
                    tenant_id_, global_broadcast_scn.get_val_for_tx(),
                    pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR, expected_epoch))) {

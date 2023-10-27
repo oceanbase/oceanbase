@@ -43,7 +43,9 @@ public:
     : resource_handle_(), ref_cnt_(0), tenant_id_(tenant_id),
       ctx_id_(ctx_id), deleted_(false),
       obj_mgr_(*this, tenant_id_, ctx_id_, INTACT_NORMAL_AOBJECT_SIZE,
-               common::ObCtxParallel::instance().parallel_of_ctx(ctx_id_), NULL),
+               CTX_ATTR(ctx_id).parallel_,
+               CTX_ATTR(ctx_id).enable_dirty_list_,
+               NULL),
       idle_size_(0), head_chunk_(), chunk_cnt_(0),
       chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
       using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
@@ -58,7 +60,8 @@ public:
     chunk_freelist_mutex_.enable_record_stat(false);
     using_list_mutex_.enable_record_stat(false);
     for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
-      new (obj_mgrs_ + i) ObjectMgr(*this, tenant_id_, ctx_id_, INTACT_MIDDLE_AOBJECT_SIZE, 4, &obj_mgr_);
+      new (obj_mgrs_ + i) ObjectMgr(*this, tenant_id_, ctx_id_, INTACT_MIDDLE_AOBJECT_SIZE,
+                                    4/*parallel*/, false/*enable_dirty_list*/, &obj_mgr_);
     }
   }
   virtual ~ObTenantCtxAllocator()

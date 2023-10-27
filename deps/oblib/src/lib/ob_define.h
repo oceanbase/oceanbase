@@ -174,6 +174,8 @@ const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
 const int64_t USER_RESOURCE_GROUP_END_ID = 19999;
 const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
 const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
+// The timeout provided to the storage layer will be reduced by 100ms
+const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
 OB_INLINE bool is_user_group(const int64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;
@@ -717,6 +719,7 @@ const char *const OB_SECURITY_AUDIT_DEFINITION = "security_audit_definition";
 const char *const OB_SYNONYM_IDS_LIST = "synonym_ids_list";
 const char *const OB_CREATE_SYNONYM_DEFINITION = "create_synonym_definition";
 const char *const OB_TIMEZONE_INFO_DEFINITION = "timezone_info_definition";
+const char *const OB_MASKED_STR = "***";
 
 enum ObCopySSTableType
 {
@@ -1772,6 +1775,7 @@ const int64_t OB_DUMP_ROOT_TABLE_TYPE = 1;
 const int64_t OB_DUMP_UNUSUAL_TABLET_TYPE = 2;
 const int64_t OB_MAX_SYS_VAR_NON_STRING_VAL_LENGTH = 128;
 const int64_t OB_MAX_SYS_VAR_VAL_LENGTH = 4096;//original 128 is too small
+const int64_t OB_MAX_TCP_INVITED_NODES_LENGTH = 64 * 1024; // 64K
 
 // bitset defines
 const int64_t OB_DEFAULT_BITSET_SIZE = OB_MAX_TABLE_NUM_PER_STMT;

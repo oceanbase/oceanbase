@@ -1522,6 +1522,7 @@ int ObStartMigrationTask::create_all_tablets_(
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObArray<ObTabletID> tablet_id_array;
+  bool need_check_tablet_limit = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1529,6 +1530,7 @@ int ObStartMigrationTask::create_all_tablets_(
   } else if (OB_ISNULL(ob_reader)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create all tablets get ivnalid argument", K(ret));
+  } else if (FALSE_IT(need_check_tablet_limit = ctx_->arg_.type_ != ObMigrationOpType::REBUILD_LS_OP)) {
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -1538,7 +1540,7 @@ int ObStartMigrationTask::create_all_tablets_(
       ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
       ls, &ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder.create_all_tablets(ob_reader,
+  } else if (OB_FAIL(ha_tablets_builder.create_all_tablets(need_check_tablet_limit, ob_reader,
       ctx_->sys_tablet_id_array_, ctx_->data_tablet_id_array_,
       ctx_->tablet_simple_info_map_))) {
     LOG_WARN("failed to create all tablets", K(ret), KPC(ctx_));

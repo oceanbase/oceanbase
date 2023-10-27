@@ -31,21 +31,20 @@ struct FPContext
 public:
 	bool enable_batched_multi_stmt_;
 	bool is_udr_mode_;
-	common::ObCollationType conn_coll_;
+	ObCharsets4Parser charsets4parser_;
 	ObSQLMode sql_mode_;
 	QuestionMarkDefNameCtx *def_name_ctx_;
 
 	FPContext()
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
-			conn_coll_(CS_TYPE_INVALID),
 			sql_mode_(0),
 			def_name_ctx_(nullptr)
 	{}
-	FPContext(common::ObCollationType conn_coll)
+	FPContext(ObCharsets4Parser charsets4parser)
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
-			conn_coll_(conn_coll),
+			charsets4parser_(charsets4parser),
 			sql_mode_(0),
 			def_name_ctx_(nullptr)
 	{}

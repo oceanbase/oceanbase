@@ -172,16 +172,16 @@ int ObLogExternalStorageHandler::pread(const common::ObString &uri,
   time_guard.click("after hold by lock");
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "ObLogExternalStorageHandler not init", K(uri), K(storage_info), K(offset), KP(buf), K(read_buf_size));
+    CLOG_LOG(WARN, "ObLogExternalStorageHandler not init", K(uri), K(offset), KP(buf), K(read_buf_size));
   } else if (!is_running_) {
     ret = OB_NOT_RUNNING;
-    CLOG_LOG(WARN, "ObLogExternalStorageHandler not running", K(uri), K(storage_info), K(offset), KP(buf), K(read_buf_size));
+    CLOG_LOG(WARN, "ObLogExternalStorageHandler not running", K(uri), K(offset), KP(buf), K(read_buf_size));
     // when uri is NFS, storage_info is empty.
   } else if (uri.empty() || 0 > offset || NULL == buf || 0 >= read_buf_size) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "ObLogExternalStorageHandler invalid argument", K(uri), K(storage_info), K(offset), KP(buf), K(read_buf_size));
+    CLOG_LOG(WARN, "ObLogExternalStorageHandler invalid argument", K(uri), K(offset), KP(buf), K(read_buf_size));
   } else if (OB_FAIL(handle_adapter_->get_file_size(uri, storage_info, file_size))) {
-    CLOG_LOG(WARN, "get_file_size failed", K(uri), K(storage_info), K(offset), KP(buf), K(read_buf_size));
+    CLOG_LOG(WARN, "get_file_size failed", K(uri), K(offset), KP(buf), K(read_buf_size));
   } else if (offset > file_size) {
     ret = OB_FILE_LENGTH_INVALID;
     CLOG_LOG(WARN, "read position lager than file size, invalid argument", K(file_size), K(offset), K(uri));
@@ -193,21 +193,21 @@ int ObLogExternalStorageHandler::pread(const common::ObString &uri,
   } else if (FALSE_IT(real_read_buf_size = std::min(file_size - offset, read_buf_size))) {
   } else if (OB_FAIL(construct_async_tasks_and_push_them_into_thread_pool_(
       uri, storage_info, offset, buf, real_read_buf_size, real_read_size, async_task_ctx))) {
-    CLOG_LOG(WARN, "construct_async_task_and_push_them_into_thread_pool_ failed", K(uri), K(storage_info),
+    CLOG_LOG(WARN, "construct_async_task_and_push_them_into_thread_pool_ failed", K(uri),
              K(offset), KP(buf), K(read_buf_size));
   } else if (FALSE_IT(time_guard.click("after construct async tasks"))) {
   } else if (OB_FAIL(wait_async_tasks_finished_(async_task_ctx))) {
-    CLOG_LOG(WARN, "wait_async_tasks_finished_ failed", K(uri), K(storage_info),
+    CLOG_LOG(WARN, "wait_async_tasks_finished_ failed", K(uri),
              K(offset), KP(buf), K(read_buf_size), KPC(async_task_ctx));
   } else if (FALSE_IT(time_guard.click("after wait async tasks"))) {
   } else {
     // if there is a failure of any async task, return the error of it, otherwise, return OB_SUCCESS.
     ret  = async_task_ctx->get_ret_code();
     if (OB_FAIL(ret)) {
-      CLOG_LOG(WARN, "pread finished", K(time_guard), K(uri), K(storage_info), K(offset), K(read_buf_size),
+      CLOG_LOG(WARN, "pread finished", K(time_guard), K(uri), K(offset), K(read_buf_size),
                K(real_read_size));
     } else {
-      CLOG_LOG(TRACE, "pread finished", K(time_guard), K(uri), K(storage_info), K(offset), K(read_buf_size),
+      CLOG_LOG(TRACE, "pread finished", K(time_guard), K(uri), K(offset), K(read_buf_size),
                K(real_read_size));
     }
   }
@@ -323,10 +323,7 @@ int ObLogExternalStorageHandler::wait_async_tasks_finished_(
   const int64_t DEFAULT_WAIT_US = 50 * 1000;
   int64_t print_log_interval = OB_INVALID_TIMESTAMP;
   // if async_task_ctx->wait return OB_SUCCESS, means there is no flying task.
-  // if async_task_ctx->wait return error except OB_TIMEOUT, we can not return
-  // the errno until async_task_ctx has no flying task.
-  while (OB_FAIL(async_task_ctx->wait(DEFAULT_WAIT_US))
-         && async_task_ctx->has_flying_async_task()) {
+  while (OB_FAIL(async_task_ctx->wait(DEFAULT_WAIT_US))) {
     if (palf::palf_reach_time_interval(500*1000, print_log_interval)) {
       CLOG_LOG(WARN, "wait ObLogExternalStorageIOTaskCtx failed", KPC(async_task_ctx));
     }

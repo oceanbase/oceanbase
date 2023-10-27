@@ -188,10 +188,6 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
     if (OB_ISNULL(var)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("var is null", K(ret), K(var), K(var_idx));
-    } else if (var->is_dup_declare()) {
-      ret = OB_ERR_DECL_MORE_THAN_ONCE;
-      LOG_WARN("package var dup", K(ret), K(var_idx));
-      LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, var->get_name().length(), var->get_name().ptr());
     } else {
       if (var_type.is_cursor_type()
           && OB_FAIL(resolve_ctx.session_info_.init_cursor_cache())) {
@@ -306,8 +302,14 @@ int ObPLPackage::get_var(const ObString &var_name, const ObPLVar *&var, int64_t 
     ObPLVar *tmp_var = var_table_.at(i);
     if (!tmp_var->is_formal_param()
         && ObCharset::case_insensitive_equal(var_name, tmp_var->get_name())) {
-      var = tmp_var;
-      var_idx = i;
+      if (tmp_var->is_dup_declare()) {
+        ret = OB_ERR_DECL_MORE_THAN_ONCE;
+        LOG_WARN("package var dup", K(ret), K(var_idx));
+        LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, tmp_var->get_name().length(), tmp_var->get_name().ptr());
+      } else {
+        var = tmp_var;
+        var_idx = i;
+      }
     }
   }
   return ret;

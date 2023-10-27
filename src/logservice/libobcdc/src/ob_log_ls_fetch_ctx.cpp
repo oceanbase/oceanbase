@@ -56,6 +56,11 @@ int LSFetchCtxGetSourceFunctor::operator()(const ObLSID &id, logservice::ObRemot
   } else if (OB_FAIL(guard.set_source(source))) {
     LOG_ERROR("source guard set source failed", KR(ret), KPC(source));
   }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(source)) {
+    logservice::ObResSrcAlloctor::free(source);
+    source = nullptr;
+  }
   return ret;
 }
 
@@ -237,6 +242,11 @@ int LSFetchCtx::init_archive_source_(const ObBackupDest &archive_dest)
     } else if (OB_FAIL(location_source->set(archive_dest, SCN::max_scn()))) {
       LOG_ERROR("location source set archive dest failed", KR(ret), K(archive_dest));
     } else {}
+
+    if (OB_FAIL(ret)) {
+      logservice::ObResSrcAlloctor::free(source_);
+      source_ = nullptr;
+    }
   }
   return ret;
 }
@@ -992,19 +1002,15 @@ uint64_t LSFetchCtx::hash() const
 int LSFetchCtx::check_fetch_timeout(const common::ObAddr &svr,
     const int64_t upper_limit,
     const int64_t fetcher_resume_tstamp,
-    bool &is_fetch_timeout,                       // Is the log fetch timeout
-    bool &is_fetch_timeout_on_lagged_replica)     // Is the log fetch timeout on a lagged replica
+    bool &is_fetch_timeout)                       // Is the log fetch timeout
 {
   int ret = OB_SUCCESS;
   int64_t cur_time = get_timestamp();
   int64_t svr_start_fetch_tstamp = OB_INVALID_TIMESTAMP;
   // Partition timeout, after which time progress is not updated, it is considered to be a log fetch timeout
   const int64_t ls_fetch_progress_update_timeout = TCONF.ls_fetch_progress_update_timeout_sec * _SEC_;
-  // Timeout period for partitions on lagging replica, compared to normal timeout period
-  const int64_t ls_fetch_progress_update_timeout_for_lagged_replica = TCONF.ls_fetch_progress_update_timeout_sec_for_lagged_replica * _SEC_;
 
   is_fetch_timeout = false;
-  is_fetch_timeout_on_lagged_replica = false;
 
   // Get the starting log time on the current server
   if (OB_FAIL(fetch_info_.get_cur_svr_start_fetch_tstamp(svr, svr_start_fetch_tstamp))) {
@@ -1019,7 +1025,6 @@ int LSFetchCtx::check_fetch_timeout(const common::ObAddr &svr,
 
     if (OB_INVALID_TIMESTAMP != cur_progress && cur_progress >= upper_limit) {
       is_fetch_timeout = false;
-      is_fetch_timeout_on_lagged_replica = false;
     } else {
       // Consider the time at which logs start to be fetched on the server as a lower bound for progress updates
       // Ensure that the ls stays on a server for a certain period of time
@@ -1042,24 +1047,11 @@ int LSFetchCtx::check_fetch_timeout(const common::ObAddr &svr,
       // long periods of non-updating progress and progress timeouts, where it is no longer necessary to determine if the machine is behind in its backup
       if (progress_update_interval >= ls_fetch_progress_update_timeout) {
         is_fetch_timeout = true;
-        is_fetch_timeout_on_lagged_replica = false;
-      } else {
-        // Before the progress timeout, verify that the server fetching the logs is a lagged replica, and if the logs are not fetched on the lagged replica for some time, then it is also considered a progress timeout
-        // Generally, the timeout for a lagged copy is less than the progress timeout
-        // ls_fetch_progress_update_timeout_for_lagged_replica < ls_fetch_progress_update_timeout
-        //
-        // How to define a long timeout for fetching logs on a lagged replica?
-        // 1. lagged replica: the next log does exist, but this server can't fetch it, indicating that this server is most likely behind the replica
-        // 2. When to start counting the timeout: from the time libobcdc confirms the existence of the next log
-        if (progress_update_interval >= ls_fetch_progress_update_timeout_for_lagged_replica)  {  // Progress update time over lagging replica configuration item
-          is_fetch_timeout = true;
-          is_fetch_timeout_on_lagged_replica = true;
-        }
       }
 
       if (is_fetch_timeout) {
         LOG_INFO("[CHECK_PROGRESS_TIMEOUT]", K_(tls_id), K(svr),
-            K(is_fetch_timeout), K(is_fetch_timeout_on_lagged_replica),
+            K(is_fetch_timeout),
             K(progress_update_interval),
             K(progress_),
             "update_limit", NTS_TO_STR(upper_limit),
@@ -1067,7 +1059,7 @@ int LSFetchCtx::check_fetch_timeout(const common::ObAddr &svr,
             "svr_start_fetch_tstamp", TS_TO_STR(svr_start_fetch_tstamp));
       } else {
         LOG_DEBUG("[CHECK_PROGRESS_TIMEOUT]", K_(tls_id), K(svr),
-            K(is_fetch_timeout), K(is_fetch_timeout_on_lagged_replica),
+            K(is_fetch_timeout),
             K(progress_update_interval),
             K(progress_),
             "update_limit", NTS_TO_STR(upper_limit),
@@ -1190,11 +1182,13 @@ bool LSFetchCtx::need_switch_server(const common::ObAddr &cur_svr)
 
   if (OB_FAIL(get_log_route_service_(log_route_service))) {
     LOG_ERROR("get_log_route_service_ failed", KR(ret));
-  } else if (OB_FAIL(log_route_service->need_switch_server(tls_id_.get_tenant_id(), tls_id_.get_ls_id(),
-          next_lsn, cur_svr))) {
-    LOG_ERROR("ObLogRouteService need_switch_server failed", KR(ret), K(tls_id_), K(next_lsn),
-        K(cur_svr));
-  } else {}
+  } else {
+    bool_ret = log_route_service->need_switch_server(
+        tls_id_.get_tenant_id(),
+        tls_id_.get_ls_id(),
+        next_lsn,
+        cur_svr);
+  }
 
   return bool_ret;
 }

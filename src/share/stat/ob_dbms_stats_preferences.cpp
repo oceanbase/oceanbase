@@ -938,7 +938,7 @@ int ObMethodOptPrefs::check_pref_value_validity(ObTableStatParam *param/*default
   } else {
     ObParser parser(*allocator_,
                     session_info_->get_sql_mode(),
-                    session_info_->get_local_collation_connection());
+                    session_info_->get_charsets4parser());
     ParseMode parse_mode = DYNAMIC_SQL_MODE;
     ParseResult parse_result;
     if (OB_FAIL(parser.parse(pvalue_, parse_result, parse_mode))) {

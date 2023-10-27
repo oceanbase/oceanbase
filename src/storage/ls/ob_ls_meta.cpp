@@ -729,6 +729,12 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
     LOG_WARN("invalid rebuild info", K(ret), K(rebuild_info_), K(rebuild_info));
   } else if (rebuild_info_ == rebuild_info) {
     //do nothing
+  } else if (ObLSRebuildStatus::CLEANUP == rebuild_info.status_
+      && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status_
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL != migration_status_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("migration status in unexpected, can not set rebuild info to cleanup", K(ret),
+        K(rebuild_info), K(migration_status_), KPC(this));
   } else {
     ObLSMeta tmp(*this);
     tmp.rebuild_info_ = rebuild_info;

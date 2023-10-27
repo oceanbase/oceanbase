@@ -9560,9 +9560,9 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_DEFAULT_VALUE_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -9590,15 +9590,15 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
 
   if (OB_SUCC(ret)) {
     ObObj data_type_default;
-    data_type_default.set_varchar(ObString::make_string(""));
+    data_type_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("DATA_TYPE", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_VARCHAR_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -9718,9 +9718,9 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_VARCHAR_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -9786,15 +9786,15 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
 
   if (OB_SUCC(ret)) {
     ObObj column_comment_default;
-    column_comment_default.set_varchar(ObString::make_string(""));
+    column_comment_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("COLUMN_COMMENT", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      MAX_COLUMN_COMMENT_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -9805,15 +9805,15 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
 
   if (OB_SUCC(ret)) {
     ObObj generation_expression_default;
-    generation_expression_default.set_varchar(ObString::make_string(""));
+    generation_expression_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("GENERATION_EXPRESSION", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_DEFAULT_VALUE_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

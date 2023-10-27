@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #define private public
 #include "lib/json_type/ob_json_tree.h"
+#include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/timezone/ob_timezone_info.h"
 #undef private
@@ -2264,7 +2265,7 @@ TEST_F(TestJsonTree, test_big_json)
   char value_buffer[16] = {0};
   int idx = 0;
 
-  for (int64_t pos = 0; pos < 20000; ++pos) {
+  for (int64_t pos = 0; pos < 50000; ++pos) {
     for (int i = 0; i < 32; ++i) {
       idx = ObRandom::rand(0, 15);
       key_buffer[i] = origin[idx];

@@ -14,6 +14,7 @@
 #define OCEANBASE_DDL_EPOCH_H
 
 #include "lib/container/ob_se_array.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 namespace oceanbase
 {
@@ -43,7 +44,14 @@ struct ObDDLEpoch
 class ObDDLEpochMgr
 {
 public:
-  ObDDLEpochMgr() : inited_(false), sql_proxy_(NULL), schema_service_(NULL) {}
+  ObDDLEpochMgr()
+    : inited_(false),
+      sql_proxy_(NULL),
+      schema_service_(NULL),
+      ddl_epoch_stat_(),
+      lock_(),
+      lock_for_promote_(),
+      mutex_for_promote_() {}
   int init(ObMySQLProxy *sql_proxy, share::schema::ObMultiVersionSchemaService *schema_service);
   // 获取本地ddl_epoch
   int get_ddl_epoch(uint64_t tenant_id, int64_t &ddl_epoch);
@@ -51,6 +59,10 @@ public:
   int promote_ddl_epoch(const uint64_t tenant_id, int64_t wait_us, int64_t &ddl_epoch_ret);
   int remove_ddl_epoch(const uint64_t tenant_id);
   int remove_all_ddl_epoch();
+  int check_and_lock_ddl_epoch(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const int64_t ddl_epoch_local);
 private:
   int promote_ddl_epoch_inner_(const uint64_t tenant_id, int64_t &new_ddl_epoch);
   int update_ddl_epoch_(uint64_t tenant_id, const int64_t ddl_epoch);
@@ -61,6 +73,7 @@ private:
   ObSEArray<ObDDLEpoch, 10> ddl_epoch_stat_;
   common::SpinRWLock lock_; // protect ddl_epoch_stat_
   common::SpinRWLock lock_for_promote_; // promise only one thread to promote
+  lib::ObMutex mutex_for_promote_; // to make promote ddl epoch serially to avoid conflict
 };
 
 

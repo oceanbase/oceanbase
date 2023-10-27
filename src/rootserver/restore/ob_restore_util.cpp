@@ -264,7 +264,7 @@ int ObRestoreUtil::get_encrypt_backup_dest_format_str(
     int64_t pos = 0;
     for (int i = 0; OB_SUCC(ret) && i < original_dest_list.count(); i++) {
       const common::ObString &item = original_dest_list.at(i);
-      if (OB_FAIL(dest.set(item))) {
+      if (OB_FAIL(dest.set_without_decryption(item))) {
         LOG_WARN("failed to push back", KR(ret), K(item));
       } else if (OB_FAIL(dest.get_backup_dest_str(encrypt_str, sizeof(encrypt_str)))) {
         LOG_WARN("failed to get backup dest str", KR(ret), K(item));

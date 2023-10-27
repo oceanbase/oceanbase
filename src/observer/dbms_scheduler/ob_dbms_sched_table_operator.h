@@ -56,7 +56,7 @@ public:
   int update_nextdate(uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
 
   int get_dbms_sched_job_info(
-    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id,
+    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
     common::ObIAllocator &allocator, ObDBMSSchedJobInfo &job_info);
   int get_dbms_sched_job_infos_in_tenant(
     uint64_t tenant_id, bool is_oracle_tenant,

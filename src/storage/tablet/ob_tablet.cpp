@@ -72,6 +72,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 
 namespace oceanbase
 {
@@ -129,7 +130,6 @@ ObTablet::ObTablet()
     ddl_kvs_(nullptr),
     ddl_kv_count_(0),
     pointer_hdl_(),
-    next_full_tablet_guard_(),
     tablet_addr_(),
     allocator_(nullptr),
     memtables_lock_(),
@@ -142,8 +142,8 @@ ObTablet::ObTablet()
     tablet_status_cache_(),
     ddl_data_cache_()
 {
-#if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1632, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+#if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1576, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -155,7 +155,7 @@ ObTablet::~ObTablet()
 
 void ObTablet::reset()
 {
-  LOG_DEBUG("reset tablet", KP(this), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_, K(lbt()));
+  FLOG_INFO("reset tablet", KP(this), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_, K(lbt()));
 
   reset_memtable();
   reset_ddl_memtables();
@@ -165,7 +165,6 @@ void ObTablet::reset()
   tablet_meta_.reset();
   mds_data_.reset();
   tablet_addr_.reset();
-  next_full_tablet_guard_.reset();
   memtable_mgr_ = nullptr;
   log_handler_ = nullptr;
   pointer_hdl_.reset();
@@ -1768,7 +1767,7 @@ int ObTablet::inner_inc_macro_ref_cnt()
   } else {
     hold_ref_cnt_ = true;
   }
-  FLOG_INFO("the tablet that inner increases ref cnt is",
+  FLOG_INFO("the tablet that inner increases ref cnt is", K(ret),
       K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
       K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
       K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
@@ -3476,7 +3475,7 @@ int ObTablet::inner_create_memtable(
     }
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->create_memtable(clog_checkpoint_scn, schema_version, for_replay))) {
+  } else if (OB_FAIL(memtable_mgr->create_memtable(clog_checkpoint_scn, schema_version, tablet_meta_.clog_checkpoint_scn_, for_replay))) {
     if (OB_ENTRY_EXIST != ret && OB_MINOR_FREEZE_NOT_ALLOW != ret) {
       LOG_WARN("failed to create memtable for tablet", K(ret), K(ls_id), K(tablet_id),
           K(clog_checkpoint_scn), K(schema_version), K(for_replay));
@@ -3501,6 +3500,35 @@ int ObTablet::inner_get_memtables(common::ObIArray<storage::ObITable *> &memtabl
       continue;
     } else if (OB_FAIL(memtables.push_back(memtables_[i]))) {
       LOG_WARN("failed to add memtables", K(ret), K(*this));
+    }
+  }
+  return ret;
+}
+
+int ObTablet::rebuild_memtables(const share::SCN scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(release_memtables(scn))) {
+    LOG_WARN("fail to release memtables", K(ret), K(scn));
+  } else {
+    reset_memtable();
+    if (OB_FAIL(pull_memtables_without_ddl())) {
+      LOG_WARN("fail to pull memtables without ddl", K(ret));
+    } else {
+      tablet_addr_.inc_seq();
+      table_store_addr_.addr_.inc_seq();
+      if (table_store_addr_.is_memory_object()) {
+        ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
+        if (OB_FAIL(table_store_addr_.get_ptr()->clear_memtables())) {
+          LOG_WARN("fail to clear memtables", K(ret));
+        } else if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+          LOG_WARN("inner get memtables fail", K(ret), K(*this));
+        } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
+          LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
+        } else {
+          LOG_INFO("table store update memtable success", KPC(this));
+        }
+      }
     }
   }
   return ret;
@@ -3595,26 +3623,6 @@ int ObTablet::mark_mds_table_switched_to_empty_shell_()
     LOG_WARN("failed to mark mds table switched to empty shell", K(ret));
   }
 
-  return ret;
-}
-
-int ObTablet::reset_storage_related_member()
-{
-  int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (is_ls_inner_tablet()) {
-    // do nothing
-  } else if (is_empty_shell()) {
-    LOG_DEBUG("tablet is empty shell", K(ret));
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->reset_storage_recorder())) {
-    LOG_WARN("failed to destroy storage recorder", K(ret), KPC(memtable_mgr));
-  }
   return ret;
 }
 
@@ -4784,12 +4792,9 @@ int ObTablet::check_medium_list() const
       const ObTabletDumpedMediumInfo *dumped_list = nullptr;
       if (OB_FAIL(ObTabletMdsData::load_medium_info_list(arena_allocator, mds_data_.medium_info_list_, dumped_list))) {
         LOG_WARN("failed to load medium info list", K(ret), K(ls_id), K(tablet_id), K(mds_data_));
-      } else if (nullptr == dumped_list) {
-        // do nothing
-        LOG_INFO("skip check medium list for empty dumped medium info list", KR(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(
           mds_data_.extra_medium_info_,
-          dumped_list->medium_info_list_,
+          nullptr == dumped_list ? nullptr : &dumped_list->medium_info_list_,
           last_major->get_snapshot_version()))) {
         LOG_WARN("fail to validate medium info list", K(ret), K(ls_id), K(tablet_id), K(mds_data_), KPC(dumped_list), KPC(last_major));
       }
@@ -5025,7 +5030,6 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
          K_(storage_schema_addr),
          K_(next_tablet_guard),
          K_(pointer_hdl),
-         K_(next_full_tablet_guard),
          KP_(next_tablet),
          KP_(memtable_mgr),
          KP_(log_handler),
@@ -5320,7 +5324,7 @@ int ObTablet::read_mds_table_medium_info_list(
       LOG_WARN("failed to traverse mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (!op.dumped()) {
       ret = OB_EMPTY_RESULT;
-      LOG_INFO("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
+      LOG_DEBUG("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
     }
   }
 
@@ -5743,7 +5747,7 @@ int ObTablet::validate_medium_info_list(
   } else if (OB_ISNULL(medium_info_list)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is null", K(ret), K(ls_id), K(tablet_id), K(finish_medium_scn), KP(medium_info_list));
-  } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(extra_info, medium_info_list->medium_info_list_, finish_medium_scn))) {
+  } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(extra_info, &medium_info_list->medium_info_list_, finish_medium_scn))) {
     LOG_WARN("failed to validate medium info list", KR(ret), K(ls_id), K(tablet_id), K(mds_data), K(finish_medium_scn));
   }
   return ret;

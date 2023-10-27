@@ -272,6 +272,7 @@ public:
 private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
       share::ObTaskId &trace_id) final override;
+  virtual bool execute_on_sys_server_() const { return false; }
   bool check_replica_in_black_server_(const share::ObLSReplica &replica, const ObIArray<common::ObAddr> &black_servers);
 public:
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id),
@@ -315,10 +316,11 @@ public:
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
   virtual int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
-    const share::ObBackupLSTaskAttr &ls_attr);
+      const share::ObBackupLSTaskAttr &ls_attr);
 private:
   int calc_start_replay_scn_(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
       const share::ObBackupLSTaskAttr &ls_attr, share::SCN &scn);
+  bool execute_on_sys_server_() const override { return true; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupComplLogTask); 
 };
@@ -332,6 +334,7 @@ public:
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
+  bool execute_on_sys_server_() const override { return true; }
   DISALLOW_COPY_AND_ASSIGN(ObBackupBuildIndexTask);
 };
 

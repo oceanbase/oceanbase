@@ -677,5 +677,48 @@ int ret = OB_SUCCESS;
   }
 }
 
+int ObNetKeepAlive::get_last_resp_ts(const common::ObAddr &addr, int64_t &last_resp_ts)
+{
+  int ret = OB_SUCCESS;
+  last_resp_ts = OB_INVALID_TIMESTAMP;
+
+  easy_addr_t ez_addr = to_ez_addr(addr);
+  DestKeepAliveState *rs = regist_dest_if_need(ez_addr);
+  if (rs != NULL) {
+    last_resp_ts = ATOMIC_LOAD(&rs->last_read_ts_);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  return ret;
+}
+
 }//end of namespace obrpc
 }//end of namespace oceanbase
+
+extern "C" {
+int is_net_keepalive_connection(ssize_t rbytes, char *buf)
+{
+  int bret = 0;
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  uint64_t header_magic = 0;
+  uint16_t msg_body_len = 0;
+  uint64_t group_magic  = 0;
+  if (rbytes <= 0 || NULL == buf) {
+    LOG_INFO("invalid argument", K(rbytes), KP(buf));
+  } else if (OB_FAIL(decode_i64(buf, rbytes, pos, reinterpret_cast<int64_t *>(&header_magic)))) {
+    LOG_INFO("decode header magic failed!", K(ret));
+  } else if (header_magic != NEGOTIATION_PACKET_HEADER_MAGIC_EASY) {
+    LOG_INFO("not negotiation msg! header magic does not match!", K(header_magic));
+  } else if (OB_FAIL(decode_i16(buf, rbytes, pos, reinterpret_cast<int16_t *>(&msg_body_len)))) {
+    LOG_INFO("decode msg body len failed!", K(ret));
+  } else if (OB_FAIL(decode_i64(buf, rbytes, pos, reinterpret_cast<int64_t *>(&group_magic)))) {
+    LOG_INFO("decode eio magic failed!", K(ret));
+  } else {
+    if (group_magic == ObNetEasy::NET_KEEPALIVE_MAGIC) {
+      bret = 1;
+    }
+  }
+  return bret;
+}
+}

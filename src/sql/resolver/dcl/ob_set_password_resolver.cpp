@@ -64,7 +64,9 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
   if (OB_ISNULL(session_info_) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info  and nodeshould not be NULL", KP(session_info_), KP(node), K(ret));
-  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) || OB_UNLIKELY(4 != node->num_child_)) {
+  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) ||
+             OB_UNLIKELY(lib::is_oracle_mode() && 4 != node->num_child_) ||
+             OB_UNLIKELY(lib::is_mysql_mode() && 5 != node->num_child_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Set password ParseNode error", K(node->type_), K(node->num_child_), K(ret));
   } else {
@@ -79,7 +81,20 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
       const ObString &session_user_name = session_info_->get_user_name();
       const ObString &session_host_name = session_info_->get_host_name();
       bool is_valid = false;
-      if (NULL != node->children_[0]) {
+      if (lib::is_mysql_mode() && NULL != node->children_[4]) {
+        /* here code is to mock a auth plugin check. */
+        ObString auth_plugin(static_cast<int32_t>(node->children_[4]->str_len_),
+                              node->children_[4]->str_value_);
+        ObString default_auth_plugin;
+        if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                    default_auth_plugin))) {
+          LOG_WARN("fail to get block encryption variable", K(ret));
+        } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+          ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+          LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
+        } else {/* do nothing */}
+      }
+      if (OB_SUCC(ret) && NULL != node->children_[0]) {
         ParseNode *user_hostname_node = node->children_[0];
         if (OB_FAIL(check_role_as_user(user_hostname_node, is_valid))) {
           LOG_WARN("failed to check role as user", K(ret));

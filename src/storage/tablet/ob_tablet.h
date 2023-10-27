@@ -215,8 +215,6 @@ public:
 
   void set_tablet_addr(const ObMetaDiskAddr &tablet_addr);
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }
-  void set_next_full_tablet(const ObTabletHandle &next_tablet_guard) { next_full_tablet_guard_ = next_tablet_guard;}
-  ObTabletHandle &get_next_full_tablet() { return next_full_tablet_guard_; }
   void set_next_tablet(ObTablet* tablet) { next_tablet_ = tablet; }
   ObTablet *get_next_tablet() { return next_tablet_; }
   ObArenaAllocator *get_allocator() { return allocator_;}
@@ -309,12 +307,19 @@ public:
 
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
+
+  // ATTENTION!!!
+  // 1. release memtables from memtable manager and this tablet.
+  // 2. If a tablet may be being accessed, shouldn't call this function.
+  int rebuild_memtables(const share::SCN scn);
+
+  // ATTENTION!!! The following two interfaces only release memtable from memtable manager.
   int release_memtables(const share::SCN scn);
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
+
   int wait_release_memtables();
-  int reset_storage_related_member();
 
   // multi-source data operation
   int get_storage_schema_for_transfer_in(
@@ -751,7 +756,6 @@ private:
   ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;
   ObTabletPointerHandle pointer_hdl_;                        // size: 24B, alignment: 8B
-  ObTabletHandle next_full_tablet_guard_;                    // size: 56B, alignment: 8B
   ObMetaDiskAddr tablet_addr_;                               // size: 40B, alignment: 8B
   // NOTICE: these two pointers: memtable_mgr_ and log_handler_,
   // are considered as cache for tablet.

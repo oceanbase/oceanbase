@@ -1173,7 +1173,8 @@ public:
   int resolve_external_type_by_name(const ObString &db_name,
                                     const ObString &package_name,
                                     const ObString &type_name,
-                                    const ObUserDefinedType *&user_type);
+                                    const ObUserDefinedType *&user_type,
+                                    bool try_synonym);
   int resolve_external_type_by_id(uint64_t type_id, const ObUserDefinedType *&user_type);
   int resolve_external_routine(const ObString &db_name,
                                const ObString &package_name,
@@ -1242,6 +1243,7 @@ public:
     : pre_ns_(pre_ns),
       type_(BLOCK_ROUTINE),
       db_name_(),
+      database_id_(OB_INVALID_ID),
       package_name_(),
       package_id_(OB_INVALID_ID),
       package_version_(OB_INVALID_VERSION),
@@ -1280,6 +1282,8 @@ public:
   inline void set_block_type(BlockType type) { type_ = type; }
   inline const common::ObString &get_db_name() const { return db_name_; }
   inline void set_db_name(const ObString &db_name) { db_name_ = db_name; }
+  inline uint64_t get_database_id() const { return database_id_; }
+  inline void set_database_id(uint64_t database_id) { database_id_ = database_id; }
   inline const common::ObString &get_package_name() const { return package_name_; }
   inline void set_package_name(const ObString &package_name) { package_name_ = package_name; }
   inline uint64_t get_package_id() const { return package_id_; }
@@ -1516,6 +1520,7 @@ private:
   const ObPLBlockNS *pre_ns_;
   BlockType type_;
   common::ObString db_name_;
+  uint64_t database_id_;
   common::ObString package_name_;
   uint64_t package_id_;
   uint64_t package_version_;

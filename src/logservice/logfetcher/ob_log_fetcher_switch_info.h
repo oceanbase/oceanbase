@@ -37,14 +37,12 @@ enum KickOutReason
 
   // Progress timeout, long time to fetch logs
   PROGRESS_TIMEOUT                      = 8,   // Partition fetch log timeout
-                                               // Progress timeout and detection of lagging replica
-  PROGRESS_TIMEOUT_ON_LAGGED_REPLICA    = 9,   //  Partition fetch log timeout on lagging replica
 
-  NEED_SWITCH_SERVER           = 10,  // There is a higher priority server that actively switch
-  DISCARDED                    = 11,  // Partition is discard
+  NEED_SWITCH_SERVER           = 9,  // There is a higher priority server that actively switch
+  DISCARDED                    = 10,  // Partition is discard
 
   // Feedback
-  ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF        = 12,  //same as ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF
+  ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF        = 11,  //same as ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF
 };
 const char *print_switch_reason(const KickOutReason reason);
 

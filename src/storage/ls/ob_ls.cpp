@@ -1328,7 +1328,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   } else {
     // The readable point of the primary tenant is weak read ts,
     // and the readable point of the standby tenant is readable scn
-    if (MTL_IS_PRIMARY_TENANT()) {
+    if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
       ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
     } else if (OB_FAIL(get_ls_replica_readable_scn(ls_info.weak_read_scn_))) {
       TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), KPC(this));

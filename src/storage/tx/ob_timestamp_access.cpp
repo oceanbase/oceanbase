@@ -58,7 +58,7 @@ void ObTimestampAccess::get_virtual_info(int64_t &ts_value,
                                          int64_t &proposal_id)
 {
   service_type = service_type_;
-  if (MTL_IS_PRIMARY_TENANT()) {
+  if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     MTL(ObTimestampService *)->get_virtual_info(ts_value, role, proposal_id);
   } else {
     MTL(ObStandbyTimestampService *)->get_virtual_info(ts_value, role, proposal_id);

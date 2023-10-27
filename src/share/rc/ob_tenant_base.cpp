@@ -50,7 +50,7 @@ ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
     inited_(false),
     created_(false),
     mtl_init_ctx_(nullptr),
-    tenant_role_value_(share::ObTenantRole::Role::PRIMARY_TENANT),
+    tenant_role_value_(share::ObTenantRole::Role::INVALID_TENANT),
     unit_max_cpu_(0),
     unit_min_cpu_(0),
     unit_memory_size_(0),

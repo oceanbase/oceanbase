@@ -223,12 +223,10 @@ int ObTransferHandler::fetch_transfer_task_from_inner_table_by_src_ls_(
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
   } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
     LOG_WARN("failed to convert from transfer task", K(ret), K(task));
-  } else if (!task_info.status_.is_start_status()
-      && !task_info.status_.is_aborted_status()) {
-    // task not exist
-  } else {
-    task_exist = true;
+  } else if (OB_FAIL(check_task_exist_(task_info.status_, true/*find_by_src_ls*/, task_exist))) {
+    LOG_WARN("failed to get task exist", K(ret), K(task_info.status_));
   }
+
   if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
     task_exist = false;
     ret = OB_SUCCESS;
@@ -251,10 +249,8 @@ int ObTransferHandler::fetch_transfer_task_from_inner_table_by_dest_ls_(
     LOG_WARN("failed to get transfer task by dest ls", K(ret), K(tenant_id), K(dest_ls_id));
   } else if (OB_FAIL(task_info.convert_from(tenant_id, task))) {
     LOG_WARN("failed to convert from transfer task", K(ret), K(task));
-  } else if (!task_info.status_.is_doing_status()) {
-    // task not exist
-  } else {
-    task_exist = true;
+  } else if (OB_FAIL(check_task_exist_(task_info.status_, false/*find_by_src_ls*/, task_exist))) {
+    LOG_WARN("failed to get task exist", K(ret), K(task_info.status_));
   }
   if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
     task_exist = false;
@@ -793,14 +789,7 @@ int ObTransferHandler::get_ls_active_trans_count_(
   int ret = OB_SUCCESS;
   active_trans_count = 0;
   const uint64_t tenant_id = MTL_ID();
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-
-  if (OB_FAIL(ls_->get_migration_status(migration_status))) {
-    LOG_WARN("failed to get migration status", K(ret), KPC(ls_));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("src ls migration status is not none", K(ret), K(migration_status), KPC(ls_));
-  } else if (OB_FAIL(ls_->get_active_tx_count(active_trans_count))) {
+  if (OB_FAIL(ls_->get_active_tx_count(active_trans_count))) {
     LOG_WARN("failed to get active trans count", K(ret), KPC(ls_));
   } else {
     LOG_INFO("get ls active trans count", K(tenant_id), K(src_ls_id), K(active_trans_count));
@@ -971,7 +960,7 @@ int ObTransferHandler::commit_trans_(
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
   } else {
-    tmp_ret = trans.end(OB_SUCC(result));
+    tmp_ret = trans.end(OB_SUCCESS == result);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("end transaction failed", K(tmp_ret), K(ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
@@ -1597,7 +1586,8 @@ int ObTransferHandler::update_all_tablet_to_ls_(
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("TRANSFER", "BEFORE_TRANSFER_UPDATE_TABLET_TO_LS");
+  ObTransferEventRecorder::record_transfer_task_event(
+    task_info.task_id_, "BEFORE_TRANSFER_UPDATE_TABLET_TO_LS", task_info.src_ls_id_, task_info.dest_ls_id_);
 #endif
   DEBUG_SYNC(BEFORE_TRANSFER_UPDATE_TABLET_TO_LS);
   const int64_t start_ts = ObTimeUtil::current_time();
@@ -1726,6 +1716,7 @@ int ObTransferHandler::update_transfer_status_aborted_(
   const share::ObTransferStatus next_status(ObTransferStatus::ABORTED);
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
+  bool is_leader = true;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
@@ -1738,6 +1729,17 @@ int ObTransferHandler::update_transfer_status_aborted_(
     const SCN scn = task_info.start_scn_;
     if (OB_FAIL(lock_transfer_task_(task_info, trans))) {
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+    }
+    // There is still a possibility of the old leader change task status to ABORT
+    // when switching leader occurs after check_self_is_leader_ and before commit.
+    // But check_self_is_leader_ occuring after row lock competition
+    // is maximize interceptions of old leader change task status to ABORT.
+    // It greatly reduce the probability of old leader change task status to ABORT
+    else if (OB_FAIL(check_self_is_leader_(is_leader))) {
+      LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+    } else if (!is_leader) {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("ls leader has been changed", K(ret), K(task_info));
     } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
       LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
     }
@@ -1938,6 +1940,7 @@ int ObTransferHandler::block_and_kill_tx_(
     bool &succ_block_tx)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   succ_block_tx = false;
   const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
@@ -1951,7 +1954,9 @@ int ObTransferHandler::block_and_kill_tx_(
     after_kill_trx_threshold = tenant_config->_balance_wait_killing_transaction_end_threshold;
   }
 
-  if (OB_FAIL(block_tx_(tenant_id, src_ls_id, gts_seq_))) {
+  if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(src_ls_id))) {
+    LOG_WARN("failed to check src ls has active trans", K(ret), K(task_info));
+  } else if (OB_FAIL(block_tx_(tenant_id, src_ls_id, gts_seq_))) {
     LOG_WARN("failed to block tx", K(ret), K(task_info));
   } else if (FALSE_IT(succ_block_tx = true)) {
   } else if (!enable_kill_trx) {
@@ -1969,6 +1974,15 @@ int ObTransferHandler::block_and_kill_tx_(
   } else {
     LOG_INFO("[TRANSFER] success to block and kill tx", "cost", ObTimeUtil::current_time() - start_ts);
   }
+
+  if (OB_FAIL(ret) && succ_block_tx) {
+    if (OB_SUCCESS != (tmp_ret = unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
+      LOG_WARN("failed to unblock tx", K(tmp_ret), K(task_info), K(gts_seq_));
+    } else {
+      succ_block_tx = false;
+    }
+  }
+
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_BLOCK_AND_KILL_TX");
 #endif
@@ -2056,6 +2070,11 @@ int ObTransferHandler::unblock_tx_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTransferUtils::unblock_tx(tenant_id, ls_id, gts))) {
     LOG_WARN("failed to unblock tx", K(ret), K(tenant_id), K(ls_id));
+    if (OB_SEQUENCE_NOT_MATCH == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      ob_abort();
+    }
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_UNBLOCK_TX");
@@ -2162,11 +2181,6 @@ int ObTransferHandler::clear_prohibit_(
     LOG_WARN("clear prohibit get invalid argument", K(ret), K(task_info));
   } else if (is_block_tx && OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
     LOG_WARN("failed to unblock tx", K(ret), K(task_info), K(gts_seq_));
-    if (OB_SEQUENCE_NOT_MATCH == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      ob_abort();
-    }
   }
 
   if (OB_FAIL(ret)) {
@@ -2208,6 +2222,29 @@ int ObTransferHandler::check_config_version_(
   } else if (config_version != current_config_version) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ls leader has been changed", K(ret), KPC(ls_), K(config_version), K(current_config_version));
+  }
+  return ret;
+}
+
+// Only src ls could work when task status is START or ABORT.
+// Conversely dest ls work when task status is DOING.
+// The benefit of above is that the src ls leader can make controlling medium compaction a local execution,
+// which is more controllable.
+// The ABORT status will change to FAILED status in src ls work time.
+int ObTransferHandler::check_task_exist_(
+    const ObTransferStatus &status, const bool find_by_src_ls, bool &task_exist) const
+{
+  int ret = OB_SUCCESS;
+  task_exist = false;
+  if (!status.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(status));
+  } else if (find_by_src_ls && (status.is_start_status() || status.is_aborted_status())) {
+    task_exist = true;
+  } else if (!find_by_src_ls && status.is_doing_status()) {
+    task_exist = true;
+  } else {
+    task_exist = false;
   }
   return ret;
 }

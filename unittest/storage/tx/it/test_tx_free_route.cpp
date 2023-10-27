@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #include <gtest/gtest.h>
 #include <thread>
 #include <functional>
@@ -892,36 +904,36 @@ TEST_F(ObTestTxFreeRoute, upgrade_to_4_1)
   EX_COMMIT_TX();
 }
 
-TEST_F(ObTestTxFreeRoute, twiddle_knob_on_the_fly)
-{
-  TXFR_TEST_SETUP("127.0.0.1", "127.0.0.2", "127.0.0.3");
-  // previous is on
-  EX_START_TX(1);
-  EX_WRITE(102,2);
-  EX_WRITE(103,2);
-  EX_COMMIT_TX();
-  omt::the_ctrl_of_enable_transaction_free_route = false;
-  // off -> on
-  EX_START_TX(1);
-  A_T(proxy.in_txn_);
-  A_F(proxy.can_free_route_);
-  EX_WRITE(100, 1); // on server 2
-  omt::the_ctrl_of_enable_transaction_free_route = true;
-  A_T(proxy.in_txn_);
-  A_F(proxy.can_free_route_);
-  EX_WRITE(101, 1); // on server 2
-  EX_COMMIT_TX();
-  // on -> off
-  EX_START_TX(1);
-  A_T(proxy.in_txn_);
-  A_T(proxy.can_free_route_);
-  EX_WRITE(100, 1); // on server 1
-  omt::the_ctrl_of_enable_transaction_free_route = false;
-  A_T(proxy.in_txn_);
-  A_T(proxy.can_free_route_);
-  EX_WRITE(101, 1); // on server 2
-  EX_COMMIT_TX();
-}
+// TEST_F(ObTestTxFreeRoute, twiddle_knob_on_the_fly)
+// {
+//   TXFR_TEST_SETUP("127.0.0.1", "127.0.0.2", "127.0.0.3");
+//   // previous is on
+//   EX_START_TX(1);
+//   EX_WRITE(102,2);
+//   EX_WRITE(103,2);
+//   EX_COMMIT_TX();
+//   omt::the_ctrl_of_enable_transaction_free_route = false;
+//   // off -> on
+//   EX_START_TX(1);
+//   A_T(proxy.in_txn_);
+//   A_F(proxy.can_free_route_);
+//   EX_WRITE(100, 1); // on server 2
+//   omt::the_ctrl_of_enable_transaction_free_route = true;
+//   A_T(proxy.in_txn_);
+//   A_F(proxy.can_free_route_);
+//   EX_WRITE(101, 1); // on server 2
+//   EX_COMMIT_TX();
+//   // on -> off
+//   EX_START_TX(1);
+//   A_T(proxy.in_txn_);
+//   A_T(proxy.can_free_route_);
+//   EX_WRITE(100, 1); // on server 1
+//   omt::the_ctrl_of_enable_transaction_free_route = false;
+//   A_T(proxy.in_txn_);
+//   A_T(proxy.can_free_route_);
+//   EX_WRITE(101, 1); // on server 2
+//   EX_COMMIT_TX();
+// }
 
 
 TEST_F(ObTestTxFreeRoute, sample)

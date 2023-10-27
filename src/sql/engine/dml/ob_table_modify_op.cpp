@@ -204,9 +204,9 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
 {
   int ret = OB_SUCCESS;
   static const char *SELECT_FMT_MYSQL  =
-    "select /*+ no_parallel */ 1 from `%.*s`.`%.*s` where %.*s limit 2 for update";
+    "select /*+ no_parallel */ 1 from `%.*s`.`%.*s` where %.*s for update";
   static const char *SELECT_FMT_ORACLE =
-    "select /*+ no_parallel */ 1 from \"%.*s\".\"%.*s\" where %.*s and rownum <= 2 for update";
+    "select /*+ no_parallel */ 1 from \"%.*s\".\"%.*s\" where %.*s for update";
   const char *select_fmt = lib::is_mysql_mode() ? SELECT_FMT_MYSQL : SELECT_FMT_ORACLE;
   ObArenaAllocator alloc(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
                           OB_MALLOC_NORMAL_BLOCK_SIZE,

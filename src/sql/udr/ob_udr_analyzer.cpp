@@ -1,8 +1,14 @@
-// Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
-// Author:
-//     LuoFan
-// Normalizer:
-//     LuoFan
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 
 #define USING_LOG_PREFIX SQL_QRR
@@ -34,7 +40,7 @@ int ObUDRAnalyzer::parse_and_resolve_stmt_type(const common::ObString &sql,
 {
   int ret = OB_SUCCESS;
   stmt_type = stmt::T_NONE;
-  ObParser parser(allocator_, sql_mode_, connection_collation_);
+  ObParser parser(allocator_, sql_mode_, charsets4parser_);
   if (OB_FAIL(multiple_query_check(sql))) {
     LOG_WARN("failed to check multiple query check", K(ret));
   } else if (OB_FAIL(parser.parse(sql, parse_result))) {
@@ -149,7 +155,7 @@ int ObUDRAnalyzer::multiple_query_check(const ObString &sql)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 1> queries;
-  ObParser parser(allocator_, sql_mode_, connection_collation_);
+  ObParser parser(allocator_, sql_mode_, charsets4parser_);
   ObMPParseStat parse_stat;
   if (OB_FAIL(parser.split_multiple_stmt(sql, queries, parse_stat))) {
     LOG_WARN("failed to split multiple stmt", K(ret), K(sql));
@@ -315,7 +321,7 @@ int ObUDRAnalyzer::parse_sql_to_gen_match_param_infos(
 {
   int ret = OB_SUCCESS;
   ObFastParserResult fp_result;
-  FPContext fp_ctx(connection_collation_);
+  FPContext fp_ctx(charsets4parser_);
   fp_ctx.sql_mode_ = sql_mode_;
   fp_ctx.is_udr_mode_ = true;
   if (pattern.empty()) {
@@ -340,7 +346,7 @@ int ObUDRAnalyzer::parse_pattern_to_gen_param_infos(
 {
   int ret = OB_SUCCESS;
   ObFastParserResult fp_result;
-  FPContext fp_ctx(connection_collation_);
+  FPContext fp_ctx(charsets4parser_);
   fp_ctx.sql_mode_ = sql_mode_;
   fp_ctx.is_udr_mode_ = true;
   if (pattern.empty()) {

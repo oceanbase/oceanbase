@@ -715,9 +715,19 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
     EXPR_GET_VARCHAR_V2(val, val_str);
     ObSysVarSchema sysvar_schema;
-    if (OB_UNLIKELY(val_str.length() > OB_MAX_SYS_VAR_VAL_LENGTH)) {
+
+    int64_t sys_var_val_length = OB_MAX_SYS_VAR_VAL_LENGTH;
+    if (set_var.var_name_ == OB_SV_TCP_INVITED_NODES) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(set_var.actual_tenant_id_, data_version))) {
+        LOG_WARN("fail to get tenant data version", KR(ret));
+      } else if (data_version >= DATA_VERSION_4_2_1_1) {
+        sys_var_val_length = OB_MAX_TCP_INVITED_NODES_LENGTH;
+      }
+    }
+    if (OB_SUCC(ret) && OB_UNLIKELY(val_str.length() > sys_var_val_length)) {
       ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("set sysvar value is overflow", "max length", OB_MAX_SYS_VAR_VAL_LENGTH,
+      LOG_WARN("set sysvar value is overflow", "max length", sys_var_val_length,
                "value length", val_str.length(), "name", set_var.var_name_, "value", val_str);
     } else if (OB_FAIL(sysvar_schema.set_name(set_var.var_name_))) {
       LOG_WARN("set sysvar schema name failed", K(ret));
@@ -1016,7 +1026,10 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
         }
       // skip commit txn if this is txn free route temporary node
       } else if (false == orig_ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
-        if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false))) {
+        // set autocommit = 1 won't clear next scope transaction settings:
+        // `set transaction read only`
+        // `set transaction isolation level`
+        if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false, NULL, false))) {
           LOG_WARN("fail implicit commit trans", K(ret));
         }
       } else {

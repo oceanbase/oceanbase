@@ -132,8 +132,10 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
 
 int ObTxDataMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                          const int64_t schema_version,
+                                         const SCN newest_clog_checkpoint_scn,
                                          const bool for_replay)
 {
+  UNUSED(newest_clog_checkpoint_scn);
   UNUSED(for_replay);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

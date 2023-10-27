@@ -496,27 +496,6 @@ int ObSelectStmtPrinter::print_select()
   return ret;
 }
 
-int ObSelectStmtPrinter::set_synonym_name_recursively(ObRawExpr *cur_expr, const ObDMLStmt *stmt) {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(cur_expr) || OB_ISNULL(stmt)) {
-  } else if (cur_expr->is_column_ref_expr()) {
-    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(cur_expr);
-    const TableItem *table_item = stmt->get_table_item_by_id(column_expr->get_table_id());
-    if (NULL != table_item && table_item->alias_name_.empty()) {
-      column_expr->set_synonym_name(table_item->synonym_name_);
-      column_expr->set_synonym_db_name(table_item->synonym_db_name_);
-    }
-  } else if (cur_expr->get_param_count() > 0) {
-    for (int64_t param_idx = 0; param_idx < cur_expr->get_param_count(); ++param_idx) {
-      ObRawExpr * param_expr = cur_expr->get_param_expr(param_idx);
-      OZ (SMART_CALL(set_synonym_name_recursively(param_expr, stmt)));
-    }
-  } else {
-    //do nothing
-  }
-  return ret;
-}
-
 int ObSelectStmtPrinter::remove_double_quotation_for_string(ObString &alias_string,
                                                             ObIAllocator &allocator)
 {

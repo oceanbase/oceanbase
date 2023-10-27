@@ -72,6 +72,7 @@ public:
   // Create all tablets with remote tablet meta.
   int create_or_update_tablets();
   int create_all_tablets(
+      const bool need_check_tablet_limit,
       ObICopyLSViewInfoReader *reader,
       common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
       common::ObIArray<common::ObTabletID> &data_tablet_id_list,
@@ -92,6 +93,7 @@ private:
   void free_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int create_or_update_tablet_(
       const obrpc::ObCopyTabletInfo &tablet_info,
+      const bool need_check_tablet_limit,
       ObLS *ls);
   int get_tablets_sstable_reader_(
       const common::ObIArray<ObTabletHandle> &tablet_handle_array,

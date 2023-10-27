@@ -719,7 +719,7 @@ void ObDRTaskMgr::run3()
           LOG_WARN("fail to try pop task", KR(ret));
         } else if (OB_NOT_NULL(task)) {
           const ObAddr &dst_server = task->get_dst_server();
-          ObServerInfoInTable server_info;
+          share::ObServerInfoInTable server_info;
           if (OB_FAIL(SVR_TRACER.get_server_info(dst_server, server_info))) {
             LOG_WARN("fail to get server_info", KR(ret), K(dst_server));
           } else if (server_info.is_permanent_offline()) {

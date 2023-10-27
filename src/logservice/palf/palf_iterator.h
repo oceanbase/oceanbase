@@ -41,7 +41,7 @@ public:
     } else if (OB_FAIL(do_init_(start_offset, get_file_end_lsn, get_mode_version, log_storage))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
-      PALF_LOG(INFO, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
+      PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
     }
     return ret;
@@ -264,7 +264,7 @@ private:
     } else if (OB_FAIL(iterator_impl_.init(get_mode_version, &iterator_storage_))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
-      PALF_LOG(INFO, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
+      PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
     }
     return ret;

@@ -249,7 +249,10 @@ int ObTenantMajorFreeze::suspend_merge()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
-    if (OB_FAIL(zone_merge_mgr_.suspend_merge(expected_epoch))) {
+    if (-1 == expected_epoch) {
+      ret = OB_EAGAIN;
+      LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(zone_merge_mgr_.suspend_merge(expected_epoch))) {
       LOG_WARN("fail to suspend merge", KR(ret), K_(tenant_id), K(expected_epoch));
     }
   } 
@@ -269,7 +272,10 @@ int ObTenantMajorFreeze::resume_merge()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
-    if (OB_FAIL(zone_merge_mgr_.resume_merge(expected_epoch))) {
+    if (-1 == expected_epoch) {
+      ret = OB_EAGAIN;
+      LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(zone_merge_mgr_.resume_merge(expected_epoch))) {
       LOG_WARN("fail to resume merge", KR(ret), K_(tenant_id), K(expected_epoch));
     }
   }
@@ -290,7 +296,10 @@ int ObTenantMajorFreeze::clear_merge_error()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
-    if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_,
+    if (-1 == expected_epoch) {
+      ret = OB_EAGAIN;
+      LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_,
                                                                          expected_epoch))) {
       LOG_WARN("fail to batch update status", KR(ret), K_(tenant_id), K(expected_epoch));
     } else if (OB_FAIL(zone_merge_mgr_.set_merge_error(error_type, expected_epoch))) {

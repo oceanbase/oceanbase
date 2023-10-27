@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #include <gtest/gtest.h>
 #define private public  // 获取私有成员
 #include "observer/table/ob_table_session_pool.h"
@@ -113,7 +125,7 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
   ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
   ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
@@ -144,7 +156,7 @@ TEST_F(TestTableSessPool, mgr_update_session)
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
   ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
   ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
@@ -159,7 +171,7 @@ TEST_F(TestTableSessPool, mgr_update_session)
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
   ASSERT_EQ(1, mgr->pool_->retired_nodes_.size_);
   ASSERT_EQ(node, mgr->pool_->retired_nodes_.get_last());
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
   ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
@@ -172,7 +184,7 @@ TEST_F(TestTableSessPool, mgr_update_session)
   ASSERT_TRUE(mgr->pool_->is_inited_);
   ASSERT_EQ(2, mgr->pool_->key_node_map_.size());
   ASSERT_EQ(1, mgr->pool_->retired_nodes_.size_);
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
   ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
@@ -186,7 +198,7 @@ TEST_F(TestTableSessPool, mgr_destroy)
   ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*mock_cred_));
   ASSERT_NE(nullptr, mgr->pool_);
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
   mgr->destroy();
   ASSERT_FALSE(mgr->is_inited_);
   ASSERT_EQ(nullptr, mgr->pool_);
@@ -203,7 +215,7 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
 
   // add mock val to node
   ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
   ObTableApiSessNodeVal val(node);
   val.is_inited_ = true;
   ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(&val));
@@ -216,7 +228,7 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
   guard.~ObTableApiSessGuard();
 
   // 3min not access
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->user_id_, node));
+  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
   node->last_active_ts_ = node->last_active_ts_ - ObTableApiSessPool::SESS_RETIRE_TIME;
   mgr->elimination_task_.run_retire_sess_task();
   ASSERT_EQ(0, mgr->pool_->key_node_map_.size());

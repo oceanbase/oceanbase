@@ -219,6 +219,7 @@ public:
   OptTableMeta() :
     table_id_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
+    table_type_(share::schema::MAX_TABLE_TYPE),
     rows_(0),
     stat_type_(OptTableStatType::DEFAULT_TABLE_STAT),
     last_analyzed_(0),
@@ -234,6 +235,7 @@ public:
 
   int init(const uint64_t table_id,
            const uint64_t ref_table_id,
+           const share::schema::ObTableType table_type,
            const int64_t rows,
            const OptTableStatType stat_type,
            ObSqlSchemaGuard &schema_guard,
@@ -282,12 +284,15 @@ public:
   bool use_ds_stat() const { return stat_type_ == OptTableStatType::DS_TABLE_STAT; }
   void set_use_ds_stat() { stat_type_ = OptTableStatType::DS_TABLE_STAT; }
 
-  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(rows), K_(stat_type), K_(ds_level),
+  share::schema::ObTableType get_table_type() const { return table_type_; }
+
+  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(table_type), K_(rows), K_(stat_type), K_(ds_level),
                K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas),
                K_(all_used_global_parts), K_(scale_ratio));
 private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
+  const share::schema::ObTableType table_type_;
   double rows_;
   OptTableStatType stat_type_;
   int64_t last_analyzed_;
@@ -321,6 +326,7 @@ public:
   int add_base_table_meta_info(OptSelectivityCtx &ctx,
                                const uint64_t table_id,
                                const uint64_t ref_table_id,
+                               const share::schema::ObTableType table_type,
                                const int64_t rows,
                                common::ObIArray<int64_t> &all_used_part_id,
                                common::ObIArray<ObTabletID> &all_used_tablets,

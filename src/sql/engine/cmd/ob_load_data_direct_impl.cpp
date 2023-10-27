@@ -1,6 +1,14 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <>
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -1524,8 +1532,8 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
     handle->data_desc_ = data_desc_;
     handle->start_line_no_ = total_line_no_ ;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
-    handle->sequence_no_.chunk_id_ = chunk_id;
-    handle->sequence_no_.chunk_seq_no_ = 0;
+    handle->sequence_no_.sequence_no_ = chunk_id;
+    handle->sequence_no_.sequence_no_ <<= ObTableLoadSequenceNo::CHUNK_ID_SHIFT;
     handle->data_buffer_.swap(expr_buffer_);
     handle->data_buffer_.is_end_file_ = data_reader_.is_end_file();
     total_line_no_ += current_line_count;
@@ -1792,8 +1800,8 @@ int ObLoadDataDirectImpl::MultiFilesLoadExecutor::get_next_task_handle(TaskHandl
     handle->data_desc_ = data_desc;
     handle->start_line_no_ = 0;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
-    handle->sequence_no_.data_id_ = data_id;
-    handle->sequence_no_.data_seq_no_ = 0;
+    handle->sequence_no_.sequence_no_ = data_id;
+    handle->sequence_no_.sequence_no_ <<= ObTableLoadSequenceNo::DATA_ID_SHIFT;
   }
   return ret;
 }

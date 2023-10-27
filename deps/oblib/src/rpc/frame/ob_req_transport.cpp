@@ -440,10 +440,7 @@ ObPacket *ObReqTransport::send_session(easy_session_t *s) const
       s->addr.cidx = balance_assign(s);
     }
 
-    {
-      lib::Thread::RpcGuard guard(s->addr);
-      pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
-    }
+    pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
     if (NULL == pkt) {
       char buff[OB_SERVER_ADDR_STR_LEN] = {'\0'};
       easy_inet_addr_to_str(&s->addr, buff, OB_SERVER_ADDR_STR_LEN);
@@ -496,7 +493,10 @@ int ObReqTransport::send(const Request &req, Result &r) const
     EVENT_ADD(RPC_PACKET_OUT_BYTES,
               req.const_pkt().get_clen() + req.const_pkt().get_header_size() + common::OB_NET_HEADER_LENGTH);
 
-    r.pkt_ = reinterpret_cast<obrpc::ObRpcPacket*>(send_session(req.s_));
+    {
+      lib::Thread::RpcGuard guard(req.s_->addr, req.const_pkt().get_pcode());
+      r.pkt_ = reinterpret_cast<obrpc::ObRpcPacket*>(send_session(req.s_));
+    }
     if (NULL == r.pkt_) {
       easy_error = req.s_->error;
       if (EASY_TIMEOUT == easy_error) {

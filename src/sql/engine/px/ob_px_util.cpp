@@ -193,14 +193,21 @@ int ObPXServerAddrUtil::get_external_table_loc(
     } else {
       ObSEArray<ObAddr, 16> all_locations;
       int64_t expected_location_cnt = std::min(dfo.get_dop(), dfo.get_external_table_files().count());
-      if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
-        LOG_WARN("fail to get external table location", K(ret));
-      } else if (expected_location_cnt >= all_locations.count() ?
-                 OB_FAIL(target_locations.assign(all_locations))
-               : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
-                                                                        expected_location_cnt,
-                                                                        target_locations)))
-      LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+      if (1 == expected_location_cnt) {
+        if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
+          LOG_WARN("fail to push push back", K(ret));
+        }
+      } else {
+        if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
+          LOG_WARN("fail to get external table location", K(ret));
+        } else if (expected_location_cnt >= all_locations.count() ?
+                   OB_FAIL(target_locations.assign(all_locations))
+                 : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
+                                                                          expected_location_cnt,
+                                                                          target_locations))) {
+          LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+        }
+      }
     }
     LOG_TRACE("calc external table location", K(target_locations));
     if (OB_SUCC(ret)) {
@@ -2607,15 +2614,22 @@ int ObPxChannelUtil::sqcs_channles_asyn_wait(ObIArray<ObPxSqcMeta *> &sqcs)
 int ObPxAffinityByRandom::add_partition(int64_t tablet_id,
                                         int64_t tablet_idx,
                                         int64_t worker_cnt,
+                                        uint64_t tenant_id,
                                         ObPxTabletInfo &partition_row_info)
 {
   int ret = OB_SUCCESS;
+  LOG_TRACE("add partition", K(tablet_id), K(tablet_idx), K(worker_cnt), K(this), K(order_partitions_));
   if (0 >= worker_cnt) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The worker cnt is invalid", K(ret), K(worker_cnt));
   } else {
     TabletHashValue part_hash_value;
-    part_hash_value.hash_value_ = 0;
+    if (order_partitions_) {
+      part_hash_value.hash_value_ = 0;
+    } else {
+      uint64_t value = (tenant_id << 32 | tablet_idx);
+      part_hash_value.hash_value_ = common::murmurhash(&value, sizeof(value), worker_cnt);
+    }
     part_hash_value.tablet_idx_ = tablet_idx;
     part_hash_value.tablet_id_ = tablet_id;
     part_hash_value.partition_info_ = partition_row_info;
@@ -2648,23 +2662,25 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
         && (tablet_hash_values_.at(0).tablet_idx_ > tablet_hash_values_.at(1).tablet_idx_)) {
       asc_order = false;
     }
-    // in partition wise affinity scenario, partition_idx of a pair of partitions may be different.
-    // for example, T1 consists of p0, p1, p2 and T2 consists of p1, p2
-    // T1.p1 <===> T2.p1  and T1.p2 <===> T2.p2
-    // The partition_idx of T1.p1 is 1 and the partition_idx of T2.p1 is 0.
-    // If we calculate hash value of partition_idx and sort partitions by the hash value,
-    // T1.p1 and T2.p1 may be assigned to different worker.
-    // So we sort partitions by partition_idx and generate a relative_idx which starts from zero.
-    // Then calculate hash value with the relative_idx
-    auto part_idx_compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.tablet_idx_ > b.tablet_idx_; };
-    std::sort(tablet_hash_values_.begin(),
-              tablet_hash_values_.end(),
-              part_idx_compare_fun);
-    int64_t relative_idx = 0;
-    for (int64_t i = 0; i < tablet_hash_values_.count(); i++) {
-      uint64_t value = ((tenant_id << 32) | relative_idx);
-      tablet_hash_values_.at(i).hash_value_ = common::murmurhash(&value, sizeof(value), worker_cnt_);
-      relative_idx++;
+    if (order_partitions_) {
+      // in partition wise affinity scenario, partition_idx of a pair of partitions may be different.
+      // for example, T1 consists of p0, p1, p2 and T2 consists of p1, p2
+      // T1.p1 <===> T2.p1  and T1.p2 <===> T2.p2
+      // The partition_idx of T1.p1 is 1 and the partition_idx of T2.p1 is 0.
+      // If we calculate hash value of partition_idx and sort partitions by the hash value,
+      // T1.p1 and T2.p1 may be assigned to different worker.
+      // So we sort partitions by partition_idx and generate a relative_idx which starts from zero.
+      // Then calculate hash value with the relative_idx
+      auto part_idx_compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.tablet_idx_ > b.tablet_idx_; };
+      std::sort(tablet_hash_values_.begin(),
+                tablet_hash_values_.end(),
+                part_idx_compare_fun);
+      int64_t relative_idx = 0;
+      for (int64_t i = 0; i < tablet_hash_values_.count(); i++) {
+        uint64_t value = ((tenant_id << 32) | relative_idx);
+        tablet_hash_values_.at(i).hash_value_ = common::murmurhash(&value, sizeof(value), worker_cnt_);
+        relative_idx++;
+      }
     }
 
     // 先打乱所有的序
@@ -2672,7 +2688,7 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
     std::sort(tablet_hash_values_.begin(),
               tablet_hash_values_.end(),
               compare_fun);
-    LOG_TRACE("after sort partition_hash_values randomly", K(tablet_hash_values_));
+    LOG_TRACE("after sort partition_hash_values randomly", K(tablet_hash_values_), K(this), K(order_partitions_));
 
     // 如果没有partition的统计信息则将它们round放置
     if (!use_partition_info) {
@@ -3383,8 +3399,9 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
     DASTabletLocArray locations;
     ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
       // 所有的affinitize计算都是SQC局部，不是全局的。
-      ObPxAffinityByRandom affinitize_rule;
       ObPxSqcMeta &sqc = *sqcs.at(idx);
+      ObPxAffinityByRandom affinitize_rule(sqc.sqc_order_gi_tasks());
+      LOG_TRACE("build ppwj_ch_mn_map", K(sqc));
       ObPxTabletInfo partition_row_info;
       locations.reset();
       if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(), sqc, locations))) {
@@ -3423,6 +3440,7 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
         } else if (OB_FAIL(affinitize_rule.add_partition(location.tablet_id_.id(),
                 tablet_idx,
                 sqc.get_task_count(),
+                ctx.get_my_session()->get_effective_tenant_id(),
                 partition_row_info))) {
           LOG_WARN("fail calc task_id", K(location.tablet_id_), K(sqc), K(ret));
         }

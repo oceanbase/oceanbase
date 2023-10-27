@@ -291,7 +291,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[15].default_value_ = "12582912" ;
+      ObSysVars[15].default_value_ = "281018368" ;
       ObSysVars[15].on_update_func_ = "ObSysVarOnUpdateFuncs::update_sql_mode" ;
       ObSysVars[15].name_ = "sql_mode" ;
       ObSysVars[15].data_type_ = ObUInt64Type ;
@@ -3305,13 +3305,83 @@ static struct VarsInit{
     ObSysVars[233].alias_ = "OB_SV__OB_PROXY_WEAKREAD_FEEDBACK" ;
     }();
 
+    [&] (){
+      ObSysVars[234].default_value_ = "0" ;
+      ObSysVars[234].info_ = "The national character set which should be translated to response nstring data" ;
+      ObSysVars[234].name_ = "ncharacter_set_connection" ;
+      ObSysVars[234].data_type_ = ObIntType ;
+      ObSysVars[234].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_charset" ;
+      ObSysVars[234].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NULLABLE ;
+      ObSysVars[234].base_class_ = "ObCharsetSysVar" ;
+      ObSysVars[234].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_charset" ;
+      ObSysVars[234].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_charset" ;
+      ObSysVars[234].id_ = SYS_VAR_NCHARACTER_SET_CONNECTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NCHARACTER_SET_CONNECTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NCHARACTER_SET_CONNECTION] = 234 ;
+      ObSysVars[234].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
+      ObSysVars[234].base_value_ = "0" ;
+    ObSysVars[234].alias_ = "OB_SV_NCHARACTER_SET_CONNECTION" ;
+    }();
+
+    [&] (){
+      ObSysVars[235].default_value_ = "1" ;
+      ObSysVars[235].info_ = "the server automatically grants the EXECUTE and ALTER ROUTINE privileges to the creator of a stored routine" ;
+      ObSysVars[235].name_ = "automatic_sp_privileges" ;
+      ObSysVars[235].data_type_ = ObIntType ;
+      ObSysVars[235].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[235].id_ = SYS_VAR_AUTOMATIC_SP_PRIVILEGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTOMATIC_SP_PRIVILEGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AUTOMATIC_SP_PRIVILEGES] = 235 ;
+      ObSysVars[235].base_value_ = "1" ;
+    ObSysVars[235].alias_ = "OB_SV_AUTOMATIC_SP_PRIVILEGES" ;
+    }();
+
+    [&] (){
+      ObSysVars[236].default_value_ = "" ;
+      ObSysVars[236].info_ = "enabling a series of privilege features based on an OceanBase release number" ;
+      ObSysVars[236].name_ = "privilege_features_enable" ;
+      ObSysVars[236].data_type_ = ObVarcharType ;
+      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[236].id_ = SYS_VAR_PRIVILEGE_FEATURES_ENABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PRIVILEGE_FEATURES_ENABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PRIVILEGE_FEATURES_ENABLE] = 236 ;
+      ObSysVars[236].base_value_ = "" ;
+    ObSysVars[236].alias_ = "OB_SV_PRIVILEGE_FEATURES_ENABLE" ;
+    }();
+
+    [&] (){
+      ObSysVars[237].default_value_ = "" ;
+      ObSysVars[237].info_ = "whether turn on mysql privilege check" ;
+      ObSysVars[237].name_ = "_priv_control" ;
+      ObSysVars[237].data_type_ = ObVarcharType ;
+      ObSysVars[237].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[237].id_ = SYS_VAR__PRIV_CONTROL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PRIV_CONTROL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PRIV_CONTROL] = 237 ;
+      ObSysVars[237].base_value_ = "" ;
+    ObSysVars[237].alias_ = "OB_SV__PRIV_CONTROL" ;
+    }();
+
+    [&] (){
+      ObSysVars[238].default_value_ = "0" ;
+      ObSysVars[238].info_ = "specifies whether check the mysql routine priv" ;
+      ObSysVars[238].name_ = "_enable_mysql_pl_priv_check" ;
+      ObSysVars[238].data_type_ = ObIntType ;
+      ObSysVars[238].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[238].id_ = SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK] = 238 ;
+      ObSysVars[238].base_value_ = "0" ;
+    ObSysVars[238].alias_ = "OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 234;
+static int64_t var_amount = 239;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

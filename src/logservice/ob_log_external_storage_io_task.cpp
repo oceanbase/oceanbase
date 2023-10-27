@@ -100,7 +100,7 @@ int ObLogExternalStorageIOTaskCtx::wait(const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   ObThreadCondGuard guard(condition_);
-  while (OB_SUCC(ret) && flying_task_count_ > 0) {
+  while (flying_task_count_ > 0 && OB_SUCC(ret)) {
     ret = condition_.wait_us(timeout_us);
   }
   return ret;
@@ -211,11 +211,11 @@ int get_and_init_io_device(const ObString &uri,
   opt.key_ = "storage_info";
   opt.value_.value_str = storage_info.ptr();
   if (OB_FAIL(ObDeviceManager::get_instance().get_device(storage_info, uri, io_device))) {
-    CLOG_LOG(WARN, "get_device from ObDeviceManager failed", K(storage_info), K(uri), KP(io_device));
+    CLOG_LOG(WARN, "get_device from ObDeviceManager failed", K(uri), KP(io_device));
   } else if (OB_FAIL(io_device->start(opts))) {
-    CLOG_LOG(WARN, "start io device failed", K(storage_info), K(uri), KP(io_device));
+    CLOG_LOG(WARN, "start io device failed", K(uri), KP(io_device));
   } else {
-    CLOG_LOG(TRACE, "get_io_device success", K(uri), K(storage_info), KP(io_device));
+    CLOG_LOG(TRACE, "get_io_device success", K(uri), KP(io_device));
   }
   return ret;
 }
@@ -299,11 +299,11 @@ int ObLogExternalStorageIOTaskHandleAdapter::exist(const ObString &uri,
   exist = false;
   ObIODevice *io_device = NULL;
   if (OB_FAIL(get_and_init_io_device(uri, storage_info, io_device))) {
-    CLOG_LOG(WARN, "get_io_device failed", K(uri), K(storage_info), KP(io_device));
+    CLOG_LOG(WARN, "get_io_device failed", K(uri), KP(io_device));
   } else if (OB_FAIL(io_device->exist(uri.ptr(), exist))) {
-    CLOG_LOG(WARN, "exist failed", K(uri), K(storage_info), KP(io_device), K(exist));
+    CLOG_LOG(WARN, "exist failed", K(uri), KP(io_device), K(exist));
   } else {
-    CLOG_LOG(TRACE, "exist success", K(uri), K(storage_info), KP(io_device), K(exist));
+    CLOG_LOG(TRACE, "exist success", K(uri), KP(io_device), K(exist));
   }
   release_io_device(io_device);
   return ret;
@@ -318,12 +318,12 @@ int ObLogExternalStorageIOTaskHandleAdapter::get_file_size(const ObString &uri,
   ObIODFileStat file_stat;
   ObIODevice *io_device = NULL;
   if (OB_FAIL(get_and_init_io_device(uri, storage_info, io_device))) {
-    CLOG_LOG(WARN, "get_io_device failed", K(uri), K(storage_info), KP(io_device));
+    CLOG_LOG(WARN, "get_io_device failed", K(uri), KP(io_device));
   } else if (OB_FAIL(io_device->stat(uri.ptr(), file_stat))) {
     CLOG_LOG(WARN, "stat io deveice failed", K(uri));
   } else {
     file_size = file_stat.size_;
-    CLOG_LOG(TRACE, "get_file_size success", K(uri), K(storage_info), KP(io_device), K(file_size));
+    CLOG_LOG(TRACE, "get_file_size success", K(uri), KP(io_device), K(file_size));
   }
   release_io_device(io_device);
   return ret;

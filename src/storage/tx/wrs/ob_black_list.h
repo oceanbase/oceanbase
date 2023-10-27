@@ -16,7 +16,7 @@
 #include "common/ob_queue_thread.h"           // ObCond
 #include "common/ob_role.h"                   // ObRole
 #include "storage/tx/ob_trans_define.h"       // ObLSID, LinkHashNode
-#include "storage/ob_storage_struct.h"        // ObMigrateStatus
+#include "storage/high_availability/ob_storage_ha_struct.h"        // ObMigrateStatus
 
 // 定期更新黑名单的时间间隔(us)
 #define BLACK_LIST_REFRESH_INTERVAL       3000000     // 3s
@@ -128,13 +128,13 @@ public:
   ObLsInfo()
     : ls_state_(-1),
       weak_read_scn_(0),
-      migrate_status_(OB_MIGRATE_STATUS_MAX),
+      migrate_status_(OB_MIGRATION_STATUS_MAX),
       tx_blocked_(false)
       {}
-  int init(const int64_t ls_state, int64_t weak_read_scn, ObMigrateStatus migrate_status, bool tx_blocked)
+  int init(const int64_t ls_state, int64_t weak_read_scn, ObMigrationStatus migrate_status, bool tx_blocked)
   {
     int ret = OB_SUCCESS;
-    if (OB_MIGRATE_STATUS_MAX == migrate_status) {
+    if (OB_MIGRATION_STATUS_MAX == migrate_status) {
       ret = OB_INVALID_ARGUMENT;
     } else {
       ls_state_ = ls_state;
@@ -147,7 +147,7 @@ public:
   bool is_leader() const { return ls_state_ == 1; }
   bool is_valid() const
   {
-    return OB_MIGRATE_STATUS_MAX != migrate_status_;
+    return OB_MIGRATION_STATUS_MAX != migrate_status_;
   }
   TO_STRING_KV(K_(ls_state), K_(weak_read_scn), K_(migrate_status), K_(tx_blocked));
 
@@ -156,7 +156,7 @@ public:
   // 弱读时间戳，如果落后超过一定时间就要加入黑名单，单位ns
   int64_t weak_read_scn_;
   // 迁移状态，正在迁移的日志流一定不可读
-  ObMigrateStatus migrate_status_;
+  ObMigrationStatus migrate_status_;
   // transaction ls blocked
   bool tx_blocked_;
 };

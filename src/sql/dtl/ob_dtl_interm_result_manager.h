@@ -41,7 +41,7 @@ struct ObDTLIntermResultMonitorInfo
   ObDTLIntermResultMonitorInfo(int64_t qc_id, int64_t dfo_id, int64_t sqc_id) :
     qc_id_(qc_id), dfo_id_(dfo_id), sqc_id_(sqc_id)
   { }
-    TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id));
+  TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id));
   int64_t qc_id_;
   int64_t dfo_id_;
   int64_t sqc_id_;
@@ -50,7 +50,7 @@ struct ObDTLIntermResultMonitorInfo
 class ObDtlLinkedBuffer;
 struct ObDTLIntermResultKey
 {
-  ObDTLIntermResultKey() : channel_id_(0), time_us_(0), 
+  ObDTLIntermResultKey() : channel_id_(0), time_us_(0),
       start_time_(0), batch_id_(0) {}
   int64_t channel_id_;
   int64_t time_us_;
@@ -127,21 +127,19 @@ struct ObDTLIntermResultInfoGuard
 #define DTL_IR_STORE_DO(ir, act, ...) \
     ((ir).datum_store_->act(__VA_ARGS__))
 
-class ObDTLIntermResultGC : public common::ObTimerTask
+class ObDTLIntermResultGC
 {
   friend class ObDTLIntermResultManager;
 public:
   ObDTLIntermResultGC()
     : cur_time_(0), expire_keys_(), gc_type_(NOT_INIT), dump_count_(0),
-      interm_cnt_(0), clean_cnt_(0), tenant_guard_(nullptr)
+      interm_cnt_(0), clean_cnt_(0)
   {}
   virtual ~ObDTLIntermResultGC() = default;
   void reset();
   int operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
       ObDTLIntermResultInfo *> &entry);
-  void runTimerTask();
 public:
-  const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L; // 10秒间隔
   const static int64_t DUMP_TIME_THRESHOLD = 10 * 1000L * 1000L; // 超过10秒dump
   const static int64_t CLEAR_TIME_THRESHOLD = 10 * 1000L * 1000L; // 超过10秒清理
 public:
@@ -159,9 +157,7 @@ private:
   int64_t dump_count_;
   int64_t interm_cnt_;
   int64_t clean_cnt_;
-  share::ObTenantSwitchGuard *tenant_guard_;
 };
-
 
 class ObAtomicGetIntermResultInfoCall
 {
@@ -210,26 +206,22 @@ public:
   bool is_eof_;
 };
 
-class ObEraseTenantIntermResultInfo
+class ObDTLIntermResultGCTask : public common::ObTimerTask
 {
 public:
-  ObEraseTenantIntermResultInfo() : tenant_id_(OB_INVALID_ID), expire_keys_(), ret_(common::OB_SUCCESS) {}
-  ~ObEraseTenantIntermResultInfo() = default;
-  int operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
-      ObDTLIntermResultInfo *> &entry);
-public:
-  uint64_t tenant_id_;
-  common::ObSEArray<ObDTLIntermResultKey, 64> expire_keys_;
-  int ret_;
+  ObDTLIntermResultGCTask() : dtl_interm_result_manager_(NULL) {}
+  virtual ~ObDTLIntermResultGCTask() {}
+  virtual void runTimerTask() override;
+  const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L; // 10秒间隔
+  ObDTLIntermResultManager *dtl_interm_result_manager_;
 };
 
 class ObDTLIntermResultManager
 {
-  friend class ObDTLIntermResultGC;
+  friend class ObDTLIntermResultGCTask;
 public:
-  static ObDTLIntermResultManager &getInstance();
-  static int process_interm_result(ObDtlLinkedBuffer *buffer, int64_t channel_id);
-  static int process_interm_result_inner(ObDtlLinkedBuffer &buffer,
+  int process_interm_result(ObDtlLinkedBuffer *buffer, int64_t channel_id);
+  int process_interm_result_inner(ObDtlLinkedBuffer &buffer,
                                   ObDTLIntermResultKey &key,
                                   int64_t start_pos,
                                   int64_t length,
@@ -252,24 +244,34 @@ public:
   int atomic_append_block(ObDTLIntermResultKey &key, ObAtomicAppendBlockCall &call);
   int atomic_append_part_block(ObDTLIntermResultKey &key, ObAtomicAppendPartBlockCall &call);
   int init();
+  static int mtl_init(ObDTLIntermResultManager* &dtl_interm_result_manager);
   void destroy();
+  static void mtl_destroy(ObDTLIntermResultManager *&dtl_interm_result_manager);
   int generate_monitor_info_rows(observer::ObDTLIntermResultMonitorInfoGetter &monitor_info_getter);
-  int erase_tenant_interm_result_info(int64_t tenant_id);
+  int erase_tenant_interm_result_info();
   static void free_interm_result_info_store(ObDTLIntermResultInfo *result_info);
   static void free_interm_result_info(ObDTLIntermResultInfo *result_info);
   static void inc_interm_result_ref_count(ObDTLIntermResultInfo *result_info);
   static void dec_interm_result_ref_count(ObDTLIntermResultInfo *&result_info);
+  void runTimerTask();
+  static int mtl_start(ObDTLIntermResultManager *&dtl_interm_result_manager);
+  static void mtl_stop(ObDTLIntermResultManager *&dtl_interm_result_manager);
+  static void mtl_wait(ObDTLIntermResultManager *&dtl_interm_result_manager);
+  ObDTLIntermResultGCTask &get_gc_task() { return gc_task_; }
+
+  ObDTLIntermResultManager();
+  ~ObDTLIntermResultManager();
 private:
-  // 由于此中间结果管理器是全局结构, 基于性能考虑,减少锁冲突设置bucket_num为50w.
-  static const int64_t BUCKET_NUM = 500000; //50w
+  // 由于此中间结果管理器是全局结构, 基于性能考虑, 减少锁冲突设置bucket_num为50w.
+  static const int64_t DEFAULT_BUCKET_NUM = 500000; //50w
+  static const int64_t MAX_TENANT_MEM_LIMIT = 17179869184; //16G
 private:
   MAP map_;
   bool is_inited_;
   int64_t dir_id_;
   ObDTLIntermResultGC gc_;
+  ObDTLIntermResultGCTask gc_task_;
 private:
-  ObDTLIntermResultManager();
-  ~ObDTLIntermResultManager();
   DISALLOW_COPY_AND_ASSIGN(ObDTLIntermResultManager);
 };
 

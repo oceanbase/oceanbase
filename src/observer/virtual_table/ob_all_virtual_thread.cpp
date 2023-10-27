@@ -144,14 +144,22 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 }
               } else if (sizeof(ObAddr) == process_vm_readv(pid, &local_iov, 1, &remote_iov, 1, 0)
                          && addr.is_valid()) {
-                int ret = 0;
-                if ((ret = snprintf(wait_event_, 64, "rpc to ")) > 0) {
-                  IGNORE_RETURN addr.to_string(wait_event_ + ret, 64 - ret);
+                GET_OTHER_TSI_ADDR(pcode, &Thread::pcode_);
+                int64_t pos1 = 0;
+                int64_t pos2 = 0;
+                if (((pos1 = snprintf(wait_event_, 37, "rpc 0x%X(%s", pcode, obrpc::ObRpcPacketSet::instance().name_of_idx(obrpc::ObRpcPacketSet::instance().idx_of_pcode(pcode)) + 3)) > 0)
+                    && ((pos2 = snprintf(wait_event_ + std::min(36L, pos1), 6, ") to ")) > 0)) {
+                  int64_t pos = std::min(36L, pos1) + std::min(5L, pos2);
+                  pos += addr.to_string(wait_event_ + pos, 64 - pos);
                 }
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_IN_TENANT_QUEUE & event))) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "tenant worker requests");
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "IO events");
+              } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_LOCAL_RETRY & event))) {
+                IGNORE_RETURN snprintf(wait_event_, 64, "local retry");
+              } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_PX_MSG & event))) {
+                IGNORE_RETURN snprintf(wait_event_, 64, "px message");
               } else if (0 != sleep_us) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "%ld us", sleep_us);
               } else if (0 != blocking_ts) {

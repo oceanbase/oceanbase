@@ -32,6 +32,9 @@ int ObAllVirtualHADiagnose::inner_get_next_row(common::ObNewRow *&row)
         if (OB_ENTRY_NOT_EXIST == ret) {
           SERVER_LOG(WARN, "ls may have been removed, just skip", K(ls));
           ret = OB_SUCCESS;
+        } else if (OB_NOT_RUNNING == ret) {
+          SERVER_LOG(WARN, "ls may be during rebalancing ", K(ls));
+          ret = OB_SUCCESS;
         } else {
           SERVER_LOG(WARN, "ls stat diagnose info failed", K(ret), K(ls));
         }

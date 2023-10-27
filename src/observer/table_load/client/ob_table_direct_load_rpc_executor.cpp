@@ -94,7 +94,7 @@ int ObTableDirectLoadBeginExecutor::process()
   }
 
   // get the existing client task if it exists
-  if (OB_SUCC(ret)) {
+  while (OB_SUCC(ret)) {
     ObTableLoadKey key(tenant_id, table_id);
     if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task_))) {
       if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
@@ -102,6 +102,7 @@ int ObTableDirectLoadBeginExecutor::process()
       } else {
         ret = OB_SUCCESS;
         client_task_ = nullptr;
+        break;
       }
     } else {
       bool need_wait_finish = false;
@@ -129,13 +130,15 @@ int ObTableDirectLoadBeginExecutor::process()
           LOG_WARN("unexpected client status", KR(ret), KPC(client_task_), K(client_status));
           break;
       }
-      if (OB_SUCC(ret) && need_wait_finish) {
-        if (OB_FAIL(ObTableLoadClientService::wait_task_finish(client_task_, wait_client_status))) {
-          LOG_WARN("fail to wait client task finish", KR(ret), KPC(client_task_),
-                   K(wait_client_status));
-        } else {
-          ObTableLoadClientService::revert_task(client_task_);
-          client_task_ = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (!need_wait_finish) {
+        break;
+      } else {
+        ObTableLoadUniqueKey task_key(table_id, client_task_->ddl_param_.task_id_);
+        ObTableLoadClientService::revert_task(client_task_);
+        client_task_ = nullptr;
+        if (OB_FAIL(ObTableLoadClientService::wait_task_finish(task_key))) {
+          LOG_WARN("fail to wait client task finish", KR(ret), K(task_key), K(wait_client_status));
         }
       }
     }
@@ -370,13 +373,13 @@ int ObTableDirectLoadAbortExecutor::process()
     LOG_WARN("fail to get client task", KR(ret), K(key));
   } else if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
     LOG_WARN("fail to abort client task", KR(ret));
-  } else if (OB_FAIL(ObTableLoadClientService::wait_task_finish(client_task,
-                                                                ObTableLoadClientStatus::ABORT))) {
-    LOG_WARN("fail to abort client task", KR(ret));
   }
   if (nullptr != client_task) {
     ObTableLoadClientService::revert_task(client_task);
     client_task = nullptr;
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObTableLoadClientService::wait_task_finish(key))) {
+    LOG_WARN("fail to wait client task finish", KR(ret), K(key));
   }
   return ret;
 }
@@ -528,8 +531,9 @@ int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_row_array.count(); ++i) {
       ObTableLoadObjRow &row = obj_row_array.at(i);
-      row.seq_no_.batch_id_ = batch_id;
-      row.seq_no_.batch_seq_no_ = i;
+      row.seq_no_.sequence_no_ = batch_id;
+      row.seq_no_.sequence_no_ <<= ObTableLoadSequenceNo::BATCH_ID_SHIFT;
+      row.seq_no_.sequence_no_ |= i;
     }
   }
   return ret;

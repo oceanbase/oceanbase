@@ -24,6 +24,7 @@
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "rootserver/ob_ls_service_helper.h"//ObTenantLSInfo
 #include "rootserver/ob_ls_recovery_reportor.h"//update_ls_recovery
+#include "rootserver/ob_tenant_info_loader.h"
 
 namespace oceanbase
 {
@@ -155,7 +156,6 @@ int ObPrimaryLSService::set_tenant_dropping_status_(
     sys_ls_target_scn.set_invalid();
     for (int64_t i = 0; OB_SUCC(ret) && i < status_machine_array.count() && !has_set_stop(); ++i) {
       const share::ObLSAttr &attr = status_machine_array.at(i).ls_info_;
-      const share::ObLSStatusInfo &info = status_machine_array.at(i).status_info_;
       if (attr.get_ls_id().is_sys_ls()) {
         if (attr.ls_is_normal()) {
           if (OB_FAIL(ls_operator.update_ls_status(attr.get_ls_id(),
@@ -172,44 +172,54 @@ int ObPrimaryLSService::set_tenant_dropping_status_(
           // the other attr is tenant_dropping, we should skip checking
         } else if (OB_FAIL(ls_operator.get_pre_tenant_dropping_ora_rowscn(sys_ls_target_scn))) {
           LOG_WARN("fail to get sys_ls_end_scn", KR(ret), K(tenant_id_));
-        } else if (OB_FAIL(tenant_info_loader->get_sync_scn(tenant_sync_scn))) {
-          LOG_WARN("get tenant_sync_scn failed", KR(ret));
-        } else if (OB_UNLIKELY(!tenant_sync_scn.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tenant_sync_scn not valid", KR(ret), K(tenant_sync_scn));
-        } else if (tenant_sync_scn < sys_ls_target_scn) {
-          ret = OB_NEED_WAIT;
-          LOG_WARN("wait some time, tenant_sync_scn cannot be smaller than sys_ls_target_scn", KR(ret),
-                  K(tenant_id_), K(tenant_sync_scn), K(sys_ls_target_scn));
         }
         // find SYS LS
         break;
       }
     }//end for set sys ls change to pre tenant dropping
+
+    //before check tenant_info sync scn larger than sys_ls pre tenant dropping scn
+    //set creating ls to create_abort
     for (int64_t i = 0; OB_SUCC(ret) && i < status_machine_array.count() && !has_set_stop(); ++i) {
       const share::ObLSAttr &attr = status_machine_array.at(i).ls_info_;
-      if (OB_UNLIKELY(!attr.is_valid()) || attr.get_ls_id().is_sys_ls()) {
+      if (attr.ls_is_creating()) {
+        task_cnt++;
+        if (OB_FAIL(ls_operator.delete_ls(attr.get_ls_id(), attr.get_ls_status(), working_sw_status))) {
+          LOG_WARN("failed to remove ls not normal", KR(ret), K(attr));
+        }
+        LOG_INFO("[PRIMARY_LS_SERVICE] tenant is dropping, delete ls in creating", KR(ret),
+            K(attr));
+      }
+    }//end for process creating
+
+    if (OB_SUCC(ret) && sys_ls_target_scn.is_valid()) {
+      if (OB_FAIL(tenant_info_loader->get_sync_scn(tenant_sync_scn))) {
+        LOG_WARN("get tenant_sync_scn failed", KR(ret));
+      } else if (OB_UNLIKELY(!tenant_sync_scn.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant_sync_scn not valid", KR(ret), K(tenant_sync_scn));
+      } else if (tenant_sync_scn < sys_ls_target_scn) {
+        ret = OB_NEED_WAIT;
+        LOG_WARN("wait some time, tenant_sync_scn cannot be smaller than sys_ls_target_scn", KR(ret),
+            K(tenant_id_), K(tenant_sync_scn), K(sys_ls_target_scn));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < status_machine_array.count() && !has_set_stop(); ++i) {
+      const share::ObLSAttr &attr = status_machine_array.at(i).ls_info_;
+      if (OB_UNLIKELY(!attr.is_valid()) || attr.get_ls_id().is_sys_ls() || attr.ls_is_creating()) {
         // invalid attr might happens if the ls is deleted in __all_ls table but still exists in __all_ls_status table
-        // no need process sys ls
+        // no need process sys ls and creating ls
       } else if (!attr.ls_is_tenant_dropping()) {
         task_cnt++;
-        if (attr.ls_is_creating()) {
-          if (OB_FAIL(ls_operator.delete_ls(attr.get_ls_id(), attr.get_ls_status(), working_sw_status))) {
-            LOG_WARN("failed to remove ls not normal", KR(ret), K(attr));
-          }
-          LOG_INFO("[PRIMARY_LS_SERVICE] tenant is dropping, delete ls in creating", KR(ret),
-              K(attr), K(tenant_sync_scn), K(sys_ls_target_scn));
-        } else if (!attr.ls_is_tenant_dropping()) {
-          //no matter the status is in normal or dropping
-          //may be the status in status info is created
-          if (OB_FAIL(ls_operator.update_ls_status(
-                  attr.get_ls_id(), attr.get_ls_status(),
-                  share::OB_LS_TENANT_DROPPING, working_sw_status))) {
-            LOG_WARN("failed to update ls status", KR(ret), K(attr));
-          }
-          LOG_INFO("[PRIMARY_LS_SERVICE] set ls to tenant dropping", KR(ret), K(attr), K(i),
-              K(tenant_sync_scn), K(sys_ls_target_scn));
+        //no matter the status is in normal or dropping
+        //may be the status in status info is created
+        if (OB_FAIL(ls_operator.update_ls_status(
+                attr.get_ls_id(), attr.get_ls_status(),
+                share::OB_LS_TENANT_DROPPING, working_sw_status))) {
+          LOG_WARN("failed to update ls status", KR(ret), K(attr));
         }
+        LOG_INFO("[PRIMARY_LS_SERVICE] set ls to tenant dropping", KR(ret), K(attr), K(i),
+            K(tenant_sync_scn), K(sys_ls_target_scn));
       }
     }//end for
   }

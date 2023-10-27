@@ -38,6 +38,11 @@ OB_DEF_DESERIALIZE(ObPxP2PDatahubArg)
   } else {
     OB_UNIS_DECODE(*msg_);
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(msg_)) {
+    // DECODE failed, must destroy msg.
+    msg_->destroy();
+    msg_ = nullptr;
+  }
   return ret;
 }
 

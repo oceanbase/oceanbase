@@ -1025,7 +1025,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   if (!sql_text.empty()) {
     SERVER_EVENT_ADD("sql", "execute_cmd",
                      "cmd_type", cmd.get_cmd_type(),
-                     "sql_text", ObHexEscapeSqlStr(sql_text),
+                     "sql_text", ObHexEscapeSqlStr(ctx.get_sql_ctx()->is_sensitive_ ?
+                                                   ObString(OB_MASKED_STR) : sql_text),
                      "return_code", ret);
   }
 

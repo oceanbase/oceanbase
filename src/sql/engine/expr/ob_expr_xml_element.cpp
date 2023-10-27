@@ -13,6 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_xml_element.h"
+#include "sql/engine/ob_exec_context.h"
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"

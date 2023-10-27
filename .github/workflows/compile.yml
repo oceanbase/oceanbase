@@ -7,26 +7,14 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
-    strategy:
-      matrix: 
-        image: ['ubuntu:22.04', 'centos:7']
+  centos-build:
     runs-on: ubuntu-20.04
-    container: ${{ matrix.image }}
+    container: centos:7
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install ubuntu environment
-      shell: bash
-      if: ${{ startsWith(matrix.image, 'ubuntu') }}
-      run: |
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin libncurses5
-      
     - name: Install centos environment
       shell: bash
-      if: ${{ startsWith(matrix.image, 'centos') }}
       run: yum install -y git wget rpm* cpio make glibc-devel glibc-headers binutils m4
 
     - name: Cache deps
@@ -37,13 +25,36 @@ jobs:
       with:
         key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
         path: deps/3rd
-        enableCrossOsArchive: true
-    
-    - name: Build init
-      run: bash build.sh init
-      
-    - name: Build project
+
+    - name: Build
+      uses: ./.github/workflows/buildbase
+      with:
+        save_cache: ${{github.event_name == 'push'}}
+        os: 'centos7'
+
+  ubuntu-build:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install ubuntu environment
       shell: bash
       run: |
-        bash build.sh debug
-        cd build_debug && make -j4
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin libncurses5
+
+    - name: Cache deps
+      id: cache-deps
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-deps
+      with:
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-el9.x86_64-${{ hashFiles('deps/init/oceanbase.el9.x86_64.deps') }}
+        path: deps/3rd
+
+    - name: Build
+      uses: ./.github/workflows/buildbase
+      with:
+        save_cache: ${{github.event_name == 'push'}}
+        os: 'ubuntu22'

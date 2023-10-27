@@ -254,7 +254,10 @@ int ObStorageHAUtils::check_transfer_ls_can_rebuild(
   if (!replay_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument invalid", K(ret), K(replay_scn));
-  } else if (MTL_IS_PRIMARY_TENANT()) {
+  } else if (MTL_TENANT_ROLE_CACHE_IS_INVALID()) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("tenant role is invalid, need retry", KR(ret), K(replay_scn));
+  } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     need_rebuild = true;
   } else if (OB_FAIL(get_readable_scn_(readable_scn))) {
     LOG_WARN("failed to get readable scn", K(ret), K(replay_scn));
@@ -352,6 +355,7 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   case OB_TRANS_TIMEOUT:
   case OB_TIMEOUT:
   case OB_EAGAIN:
+  case OB_ERR_EXCLUSIVE_LOCK_CONFLICT:
       bool_ret = true;
       break;
     default:

@@ -137,6 +137,7 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
     TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock));
   } else {
+    cb->set_base_ts(base_scn);
     cb->set_lsn(lsn);
     cb->set_log_ts(scn);
     cb->set_submit_ts(ObTimeUtility::current_time());

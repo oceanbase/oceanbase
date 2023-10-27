@@ -99,6 +99,9 @@ namespace sql
     const common::ObIArray<ObRawExpr *> &get_join_conditions() const { return join_conditions_; }
 
     common::ObIArray<ObRawExpr *> &get_join_filters() { return join_filters_; }
+    int adjust_join_conds(ObIArray<ObRawExpr *> &dest_exprs);
+    int calc_equal_cond_opposite(const ObRawExpr &raw_expr,
+                                  bool &is_opposite);
 
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
     const common::ObIArray<ObOrderDirection> &get_merge_directions() const { return merge_directions_; }
@@ -153,7 +156,7 @@ namespace sql
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
     int check_and_set_use_batch();
-    int check_if_disable_batch(ObLogicalOperator* root);
+    int check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj);
     void set_join_path(JoinPath *path) { join_path_ = path; }
     JoinPath *get_join_path() { return join_path_; }
     bool is_my_exec_expr(const ObRawExpr *expr);

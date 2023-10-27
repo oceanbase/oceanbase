@@ -24,6 +24,7 @@
 #include "lib/function/ob_function.h"       // ObFunction
 #include "palf/log_define.h"                // block_id_t
 #include "palf/log_block_pool_interface.h"  // ObIServerLogBlockPool
+#include "palf/log_io_utils.h"              // ObBaseDirFunctor
 
 namespace oceanbase
 {

@@ -22,12 +22,14 @@ namespace oceanbase
 {
 using namespace logservice;
 
+int64_t ARB_TIMEOUT_ARG = 2 * 1000 * 1000L;
+
 namespace logservice
 {
 
 void ObArbitrationService::update_arb_timeout_()
 {
-  arb_timeout_us_ = 2 * 1000 * 1000L;
+  arb_timeout_us_ = ARB_TIMEOUT_ARG;
   if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
     CLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "update_arb_timeout_", K_(self), K_(arb_timeout_us));
   }
@@ -213,6 +215,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_reconfirm_degrade_upgrade)
   palf_list[another_f_idx]->palf_handle_impl_->set_location_cache_cb(&loc_cb);
   // block net of old leader, new leader will be elected
   // and degrade in RECONFIRM state
+  ARB_TIMEOUT_ARG = 15 * 1000 * 1000;
   block_net(leader_idx, another_f_idx);
   block_net(leader_idx, arb_replica_idx);
   // block_net后会理解进行降级操作，导致旧主上有些单副本写成功的日志被committed
@@ -234,6 +237,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_reconfirm_degrade_upgrade)
   leader.reset();
   new_leader.reset();
   delete_paxos_group(id);
+  ARB_TIMEOUT_ARG = 2 * 1000 * 1000;
   PALF_LOG(INFO, "end test_2f1a_reconfirm_degrade_upgrade", K(id));
 }
 

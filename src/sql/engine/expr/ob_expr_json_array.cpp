@@ -195,9 +195,9 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
-                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false))) {
+                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent))) {
       LOG_WARN("failed to get json value node.", K(ret), K(val_type));
-    } else if (is_null_absent && j_val->json_type() == ObJsonNodeType::J_NULL) {
+    } else if (OB_ISNULL(j_val)) {
     } else if (OB_FAIL(j_arr.append(static_cast<ObJsonNode*>(j_val)))) {
       LOG_WARN("failed to append in array.", K(ret), K(i));
     }
@@ -220,7 +220,17 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
       } else if (OB_FAIL(j_arr.print(string_buffer, true, false))) {
         LOG_WARN("failed: get json string text", K(ret));
       } else {
-        res_string.assign_ptr(string_buffer.ptr(), string_buffer.length());
+        ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+        ObCollationType dst_cs_type = expr.obj_meta_.get_collation_type();
+        ObString temp_str = string_buffer.string();
+
+        if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(in_cs_type,
+                                                                    dst_cs_type,
+                                                                    &temp_allocator,
+                                                                    temp_str,
+                                                                    res_string))) {
+          LOG_WARN("fail to convert string result", K(ret));
+        }
       }
     }
 

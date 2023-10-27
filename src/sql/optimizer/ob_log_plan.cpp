@@ -3955,7 +3955,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
   } else if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create plan", K(ret), K(opt_ctx.get_query_ctx()->get_sql_stmt()));
-  } else if (OB_FAIL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan())) {
+  } else if (OB_FAIL(SMART_CALL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan()))) {
     LOG_WARN("failed to optimize sub-select", K(ret));
   } else {
     SubPlanInfo *info = static_cast<SubPlanInfo *>(get_allocator().alloc(sizeof(SubPlanInfo)));
@@ -10106,9 +10106,7 @@ int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
       LOG_WARN("failed to check subquery has ref assign user var", K(ret));
     } else if (has_ref_assign_user_var) {
       is_valid = false;
-    } else if (expr->get_output_column() == 1 &&
-               !static_cast<ObQueryRefRawExpr *>(expr)->is_set() &&
-               !static_cast<ObQueryRefRawExpr *>(expr)->is_multiset() ) {
+    } else if (static_cast<ObQueryRefRawExpr *>(expr)->is_scalar()) {
       if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back candi onetime expr", K(ret));
       }
@@ -11815,6 +11813,9 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type() &&
                  OB_FAIL(static_cast<ObLogSubPlanFilter*>(op)->check_and_set_das_group_rescan())) {
         LOG_WARN("failed to set use batch spf", K(ret));
+      } else if (log_op_def::LOG_JOIN == op->get_type() &&
+                 OB_FAIL(static_cast<ObLogJoin*>(op)->adjust_join_conds(static_cast<ObLogJoin *>(op)->get_join_conditions()))) {
+        LOG_WARN("failed to adjust join conds", K(ret));
       } else { /*do nothing*/ }
     }
   }

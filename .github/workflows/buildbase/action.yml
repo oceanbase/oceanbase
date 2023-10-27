@@ -1,0 +1,32 @@
+name: "Build base"
+
+inputs:
+  save_cache:
+    description: 'whether to save ccache to github action cache'
+    required: true
+  os:
+    description: 'which runner os to run this build action'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build init
+      shell: bash
+      run: |
+        bash build.sh init
+        echo "$GITHUB_WORKSPACE/deps/3rd/usr/local/oceanbase/devtools/bin" >> $GITHUB_PATH
+
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        max-size: 800M
+        save: ${{inputs.save_cache}}
+        key: ${{inputs.os}}
+
+    - name: Build project
+      shell: bash
+      run: |
+        bash build.sh debug -DOB_USE_CCACHE=ON
+        cd build_debug && make -j4
+        ccache -s

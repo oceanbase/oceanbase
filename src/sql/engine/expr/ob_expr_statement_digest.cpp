@@ -50,7 +50,9 @@ int calc_digest_text(ObIAllocator &allocator,
     sql_ctx.schema_guard_ = schema_guard;
     ObPlanCacheCtx pc_ctx(sql_str, PC_TEXT_MODE, allocator, sql_ctx, exec_ctx,
                           session->get_effective_tenant_id());
-    ObParser parser(allocator, session->get_sql_mode(), cs_type);
+    ObCharsets4Parser charsets4parser = session->get_charsets4parser();
+    charsets4parser.string_collation_ = cs_type;
+    ObParser parser(allocator, session->get_sql_mode(), charsets4parser);
     ObSEArray<ObString, 1> queries;
     ObMPParseStat parse_stat;
     if (OB_FAIL(parser.split_multiple_stmt(sql_str, queries, parse_stat))) {
@@ -90,7 +92,7 @@ int calc_digest_text(ObIAllocator &allocator,
                                                                     pc_ctx,
                                                                     parse_result.result_tree_,
                                                                     tmp_params,
-                                                                    cs_type))) {
+                                                                    charsets4parser))) {
           LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
         } else {
           digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;

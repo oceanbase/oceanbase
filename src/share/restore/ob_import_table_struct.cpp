@@ -867,6 +867,7 @@ const char* ObRecoverTableStatus::get_str() const
     "PREPARE",
     "RECOVERING",
     "RESTORE_AUX_TENANT",
+    "ACTIVE_AUX_TENANT",
     "PRECHECK_IMPORT",
     "GEN_IMPORT_JOB",
     "IMPORTING",
@@ -892,6 +893,7 @@ int ObRecoverTableStatus::set_status(const char *str)
     "PREPARE",
     "RECOVERING",
     "RESTORE_AUX_TENANT",
+    "ACTIVE_AUX_TENANT",
     "PRECHECK_IMPORT",
     "GEN_IMPORT_JOB",
     "IMPORTING",
@@ -945,6 +947,10 @@ ObRecoverTableStatus ObRecoverTableStatus::get_user_next_status(const ObRecoverT
       break;
     }
     case ObRecoverTableStatus::Status::RESTORE_AUX_TENANT: {
+      ret = ObRecoverTableStatus::Status::ACTIVE_AUX_TENANT;
+      break;
+    }
+    case ObRecoverTableStatus::Status::ACTIVE_AUX_TENANT: {
       ret = ObRecoverTableStatus::Status::GEN_IMPORT_JOB;
       break;
     }

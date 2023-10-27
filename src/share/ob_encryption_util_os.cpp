@@ -46,6 +46,31 @@ int ObKeyGenerator::generate_encrypt_key(char *buf, int64_t len)
   return ret;
 }
 
+int ObKeyGenerator::generate_encrypt_key_char(char *buf, int64_t len)
+{
+  int ret = OB_SUCCESS;
+  if (len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the buf of len is invalid", K(ret));
+  } else {
+    int i;
+    for (i = 0; i < len; ++i) {
+      switch (common::ObRandom::rand(0, 2)) {
+        case 1:
+        buf[i] = 'A' + common::ObRandom::rand(0, 25);
+        break;
+        case 2:
+        buf[i] = 'a' + common::ObRandom::rand(0, 25);
+        break;
+        default:
+        buf[i] = '0' + common::ObRandom::rand(0, 9);
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 static const EVP_CIPHER *get_evp_cipher(const ObCipherOpMode mode)
 {
   switch (mode)
@@ -330,27 +355,6 @@ int ObBlockCipher::decrypt(const char *key, const int64_t key_len,
   return ret;
 }
 
-
-#ifndef OB_USE_BABASSL
-static void* ob_malloc_openssl(size_t nbytes)
-{
-  ObMemAttr attr;
-  attr.label_ = ObModIds::OB_BUFFER;
-  return ob_malloc(nbytes, attr);
-}
-
-static void* ob_realloc_openssl(void *ptr, size_t nbytes)
-{
-  ObMemAttr attr;
-  attr.label_ = ObModIds::OB_BUFFER;
-  return ob_realloc(ptr, nbytes, attr);
-}
-
-static void ob_free_openssl(void *ptr)
-{
-  ob_free(ptr);
-}
-#else
 static void* ob_malloc_openssl(size_t nbyte, const char *, int)
 {
   ObMemAttr attr;
@@ -369,7 +373,6 @@ static void ob_free_openssl(void *ptr, const char *, int)
 {
   ob_free(ptr);
 }
-#endif
 
 int ObEncryptionUtil::init_ssl_malloc()
 {

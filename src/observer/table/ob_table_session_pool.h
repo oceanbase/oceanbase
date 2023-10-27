@@ -85,7 +85,7 @@ private:
 class ObTableApiSessPool final
 {
 public:
-  // key is user_id
+  // key is ObTableApiCredential.hash_val_
   typedef common::hash::ObHashMap<uint64_t, ObTableApiSessNode*> CacheKeyNodeMap;
   static const int64_t SESS_POOL_DEFAULT_BUCKET_NUM = 10; // 取决于客户端登录的用户数量
   static const int64_t SESS_RETIRE_TIME = 300 * 1000000; // 超过300s未被访问的session会被标记淘汰

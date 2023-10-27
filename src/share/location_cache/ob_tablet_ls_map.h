@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_TABLET_LS_MAP
 #define OCEANBASE_SHARE_OB_TABLET_LS_MAP
 
+#include "lib/lock/ob_qsync_lock.h"
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSKey, ObTabletLSCache
 
 namespace oceanbase
@@ -49,6 +50,9 @@ public:
   int del(const ObTabletLSKey &key);
   int64_t size() const { return size_; }
 
+  template <typename Function>
+  int for_each_and_delete_if(Function &func);
+
 private:
   // void try_update_access_ts_(ObTabletLSCache *cache_ptr);
 
@@ -63,6 +67,40 @@ private:
   ObTabletLSCache **ls_buckets_;
   common::ObQSyncLock *buckets_lock_;
 };
+
+template <typename Function>
+int ObTabletLSMap::for_each_and_delete_if(Function &func)
+{
+  int ret = OB_SUCCESS;
+  ObTabletLSCache *prev = NULL;
+  ObTabletLSCache *curr = NULL;
+  ObTabletLSCache *next = NULL;
+  for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
+    ObQSyncLockWriteGuard guard(buckets_lock_[i % LOCK_SLOT_CNT]);
+    prev = NULL;
+    curr = ls_buckets_[i];
+    next = NULL;
+    // foreach bucket
+    while (OB_NOT_NULL(curr) && OB_SUCC(ret)) {
+      next = static_cast<ObTabletLSCache *>(curr->next_);
+      if (func(*curr)) { // need to delete
+        if (OB_ISNULL(prev)) {
+          // the first node
+          ls_buckets_[i] = next;
+        } else {
+          prev->next_ = curr->next_;
+        }
+        curr->next_ = NULL;
+        op_free(curr);
+        ATOMIC_DEC(&size_);
+      } else { // no need to delete
+        prev = curr;
+      }
+      curr = next;
+    }
+  }
+  return ret;
+}
 
 } // end namespace share
 } // end namespace oceanbase

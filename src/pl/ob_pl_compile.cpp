@@ -54,24 +54,20 @@ int ObPLCompiler::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                   K(ret), K(tenant_id), K(dep_schema_objs.at(i)));
       } else if (OB_INVALID_VERSION == new_version ||
                  new_version != dep_schema_objs.at(i).version_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)));
+        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)), K(new_version));
       }
     } else {
       const ObSimpleTableSchemaV2 *table_schema = nullptr;
       if (OB_FAIL(schema_guard.get_simple_table_schema(MTL_ID(),
                                                       dep_schema_objs.at(i).object_id_,
                                                       table_schema))) {
-        LOG_WARN("failed to get table schema",
-                K(ret), K(dep_schema_objs.at(i)));
+        LOG_WARN("failed to get table schema", K(ret), K(dep_schema_objs.at(i)));
       } else if (nullptr == table_schema) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get an unexpected null table schema", K(ret));
+        LOG_WARN("get an unexpected null table schema", K(dep_schema_objs.at(i).object_id_));
       } else if (table_schema->is_index_table()) {
         // do nothing
       } else if (table_schema->get_schema_version() != dep_schema_objs.at(i).version_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)));
+        LOG_WARN("schema version is invalid", K(ret), K(dep_schema_objs.at(i)), K(table_schema->get_schema_version()));
       }
     }
   }
@@ -418,7 +414,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     if (OB_SUCC(ret)) {
       ObString body = proc->get_routine_body(); //获取body字符串
       ObDataTypeCastParams dtc_params = session_info_.get_dtc_params();
-      ObPLParser parser(allocator_, dtc_params.connection_collation_, session_info_.get_sql_mode());
+      ObPLParser parser(allocator_, session_info_.get_charsets4parser(), session_info_.get_sql_mode());
       if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                     allocator_, dtc_params, body))) {
         LOG_WARN("fail to do charset convert", K(ret), K(body));
@@ -652,7 +648,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
   CK (!source.empty());
   CK (package_ast.is_inited());
   if (OB_SUCC(ret)) {
-    ObPLParser parser(allocator_, session_info_.get_local_collation_connection(), session_info_.get_sql_mode());
+    ObPLParser parser(allocator_, session_info_.get_charsets4parser(), session_info_.get_sql_mode());
     ObStmtNodeTree *parse_tree = NULL;
     CHECK_COMPATIBILITY_MODE(&session_info_);
     ObPLResolver resolver(allocator_,

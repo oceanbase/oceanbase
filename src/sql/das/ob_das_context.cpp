@@ -37,7 +37,7 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
   const ObIArray<ObTableLocation> &normal_locations = plan.get_table_locations();
   const ObIArray<ObTableLocation> &das_locations = plan.get_das_table_locations();
   location_router_.set_last_errno(ctx.get_my_session()->get_retry_info().get_last_query_retry_err());
-  location_router_.set_retry_cnt(ctx.get_my_session()->get_retry_info().get_retry_cnt());
+  location_router_.set_history_retry_cnt(ctx.get_my_session()->get_retry_info().get_retry_cnt());
   for (int64_t i = 0; OB_SUCC(ret) && i < das_locations.count(); ++i) {
     const ObTableLocation &das_location = das_locations.at(i);
     ObDASTableLoc *table_loc = nullptr;

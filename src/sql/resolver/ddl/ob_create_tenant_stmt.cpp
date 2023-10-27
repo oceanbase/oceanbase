@@ -123,23 +123,6 @@ int ObCreateTenantStmt::set_default_tablegroup_name(const common::ObString &tabl
   return create_tenant_arg_.tenant_schema_.set_default_tablegroup_name(tablegroup_name);
 }
 
-int ObCreateTenantStmt::set_tcp_invited_nodes(common::ObString value)
-{
-  int ret = OB_SUCCESS;
-  const share::ObSysVarClassType sys_id = share::SYS_VAR_OB_TCP_INVITED_NODES;
-  if (value.empty()) {
-    //if not set it, or set it null, use ALLOW_ALL police
-    value =  common::ObString::make_string("%");
-  }
-  if(OB_UNLIKELY(value.length() > OB_MAX_SYS_VAR_VAL_LENGTH)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("set sysvar value is overflow", "max length", OB_MAX_SYS_VAR_VAL_LENGTH, "value length", value.length(), K(sys_id), K(value));
-  } else if (OB_FAIL(create_tenant_arg_.sys_var_list_.push_back(obrpc::ObSysVarIdValue(sys_id, value)))) {
-    LOG_WARN("failed to push back", K(sys_id), K(value), K(ret));
-  }
-  return ret;
-}
-
 void ObCreateTenantStmt::set_create_standby_tenant()
 {
   create_tenant_arg_.is_creating_standby_ = true;

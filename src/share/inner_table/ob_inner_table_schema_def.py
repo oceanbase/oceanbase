@@ -6300,7 +6300,12 @@ def_table_schema(
 
 # 485 : __all_clone_job
 # 486 : __all_clone_job_history
-
+# 487 : __wr_system_event
+# 488 : __wr_event_name
+# 489 : __all_tenant_scheduler_running_job
+# 490 : __all_routine_privilege
+# 491 : __all_routine_privilege_history
+# 492 : __wr_sqlstat
 #
 # 余留位置
 ################################################################################
@@ -9087,7 +9092,7 @@ def_table_schema(
   ('process_priv', 'varchar:1'),
   ('file_priv', 'varchar:1'),
   ('grant_priv', 'varchar:1'),
-  ('reference_priv', 'varchar:1'),
+  ('references_priv', 'varchar:1'),
   ('index_priv', 'varchar:1'),
   ('alter_priv', 'varchar:1'),
   ('show_db_priv', 'varchar:1'),
@@ -9144,7 +9149,7 @@ def_table_schema(
   ('create_priv', 'varchar:1'),
   ('drop_priv', 'varchar:1'),
   ('grant_priv', 'varchar:1'),
-  ('reference_priv', 'varchar:1'),
+  ('references_priv', 'varchar:1'),
   ('index_priv', 'varchar:1'),
   ('alter_priv', 'varchar:1'),
   ('create_tmp_table_priv', 'varchar:1'),
@@ -9233,7 +9238,7 @@ def_table_schema(
    ('comment', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
    ('character_set_client', 'varchar:MAX_CHARSET_LENGTH'),
    ('collation_connection', 'varchar:MAX_CHARSET_LENGTH'),
-   ('collation_database', 'varchar:MAX_CHARSET_LENGTH'),
+   ('db_collation', 'varchar:MAX_CHARSET_LENGTH'),
    ('body_utf8', 'varchar:OB_MAX_VARCHAR_LENGTH'),
    ],
 )
@@ -9985,9 +9990,9 @@ def_table_schema(
   ('TABLE_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
   ('COLUMN_NAME', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false', ''),
   ('ORDINAL_POSITION', 'uint', 'false', '0'),
-  ('COLUMN_DEFAULT', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
+  ('COLUMN_DEFAULT', 'longtext', 'true'),
   ('IS_NULLABLE', 'varchar:COLUMN_NULLABLE_LENGTH',  'false', ''),
-  ('DATA_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH',  'false', ''),
+  ('DATA_TYPE', 'longtext',  'false', ''),
   ('CHARACTER_MAXIMUM_LENGTH', 'uint', 'true'),
   ('CHARACTER_OCTET_LENGTH', 'uint', 'true'),
   ('NUMERIC_PRECISION', 'uint', 'true'),
@@ -9995,12 +10000,12 @@ def_table_schema(
   ('DATETIME_PRECISION', 'uint', 'true'),
   ('CHARACTER_SET_NAME', 'varchar:MAX_CHARSET_LENGTH', 'true'),
   ('COLLATION_NAME', 'varchar:MAX_COLLATION_LENGTH', 'true'),
-  ('COLUMN_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH'),
+  ('COLUMN_TYPE', 'longtext'),
   ('COLUMN_KEY', 'varchar:MAX_COLUMN_KEY_LENGTH', 'false', ''),
   ('EXTRA', 'varchar:COLUMN_EXTRA_LENGTH', 'false', ''),
   ('PRIVILEGES', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH', 'false', ''),
-  ('COLUMN_COMMENT', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'false', ''),
-  ('GENERATION_EXPRESSION', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', '')
+  ('COLUMN_COMMENT', 'longtext', 'false', ''),
+  ('GENERATION_EXPRESSION', 'longtext', 'false', '')
   ],
 )
 
@@ -12757,6 +12762,29 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sysstat']))
 # 12392: __all_virtual_kv_connection
+def_table_schema(
+  owner      = 'shenyunlong.syl',
+  table_name = '__all_virtual_kv_connection',
+  table_id = '12392',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('client_port', 'int'),
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('user_id', 'int'),
+    ('db_id', 'int'),
+    ('first_active_time', 'timestamp'),
+    ('last_active_time', 'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
@@ -12976,8 +13004,16 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12435: __all_virtual_clone_job
 # 12436: __all_virtual_clone_job_history
-
-#
+# 12437: __all_virtual_checkpoint_diagnose_memtable_info
+# 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
+# 12439: __all_virtual_checkpoint_diagnose_info
+# 12440: __all_virtual_wr_system_event
+# 12441: __all_virtual_wr_event_name
+# 12442: __all_tenant_scheduler_running_job
+# 12443: __all_virtual_routine_privilege
+# 12444: __all_virtual_routine_privilege_history
+# 12445: __all_virtual_sqlstat
+# 12446: __all_virtual_wr_sqlstat
 # 余留位置
 #
 
@@ -13388,6 +13424,11 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15418: __all_virtual_cgroup_config
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
+# 15421: __all_virtual_wr_system_event
+# 15422: __all_virtual_wr_event_name
+# 15423: __all_tenant_scheduler_running_job
+# 15424: __all_virtual_sqlstat
+# 15425: __all_virtual_wr_sqlstat
 # 余留位置
 
 ################################################################################
@@ -13808,7 +13849,7 @@ def_table_schema(
                              table_id,
                              row_cnt,
                              avg_row_len,
-                             row_cnt * avg_row_len as data_size
+                             (macro_blk_cnt * 2 * 1024 * 1024) as data_size
                       from oceanbase.__all_table_stat
                       where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
@@ -14154,7 +14195,7 @@ def_table_schema(
                       CAST(mp.DEFINER AS CHAR(93)) as DEFINER,
                       CAST(mp.CHARACTER_SET_CLIENT AS CHAR(32)) as CHARACTER_SET_CLIENT,
                       CAST(mp.COLLATION_CONNECTION AS CHAR(32)) as COLLATION_CONNECTION,
-                      CAST(mp.collation_database AS CHAR(32)) as DATABASE_COLLATION
+                      CAST(mp.db_collation AS CHAR(32)) as DATABASE_COLLATION
                     from
                       mysql.proc as mp
                       join oceanbase.__all_database a
@@ -17485,8 +17526,19 @@ WHERE
     'ROLLBACK_ALTER_TENANT_LOCALITY',
     'SHRINK_RESOURCE_TENANT_UNIT_NUM',
     'ALTER_TENANT_PRIMARY_ZONE',
-    'ALTER_RESOURCE_TENANT_UNIT_NUM'
+    'ALTER_RESOURCE_TENANT_UNIT_NUM',
+    'UPGRADE_POST_ACTION',
+    'UPGRADE_SYSTEM_VARIABLE',
+    'UPGRADE_SYSTEM_TABLE',
+    'UPGRADE_BEGIN',
+    'UPGRADE_VIRTUAL_SCHEMA',
+    'UPGRADE_SYSTEM_PACKAGE',
+    'UPGRADE_ALL_POST_ACTION',
+    'UPGRADE_INSPECTION',
+    'UPGRADE_END',
+    'UPGRADE_ALL'
   )
+  AND TENANT_ID != 0
 """.replace("\n", " ")
 )
 
@@ -23591,7 +23643,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'baixian.zr',
+    owner = 'guoyun.lgy',
     table_name     = 'DBA_OB_OUTLINE_CONCURRENT_HISTORY',
     table_id       = '21273',
     table_type = 'SYSTEM_VIEW',
@@ -28105,6 +28157,45 @@ def_table_schema(
 )
 # 21397: GV$OB_KV_CONNECTIONS
 # 21398: V$OB_KV_CONNECTIONS
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'GV$OB_KV_CONNECTIONS',
+  table_id        = '21397',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """
+  select
+    tenant_id as TENANT_ID,
+    user_id as USER_ID,
+    db_id as DB_ID,
+    svr_ip as SVR_IP,
+    svr_port as SVR_PORT,
+    client_ip as CLIENT_IP,
+    client_port as CLIENT_PORT,
+    first_active_time as FIRST_ACTIVE_TIME,
+    last_active_time as LAST_ACTIVE_TIME
+  from oceanbase.__all_virtual_kv_connection
+  order by LAST_ACTIVE_TIME desc, FIRST_ACTIVE_TIME desc
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'V$OB_KV_CONNECTIONS',
+  table_id        = '21398',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """
+  SELECT * FROM oceanbase.GV$OB_KV_CONNECTIONS
+        WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'yangyifei.yyf',
@@ -29883,6 +29974,16 @@ def_table_schema(
 
 #21479 GV$OB_CGROUP_CONFIG
 #21480 V$OB_CGROUP_CONFIG
+#21481 DBA_WR_SYSTEM_EVENT
+#21482 CDB_WR_SYSTEM_EVENT
+#21483 DBA_WR_EVENT_NAME
+#21484 CDB_WR_EVENT_NAME
+#21485 DBA_OB_FORMAT_OUTLINES
+#21486 mysql.procs_priv
+#21487 GV$SQLSTAT
+#21488 V$SQLSTAT
+#21489 DBA_WR_SQLSTAT
+#21490 CDB_WR_SQLSTAT
 
 # 余留位置
 
@@ -35025,7 +35126,7 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
+               (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
         WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
@@ -35055,7 +35156,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
              FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON P.TABLE_ID = TS.TABLE_ID
           AND P.PART_ID = TS.PARTITION_ID
@@ -35089,7 +35190,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
             FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON SUBP.TABLE_ID = TS.TABLE_ID
           AND SUBP.SUB_PART_ID = TS.PARTITION_ID
@@ -35182,7 +35283,7 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
+               (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
         WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
@@ -35212,7 +35313,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
              FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON P.TABLE_ID = TS.TABLE_ID
           AND P.PART_ID = TS.PARTITION_ID
@@ -35246,7 +35347,7 @@ def_table_schema(
             SELECT TENANT_ID,
                    TABLE_ID,
                    PARTITION_ID,
-                   (ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+                   (MACRO_BLK_CNT * 2 * 1024 * 1024) AS DATA_SIZE
             FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT) TS
           ON SUBP.TABLE_ID = TS.TABLE_ID
           AND SUBP.SUB_PART_ID = TS.PARTITION_ID
@@ -48352,7 +48453,11 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
-
+# 25269: DBA_WR_SYSTEM_EVENT
+# 25270: DBA_WR_EVENT_NAME
+# 25271: DBA_SCHEDULER_RUNNING_JOBS
+# 25272: DBA_OB_FORMAT_OUTLINES
+# 25273: DBA_WR_SQLSTAT
 # 余留位置
 
 #### End Data Dictionary View
@@ -53128,7 +53233,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'baixian.zr',
+  owner = 'guoyun.lgy',
   table_name      = 'DBA_OB_OUTLINE_CONCURRENT_HISTORY',
   name_postfix = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -54443,6 +54548,8 @@ def_table_schema(
 # 28199: V$OB_PL_CACHE_OBJECT
 # 28200: GV$OB_CGROUP_CONFIG
 # 28201: V$OB_CGROUP_CONFIG
+# 28203: GV$SQLSTAT
+# 28204: V$SQLSTAT
 
 ################################################################################
 # Lob Table (50000, 70000)
@@ -55228,8 +55335,6 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_dbms_lock_allocated'])
 
 # 101092 : placeholder for index of __all_tablet_reorganize_history
-# 101093 : placeholder for index of __all_kv_ttl_task
-# 101094 : placeholder for index of __all_kv_ttl_task_history
 
 def_sys_index_table(
   index_name = 'idx_kv_ttl_task_table_id',
@@ -55246,6 +55351,10 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_kv_ttl_task_history'])
+
+# 101095 : placeholder for index of __all_mview_refresh_run_stats
+# 101096 : placeholder for index of __all_mview_refresh_stats
+# 101097 : placeholder for index of __all_mview_refresh_stats
 
 ################################################################################
 # Oracle Agent table Index

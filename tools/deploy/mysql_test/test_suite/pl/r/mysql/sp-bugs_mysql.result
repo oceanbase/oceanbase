@@ -17,7 +17,7 @@ BEGIN
    CALL p_not_exists();
 END|
 # should not return valgrind warnings
-### TODO : --error 1305
+### TODO : --error 1305 
 CALL p3(f2());
 ERROR 2F005: FUNCTION ended without RETURN
 
@@ -36,7 +36,7 @@ BEGIN
    CALL p_not_exists();
 END|
 # should not return valgrind warnings
-### TODO : --error 1305
+### TODO : --error 1305 
 CALL p3(f2());
 ERROR 2F005: FUNCTION ended without RETURN
 
@@ -51,7 +51,7 @@ BEGIN
    RETURN f_not_exists () ;
 END|
 # should not return valgrind warnings
-### TODO : --error 1305
+### TODO : --error 1305 
 SELECT f2();
 ERROR 2F005: FUNCTION ended without RETURN
 
@@ -68,36 +68,36 @@ USE test;
 ## DROP TRIGGER IF EXISTS tr1;
 ## DROP PROCEDURE IF EXISTS p1;
 ## --enable_warnings
-##
+## 
 ## CREATE TABLE t1 (f1 INTEGER);
 ## CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @aux = 1;
 ## CREATE PROCEDURE p1 () DROP TRIGGER tr1;
-##
+## 
 ## CALL p1 ();
 ## --error ER_TRG_DOES_NOT_EXIST
 ## CALL p1 ();
-##
+## 
 ## DROP TABLE t1;
 ## DROP PROCEDURE p1;
-##
+## 
 ## --echo #
 ## --echo # Bug#50423: Crash on second call of a procedure dropping a trigger
 ## --echo #
-##
+## 
 ## --disable_warnings
 ## DROP TABLE IF EXISTS t1;
 ## DROP TRIGGER IF EXISTS tr1;
 ## DROP PROCEDURE IF EXISTS p1;
 ## --enable_warnings
-##
+## 
 ## CREATE TABLE t1 (f1 INTEGER);
 ## CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @aux = 1;
 ## CREATE PROCEDURE p1 () DROP TRIGGER tr1;
-##
+## 
 ## CALL p1 ();
 ## --error ER_TRG_DOES_NOT_EXIST
 ## CALL p1 ();
-##
+## 
 ## DROP TABLE t1;
 ## DROP PROCEDURE p1;
 #
@@ -145,8 +145,8 @@ DROP DATABASE db1;
 DROP DATABASE db2;
 
 #
-# Bug#13105873:valgrind warning:possible crash in foreign
-# key handling on subsequent create table if not exists
+# Bug#13105873:valgrind warning:possible crash in foreign 
+# key handling on subsequent create table if not exists 
 #
 ## oceanbase not support foreign key yet!
 ## --disable_warnings
@@ -164,7 +164,7 @@ DROP DATABASE db2;
 ## DELIMITER ;$
 ## CALL p1();
 ## --echo # below stmt should not return valgrind warnings
-## CALL p1();
+## CALL p1(); 
 ## DROP DATABASE testdb;
 ## USE test;
 End of 5.1 tests

@@ -50,7 +50,7 @@ class ObParser
 {
 public:
   explicit ObParser(common::ObIAllocator &allocator, ObSQLMode mode,
-                    common::ObCollationType conn_collation = common::CS_TYPE_UTF8MB4_GENERAL_CI,
+                    ObCharsets4Parser charsets4parser = ObCharsets4Parser(),
                     QuestionMarkDefNameCtx *ctx = nullptr);
   virtual ~ObParser();
   /// @param queries Note that all three members of ObString is valid, size() is the length
@@ -201,7 +201,8 @@ private:
   // when sql_mode = "ANSI_QUOTES", Treat " as an identifier quote character
   // we don't use it in parser now
   ObSQLMode sql_mode_;
-  common::ObCollationType connection_collation_;
+
+  ObCharsets4Parser charsets4parser_;
   QuestionMarkDefNameCtx *def_name_ctx_;
 };
 

@@ -1642,7 +1642,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
     ObString pc_key;
     ParseResult parse_result;
     ObPLParser pl_parser(allocator,
-                      ctx.get_my_session()->get_dtc_params().connection_collation_,
+                      ctx.get_my_session()->get_charsets4parser(),
                       ctx.get_my_session()->get_sql_mode());
     OZ (pl_parser.fast_parse(sql, parse_result));
     if (OB_SUCC(ret)) {
@@ -1705,6 +1705,8 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
   CHECK_COMPATIBILITY_MODE(ctx.get_my_session());
 
   OZ (ObPLContext::valid_execute_context(ctx));
+
+  OX (is_forbid_anony_parameter = is_forbid_anony_parameter || ctx.get_my_session()->is_pl_debug_on());
 
   OX (param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(),
                          ObModIds::OB_PL_TEMP,
@@ -2353,7 +2355,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     ObParser parser(ctx.get_allocator(),
                     ctx.get_my_session()->get_sql_mode(),
-                    ctx.get_my_session()->get_local_collation_connection());
+                    ctx.get_my_session()->get_charsets4parser());
     ParseResult parse_result;
     ParseMode parse_mode = ctx.get_sql_ctx()->is_dynamic_sql_ ? DYNAMIC_SQL_MODE
         : (ctx.get_my_session()->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
@@ -2851,7 +2853,12 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
     OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
-  } else if (real_pl_type->is_package_type() || real_pl_type->is_rowtype_type()) {
+  } else if (OB_NOT_NULL(session->get_pl_context())
+      && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
+    pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
+    CK (OB_NOT_NULL(ns));
+    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
+  } else {
     ObPLResolveCtx ns(allocator,
                       *session,
                       *schema_guard,
@@ -2859,11 +2866,6 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
                       *sql_proxy,
                       false);
     OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
-  } else if (OB_NOT_NULL(session->get_pl_context())
-      && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
-    pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
-    CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
   }
   OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
@@ -2898,7 +2900,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
   if (OB_SUCC(ret) && NULL != params) {
     for (int64_t i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
       const ObPLDataType &dest_type = func_.get_variables().at(i);
-      if (params->at(i).is_null()) {
+      if (params->at(i).is_null() ||
+          params->at(i).is_pl_mock_default_param()) {
         // need not check
       } else if (!params->at(i).is_ext()) { // basic type
         if (!dest_type.is_obj_type()) {
@@ -3232,9 +3235,18 @@ do {                                                                  \
                                              *get_allocator()));
             OX (get_params().at(i) = tmp);
           } else {
+            // same type, we already check this on resolve stage, here directly assign value to symbol.
             if (get_params().at(i).is_ref_cursor_type()) {
               get_params().at(i) = params->at(i);
               get_params().at(i).set_is_ref_cursor_type(true);
+            } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
+              ObPLComposite *composite = NULL;
+              get_params().at(i) = params->at(i);
+              get_params().at(i).set_udt_id(pl_type.get_user_type_id());
+              composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
+              if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
+                composite->set_id(pl_type.get_user_type_id());
+              }
             } else {
               get_params().at(i) = params->at(i);
             }
@@ -3316,6 +3328,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
 
   OX (exec_ctx_bak_.backup(*ctx_.exec_ctx_));
   OX (ctx_.exec_ctx_->set_physical_plan_ctx(&get_physical_plan_ctx()));
+  OX (ctx_.exec_ctx_->get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *ctx_.exec_ctx_->get_my_session()));
   OX (need_reset_physical_plan_ = true);
   if (OB_SUCC(ret) && func_.get_expr_op_size() > 0)  {
     OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size(), ctx_.allocator_));
@@ -4301,7 +4314,7 @@ int ObPLINS::get_size(ObPLTypeSize type,
   const ObUserDefinedType *user_type = NULL;
   CK (pl_type.is_composite_type());
   OZ (get_user_type(pl_type.get_user_type_id(), user_type, allocator));
-  CK (OB_NOT_NULL(user_type));
+  OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(pl_type));
   OZ (user_type->get_size(*this, type, size));
   return ret;
 }

@@ -956,7 +956,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                          static_cast<uint32_t>(udf_info.udf_param_num_ + udf_info.param_names_.count()));
           SQL_LOG(WARN, "param count mismatch", K(ret), K(i), K(default_val));
         } else if (OB_FAIL(ObRawExprUtils::parse_default_expr_from_str(
-            default_val, params.session_info_->get_local_collation_connection(),
+            default_val, params.session_info_->get_charsets4parser(),
             *(params.allocator_), default_node))) {
           SQL_LOG(WARN, "failed to parse expr node from str", K(ret), K(i), K(default_val), K(udf_info));
         } else if (OB_ISNULL(default_node)
@@ -1368,7 +1368,7 @@ int ObRawExprUtils::make_raw_expr_from_str(const ObString &expr_str,
 }
 
 int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
-  ObCollationType expr_str_cs_type, ObIAllocator &allocator, const ParseNode *&node)
+  ObCharsets4Parser expr_str_cs_type, ObIAllocator &allocator, const ParseNode *&node)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_str;
@@ -1383,10 +1383,12 @@ int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
   parse_result.pl_parse_info_.is_pl_parse_ = true;
   parse_result.pl_parse_info_.is_pl_parse_expr_ = true;
   parse_result.sql_mode_ = sql_mode;
-  parse_result.charset_info_ = ObCharset::get_charset(expr_str_cs_type);
-  parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(expr_str_cs_type) ?
-        (ObCharset::charset_type_by_coll(expr_str_cs_type) != CHARSET_UTF8MB4) : false;
-  parse_result.connection_collation_ = expr_str_cs_type;
+  parse_result.charset_info_ = ObCharset::get_charset(expr_str_cs_type.string_collation_);
+  parse_result.charset_info_oracle_db_ = ObCharset::is_valid_collation(expr_str_cs_type.nls_collation_) ?
+        ObCharset::get_charset(expr_str_cs_type.nls_collation_) : NULL;
+  parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(expr_str_cs_type.string_collation_) ?
+        (ObCharset::charset_type_by_coll(expr_str_cs_type.string_collation_) != CHARSET_UTF8MB4) : false;
+  parse_result.connection_collation_ = expr_str_cs_type.string_collation_;
 
   if (OB_FAIL(sql_str.append_fmt("DO %.*s", expr_str.length(), expr_str.ptr()))) {
     LOG_WARN("failed to concat expr str", K(expr_str), K(ret));
@@ -1426,7 +1428,7 @@ int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
 }
 
 int ObRawExprUtils::parse_expr_list_node_from_str(const ObString &expr_str,
-                                                  ObCollationType expr_str_cs_type,
+                                                  ObCharsets4Parser expr_str_cs_type,
                                                   ObIAllocator &allocator,
                                                   const ParseNode *&node,
                                                   const ObSQLMode &sql_mode)
@@ -1503,7 +1505,7 @@ int ObRawExprUtils::parse_expr_list_node_from_str(const ObString &expr_str,
 }
 
 int ObRawExprUtils::parse_expr_node_from_str(const ObString &expr_str,
-                                             ObCollationType expr_str_cs_type,
+                                             ObCharsets4Parser expr_str_cs_type,
                                              ObIAllocator &allocator,
                                              const ParseNode *&node,
                                              const ObSQLMode &sql_mode)
@@ -1626,7 +1628,7 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
   int ret = OB_SUCCESS;
   const ParseNode *node = NULL;
   if (OB_FAIL(parse_expr_node_from_str(expr_str,
-      session_info.get_local_collation_connection(),
+      session_info.get_charsets4parser(),
       expr_factory.get_allocator(), node, session_info.get_sql_mode()))) {
     LOG_WARN("parse expr node from string failed", K(ret), K(expr_str));
   } else if (OB_ISNULL(node)) {
@@ -1947,7 +1949,7 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
   ObSEArray<ObRawExpr *, 6> real_exprs;
   const ObColumnSchemaV2 *col_schema = NULL;
   if (OB_FAIL(parse_expr_node_from_str(expr_str,
-      session_info.get_local_collation_connection(),
+      session_info.get_charsets4parser(),
       expr_factory.get_allocator(), node))) {
     LOG_WARN("parse expr node from string failed", K(ret));
   } else if (OB_ISNULL(node)) {
@@ -3332,6 +3334,29 @@ int ObRawExprUtils::extract_set_op_exprs(const ObRawExpr *raw_expr,
       if (OB_FAIL(SMART_CALL(extract_set_op_exprs(raw_expr->get_param_expr(i),
                                                   set_op_exprs)))) {
         LOG_WARN("failed to extract set op exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_var_assign_exprs(const ObRawExpr *raw_expr,
+                                             ObIArray<ObRawExpr*> &assign_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid raw expr", K(ret), K(raw_expr));
+  } else if (raw_expr->has_flag(IS_ASSIGN_EXPR) && raw_expr->get_relation_ids().is_empty()) {
+    if (OB_FAIL(add_var_to_array_no_dup(assign_exprs, const_cast<ObRawExpr*>(raw_expr)))) {
+      LOG_WARN("failed to append expr", K(ret));
+    }
+  } else {
+    int64_t N = raw_expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      if (OB_FAIL(SMART_CALL(extract_var_assign_exprs(raw_expr->get_param_expr(i),
+                                                      assign_exprs)))) {
+        LOG_WARN("failed to extract var assign op exprs", K(ret));
       }
     }
   }

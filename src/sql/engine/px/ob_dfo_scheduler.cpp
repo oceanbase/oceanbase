@@ -603,7 +603,8 @@ bool ObSerialDfoScheduler::CleanDtlIntermRes::operator()(const ObAddr &attr,
     LOG_WARN("send clean dtl interm result rpc failed", K(ret), K(attr), KPC(arg));
   }
   LOG_TRACE("clean dtl res map", K(attr), K(*arg));
-  delete arg;
+  arg->~ObPxCleanDtlIntermResArgs();
+  arg = NULL;
 
   return true;
 }
@@ -642,7 +643,7 @@ void ObSerialDfoScheduler::clean_dtl_interm_result(ObExecContext &exec_ctx)
             if (!map.is_inited() && OB_FAIL(map.init("CleanDtlRes", OB_SYS_TENANT_ID))) {
               LOG_WARN("init map failed", K(ret));
             } else if (OB_FAIL(map.get(sqc.get_exec_addr(), arg))) {
-              if (OB_HASH_NOT_EXIST == ret) {
+              if (OB_ENTRY_NOT_EXIST == ret) {
                 void *buf = NULL;
                 if (OB_ISNULL(buf = allocator.alloc(sizeof(ObPxCleanDtlIntermResArgs)))) {
                   ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1229,6 +1230,7 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
         pkt.sqc_id_ = sqc.get_sqc_id();
         pkt.rc_ = resp.rc_;
         pkt.task_count_ = resp.reserved_thread_count_;
+        pkt.sqc_order_gi_tasks_ = resp.sqc_order_gi_tasks_;
         if (resp.reserved_thread_count_ < sqc.get_max_task_count()) {
           LOG_TRACE("SQC don`t have enough thread or thread auto scaling, Downgraded thread allocation",
               K(resp), K(sqc));

@@ -21,7 +21,8 @@ namespace table
 
 const char *OB_HTABLE_LOCK_MANAGER = "hTableLockMgr";
 
-int ObHTableLockMgr::mtl_init(ObHTableLockMgr *&htable_lock_mgr) {
+int ObHTableLockMgr::mtl_init(ObHTableLockMgr *&htable_lock_mgr)
+{
   int ret = OB_SUCCESS;
   htable_lock_mgr = OB_NEW(ObHTableLockMgr, ObMemAttr(MTL_ID(), OB_HTABLE_LOCK_MANAGER));
   if (OB_ISNULL(htable_lock_mgr)) {
@@ -126,7 +127,7 @@ int ObHTableLockMgr::lock_row(const uint64_t table_id, const common::ObString& k
   if (key.empty()) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("null lock row key", K(ret));
-  } else if (handle.find_lock_node(table_id, key, lock_node)) {
+  } else if (OB_FAIL(handle.find_lock_node(table_id, key, lock_node))) {
     LOG_WARN("fail to find lock node", K(ret), K(table_id), K(key));
   } else if (OB_ISNULL(lock_node)) {
     if (OB_FAIL(internal_lock_row(table_id, key, mode, handle))) {

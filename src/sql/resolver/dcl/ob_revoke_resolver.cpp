@@ -95,6 +95,7 @@ int ObRevokeResolver::resolve_revoke_role_inner(
   ObSArray<ObString> user_name_array;
   ObSArray<ObString> host_name_array;
   OZ (ObGrantResolver::resolve_grantee_clause(revoke_role->children_[1], 
+                                              params_.session_info_,
                                               user_name_array, 
                                               host_name_array));
   CK (user_name_array.count() == host_name_array.count());
@@ -184,6 +185,7 @@ int ObRevokeResolver::resolve_revoke_sysprivs_inner(
   ObSArray<ObString> user_name_array;
   ObSArray<ObString> host_name_array;
   OZ (ObGrantResolver::resolve_grantee_clause(revoke_role->children_[1], 
+                                              params_.session_info_,
                                               user_name_array, 
                                               host_name_array));
   CK (user_name_array.count() == host_name_array.count());
@@ -611,7 +613,8 @@ int ObRevokeResolver::resolve_revoke_role_and_sysprivs_inner(const ParseNode *no
   const ObUserInfo *user_info = NULL;
   ObSArray<ObString> user_name_array;
   ObSArray<ObString> host_name_array;
-  OZ (ObGrantResolver::resolve_grantee_clause(node->children_[1], 
+  OZ (ObGrantResolver::resolve_grantee_clause(node->children_[1],
+                                              params_.session_info_,
                                               user_name_array, 
                                               host_name_array));
   CK (user_name_array.count() == host_name_array.count());

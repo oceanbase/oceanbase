@@ -22,6 +22,7 @@
 #include "share/restore/ob_recover_table_persist_helper.h"
 #include "sql/parser/parse_node.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
+#include "share/restore/ob_import_table_persist_helper.h"
 
 using namespace oceanbase;
 using namespace share::schema;
@@ -108,10 +109,6 @@ int ObRecoverTableInitiator::start_recover_table_(const obrpc::ObRecoverTableArg
     LOG_WARN("failed to insert sys recover table job", K(ret));
   } else {
     LOG_INFO("initiate recover table succeed", K(ret), K(job));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = insert_user_job_(job))) {
-      LOG_WARN("failed to insert user job", K(ret), K(job));
-    }
   }
   uint64_t tenant_id = arg.tenant_id_;
   int64_t job_id = job.get_job_id();
@@ -146,43 +143,6 @@ int ObRecoverTableInitiator::cancel_recover_table_(const obrpc::ObRecoverTableAr
   }
 
   ROOTSERVICE_EVENT_ADD("recover_table", "cancel_recover_table", "tenant_id", arg.tenant_id_, "result", ret);
-  return ret;
-}
-
-int ObRecoverTableInitiator::insert_user_job_(share::ObRecoverTableJob &job)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  int64_t job_id = -1;
-  const int64_t initiator_job_id = job.get_job_id(); // sys job id
-  const uint64_t exec_tenant_id = gen_meta_tenant_id(job.get_target_tenant_id());
-  if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
-    LOG_WARN("failed to start trans", K(ret));
-  } else {
-    share::ObRecoverTablePersistHelper helper;
-    if (OB_FAIL(ObLSBackupInfoOperator::get_next_job_id(trans, exec_tenant_id, job_id))) {
-      LOG_WARN("failed to get next job_id", K(ret));
-    } else if (OB_FALSE_IT(job.set_tenant_id(job.get_target_tenant_id()))) {
-    } else if (OB_FALSE_IT(job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) {
-    } else if (OB_FALSE_IT(job.set_job_id(job_id))) {
-    } else if (OB_FALSE_IT(job.set_initiator_job_id(initiator_job_id))) {
-    } else if (OB_FALSE_IT(job.set_start_ts(ObTimeUtility::current_time()))) {
-    } else if (OB_FAIL(helper.init(job.get_tenant_id()))) {
-      LOG_WARN("failed to init table op", K(ret), "tenant_id", job.get_tenant_id());
-    } else if (OB_FAIL(helper.insert_recover_table_job(trans, job))) {
-      LOG_WARN("failed to insert initial recover table job", K(ret), K(job));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(trans.end(true))) {
-        LOG_WARN("failed to commit trans", K(ret));
-      }
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-        LOG_WARN("failed to rollback trans", K(tmp_ret));
-      }
-    }
-  }
   return ret;
 }
 

@@ -65,9 +65,11 @@ public:
   int get_last_frozen_memtable(ObTableHandleV2 &handle) const;
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) override;
   int release_tail_memtable(memtable::ObIMemtable *memtable);
-  int create_memtable(const share::SCN clog_checkpoint_scn,
-                      const int64_t schema_version,
-                      const bool for_replay);
+  virtual int create_memtable(
+      const share::SCN clog_checkpoint_scn,
+      const int64_t schema_version,
+      const share::SCN newest_clog_checkpoint_scn,
+      const bool for_replay) override;
   int get_memtables(
       ObTableHdlArray &handle,
       const bool reset_handle = true,

@@ -219,7 +219,7 @@ int ObMPQuery::process()
         bool force_sync_resp = false;
         need_response_error = false;
         ObParser parser(THIS_WORKER.get_sql_arena_allocator(),
-                        session.get_sql_mode(), session.get_local_collation_connection());
+                        session.get_sql_mode(), session.get_charsets4parser());
         //为了性能优化考虑，减少数组长度，降低无用元素的构造和析构开销
         ObSEArray<ObString, 1> queries;
         ObSEArray<ObString, 1> ins_queries;
@@ -502,6 +502,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       //每次执行不同sql都需要更新
       ctx_.self_add_plan_ = false;
       retry_ctrl_.reset_retry_times();//每个statement单独记录retry times
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
       do {
         ret = OB_SUCCESS; //当发生本地重试的时候，需要重置错误码，不然无法推进重试
         need_disconnect = true;
@@ -559,7 +560,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   // 也不需要在这里设置结束时间，因为这已经相当于事务的最后一条语句了。
   // 最后，需要判断ret错误码，只有成功执行的sql才记录结束时间
   if (session.get_in_transaction() && !async_resp_used && OB_SUCC(ret)) {
-    session.set_curr_trans_last_stmt_end_time(ObClockGenerator::getClock());
+    session.set_curr_trans_last_stmt_end_time(common::ObTimeUtility::current_time());
   }
 
   // need_response_error这个变量保证仅在
@@ -580,7 +581,6 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
                                                     bool &need_disconnect)
 {
   int ret = OB_SUCCESS;
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   //create a temporary memory context to process retry or the rest sql of multi-query,
   //avoid memory dynamic leaks caused by query retry or too many multi-query items
   lib::ContextParam param;
@@ -754,7 +754,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
                       K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql));
           } else {
             LOG_WARN("run stmt_query failed, check if need retry",
-                     K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql));
+                     K(ret), K(cli_ret), K(retry_ctrl_.need_retry()),
+                     "sql", ctx_.is_sensitive_ ? ObString(OB_MASKED_STR) : sql);
           }
           ret = cli_ret;
           if (OB_ERR_PROXY_REROUTE == ret) {
@@ -876,7 +877,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("query should be rerouted", K(ret), K(async_resp_used));
           } else {
-            LOG_WARN("query failed", K(ret), K(session), K(sql), K(retry_ctrl_.need_retry()));
+            LOG_WARN("query failed", K(ret), K(session),
+                     "sql", ctx_.is_sensitive_ ? ObString(OB_MASKED_STR) : sql,
+                     K(retry_ctrl_.need_retry()));
           }
           // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
           // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，

@@ -187,6 +187,11 @@ int ObDDLEpochMgr::promote_ddl_epoch(const uint64_t tenant_id, int64_t wait_us, 
 int ObDDLEpochMgr::promote_ddl_epoch_inner_(const uint64_t tenant_id, int64_t &new_ddl_epoch)
 {
   int ret = OB_SUCCESS;
+  // bugfix: 52360960
+  // Consider this function will be called only once for each tenant after rs restarts.
+  // To simplify related logic and mangement of memory, single mutex lock will be used.
+  // (TODO): Actually, we can lock by tenant for better performance.
+  lib::ObMutexGuard mutex_guard(mutex_for_promote_);
   ObMySQLTransaction trans;
   int64_t ddl_epoch_tmp = 0;
   observer::ObInnerSQLConnection *conn = NULL;
@@ -218,6 +223,35 @@ int ObDDLEpochMgr::promote_ddl_epoch_inner_(const uint64_t tenant_id, int64_t &n
   }
   if (OB_SUCC(ret)) {
     new_ddl_epoch = ddl_epoch_tmp;
+  }
+  return ret;
+}
+
+int ObDDLEpochMgr::check_and_lock_ddl_epoch(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const int64_t ddl_epoch_local)
+{
+  int ret = OB_SUCCESS;
+  int64_t ddl_epoch_core = 0;
+  // bugfix: 52360960
+  // Parallel ddl trans will commit serially controlled by wait_task_ready().
+  // So, we don't protect parallel ddl trans commit by lock.
+  ObGlobalStatProxy global_stat_proxy(trans, tenant_id);
+  if (OB_FAIL(global_stat_proxy.select_ddl_epoch_for_update(trans, tenant_id, ddl_epoch_core))) {
+    LOG_WARN("fail to get ddl epoch from inner table", KR(ret), K(tenant_id));
+    if (OB_ERR_NULL_VALUE == ret) {
+      // ignore ret
+      (void) remove_ddl_epoch(tenant_id);
+    }
+  } else {
+    if (ddl_epoch_local == ddl_epoch_core) {
+    } else {
+      ret = OB_RS_NOT_MASTER;
+      LOG_WARN("ddl epoch changed", KR(ret), K(tenant_id), K(ddl_epoch_local), K(ddl_epoch_core));
+      // ignore ret
+      (void) remove_ddl_epoch(tenant_id);
+    }
   }
   return ret;
 }

@@ -221,10 +221,12 @@ public:
 
   virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
+                              const share::SCN newest_clog_checkpoint_scn,
                               const bool for_replay = false)
   {
     UNUSED(clog_checkpoint_scn);
     UNUSED(schema_version);
+    UNUSED(newest_clog_checkpoint_scn);
     UNUSED(for_replay);
     return OB_NOT_SUPPORTED;
   }
@@ -285,11 +287,8 @@ public:
     UNUSED(log_handler);
     return OB_NOT_SUPPORTED;
   }
-  virtual int reset_storage_recorder()
-  { // do nothing
-    return OB_NOT_SUPPORTED;
-  }
-  virtual int set_frozen_for_all_memtables() { return OB_SUCCESS; }
+  virtual int reset_storage_recorder() { return common::OB_SUCCESS; }
+  virtual int set_frozen_for_all_memtables() { return common::OB_SUCCESS; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }

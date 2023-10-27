@@ -37,6 +37,7 @@ public:
   virtual void wait() = 0;
   virtual int add_task(int64_t thread_idx, ObTableLoadTask *task) = 0;
   virtual int64_t get_thread_count() const = 0;
+  virtual bool is_stopped() const = 0;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObITableLoadTaskScheduler);
 };
@@ -61,6 +62,10 @@ public:
   void wait() override;
   int add_task(int64_t thread_idx, ObTableLoadTask *task) override;
   int64_t get_thread_count() const override { return thread_count_; }
+  bool is_stopped() const override
+  {
+    return state_ == STATE_STOPPED || state_ == STATE_STOPPED_NO_WAIT;
+  }
 private:
   void run(uint64_t thread_idx);
   int init_worker_ctx_array();

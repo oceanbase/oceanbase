@@ -5,7 +5,7 @@ This document describes some methods to debug OceanBase. We have many ways to de
 We suggest you build OceanBase with debug mode as it is easy to debug.
 
 # GDB
-GDB is a powerful debugging tool, but it is difficult to debug OceanBase by gdb and the scenarioes is limited.
+GDB is a powerful debugging tool, but it is difficult to debug OceanBase by gdb and the scenarios is limited.
 
 If you want to debug a single oceanbase process and single thread, you can use gdb, otherwise it is more recommended to use logging.
 
@@ -317,7 +317,7 @@ If you use gdb to debug OceanBase, it maybe cannot work normally because gdb wil
 
 The specific thread of OceanBase process will hang on the point if you add a debug sync point in the code, and then you can do something to debug the process, such as attach the process by gdb, or execute some SQL commands to get some information.
 
-> Debug Sync can work on release mode, so it is enabled on production envrionment.
+> Debug Sync can work on release mode, so it is enabled on production environment.
 
 ## How to use
 

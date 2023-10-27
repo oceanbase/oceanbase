@@ -1,8 +1,14 @@
-// Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
-// Author:
-//     LuoFan
-// Normalizer:
-//     LuoFan
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX PL
 
@@ -185,7 +191,7 @@ int ObCreateRuleProcessor::generate_exec_arg()
   } else {
     ObUDRAnalyzer analyzer(ctx_.get_allocator(),
                            session->get_sql_mode(),
-                           session->get_local_collation_connection());
+                           session->get_charsets4parser());
     if (OB_FAIL(analyzer.parse_and_check(arg_.pattern_, arg_.replacement_))) {
       LOG_WARN("failed to parse and check", K(ret));
     } else if (OB_FAIL(analyzer.parse_pattern_to_gen_param_infos_str(

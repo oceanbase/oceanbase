@@ -128,7 +128,7 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(PROCESS);
                   EXIST_PRIV_CASE(FILE);
                   EXIST_PRIV_CASE(GRANT);
-                  NO_EXIST_PRIV_CASE(REFERENCE);
+                  NO_EXIST_PRIV_CASE(REFERENCES);
                   EXIST_PRIV_CASE(INDEX);
                   EXIST_PRIV_CASE(ALTER);
                   EXIST_PRIV_CASE(SHOW_DB);

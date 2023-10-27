@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_WR_OB_WORKLOAD_REPOSITORY_COLLECTOR_H_
 #define OCEANBASE_WR_OB_WORKLOAD_REPOSITORY_COLLECTOR_H_
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
+#include "share/wr/ob_wr_task.h"
 namespace oceanbase
 {
 namespace share

@@ -105,7 +105,7 @@ int ObTableAccessContext::build_lob_locator_helper(ObTableScanParam &scan_param,
   } else if (OB_ISNULL(buf = lob_allocator_.alloc(sizeof(ObLobLocatorHelper)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to alloc memory for ObLobLocatorHelper", K(ret));
-  } else if (FALSE_IT(lob_locator_helper_ = new (buf) ObLobLocatorHelper(lob_allocator_))) {
+  } else if (FALSE_IT(lob_locator_helper_ = new (buf) ObLobLocatorHelper())) {
   } else if (OB_FAIL(lob_locator_helper_->init(scan_param,
                                                ctx,
                                                scan_param.ls_id_,
@@ -134,7 +134,7 @@ int ObTableAccessContext::build_lob_locator_helper(const ObStoreCtx &ctx,
   } else if (OB_ISNULL(buf = lob_allocator_.alloc(sizeof(ObLobLocatorHelper)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to alloc memory for ObLobLocatorHelper", K(ret));
-  } else if (FALSE_IT(lob_locator_helper_ = new (buf) ObLobLocatorHelper(lob_allocator_))) {
+  } else if (FALSE_IT(lob_locator_helper_ = new (buf) ObLobLocatorHelper())) {
   } else if (OB_FAIL(lob_locator_helper_->init(table_store_stat_,
                                                ctx,
                                                ls_id_,

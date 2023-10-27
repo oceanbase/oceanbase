@@ -143,13 +143,13 @@ int ObMPChangeUser::decode_string_kv(const char *attrs_end, const char *&pos, Ob
   } else {
     if (OB_FAIL(ObMySQLUtil::get_length(pos, key_len))) {
       OB_LOG(WARN, "fail t get key len", K(pos), K(ret));
+    } else if (pos + key_len >= attrs_end) {
+      // skip this value
+      pos = attrs_end;
     } else {
       kv.key_.assign_ptr(pos, static_cast<uint32_t>(key_len));
       pos += key_len;
-      if (pos >= attrs_end) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected key len", K(ret), K(key_len));
-      } else if (OB_FAIL(ObMySQLUtil::get_length(pos, value_len))) {
+      if (OB_FAIL(ObMySQLUtil::get_length(pos, value_len))) {
         OB_LOG(WARN, "fail t get value len", K(pos), K(ret));
       } else {
         kv.value_.assign_ptr(pos, static_cast<uint32_t>(value_len));
@@ -276,9 +276,13 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
   int ret = OB_SUCCESS;
 
   ObSchemaGetterGuard schema_guard;
+  ObSMConnection *conn = NULL;
   if (OB_ISNULL(session) || OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN,"invalid argument", K(session), K(gctx_.schema_service_));
+  } else if (OB_ISNULL(conn = get_conn())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("null conn", K(ret));
   } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                                   session->get_effective_tenant_id(), schema_guard))) {
     OB_LOG(WARN,"fail get schema guard", K(ret));
@@ -308,8 +312,7 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
       login_info.client_ip_ = session->get_client_ip();
       OB_LOG(INFO, "com change user", "username", login_info.user_name_,
             "tenant name", login_info.tenant_name_);
-      const ObSMConnection &conn = *get_conn();
-      login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
+      login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
       login_info.passwd_ = auth_response_;
 
     }
@@ -350,10 +353,16 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
         LOG_WARN("load system variables failed", K(ret));
       } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
         OB_LOG(WARN, "failed to update database variables", K(ret));
-      } else if (OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
+      } else if (!database_.empty() && OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
                                                       session->get_database_name(),
                                                       db_id))) {
         OB_LOG(WARN, "failed to get database id", K(ret));
+      } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
+        LOG_WARN("update transmisson checksum flag failed", K(ret));
+      } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
+        LOG_WARN("update_proxy_sys_vars failed", K(ret));
+      } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
+        LOG_WARN("fail to update charset sys vars", K(ret));
       } else {
         session->set_database_id(db_id);
         session->reset_user_var();

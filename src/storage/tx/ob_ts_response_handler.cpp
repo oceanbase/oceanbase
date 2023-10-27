@@ -39,7 +39,7 @@ int ObTsResponseHandler::init(observer::ObSrvTask *task, ObTsMgr *ts_mgr)
   } else {
     //Indicates that the task is a task generated internally by the Observer
     task_ = task;
-    ts_mgr = NULL;
+    ts_mgr_ = ts_mgr;
   }
 
   return ret;

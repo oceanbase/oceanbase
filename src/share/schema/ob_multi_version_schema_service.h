@@ -24,7 +24,6 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_ddl_trans_controller.h"
 #include "share/schema/ob_ddl_epoch.h"
-#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -254,7 +253,7 @@ public:
       const uint64_t tenant_id,
       const int64_t version_cnt,
       int64_t &schema_version);
-
+  int get_dropped_tenant_ids(common::ObIArray<uint64_t> &dropped_tenant_ids);
   /*----------- check schema interface -----------------*/
   bool is_sys_full_schema() const;
 

@@ -73,9 +73,12 @@ int ObDbmsInfo::deep_copy_field_columns(ObIAllocator& allocator,
   if (OB_ISNULL(src_fields)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can't copy null fields", K(ret));
-  } else if (src_fields->count() <= 0) {
+  } else if (src_fields->count() < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src fields is null.", K(ret), K(src_fields->count()));
+  } else if (0 == src_fields->count() ) {
+    // do nothing
+    // SELECT * INTO OUTFILE return null field
   } else if (OB_FAIL(dst_fields.reserve(src_fields->count()))) {
     LOG_WARN("fail to reserve column fields",
              K(ret), K(dst_fields.count()), K(src_fields->count()));
@@ -580,7 +583,7 @@ int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
   OX (set_spi_cursor(NULL));
   if (OB_SUCC(ret)) {
     ObIAllocator &alloc = get_dbms_entity()->get_arena_allocator();
-    ObParser parser(alloc, session.get_sql_mode(), session.get_local_collation_connection());
+    ObParser parser(alloc, session.get_sql_mode(), session.get_charsets4parser());
     ParseResult parse_result;
     int64_t param_count = 0;
     char **param_names = NULL;

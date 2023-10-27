@@ -464,8 +464,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(imc_tasks_.init())) {
       LOG_ERROR("init imc tasks failed", KR(ret));
 #endif
-    } else if (OB_FAIL(unix_domain_listener_.init())) {
-      LOG_ERROR("init unix domain listener failed", KR(ret));
     } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.init(&sql_proxy_, &schema_service_))) {
       LOG_ERROR("init OB_PRIMARY_STANDBY_SERVICE failed", KR(ret));
     } else if (OB_FAIL(init_px_target_mgr())) {
@@ -948,7 +946,7 @@ int ObServer::start()
     }
 #endif
 
-    if (FAILEDx(unix_domain_listener_.run())) {
+    if (FAILEDx(unix_domain_listener_.start())) {
       LOG_ERROR("fail to start unix domain listener", KR(ret));
     } else {
       FLOG_INFO("success to start unix domain listener");
@@ -1049,6 +1047,7 @@ int ObServer::start()
         const int64_t start_ts = ObTimeUtility::current_time();
         int64_t schema_refreshed_ts = 0;
         const int64_t expire_time = start_ts + MAX_CHECK_TIME;
+        tenant_ids.set_max_print_count(512);
 
         if (OB_FAIL(multi_tenant_.get_mtl_tenant_ids(tenant_ids))) {
           FLOG_ERROR("get mtl tenant ids fail", KR(ret));

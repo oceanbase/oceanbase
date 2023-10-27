@@ -269,7 +269,10 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       rls_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
-      schema_service_(NULL)
+      schema_service_(NULL),
+      object_ids_mutex_(),
+      normal_tablet_ids_mutex_(),
+      extended_tablet_ids_mutex_()
 {
 }
 
@@ -433,6 +436,11 @@ int ObSchemaServiceSQLImpl::get_new_schema_version(uint64_t tenant_id, int64_t &
   return ret;
 }
 
+bool ObSchemaServiceSQLImpl::in_parallel_ddl_thread_()
+{
+  return 0 == STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name());
+}
+
 int ObSchemaServiceSQLImpl::gen_new_schema_version(
     const uint64_t tenant_id,
     const int64_t refreshed_schema_version,
@@ -444,7 +452,7 @@ int ObSchemaServiceSQLImpl::gen_new_schema_version(
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (0 == STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name())) {
+  } else if (in_parallel_ddl_thread_()) {
     auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     if (OB_ISNULL(tsi_generator)) {
       ret = OB_ERR_UNEXPECTED;
@@ -475,7 +483,7 @@ int ObSchemaServiceSQLImpl::gen_batch_new_schema_versions(
       || version_cnt < 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(version_cnt));
-  } else if (OB_UNLIKELY(0 != STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name()))) {
+  } else if (OB_UNLIKELY(!in_parallel_ddl_thread_())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("this interface only works in parallel ddl thread",
              KR(ret), "thread_name", ob_get_origin_thread_name());
@@ -2648,10 +2656,40 @@ int ObSchemaServiceSQLImpl::fetch_temp_table_schema(
 int ObSchemaServiceSQLImpl::fetch_new_tenant_id(uint64_t &new_tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(fetch_new_schema_id(OB_SYS_TENANT_ID, OB_MAX_USED_TENANT_ID_TYPE, new_tenant_id))) {
+  if (OB_FAIL(fetch_new_schema_id_(OB_SYS_TENANT_ID, OB_MAX_USED_TENANT_ID_TYPE, new_tenant_id))) {
     LOG_WARN("fetch_new_tenant_id faild", K(ret));
   }
   return ret;
+}
+
+// When ret = OB_SUCCESS, object_ids are avaliable in [max_object_id - object_cnt + 1, max_object_id].
+int ObSchemaServiceSQLImpl::fetch_new_object_ids(
+    const uint64_t tenant_id,
+    const int64_t object_cnt,
+    uint64_t &max_object_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mysql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("proxy is NULL", KR(ret));
+  } else {
+    lib::ObMutexGuard mutex_guard(object_ids_mutex_);
+    ObMaxIdFetcher id_fetcher(*mysql_proxy_);
+    if (OB_FAIL(id_fetcher.fetch_new_max_id(tenant_id, OB_MAX_USED_OBJECT_ID_TYPE,
+        max_object_id, UINT64_MAX/*initial value should exist*/, object_cnt))) {
+      LOG_WARN("fail to fetch object id", KR(ret), K(tenant_id), K(object_cnt));
+    }
+  }
+  return ret;
+}
+
+// When ret = OB_SUCCESS, partition_ids are avaliable in [new_partition_id - partition_num + 1, partition_id].
+int ObSchemaServiceSQLImpl::fetch_new_partition_ids(
+    const uint64_t tenant_id,
+    const int64_t partition_num,
+    uint64_t &max_partition_id)
+{
+  return fetch_new_object_ids(tenant_id, partition_num, max_partition_id);
 }
 
 int ObSchemaServiceSQLImpl::fetch_new_tablet_ids(
@@ -2662,13 +2700,13 @@ int ObSchemaServiceSQLImpl::fetch_new_tablet_ids(
 {
   int ret = OB_SUCCESS;
   if (gen_normal_tablet) {
-    if (OB_FAIL(fetch_new_normal_rowid_table_tablet_ids(
-                tenant_id, min_tablet_id, size))) {
+    if (OB_FAIL(fetch_new_normal_rowid_table_tablet_ids_(
+                tenant_id, size, min_tablet_id))) {
       LOG_WARN("fail to fetch new tablet id", KR(ret), K(tenant_id));
     }
   } else {
-    if (OB_FAIL(fetch_new_extended_rowid_table_tablet_ids(
-                tenant_id, min_tablet_id, size))) {
+    if (OB_FAIL(fetch_new_extended_rowid_table_tablet_ids_(
+                tenant_id, size, min_tablet_id))) {
       LOG_WARN("fail to fetch new tablet id", KR(ret), K(tenant_id));
     }
   }
@@ -2679,24 +2717,8 @@ int ObSchemaServiceSQLImpl::fetch_new_tablet_ids(
 #define FETCH_NEW_SCHEMA_ID(SCHEMA_TYPE, SCHEMA) \
 int ObSchemaServiceSQLImpl::fetch_new_##SCHEMA##_id(const uint64_t tenant_id, uint64_t &new_schema_id)  \
 {                                                                                                    \
-  return fetch_new_schema_id(tenant_id, OB_MAX_USED_##SCHEMA_TYPE##_ID_TYPE, new_schema_id);         \
+  return fetch_new_schema_id_(tenant_id, OB_MAX_USED_##SCHEMA_TYPE##_ID_TYPE, new_schema_id);         \
 }
-// When ret = OB_SUCCESS, partition_ids in [new_partition_id - num + 1, partition_id] are available.
-int ObSchemaServiceSQLImpl::fetch_new_partition_ids(
-    const uint64_t tenant_id, const int64_t partition_num, uint64_t &new_partition_id)
-{
-  int ret = OB_SUCCESS;
-  ObMaxIdFetcher id_fetcher(*mysql_proxy_);
-  if (OB_ISNULL(mysql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is NULL", KR(ret));
-  } else if (OB_FAIL(id_fetcher.fetch_new_max_id(tenant_id, OB_MAX_USED_PARTITION_ID_TYPE,
-    new_partition_id, UINT64_MAX/*initial value should exist*/, partition_num))) {
-    LOG_WARN("get new schema id failed", KR(ret), K(tenant_id), K(partition_num));
-  }
-  return ret;
-}
-
 FETCH_NEW_SCHEMA_ID(DATABASE, database);
 FETCH_NEW_SCHEMA_ID(TABLE, table);
 FETCH_NEW_SCHEMA_ID(TABLEGROUP, tablegroup);
@@ -2731,25 +2753,35 @@ FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 
 #undef FETCH_NEW_SCHEMA_ID
 
-int ObSchemaServiceSQLImpl::fetch_new_normal_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &new_schema_id, const uint64_t size)
+int ObSchemaServiceSQLImpl::fetch_new_normal_rowid_table_tablet_ids_(
+    const uint64_t tenant_id,
+    const uint64_t size,
+    uint64_t &min_tablet_id)
 {
-  return fetch_new_schema_ids(tenant_id, OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE, new_schema_id, size);
+  lib::ObMutexGuard mutex_guard(normal_tablet_ids_mutex_);
+  return fetch_new_tablet_ids_(tenant_id, OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE, size, min_tablet_id);
 }
 
-int ObSchemaServiceSQLImpl::fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &new_schema_id, const uint64_t size)
+int ObSchemaServiceSQLImpl::fetch_new_extended_rowid_table_tablet_ids_(
+    const uint64_t tenant_id,
+    const uint64_t size,
+    uint64_t &min_tablet_id)
 {
-  return fetch_new_schema_ids(tenant_id, OB_MAX_USED_EXTENDED_ROWID_TABLE_TABLET_ID_TYPE, new_schema_id, size);
+  lib::ObMutexGuard mutex_guard(extended_tablet_ids_mutex_);
+  return fetch_new_tablet_ids_(tenant_id, OB_MAX_USED_EXTENDED_ROWID_TABLE_TABLET_ID_TYPE, size, min_tablet_id);
 }
 
-int ObSchemaServiceSQLImpl::fetch_new_schema_id(const uint64_t tenant_id,
-                                                const enum ObMaxIdType max_id_type,
-                                                uint64_t &new_schema_id)
+int ObSchemaServiceSQLImpl::fetch_new_schema_id_(
+    const uint64_t tenant_id,
+    const enum ObMaxIdType max_id_type,
+    uint64_t &new_schema_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mysql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is NULL");
   } else {
+    lib::ObMutexGuard mutex_guard(object_ids_mutex_);
     ObMaxIdFetcher id_fetcher(*mysql_proxy_);
     if (OB_FAIL(id_fetcher.fetch_new_max_id(tenant_id, max_id_type, new_schema_id))) {
       LOG_WARN("get new schema id failed", K(ret), K(max_id_type));
@@ -2758,10 +2790,11 @@ int ObSchemaServiceSQLImpl::fetch_new_schema_id(const uint64_t tenant_id,
   return ret;
 }
 
-int ObSchemaServiceSQLImpl::fetch_new_schema_ids(const uint64_t tenant_id,
-                                                const enum ObMaxIdType max_id_type,
-                                                uint64_t &new_schema_id,
-                                                const uint64_t size/* = 1 */)
+int ObSchemaServiceSQLImpl::fetch_new_tablet_ids_(
+    const uint64_t tenant_id,
+    const enum ObMaxIdType max_id_type,
+    const uint64_t size,
+    uint64_t &min_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mysql_proxy_)) {
@@ -2769,7 +2802,7 @@ int ObSchemaServiceSQLImpl::fetch_new_schema_ids(const uint64_t tenant_id,
     LOG_WARN("proxy is NULL");
   } else {
     ObMaxIdFetcher id_fetcher(*mysql_proxy_);
-    if (OB_FAIL(id_fetcher.fetch_new_max_ids(tenant_id, max_id_type, new_schema_id, size))) {
+    if (OB_FAIL(id_fetcher.fetch_new_max_ids(tenant_id, max_id_type, min_tablet_id, size))) {
       LOG_WARN("get new schema id failed", K(ret), K(max_id_type));
     }
   }

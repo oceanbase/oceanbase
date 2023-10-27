@@ -297,8 +297,8 @@ begin
 DECLARE continue HANDLER FOR sqlexception insert into a values(-1);
 begin
 DECLARE aaa CONDITION FOR SQLSTATE '42S02';
-DECLARE continue HANDLER FOR sqlexception
-begin
+DECLARE continue HANDLER FOR sqlexception 
+begin 
 insert into a values(0);
 insert into t values(1);
 insert into a values(6);

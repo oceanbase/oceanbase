@@ -196,6 +196,7 @@ int ObMPStmtPrexecute::before_process()
                                                         session->get_effective_tenant_id()))) {
               LOG_WARN("failed to check_and_refresh_schema", K(ret));
             } else {
+              oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
               do {
                 share::schema::ObSchemaGetterGuard schema_guard;
                 const uint64_t tenant_id = session->get_effective_tenant_id();
@@ -252,9 +253,6 @@ int ObMPStmtPrexecute::before_process()
                     }
                     session->set_session_in_retry(retry_ctrl_.need_retry());
                   }
-                }
-                if (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type()) {
-                  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
                 }
               } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
               if (OB_SUCC(ret) && retry_ctrl_.get_retry_times() > 0) {
@@ -575,9 +573,9 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       if (OB_NOT_NULL(cursor) && OB_FAIL(session.close_cursor(cursor->get_id()))) {
         LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
       }
-      // first time the stmt_id do not response to the client
-      // Whether the cursor close is successful or not, it is required
-      if (first_time_ && OB_FAIL(session.close_ps_stmt(stmt_id_))) {
+      if (OB_FAIL(clean_ps_stmt(session,
+                                RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type(),
+                                ctx.multi_stmt_item_.is_batched_multi_stmt()))) {
         LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
       }
       ret = tmp_ret;

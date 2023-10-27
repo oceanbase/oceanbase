@@ -246,6 +246,114 @@ int ObLogJoin::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
+int ObLogJoin::adjust_join_conds(ObIArray<ObRawExpr *> &dest_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t dest_num = dest_exprs.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < dest_num; ++i) {
+    ObRawExpr *&cur_expr = dest_exprs.at(i);
+    ObRawExpr *lexpr = NULL;
+    ObRawExpr *rexpr = NULL;
+    if (OB_ISNULL(lexpr = cur_expr->get_param_expr(0)) ||
+        OB_ISNULL(rexpr = cur_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument", K(lexpr), K(rexpr), K(ret));
+    } else if (!(T_OP_EQ == cur_expr->get_expr_type() ||
+              T_OP_NSEQ == cur_expr->get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument", K(cur_expr->get_expr_type()), K(ret));
+    } else if (T_OP_EQ == cur_expr->get_expr_type()) {
+      ObSEArray<ObRawExpr*, 4> left_columns;
+      ObSEArray<ObRawExpr*, 4> right_columns;
+      if (OB_FAIL(ObRawExprUtils::extract_column_exprs(lexpr, left_columns))) {
+        LOG_WARN("extract column exprs failed", K(ret), K(lexpr));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(rexpr, right_columns))) {
+        LOG_WARN("extract column exprs failed", K(ret), K(rexpr));
+      } else {
+        bool is_conclude_gen_col = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !is_conclude_gen_col &&
+              j < left_columns.count(); ++j) {
+          ObRawExpr *dep_column = left_columns.at(j);
+          if (OB_ISNULL(dep_column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("deps_column is null");
+          } else if (!dep_column->is_column_ref_expr()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dep column is invalid", K(ret), KPC(dep_column));
+          } else if (static_cast<ObColumnRefRawExpr *>(dep_column)->is_generated_column()) {
+            is_conclude_gen_col = true;
+          }
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && !is_conclude_gen_col &&
+              j < right_columns.count(); ++j) {
+          ObRawExpr *dep_column = right_columns.at(j);
+          if (OB_ISNULL(dep_column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("deps_column is null");
+          } else if (!dep_column->is_column_ref_expr()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dep column is invalid", K(ret), KPC(dep_column));
+          } else if (static_cast<ObColumnRefRawExpr *>(dep_column)->is_generated_column()) {
+            is_conclude_gen_col = true;
+          }
+        }
+        if (OB_SUCC(ret) && is_conclude_gen_col) {
+          bool is_opposite = false;
+          if (OB_FAIL(calc_equal_cond_opposite(
+                *cur_expr, is_opposite))) {
+            LOG_WARN("failed to calc equal condition opposite", K(ret));
+          } else {
+            LOG_INFO("do is_opposite", K(ret), K(is_opposite));
+            // Before generating column replacement, determine whether the dependent expression
+            // is a constant expression. If so, you need to change the left and right node positions
+            // in advance.
+            if (is_opposite) {
+              std::swap(cur_expr->get_param_expr(0), cur_expr->get_param_expr(1));
+            }
+          }
+        }
+      }
+    }
+
+  }
+  return ret;
+}
+
+int ObLogJoin::calc_equal_cond_opposite(const ObRawExpr &raw_expr,
+                                               bool &is_opposite)
+{
+  int ret = OB_SUCCESS;
+  is_opposite = false;
+  const ObLogicalOperator *left_child = NULL;
+  const ObLogicalOperator *right_child = NULL;
+  const ObRawExpr *lexpr = NULL;
+  const ObRawExpr *rexpr = NULL;
+  if (OB_ISNULL(lexpr = raw_expr.get_param_expr(0)) ||
+      OB_ISNULL(rexpr = raw_expr.get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(lexpr), K(rexpr), K(ret));
+  } else if (!(T_OP_EQ == raw_expr.get_expr_type() ||
+            T_OP_NSEQ == raw_expr.get_expr_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(raw_expr.get_expr_type()), K(ret));
+  } else if (OB_ISNULL(left_child = this->get_child(0)) ||
+      OB_ISNULL(right_child = this->get_child(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(left_child), K(right_child), K(ret));
+  } else if (lexpr->get_relation_ids().is_subset(left_child->get_table_set())
+      && rexpr->get_relation_ids().is_subset(right_child->get_table_set())) {
+    is_opposite = false;
+  } else if (lexpr->get_relation_ids().is_subset(right_child->get_table_set())
+              && rexpr->get_relation_ids().is_subset(left_child->get_table_set())) {
+    is_opposite = true;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid equal condition", K(this), K(raw_expr), K(ret));
+  }
+
+  return ret;
+}
+
 int ObLogJoin::inner_replace_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
@@ -1198,20 +1306,21 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
       }
     }
   } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    ObLogJoin *nlj = NULL;
-    ObLogicalOperator *child = NULL;
-    if (OB_ISNULL(nlj = static_cast<ObLogJoin *>(root))
-        || OB_ISNULL(child = nlj->get_child(0))) {
+    ObLogJoin *join = NULL;
+    ObLogicalOperator *left_child = NULL;
+    ObLogicalOperator *rigtht_child = NULL;
+    if (OB_ISNULL(join = static_cast<ObLogJoin *>(root))
+        || OB_ISNULL(left_child = join->get_child(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid input", K(ret));
-    } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
+    } else if (OB_FAIL(SMART_CALL(set_use_batch(left_child)))) {
       LOG_WARN("failed to check use batch nlj", K(ret));
-    } else if (!nlj->can_use_batch_nlj()) {
+    } else if (!join->can_use_batch_nlj()) {
       // do nothing
-    } else if (OB_ISNULL(child = nlj->get_child(1))) {
+    } else if (OB_ISNULL(rigtht_child = join->get_child(1))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid child", K(ret));
-    } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
+    } else if (OB_FAIL(SMART_CALL(set_use_batch(rigtht_child)))) {
       LOG_WARN("failed to check use batch nlj", K(ret));
     }
   } else { /*do nothing*/ }
@@ -1249,7 +1358,7 @@ int ObLogJoin::check_and_set_use_batch()
       LOG_WARN("failed to check contains limit", K(ret));
     } else if (contains_limit) {
       can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(check_if_disable_batch(get_child(1)))) {
+    } else if (OB_FAIL(check_if_disable_batch(get_child(1), can_use_batch_nlj_))) {
       LOG_WARN("failed to check if disable batch", K(ret));
     }
   }
@@ -1262,13 +1371,13 @@ int ObLogJoin::check_and_set_use_batch()
   return ret;
 }
 
-int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root)
+int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(root)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (!can_use_batch_nlj_) {
+  } else if (!can_use_batch_nlj) {
     // do nothing
   } else if (root->is_table_scan()) {
     ObLogTableScan *ts = NULL;
@@ -1282,7 +1391,7 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root)
     } else if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
       // For the global index lookup, if there is a pushdown filter when scanning the index,
       // batch cannot be used.
-      can_use_batch_nlj_ = false;
+      can_use_batch_nlj = false;
     } else {
       SMART_VAR(ObTablePartitionInfo, tmp_info) {
         ObTablePartitionInfo *tmp_info_ptr = &tmp_info;
@@ -1293,26 +1402,41 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root)
               tmp_info.get_table_location().get_has_dynamic_exec_param()) {
             // dynamic partition pruning, no need to check
           } else if (10 < info->get_phy_tbl_location_info().get_phy_part_loc_info_list().count()) {
-            can_use_batch_nlj_ = false;
+            can_use_batch_nlj = false;
           }
         }
       }
     }
-  } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type()) {
-    if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0))))) {
+  } else if (1 == root->get_num_of_child()) {
+    if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
       LOG_WARN("failed to check if disable batch", K(ret));
     }
   } else if (log_op_def::LOG_SET == root->get_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj_ && i < root->get_num_of_child(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(child)))) {
+      } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(child, can_use_batch_nlj)))) {
         LOG_WARN("failed to check if disable batch", K(ret));
       }
     }
-  } else { /* do nothing */ }
+  } else if (log_op_def::LOG_JOIN == root->get_type()) {
+    ObLogJoin *join = NULL;
+    if (OB_ISNULL(join = static_cast<ObLogJoin *>(root))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input", K(ret));
+    } else if (!join->can_use_batch_nlj()) {
+      can_use_batch_nlj = false;
+      LOG_TRACE("child join not support batch_nlj", K(root->get_name()));
+    } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
+      LOG_WARN("failed to check use batch nlj", K(ret));
+    } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(1), can_use_batch_nlj)))) {
+      LOG_WARN("failed to check use batch nlj for right op", K(ret));
+    }
+  } else {
+    can_use_batch_nlj = false;
+  }
   return ret;
 }
 

@@ -134,32 +134,6 @@ inline int ObITabletMdsInterface::check_tablet_status_written(bool &written)
   return ret;
 }
 
-template <int N>
-int ObITabletMdsInterface::forcely_reset_mds_table(const char (&reason)[N])
-{
-  #define PRINT_WRAPPER KR(ret), K(reason)
-  MDS_TG(10_ms);
-  int ret = OB_SUCCESS;
-  mds::MdsTableHandle handle;
-  if (OB_UNLIKELY(!check_is_inited_())) {
-    ret = OB_NOT_INIT;
-    MDS_LOG_GC(WARN, "not inited");
-  } else if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      MDS_LOG_GC(WARN, "failed to get_mds_table");
-    } else {
-      ret = OB_SUCCESS;
-    }
-  } else if (!handle.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    MDS_LOG_GC(WARN, "mds cannot be NULL");
-  } else if (CLICK_FAIL(handle.forcely_reset_mds_table(reason))) {
-    MDS_LOG_GC(WARN, "fail to release mds nodes in mds table");
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
 /**********************************IMPLEMENTATION WITH TEMPLATE************************************/
 
 template <>
@@ -173,7 +147,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletCreateDeleteM
   const mds::MdsDumpKV *kv = nullptr;
   ObArenaAllocator allocator("mds_reader");
   const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_addr = get_mds_data_().tablet_status_.committed_kv_;
-  const ObTabletCreateDeleteMdsUserData& tablet_status_cache = get_mds_data_().tablet_status_cache_;
+  const ObTabletCreateDeleteMdsUserData &tablet_status_cache = get_mds_data_().tablet_status_cache_;
 
   // TODO(@chenqingxiang.cqx): remove read from IO after cache ready
   if (tablet_status_cache.is_valid()) {
@@ -181,6 +155,11 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletCreateDeleteM
       MDS_LOG_GET(WARN, "failed to do read op", K(tablet_status_cache));
     }
   } else {
+    // for debug perf issue
+    if (tablet_status_addr.is_disk_object()) {
+      MDS_LOG_GET(ERROR, "tablet status addr is disk, but cache is invalid", K(tablet_status_addr), K(tablet_status_cache));
+    }
+
     if (CLICK_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, tablet_status_addr, kv))) {
       MDS_LOG_GET(WARN, "failed to load mds dump kv");
     } else if (nullptr == kv) {
@@ -217,7 +196,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletBindingMdsUse
   const mds::MdsDumpKV *kv = nullptr;
   ObArenaAllocator allocator("mds_reader");
   const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_addr = get_mds_data_().aux_tablet_info_.committed_kv_;
-  const ObTabletBindingMdsUserData& aux_tablet_info_cache = get_mds_data_().aux_tablet_info_cache_;
+  const ObTabletBindingMdsUserData &aux_tablet_info_cache = get_mds_data_().aux_tablet_info_cache_;
 
   if (aux_tablet_info_addr.is_memory_object()) {
     if (CLICK_FAIL(read_op(aux_tablet_info_cache))) {

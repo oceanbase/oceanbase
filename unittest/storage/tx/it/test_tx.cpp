@@ -522,7 +522,9 @@ TEST_F(ObTestTx, switch_to_follower_forcedly)
 
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
   ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
-
+  // disable keepalive msg, because switch to follower forcedly will send keepalive msg to notify
+  // scheduler abort tx
+  n1->add_drop_msg_type(KEEPALIVE);
   {
     ls_tx_ctx_mgr->switch_to_follower_forcedly();
 

@@ -641,11 +641,8 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
         routine_param.set_nocopy_param();
       }
 #ifdef OB_BUILD_ORACLE_PL
-      if (OB_SUCC(ret)) {
-        // 借用text_len_ , 后续修改
-        if (pl::ObPLUDTObjectManager::is_self_param(param_name)) {
-          routine_param.set_is_self_param();
-        }
+      if (OB_SUCC(ret) && 0 == param_name.case_compare("SELF")) {
+        routine_param.set_is_self_param();
       }
 #endif
       // 设置default value expr str
@@ -780,7 +777,7 @@ int ObCreateRoutineResolver::resolve_aggregate_body(
   const ParseNode *parse_node, ObRoutineInfo &routine_info)
 {
   int ret = OB_SUCCESS;
-  ObString db_name, type_name;
+  ObString db_name, type_name, real_db_name;
   const share::schema::ObUDTTypeInfo *udt_info = NULL;
 
   CK (OB_NOT_NULL(parse_node), OB_NOT_NULL(session_info_));
@@ -790,17 +787,57 @@ int ObCreateRoutineResolver::resolve_aggregate_body(
   CK (OB_NOT_NULL(parse_node->children_[0]));
 
   OZ (ObResolverUtils::resolve_sp_name(
-    *session_info_, *(parse_node->children_[0]), db_name, type_name));
+    *session_info_, *(parse_node->children_[0]), db_name, type_name, false));
+
+  if (OB_SUCC(ret)) {
+    if (db_name.empty()) {
+      if (session_info_->get_database_name().empty() || OB_INVALID_ID == session_info_->get_database_id()) {
+        ret = OB_ERR_NO_DB_SELECTED;
+        LOG_USER_ERROR(OB_ERR_NO_DB_SELECTED);
+        LOG_WARN("No Database Selected", K(ret));
+      } else {
+        real_db_name = session_info_->get_database_name();
+      }
+    } else {
+      real_db_name = db_name;
+    }
+  }
+
   OZ (schema_checker_->get_udt_info(
-    session_info_->get_effective_tenant_id(), db_name, type_name, udt_info));
+    session_info_->get_effective_tenant_id(), real_db_name, type_name, udt_info));
   if (OB_ISNULL(udt_info) // try sys udt
-      && (db_name.case_compare(OB_ORA_SYS_SCHEMA_NAME)
-          || db_name.case_compare(OB_SYS_DATABASE_NAME))) {
+      && (0 == real_db_name.case_compare(OB_ORA_SYS_SCHEMA_NAME)
+          || 0 == real_db_name.case_compare(OB_SYS_DATABASE_NAME))) {
     OZ (schema_checker_->get_udt_info(
       OB_SYS_TENANT_ID, OB_SYS_DATABASE_NAME, type_name, udt_info));
   }
 
-  if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
+  if (OB_ISNULL(udt_info) && ret != OB_ERR_NO_DB_SELECTED) { // try synonym
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    uint64_t database_id = session_info_->get_database_id();
+    ObSEArray<uint64_t, 4> syn_id_array;
+    if (!db_name.empty() // try database name synonym
+        && (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))
+            || OB_INVALID_ID == database_id)) {
+      database_id = session_info_->get_database_id();
+      OZ (schema_checker_->get_obj_info_recursively_with_synonym(
+        tenant_id, database_id, db_name, database_id, db_name, syn_id_array, true));
+      OZ (schema_checker_->get_udt_info(tenant_id, db_name, type_name, udt_info));
+    } else { // try type name synonym
+      OZ (schema_checker_->get_obj_info_recursively_with_synonym(
+        tenant_id, database_id, type_name, database_id, type_name, syn_id_array, true));
+      if (OB_SUCC(ret) && database_id != session_info_->get_database_id()) {
+        const share::schema::ObDatabaseSchema *database_schema = NULL;
+        OZ (schema_checker_->get_database_schema(tenant_id, database_id, database_schema));
+        CK (OB_NOT_NULL(database_schema));
+        OX (real_db_name = database_schema->get_database_name_str());
+      }
+      OZ (schema_checker_->get_udt_info(tenant_id, real_db_name, type_name, udt_info));
+    }
+  }
+
+
+  if ((OB_SUCC(ret) && OB_ISNULL(udt_info)) || OB_SYNONYM_NOT_EXIST == ret) {
     ret = OB_ERR_SP_UNDECLARED_VAR;
     LOG_WARN("PLS-00201: identifier type_name must be declared",
              K(ret), K(type_name), K(db_name));

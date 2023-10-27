@@ -588,6 +588,7 @@ int ObTransService::abort_tx_(ObTxDesc &tx, const int cause, const bool cleanup)
     if (tx.addr_ == self_ || tx.xa_start_addr_ == self_) {
       abort_tx__(tx, cleanup);
     } else {
+      abort_participants_(tx);
       tx.flags_.DEFER_ABORT_ = true;
     }
     tx.state_ = ObTxDesc::State::ABORTED;
@@ -877,19 +878,33 @@ int ObTransService::interrupt(ObTxDesc &tx, int cause)
 int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransRpcResult &result)
 {
   int ret = OB_SUCCESS;
+  int ret_status = OB_SUCCESS;
   const ObTransID &tx_id = msg.tx_id_;
   ObTxDesc *tx = NULL;
+  bool do_response = true;
   if (OB_FAIL(tx_desc_mgr_.get(tx_id, tx)) &&
       OB_ENTRY_NOT_EXIST != ret) {
     TRANS_LOG(WARN, "get tx fail", K(ret), K(tx_id), K(msg));
+    ret_status = ret;
   } else if (OB_ISNULL(tx)) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
+    ret_status = OB_TRANS_CTX_NOT_EXIST;
   } else if (tx->is_committed() && tx_id == tx->tx_id_) {
-    ret = OB_TRANS_COMMITED;
+    ret_status = OB_TRANS_COMMITED;
   } else if (tx->is_rollbacked() && tx_id == tx->tx_id_) {
-    ret = OB_TRANS_ROLLBACKED;
+    ret_status = OB_TRANS_ROLLBACKED;
+  } else if (tx->is_aborted() && tx_id == tx->tx_id_) {
+    ret_status = OB_TRANS_KILLED;
   } else if (OB_SUCCESS != msg.status_) {
     TRANS_LOG(WARN, "tx participant in failed status", K(msg));
+    if (OB_TRANS_KILLED == msg.status_)  {
+      TRANS_LOG(INFO, "participant was killed, mark tx should abort", K(tx_id), K(msg.sender_));
+      tx->mark_part_abort(tx_id, OB_TRANS_KILLED);
+      ret_status = OB_TRANS_NEED_ROLLBACK;
+    } else if (msg.status_ > 0) {
+      TRANS_LOG(INFO, "participant failed, mark tx should abort", K(tx_id), K(msg.status_), K(msg.sender_));
+      tx->mark_part_abort(tx_id, msg.status_);
+      ret_status = OB_TRANS_NEED_ROLLBACK;
+    }
   }
   ObTxKeepaliveRespMsg resp;
   resp.cluster_version_ = GET_MIN_CLUSTER_VERSION();
@@ -900,7 +915,7 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
   resp.sender_addr_ = self_;
   resp.sender_ = share::SCHEDULER_LS;
   resp.receiver_ = msg.sender_;
-  resp.status_ = ret;
+  resp.status_ = ret_status;
   if (OB_FAIL(rpc_->post_msg(resp.receiver_, resp))) {
     TRANS_LOG(WARN, "post tx keepalive resp fail", K(ret), K(resp), KPC(this));
   }
@@ -985,7 +1000,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
         if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
           ret = OB_SUCCESS;
         } else {
-          if (!MTL_IS_PRIMARY_TENANT()) {
+          if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
             ret = OB_STANDBY_READ_ONLY;
           }
           TRANS_LOG(WARN, "get tx ctx fail",
@@ -1110,7 +1125,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   }
   // fail, rollback
   if (OB_FAIL(ret)) {
-    if (!MTL_IS_PRIMARY_TENANT()) {
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
       ret = OB_STANDBY_READ_ONLY;
     }
     if (OB_NOT_NULL(tx_ctx)) {
@@ -1445,7 +1460,7 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
     } else {
       if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
         TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
-      } else if (MTL_IS_PRIMARY_TENANT()) {
+      } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
         ret = OB_NOT_MASTER;
       } else {
         ret = OB_REPLICA_NOT_READABLE;
@@ -1464,7 +1479,7 @@ bool ObTransService::check_ls_readable_(ObLS &ls,
   int ret = OB_SUCCESS;
   bool readable = false;
   SCN scn;
-  if (ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src || MTL_IS_PRIMARY_TENANT()) {
+  if (ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src || MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     readable = snapshot <= ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
   } else if (OB_FAIL(ls.get_ls_replica_readable_scn(scn))) {
     TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls.get_ls_id()));
@@ -1591,7 +1606,7 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   SCN snapshot0;
   SCN snapshot1;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
-  const bool can_elr = MTL_IS_PRIMARY_TENANT() ? true : false;
+  const bool can_elr = MTL_TENANT_ROLE_CACHE_IS_PRIMARY() ? true : false;
   ObLSHandle ls_handle;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
     TRANS_LOG(WARN, "get ls fail", K(ret), K(ls_id));
@@ -1617,10 +1632,10 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
       && OB_NOT_NULL(ls_handle.get_ls())) {
     dup_trx_status =
         ls_handle.get_ls()->get_tx_svr()->get_tx_ls_log_adapter()->get_committing_dup_trx_cnt(committing_dup_trx_cnt);
-    if (!MTL_IS_PRIMARY_TENANT()) {
+    if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
       ret = OB_NOT_MASTER;
       TRANS_LOG(DEBUG, "the max_commmit_ts can not be used as a snapshot in standby tenant ",
-                K(ret), K(ls_id), K(snapshot), K(MTL_IS_PRIMARY_TENANT()),
+                K(ret), K(ls_id), K(snapshot), K(MTL_TENANT_ROLE_CACHE_IS_PRIMARY()),
                 K(committing_dup_trx_cnt));
     } else if (!ls_handle.get_ls()
                     ->get_tx_svr()
@@ -1724,7 +1739,7 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   const MonotonicTs now0 = get_req_receive_mts_();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
   int retry_times = 0;
-  const int MAX_RETRY_TIMES = 100;
+  const int MAX_RETRY_TIMES = 2000; // 2000 * 500us = 1s
   do {
     int64_t n = ObClockGenerator::getClock();
     MonotonicTs rts(0);
@@ -1986,11 +2001,6 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
     // We donot respond with the abort response, because we think the abort is
     // eventually always successful if we have never send the commit request
     TRANS_LOG(WARN, "get transaction context error", KR(ret), K(abort_req.get_trans_id()));
-  } else if (ctx->get_scheduler() != abort_req.sender_addr_ && ctx->get_scheduler().is_valid()
-             // xa tmp scheduler will send abort when session is break
-             && !ctx->is_xa_trans()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "receive abort request not from scheduler.", K(ret), K(ctx->get_scheduler()));
   } else if (OB_FAIL(ctx->abort(abort_req.reason_))) {
     TRANS_LOG(WARN, "trans rollback error", KR(ret), K(abort_req));
   }
@@ -2383,7 +2393,7 @@ int ObTransService::gen_trans_id(ObTransID &trans_id)
   int ret = OB_SUCCESS;
 
   int retry_times = 0;
-  if (!MTL_IS_PRIMARY_TENANT()) {
+  if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     ret = OB_STANDBY_READ_ONLY;
     TRANS_LOG(WARN, "standby tenant support read only", K(ret));
   } else {

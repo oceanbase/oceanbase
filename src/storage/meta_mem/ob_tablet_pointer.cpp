@@ -47,8 +47,8 @@ ObTabletPointer::ObTabletPointer()
     mds_table_handler_(),
     old_version_chain_(nullptr)
 {
-#if defined(__x86_64__)
-    static_assert(sizeof(ObTabletPointer) == 272, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+#if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
+  static_assert(sizeof(ObTabletPointer) == 272, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -339,6 +339,31 @@ bool ObTabletPointer::is_tablet_status_written() const
 void ObTabletPointer::mark_mds_table_deleted()
 {
   return mds_table_handler_.mark_removed_from_t3m(this);
+}
+
+int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline()
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = memtable_mgr_handle_.get_memtable_mgr();
+  mds::MdsTableHandle mds_table;
+  if (OB_ISNULL(memtable_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("memtable mgr is null", K(ret));
+  } else if (OB_FAIL(memtable_mgr->release_memtables())) {
+    LOG_WARN("failed to release memtables", K(ret));
+  } else if (OB_FAIL(memtable_mgr->reset_storage_recorder())) {
+    LOG_WARN("failed to destroy storage recorder", K(ret), KPC(memtable_mgr));
+  } else if (OB_FAIL(get_mds_table(mds_table, false/*not_exist_create*/))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get mds table", K(ret));
+    }
+  } else if (OB_FAIL(mds_table.forcely_reset_mds_table("OFFLINE"))) {
+    LOG_WARN("fail to release mds nodes in mds table", K(ret));
+  }
+
+  return ret;
 }
 
 int ObTabletPointer::add_tablet_to_old_version_chain(ObTablet *tablet)

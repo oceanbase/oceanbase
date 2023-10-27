@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include <string.h>
+#include "lib/utility/ob_print_utils.h"
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_func_dump.h"
@@ -229,7 +230,7 @@ int ObExprFuncDump::calc_number(const common::ObObj &input,
                                 input.get_type(), nmb.get_deep_copy_size()))) {
       LOG_WARN("failed to databuff_printf", K(ret), K(nmb));
     } else if (ReturnFormat::RF_OB_SEPC == fmt_enum) {
-      if (OB_FAIL(databuff_print_obj(tmp_buf, buff_size, pos, nmb))) {
+      if (OB_FAIL(common::databuff_print_obj(tmp_buf, buff_size, pos, nmb))) {
         LOG_WARN("failed to databuff_printf", K(ret), K(pos));
       }
     } else {
@@ -461,7 +462,7 @@ static int dump_ob_spec(char *buf, int64_t buf_len, int64_t &buf_pos, bool &dump
     case ObNumberType:
     case ObNumberFloatType: {
       number::ObNumber nmb(datum.get_number());
-      OZ(databuff_print_obj(buf, buf_len, buf_pos, nmb));
+      OZ(common::databuff_print_obj(buf, buf_len, buf_pos, nmb));
       break;
     }
     case ObDateTimeType: {

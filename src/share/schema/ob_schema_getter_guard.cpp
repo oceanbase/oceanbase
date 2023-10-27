@@ -8812,6 +8812,22 @@ int ObSchemaGetterGuard::check_if_tenant_has_been_dropped(const uint64_t tenant_
   return ret;
 }
 
+int ObSchemaGetterGuard::get_dropped_tenant_ids(common::ObIArray<uint64_t> &dropped_tenant_ids) const
+{
+  int ret = OB_SUCCESS;
+  dropped_tenant_ids.reset();
+  const ObSchemaMgr *schema_mgr = NULL;
+  if (OB_FAIL(get_schema_mgr(OB_SYS_TENANT_ID, schema_mgr))) {
+    LOG_WARN("fail to get schema mgr", KR(ret));
+  } else if (OB_ISNULL(schema_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_mgr is null", KR(ret));
+  } else if (OB_FAIL(schema_mgr->get_drop_tenant_ids(dropped_tenant_ids))) {
+    LOG_WARN("fail to get drop tenant ids", KR(ret));
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::check_is_creating_standby_tenant(const uint64_t tenant_id, bool &is_creating_standby)
 {
   int ret = OB_SUCCESS;

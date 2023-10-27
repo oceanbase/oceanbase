@@ -145,7 +145,7 @@ IS
   NUM_SAMPLES      Number;
   NUM_EVENTS       Number; -- One event may cross many samples
 
-  FILTER_EVENT_STR CONSTANT VARCHAR2(100) := 'CASE WHEN wait_class_id = 100 OR TIME_WAITED != 0 THEN 1 ELSE 0 END';
+  FILTER_EVENT_STR CONSTANT VARCHAR2(100) := '1';
 BEGIN
   REPORT_CLEANUP();
 
@@ -192,7 +192,7 @@ BEGIN
   APPEND_ROW('             ----------');
   APPEND_ROW('    Analysis Begin Time: ' || TO_CHAR(ASH_BEGIN_TIME, 'yyyy-mm-dd HH24:MI:SS'));
   APPEND_ROW('      Analysis End Time: ' || TO_CHAR(ASH_END_TIME, 'yyyy-mm-dd HH24:MI:SS'));
-  APPEND_ROW('           Elapsed Time: ' || TO_CHAR(DUR_ELAPSED)); -- TO_CHAR(ROUND(DUR_ELAPSED, DIG_2_FM)) || '(secs)');
+  APPEND_ROW('           Elapsed Time: ' || TO_CHAR(DUR_ELAPSED) || '(secs)'); -- TO_CHAR(ROUND(DUR_ELAPSED, DIG_2_FM)) || '(secs)');
   APPEND_ROW('          Num of Sample: ' || TO_CHAR(NUM_SAMPLES));
   APPEND_ROW('          Num of Events: ' || TO_CHAR(NUM_EVENTS));
   APPEND_ROW('Average Active Sessions: ' || TO_CHAR(ROUND(NUM_SAMPLES/DUR_ELAPSED,2), DIG_3_FM));
@@ -215,14 +215,14 @@ BEGIN
 
   APPEND_ROW(' ');
   APPEND_ROW('## Top User Events:');
-  column_widths := COLUMN_WIDTH_ARRAY(40, 20, 10, 9);
-  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-');
+  column_widths := COLUMN_WIDTH_ARRAY(40, 20, 9);
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
-  column_content := COLUMN_CONTENT_ARRAY('Event', 'WAIT_CLASS', 'EVENT_CNT', '% Event');
+  column_content := COLUMN_CONTENT_ARRAY('Event', 'WAIT_CLASS', '% Event');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, ' ', '|'));
-  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-');
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
-  DYN_SQL := 'SELECT /*+ MONITOR */ EVENT,  WAIT_CLASS, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' || 'GROUP BY EVENT, WAIT_CLASS';
+  DYN_SQL := 'SELECT /*+ MONITOR */ EVENT,  WAIT_CLASS, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' || 'GROUP BY EVENT, WAIT_CLASS ORDER BY EVENT_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -238,12 +238,11 @@ BEGIN
     APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
           top_event_rec.EVENT,
           top_event_rec.WAIT_CLASS,
-          TO_CHAR(top_event_rec.EVENT_CNT),
           TO_CHAR(ROUND(100 * top_event_rec.EVENT_CNT/NUM_EVENTS,2), DIG_2_FM) || '%'
     ), column_widths, ' ', '|'));
   END LOOP;
   CLOSE top_event_cv;
-  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-');
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
 
 
@@ -408,7 +407,7 @@ BEGIN
              'FROM (SELECT SQL_ID, PLAN_ID, SUM(' || FILTER_EVENT_STR || ') EVENT_CNT, EVENT FROM (' ||
                 DBMS_ASH_INTERNAL.ASH_VIEW_SQL ||
               ') top_event GROUP BY SQL_ID, PLAN_ID, EVENT) ash ' ||
-             'LEFT JOIN SYS.GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) v1 WHERE ROWNUM < 100';
+             'LEFT JOIN SYS.GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) v1 WHERE ROWNUM < 20';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -422,9 +421,9 @@ BEGIN
     FETCH top_event_cv INTO top_sql_rec;
     EXIT WHEN top_event_cv%NOTFOUND;
     APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
-          top_sql_rec.SQL_ID,
-          TO_CHAR(top_sql_rec.PLAN_ID),
-          TO_CHAR(top_sql_rec.EVENT_CNT),
+          NVL(top_sql_rec.SQL_ID, ' '),
+          NVL(TO_CHAR(top_sql_rec.PLAN_ID), ' '),
+          NVL(TO_CHAR(top_sql_rec.EVENT_CNT), ' '),
           top_sql_rec.EVENT,
           TO_CHAR(ROUND(100 * top_sql_rec.EVENT_CNT/NUM_EVENTS, 2), DIG_2_FM) || '%',
           NVL(top_sql_rec.QUERY_SQL, ' ')
@@ -453,7 +452,7 @@ BEGIN
              ' FROM (SELECT SQL_ID, PLAN_ID, SUM(' || FILTER_EVENT_STR || ') EVENT_CNT, EVENT FROM (' ||
                 DBMS_ASH_INTERNAL.ASH_VIEW_SQL ||
              ' ) top_event WHERE wait_class_id != 100 GROUP BY SQL_ID, PLAN_ID, EVENT) ash ' ||
-             'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE ROWNUM < 100';
+             'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE ROWNUM < 20';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -484,7 +483,7 @@ BEGIN
   APPEND_ROW('## Complete List of SQL Text');
   DYN_SQL := 'SELECT SQL_ID, PLAN_ID, QUERY_SQL FROM (SELECT pc.SQL_ID SQL_ID, pc.PLAN_ID, pc.QUERY_SQL QUERY_SQL ' ||
              'FROM (SELECT SQL_ID, PLAN_ID, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event GROUP BY SQL_ID, PLAN_ID, EVENT) ash ' ||
-             'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE QUERY_SQL IS NOT NULL AND ROWNUM < 100';
+             'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE QUERY_SQL IS NOT NULL AND ROWNUM < 20';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -517,8 +516,8 @@ BEGIN
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   DYN_SQL := 'SELECT  SESSION_ID, EVENT, EVENT_CNT, SAMPLE_CNT, USERNAME USER_NAME ' ||
              ' FROM (SELECT * FROM (SELECT SESSION_ID, USER_ID, EVENT, SUM(' || FILTER_EVENT_STR || ') EVENT_CNT, COUNT(1) SAMPLE_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' ||
-             ' GROUP BY SESSION_ID, USER_ID, EVENT HAVING COUNT(1) / :num_samples > 0.005 ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100) ash ' ||
-             ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID';
+             ' GROUP BY SESSION_ID, USER_ID, EVENT ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 20) ash ' ||
+             ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID ORDER BY SAMPLE_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -527,7 +526,7 @@ BEGIN
           WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR, NUM_SAMPLES;
+          NULL_CHAR, NULL_CHAR;
   LOOP
     FETCH top_event_cv INTO top_sess_rec;
     EXIT WHEN top_event_cv%NOTFOUND;
@@ -561,8 +560,8 @@ BEGIN
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   DYN_SQL := 'SELECT  SESSION_ID, EVENT, EVENT_CNT, SAMPLE_CNT, USERNAME USER_NAME ' ||
              ' FROM (SELECT * FROM (SELECT SESSION_ID, USER_ID, EVENT, SUM(' || FILTER_EVENT_STR || ') EVENT_CNT, COUNT(1) SAMPLE_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' ||
-             ' WHERE wait_class_id != 100 GROUP BY SESSION_ID, USER_ID, EVENT HAVING COUNT(1) / :num_samples > 0.005 ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100) ash ' ||
-             ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID';
+             ' WHERE wait_class_id != 100 GROUP BY SESSION_ID, USER_ID, EVENT ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 20) ash ' ||
+             ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID ORDER BY SAMPLE_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -571,18 +570,17 @@ BEGIN
           WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR, NUM_SAMPLES;
+          NULL_CHAR, NULL_CHAR;
   LOOP
     FETCH top_event_cv INTO top_sess_rec;
     EXIT WHEN top_event_cv%NOTFOUND;
-    DBMS_OUTPUT.PUT_LINE(TO_CHAR(top_sess_rec.EVENT_CNT));
     APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
           TO_CHAR(top_sess_rec.SESSION_ID),
           TO_CHAR(ROUND(100 * top_sess_rec.SAMPLE_CNT/NUM_SAMPLES, 2), DIG_2_FM) || '%',
           top_sess_rec.EVENT,
           TO_CHAR(top_sess_rec.EVENT_CNT),
           TO_CHAR(ROUND(100 * top_sess_rec.EVENT_CNT/NUM_EVENTS, 2), DIG_2_FM) || '%',
-          top_sess_rec.USER_NAME,
+          NVL(top_sess_rec.USER_NAME, ' '),
           TO_CHAR(top_sess_rec.EVENT_CNT) || '/' || TO_CHAR(DUR_ELAPSED) || '[' || TO_CHAR(ROUND(100*top_sess_rec.EVENT_CNT/DUR_ELAPSED, 2), DIG_2_FM) || '%]'
     ), column_widths, ' ', '|'));
   END LOOP;
@@ -602,7 +600,7 @@ BEGIN
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   DYN_SQL := 'SELECT * FROM (SELECT EVENT, COUNT(1) SAMPLE_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' ||
-             ' WHERE wait_class_id = 104 AND SUBSTR(event, 0, 6) = ''latch:'' GROUP BY EVENT HAVING COUNT(1) / :num_samples > 0.005 ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100';
+             ' WHERE wait_class_id = 104 AND SUBSTR(event, 0, 6) = ''latch:'' GROUP BY EVENT ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
           ASH_BEGIN_TIME, ASH_END_TIME,
@@ -611,7 +609,7 @@ BEGIN
           WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR, NUM_SAMPLES;
+          NULL_CHAR, NULL_CHAR;
   LOOP
     FETCH top_event_cv INTO top_latch_rec;
     EXIT WHEN top_event_cv%NOTFOUND;

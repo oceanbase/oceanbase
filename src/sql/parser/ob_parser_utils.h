@@ -142,6 +142,16 @@ private:
   const ParseNode &parse_tree_;
 };
 
+struct ObCharsets4Parser
+{
+  explicit ObCharsets4Parser() :
+      string_collation_(common::CS_TYPE_UTF8MB4_GENERAL_CI),
+      nls_collation_(common::CS_TYPE_INVALID)
+    {}
+  common::ObCollationType string_collation_; //collation type for the string to parse
+  common::ObCollationType nls_collation_; //oracle database collation for validating identifiers
+};
+
 } // end namespace sql
 } // end namespace oceanbase
 

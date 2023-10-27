@@ -18,6 +18,7 @@
 #include "share/config/ob_server_config.h"
 #include "common/ob_clock_generator.h"
 #include "lib/oblog/ob_log.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -362,7 +363,7 @@ static const char* ref_info_type_strs[] = {
   "SCHEMA_RECORDER",
   "SPI_RESULT_SET",
   "PL_PREPARE_RESULT",
-  "PARTITION_BALANCE",
+  "PARTITION_BALANCE"
 };
 
 int ObSchemaMgrCache::get_ref_info_type_str_(const int64_t &index, const char *&type_str) {

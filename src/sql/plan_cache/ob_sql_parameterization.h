@@ -179,7 +179,7 @@ public:
                                       ObPlanCacheCtx &pc_ctx,
                                       ParseNode *tree,
                                       ParamStore &params,
-                                      ObCollationType cs_type);
+                                      ObCharsets4Parser charsets4parser);
   static int gen_special_param_info(SqlInfo &sql_info, ObPlanCacheCtx &pc_ctx);
   static int gen_ps_not_param_var(const ObIArray<int64_t> &offsets,
                                   ParamStore &params,

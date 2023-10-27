@@ -82,7 +82,10 @@ int ObDirectLoadPartitionMergeTask::process()
       LOG_INFO("add sstable slice begin", K(target_tablet_id), K(parallel_idx_));
       const ObDatumRow *datum_row = nullptr;
       while (OB_SUCC(ret)) {
-        if (OB_FAIL(row_iter->get_next_row(datum_row))) {
+        if (OB_UNLIKELY(is_stop_)) {
+          ret = OB_CANCELED;
+          LOG_WARN("merge task canceled", KR(ret));
+        } else if (OB_FAIL(row_iter->get_next_row(datum_row))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("fail to get next row", KR(ret));
           } else {

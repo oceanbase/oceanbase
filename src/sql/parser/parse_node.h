@@ -292,7 +292,8 @@ typedef struct
   void *malloc_pool_; // ObIAllocator
   ObQuestionMarkCtx question_mark_ctx_;
   ObSQLMode sql_mode_;
-  const struct ObCharsetInfo *charset_info_;
+  const struct ObCharsetInfo *charset_info_; //client charset
+  const struct ObCharsetInfo *charset_info_oracle_db_; //oracle DB charset
   ParamList *param_nodes_;
   ParamList *tail_param_node_;
   struct {
@@ -314,6 +315,8 @@ typedef struct
     uint32_t is_multi_values_parser_           : 1;
     uint32_t is_for_udr_                       : 1;
     uint32_t is_for_remap_                     : 1;
+    uint32_t contain_sensitive_data_           : 1;
+    uint32_t may_contain_sensitive_data_       : 1;
   };
 
   ParseNode *result_tree_;

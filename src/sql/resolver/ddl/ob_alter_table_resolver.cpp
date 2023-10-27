@@ -877,11 +877,23 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             break;
         }
         case T_REMOVE_TTL: {
+          uint64_t tenant_data_version = 0;
+          if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+          } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("REMOVE TTL is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "REMOVE TTL in data version less than 4.2.1");
+          } else {
             ttl_definition_.reset();
             if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
               SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
             }
-            break;
+          }
+          break;
         }
         default: {
             ret = OB_ERR_UNEXPECTED;
@@ -5626,6 +5638,9 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
                               alter_column_schema.get_origin_column_name(),
                               alter_table_stmt))) {
           SQL_RESV_LOG(WARN, "failed to check column in foreign key for oracle mode", K(ret));
+        } else if (OB_FAIL(check_drop_column_is_partition_key(*table_schema_,
+                                                              alter_column_schema.get_origin_column_name()))) {
+          SQL_RESV_LOG(WARN, "failed to check column in parition key", K(ret));
         } else if (OB_FAIL(check_column_in_check_constraint(
                            *table_schema_,
                            alter_column_schema.get_origin_column_name(),
@@ -5952,6 +5967,32 @@ int ObAlterTableResolver::check_mysql_rename_column(const AlterColumnSchema &alt
           LOG_WARN("column has contraint deps", K(ret), K(alter_column_schema));
         }
       }
+    }
+  }
+  return ret;
+}
+
+/*
+* chech the droped column is partition key,
+* if ture, forbid the action
+*/
+int ObAlterTableResolver::check_drop_column_is_partition_key(const ObTableSchema &table_schema, const ObString &column_name)
+{
+  int ret=OB_SUCCESS;
+  if (!table_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid arguemnt", K(ret), K(table_schema));
+  } else {
+    const ObColumnSchemaV2 *origin_column = table_schema.get_column_schema(column_name);
+    if (OB_ISNULL(origin_column)) {
+      // do nothing
+      // 根据列名查不到列是因为表中不存在该列，后面会在 RS 端再检查一遍表中是否存在该列，并在 RS 端根据操作的不同报不同的错误
+    } else if (origin_column->is_tbl_part_key_column()){
+      ret = OB_ERR_DEPENDENT_BY_PARTITION_FUNC;
+      LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_PARTITION_FUNC,
+                     column_name.length(),
+                     column_name.ptr());
+      LOG_WARN("alter column has table part key deps", K(ret), K(origin_column));
     }
   }
   return ret;

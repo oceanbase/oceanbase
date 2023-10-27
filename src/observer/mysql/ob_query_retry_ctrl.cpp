@@ -520,6 +520,10 @@ public:
     if (local_schema_not_full || OB_ERR_REMOTE_SCHEMA_NOT_FULL == v.err_) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_LOCAL;
+      sleep_before_local_retry(v,
+                          RETRY_SLEEP_TYPE_LINEAR,
+                          WAIT_RETRY_SHORT_US,
+                          THIS_WORKER.get_timeout_ts());
     }
   }
 };

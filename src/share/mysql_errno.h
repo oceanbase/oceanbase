@@ -1,15 +1,3 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
-
 #ifndef _MYSQL_ERRNO_H
 #define _MYSQL_ERRNO_H 1
 
@@ -1072,6 +1060,8 @@
 #define ER_MISSING_JSON_VALUE 3966
 #define ER_MULTIPLE_JSON_VALUES 3967
 #define ER_CHARACTER_SET_MISMATCH 3995
+#define ER_USER_REFERRED_AS_DEFINER 4005
+#define ER_OPERATION_ON_USER_REFERRED_AS_DEFINER 4006
 #define ER_TABLE_MUST_HAVE_A_VISIBLE_COLUMN 4028
 #define ER_INVALID_CAST_TO_GEOMETRY 4032
 #define ER_INVALID_CAST_POLYGON_RING_DIRECTION 4033

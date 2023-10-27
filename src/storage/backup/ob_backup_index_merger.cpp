@@ -241,6 +241,11 @@ int ObIBackupMultiLevelIndexBuilder::build_and_flush_index_tree_()
       if (OB_ISNULL(dummy_)) {
         dummy_ = next_node;
       }
+      next_node = NULL;
+    }
+    if (OB_NOT_NULL(next_node)) {
+      next_node->~ObBackupIndexBufferNode();
+      next_node = NULL;
     }
   }
   if (OB_SUCC(ret)) {
@@ -276,6 +281,11 @@ int ObIBackupMultiLevelIndexBuilder::alloc_new_buffer_node_(const uint64_t tenan
     LOG_WARN("failed to init index buffer node", K(ret), K(tenant_id), K(block_type), K(node_level));
   } else {
     new_node = tmp_node;
+    tmp_node = NULL;
+  }
+  if (OB_NOT_NULL(tmp_node)) {
+    tmp_node->~ObBackupIndexBufferNode();
+    tmp_node = NULL;
   }
   return ret;
 }
@@ -903,7 +913,11 @@ int ObBackupMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
     LOG_WARN("failed to init backup macro range index iterator", K(ret), K(merge_param), K(prev_backup_set_desc), K(prev_tenant_index_retry_id));
   } else {
     iter = tmp_iter;
+    tmp_iter = NULL;
     LOG_INFO("prepare prev backup set index iter", K(prev_backup_set_desc), K(merge_param));
+  }
+  if (OB_NOT_NULL(tmp_iter)) {
+    ObLSBackupFactory::free(tmp_iter);
   }
   return ret;
 }
@@ -950,10 +964,15 @@ int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
                      ls_id,
                      merge_param.backup_data_type_,
                      turn_id,
-                     retry_id))) {
+                     retry_id,
+                     true/*need_read_inner_table*/))) {
         LOG_WARN("failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id));
       } else {
         iter = tmp_iter;
+        tmp_iter = NULL;
+      }
+      if (OB_NOT_NULL(tmp_iter)) {
+        ObLSBackupFactory::free(tmp_iter);
       }
     } else {
       const ObBackupIndexIteratorType type = BACKUP_MACRO_RANGE_INDEX_ITERATOR;
@@ -974,6 +993,10 @@ int ObBackupMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_level,
             "failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id), K(retry_id));
       } else {
         iter = tmp_iter;
+        tmp_iter = NULL;
+      }
+      if (OB_NOT_NULL(tmp_iter)) {
+        ObLSBackupFactory::free(tmp_iter);
       }
     }
   }
@@ -1369,6 +1392,10 @@ int ObBackupMetaIndexMerger::alloc_merge_iter_(const ObBackupIndexMergeParam &me
     LOG_WARN("failed to init meta index iterator", K(ret), K(merge_param));
   } else {
     iter = tmp_iter;
+    tmp_iter = NULL;
+  }
+  if (OB_NOT_NULL(tmp_iter)) {
+    ObLSBackupFactory::free(tmp_iter);
   }
   return ret;
 }

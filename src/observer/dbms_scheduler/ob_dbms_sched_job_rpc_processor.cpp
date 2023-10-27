@@ -67,7 +67,7 @@ int ObRpcRunDBMSSchedJobP::process()
              K(ret), K(gctx_.sql_proxy_), K(gctx_.schema_service_));
   } else if (OB_FAIL(executor.init(gctx_.sql_proxy_, gctx_.schema_service_))) {
     LOG_WARN("fail to init dbms sched job executor", K(ret));
-  } else if (OB_FAIL(executor.run_dbms_sched_job(arg.tenant_id_, arg.is_oracle_tenant_, arg.job_id_))) {
+  } else if (OB_FAIL(executor.run_dbms_sched_job(arg.tenant_id_, arg.is_oracle_tenant_, arg.job_id_, arg.job_name_))) {
     LOG_WARN("fail to executor dbms sched job", K(ret), K(arg));
   }
   LOG_INFO("dbms sched job run rpc process end", K(ret), K(arg_));

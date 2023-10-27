@@ -168,7 +168,11 @@ public:
   int64_t get_hidden_sys_memory() { return hidden_sys_memory_; }
   //the extra_memory just used by real sys when non_mini_mode
   int64_t get_extra_memory();
+  void check_500_tenant_hold(bool ignore_error);
 
+#ifdef ENABLE_500_MEMORY_LIMIT
+  int set_500_tenant_limit(const int64_t limit_mode);
+#endif
 private:
   int64_t get_adaptive_memory_config(const int64_t memory_size,
                                      DependentMemConfig dep_mem_config,

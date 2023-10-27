@@ -219,7 +219,7 @@ int ObDataAccessService::refresh_task_location_info(ObDASRef &das_ref, ObIDASTas
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = das_ref.get_exec_ctx();
   ObDASTabletLoc *tablet_loc = const_cast<ObDASTabletLoc*>(task_op.get_tablet_loc());
-  int64_t retry_cnt = DAS_CTX(exec_ctx).get_location_router().get_retry_cnt();
+  int64_t retry_cnt = DAS_CTX(exec_ctx).get_location_router().get_cur_retry_cnt();
   if (OB_FAIL(ObDASUtils::wait_das_retry(retry_cnt))) {
     LOG_WARN("wait das retry failed", K(ret));
   } else if (OB_FAIL(DAS_CTX(exec_ctx).get_location_router().get_tablet_loc(*tablet_loc->loc_meta_,
@@ -247,6 +247,8 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
   ObDasAggregatedTasks das_task_wrapper(tmp_alloc);
   bool retry_continue = false;
   ObDASLocationRouter &location_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
+  location_router.reset_cur_retry_cnt();
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     ObDASRetryCtrl::retry_func retry_func = nullptr;
 
@@ -256,14 +258,17 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       LOG_WARN("get das retry func failed", K(tmp_ret), K(task_op.errcode_));
     } else if (retry_func != nullptr) {
       bool need_retry = false;
+      const ObDASTabletLoc *tablet_loc = task_op.get_tablet_loc();
+      const ObDASTableLocMeta *loc_meta = tablet_loc != nullptr ? tablet_loc->loc_meta_ : nullptr;
       retry_func(das_ref, task_op, need_retry);
       LOG_INFO("[DAS RETRY] check if need tablet level retry",
                KR(task_op.errcode_), K(need_retry), K(task_op.task_flag_),
-               "retry_cnt", location_router.get_retry_cnt(),
-               KPC(task_op.get_tablet_loc()));
+               "continuous_retry_cnt", location_router.get_cur_retry_cnt(),
+               "total_retry_cnt", location_router.get_total_retry_cnt(),
+               KPC(loc_meta), KPC(tablet_loc));
       if (need_retry &&
           task_op.get_inner_rescan() &&
-          location_router.get_retry_cnt() > 100) { //hard code retry 100 times.
+          location_router.get_total_retry_cnt() > 100) { //hard code retry 100 times.
         // disable das retry for rescan.
         need_retry = false;
         retry_continue = false;
@@ -272,8 +277,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       if (need_retry) {
         task_op.in_part_retry_ = true;
         location_router.set_last_errno(task_op.get_errcode());
-        location_router.inc_retry_cnt();
-        oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
+        location_router.inc_cur_retry_cnt();
         if (OB_TMP_FAIL(clear_task_exec_env(das_ref, task_op))) {
           LOG_WARN("clear task execution environment failed", K(tmp_ret));
         }
@@ -290,10 +294,28 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
           } else if (OB_FAIL(execute_dist_das_task(das_ref, das_task_wrapper, false))) {
             LOG_WARN("execute dist DAS task failed", K(ret));
           }
-          LOG_INFO("[DAS RETRY] Retry completing the DAS Task", KPC(task_op.get_tablet_loc()), KR(ret));
+          if (OB_SUCCESS == ret) {
+            LOG_INFO("[DAS RETRY] DAS Task succeeds after multiple retries",
+                     "continuous_retry_cnt", location_router.get_cur_retry_cnt(),
+                     "total_retry_cnt", location_router.get_total_retry_cnt(),
+                     KPC(task_op.get_tablet_loc()));
+          } else {
+            int64_t cur_retry_cnt = location_router.get_cur_retry_cnt();
+            int64_t total_retry_cnt = location_router.get_total_retry_cnt();
+            if (cur_retry_cnt >= 100 && cur_retry_cnt % 50L == 0) {
+              LOG_INFO("[DAS RETRY] The DAS task has been retried multiple times without success, "
+                       "and the execution may be blocked by a specific exception", KR(ret),
+                       "continuous_retry_cnt", cur_retry_cnt,
+                       "total_retry_cnt", location_router.get_total_retry_cnt(),
+                       KPC(task_op.get_tablet_loc()));
+            }
+          }
         }
         task_op.errcode_ = ret;
         retry_continue = (OB_SUCCESS != ret);
+        if (!retry_continue) {
+          location_router.accumulate_retry_count();
+        }
         if (retry_continue && IS_INTERRUPTED()) {
           retry_continue = false;
           LOG_INFO("[DAS RETRY] Retry is interrupted by worker interrupt signal", KR(ret));

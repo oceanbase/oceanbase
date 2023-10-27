@@ -132,7 +132,7 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("reload config for tde encrypt engine fail", K(ret));
     }
-    if (OB_FAIL(OBSERVER.get_net_frame().reload_rpc_auth_method())) {
+    if (OB_FAIL(ObSrvNetworkFrame::reload_rpc_auth_method())) {
       real_ret = ret;
       LOG_WARN("reload config for rpc auth method fail", K(ret));
     }
@@ -180,7 +180,6 @@ int ObServerReloadConfig::operator()()
       (void)reload_diagnose_info_config(GCONF.enable_perf_event);
       (void)reload_trace_log_config(GCONF.enable_record_trace_log);
 
-      reload_tenant_freezer_config_();
       reload_tenant_scheduler_config_();
     }
   }
@@ -336,22 +335,6 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
     auto f = [] () {
       (void)MTL(ObTenantDagScheduler *)->reload_config();
       (void)MTL(ObTenantTabletScheduler *)->reload_tenant_config();
-      return OB_SUCCESS;
-    };
-    omt->operate_in_each_tenant(f);
-  }
-}
-
-void ObServerReloadConfig::reload_tenant_freezer_config_()
-{
-  int ret = OB_SUCCESS;
-  omt::ObMultiTenant *omt = GCTX.omt_;
-  if (OB_ISNULL(omt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("omt should not be null", K(ret));
-  } else {
-    auto f = [] () {
-      MTL(ObTenantFreezer *)->reload_config();
       return OB_SUCCESS;
     };
     omt->operate_in_each_tenant(f);

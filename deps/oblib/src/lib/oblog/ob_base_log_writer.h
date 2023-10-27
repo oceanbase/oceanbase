@@ -105,7 +105,7 @@ private:
   static const uint64_t MAX_THREAD_NAME_LEN = 9;
   bool is_inited_;
   ObBaseLogWriterCfg log_cfg_;
-  pthread_t flush_tid_;
+  void *flush_tid_;
 protected:
   //async log queue
   ObIBaseLogItem **log_items_;

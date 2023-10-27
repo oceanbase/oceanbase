@@ -94,7 +94,7 @@ int ObCreateTableStmt::get_first_stmt(ObString &first_stmt)
                                                   get_query_ctx()->get_sql_stmt_coll_type(),
                                                   ObCharset::get_system_collation(),
                                                   first_stmt,
-                                                  ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
+                                                  ObCharset::REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET))) {
       LOG_WARN("fail to convert charset", K(ret), K(first_stmt),
                "stmt collation type", get_query_ctx()->get_sql_stmt_coll_type());
     }

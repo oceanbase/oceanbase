@@ -141,7 +141,8 @@ int ObBackupDataScheduler::do_get_need_reload_task_(
       ObBackupLSTaskAttr &ls_task = ls_tasks.at(i);
       ObBackupScheduleTask *task = nullptr;
       bool is_dropped = false;
-      if (OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
+      if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
+          && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
         LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
       } else if (is_dropped) {
         // ls deleted, no need to reload, mark it to finish
@@ -969,7 +970,7 @@ int ObBackupDataScheduler::process()
   }
   if (OB_NOT_NULL(job_mgr)) {
     job_mgr->~ObIBackupJobMgr();
-    ObBackupJobMgrAlloctor::free(job_mgr);
+    ObBackupJobMgrAlloctor::free(tenant_id_, job_mgr);
     job_mgr = nullptr;
   }
   return ret;
@@ -1844,16 +1845,16 @@ int ObBackupJobMgrAlloctor::alloc(const uint64_t tenant_id, ObIBackupJobMgr *&jo
   return ret;
 }
 
-void ObBackupJobMgrAlloctor::free(ObIBackupJobMgr *job_mgr)
+void ObBackupJobMgrAlloctor::free(const uint64_t tenant_id, ObIBackupJobMgr *job_mgr)
 {
-  uint64_t tenant_id = OB_INVALID_TENANT_ID;
   if (OB_ISNULL(job_mgr)) {
-  } else if (OB_FALSE_IT(tenant_id = job_mgr->get_tenant_id())) {
   } else if (is_sys_tenant(tenant_id)) {
     OB_DELETE(ObIBackupJobMgr, "SysJobMgr", job_mgr);
   } else if (is_meta_tenant(tenant_id)) {
     OB_DELETE(ObIBackupJobMgr, "UserJobMgr", job_mgr);
-  } 
+  } else {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "not free backup job mgr, mem leak", K(tenant_id));
+  }
   job_mgr = nullptr;
 }
 

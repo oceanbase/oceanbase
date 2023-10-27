@@ -1286,6 +1286,8 @@ void ObRootService::wait()
   FLOG_INFO("global ctx timer exit success");
   ddl_service_.get_index_name_checker().reset_all_cache();
   FLOG_INFO("reset index name checker success");
+  ddl_service_.get_non_partitioned_tablet_allocator().reset_all_cache();
+  FLOG_INFO("reset non partitioned tablet allocator success");
   ObUpdateRsListTask::clear_lock();
   THE_RS_JOB_TABLE.reset_max_job_id();
   int64_t cost = ObTimeUtility::current_time() - start_time;
@@ -1999,13 +2001,17 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     if (OB_SUCC(ret)) {
       char ori_min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
       uint64_t ori_cluster_version = GET_MIN_CLUSTER_VERSION();
+      share::ObServerInfoInTable::ObBuildVersion build_version;
       if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
           ori_min_server_version, OB_SERVER_VERSION_LENGTH, ori_cluster_version)) {
          ret = OB_INVALID_ARGUMENT;
          LOG_WARN("fail to print version str", KR(ret), K(ori_cluster_version));
+      } else if (OB_FAIL(observer::ObService::get_build_version(build_version))) {
+        LOG_WARN("fail to get build version", KR(ret));
       } else {
         CLUSTER_EVENT_SYNC_ADD("BOOTSTRAP", "BOOTSTRAP_SUCCESS",
-                               "cluster_version", ori_min_server_version);
+                               "cluster_version", ori_min_server_version,
+                               "build_version", build_version.ptr());
       }
     }
 
@@ -2563,7 +2569,7 @@ int ObRootService::alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("target_tenant_id value unexpected", KR(ret), K(target_tenant_name), K(target_tenant_id));
     } else if (OB_FAIL(unit_manager_.alter_resource_tenant(
-            target_tenant_id, new_unit_num, delete_unit_group_id_array))) {
+            target_tenant_id, new_unit_num, delete_unit_group_id_array, arg.ddl_stmt_str_))) {
       LOG_WARN("fail to alter resource tenant", KR(ret), K(target_tenant_id),
                K(new_unit_num), K(delete_unit_group_id_array));
       if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
@@ -5339,6 +5345,7 @@ int ObRootService::load_server_manager()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERROR_EVENT_TABLE_CLEAR_INTERVAL);
 int ObRootService::start_timer_tasks()
 {
   int ret = OB_SUCCESS;
@@ -5348,11 +5355,12 @@ int ObRootService::start_timer_tasks()
   }
 
   if (OB_SUCCESS == ret && !task_queue_.exist_timer_task(event_table_clear_task_)) {
-    const int64_t delay = ObEventHistoryTableOperator::EVENT_TABLE_CLEAR_INTERVAL;
+    const int64_t delay = ERROR_EVENT_TABLE_CLEAR_INTERVAL ? 10 * 1000 * 1000 :
+      ObEventHistoryTableOperator::EVENT_TABLE_CLEAR_INTERVAL;
     if (OB_FAIL(task_queue_.add_repeat_timer_task_schedule_immediately(event_table_clear_task_, delay))) {
       LOG_WARN("start event table clear task failed", K(delay), K(ret));
     } else {
-      LOG_INFO("added event_table_clear_task");
+      LOG_INFO("added event_table_clear_task", K(delay));
     }
   }
 

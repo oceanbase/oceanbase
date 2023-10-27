@@ -6,7 +6,7 @@ To build OceanBase from source code, you need to install the C++ toolchain in yo
 
 OceanBase makes strong assumption on the underlying operator systems. Not all the operator systems are supported; especially, Windows and Mac OS X are not supported yet.
 
-Below is the OS compatiblity list:
+Below is the OS compatibility list:
 
 | OS                  | Version               | Arch   | Compilable | Package Deployable | Compiled Binary Deployable | MYSQLTEST Passed |
 | ------------------- | --------------------- | ------ | ---------- | ------------------ | -------------------------- | ---------------- |

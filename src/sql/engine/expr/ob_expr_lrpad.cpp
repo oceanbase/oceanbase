@@ -1318,6 +1318,10 @@ int ObExprOracleLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
   if (OB_ISNULL(expr_cg_ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Allocator is NULL", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
+    // lpad expr do not have a extra_info before 4_2_0_release, need to maintain compatibility
+    rt_expr.extra_info_ = nullptr;
+    rt_expr.eval_func_ = calc_oracle_lpad_expr;
   } else {
     ObIAllocator &alloc = *expr_cg_ctx.allocator_;
     ObIExprExtraInfo *extra_info = nullptr;
@@ -1391,6 +1395,10 @@ int ObExprOracleRpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
   if (OB_ISNULL(expr_cg_ctx.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Allocator is NULL", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
+    // rpad expr do not have a extra_info before 4_2_0_release, need to maintain compatibility
+    rt_expr.extra_info_ = nullptr;
+    rt_expr.eval_func_ = calc_oracle_rpad_expr;
   } else {
     ObIAllocator &alloc = *expr_cg_ctx.allocator_;
     ObIExprExtraInfo *extra_info = nullptr;

@@ -291,11 +291,6 @@ int ObDtl::init()
       is_inited_ = true;
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDTLIntermResultManager::getInstance().init())) {
-      LOG_WARN("fail to init dtl internal result manager", K(ret));
-    }
-  }
   return ret;
 }
 

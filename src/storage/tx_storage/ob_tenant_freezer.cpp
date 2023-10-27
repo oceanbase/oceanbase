@@ -44,7 +44,6 @@ ObTenantFreezer::ObTenantFreezer()
     svr_rpc_proxy_(nullptr),
     common_rpc_proxy_(nullptr),
     rs_mgr_(nullptr),
-    config_(nullptr),
     allocator_mgr_(nullptr),
     freeze_thread_pool_(),
     freeze_thread_pool_lock_(common::ObLatchIds::FREEZE_THREAD_POOL_LOCK),
@@ -66,7 +65,6 @@ void ObTenantFreezer::destroy()
   svr_rpc_proxy_ = nullptr;
   common_rpc_proxy_ = nullptr;
   rs_mgr_ = nullptr;
-  config_ = nullptr;
   allocator_mgr_ = nullptr;
 
   is_inited_ = false;
@@ -87,12 +85,10 @@ int ObTenantFreezer::init()
              OB_ISNULL(GCTX.net_frame_) ||
              OB_ISNULL(GCTX.srv_rpc_proxy_) ||
              OB_ISNULL(GCTX.rs_rpc_proxy_) ||
-             OB_ISNULL(GCTX.rs_mgr_) ||
-             OB_ISNULL(GCTX.config_)) {
+             OB_ISNULL(GCTX.rs_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[TenantFreezer] invalid argument", KR(ret), KP(GCTX.srv_rpc_proxy_),
-             KP(GCTX.rs_rpc_proxy_), KP(GCTX.rs_mgr_), KP(GCTX.config_),
-             K(GCONF.self_addr_));
+             KP(GCTX.rs_rpc_proxy_), KP(GCTX.rs_mgr_), K(GCONF.self_addr_));
   } else if (OB_FAIL(freeze_trigger_pool_.init_and_start(FREEZE_TRIGGER_THREAD_NUM))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze trigger pool", KR(ret));
   } else if (OB_FAIL(freeze_thread_pool_.init_and_start(FREEZE_THREAD_NUM))) {
@@ -110,7 +106,6 @@ int ObTenantFreezer::init()
     svr_rpc_proxy_ = GCTX.srv_rpc_proxy_;
     common_rpc_proxy_ = GCTX.rs_rpc_proxy_;
     rs_mgr_ = GCTX.rs_mgr_;
-    config_ = GCTX.config_;
     allocator_mgr_ = &ObMemstoreAllocatorMgr::get_instance();
     tenant_info_.tenant_id_ = MTL_ID();
     is_inited_ = true;
@@ -792,9 +787,38 @@ int ObTenantFreezer::unset_tenant_slow_freeze(const common::ObTabletID &tablet_i
   return ret;
 }
 
-int ObTenantFreezer::set_tenant_mem_limit(
-    const int64_t lower_limit,
-    const int64_t upper_limit)
+bool ObTenantFreezer::is_tenant_mem_changed(const int64_t curr_lower_limit,
+                                            const int64_t curr_upper_limit) const
+{
+  int ret = OB_SUCCESS;
+  bool is_changed = false;
+  int64_t old_lower_limit = 0;
+  int64_t old_upper_limit = 0;
+  const uint64_t tenant_id = tenant_info_.tenant_id_;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (false == tenant_info_.is_loaded_) {
+    is_changed = true;
+  } else {
+    // 1. tenant memory limit changed
+    tenant_info_.get_mem_limit(old_lower_limit, old_upper_limit);
+    is_changed = (is_changed ||
+                  old_lower_limit != curr_lower_limit ||
+                  old_upper_limit != curr_upper_limit);
+  }
+  if (is_changed) {
+    LOG_INFO("tenant memory changed",
+             "before_min", old_lower_limit,
+             "before_max", old_upper_limit,
+             "after_min", curr_lower_limit,
+             "after_max", curr_upper_limit);
+  }
+  return is_changed;
+}
+
+int ObTenantFreezer::set_tenant_mem_limit(const int64_t lower_limit,
+                                          const int64_t upper_limit)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -805,16 +829,16 @@ int ObTenantFreezer::set_tenant_mem_limit(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[TenantFreezer] invalid argument", KR(ret), K(lower_limit), K(upper_limit));
   } else {
-    int64_t freeze_trigger_percentage = get_freeze_trigger_percentage_();
-    if ((NULL != config_) &&
-        (((int64_t)(config_->memstore_limit_percentage)) > 100 ||
-         ((int64_t)(config_->memstore_limit_percentage)) <= 0 ||
-         freeze_trigger_percentage > 100 ||
-         freeze_trigger_percentage <= 0)) {
+    const int64_t freeze_trigger_percentage = get_freeze_trigger_percentage_();
+    const int64_t memstore_limit_percent = get_memstore_limit_percentage_();
+    if (memstore_limit_percent > 100 ||
+        memstore_limit_percent <= 0 ||
+        freeze_trigger_percentage > 100 ||
+        freeze_trigger_percentage <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[TenantFreezer] memstore limit percent in ObServerConfig is invaild",
                "memstore limit percent",
-               (int64_t)config_->memstore_limit_percentage,
+               memstore_limit_percent,
                "minor freeze trigger percent",
                freeze_trigger_percentage,
                KR(ret));
@@ -822,15 +846,11 @@ int ObTenantFreezer::set_tenant_mem_limit(
       const uint64_t tenant_id = tenant_info_.tenant_id_;
       ObTenantFreezeCtx ctx;
       tenant_info_.update_mem_limit(lower_limit, upper_limit);
-      if (NULL != config_) {
-        tenant_info_.update_memstore_limit(config_->memstore_limit_percentage);
-      }
+      tenant_info_.update_memstore_limit(memstore_limit_percent);
       tenant_info_.is_loaded_ = true;
       tenant_info_.get_freeze_ctx(ctx);
-      if (NULL != config_) {
-        if (OB_FAIL(get_freeze_trigger_(ctx))) {
-          LOG_WARN("[TenantFreezer] fail to get minor freeze trigger", KR(ret), K(tenant_id));
-        }
+      if (OB_FAIL(get_freeze_trigger_(ctx))) {
+        LOG_WARN("[TenantFreezer] fail to get minor freeze trigger", KR(ret), K(tenant_id));
       }
       if (OB_SUCC(ret)) {
         LOG_INFO("[TenantFreezer] set tenant mem limit",
@@ -897,7 +917,51 @@ bool ObTenantFreezer::is_replay_pending_log_too_large(const int64_t pending_size
   return bool_ret;
 }
 
-int ObTenantFreezer::get_tenant_memstore_cond(
+int ObTenantFreezer::get_tenant_memstore_used(int64_t &total_memstore_used,
+                                              const bool force_refresh)
+{
+  int ret = OB_SUCCESS;
+  int64_t unused_active_memstore_used = 0;
+  int64_t unused_memstore_freeze_trigger = 0;
+  int64_t unused_memstore_limit = 0;
+  int64_t unused_freeze_cnt = 0;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (OB_FAIL(get_tenant_memstore_cond_(unused_active_memstore_used,
+                                               total_memstore_used,
+                                               unused_memstore_freeze_trigger,
+                                               unused_memstore_limit,
+                                               unused_freeze_cnt,
+                                               force_refresh))) {
+    LOG_WARN("get tenant memstore used failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantFreezer::get_tenant_memstore_cond(int64_t &active_memstore_used,
+                                              int64_t &total_memstore_used,
+                                              int64_t &memstore_freeze_trigger,
+                                              int64_t &memstore_limit,
+                                              int64_t &freeze_cnt,
+                                              const bool force_refresh)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (OB_FAIL(get_tenant_memstore_cond_(active_memstore_used,
+                                               total_memstore_used,
+                                               memstore_freeze_trigger,
+                                               memstore_limit,
+                                               freeze_cnt,
+                                               force_refresh))) {
+    LOG_WARN("get tenant memstore used failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantFreezer::get_tenant_memstore_cond_(
     int64_t &active_memstore_used,
     int64_t &total_memstore_used,
     int64_t &memstore_freeze_trigger,
@@ -921,11 +985,8 @@ int ObTenantFreezer::get_tenant_memstore_cond(
   memstore_freeze_trigger = 0;
   memstore_limit = 0;
 
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
-  } else if (!force_refresh &&
-             current_time - last_refresh_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
+  if (!force_refresh &&
+      current_time - last_refresh_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
     active_memstore_used = last_active_memstore_used;
     total_memstore_used = last_total_memstore_used;
     memstore_freeze_trigger = last_memstore_freeze_trigger;
@@ -1243,6 +1304,22 @@ int64_t ObTenantFreezer::get_freeze_trigger_percentage_()
   return percent;
 }
 
+int64_t ObTenantFreezer::get_memstore_limit_percentage_()
+{
+  int ret = OB_SUCCESS;
+  static const int64_t DEFAULT_MEMSTORE_LIMIT_PERCENTAGE = 50;
+  int64_t percent = DEFAULT_MEMSTORE_LIMIT_PERCENTAGE;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    percent = tenant_config->memstore_limit_percentage;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("memstore limit percentage is invalid", K(ret));
+  }
+  return percent;
+}
+
+
 int ObTenantFreezer::post_freeze_request_(
     const storage::ObFreezeType freeze_type,
     const int64_t try_frozen_scn)
@@ -1303,39 +1380,35 @@ int ObTenantFreezer::rpc_callback()
   return ret;
 }
 
-void ObTenantFreezer::reload_config()
+int ObTenantFreezer::reload_config()
 {
   int ret = OB_SUCCESS;
-  int64_t freeze_trigger_percentage = get_freeze_trigger_percentage_();
+  const int64_t freeze_trigger_percentage = get_freeze_trigger_percentage_();
+  const int64_t memstore_limit_percent = get_memstore_limit_percentage_();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
-  } else if (NULL == config_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[TenantFreezer] config_ shouldn't be null here", KR(ret), KP(config_));
-  } else if (((int64_t)(config_->memstore_limit_percentage)) > 100
-             || ((int64_t)(config_->memstore_limit_percentage)) <= 0
+  } else if (memstore_limit_percent > 100
+             || memstore_limit_percent <= 0
              || freeze_trigger_percentage > 100
              || freeze_trigger_percentage <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[TenantFreezer] memstore limit percent in ObServerConfig is invalid",
              "memstore limit percent",
-             (int64_t)config_->memstore_limit_percentage,
+             memstore_limit_percent,
              "minor freeze trigger percent",
              freeze_trigger_percentage,
              KR(ret));
-  } else {
-    if (true == tenant_info_.is_loaded_) {
-      tenant_info_.update_memstore_limit(config_->memstore_limit_percentage);
-    }
-  }
-  if (OB_SUCCESS == ret) {
+  } else if (true == tenant_info_.is_loaded_ &&
+             tenant_info_.is_memstore_limit_changed(memstore_limit_percent)) {
+    tenant_info_.update_memstore_limit(memstore_limit_percent);
     LOG_INFO("[TenantFreezer] reload config for tenant freezer",
              "new memstore limit percent",
-             (int64_t)config_->memstore_limit_percentage,
+             memstore_limit_percent,
              "new minor freeze trigger percent",
              freeze_trigger_percentage);
   }
+  return ret;
 }
 
 int ObTenantFreezer::print_tenant_usage(

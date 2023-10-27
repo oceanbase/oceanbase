@@ -81,8 +81,10 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer *&buf)
     is_first = buf->is_data_msg() && 1 == buf->seq_no();
     is_eof = buf->is_eof();
     if (buf->is_data_msg() && buf->use_interm_result()) {
-      if (OB_FAIL(ObDTLIntermResultManager::process_interm_result(buf, peer_id_))) {
-        LOG_WARN("fail to process internal result", K(ret));
+      MTL_SWITCH(buf->tenant_id()) {
+        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(buf, peer_id_))) {
+          LOG_WARN("fail to process internal result", K(ret));
+        }
       }
     } else if (OB_FAIL(DTL.get_channel(peer_id_, chan))) {
       int tmp_ret = ret;

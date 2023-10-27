@@ -19,7 +19,6 @@
 #include "lib/string/ob_string.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/schema/ob_ddl_sql_service.h"
-#include "share/schema/ob_dependency_info.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/ob_partition_modify.h"
@@ -512,6 +511,11 @@ public:
                            const bool need_reset_object_status,
                            common::ObMySQLTransaction &trans,
                            const common::ObString *ddl_stmt_str);
+  virtual int rename_aux_table(const ObTableSchema &new_table_schema,
+                               const uint64_t table_id,
+                               ObSchemaGetterGuard &schema_guard,
+                               ObMySQLTransaction &trans,
+                               ObTableSchema &new_aux_table_schema);
   virtual int update_index_status(
               const uint64_t tenant_id,
               const uint64_t data_table_id,
