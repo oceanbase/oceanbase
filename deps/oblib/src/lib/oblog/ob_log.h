@@ -1297,13 +1297,27 @@ _Pragma("GCC diagnostic pop")
       check_reset_force_allows();
     } /* not allow */
   }
-  last_logging_cost_time_us_ = tg.get_diff();
-  if (OB_UNLIKELY(last_logging_cost_time_us_ > 1000 * 1000)) {
-    char buf[256] = {'\0'};
-    int64_t pos = tg.to_string(buf, sizeof buf);
-    fprintf(stderr, "LOGGER COST TOO MUCH TIME, tid: [%ld], start_ts: %ld, cost: %ld, %.*s, %s\n",
-            GETTID(), tg.get_start_ts(), last_logging_cost_time_us_, static_cast<int>(pos), buf, lbt());
+#ifndef OB_BUILD_RPM
+  const int64_t threshold_us = 500 * 1000;
+#else
+  const int64_t threshold_us = 1000 * 1000;
+#endif
+  const int64_t cost_time = tg.get_diff();
+  if (OB_UNLIKELY(cost_time > threshold_us)) {
+    char buf[512] = {'\0'};
+    const int64_t buf_len = sizeof buf;
+    int64_t pos = 0;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(log_head(tg.get_start_ts(), mod_name, OB_LOG_LEVEL_ERROR, file, line, function,
+                             errcode, buf, buf_len, pos))) {
+    } else if (OB_TMP_FAIL(logdata_printf(buf, buf_len, pos,
+                                          "LOGGER COST TOO MUCH TIME, cost: %ld, ", cost_time))) {
+    } else {
+      pos += tg.to_string(buf + pos, buf_len - pos);
+      fprintf(stderr, "%.*s, BACKTRACE: %s\n", static_cast<int>(pos), buf, lbt());
+    }
   }
+  last_logging_cost_time_us_ = cost_time;
 }
 
 template <typename ... Args>
