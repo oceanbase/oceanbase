@@ -2618,13 +2618,18 @@ int ObPxAffinityByRandom::add_partition(int64_t tablet_id,
                                         ObPxTabletInfo &partition_row_info)
 {
   int ret = OB_SUCCESS;
+  LOG_TRACE("add partition", K(tablet_id), K(tablet_idx), K(worker_cnt), K(this), K(order_partitions_));
   if (0 >= worker_cnt) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The worker cnt is invalid", K(ret), K(worker_cnt));
   } else {
     TabletHashValue part_hash_value;
-    uint64_t value = (tenant_id << 32 | tablet_idx);
-    part_hash_value.hash_value_ = common::murmurhash(&value, sizeof(value), worker_cnt);
+    if (order_partitions_) {
+      part_hash_value.hash_value_ = 0;
+    } else {
+      uint64_t value = (tenant_id << 32 | tablet_idx);
+      part_hash_value.hash_value_ = common::murmurhash(&value, sizeof(value), worker_cnt);
+    }
     part_hash_value.tablet_idx_ = tablet_idx;
     part_hash_value.tablet_id_ = tablet_id;
     part_hash_value.partition_info_ = partition_row_info;
@@ -2636,7 +2641,7 @@ int ObPxAffinityByRandom::add_partition(int64_t tablet_id,
   return ret;
 }
 
-int ObPxAffinityByRandom::do_random(bool use_partition_info)
+int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   common::ObArray<int64_t> workers_load;
@@ -2657,12 +2662,33 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info)
         && (tablet_hash_values_.at(0).tablet_idx_ > tablet_hash_values_.at(1).tablet_idx_)) {
       asc_order = false;
     }
+    if (order_partitions_) {
+      // in partition wise affinity scenario, partition_idx of a pair of partitions may be different.
+      // for example, T1 consists of p0, p1, p2 and T2 consists of p1, p2
+      // T1.p1 <===> T2.p1  and T1.p2 <===> T2.p2
+      // The partition_idx of T1.p1 is 1 and the partition_idx of T2.p1 is 0.
+      // If we calculate hash value of partition_idx and sort partitions by the hash value,
+      // T1.p1 and T2.p1 may be assigned to different worker.
+      // So we sort partitions by partition_idx and generate a relative_idx which starts from zero.
+      // Then calculate hash value with the relative_idx
+      auto part_idx_compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.tablet_idx_ > b.tablet_idx_; };
+      std::sort(tablet_hash_values_.begin(),
+                tablet_hash_values_.end(),
+                part_idx_compare_fun);
+      int64_t relative_idx = 0;
+      for (int64_t i = 0; i < tablet_hash_values_.count(); i++) {
+        uint64_t value = ((tenant_id << 32) | relative_idx);
+        tablet_hash_values_.at(i).hash_value_ = common::murmurhash(&value, sizeof(value), worker_cnt_);
+        relative_idx++;
+      }
+    }
 
     // 先打乱所有的序
     auto compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.hash_value_ > b.hash_value_; };
     std::sort(tablet_hash_values_.begin(),
               tablet_hash_values_.end(),
               compare_fun);
+    LOG_TRACE("after sort partition_hash_values randomly", K(tablet_hash_values_), K(this), K(order_partitions_));
 
     // 如果没有partition的统计信息则将它们round放置
     if (!use_partition_info) {
@@ -3373,8 +3399,9 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
     DASTabletLocArray locations;
     ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
       // 所有的affinitize计算都是SQC局部，不是全局的。
-      ObPxAffinityByRandom affinitize_rule;
       ObPxSqcMeta &sqc = *sqcs.at(idx);
+      ObPxAffinityByRandom affinitize_rule(sqc.sqc_order_gi_tasks());
+      LOG_TRACE("build ppwj_ch_mn_map", K(sqc));
       ObPxTabletInfo partition_row_info;
       locations.reset();
       if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(), sqc, locations))) {
@@ -3419,7 +3446,8 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(affinitize_rule.do_random(!sqc.get_partitions_info().empty()))) {
+      } else if (OB_FAIL(affinitize_rule.do_random(!sqc.get_partitions_info().empty(),
+                         ctx.get_my_session()->get_effective_tenant_id()))) {
         LOG_WARN("failed to do random", K(ret));
       } else {
         const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs =
