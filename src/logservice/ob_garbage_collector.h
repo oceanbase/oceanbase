@@ -276,7 +276,8 @@ public:
   TO_STRING_KV(K(is_inited_),
                K(gc_seq_invalid_member_),
                K(gc_start_ts_),
-               K(block_tx_ts_));
+               K(block_tx_ts_),
+               K(block_log_debug_time_));
 
 private:
   typedef common::SpinRWLock RWLock;
@@ -348,6 +349,7 @@ private:
   int64_t gc_seq_invalid_member_; //缓存gc检查当前ls不在成员列表时的轮次
   int64_t gc_start_ts_;
   int64_t block_tx_ts_;
+  int64_t block_log_debug_time_;
   bool log_sync_stopped_;//used for trans_service to kill trx, True means this replica may not be able to fully synchronize the logs.
 };
 

@@ -359,7 +359,8 @@ ObGCHandler::ObGCHandler() : is_inited_(false),
                              ls_(NULL),
                              gc_seq_invalid_member_(-1),
                              gc_start_ts_(OB_INVALID_TIMESTAMP),
-                             block_tx_ts_(OB_INVALID_TIMESTAMP)
+                             block_tx_ts_(OB_INVALID_TIMESTAMP),
+                             block_log_debug_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -375,6 +376,7 @@ void ObGCHandler::reset()
   ls_ = NULL;
   gc_start_ts_ = OB_INVALID_TIMESTAMP;
   block_tx_ts_ = OB_INVALID_TIMESTAMP;
+  block_log_debug_time_ = OB_INVALID_TIMESTAMP;
   log_sync_stopped_ = false;
   is_inited_ = false;
 }
@@ -585,8 +587,34 @@ int ObGCHandler::replay(const void *buffer,
   } else {
     WLockGuard wlock_guard(rwlock_);
     ObGCLSLOGType log_type = static_cast<ObGCLSLOGType>(gc_log.get_log_type());
-    (void)update_ls_gc_state_after_submit_log_(log_type, scn);
-    CLOG_LOG(INFO, "replay gc log", K(log_type));
+    share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+    if (ObGCLSLOGType::BLOCK_TABLET_TRANSFER_IN == log_type) {
+      if (is_invalid_tenant(tenant_role) || is_standby_tenant(tenant_role)) {
+        //block_tx log in standby tenant should replay after tenant_readable_scn surpassed max_decided_scn of current ls
+        SCN ls_max_decided_scn;
+        SCN tenant_readable_scn;
+        ObLSID ls_id = ls_->get_ls_id();
+        if (OB_FAIL(ls_->get_max_decided_scn(ls_max_decided_scn))) {
+          CLOG_LOG(WARN, "get_max_decided_scn failed", K(ls_id));
+        } else if (OB_FAIL(get_tenant_readable_scn_(tenant_readable_scn))) {
+          CLOG_LOG(WARN, "get_tenant_readable_scn_ failed", K(ls_id));
+        } else if (ls_max_decided_scn.is_valid() && tenant_readable_scn.is_valid() &&
+                   tenant_readable_scn >= ls_max_decided_scn) {
+          // block_tx gc log can replay
+        } else {
+          ret = OB_EAGAIN;
+          if (palf_reach_time_interval(2 * 1000 * 1000, block_log_debug_time_)) {
+            CLOG_LOG(WARN, "BLOCK_TX log can not replay because tenant_readable_lsn is smaller"
+            " than ls_max_decided_scn", K(tenant_readable_scn), K(ls_max_decided_scn), K(ls_id));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      (void)update_ls_gc_state_after_submit_log_(log_type, scn);
+      CLOG_LOG(INFO, "replay gc log", K(log_type), K(scn));
+    }
   }
   return ret;
 }
