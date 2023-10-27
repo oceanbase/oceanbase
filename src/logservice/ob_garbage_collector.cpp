@@ -360,7 +360,8 @@ ObGCHandler::ObGCHandler() : is_inited_(false),
                              gc_seq_invalid_member_(-1),
                              gc_start_ts_(OB_INVALID_TIMESTAMP),
                              block_tx_ts_(OB_INVALID_TIMESTAMP),
-                             block_log_debug_time_(OB_INVALID_TIMESTAMP)
+                             block_log_debug_time_(OB_INVALID_TIMESTAMP),
+                             log_sync_stopped_(false)
 {
 }
 
