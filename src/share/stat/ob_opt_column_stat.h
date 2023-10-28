@@ -39,15 +39,16 @@ struct ObHistBucket
 {
 public:
   ObHistBucket()
-    : endpoint_repeat_count_(0), endpoint_num_(-1)
+    : endpoint_repeat_count_(0), endpoint_num_(-1), endpoint_repeat_dynamic_count_(0)
   {}
-  ObHistBucket(int64_t repeat_count, int64_t endpoint_num)
-    : endpoint_repeat_count_(repeat_count), endpoint_num_(endpoint_num)
+  ObHistBucket(int64_t repeat_count, int64_t endpoint_num, int64_t dynamic_count = 0)
+    : endpoint_repeat_count_(repeat_count), endpoint_num_(endpoint_num), endpoint_repeat_dynamic_count_(dynamic_count)
   {}
-  ObHistBucket(const ObObj &obj, int64_t repeat_count, int64_t endpoint_num)
+  ObHistBucket(const ObObj &obj, int64_t repeat_count, int64_t endpoint_num, int64_t dynamic_count = 0)
     : endpoint_value_(obj),
       endpoint_repeat_count_(repeat_count),
-      endpoint_num_(endpoint_num)
+      endpoint_num_(endpoint_num),
+      endpoint_repeat_dynamic_count_(dynamic_count)
   {}
 
   int deep_copy(const ObHistBucket &src,
@@ -64,6 +65,7 @@ public:
   common::ObObj endpoint_value_;
   int64_t endpoint_repeat_count_; // the frequence for the endpoint_value;
   int64_t endpoint_num_; // cumlative frequence
+  int64_t endpoint_repeat_dynamic_count_; // only used in dynamic updates on the counter (statistics collector)
 };
 
 
@@ -86,7 +88,8 @@ public:
     bucket_cnt_(0),
     buckets_(),
     pop_freq_(0),
-    pop_count_(0)
+    pop_count_(0),
+    bucket_width_(0)
     {}
 
   ~ObHistogram() { reset(); }
@@ -127,6 +130,11 @@ public:
   void set_pop_frequency(int64_t pop_freq) { pop_freq_ = pop_freq; }
   int64_t get_pop_count() const { return pop_count_; }
   void set_pop_count(int64_t pop_count) { pop_count_ = pop_count; }
+  double_t get_bucket_width() const { return bucket_width_; }
+  void set_bucket_width(double_t bucket_width) { bucket_width_ = bucket_width; }
+  int get_endpoint_value(common::ObObj &value) const;
+  int inc_endpoint_repeat_count(const common::ObObj &value);
+  int get_percentage_value(double_t percentage, common::ObObj &value);
 
   int prepare_allocate_buckets(ObIAllocator &allocator, const int64_t bucket_size);
   int add_bucket(const ObHistBucket &bucket);
@@ -150,6 +158,7 @@ protected:
   Buckets buckets_;
   int64_t pop_freq_;  // only used during gather table stats
   int64_t pop_count_; // only used during gather table stats
+  double_t bucket_width_; // only used in FREQUENCY equi-width histogram
 };
 
 class ObOptColumnStat : public common::ObIKVCacheValue

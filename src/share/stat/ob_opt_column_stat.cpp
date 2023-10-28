@@ -33,6 +33,7 @@ int ObHistBucket::deep_copy(const ObHistBucket &src,
   } else {
     endpoint_repeat_count_ = src.endpoint_repeat_count_;
     endpoint_num_ = src.endpoint_num_;
+    endpoint_repeat_dynamic_count_ = src.endpoint_repeat_dynamic_count_;
   }
   return ret;
 }
@@ -44,6 +45,7 @@ void ObHistogram::reset()
   density_ = -1;
   bucket_cnt_ = 0;
   buckets_.reset();
+  bucket_width_ = 0;
 }
 
 const char *ObHistogram::get_type_name() const
@@ -77,6 +79,7 @@ int ObHistogram::deep_copy(const ObHistogram &src, char *buf, const int64_t buf_
   sample_size_ = src.sample_size_;
   density_ = src.density_;
   bucket_cnt_ = src.bucket_cnt_;
+  bucket_width_ = src.bucket_width_;
   int64_t copy_size = src.deep_copy_size();
   if (OB_UNLIKELY(copy_size  + pos > buf_len)) {
     ret = OB_ERR_UNEXPECTED;
@@ -89,6 +92,71 @@ int ObHistogram::deep_copy(const ObHistogram &src, char *buf, const int64_t buf_
       if (OB_FAIL(buckets_.at(i).deep_copy(src.buckets_.at(i), buf, buf_len, pos))) {
         LOG_WARN("deep copy bucket failed", K(ret), K(buf_len), K(pos));
       }
+    }
+  }
+  return ret;
+}
+
+int ObHistogram::get_endpoint_value(common::ObObj &value) const 
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(bucket_cnt_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    value.set_null();
+    LOG_WARN("the histogram is empty, return null endpoint value", K(ret), K(bucket_cnt_));
+  } else {
+    value = buckets_.at(bucket_cnt_ - 1).endpoint_value_;
+  }
+  return ret;
+}
+
+int ObHistogram::inc_endpoint_repeat_count(const common::ObObj &value) 
+{
+  int ret = OB_SUCCESS;
+  int64_t left = 0;
+  int64_t right = buckets_.count();
+  while (OB_SUCC(ret) && left < right) {
+    int64_t mid = (left + right) / 2;
+    int eq_cmp = 0;
+    if (OB_FAIL(buckets_.at(mid).endpoint_value_.compare(value, eq_cmp))) {
+      LOG_WARN("compare objects failed", K(ret), K(value));
+    } else if (eq_cmp < 0) {
+      left = mid + 1;
+    } else {
+      right = mid;
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("increment endpoint repeat count failed", K(ret));
+  } else if (OB_UNLIKELY(left >= buckets_.count())) {
+    ret = OB_SEARCH_NOT_FOUND;
+    LOG_WARN("search endpoint value not found", K(ret), K(value));
+  } else {
+    buckets_.at(left).endpoint_repeat_dynamic_count_++;
+    // sample_size_ should be inited when add_buckets
+    sample_size_++;
+  }
+  return ret;
+}
+
+int ObHistogram::get_percentage_value(double_t percentage, common::ObObj &value) 
+{
+  int ret = OB_SUCCESS;
+  int64_t target_count = static_cast<int64_t>(percentage * sample_size_);
+  int64_t cumulative_count = 0;
+  for (int64_t i = 0; i < buckets_.count(); i++) {
+    cumulative_count += buckets_.at(i).endpoint_repeat_dynamic_count_;
+    if (cumulative_count > target_count) {
+      if (i > 0) {
+        double_t sum_value = 0;
+        sum_value += buckets_.at(i).endpoint_value_.get_double();
+        sum_value += buckets_.at(i - 1).endpoint_value_.get_double();
+        value.reset();
+        value.set_double(sum_value / 2);
+      } else {
+        value = buckets_.at(i).endpoint_value_;
+      }
+      break;
     }
   }
   return ret;
@@ -138,6 +206,7 @@ int ObHistogram::assign(const ObHistogram &other)
   bucket_cnt_ = other.bucket_cnt_;
   pop_freq_ = other.pop_freq_;
   pop_count_ = other.pop_count_;
+  bucket_width_ = other.bucket_width_;
   return buckets_.assign(other.buckets_);
 }
 

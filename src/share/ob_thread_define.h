@@ -89,6 +89,7 @@ TG_DEF(LogMysqlPool, LogMysqlPool, "", TG_STATIC, TIMER)
 TG_DEF(TblCliSqlPool, TblCliSqlPool, "", TG_STATIC, TIMER)
 TG_DEF(MysqlProxyPool, MysqlProxyPool, "", TG_STATIC, TIMER)
 TG_DEF(TransactionExecutorPool, TransactionExecutorPool, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1, 1), 1)
+TG_DEF(StatisticsCollectorPool, StatisticsCollectorPool, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(2, 1), 10000)
 TG_DEF(QueryExecCtxGC, QueryExecCtxGC, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(DtlDfc, DtlDfc, "", TG_STATIC, TIMER)
 TG_DEF(LogIOTaskCbThreadPool, LogIOCb, "", TG_STATIC, QUEUE_THREAD,
