@@ -380,9 +380,26 @@ class BenchDataCommand(TestBenchCommand):
         super(BenchDataCommand, self).__init__(
             "data", "Generate and save data in the local storage."
         )
+        self.parser.add_option(
+            "-d", "--dataset_config", type="string", help="Path to the dataset configuration file."
+        )
+        self.parser.add_option(
+            "-f", "--force", action="store_true", default=False, help="Overwrite the existing databset."
+        )
+        
+    def _check(self):
+        config = getattr(self.opts, "dataset_config", "")
+        if not config:
+            ROOT_IO.error("Fail to generate dataset without configuration file.")
+            return False
+
+        if not os.path.exists(config):
+            ROOT_IO.error("Configuration file {} does not exist.".format(config))
+            return False
+        return True
 
     def _do_command(self, tb):
-        return super()._do_command(tb)
+        self._do_step("Generating datasets for the benchmark table.", tb.generate_dataset)
 
 
 class BenchLoadCommand(TestBenchCommand):
@@ -390,10 +407,26 @@ class BenchLoadCommand(TestBenchCommand):
         super(BenchLoadCommand, self).__init__(
             "load", "Populate data into the cluster."
         )
+        self.parser.add_option(
+            "-d", "--dataset_config", type="string", help="Path to the dataset configuration file."
+        )
+    
+    def _check(self):
+        config = getattr(self.opts, "dataset_config", "")
+        if not config:
+            ROOT_IO.error("Fail to generate dataset without configuration file.")
+            return False
+
+        if not os.path.exists(config):
+            ROOT_IO.error("Configuration file {} does not exist.".format(config))
+            return False
+        return True
 
     def _do_command(self, tb):
-        return super()._do_command(tb)
-
+        self._do_step("Generating datasets for the benchmark table.", tb.generate_dataset)
+        self._do_step("Creating schemas for the benchmark table.", tb.generate_schema)
+        self._do_step("Loading datasets into the benchmark table.", tb.load_dataset)
+        
 
 class BenchTestCommand(TestBenchCommand):
     def __init__(self):

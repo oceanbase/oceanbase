@@ -119,7 +119,7 @@ class LocalClient(SafeStdio):
 
 class MySQLClient(SafeStdio):
     @staticmethod
-    def connect(server, user="root", password="", stdio=None):
+    def connect(server, user="root", password="", database="oceanbase", stdio=None):
         ip = server.get_conf("ip_addr")
         port = server.get_conf("mysql_port")
         name = server.get_conf("server_name")
@@ -134,7 +134,11 @@ class MySQLClient(SafeStdio):
             try:
                 if sys.version_info.major == 2:
                     db = MySQL.connect(
-                        host=ip, user=user, port=int(port), passwd=str(password)
+                        host=ip, 
+                        user=user, 
+                        port=int(port), 
+                        passwd=str(password),
+                        database=str(database)
                     )
                     cursor = db.cursor(cursorclass=MySQL.cursors.DictCursor)
                 else:
@@ -143,6 +147,7 @@ class MySQLClient(SafeStdio):
                         user=user,
                         port=int(port),
                         password=str(password),
+                        database=str(database),
                         cursorclass=MySQL.cursors.DictCursor,
                     )
                     cursor = db.cursor()

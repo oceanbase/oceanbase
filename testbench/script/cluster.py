@@ -207,7 +207,7 @@ class ClusterManager(Manager):
                 "There should be exactly one component in the cluster configuration file."
             )
             return False
-        self._component = src_data.keys()[0]
+        self._component = list(src_data.keys())[0]
         self._component_config = src_data[self._component]
         global_config = OrderedDict()
         if "global" not in self._component_config:

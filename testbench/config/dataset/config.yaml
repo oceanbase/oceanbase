@@ -1,0 +1,5 @@
+testbench_dataset:
+  global:
+    partitions: 9
+    rows: 3000
+    distribution: uniform

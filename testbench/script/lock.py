@@ -33,6 +33,7 @@ from error import LockError
 class LockType(Enum):
     GLOBAL = "global"
     CLUSTER = "cluster"
+    DATASET = "dataset"
     SCHEDULER = "scheduler"
     RESULT = "result"
     REPOSITORY = "repository"
@@ -203,6 +204,7 @@ class LockManager(Manager):
     RELATIVE_PATH = "lock/"
     GLOBAL_FN = LockType.GLOBAL.value
     CLUSTER_FN = LockType.CLUSTER.value
+    DATASET_FN = LockType.DATASET.value
     SCHEDULER_FN = LockType.SCHEDULER.value
     RESULT_FN_PREFIX = LockType.RESULT.value
     REPOSITORY_FN = LockType.REPOSITORY.value
@@ -213,6 +215,7 @@ class LockManager(Manager):
         self.locks = []
         self.global_path = os.path.join(self.path, self.GLOBAL_FN)
         self.cluster_path = os.path.join(self.path, self.CLUSTER_FN)
+        self.dataset_path = os.path.join(self.path, self.DATASET_FN)
         self.repository_path = os.path.join(self.path, self.REPOSITORY_FN)
         self.scheduler_path = os.path.join(self.path, self.SCHEDULER_FN)
 
@@ -264,6 +267,12 @@ class LockManager(Manager):
 
     def cluster_sh_lock(self):
         return self._sh_lock(self.cluster_path)
+    
+    def dataset_sh_lock(self):
+        return self._sh_lock(self.dataset_path)
+    
+    def dataset_ex_lock(self):
+        return self._ex_lock(self.dataset_path)
 
     def repository_ex_lock(self):
         return self._ex_lock(self.repository_path)

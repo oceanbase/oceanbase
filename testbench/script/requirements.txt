@@ -1,0 +1,16 @@
+rpmfile==1.0.8
+paramiko==2.10.1
+requests==2.25.1
+PyMySQL==1.0.2
+ruamel.yaml==0.17.4
+subprocess32==3.5.4
+prettytable==2.1.0
+progressbar==2.5
+halo==0.0.31
+pycryptodome==3.10.1
+inspect2==0.1.2
+six==1.16.0
+pyinstaller>=4.3
+bcrypt==3.2.2
+configparser>=5.2.0
+zstandard==0.18.0
