@@ -160,7 +160,8 @@ public:
               access_table_location_indexes_(),
               server_not_alive_(false),
               adjoining_root_dfo_(false),
-              is_single_tsc_leaf_dfo_(false)
+              is_single_tsc_leaf_dfo_(false),
+              sqc_order_gi_tasks_(false)
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -268,12 +269,15 @@ public:
   bool adjoining_root_dfo() const { return adjoining_root_dfo_; }
   void set_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
   bool is_single_tsc_leaf_dfo() { return is_single_tsc_leaf_dfo_; }
+  void set_sqc_order_gi_tasks(bool v) { sqc_order_gi_tasks_ = v; }
+  bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
                K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
                K_(thread_inited), K_(thread_finish), K_(px_int_id),
                K_(transmit_use_interm_result),
-               K_(recieve_use_interm_result), K_(serial_receive_channels));
+               K_(recieve_use_interm_result), K_(serial_receive_channels),
+               K_(sqc_order_gi_tasks));
 private:
   uint64_t execution_id_;
   uint64_t qc_id_;
@@ -332,6 +336,7 @@ private:
   bool adjoining_root_dfo_;
   //for auto scale
   bool is_single_tsc_leaf_dfo_;
+  bool sqc_order_gi_tasks_;
 };
 
 class ObDfo
@@ -679,7 +684,8 @@ public:
         static_engine_root_(nullptr),
         des_allocator_(NULL),
         sqc_handler_(NULL),
-        scan_spec_ops_()
+        scan_spec_ops_(),
+        qc_order_gi_tasks_(true)
   {}
   ~ObPxRpcInitSqcArgs() = default;
 
@@ -715,6 +721,8 @@ public:
   ObPxSqcHandler *sqc_handler_;
   ObSEArray<const ObTableScanSpec*, 8> scan_spec_ops_;
   ObSqcSerializeCache ser_cache_;
+  // whether qc support order gi tasks. default value is true and set false before deserialize.
+  bool qc_order_gi_tasks_;
 };
 
 struct ObPxCleanDtlIntermResInfo
@@ -996,13 +1004,15 @@ public:
   ObPxRpcInitSqcResponse()
       : rc_(common::OB_NOT_INIT),
         reserved_thread_count_(0),
-        partitions_info_()
+        partitions_info_(),
+        sqc_order_gi_tasks_(false)
   {}
   TO_STRING_KV(K_(rc), K_(reserved_thread_count));
 public:
   int rc_;
   int64_t reserved_thread_count_;
   ObSEArray<ObPxTabletInfo, 8> partitions_info_;
+  bool sqc_order_gi_tasks_;
 };
 
 class ObPxWorkerEnvArgs

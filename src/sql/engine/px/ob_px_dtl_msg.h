@@ -350,7 +350,8 @@ public:
       : dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
         rc_(common::OB_SUCCESS),
-        task_count_(0) {}
+        task_count_(0),
+        sqc_order_gi_tasks_(false) {}
   virtual ~ObPxInitSqcResultMsg() = default;
   void reset() {}
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
@@ -361,6 +362,7 @@ public:
   int64_t task_count_;
   // No need to serialize
   ObSEArray<ObPxTabletInfo, 8> tablets_info_;
+  bool sqc_order_gi_tasks_;
 };
 
 

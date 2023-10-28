@@ -420,8 +420,8 @@ public:
     TO_STRING_KV(K_(tablet_id), K_(tablet_idx), K_(hash_value), K_(worker_id), K_(partition_info));
   };
 public:
-  ObPxAffinityByRandom() :
-  worker_cnt_(0), tablet_hash_values_() {}
+  ObPxAffinityByRandom(bool order_partitions) :
+  worker_cnt_(0), tablet_hash_values_(), order_partitions_(order_partitions) {}
   virtual ~ObPxAffinityByRandom() = default;
   int reserve(int64_t size) { return tablet_hash_values_.reserve(size); }
   int add_partition(int64_t tablet_id,
@@ -429,12 +429,13 @@ public:
       int64_t worker_cnt,
       uint64_t tenant_id,
       ObPxTabletInfo &partition_row_info);
-  int do_random(bool use_partition_info);
+  int do_random(bool use_partition_info, uint64_t tenant_id);
   const ObIArray<TabletHashValue> &get_result() { return tablet_hash_values_; }
   static int get_tablet_info(int64_t tablet_id, ObIArray<ObPxTabletInfo> &partitions_info, ObPxTabletInfo &partition_info);
 private:
   int64_t worker_cnt_;
   ObSEArray<TabletHashValue, 8> tablet_hash_values_;
+  bool order_partitions_;
 };
 
 class ObSlaveMapUtil

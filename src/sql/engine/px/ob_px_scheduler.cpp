@@ -180,6 +180,9 @@ int ObPxMsgProc::on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcResultMsg 
     } else {
       sqc->set_task_count(pkt.task_count_);
       sqc->set_thread_inited(true);
+      sqc->set_sqc_order_gi_tasks(pkt.sqc_order_gi_tasks_);
+      LOG_TRACE("set sqc support_order_gi_tasks", K(sqc->get_dfo_id()), K(sqc->get_sqc_id()),
+                K(pkt.sqc_order_gi_tasks_));
     }
   }
 

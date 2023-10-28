@@ -64,7 +64,7 @@ int ObInitSqcP::process()
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
-
+  result_.sqc_order_gi_tasks_ = true;
   /**
    * 只要能进process，after process一定会被调用，所以可以用中断覆盖整个
    * SQC的生命周期。
