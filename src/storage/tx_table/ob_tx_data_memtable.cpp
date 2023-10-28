@@ -64,6 +64,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
       min_tx_scn_[i] = SCN::max_scn();
       min_start_scn_[i] = SCN::max_scn();
       occupied_size_[i] = 0;
+      total_undo_node_cnt_[i] = 0;
     }
     ls_id_ = freezer_->get_ls_id();
     construct_list_done_ = false;
@@ -126,6 +127,7 @@ void ObTxDataMemtable::reset()
     min_tx_scn_[i] = SCN::max_scn();
     min_start_scn_[i] = SCN::max_scn();
     occupied_size_[i] = 0;
+    total_undo_node_cnt_[i] = 0;
   }
   construct_list_done_ = false;
   pre_process_done_ = false;
@@ -182,6 +184,19 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
     max_tx_scn_.inc_update(tx_data->end_scn_);
     atomic_update_(tx_data);
     ATOMIC_INC(&inserted_cnt_);
+    if (OB_UNLIKELY(tx_data->undo_status_list_.undo_node_cnt_ >= 10)) {
+      if (tx_data->undo_status_list_.undo_node_cnt_ == 10 || tx_data->undo_status_list_.undo_node_cnt_ % 100 == 0) {
+        STORAGE_LOG(INFO,
+                    "attention! this tx write too many rollback to savepoint log",
+                    "ls_id", get_ls_id(),
+                    "tx_id", tx_data->tx_id_,
+                    "state", ObTxData::get_state_string(tx_data->state_),
+                    "undo_node_cnt", tx_data->undo_status_list_.undo_node_cnt_,
+                    "newest_undo_node", tx_data->undo_status_list_.head_,
+                    K(tx_data->start_scn_),
+                    K(tx_data->end_scn_));
+      }
+    }
   }
 
   return ret;
@@ -194,6 +209,7 @@ void ObTxDataMemtable::atomic_update_(ObTxData *tx_data)
   min_start_scn_[thread_idx].dec_update(tx_data->start_scn_);
   int64_t tx_data_size = TX_DATA_SLICE_SIZE * (1LL + tx_data->undo_status_list_.undo_node_cnt_);
   ATOMIC_FAA(&occupied_size_[thread_idx], tx_data_size);
+  ATOMIC_FAA(&total_undo_node_cnt_[thread_idx], tx_data->undo_status_list_.undo_node_cnt_);
 }
 
 int ObTxDataMemtable::get_tx_data(const ObTransID &tx_id, ObTxDataGuard &tx_data_guard)
@@ -608,6 +624,15 @@ int64_t ObTxDataMemtable::get_occupied_size() const
   res += (get_buckets_cnt() * sizeof(ObTxDataHashMap::ObTxDataHashHeader));
   for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
     res += occupied_size_[i];
+  }
+  return res;
+}
+
+int64_t ObTxDataMemtable::get_total_undo_node_cnt() const
+{
+  int64_t res = 0;
+  for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
+    res += total_undo_node_cnt_[i];
   }
   return res;
 }
@@ -1061,7 +1086,7 @@ int ObTxDataMemtable::dump2text(const char *fname)
     fprintf(fd, "tenant_id=%ld ls_id=%ld\n", tenant_id, ls_id);
     fprintf(fd,
         "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d do_recycle_=%d min_tx_log_ts=%s max_tx_log_ts=%s "
-        "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld last_insert_ts=%ld "
+        "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld total_undo_node_cnt=%ld last_insert_ts=%ld "
         "state=%d\n",
         S(key_),
         is_inited_,
@@ -1075,6 +1100,7 @@ int ObTxDataMemtable::dump2text(const char *fname)
         deleted_cnt_,
         write_ref_,
         get_occupied_size(),
+        get_total_undo_node_cnt(),
         last_insert_ts_,
         state_);
     fprintf(fd, "tx_data_count=%ld \n", tx_data_map_->count());

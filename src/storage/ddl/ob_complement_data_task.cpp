@@ -2117,12 +2117,20 @@ int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
                             static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr(),
                             static_cast<int>(query_partition_sql.length()), query_partition_sql.ptr()))) {
             LOG_WARN("fail to assign sql string", K(ret), K(query_column_sql_string), K(query_partition_sql));
+          } else if (OB_FAIL(sql_string.append("order by "))) {
+            LOG_WARN("append failed", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_schema->get_rowkey_column_num(); i++) {
+              if (OB_FAIL(sql_string.append_fmt("%s %ld", i == 0 ? "": ",", i+1))) {
+                LOG_WARN("append fmt failed", K(ret));
+              }
+            }
           }
         }
       }
     }
   }
-  LOG_TRACE("generate query sql finished", K(ret), K(sql_string));
+  FLOG_INFO("generate query sql finished", K(ret), K(sql_string));
   return ret;
 }
 

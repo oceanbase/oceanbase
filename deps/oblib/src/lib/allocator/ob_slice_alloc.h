@@ -148,7 +148,7 @@ public:
   bool release() { return faa(-K) > 0; }
   bool recycle() {
     int32_t total = total_;
-    return inc_if_lt(2 * K, -K + total) == -K + total; 
+    return inc_if_lt(2 * K, -K + total) == -K + total;
   }
   bool alloc_stock() { return dec_if_gt(1, 0) > 0; }
   bool free_stock(bool& first_free) {
@@ -301,11 +301,14 @@ public:
   class Arena
   {
   public:
-    Arena(): blk_(NULL) {}
+    Arena(): lock_(ObLatchIds::OB_DLIST_LOCK), blk_(NULL) {}
+    void lock() { lock_.lock(); }
+    void unlock() { lock_.unlock(); }
     Block* blk() { return ATOMIC_LOAD(&blk_); }
     bool cas(Block* ov, Block* nv) { return ATOMIC_BCAS(&blk_, ov, nv); }
     Block* clear() { return ATOMIC_TAS(&blk_, NULL); }
   private:
+    mutable common::ObSpinLock lock_;
     Block* blk_;
   } CACHE_ALIGNED;
   ObSliceAlloc(): nway_(0), bsize_(0), isize_(0),
@@ -359,13 +362,17 @@ public:
       Arena& arena = arena_[get_itid() % nway_];
       Block* blk = arena.blk();
       if (NULL == blk) {
-        Block* new_blk = prepare_block();
-        if (NULL == new_blk) {
-          // alloc block fail, end
-          tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
-        } else {
-          if (!arena.cas(NULL, new_blk)) {
-            release_block(new_blk);
+        arena.lock();
+        DEFER(arena.unlock());
+        if (NULL == arena.blk()) {
+          Block* new_blk = prepare_block();
+          if (NULL == new_blk) {
+            // alloc block fail, end
+            tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else {
+            if (!arena.cas(NULL, new_blk)) {
+              release_block(new_blk);
+            }
           }
         }
       } else {

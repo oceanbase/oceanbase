@@ -67,7 +67,6 @@ private:
   int fill_recover_table_arg_(
       const obrpc::ObRecoverTableArg &arg, share::ObRecoverTableJob &job);
   int insert_sys_job_(share::ObRecoverTableJob &job, share::ObPhysicalRestoreJob &physical_restore_job);
-  int insert_user_job_(share::ObRecoverTableJob &job);
   int fill_recover_database(const share::ObImportArg &import_arg, share::ObImportTableArg &import_table_arg);
   int fill_recover_table(const share::ObImportArg &import_arg, share::ObImportTableArg &import_table_arg);
   int fill_recover_partition(const share::ObImportArg &import_arg, share::ObImportTableArg &import_table_arg);

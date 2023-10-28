@@ -105,6 +105,10 @@ private:
       EventItem &item = ::oceanbase::common::EventTable::instance().get_event(event_no); \
       item.call(SELECT(1, ##__VA_ARGS__)); })
 
+#define EVENT_CODE(event_no, ...) ({ \
+      EventItem &item = ::oceanbase::common::EventTable::instance().get_event(event_no); \
+      item.get_event_code(); })
+
 #define ERRSIM_POINT_DEF(name) void name##name(){}; static oceanbase::common::NamedEventItem name( \
     #name, oceanbase::common::EventTable::global_item_list());
 #define ERRSIM_POINT_CALL(name) name?:
@@ -227,44 +231,47 @@ struct EventItem
       cond_(0) {}
 
   int call(const int64_t v) { return cond_ == v ? call() : 0; }
-  int call()
+  int call() { return static_cast<int>(get_event_code()); }
+  int64_t get_event_code()
   {
-    int ret = 0;
+    int64_t event_code = 0;
     int64_t trigger_freq = trigger_freq_;
     if (occur_ > 0) {
       do {
         int64_t occur = occur_;
         if (occur > 0) {
           if (ATOMIC_VCAS(&occur_, occur, occur - 1)) {
-            ret = static_cast<int>(error_code_);
+            event_code = error_code_;
             break;
           }
         } else {
-          ret = 0;
+          event_code = 0;
           break;
         }
       } while (true);
     } else if (OB_LIKELY(trigger_freq == 0)) {
-      ret = 0;
+      event_code = 0;
     } else if (get_tp_switch()) { // true means skip errsim
-      ret = 0;
+      event_code = 0;
     } else if (trigger_freq == 1) {
-      ret = static_cast<int>(error_code_);
+      event_code = error_code_;
 #ifdef NDEBUG
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000))
 #endif
       {
-        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
+        int ret = static_cast<int>(event_code);
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(event_code));
       }
     } else {
       if (rand() % trigger_freq == 0) {
-        ret = static_cast<int>(error_code_);
+        event_code = error_code_;
+        int ret = static_cast<int>(event_code);
         COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(error_code), K(trigger_freq), KCSTRING(lbt()));
       } else {
-        ret = 0;
+        event_code = 0;
       }
     }
-    return ret;
+    return event_code;
   }
 
 };
@@ -598,6 +605,9 @@ class EventTable
       EN_TABLE_INSERT_UP_BATCH_ROW_COUNT = 402,
       EN_EXPLAIN_BATCHED_MULTI_STATEMENT = 403,
       EN_INS_MULTI_VALUES_BATCH_OPT = 404,
+      EN_SQL_MEMORY_LABEL_HIGH64 = 405,
+      EN_SQL_MEMORY_LABEL_LOW64 = 406,
+      EN_SQL_MEMORY_DYNAMIC_LEAK_SIZE = 407,
 
       // DDL related 500-550
       EN_DATA_CHECKSUM_DDL_TASK = 501,

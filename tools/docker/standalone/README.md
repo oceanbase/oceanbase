@@ -93,7 +93,7 @@ oceanbase-ce image installs the Sysbench tool by default. And the Sysbench tool 
 docker exec -it oceanbase-ce obd test sysbench obcluster
 ```
 
-## Mount Volumn
+## Mount Volume
 You can use `-v /your/host/path:/container/path` parameter in docker `run` command to save data in host os if you want to persistence the data of a container.
 
 Below is an example.
@@ -106,4 +106,4 @@ Note that you should use your own path.
 
 The docker image `oceanbase-ce` saves the data to /root/ob directory default. You should bind both the /root/ob and /root/.obd. You can not start new docker image if you only bind the /root/ob directory, because the docker image oceanbase-ce uses the [obd](https://github.com/oceanbase/obdeploy) to manage database clusters and there is no information about the database cluster in a new docker container.
 
-You can view more information about `docker -v` at [docker volumn](https://docs.docker.com/storage/volumes/).
+You can view more information about `docker -v` at [docker volume](https://docs.docker.com/storage/volumes/).

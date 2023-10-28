@@ -1065,7 +1065,7 @@ void ObTenantMetaMemMgr::release_tx_data_memtable_(ObTxDataMemtable *memtable)
 {
   if (OB_NOT_NULL(memtable)) {
     if (0 != memtable->get_ref()) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTxDataMemtable reference count may be leak", KPC(memtable));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTxDataMemtable reference count may be leak", KP(memtable));
     } else {
       tx_data_memtable_pool_.release(memtable);
     }

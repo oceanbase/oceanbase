@@ -2,9 +2,9 @@
 
 The latest dooba stable version is 1.0
 
-dooba is a easy tools monitoring oceanbase cluster for oceanbase admins. It's based on python curses library, and is a powerful tool for watching oceanbase cluster status with straightfoward vision.
+dooba is a easy tools monitoring oceanbase cluster for oceanbase admins. It's based on python curses library, and is a powerful tool for watching oceanbase cluster status with straightforward vision.
 
-dooba's gui is somewhat inspired by many other curses programes such as ncmpcpp, htop, wicd-curses, weechat-curses and so on.
+dooba's gui is somewhat inspired by many other curses programs such as ncmpcpp, htop, wicd-curses, weechat-curses and so on.
 
 Many other features will be involved in dooba in not so long days. Here is a simple list.
 

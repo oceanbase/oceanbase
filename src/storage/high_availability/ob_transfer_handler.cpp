@@ -789,14 +789,7 @@ int ObTransferHandler::get_ls_active_trans_count_(
   int ret = OB_SUCCESS;
   active_trans_count = 0;
   const uint64_t tenant_id = MTL_ID();
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-
-  if (OB_FAIL(ls_->get_migration_status(migration_status))) {
-    LOG_WARN("failed to get migration status", K(ret), KPC(ls_));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("src ls migration status is not none", K(ret), K(migration_status), KPC(ls_));
-  } else if (OB_FAIL(ls_->get_active_tx_count(active_trans_count))) {
+  if (OB_FAIL(ls_->get_active_tx_count(active_trans_count))) {
     LOG_WARN("failed to get active trans count", K(ret), KPC(ls_));
   } else {
     LOG_INFO("get ls active trans count", K(tenant_id), K(src_ls_id), K(active_trans_count));
@@ -1947,6 +1940,7 @@ int ObTransferHandler::block_and_kill_tx_(
     bool &succ_block_tx)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   succ_block_tx = false;
   const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
@@ -1960,7 +1954,9 @@ int ObTransferHandler::block_and_kill_tx_(
     after_kill_trx_threshold = tenant_config->_balance_wait_killing_transaction_end_threshold;
   }
 
-  if (OB_FAIL(block_tx_(tenant_id, src_ls_id, gts_seq_))) {
+  if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(src_ls_id))) {
+    LOG_WARN("failed to check src ls has active trans", K(ret), K(task_info));
+  } else if (OB_FAIL(block_tx_(tenant_id, src_ls_id, gts_seq_))) {
     LOG_WARN("failed to block tx", K(ret), K(task_info));
   } else if (FALSE_IT(succ_block_tx = true)) {
   } else if (!enable_kill_trx) {
@@ -1978,6 +1974,15 @@ int ObTransferHandler::block_and_kill_tx_(
   } else {
     LOG_INFO("[TRANSFER] success to block and kill tx", "cost", ObTimeUtil::current_time() - start_ts);
   }
+
+  if (OB_FAIL(ret) && succ_block_tx) {
+    if (OB_SUCCESS != (tmp_ret = unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
+      LOG_WARN("failed to unblock tx", K(tmp_ret), K(task_info), K(gts_seq_));
+    } else {
+      succ_block_tx = false;
+    }
+  }
+
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_BLOCK_AND_KILL_TX");
 #endif
@@ -2065,6 +2070,11 @@ int ObTransferHandler::unblock_tx_(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTransferUtils::unblock_tx(tenant_id, ls_id, gts))) {
     LOG_WARN("failed to unblock tx", K(ret), K(tenant_id), K(ls_id));
+    if (OB_SEQUENCE_NOT_MATCH == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      ob_abort();
+    }
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_UNBLOCK_TX");
@@ -2171,11 +2181,6 @@ int ObTransferHandler::clear_prohibit_(
     LOG_WARN("clear prohibit get invalid argument", K(ret), K(task_info));
   } else if (is_block_tx && OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
     LOG_WARN("failed to unblock tx", K(ret), K(task_info), K(gts_seq_));
-    if (OB_SEQUENCE_NOT_MATCH == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      ob_abort();
-    }
   }
 
   if (OB_FAIL(ret)) {

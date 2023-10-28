@@ -396,7 +396,14 @@ int ObTabletGroupRestoreDagNet::start_running_for_restore_()
       LOG_WARN("Fail to add task", K(ret));
       ret = OB_EAGAIN;
     }
+  } else {
+    initial_restore_dag = nullptr;
   }
+
+  if (OB_NOT_NULL(initial_restore_dag) && OB_NOT_NULL(scheduler)) {
+    scheduler->free_dag(*initial_restore_dag);
+  }
+
   return ret;
 }
 
@@ -2191,11 +2198,6 @@ int ObTabletRestoreTask::generate_minor_restore_tasks_(
   } else if (!ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)
       && !ObTabletRestoreAction::is_restore_all(tablet_restore_ctx_->action_)) {
     LOG_INFO("tablet not restore minor or restore all, skip minor restore tasks",
-        KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(ObStorageHATabletBuilderUtil::check_remote_logical_sstable_exist(tablet, is_remote_sstable_exist))) {
-    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
-  } else if (!is_remote_sstable_exist && !tablet->get_tablet_meta().has_transfer_table()) {
-    LOG_INFO("neither remote logical sstable nor transfer table exist, skip minor restore tasks",
         KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_restore_task_(ObITable::is_minor_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate minor restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
