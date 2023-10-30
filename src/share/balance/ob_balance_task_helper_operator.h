@@ -187,6 +187,30 @@ public:
                         ObISQLClient &client);
   static int fill_dml_spliter(share::ObDMLSqlSplicer &dml,
                               const ObBalanceTaskHelper &ls_balance_task);
+ /**
+   * @description: get transfer end task while has transfer begin
+   * @param[in] tenant_id : user_tenant_id
+   * @param[in] op_scn : transfer begin operation scn, transfer end 's scn is larger than this
+   * @param[in] src_ls : transfer_begin's source ls
+   * @param[in] desc_ls : transfer_begin's destination ls
+   * @param[in] client : sql client or trans
+   * @param[out] ls_balance_task : ls_balance_task of min operation_scn
+   * @return :
+   *  OB_SUCCESS : get a valid ls_balance_task
+   *  OB_ENTRY_NOT_EXIST : empty
+   *  OTHER : fail
+   */
+  static int try_find_transfer_end(const uint64_t tenant_id,
+                                   const share::SCN &op_scn,
+                                   const ObLSID &src_ls,
+                                   const ObLSID &dest_ls,
+                                   ObISQLClient &client,
+                                   ObBalanceTaskHelper &ls_balance_task);
+private:
+  static int exec_get_single_row_(const common::ObSqlString &sql,
+                             const uint64_t tenant_id,
+                             ObISQLClient &client,
+                             ObBalanceTaskHelper &ls_balance_task);
 };
 }
 }
