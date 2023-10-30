@@ -1076,7 +1076,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = store_ctx.ls_id_;
   ObPartTransCtx *tx_ctx = NULL;
-  const int64_t data_scn = ObSequence::inc_and_get_max_seq_no();
+  int64_t data_scn = 0;
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
   bool access_started = false;

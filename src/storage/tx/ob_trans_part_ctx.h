@@ -698,8 +698,7 @@ public:
    * @data_seq: the sequence_no of current access
    *            new created data will marked with this seq no
    */
-  int start_access(const ObTxDesc &tx_desc,
-                   const int64_t data_seq);
+  int start_access(const ObTxDesc &tx_desc, int64_t &data_seq);
   /*
    * end_access - end of txn protected resources access
    */
