@@ -158,6 +158,7 @@ int ObRangeIterator::set_scan_param(ObTableScanParam& scan_param)
   int ret = OB_SUCCESS;
   int64_t array_cnt = scan_param.range_array_pos_.count();
   const int64_t range_cnt = scan_param.key_ranges_.count();
+  const bool can_remove_false_range = 0 == array_cnt;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
@@ -204,7 +205,7 @@ int ObRangeIterator::set_scan_param(ObTableScanParam& scan_param)
       } else {
         if (OB_FAIL(order_ranges_.reserve(range_cnt))) {
           STORAGE_LOG(WARN, "fail to reserve order ranges", K(ret), K(range_cnt));
-        } else if (OB_FAIL(convert_key_ranges(0, range_cnt, 0, *scan_param_->allocator_, order_ranges_))) {
+        } else if (OB_FAIL(convert_key_ranges(0, range_cnt, 0, *scan_param_->allocator_, can_remove_false_range, order_ranges_))) {
           STORAGE_LOG(WARN, "convert_key_ranges railed", K(ret));
         } else {
           // sort the ranges
@@ -232,7 +233,7 @@ int ObRangeIterator::set_scan_param(ObTableScanParam& scan_param)
       for (int64_t i = 0; OB_SUCC(ret) && i < array_cnt; ++i) {
         curr_range_end_pos = scan_param_->range_array_pos_.at(i) + 1;
         if (OB_FAIL(convert_key_ranges(
-                curr_range_start_pos, curr_range_end_pos, range_array_idx, *scan_param_->allocator_, order_ranges_))) {
+                curr_range_start_pos, curr_range_end_pos, range_array_idx, *scan_param_->allocator_, can_remove_false_range, order_ranges_))) {
           STORAGE_LOG(WARN, "fail to convert key ranges", K(ret));
         } else {
           ++range_array_idx;
@@ -259,7 +260,7 @@ int ObRangeIterator::set_scan_param(ObTableScanParam& scan_param)
 }
 
 int ObRangeIterator::convert_key_ranges(const int64_t range_begin_pos, const int64_t range_end_pos,
-    const int64_t range_array_idx, ObIAllocator& allocator, ObIArray<ObExtStoreRange>& store_ranges)
+    const int64_t range_array_idx, ObIAllocator& allocator, const bool remove_flase_range, ObIArray<ObExtStoreRange>& store_ranges)
 {
   int ret = OB_SUCCESS;
   ObStoreRange store_range;
@@ -272,7 +273,7 @@ int ObRangeIterator::convert_key_ranges(const int64_t range_begin_pos, const int
       STORAGE_LOG(WARN, "convert to store range failed", K(ret), K(cur_range), K(rowkey_column_orders_));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(always_false(store_range, rowkey_column_orders_, is_always_false))) {
+    } else if (remove_flase_range && OB_FAIL(always_false(store_range, rowkey_column_orders_, is_always_false))) {
       STORAGE_LOG(WARN, "fail to check range always false", K(ret), K(store_range), K(rowkey_column_orders_));
     } else if (OB_UNLIKELY(is_always_false)) {
       STORAGE_LOG(INFO, "range is always false, skip it", K(store_range), K(rowkey_column_orders_));
@@ -327,8 +328,9 @@ int ObRangeIterator::get_next(ObBatch& batch)
   } else if (cur_idx_ >= (cnt = order_ranges_.count())) {
     ret = OB_ITER_END;
   } else if (1 == cnt) {
+    const bool can_remove_false_range = scan_param_->range_array_pos_.count() == 0;
     const ObExtStoreRange& range = order_ranges_.at(cur_idx_++);
-    if (OB_FAIL(always_false(range.get_range(), rowkey_column_orders_, is_always_false))) {
+    if (can_remove_false_range && OB_FAIL(always_false(range.get_range(), rowkey_column_orders_, is_always_false))) {
       STORAGE_LOG(WARN, "check range always false failed.", K(range), K(ret));
     } else if (is_always_false) {
       STORAGE_LOG(INFO, "range is always false, skip it", K(range));

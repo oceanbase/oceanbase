@@ -90,7 +90,7 @@ public:
 
 private:
   int convert_key_ranges(const int64_t range_begin_pos, const int64_t range_end_pos, const int64_t range_array_idx,
-      ObIAllocator& allocator, common::ObIArray<common::ObExtStoreRange>& store_ranges);
+      ObIAllocator& allocator, const bool remove_flase_range, common::ObIArray<common::ObExtStoreRange>& store_ranges);
   template <typename T>
   void set_range_array_idx(const int64_t range_array_idx, T& range);
 
