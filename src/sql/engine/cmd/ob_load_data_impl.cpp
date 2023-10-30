@@ -989,6 +989,7 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
 
   if (OB_ISNULL(handle)
       || OB_ISNULL(handle->data_buffer)
+      || OB_ISNULL(handle->escape_buffer)
       || OB_ISNULL(handle->exec_ctx.get_my_session())
       || OB_ISNULL(handle->exec_ctx.get_sql_ctx())) {
     ret = OB_INVALID_ARGUMENT;
