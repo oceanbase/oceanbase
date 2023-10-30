@@ -34,6 +34,7 @@
 #include "sql/ob_select_stmt_printer.h"
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "observer/ob_server.h"
+#include "sql/rewrite/ob_transform_pre_process.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -113,11 +114,21 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
         } else {
           ObObj value_obj;
           ObBasicSysVar *sys_var = NULL;
+          bool transformed = false;
+          ObRawExprFactory *expr_factory = ctx.get_expr_factory();
           if (true == node.is_set_default_) {
             if (false == node.is_system_variable_) {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("when reach here, node.is_system_variable_ must be true", K(ret));
             } else {}
+          } else if (OB_ISNULL(expr_factory)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr_factory is NULL", K(ret), KP(expr_factory));
+          } else if (OB_FAIL(ObTransformPreProcess::transform_expr(*expr_factory,
+                                                      *session,
+                                                      node.value_expr_,
+                                                      transformed))) {
+              LOG_WARN("transform expr failed", K(ret));
           } else if (node.value_expr_->has_flag(CNT_SUB_QUERY)) {
             if (OB_FAIL(calc_subquery_expr_value(ctx, session, node.value_expr_, value_obj))) {
               LOG_WARN("failed to calc subquery result", K(ret));
