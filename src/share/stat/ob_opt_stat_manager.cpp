@@ -245,12 +245,14 @@ int ObOptStatManager::update_column_stat(share::schema::ObSchemaGetterGuard *sch
                                          const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("UpdateColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   int64_t current_time = ObTimeUtility::current_time();
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
   } else if (OB_FAIL(stat_service_.get_sql_service().update_column_stat(schema_guard,
                                                                         tenant_id,
+                                                                        allocator,
                                                                         trans,
                                                                         column_stats,
                                                                         current_time,
@@ -384,6 +386,7 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                   const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("UpdateColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
@@ -399,6 +402,7 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
   } else if (!column_stats.empty() &&
              OB_FAIL(stat_service_.get_sql_service().update_column_stat(schema_guard,
                                                                         tenant_id,
+                                                                        allocator,
                                                                         trans,
                                                                         column_stats,
                                                                         current_time,

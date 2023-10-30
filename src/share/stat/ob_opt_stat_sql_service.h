@@ -104,6 +104,7 @@ public:
                         const bool is_history_stat = false);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t exec_tenant_id,
+                         ObIAllocator &allocator,
                          ObMySQLTransaction &trans,
                          const common::ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
