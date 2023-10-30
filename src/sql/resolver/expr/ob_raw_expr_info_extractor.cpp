@@ -323,6 +323,11 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
   if (OB_SUCC(ret) && OB_FAIL(visit_subquery_node(expr))) {
     LOG_WARN("visit subquery node failed", K(ret));
   }
+  if (OB_SUCC(ret) && expr.get_expr_type() == T_OBJ_ACCESS_REF) {
+    if (OB_FAIL(expr.add_flag(CNT_OBJ_ACCESS_EXPR))) {
+      LOG_WARN("failed to add flag IS_OR", K(ret));
+    }
+  }
   return ret;
 }
 
