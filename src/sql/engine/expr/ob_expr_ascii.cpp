@@ -212,7 +212,7 @@ int ObExprOrd::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& ex
     ObString str_val = obj1.get_string();
 
     const char* str_ptr = str_val.ptr();
-    if (NULL != str_ptr) {
+    if (NULL != str_ptr && str_val.length() != 0) {
       const ObCharsetInfo* cs = ObCharset::get_charset(cs_type);
       uint64_t n = 0, char_len = cs->cset->ismbchar(str_val.ptr(), str_val.length());
       if (char_len > str_val.length()) {
