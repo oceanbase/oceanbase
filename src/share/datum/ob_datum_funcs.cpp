@@ -478,7 +478,7 @@ struct DatumJsonHashCalculator : public DefHashMethod<T>
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res) {
     int ret = OB_SUCCESS;
     if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
+      res = seed;
     } else {
       ret = calc_datum_hash(datum, seed, res);
     }
@@ -512,7 +512,7 @@ struct DatumGeoHashCalculator : public DefHashMethod<T>
   {
     int ret = OB_SUCCESS;
     if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
+      res = seed;
     } else {
       ret = calc_datum_hash(datum, seed, res);
     }
@@ -530,14 +530,7 @@ struct DatumUDTHashCalculator : public DefHashMethod<T>
 
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    int ret = OB_SUCCESS;
-    if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
-    } else {
-      ret = datum_lob_locator_hash(
-          datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
-    }
-    return ret;
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
   }
 };
 
@@ -576,7 +569,7 @@ DEF_DATUM_TIMESTAMP_HASH_FUNCS(ObTimestampNanoType, otimestamp_tiny, time_desc_,
     static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res) {         \
       int ret = OB_SUCCESS;                                                                 \
       if (datum.is_null()) {                                                                \
-        res = T::hash(NULL, 0, seed);                                                       \
+        res = seed;                                                                         \
       } else {                                                                              \
         ret = calc_datum_hash(datum, seed, res);                                            \
       }                                                                                     \
@@ -675,12 +668,8 @@ struct DatumStrHashCalculator : public DefHashMethod<T>
   }
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
-    } else {
-      res = datum_varchar_hash(
+    res = datum_varchar_hash(
           datum, cs_type, calc_end_space, seed, T::is_varchar_hash ? T::hash : NULL);
-    }
     return OB_SUCCESS;
   }
 };
@@ -695,13 +684,7 @@ struct DatumStrHashCalculator<cs_type, calc_end_space, T, true /* is_lob_locator
   }
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    int ret = OB_SUCCESS;
-    if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
-    } else {
-      ret = datum_lob_locator_hash(datum, cs_type, seed, T::is_varchar_hash ? T::hash : NULL, res);
-    }
-    return ret;
+    return datum_lob_locator_hash(datum, cs_type, seed, T::is_varchar_hash ? T::hash : NULL, res);
   }
 };
 
@@ -734,18 +717,14 @@ struct DatumStrHashCalculator<CS_TYPE_UTF8MB4_BIN, calc_end_space, T, true /* is
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
     int ret = OB_SUCCESS;
-    if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
+    ObString inrow_data = datum.get_string();
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    // all lob tc can use longtext type for lob iter
+    if (OB_FAIL(datum_lob_locator_get_string(datum, allocator, inrow_data))) {
+      LOG_WARN("Lob: get string failed ", K(ret), K(datum));
     } else {
-      ObString inrow_data = datum.get_string();
-      common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      // all lob tc can use longtext type for lob iter
-      if (OB_FAIL(datum_lob_locator_get_string(datum, allocator, inrow_data))) {
-        LOG_WARN("Lob: get string failed ", K(ret), K(datum));
-      } else {
-        res = datum_varchar_hash_utf8mb4_bin<calc_end_space, T>(
-              inrow_data.ptr(), inrow_data.length(), seed);
-      }
+      res = datum_varchar_hash_utf8mb4_bin<calc_end_space, T>(
+            inrow_data.ptr(), inrow_data.length(), seed);
     }
     return ret;
   }
@@ -768,7 +747,7 @@ struct DatumFixedDoubleHashCalculator : public DefHashMethod<T>
   {
     int ret = OB_SUCCESS;
     if (datum.is_null()) {
-      res = T::hash(NULL, 0, seed);
+      res = seed;
     } else {
       ret = calc_datum_hash(datum, seed, res);
     }
