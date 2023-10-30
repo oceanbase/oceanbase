@@ -138,7 +138,8 @@ int ObActiveDDLKVIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle)
           } else {
             LOG_WARN("failed to get tablet", K(ret), K(ls_->get_ls_id()), K(tablet_id));
           }
-        } else if (tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min()) {
+        } else if (tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min() &&
+          tablet_handle.get_obj()->get_tablet_meta().ddl_checkpoint_scn_ >= tablet_handle.get_obj()->get_tablet_meta().ddl_commit_scn_) {
           if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
             LOG_WARN("push back to deleted tablet failed", K(ret));
           }
