@@ -168,6 +168,7 @@ int ObPLCompiler::init_anonymous_ast(
 //for anonymous
 int ObPLCompiler::compile(
   const ObStmtNodeTree *block,
+  const uint64_t stmt_id,
   ObPLFunction &func,
   ParamStore *params/*=NULL*/,
   bool is_prepare_protocol/*=false*/)
@@ -230,6 +231,7 @@ int ObPLCompiler::compile(
                lib::is_oracle_mode()) {
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), stmt_id);
         if (OB_FAIL(cg.init())) {
           LOG_WARN("failed to init code generator", K(ret));
         } else if (OB_FAIL(cg.generate(func))) {
@@ -464,6 +466,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                lib::is_oracle_mode()) {
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
         if (OB_FAIL(cg.init())) {
           LOG_WARN("failed to init code generator", K(ret));
         } else if (OB_FAIL(cg.generate(func))) {
@@ -772,6 +775,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger()));
 
+  ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
   if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
     HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {

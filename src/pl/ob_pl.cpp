@@ -190,6 +190,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
+  OZ (jit_lock_.init(32));
   OZ (interface_service_.init());
   OX (serialize_composite_callback = ObUserDefinedType::serialize_obj);
   OX (deserialize_composite_callback = ObUserDefinedType::deserialize_obj);
@@ -1749,7 +1750,9 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
                   K(ret), K(sizeof(ObPLFunction)));
         }
         OX (routine = new(routine)ObPLFunction(mem_context));
-        OZ (compiler.compile(block, *routine, &params, false));
+
+        // stmt_id is OB_INVALID_ID for anonymous block from text protocol
+        OZ (compiler.compile(block, OB_INVALID_ID, *routine, &params, false));
         OX (routine->set_debug_priv());
       }
     }
@@ -2148,7 +2151,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       }
       OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
       if (OB_SUCC(ret) && OB_ISNULL(routine)) {
-        OZ (generate_pl_function(ctx, sql, params, root_node, cacheobj_guard));
+        OZ (generate_pl_function(ctx, sql, params, root_node, cacheobj_guard, stmt_id));
         OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
         CK (OB_NOT_NULL(routine));
         if (OB_SUCC(ret) && routine->get_can_cached()) {
@@ -2333,6 +2336,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
                                ParamStore &params,
                                ParseNode &parse_node,
                                ObCacheObjGuard& cacheobj_guard,
+                               const uint64_t stmt_id,
                                bool is_anonymous_text)
 {
   int ret = OB_SUCCESS;
@@ -2408,7 +2412,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
                           *(ctx.get_sql_proxy()));
 
     OZ (compiler.compile(
-      block_node, *routine, &params, ctx.get_sql_ctx()->is_prepare_protocol_));
+      block_node, stmt_id, *routine, &params, ctx.get_sql_ctx()->is_prepare_protocol_));
     OZ (routine->set_params_info(params));
   }
 
