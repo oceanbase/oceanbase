@@ -6053,6 +6053,18 @@ int ObDDLResolver::check_index_name_duplicate(const ObTableSchema &table_schema,
     }
   }
 
+  if (is_oracle_mode() && !has_same_index_name) {
+    //in oracle mode, names of index and primary key can't be same
+    ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
+    for (; !has_same_index_name && iter != table_schema.constraint_end(); ++iter) {
+      if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
+        if (0 == create_index_arg.index_name_.compare((*iter)->get_constraint_name_str())) {
+          has_same_index_name = true;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
