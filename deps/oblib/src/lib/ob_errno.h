@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 // Copyright (c) 2018 Alibaba Inc. All Rights Reserved.
 //
 /// \file errno.h
