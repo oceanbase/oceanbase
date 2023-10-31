@@ -202,6 +202,9 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
     LOG_WARN("insert row is NULL", K(ret));
   } else if (OB_FAIL(conflict_checker_.check_duplicate_rowkey(insert_row_, constraint_values, true))) {
     LOG_WARN("fail to check duplicated key", K(ret), KPC_(insert_row));
+  } else if (constraint_values.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("constraint_values is empty", K(ret), KPC_(insert_row), K(conflict_checker_.conflict_map_array_.count()));
   } else {
     upd_rtdef.found_rows_++;
     const ObChunkDatumStore::StoredRow *upd_new_row = insert_row_;
