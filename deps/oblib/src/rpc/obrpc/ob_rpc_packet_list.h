@@ -571,6 +571,10 @@ PCODE_DEF(OB_ADD_ARB, 0x57E)
 PCODE_DEF(OB_REMOVE_ARB, 0x57F)
 #endif
 
+// for ob_admin triggered ls replica task
+PCODE_DEF(OB_ADMIN_ADD_LS_REPLICA, 0x580)
+PCODE_DEF(OB_ADMIN_REMOVE_LS_REPLICA, 0x581)
+
 //// DTL
 //
 // Channel operations
