@@ -1650,7 +1650,8 @@ int ObTransformSemiToInner::construct_transform_hint(ObDMLStmt &stmt, void *tran
         LOG_WARN("failed to push back table hint", K(ret));
       } else if (OB_FAIL(ctx_->add_src_hash_val(table_item->get_table_name()))) {
         LOG_WARN("failed to add src hash val", K(ret));
-      } else if (NULL != myhint && myhint->enable_semi_to_inner(query_hint->cs_type_, *table_item)) {
+      } else if (NULL != myhint && (myhint->get_tables().count() == 0 ||
+                                    myhint->enable_semi_to_inner(query_hint->cs_type_, *table_item))) {
         use_hint = true;
       }
     }
@@ -1680,7 +1681,8 @@ int ObTransformSemiToInner::check_hint_valid(const ObDMLStmt &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(query_hint));
   } else {
-    force_trans = NULL != myhint && myhint->enable_semi_to_inner(query_hint->cs_type_, table);
+    force_trans = NULL != myhint && (myhint->get_tables().count() == 0 ||
+                                     myhint->enable_semi_to_inner(query_hint->cs_type_, table));
     force_no_trans = !force_trans && query_hint->has_outline_data();
   }
   return ret;

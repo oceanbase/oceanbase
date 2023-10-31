@@ -760,6 +760,7 @@ class ObCoalesceSqHint : public ObTransHint
 
   virtual int print_hint_desc(PlanText &plan_text) const override;
   ObIArray<QbNameList> &get_qb_name_list() { return qb_name_list_; }
+  const ObIArray<QbNameList> &get_qb_name_list() const { return qb_name_list_; }
   int add_qb_name_list(const QbNameList& qb_names);
   int get_qb_name_list(const ObString& qb_name, QbNameList &qb_names) const;
   bool enable_coalesce_sq(const ObIArray<ObString> &subqueries) const
