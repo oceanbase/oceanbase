@@ -6356,6 +6356,7 @@ def_table_schema(
 # 490 : __all_routine_privilege
 # 491 : __all_routine_privilege_history
 # 492 : __wr_sqlstat
+# 493 : __all_ncomp_dll
 #
 # 余留位置
 ################################################################################
@@ -55522,6 +55523,7 @@ def_sys_index_table(
 # 101095 : placeholder for index of __all_mview_refresh_run_stats
 # 101096 : placeholder for index of __all_mview_refresh_stats
 # 101097 : placeholder for index of __all_mview_refresh_stats
+# 101098 : placeholder for index of __all_ncomp_dll
 
 ################################################################################
 # Oracle Agent table Index
