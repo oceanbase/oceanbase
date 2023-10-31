@@ -984,6 +984,12 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   } else if (is_tenant_dropped) {
     need_retry_ = false;
     LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(dst_tenant_id_));
+  } else if (tenant_id_ != dst_tenant_id_ &&
+      OB_FAIL(root_service->get_schema_service().check_if_tenant_has_been_dropped(tenant_id_, is_tenant_dropped))) {
+    LOG_WARN("check if tenant has been dropped failed", K(ret), K(tenant_id_));
+  } else if (is_tenant_dropped) {
+    need_retry_ = false;
+    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_));
   } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(&root_service->get_sql_proxy(), dst_tenant_id_, is_standby_tenant))) {
     LOG_WARN("check is standby tenant failed", K(ret), K(dst_tenant_id_));
   } else if (is_standby_tenant) {
@@ -1063,11 +1069,13 @@ int ObDDLTask::refresh_status()
 int ObDDLTask::refresh_schema_version()
 {
   int ret = OB_SUCCESS;
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLTask has not been inited", K(ret));
-  } else if (schema_version_ > 0 && schema_version_ != UINT64_MAX) {
-    ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  }
+
+  if (OB_SUCC(ret) && (schema_version_ > 0 && schema_version_ != UINT64_MAX)) {
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
       LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id_));
@@ -1075,6 +1083,18 @@ int ObDDLTask::refresh_schema_version()
       ret = OB_SCHEMA_EAGAIN;
       if (REACH_TIME_INTERVAL(1000L * 1000L)) {
         LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(tenant_id_), K(schema_version_), K(refreshed_schema_version));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && (tenant_id_ != dst_tenant_id_) && (dst_schema_version_ > 0 && dst_schema_version_ != UINT64_MAX)) {
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(dst_tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("get refreshed schema version failed", K(ret), K(dst_tenant_id_));
+    } else if (!ObSchemaService::is_formal_version(refreshed_schema_version) || refreshed_schema_version < dst_schema_version_) {
+      ret = OB_SCHEMA_EAGAIN;
+      if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+        LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(dst_tenant_id_), K(dst_schema_version_), K(refreshed_schema_version));
       }
     }
   }
