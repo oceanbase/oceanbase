@@ -99,7 +99,8 @@ private:
     DEFAULT,
     EXTRA,
     PRIVILEGES,
-    COMMENT
+    COMMENT,
+    IS_HIDDEN
   };
   int calc_show_table_id(uint64_t &show_table_id);
   int fill_row_cells(const share::schema::ObTableSchema &table_schema,

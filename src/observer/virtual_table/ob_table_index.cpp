@@ -431,6 +431,12 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
             cells[cell_idx].set_null();
             break;
           }
+          // is_column_visible
+          case OB_APP_MIN_COLUMN_ID + 18: {
+            // is_column_visible is used for SHOW EXTENDED in 4.2.2
+            cells[cell_idx].set_int(1);
+            break;
+          }
 
           default: {
             ret = OB_ERR_UNEXPECTED;
@@ -777,6 +783,12 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
             }
             break;
           }
+          // is_column_visible
+          case OB_APP_MIN_COLUMN_ID + 18: {
+            // is_column_visible is used for SHOW EXTENDED in 4.2.2
+            cells[cell_idx].set_int(1);
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
@@ -965,6 +977,12 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
             //expression
           case OB_APP_MIN_COLUMN_ID + 17: {
             cells[cell_idx].set_null();
+            break;
+          }
+          // is_column_visible
+          case OB_APP_MIN_COLUMN_ID + 18: {
+            // is_column_visible is used for SHOW EXTENDED in 4.2.2
+            cells[cell_idx].set_int(1);
             break;
           }
           default: {
