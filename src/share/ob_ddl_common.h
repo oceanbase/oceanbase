@@ -82,6 +82,7 @@ enum ObDDLType
   DDL_DIRECT_LOAD = 1011, // load data
   DDL_DIRECT_LOAD_INSERT = 1012, // insert into select
   DDL_TABLE_RESTORE = 1013, // table restore
+  DDL_MVIEW_COMPLETE_REFRESH = 1014,
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,
