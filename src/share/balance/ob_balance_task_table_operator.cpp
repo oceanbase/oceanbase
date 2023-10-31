@@ -814,6 +814,7 @@ int ObBalanceTaskTableOperator::remove_parent_task(const uint64_t tenant_id,
   }
   return ret;
 }
+
 int ObBalanceTaskTableOperator::load_can_execute_task(const uint64_t tenant_id,
                                        ObBalanceTaskIArray &task_array,
                                        ObISQLClient &client)
@@ -1066,6 +1067,29 @@ int ObBalanceTaskTableOperator::get_merge_task_dest_ls_by_src_ls(
   }
   return ret;
 }
+
+int ObBalanceTaskTableOperator::load_need_transfer_task(const uint64_t tenant_id,
+                                       ObBalanceTaskIArray &task_array,
+                                       ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  task_array.reset();
+  ObSqlString sql;
+  ObBalanceTaskStatus task_status(ObBalanceTaskStatus::BALANCE_TASK_STATUS_TRANSFER);
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where status = '%s'",
+                                    OB_ALL_BALANCE_TASK_TNAME, task_status.to_str()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql), K(task_status));
+  } else if (OB_FAIL(read_tasks_(tenant_id, client, sql, task_array))) {
+    LOG_WARN("failed to read task", KR(ret), K(tenant_id), K(sql));
+  }
+  LOG_INFO("load need transfer balance task", KR(ret), K(task_array), K(sql));
+  return ret;
+}
+
+
 
 int ObBalanceTaskMDSHelper::on_register(
     const char* buf,
