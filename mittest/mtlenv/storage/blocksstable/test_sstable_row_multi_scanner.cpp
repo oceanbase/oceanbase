@@ -134,8 +134,8 @@ void TestSSTableRowMultiScanner::test_one_case(
   int ret = OB_SUCCESS;
   ObArenaAllocator test_allocator(ObMemAttr(MTL_ID(), "TestAlloc"));
   ObDatumRange mscan_ranges[TEST_MULTI_GET_CNT];
-  ObSSTableRowMultiScanner scanner;
-  ObSSTableRowMultiScanner kv_scanner;
+  ObSSTableRowMultiScanner<> scanner;
+  ObSSTableRowMultiScanner<> kv_scanner;
   ObSEArray<ObDatumRange, TEST_MULTI_GET_CNT> ranges;
   const ObDatumRow *prow = NULL;
   const ObDatumRow *kv_prow = NULL;
@@ -574,7 +574,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_scan_range(
   ObStoreRow row;
   ObStoreRowkey rowkey;
   ObArray<int64_t> seeds;
-  ObSSTableRowMultiScanner scanner;
+  ObSSTableRowMultiScanner<> scanner;
 
   // prepare query param
   prepare_query_param(is_reverse_scan, &test_allocator);
@@ -699,8 +699,8 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   const ObDatumRow *prow = NULL;
   const ObDatumRow *kv_prow = NULL;
   int64_t row_cnt = 0;
-  ObSSTableRowMultiScanner scanner;
-  ObSSTableRowMultiScanner kv_scanner;
+  ObSSTableRowMultiScanner<> scanner;
+  ObSSTableRowMultiScanner<> kv_scanner;
 
   // prepare query param
   prepare_query_param(is_reverse_scan, &query_param_allocator);
@@ -1034,6 +1034,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   }
   ASSERT_EQ(OB_ITER_END, scanner.inner_get_next_row(prow));
   ASSERT_EQ(OB_ITER_END, kv_scanner.inner_get_next_row(kv_prow));
+  scanner.reset();
   destroy_query_param();
 }
 

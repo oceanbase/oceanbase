@@ -701,7 +701,7 @@ private:
   int64_t start_key_;
 };
 
-class TestNode : public KVCacheHazardNode{
+class TestNode : public ObKVCacheHazardNode{
 public:
   TestNode()
     : id_(0) 

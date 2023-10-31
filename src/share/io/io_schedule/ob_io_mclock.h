@@ -38,6 +38,7 @@ public:
   bool is_stop() const;
   int calc_phy_clock(const int64_t current_ts, const double iops_scale, const double weight_scale, ObPhyQueue *phy_queue);
   int dial_back_reservation_clock(const double iops_scale);
+  int time_out_dial_back(const double iops_scale, const double weight_scale);
   int dial_back_proportion_clock(const int64_t delta_us);
   int64_t get_proportion_ts() const;
   TO_STRING_KV(K(is_inited_), K(is_stopped_), K_(reservation_clock), K_(limitation_clock), K_(proportion_clock));
@@ -57,13 +58,15 @@ public:
   virtual ~ObTenantIOClock();
   int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage);
   void destroy();
-  int calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
+  int calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req);
   int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
   int sync_tenant_clock(ObTenantIOClock *ioclock);
-  int adjust_reservation_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
+  int adjust_clocks(ObPhyQueue *phy_queue, ObIORequest &req);
+  int adjust_reservation_clock(ObPhyQueue *phy_queue, ObIORequest &req);
   int adjust_proportion_clock(const int64_t delta_us);
   int update_io_clocks(const ObTenantIOConfig &io_config);
   int update_io_clock(const int64_t index, const ObTenantIOConfig &io_config, const int64_t all_group_num);
+  int update_clock_unit_config(const ObTenantIOConfig &io_config);
   int64_t get_min_proportion_ts();
   void stop_clock(const uint64_t index);
   TO_STRING_KV(K(is_inited_), "group_clocks", group_clocks_, "other_clock", other_group_clock_,

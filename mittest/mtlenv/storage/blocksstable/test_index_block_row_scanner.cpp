@@ -14,8 +14,7 @@
 #define private public
 #define protected public
 
-#include "storage/blocksstable/ob_index_block_row_scanner.h"
-#include "storage/blocksstable/ob_index_block_row_scanner.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
 #include "ob_index_block_data_prepare.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
@@ -39,7 +38,7 @@ protected:
 };
 
 TestIndexBlockRowScanner::TestIndexBlockRowScanner()
-  : TestIndexBlockDataPrepare("Test index block row scanner")
+  : TestIndexBlockDataPrepare("Test index block row scanner", MAJOR_MERGE, true)
 {
 }
 
@@ -78,15 +77,13 @@ void TestIndexBlockRowScanner::TearDown()
 TEST_F(TestIndexBlockRowScanner, transform)
 {
   ObIndexBlockDataTransformer index_block_transformer;
-  const ObMicroBlockHeader *micro_header
-      = reinterpret_cast<const ObMicroBlockHeader *>(root_block_data_buf_.get_buf());
-  int64_t extra_size = ObIndexBlockDataTransformer::get_transformed_block_mem_size(
-      root_block_data_buf_);
-  char * extra_buf = reinterpret_cast<char *>(allocator_.alloc(extra_size));
-  ASSERT_NE(nullptr, extra_buf);
-  ASSERT_EQ(OB_SUCCESS, index_block_transformer.transform(root_block_data_buf_, extra_buf, extra_size));
+  char *allocated_buf = nullptr;
+  ASSERT_EQ(OB_SUCCESS, index_block_transformer.transform(
+      root_block_data_buf_, root_block_data_buf_, allocator_, allocated_buf));
+  ASSERT_NE(nullptr, allocated_buf);
   const ObIndexBlockDataHeader *idx_blk_header
-      = reinterpret_cast<const ObIndexBlockDataHeader *>(extra_buf);
+      = reinterpret_cast<const ObIndexBlockDataHeader *>(root_block_data_buf_.get_extra_buf());
+  ASSERT_TRUE(idx_blk_header->is_valid());
   for (int64_t i = 0; i < idx_blk_header->row_cnt_; ++i) {
     STORAGE_LOG(INFO, "Show transformed root block rowkey", K(idx_blk_header->rowkey_array_[i]));
   }
@@ -100,39 +97,38 @@ TEST_F(TestIndexBlockRowScanner, transform)
   ASSERT_EQ(last_rowkey, index_rowkey);
 
   // Test update index block on deep copy
-  const int64_t new_buf_size = root_block_data_buf_.get_buf_size() + extra_size;
+  ObIndexBlockDataHeader new_idx_blk_header;
+  const int64_t new_buf_size = root_block_data_buf_.get_buf_size() + root_block_data_buf_.get_extra_size();
   char *new_buf = reinterpret_cast<char *>(allocator_.alloc(new_buf_size));
   ASSERT_NE(nullptr, new_buf);
-  char *new_extra_buf = new_buf + root_block_data_buf_.get_buf_size();
-  MEMCPY(new_buf, root_block_data_buf_.get_buf(), root_block_data_buf_.get_buf_size());
-  ASSERT_EQ(OB_SUCCESS, index_block_transformer.update_index_block(
-      *idx_blk_header,
-      new_buf,
-      root_block_data_buf_.get_buf_size(),
-      new_extra_buf,
-      extra_size));
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, new_idx_blk_header.deep_copy_transformed_index_block(
+      *idx_blk_header, new_buf_size, new_buf, pos));
 
-  const ObIndexBlockDataHeader *new_idx_blk_header = reinterpret_cast<const ObIndexBlockDataHeader *>(new_extra_buf);
-  ASSERT_NE(nullptr, new_idx_blk_header);
-  ASSERT_TRUE(new_idx_blk_header->is_valid());
-  ASSERT_EQ(new_idx_blk_header->row_cnt_, idx_blk_header->row_cnt_);
-  ASSERT_EQ(new_idx_blk_header->col_cnt_, idx_blk_header->col_cnt_);
+
+  ASSERT_TRUE(new_idx_blk_header.is_valid());
+  ASSERT_EQ(new_idx_blk_header.row_cnt_, idx_blk_header->row_cnt_);
+  ASSERT_EQ(new_idx_blk_header.col_cnt_, idx_blk_header->col_cnt_);
   for (int64_t i = 0; i < idx_blk_header->row_cnt_; ++i) {
-    ASSERT_EQ(new_idx_blk_header->rowkey_array_[i], idx_blk_header->rowkey_array_[i]);
+    STORAGE_LOG(INFO, "cmp deep copy rowkey", K(i),
+        K(new_idx_blk_header.rowkey_array_[i]), K(idx_blk_header->rowkey_array_[i]));
+    ASSERT_EQ(new_idx_blk_header.rowkey_array_[i], idx_blk_header->rowkey_array_[i]);
   }
 
   // clear src block extra buf
-  memset(extra_buf, 0, extra_size);
-  allocator_.free(extra_buf);
+  memset(((char *)idx_blk_header), 0, idx_blk_header->data_buf_size_);
+  allocator_.free((char *)idx_blk_header);
   ObIndexBlockRowParser idx_row_parser;
-  for (int64_t i = 0; i < new_idx_blk_header->row_cnt_; ++i) {
-    const ObDatumRowkey &rowkey = new_idx_blk_header->rowkey_array_[i];
+  for (int64_t i = 0; i < new_idx_blk_header.row_cnt_; ++i) {
+    idx_row_parser.reset();
+    const ObDatumRowkey &rowkey = new_idx_blk_header.rowkey_array_[i];
     for (int64_t j = 0; j < rowkey.get_datum_cnt(); ++j) {
       ASSERT_NE(nullptr, rowkey.datums_[j].ptr_);
     }
     const char *idx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, new_idx_blk_header->get_index_data(i, idx_data));
-    ASSERT_EQ(OB_SUCCESS, idx_row_parser.init(idx_data));
+    int64_t idx_len = 0;
+    ASSERT_EQ(OB_SUCCESS, new_idx_blk_header.get_index_data(i, idx_data, idx_len));
+    ASSERT_EQ(OB_SUCCESS, idx_row_parser.init(idx_data, idx_len));
   }
 
 }
@@ -148,15 +144,14 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ObQueryFlag query_flag;
   query_flag.set_use_block_cache();
   ObIndexBlockDataTransformer transformer;
-  const ObMicroBlockHeader *micro_header
-      = reinterpret_cast<const ObMicroBlockHeader *>(root_block_data_buf_.get_buf());
-  int64_t extra_size = ObIndexBlockDataTransformer::get_transformed_block_mem_size(
-      root_block_data_buf_);
-  char * extra_buf = reinterpret_cast<char *>(allocator_.alloc(extra_size));
-  ASSERT_NE(nullptr, extra_buf);
-  ASSERT_EQ(OB_SUCCESS, transformer.transform(root_block_data_buf_, extra_buf, extra_size));
+
+  char *allocated_buf = nullptr;
+  ASSERT_EQ(OB_SUCCESS, transformer.transform(
+      root_block_data_buf_, root_block_data_buf_, allocator_, allocated_buf));
+  ASSERT_NE(nullptr, allocated_buf);
   const ObIndexBlockDataHeader *root_blk_header
-      = reinterpret_cast<const ObIndexBlockDataHeader *>(extra_buf);
+      = reinterpret_cast<const ObIndexBlockDataHeader *>(root_block_data_buf_.get_extra_buf());
+  ASSERT_TRUE(root_blk_header->is_valid());
 
   ASSERT_EQ(OB_SUCCESS, idx_scanner.init(
       agg_projector, agg_column_schema, tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
@@ -167,27 +162,37 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   int64_t root_row_id = 0;
   const char *index_data_ptr;
-  ASSERT_EQ(OB_SUCCESS, root_blk_header->get_index_data(root_row_id, index_data_ptr));
-  ASSERT_EQ(OB_SUCCESS, idx_row_parser.init(index_data_ptr));
+  int64_t index_data_len = 0;
+  ASSERT_EQ(OB_SUCCESS, root_blk_header->get_index_data(root_row_id, index_data_ptr, index_data_len));
+  ASSERT_EQ(OB_SUCCESS, idx_row_parser.init(index_data_ptr, index_data_len));
   ASSERT_EQ(OB_SUCCESS, idx_row_parser.get_header(idx_row_header));
   ObMicroIndexInfo idx_row;
   idx_row.endkey_ = &root_blk_header->rowkey_array_[root_row_id];
   idx_row.row_header_ = idx_row_header;
   ASSERT_EQ(OB_SUCCESS, index_block_cache.prefetch(
-          table_schema_.get_tenant_id(),
-          idx_row_header->get_macro_id(),
-          idx_row,
-          query_flag,
-          macro_handle));
+      table_schema_.get_tenant_id(),
+      idx_row_header->get_macro_id(),
+      idx_row,
+      query_flag.is_use_block_cache(),
+      macro_handle,
+      &allocator_));
 
-  ASSERT_EQ(OB_SUCCESS, macro_handle.wait(2000)); // Wait at most 2 sec
+  ASSERT_EQ(OB_SUCCESS, macro_handle.wait());
   const ObMicroBlockData *read_block
-      = reinterpret_cast<const ObMicroBlockData *>(macro_handle.get_buffer());
+      = &reinterpret_cast<const ObMicroBlockCacheValue *>(macro_handle.get_buffer())->get_block_data();
   ASSERT_NE(nullptr, read_block);
-  ObMicroBlockData raw_block;
-  raw_block.buf_ = read_block->get_buf();
-  raw_block.size_ = read_block->get_buf_size();
-  raw_block.type_ = read_block->type_;
+
+  ObMacroBlockHandle raw_block_macro_handle;
+  ASSERT_EQ(OB_SUCCESS, index_block_cache.prefetch(
+      table_schema_.get_tenant_id(),
+      idx_row_header->get_macro_id(),
+      idx_row,
+      false /* disable use block cache */,
+      raw_block_macro_handle,
+      &allocator_));
+  ASSERT_EQ(OB_SUCCESS, raw_block_macro_handle.wait());
+  const ObMicroBlockData *raw_block
+      = &reinterpret_cast<const ObMicroBlockCacheValue *>(raw_block_macro_handle.get_buffer())->get_block_data();
 
   ObMicroIndexInfo read_idx_info;
   ObMicroIndexInfo raw_read_idx_info;
@@ -197,7 +202,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       root_blk_header->rowkey_array_[root_row_id]));
   ASSERT_EQ(OB_SUCCESS, raw_idx_scanner.open(
       ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID,
-      raw_block,
+      *raw_block,
       root_blk_header->rowkey_array_[root_row_id]));
   ASSERT_EQ(idx_scanner.current_, raw_idx_scanner.current_);
 
@@ -213,7 +218,7 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       0, true, true));
   ASSERT_EQ(OB_SUCCESS, raw_idx_scanner.open(
       ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID,
-      raw_block,
+      *raw_block,
       query_range,
       0, true, true));
 
@@ -221,9 +226,13 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   while (OB_SUCCESS == tmp_ret) {
     ASSERT_EQ(idx_scanner.current_, raw_idx_scanner.current_);
     tmp_ret = idx_scanner.get_next(read_idx_info);
-    ASSERT_EQ(tmp_ret, raw_idx_scanner.get_next(raw_read_idx_info));
-    ASSERT_EQ(read_idx_info.row_header_, raw_read_idx_info.row_header_);
-    STORAGE_LOG(INFO, "Show read idx info", K(read_idx_info), K(raw_read_idx_info));
+    if (OB_SUCCESS == tmp_ret) {
+      ASSERT_EQ(tmp_ret, raw_idx_scanner.get_next(raw_read_idx_info));
+      ASSERT_EQ(read_idx_info.row_header_->get_macro_id(), raw_read_idx_info.row_header_->get_macro_id());
+      ASSERT_EQ(read_idx_info.row_header_->get_block_offset(), raw_read_idx_info.row_header_->get_block_offset());
+      ASSERT_EQ(read_idx_info.row_header_->get_block_size(), raw_read_idx_info.row_header_->get_block_size());
+      ASSERT_EQ(read_idx_info.row_header_->pack_, raw_read_idx_info.row_header_->pack_);
+    }
   }
   ASSERT_EQ(OB_ITER_END, tmp_ret);
 }
@@ -234,8 +243,8 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_row_scanner.log*");
+  OB_LOGGER.set_file_name("test_index_block_row_scanner.log", true, true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  OB_LOGGER.set_file_name("test_index_block_row_scanner.log", true, false);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -22,6 +22,8 @@
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -56,17 +58,19 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
   ObPrecision precision = PRECISION_UNKNOWN_YET;
   const ObSQLSessionInfo *session = nullptr;
   bool is_oracle = lib::is_oracle_mode();
+  const bool is_all_decint_args =
+    ob_is_decimal_int(type1.get_type()) && ob_is_decimal_int(type2.get_type());
   if (OB_ISNULL(session = type_ctx.get_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get mysession", K(ret));
   } else if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
     LOG_WARN("fail to calc result type", K(ret), K(type), K(type1), K(type2));
-  } else if (is_oracle && type.is_oracle_decimal()) {
-    type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
-    type.set_precision(PRECISION_UNKNOWN_YET);
+  } else if (type.is_decimal_int() && (type1.is_null() || type2.is_null())) {
+    type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
+    type.set_scale(MAX(type1.get_scale(), type2.get_scale()));
   } else if (OB_UNLIKELY(SCALE_UNKNOWN_YET == type1.get_scale() ||
                          SCALE_UNKNOWN_YET == type2.get_scale())) {
-    type.set_scale(SCALE_UNKNOWN_YET);
+    type.set_scale(NUMBER_SCALE_UNKNOWN_YET);
     type.set_precision(PRECISION_UNKNOWN_YET);
   } else if (type1.get_type_class() == ObIntervalTC
              || type2.get_type_class() == ObIntervalTC) {
@@ -87,6 +91,8 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
       scale = MAX(scale1, scale2);
       if (lib::is_mysql_mode() && type.is_double()) {
         precision = ObMySQLUtil::float_length(scale);
+      } else if (type.has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
+        precision = MAX(type1.get_precision(), type2.get_precision());
       } else {
         int64_t inter_part_length1 = type1.get_precision() - type1.get_scale();
         int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
@@ -106,6 +112,30 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
       ObObjType convert_type = type.get_type();
       convert_unsigned_type_to_signed(convert_type);
       type.set_type(convert_type);
+    }
+    if (is_all_decint_args || type.is_decimal_int()) {
+      if (OB_UNLIKELY(PRECISION_UNKNOWN_YET == type.get_precision() ||
+                      SCALE_UNKNOWN_YET == type.get_scale())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected decimal int precision and scale", K(ret), K(type));
+      } else if (is_oracle && type.get_precision() > OB_MAX_NUMBER_PRECISION) {
+        type1.set_calc_type(ObNumberType);
+        type2.set_calc_type(ObNumberType);
+      } else {
+        if (ObRawExprUtils::decimal_int_need_cast(type1.get_accuracy(), type.get_accuracy()) ||
+              ObRawExprUtils::decimal_int_need_cast(type2.get_accuracy(), type.get_accuracy())) {
+          type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
+        }
+        type1.set_calc_accuracy(type.get_accuracy());
+        type2.set_calc_accuracy(type.get_accuracy());
+      }
+      LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+                                     K(type2.get_accuracy()));
+    }
+    // reset PS to unknown for oracle number type
+    if (OB_SUCC(ret) && is_oracle && type.is_oracle_decimal() && !type.is_decimal_int()) {
+      type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+      type.set_precision(PRECISION_UNKNOWN_YET);
     }
     LOG_DEBUG("calc_result_type2", K(scale), K(type1), K(type2), K(type), K(precision));
   }
@@ -683,8 +713,51 @@ int ObExprMinus::cg_expr(ObExprCGCtx &op_cg_ctx,
       case ObNumberType:
         if (ObDateTimeType == left_type) {
           SET_MINUS_FUNC_PTR(minus_datetime_datetime_oracle);
+        } else if (ob_is_decimal_int(left_type) && ob_is_decimal_int(right_type)) {
+          switch (get_decimalint_type(rt_expr.args_[0]->datum_meta_.precision_)) {
+            case DECIMAL_INT_32:
+              SET_MINUS_FUNC_PTR(minus_decimalint32_oracle);
+              break;
+            case DECIMAL_INT_64:
+              SET_MINUS_FUNC_PTR(minus_decimalint64_oracle);
+              break;
+            case DECIMAL_INT_128:
+              SET_MINUS_FUNC_PTR(minus_decimalint128_oracle);
+              break;
+            default:
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected precision", K(ret), K(rt_expr.datum_meta_));
+              break;
+          }
         } else {
           SET_MINUS_FUNC_PTR(minus_number_number);
+        }
+        break;
+      case ObDecimalIntType:
+        switch (get_decimalint_type(rt_expr.datum_meta_.precision_)) {
+          case DECIMAL_INT_32:
+            SET_MINUS_FUNC_PTR(minus_decimalint32);
+            break;
+          case DECIMAL_INT_64:
+            SET_MINUS_FUNC_PTR(minus_decimalint64);
+            break;
+          case DECIMAL_INT_128:
+            SET_MINUS_FUNC_PTR(minus_decimalint128);
+            break;
+          case DECIMAL_INT_256:
+            SET_MINUS_FUNC_PTR(minus_decimalint256);
+            break;
+          case DECIMAL_INT_512:
+            if (rt_expr.datum_meta_.precision_ < OB_MAX_DECIMAL_POSSIBLE_PRECISION) {
+              SET_MINUS_FUNC_PTR(minus_decimalint512);
+            } else {
+              SET_MINUS_FUNC_PTR(minus_decimalint512_with_check);
+            }
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected precision", K(ret), K(rt_expr.datum_meta_));
+            break;
         }
         break;
       default:
@@ -1511,6 +1584,105 @@ int ObExprMinus::minus_datetime_datetime_batch(BATCH_EVAL_FUNC_ARG_DECL)
       BATCH_EVAL_FUNC_ARG_LIST);
 }
 
+template<typename T>
+struct ObDecimalIntBatchMinusRaw : public ObArithOpRawType<T, T, T>
+{
+  static void raw_op(T &res, const T &l, const T &r)
+  {
+    res = l - r;
+  }
+
+  static int raw_check(const T &res, const T &l, const T &r)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+struct ObDecimalIntBatchMinusRawWithCheck : public ObDecimalIntBatchMinusRaw<int512_t>
+{
+  static int raw_check(const int512_t &res, const int512_t &l, const int512_t &r)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(res <= wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MIN
+                    || res >= wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MAX)) {
+      char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
+      ret = OB_OPERATE_OVERFLOW;
+      int64_t pos = 0;
+      databuff_printf(expr_str, OB_MAX_TWO_OPERATOR_EXPR_LENGTH, pos, "");
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DECIMAL", expr_str);
+      LOG_WARN("decimal int out of range", K(ret));
+    }
+    return ret;
+  }
+};
+
+#define DECINC_MINUS_EVAL_FUNC_DECL(TYPE) \
+int ObExprMinus::minus_decimal##TYPE(EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_arith_eval_func<ObArithOpWrap<ObDecimalIntBatchMinusRaw<TYPE##_t>>>(EVAL_FUNC_ARG_LIST); \
+}                                            \
+int ObExprMinus::minus_decimal##TYPE##_batch(BATCH_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_batch_arith_op<ObArithOpWrap<ObDecimalIntBatchMinusRaw<TYPE##_t>>>(BATCH_EVAL_FUNC_ARG_LIST); \
+}
+
+DECINC_MINUS_EVAL_FUNC_DECL(int32)
+DECINC_MINUS_EVAL_FUNC_DECL(int64)
+DECINC_MINUS_EVAL_FUNC_DECL(int128)
+DECINC_MINUS_EVAL_FUNC_DECL(int256)
+DECINC_MINUS_EVAL_FUNC_DECL(int512)
+
+int ObExprMinus::minus_decimalint512_with_check(EVAL_FUNC_ARG_DECL)
+{
+  return def_arith_eval_func<ObArithOpWrap<ObDecimalIntBatchMinusRawWithCheck>>(EVAL_FUNC_ARG_LIST);
+}
+
+int ObExprMinus::minus_decimalint512_with_check_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  return def_batch_arith_op<ObArithOpWrap<ObDecimalIntBatchMinusRawWithCheck>>(BATCH_EVAL_FUNC_ARG_LIST);
+}
+
+#undef DECINC_MINUS_EVAL_FUNC_DECL
+
+template<typename T>
+struct ObDecimalOracleMinusFunc
+{
+  int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, const int64_t scale,
+                 ObNumStackOnceAlloc &alloc) const
+  {
+    int ret = OB_SUCCESS;
+    const T res_int = *reinterpret_cast<const T *>(l.ptr_) - *reinterpret_cast<const T *>(r.ptr_);
+    number::ObNumber res_num;
+    if (OB_FAIL(wide::to_number(res_int, scale, alloc, res_num))) {
+      LOG_WARN("fail to cast decima int to number", K(ret), K(scale));
+    } else {
+      res.set_number(res_num);
+      alloc.free();  // for batch function reuse alloc
+    }
+    return ret;
+  }
+};
+
+#define DECINC_MINUS_EVAL_FUNC_ORA_DECL(TYPE) \
+int ObExprMinus::minus_decimal##TYPE##_oracle(EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  ObNumStackOnceAlloc tmp_alloc;                                \
+  const int64_t scale = expr.args_[0]->datum_meta_.scale_;      \
+  return def_arith_eval_func<ObDecimalOracleMinusFunc<TYPE##_t>>(EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
+}                                            \
+int ObExprMinus::minus_decimal##TYPE##_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  ObNumStackOnceAlloc tmp_alloc;                                \
+  const int64_t scale = expr.args_[0]->datum_meta_.scale_;      \
+  return def_batch_arith_op_by_datum_func<ObDecimalOracleMinusFunc<TYPE##_t>>(BATCH_EVAL_FUNC_ARG_LIST, scale, tmp_alloc); \
+}
+
+DECINC_MINUS_EVAL_FUNC_ORA_DECL(int32)
+DECINC_MINUS_EVAL_FUNC_ORA_DECL(int64)
+DECINC_MINUS_EVAL_FUNC_ORA_DECL(int128)
+
+
+#undef DECINC_MINUS_EVAL_FUNC_ORA_DECL
 
 }
 }

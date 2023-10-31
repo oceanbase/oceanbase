@@ -197,6 +197,16 @@ int ObStringPrefixEncoder::get_var_length(const int64_t row_id, int64_t &length)
   return ret;
 }
 
+int ObStringPrefixEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  const bool hex_packing = hex_string_map_.can_packing();
+  need_size = sizeof(ObStringPrefixMetaHeader);
+  need_size += hex_packing ? hex_string_map_.size_ : 0;
+  need_size += (prefix_count_ - 1) * prefix_index_byte_ + prefix_length_;
+  return ret;
+}
+
 int ObStringPrefixEncoder::store_meta(ObBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;

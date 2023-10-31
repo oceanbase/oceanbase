@@ -137,11 +137,15 @@ int ObExprOracleTrunc::calc_result_typeN(ObExprResType &type,
           result_type = ObNumberType;
         }
         if (params_count <= 1 && ObNumberType != result_type && ObFloatType != result_type && ObDoubleType != result_type &&
-            ObDateTimeType != result_type) {
+            ObDateTimeType != result_type && result_type != ObDecimalIntType) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("unsupported type for ora_trunc", K(ret), K(result_type), K(params[0].get_type()));
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "calculate result type for ora_trunc");
         }
+      }
+      if (!lib::is_oracle_mode() && ObDecimalIntTC == params[0].get_type_class()) {
+        // In mysql mode, the result type is the same as oracle mode while input is decimal int
+        result_type = ObNumberType;
       }
       if (ObDateTimeType == result_type) {
         type.set_scale(DEFAULT_SCALE_FOR_DATE);
@@ -173,6 +177,7 @@ int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
   ObDatum *x_datum = NULL;
   ObDatum *d_datum = NULL;
   const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
+  const ObScale arg_scale = expr.args_[0]->datum_meta_.scale_;
   const ObObjType res_type = expr.datum_meta_.type_;
   if (OB_UNLIKELY(1 != expr.arg_cnt_ && 2 != expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -216,7 +221,7 @@ int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
       if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
-      } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*x_datum, arg_type,
+      } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*x_datum, arg_type, arg_scale,
                  get_timezone_info(session), ob_time,
                  get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {

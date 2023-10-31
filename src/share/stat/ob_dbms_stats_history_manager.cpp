@@ -37,7 +37,7 @@ namespace common {
 #define FETCH_COL_STATS_HISTROY "SELECT table_id, partition_id, column_id, object_type stat_level,\
                                  distinct_cnt num_distinct, null_cnt num_null, b_max_value,\
                                  b_min_value, avg_len, distinct_cnt_synopsis, distinct_cnt_synopsis_size,\
-                                 histogram_type, sample_size, bucket_cnt, density, last_analyzed\
+                                 histogram_type, sample_size, bucket_cnt, density, last_analyzed%s\
                                  FROM %s T WHERE tenant_id = %lu and table_id = %ld \
                                  and partition_id in %s and savtime in (SELECT min(savtime) From \
                                  %s TF where TF.tenant_id = T.tenant_id \
@@ -436,12 +436,16 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
   uint64_t tenant_id = param.tenant_id_;
   uint64_t exec_tenant_id = share::schema::ObSchemaUtils::get_exec_tenant_id(tenant_id);
   ObSqlString partition_list;
+  uint64_t data_version = 0;
   if (OB_ISNULL(mysql_proxy = ctx.get_sql_proxy()) || OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(mysql_proxy), K(param));
   } else if (OB_FAIL(gen_partition_list(param, partition_list))) {
     LOG_WARN("failed to gen partition list", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(FETCH_COL_STATS_HISTROY,
+                                        data_version < DATA_VERSION_4_3_0_0 ? " ": ",cg_macro_blk_cnt, cg_micro_blk_cnt",
                                         share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
                                         share::schema::ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                         share::schema::ObSchemaUtils::get_extract_schema_id(exec_tenant_id, param.table_id_),
@@ -461,7 +465,7 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
       } else {
         while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
           ObOptColumnStat *col_stat = NULL;
-          if (OB_FAIL(fill_column_stat_history(*param.allocator_, *client_result, col_stat))) {
+          if (OB_FAIL(fill_column_stat_history(*param.allocator_, *client_result, col_stat, data_version >= DATA_VERSION_4_3_0_0))) {
             LOG_WARN("failed to fill table stat", K(ret));
           } else if (OB_ISNULL(col_stat)) {
             ret = OB_ERR_UNEXPECTED;
@@ -501,7 +505,8 @@ int ObDbmsStatsHistoryManager::fetch_column_stat_history(ObExecContext &ctx,
 
 int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
                                                         common::sqlclient::ObMySQLResult &result,
-                                                        ObOptColumnStat *&col_stat)
+                                                        ObOptColumnStat *&col_stat,
+                                                        bool need_cg_info)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -596,6 +601,20 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
           col_stat->set_llc_bitmap(decomp_buf, decomp_size);
         }
       }
+    }
+    if (OB_SUCC(ret) && need_cg_info) {
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cg_macro_blk_cnt, *col_stat, int64_t, true, true, 0);
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cg_micro_blk_cnt, *col_stat, int64_t, true, true, 0);
+      //will be used in the future, not removed.
+      // if (OB_SUCC(ret)) {
+      //   if (OB_FAIL(result.get_type("cg_skip_rate", obj_type))) {
+      //     LOG_WARN("failed to get type", K(ret));
+      //   } else if (OB_LIKELY(obj_type.is_double())) {
+      //     EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, cg_skip_rate, *col_stat, int64_t);
+      //   } else {
+      //     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, cg_skip_rate, *col_stat, int64_t);
+      //   }
+      // }
     }
   }
   return ret;

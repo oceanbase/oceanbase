@@ -23,6 +23,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "share/scn.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -184,10 +185,12 @@ int ObStorageSchemaRecorder::try_update_storage_schema(
   } else if (OB_UNLIKELY(table_version < 0 || table_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("input schema version is invalid", K(ret), K_(tablet_id), K(table_version));
-  } else if (ignore_storage_schema_) {
+  } else if (table_version <= ATOMIC_LOAD(&max_saved_version_)) {
+    // do nothing
+  } else if (OB_UNLIKELY(ignore_storage_schema_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to update storage schema", K(ret), K_(tablet_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+  } else if (OB_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
     LOG_WARN("fail to get data version", K(ret));
   } else if (compat_version >= DATA_VERSION_4_2_0_0) {
     // for compat, before all server upgrade to 4.2, need sync storage schema

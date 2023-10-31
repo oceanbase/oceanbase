@@ -243,6 +243,11 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
                                     is_from_povit,
                                     groupby_helper))) {
       LOG_WARN("failed to init group by helper", K(ret));
+    } else if (groupby_helper.can_storage_pushdown_ &&
+               OB_FAIL(try_push_aggr_into_table_scan(candidates_.candidate_plans_,
+                                                     aggr_items,
+                                                     groupby_helper.pushdown_groupby_columns_))) {
+      LOG_WARN("failed to try push aggr into table scan", K(ret));
     } else if (groupby_helper.can_three_stage_pushdown_) {
       OPT_TRACE("generate three stage group by");
       if (OB_FAIL(candi_allocate_three_stage_group_by(reduce_exprs,
@@ -1403,12 +1408,19 @@ int ObSelectLogPlan::candi_allocate_distinct()
       CandidatePlan candidate_plan;
       ObSEArray<CandidatePlan, 4> distinct_plans;
       ObSEArray<ObOrderDirection, 4> distinct_directions;
+      ObSEArray<ObAggFunRawExpr*, 1> dummy_items;
       if (OB_FAIL(init_distinct_helper(distinct_exprs, distinct_helper))) {
         LOG_WARN("failed to init distinct helper", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::get_default_directions(distinct_exprs.count(),
                                                                  distinct_directions))) {
         LOG_WARN("failed to generate default directions", K(ret));
+      } else if (distinct_helper.can_storage_pushdown_ &&
+                 OB_FAIL(try_push_aggr_into_table_scan(candidates_.candidate_plans_,
+                                                       dummy_items,
+                                                       distinct_exprs))) {
+        LOG_WARN("failed to try push distinct exprs into table scan", K(ret));
       }
+
       // create hash distinct
       if (OB_SUCC(ret) && !distinct_helper.force_use_merge_) {
         ObSEArray<CandidatePlan, 16> best_candidates;
@@ -7016,10 +7028,12 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
   ObTablePartitionInfo *table_scan_part_info = NULL;
   const ObTablePartitionInfo *index_scan_part_info = NULL;
   ObIAllocator &allocator = get_allocator();
+  ObCostTableScanInfo *est_cost_info = NULL;
   table_get = NULL;
   if (OB_ISNULL(index_scan) || OB_ISNULL(index_scan->get_sharding()) || OB_ISNULL(table_item) ||
       OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx()) ||
-      OB_ISNULL(index_scan_part_info = index_scan->get_table_partition_info())) {
+      OB_ISNULL(index_scan_part_info = index_scan->get_table_partition_info()) ||
+      OB_ISNULL(index_scan->get_est_cost_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(index_scan), K(table_item), K(stmt),
         K(index_scan_part_info), K(ret));
@@ -7034,6 +7048,15 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
   } else if (FALSE_IT(table_scan_part_info = new (table_scan_part_info) ObTablePartitionInfo(allocator))) {
   } else if (OB_FAIL(table_scan_part_info->assign(*index_scan_part_info))) {
     LOG_WARN("failed to assign table partition info", K(ret));
+  } else if (OB_ISNULL(est_cost_info = static_cast<ObCostTableScanInfo*>(allocator.alloc(
+                                              sizeof(ObCostTableScanInfo))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate cost table info", K(ret));
+  } else if (FALSE_IT(est_cost_info = new (est_cost_info) ObCostTableScanInfo(OB_INVALID_ID,
+                                                                              OB_INVALID_ID,
+                                                                              OB_INVALID_ID))) {
+  } else if (OB_FAIL(est_cost_info->assign(*index_scan->get_est_cost_info()))) {
+    LOG_WARN("failed to assigin table cost info", K(ret));
   } else {
     table_scan->set_index_back(false);
     table_scan->set_table_id(table_id);
@@ -7059,10 +7082,11 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     table_scan->set_op_cost(ObOptEstCost::cost_late_materialization_table_get(stmt->get_column_size(),
                                                                               get_optimizer_context().get_cost_model_type()));
     table_scan->set_cost(table_scan->get_op_cost());
-    table_scan->set_table_row_count(index_scan->get_table_row_count());
-    table_scan->set_output_row_count(1.0);
-    table_scan->set_phy_query_range_row_count(1.0);
-    table_scan->set_query_range_row_count(1.0);
+    est_cost_info->output_row_count_ = 1.0;
+    est_cost_info->phy_query_range_row_count_ = 1.0;
+    est_cost_info->logical_query_range_row_count_ = 1.0;
+    est_cost_info->use_column_store_ = false;
+    table_scan->set_est_cost_info(est_cost_info);
     table_get = table_scan;
   }
   return ret;
@@ -7188,6 +7212,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
   index_scan = NULL;
   ObLogSort *child_sort = NULL;
   ObLogTableScan *table_scan = NULL;
+  ObSEArray<uint64_t, 4> used_column_ids;
   if (OB_ISNULL(top) || OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(top), K(get_stmt()), K(ret));
@@ -7195,134 +7220,257 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                                        child_sort,
                                                        table_scan))) {
     LOG_WARN("failed to get late materialization operator", K(ret));
-  } else if (NULL != table_scan && NULL != table_scan->get_plan() && NULL != child_sort) {
-    ObSEArray<ObRawExpr*, 4> temp_exprs;
-    ObSEArray<ObRawExpr*, 4> table_keys;
-    ObSEArray<uint64_t, 4> index_column_ids;
-    ObSEArray<uint64_t, 4> used_column_ids;
-    const ObTableSchema *index_schema = NULL;
-    ObSqlSchemaGuard *schema_guard = NULL;
-    // check whether index key cover filter exprs, sort exprs and part exprs
-    if (table_scan->is_index_scan() && table_scan->get_index_back() &&
-        (table_scan->is_local() || table_scan->is_remote())) {
-      if (OB_FAIL(get_rowkey_exprs(table_scan->get_table_id(),
-                                   table_scan->get_ref_table_id(),
-                                   table_keys))) {
-        LOG_WARN("failed to generate rowkey exprs", K(ret));
-      } else if (OB_FAIL(child_sort->get_sort_exprs(temp_exprs))) {
-        LOG_WARN("failed to get sort exprs", K(ret));
-      } else if (OB_FAIL(append(temp_exprs, table_scan->get_filter_exprs())) ||
-                 OB_FAIL(append(temp_exprs, table_keys))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (NULL != table_scan->get_pre_query_range() &&
-                 OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected nul", K(ret));
-      } else if (OB_FAIL(schema_guard->get_table_schema(
-                 table_scan->get_table_id(),
-                 table_scan->get_index_table_id(),
-                 stmt,
-                 index_schema))) {
-        LOG_WARN("failed to get table schema", K(ret));
-      } else if (OB_ISNULL(index_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(index_schema->get_column_ids(index_column_ids))) {
-        LOG_WARN("failed to get column ids", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(temp_exprs, used_column_ids))) {
-        LOG_WARN("failed to extract column ids", K(ret));
-      } else if (ObOptimizerUtil::is_subset(used_column_ids, index_column_ids)){
-        bool has_other_col = false;
-        for (int64_t i = 0; OB_SUCC(ret) && !has_other_col && i < stmt->get_column_size(); i++) {
-          const ColumnItem *item = stmt->get_column_item(i);
-          if (OB_ISNULL(item)) {
-            ret = OB_ERR_UNEXPECTED;
-          } else if (item->get_expr()->is_virtual_generated_column()) {
-            // do nothing
-          } else if (!ObOptimizerUtil::find_item(index_column_ids, item->base_cid_)) {
-            has_other_col = true;
-          }
-        }
-        need = has_other_col;
-      }
+  } else if (NULL == table_scan ||
+             NULL == table_scan->get_plan() ||
+             NULL == child_sort) {
+    //do nothing
+  } else if (OB_FAIL(if_index_back_plan_need_late_materialization(child_sort,
+                                                                  table_scan,
+                                                                  used_column_ids,
+                                                                  need))) {
+    LOG_WARN("failed to check index back plan need late materialization", K(ret));
+  } else if (need) {
+    OPT_TRACE("try late materialization plan, normal plan cost:", top->get_cost());
+    if (OB_FAIL(adjust_est_info_for_index_back_plan(table_scan, used_column_ids))) {
+      LOG_WARN("failed to adjust est info for index back plan", K(ret));
     }
-    // update cost for late materialization
-    if (OB_SUCC(ret) && need) {
-      OPT_TRACE("try late materialization plan, normal plan cost:", top->get_cost());
-      if (OB_ISNULL(table_scan->get_est_cost_info())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(table_scan->get_est_cost_info()->access_columns_.assign(used_column_ids))) {
-        LOG_WARN("failed to assign column ids", K(ret));
-      } else {
-        table_scan->get_est_cost_info()->index_meta_info_.is_index_back_ = false;
-        table_scan->set_index_back(false);
-        table_scan->set_index_back_row_count(0.0);
-        double query_range_row_count = table_scan->get_query_range_row_count();
-        double phy_query_range_row_count = table_scan->get_phy_query_range_row_count();
-        double op_cost = 0.0;
-        double index_back_cost = 0.0;
-        // estimate cost
-        if (OB_FAIL(ObOptEstCost::cost_table(*table_scan->get_est_cost_info(),
-                                             table_scan->get_parallel(),
-                                             query_range_row_count,
-                                             phy_query_range_row_count,
-                                             op_cost,
-                                             index_back_cost,
-                                             get_optimizer_context().get_cost_model_type()))) {
-          LOG_WARN("failed to get index access info", K(ret));
-        } else {
-          table_scan->set_cost(op_cost);
-          table_scan->set_op_cost(op_cost);
-        }
-        // estimate width
-        if (OB_FAIL(ret)) {
-          /*do nothing*/
-        } else {
-          double width = 0.0;
-          ObSEArray<ObRawExpr*, 8> column_exprs;
-          for (int64_t i = 0; OB_SUCC(ret) && i < used_column_ids.count(); i++) {
-            const ColumnItem *col_item = NULL;
-            if (OB_ISNULL(col_item = get_column_item_by_id(table_scan->get_table_id(),
-                                                           used_column_ids.at(i))) ||
-                OB_ISNULL(col_item->expr_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected null", K(col_item), K(ret));
-            } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
-              LOG_WARN("failed to push back column expr", K(ret));
-            } else { /*do nothing*/ }
-          }
-          if (OB_FAIL(ret)) {
-            /*do nothing*/
-          } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(table_scan->get_plan()->get_basic_table_metas(),
-                                                                    table_scan->get_plan()->get_selectivity_ctx(),
-                                                                    column_exprs,
-                                                                    width))) {
-            LOG_WARN("failed to estimate width for columns", K(ret));
-          } else {
-            table_scan->set_width(width);
-          }
-        }
-        if (OB_FAIL(ret)) {
-          /*do nothing*/
-        } else if (OB_FAIL(child_sort->est_cost())) {
-          LOG_WARN("failed to compute property", K(ret));
-        } else if (OB_FAIL(top->est_cost())) {
-          LOG_WARN("failed to compute property", K(ret));
-        } else {
-          index_scan = table_scan;
-          ObOptEstCost::cost_late_materialization(top->get_card(),
-                                                  top->get_cost(),
-                                                  stmt->get_column_size(),
-                                                  late_mater_cost,
-                                                  get_optimizer_context().get_cost_model_type());
+  } else if (OB_FAIL(if_column_store_plan_need_late_materialization(child_sort,
+                                                                    table_scan,
+                                                                    used_column_ids,
+                                                                    need))) {
+    LOG_WARN("failed to check column store plan need late materialization", K(ret));
+  } else if (need) {
+    OPT_TRACE("try late materialization plan, normal plan cost:", top->get_cost());
+    if (OB_FAIL(adjust_est_cost_info_for_column_store_plan(table_scan, used_column_ids))) {
+      LOG_WARN("failed to adjust est info for column store plan", K(ret));
+    }
+  }
+  // update cost for late materialization
+  if (OB_SUCC(ret) && need) {
+    double op_cost = 0.0;
+    // estimate cost
+    if (OB_FAIL(ObOptEstCost::cost_table(*table_scan->get_est_cost_info(),
+                                          table_scan->get_parallel(),
+                                          op_cost,
+                                          get_optimizer_context().get_cost_model_type()))) {
+      LOG_WARN("failed to get index access info", K(ret));
+    } else if (OB_FAIL(child_sort->est_cost())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else if (OB_FAIL(top->est_cost())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      ObOptEstCost::cost_late_materialization(top->get_card(),
+                                              top->get_cost(),
+                                              stmt->get_column_size(),
+                                              late_mater_cost,
+                                              get_optimizer_context().get_cost_model_type());
+      table_scan->set_cost(op_cost);
+      table_scan->set_op_cost(op_cost);
+      index_scan = table_scan;
+      OPT_TRACE("late materialization plan cost:", late_mater_cost);
+    }
+  }
+  return ret;
+}
 
-          OPT_TRACE("late materialization plan cost:", late_mater_cost);
-        }
+int ObSelectLogPlan::if_index_back_plan_need_late_materialization(ObLogSort *child_sort,
+                                                                  ObLogTableScan *table_scan,
+                                                                  ObIArray<uint64_t> &used_column_ids,
+                                                                  bool &need)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> temp_exprs;
+  ObSEArray<ObRawExpr*, 4> table_keys;
+  ObSEArray<uint64_t, 4> index_column_ids;
+  const ObTableSchema *index_schema = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObDMLStmt *stmt = NULL;
+  used_column_ids.reuse();
+  // check whether index key cover filter exprs, sort exprs and part exprs
+  if (OB_ISNULL(table_scan) || OB_ISNULL(child_sort) ||
+      OB_ISNULL(stmt=get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null op", K(ret));
+  } else if (!table_scan->is_index_scan() ||
+             !table_scan->get_index_back() ||
+             (!table_scan->is_local() && !table_scan->is_remote())) {
+    need = false;
+  } else if (OB_FAIL(get_rowkey_exprs(table_scan->get_table_id(),
+                                      table_scan->get_ref_table_id(),
+                                      table_keys))) {
+    LOG_WARN("failed to generate rowkey exprs", K(ret));
+  } else if (OB_FAIL(child_sort->get_sort_exprs(temp_exprs))) {
+    LOG_WARN("failed to get sort exprs", K(ret));
+  } else if (OB_FAIL(append(temp_exprs, table_scan->get_filter_exprs())) ||
+              OB_FAIL(append(temp_exprs, table_keys))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (NULL != table_scan->get_pre_query_range() &&
+              OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected nul", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_scan->get_table_id(),
+                                                    table_scan->get_index_table_id(),
+                                                    stmt,
+                                                    index_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(index_schema->get_column_ids(index_column_ids))) {
+    LOG_WARN("failed to get column ids", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(temp_exprs, used_column_ids))) {
+    LOG_WARN("failed to extract column ids", K(ret));
+  } else if (ObOptimizerUtil::is_subset(used_column_ids, index_column_ids)) {
+    bool has_other_col = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_other_col && i < stmt->get_column_size(); i++) {
+      const ColumnItem *item = stmt->get_column_item(i);
+      if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (item->get_expr()->is_virtual_generated_column()) {
+        // do nothing
+      } else if (!ObOptimizerUtil::find_item(index_column_ids, item->base_cid_)) {
+        has_other_col = true;
       }
     }
+    need = has_other_col;
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::if_column_store_plan_need_late_materialization(ObLogSort *child_sort,
+                                                                    ObLogTableScan *table_scan,
+                                                                    ObIArray<uint64_t> &used_column_ids,
+                                                                    bool &need)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> temp_exprs;
+  ObSEArray<ObRawExpr*, 4> table_keys;
+  const ObDMLStmt *stmt = NULL;
+  used_column_ids.reuse();
+  // check whether index key cover filter exprs, sort exprs and part exprs
+  if (OB_ISNULL(table_scan) || OB_ISNULL(child_sort) ||
+      OB_ISNULL(stmt=get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null op", K(ret));
+  } else if (!table_scan->use_column_store() ||
+             (!table_scan->is_local() && !table_scan->is_remote())) {
+    need = false;
+  } else if (OB_FAIL(get_rowkey_exprs(table_scan->get_table_id(),
+                                      table_scan->get_ref_table_id(),
+                                      table_keys))) {
+    LOG_WARN("failed to generate rowkey exprs", K(ret));
+  } else if (OB_FAIL(child_sort->get_sort_exprs(temp_exprs))) {
+    LOG_WARN("failed to get sort exprs", K(ret));
+  } else if (OB_FAIL(append(temp_exprs, table_keys))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(append(temp_exprs, table_scan->get_filter_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (NULL != table_scan->get_pre_query_range() &&
+              OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(temp_exprs, used_column_ids))) {
+    LOG_WARN("failed to extract column ids", K(ret));
+  } else {
+    bool has_other_col = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_other_col && i < stmt->get_column_size(); i++) {
+      const ColumnItem *item = stmt->get_column_item(i);
+      if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (item->get_expr()->is_virtual_generated_column()) {
+        // do nothing
+      } else if (!ObOptimizerUtil::find_item(used_column_ids, item->base_cid_)) {
+        has_other_col = true;
+      }
+    }
+    need = has_other_col;
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::adjust_est_info_for_index_back_plan(ObLogTableScan *table_scan,
+                                                         ObIArray<uint64_t> &used_column_ids)
+{
+  int ret = OB_SUCCESS;
+  double width = 0.0;
+  ObSEArray<ObRawExpr*, 8> column_exprs;
+  if (OB_ISNULL(table_scan) ||
+      OB_ISNULL(table_scan->get_est_cost_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(table_scan->get_est_cost_info()->access_columns_.assign(used_column_ids))) {
+    LOG_WARN("failed to assign column ids", K(ret));
+  } else {
+    table_scan->get_est_cost_info()->index_meta_info_.is_index_back_ = false;
+    table_scan->set_index_back(false);
+    table_scan->set_index_back_row_count(0.0);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < used_column_ids.count(); i++) {
+    const ColumnItem *col_item = NULL;
+    if (OB_ISNULL(col_item = get_column_item_by_id(table_scan->get_table_id(),
+                                                    used_column_ids.at(i))) ||
+        OB_ISNULL(col_item->expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(col_item), K(ret));
+    } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
+      LOG_WARN("failed to push back column expr", K(ret));
+    } else { /*do nothing*/ }
+  }
+  if (OB_FAIL(ret)) {
+    /*do nothing*/
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(table_scan->get_plan()->get_basic_table_metas(),
+                                                            table_scan->get_plan()->get_selectivity_ctx(),
+                                                            column_exprs,
+                                                            width))) {
+    LOG_WARN("failed to estimate width for columns", K(ret));
+  } else {
+    table_scan->set_width(width);
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::adjust_est_cost_info_for_column_store_plan(ObLogTableScan *table_scan,
+                                                                ObIArray<uint64_t> &used_column_ids)
+{
+  int ret = OB_SUCCESS;
+  double width = 0.0;
+  ObSEArray<ObRawExpr*, 8> column_exprs;
+  if (OB_ISNULL(table_scan) ||
+      OB_ISNULL(table_scan->get_est_cost_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(table_scan->get_est_cost_info()->access_columns_.assign(used_column_ids))) {
+    LOG_WARN("failed to assign column ids", K(ret));
+  }
+  for (int64_t i = table_scan->get_est_cost_info()->column_group_infos_.count()-1; OB_SUCC(ret) && i >= 0; --i) {
+    ObCostColumnGroupInfo &info = table_scan->get_est_cost_info()->column_group_infos_.at(i);
+    if (ObOptimizerUtil::find_item(used_column_ids, info.column_id_)) {
+      //do nothing
+    } else if (OB_FAIL(table_scan->get_est_cost_info()->column_group_infos_.remove(i))) {
+      LOG_WARN("failed to remove column group info", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < used_column_ids.count(); i++) {
+    const ColumnItem *col_item = NULL;
+    if (OB_ISNULL(col_item = get_column_item_by_id(table_scan->get_table_id(),
+                                                    used_column_ids.at(i))) ||
+        OB_ISNULL(col_item->expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(col_item), K(ret));
+    } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
+      LOG_WARN("failed to push back column expr", K(ret));
+    } else { /*do nothing*/ }
+  }
+  if (OB_FAIL(ret)) {
+    /*do nothing*/
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(table_scan->get_plan()->get_basic_table_metas(),
+                                                            table_scan->get_plan()->get_selectivity_ctx(),
+                                                            column_exprs,
+                                                            width))) {
+    LOG_WARN("failed to estimate width for columns", K(ret));
+  } else {
+    table_scan->set_width(width);
   }
   return ret;
 }

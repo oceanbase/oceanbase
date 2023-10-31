@@ -402,6 +402,10 @@ public:
                                               ObString &policy_name);
   int add_fake_cte_schema(share::schema::ObTableSchema* tbl_schema);
   int find_fake_cte_schema(common::ObString tblname, ObNameCaseMode mode, bool& exist);
+  int adjust_fake_cte_column_type(uint64_t table_id,
+                                  uint64_t column_id,
+                                  const common::ColumnType &type,
+                                  const common::ObAccuracy &accuracy);
   int get_schema_version(const uint64_t tenant_id, uint64_t table_id, share::schema::ObSchemaType schema_type, int64_t &schema_version);
   share::schema::ObSchemaGetterGuard *get_schema_mgr() { return schema_mgr_; }
   int get_tablegroup_schema(const int64_t tenant_id, const common::ObString &tablegroup_name,

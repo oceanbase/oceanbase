@@ -74,11 +74,11 @@ public:
   int ls_freeze(const share::ObLSID &ls_id);
   // freeze a tablet
   int tablet_freeze(const common::ObTabletID &tablet_id,
-                    const bool is_force_freeze = false,
+                    const bool need_rewrite_tablet_meta = false,
                     const bool is_sync = false);
   int tablet_freeze(share::ObLSID ls_id,
                     const common::ObTabletID &tablet_id,
-                    const bool is_force_freeze = false,
+                    const bool need_rewrite_tablet_meta = false,
                     const bool is_sync = false);
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
@@ -164,13 +164,13 @@ private:
                            const bool from_user = true);
   static int ls_freeze_(ObLS *ls,
                         const bool is_sync = true,
-                        const bool force_freeze = true,
+                        const bool need_rewrite_tablet_meta = true,
                         const int64_t abs_timeout_ts = INT64_MAX);
   static int ls_freeze_all_unit_(ObLS *ls,
                                  const int64_t abs_timeout_ts = INT64_MAX);
   static int tablet_freeze_(ObLS *ls,
                             const common::ObTabletID &tablet_id,
-                            const bool force_tablet_freeze,
+                            const bool need_rewrite_tablet_meta,
                             const bool is_sync,
                             const int64_t abs_timeout_ts);
   // freeze all the ls of this tenant.

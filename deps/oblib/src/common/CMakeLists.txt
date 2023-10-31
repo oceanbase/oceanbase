@@ -20,6 +20,7 @@ ob_set_subtarget(oblib_common common
   ob_store_range.cpp
   ob_string_buf.ipp
   ob_tablet_id.cpp
+  ob_target_specific.cpp
   ob_timeout_ctx.cpp
   ob_zone_type.cpp
 )

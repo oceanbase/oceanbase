@@ -188,6 +188,13 @@ ObTabletStat& ObTabletStat::archive(int64_t factor)
 
 
 /************************************* ObTabletStatAnalyzer *************************************/
+ObTabletStatAnalyzer::ObTabletStatAnalyzer()
+  : tablet_stat_(),
+    boost_factor_(1),
+    is_small_tenant_(false)
+{
+}
+
 bool ObTabletStatAnalyzer::is_hot_tablet() const
 {
   return tablet_stat_.query_cnt_ + tablet_stat_.merge_cnt_ >= ACCESS_FREQUENCY * boost_factor_;
@@ -656,6 +663,28 @@ int ObTenantTabletStatMgr::get_latest_tablet_stat(
   return ret;
 }
 
+int ObTenantTabletStatMgr::get_all_tablet_stats(
+    common::ObIArray<ObTabletStat> &tablet_stats)
+{
+  int ret = OB_SUCCESS;
+  tablet_stats.reset();
+  ObTabletStreamNode *cur_node = nullptr;
+  ObTabletStat cur_stat;
+  for (auto bucket_it = stream_map_.begin(); OB_SUCC(ret) && bucket_it != stream_map_.end(); ++bucket_it) {
+    if (OB_NOT_NULL(cur_node = bucket_it->second)) {
+      cur_stat.reset();
+      cur_node->stream_.get_latest_stat(cur_stat);
+      if (!cur_stat.is_valid()) {
+      } else if (0 == cur_stat.query_cnt_ && 0 == cur_stat.merge_cnt_) {
+        // no tablet stat has been collected in the past 16 minutes.
+      } else if (OB_FAIL(tablet_stats.push_back(cur_stat))) {
+        LOG_WARN("failed to add tablet stat", K(ret), K(cur_stat));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantTabletStatMgr::get_history_tablet_stats(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
@@ -709,10 +738,7 @@ int ObTenantTabletStatMgr::get_sys_stat(ObTenantSysStat &sys_stat)
 {
   int ret = OB_SUCCESS;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
-  } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu_usage(MTL_ID(), sys_stat.cpu_usage_percentage_))) {
+  if (OB_FAIL(GCTX.omt_->get_tenant_cpu_usage(MTL_ID(), sys_stat.cpu_usage_percentage_))) {
     LOG_WARN("failed to get tenant cpu usage", K(ret), K(sys_stat));
   } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), sys_stat.min_cpu_cnt_, sys_stat.max_cpu_cnt_))) {
     LOG_WARN("failed to get tenant cpu count", K(ret), K(sys_stat));
@@ -805,7 +831,6 @@ void ObTenantTabletStatMgr::process_stats()
   uint64_t end_idx = (pending_cur > start_idx + DEFAULT_MAX_PENDING_CNT)
                    ? start_idx + DEFAULT_MAX_PENDING_CNT
                    : pending_cur;
-
   if (start_idx == end_idx) { // empty queue
   } else {
     for (uint64_t i = start_idx; i < end_idx; ++i) {

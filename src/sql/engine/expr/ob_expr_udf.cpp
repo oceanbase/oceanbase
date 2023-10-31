@@ -232,6 +232,7 @@ int ObExprUDF::process_in_params(const ObObj *objs_stack,
         }
       } else {
         objs_stack[i].copy_value_or_obj(param, true);
+        param.set_param_meta();
       }
     } else if (params_desc.at(i).is_local_out()
               || params_desc.at(i).is_package_var_out()

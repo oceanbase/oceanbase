@@ -46,10 +46,48 @@ typedef void (*raw_var_batch_decode_func)(
             common::ObDatum *datums);
 
 typedef void (*fix_filter_func)(
-            const int64_t row_cnt,
             const unsigned char *col_data,
             const uint64_t node_value,
+            const sql::PushdownFilterInfo &pd_filter_info,
             sql::ObBitVector &res);
+
+typedef void (*raw_compare_function)(
+            const unsigned char* raw_data,
+            const uint64_t node_value,
+            uint8_t* selection,
+            uint32_t from,
+            uint32_t to);
+
+typedef void (*raw_compare_function_with_null)(
+            const unsigned char* raw_data,
+            const uint64_t node_value,
+            const uint64_t null_node_value,
+            uint8_t* selection,
+            uint32_t from,
+            uint32_t to);
+
+class RawCompareFunctionFactory {
+public:
+  static constexpr uint32_t IS_SIGNED_CNT = 2;
+  static constexpr uint32_t FIX_LEN_TAG_CNT = 4;
+  static constexpr uint32_t OP_TYPE_CNT = 6;
+public:
+  static RawCompareFunctionFactory &instance();
+  raw_compare_function get_cmp_function(
+      const bool is_signed,
+      const int32_t fix_len_tag,
+      const sql::ObWhiteFilterOperatorType op_type);
+  raw_compare_function_with_null get_cs_cmp_function_with_null(
+      const int32_t fix_len_tag,
+      const sql::ObWhiteFilterOperatorType op_type);
+private:
+  RawCompareFunctionFactory();
+  ~RawCompareFunctionFactory() = default;
+  DISALLOW_COPY_AND_ASSIGN(RawCompareFunctionFactory);
+private:
+  ObMultiDimArray_T<raw_compare_function, IS_SIGNED_CNT, FIX_LEN_TAG_CNT, OP_TYPE_CNT> functions_array_;
+  ObMultiDimArray_T<raw_compare_function_with_null, FIX_LEN_TAG_CNT, OP_TYPE_CNT> cs_functions_with_null_array_;
+};
 
 class ObRawDecoder : public ObIColumnDecoder
 {
@@ -67,7 +105,7 @@ public:
 
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
 
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
   void reset() { this->~ObRawDecoder(); new (this) ObRawDecoder(); }
@@ -104,6 +142,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 
   virtual int get_null_count(
@@ -112,14 +151,15 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
+  virtual bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const override;
 private:
-  bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const;
 
-  bool fast_filter_valid(
+  int check_fast_filter_valid(
       const ObColumnDecoderCtx &ctx,
-      const ObObjType &filter_value_type,
+      const sql::ObWhiteFilterExecutor &filter,
       int32_t &fix_length,
-      bool &is_signed_data) const;
+      bool &is_signed_data,
+      bool &valid) const;
 
   int batch_decode_general(
       const ObColumnDecoderCtx &ctx,
@@ -128,20 +168,37 @@ private:
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const;
+  int batch_decode_fast(
+      const ObColumnDecoderCtx &ctx,
+      const ObIRowIndex* row_index,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      common::ObDatum *datums) const;
 
   int get_is_null_bitmap(
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
-  int fast_comparison_operator(
+  // For binary data
+  int fast_binary_comparison_operator(
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
       int32_t fix_len_tag,
       bool is_signed_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
+
+  // For structured data
+  int fast_datum_comparison_operator(
+      const ObColumnDecoderCtx &col_ctx,
+      const ObIRowIndex* row_index,
+      const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      ObBitmap &result_bitma) const;
 
   int comparison_operator(
       const sql::ObPushdownFilterExecutor *parent,
@@ -149,6 +206,7 @@ private:
       const unsigned char* col_data,
       const ObIRowIndex* row_index,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int bt_operator(
@@ -157,6 +215,7 @@ private:
       const unsigned char* col_data,
       const ObIRowIndex* row_index,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int in_operator(
@@ -165,21 +224,18 @@ private:
       const unsigned char* col_data,
       const ObIRowIndex* row_index,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
-  int load_data_to_obj_cell(const ObObjMeta cell_meta, const char *cell_data, int64_t cell_len, ObObj &load_obj) const;
-
+  template<typename Operator>
   int traverse_all_data(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const ObIRowIndex* row_index,
-      const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap,
-      int (*lambda)(
-          const ObObj &cur_obj,
-          const sql::ObWhiteFilterExecutor &filter,
-          bool &result)) const;
+      Operator const &eval) const;
 
 private:
   ObObjTypeStoreClass store_class_;
@@ -348,17 +404,19 @@ template <bool IS_SIGNED, int32_t LEN_TAG, int32_t CMP_TYPE>
 struct RawFixFilterFunc_T
 {
   static void fix_filter_func(
-      const int64_t row_cnt,
       const unsigned char *col_data,
       const uint64_t node_value,
+      const sql::PushdownFilterInfo &pd_filter_info,
       sql::ObBitVector &res)
   {
     typedef typename ObEncodingTypeInference<IS_SIGNED, LEN_TAG>::Type DataType;
     const DataType *values = reinterpret_cast<const DataType *>(col_data);
     DataType right_value = *reinterpret_cast<const DataType *>(&node_value);
-    for (int64_t row_id = 0; row_id < row_cnt; ++row_id) {
+    int64_t row_id = 0;
+    for (int64_t offset = 0; offset < pd_filter_info.count_; ++offset) {
+      row_id = offset + pd_filter_info.start_;
       if (value_cmp_t<DataType, CMP_TYPE>(values[row_id], right_value)) {
-        res.set(row_id);
+        res.set(offset);
       }
     }
   }

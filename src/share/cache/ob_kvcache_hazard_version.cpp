@@ -11,27 +11,26 @@
  */
 
 #include "ob_kvcache_hazard_version.h"
-#include "ob_kv_storecache.h"
 
 
 namespace oceanbase{
 namespace common{
 
 /*
- * -----------------------------------------------------------KVCacheHazardNode-----------------------------------------------------------
+ * -----------------------------------------------------------ObKVCacheHazardNode-----------------------------------------------------------
  */
-KVCacheHazardNode::KVCacheHazardNode()
+ObKVCacheHazardNode::ObKVCacheHazardNode()
     : tenant_id_(OB_INVALID_TENANT_ID),
       hazard_next_(nullptr),
       version_(UINT64_MAX)
 {
 }
 
-KVCacheHazardNode::~KVCacheHazardNode()
+ObKVCacheHazardNode::~ObKVCacheHazardNode()
 {
 }
 
-void KVCacheHazardNode::set_next(KVCacheHazardNode * const next)
+void ObKVCacheHazardNode::set_next(ObKVCacheHazardNode * const next)
 {
   if (this != next) {
     hazard_next_ = next;
@@ -39,82 +38,57 @@ void KVCacheHazardNode::set_next(KVCacheHazardNode * const next)
 }
 
 /*
- * -----------------------------------------------------------KVCacheHazardThreadStore-----------------------------------------------------------
+ * -----------------------------------------------------------ObKVCacheHazardSlot-----------------------------------------------------------
  */
-KVCacheHazardThreadStore::KVCacheHazardThreadStore()
+ObKVCacheHazardSlot::ObKVCacheHazardSlot()
     : acquired_version_(UINT64_MAX),
       delete_list_(nullptr),
       waiting_nodes_count_(0),
       last_retire_version_(0),
-      next_(nullptr),
-      thread_id_(0),
-      is_retiring_(false),
-      inited_(false)
+      is_retiring_(false)
 {
 }
 
-KVCacheHazardThreadStore::~KVCacheHazardThreadStore()
+ObKVCacheHazardSlot::~ObKVCacheHazardSlot()
 {
 }
 
-int KVCacheHazardThreadStore::init(const int64_t thread_id)
+bool ObKVCacheHazardSlot::acquire(const uint64_t version)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(thread_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid arguments", K(ret), K(thread_id));
-  } else if (!ATOMIC_BCAS(&inited_, false, true)) {
-    ret = OB_INIT_TWICE;
-    COMMON_LOG(WARN, "This KVCacheHazardThreadStore has been inited", K(ret), K(inited_));
-  } else {
-    thread_id_ = thread_id;
-  }
-
-  return ret;
+  return ATOMIC_BCAS(&acquired_version_, UINT64_MAX, version);
 }
 
-void KVCacheHazardThreadStore::set_exit()
+void ObKVCacheHazardSlot::release()
 {
-  thread_id_ = 0;
-  acquired_version_ = UINT64_MAX;
-  ATOMIC_SET(&inited_, false);
+  ATOMIC_STORE(&acquired_version_, UINT64_MAX);
 }
 
-int KVCacheHazardThreadStore::delete_node(KVCacheHazardNode &node)
+void ObKVCacheHazardSlot::delete_node(ObKVCacheHazardNode &node)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This KVCacheHazardThreadStore is not inited", K(ret), K(inited_));
-  } else {
-    add_nodes(node);
-    ATOMIC_AAF(&waiting_nodes_count_, 1);
-  }
-
-  return ret;
+  add_nodes(node);
+  ATOMIC_AAF(&waiting_nodes_count_, 1);
 }
 
-void KVCacheHazardThreadStore::retire(const uint64_t version, const uint64_t tenant_id)
+void ObKVCacheHazardSlot::retire(const uint64_t version, const uint64_t tenant_id)
 {
   if (version > ATOMIC_LOAD(&last_retire_version_) || tenant_id != OB_INVALID_TENANT_ID) {
     while(!ATOMIC_BCAS(&is_retiring_, false, true)) {
       // wait until get retiring
       PAUSE();
     }
-    KVCacheHazardNode *head = ATOMIC_LOAD(&delete_list_);
+
+    ObKVCacheHazardNode *head = ATOMIC_LOAD(&delete_list_);
     if (nullptr != head) {
       if (version > last_retire_version_) {
         (void) ATOMIC_SET(&last_retire_version_, version);
       }
-      KVCacheHazardNode *temp_node = head;
+      ObKVCacheHazardNode *temp_node = head;
       while (temp_node != (head = ATOMIC_VCAS(&delete_list_, temp_node, nullptr))) {
         temp_node = head;
       }
 
       int64_t retire_count = 0;
-      KVCacheHazardNode *remain_list = nullptr;
+      ObKVCacheHazardNode *remain_list = nullptr;
       while (head != nullptr) {
         temp_node = head;
         head = head->get_next();
@@ -138,17 +112,17 @@ void KVCacheHazardThreadStore::retire(const uint64_t version, const uint64_t ten
   }
 }
 
-void KVCacheHazardThreadStore::add_nodes(KVCacheHazardNode &list)
+void ObKVCacheHazardSlot::add_nodes(ObKVCacheHazardNode &list)
 {
   // Remember to udapte waiting_nodes_count_ outside
 
-  KVCacheHazardNode *tail = &list;
+  ObKVCacheHazardNode *tail = &list;
   while (nullptr != tail->get_next()) {
     tail = tail->get_next();
   }
 
-  KVCacheHazardNode *curr = ATOMIC_LOAD(&delete_list_);
-  KVCacheHazardNode *old = curr;
+  ObKVCacheHazardNode *curr = ATOMIC_LOAD(&delete_list_);
+  ObKVCacheHazardNode *old = curr;
   tail->set_next(curr);
   while (old != (curr = ATOMIC_VCAS(&delete_list_, old, &list))) {
     old = curr;
@@ -157,153 +131,157 @@ void KVCacheHazardThreadStore::add_nodes(KVCacheHazardNode &list)
 }
 
 /*
- * -----------------------------------------------------------GlobalHazardVersion-----------------------------------------------------------
+ * -----------------------------------------------------------ObKVCacheHazardStation-----------------------------------------------------------
  */
 
-GlobalHazardVersion::GlobalHazardVersion()
+ObKVCacheHazardStation::ObKVCacheHazardStation()
     : version_(0),
-      thread_waiting_node_threshold_(0),
-      thread_store_lock_(common::ObLatchIds::THREAD_STORE_LOCK),
-      thread_stores_(nullptr),
-      thread_store_allocator_(),
-      ts_key_(OB_INVALID_PTHREAD_KEY),
+      waiting_node_threshold_(0),
+      hazard_slots_(nullptr),
+      slot_num_(0),
+      slot_allocator_("KVCACHE_HAZARD", OB_MALLOC_MIDDLE_BLOCK_SIZE, OB_SERVER_TENANT_ID),
       inited_(false)
 {
 }
 
-GlobalHazardVersion::~GlobalHazardVersion()
+ObKVCacheHazardStation::~ObKVCacheHazardStation()
 {
   destroy();
 }
 
-int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold)
+int ObKVCacheHazardStation::init(const int64_t waiting_node_threshold, const int64_t slot_num)
 {
   int ret = OB_SUCCESS;
 
+  void *buf = nullptr;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
-    COMMON_LOG(WARN, "This HazardVersion has been inited", K(ret), K(inited_));
-  } else if (OB_FAIL(thread_store_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "KVCACHE_HAZARD", OB_SERVER_TENANT_ID,
-                      INT64_MAX))) {
-    COMMON_LOG(WARN, "Fail to init thread store allocator", K(ret));
+    COMMON_LOG(WARN, "This hazard station has been inited", K(ret), K(inited_));
+  } else if (OB_UNLIKELY(waiting_node_threshold <= 0 || slot_num <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(waiting_node_threshold), K(slot_num));
+  } else if (OB_ISNULL(buf = slot_allocator_.alloc(sizeof(ObKVCacheHazardSlot) * slot_num))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "Fail to allocate memory for hazard slots", K(ret));
   } else {
-    lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "KVCACHE_HAZARD");
-    SET_USE_500(attr);
-    thread_store_allocator_.set_attr(attr);
-    int syserr = pthread_key_create(&ts_key_, deregister_thread);
-    if (OB_UNLIKELY(0 != syserr)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(WARN, "Fail to create pthread key", K(ret), K(syserr));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    destroy();
-  } else {
+    hazard_slots_ = new (buf) ObKVCacheHazardSlot[slot_num];
     version_ = 0;
-    thread_waiting_node_threshold_ = thread_waiting_node_threshold;
+    waiting_node_threshold_ = waiting_node_threshold;
+    slot_num_ = slot_num;
     inited_ = true;
   }
+  COMMON_LOG(DEBUG, "Hazard station init details", K(ret), K(waiting_node_threshold_), K(slot_num_));
 
   return ret;
 }
 
-void GlobalHazardVersion::destroy()
+void ObKVCacheHazardStation::destroy()
 {
-  COMMON_LOG(INFO, "Hazard version begin to destroy");
+  COMMON_LOG(INFO, "Hazard station begin to destroy");
 
   inited_ = false;
-  thread_stores_ = nullptr;
-  thread_store_allocator_.reset();
+  if (OB_NOT_NULL(hazard_slots_)) {
+    for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+      hazard_slots_[i].~ObKVCacheHazardSlot();
+    }
+    slot_allocator_.free(hazard_slots_);
+    hazard_slots_ = nullptr;
+  }
+  slot_num_ = 0;
+  waiting_node_threshold_ = 0;
+  version_ = 0;
+  slot_allocator_.reset();
 }
 
-int GlobalHazardVersion::delete_node(KVCacheHazardNode *node)
+int ObKVCacheHazardStation::delete_node(const int64_t slot_id, ObKVCacheHazardNode *node)
 {
   int ret = OB_SUCCESS;
 
-  KVCacheHazardThreadStore *ts = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
-  } else if (OB_UNLIKELY(nullptr == node || OB_INVALID_TENANT_ID == node->tenant_id_)) {
+    COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
+  } else if (OB_UNLIKELY(slot_id < 0 || slot_id >= slot_num_ || nullptr == node)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), KPC(node));
-  } else if (OB_FAIL(get_thread_store(ts))) {
-    COMMON_LOG(WARN, "Fail to get thread store", K(ret));
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(slot_num_), K(slot_id), KP(node));
   } else {
     node->set_version(ATOMIC_FAA(&version_, 1));
     if (OB_UNLIKELY(nullptr != node->get_next())) {
       COMMON_LOG(ERROR, "Unexpected hazard next", KPC(node));
       ob_abort();
-    } else if (OB_FAIL(ts->delete_node(*node))) {
-      COMMON_LOG(WARN, "Fail to add node to threadstore", K(ret), K(*ts));
+    } else {
+      hazard_slots_[slot_id].delete_node(*node);
     }
   }
 
   return ret;
 }
 
-int GlobalHazardVersion::acquire()
+int ObKVCacheHazardStation::acquire(int64_t &slot_id)
 {
   int ret = OB_SUCCESS;
 
-  KVCacheHazardThreadStore *ts = nullptr;
+  slot_id = -1;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
-  } else if (OB_FAIL(get_thread_store(ts))) {
-    COMMON_LOG(WARN, "Fail to get thread store", K(ret));
+    COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
   } else {
-    ts->set_acquired_version(version_);
-    while (ts->get_acquired_version() != ATOMIC_LOAD(&version_)) {
-      ts->set_acquired_version(version_);
+    int64_t retry_count = 0;
+    int64_t curr = get_itid() % slot_num_;
+    const int64_t end = curr;
+    while (!hazard_slots_[curr].acquire(version_)) {
+      curr = (curr + 1) % slot_num_;
+      if (curr == end) {
+        if (++retry_count >= MAX_ACQUIRE_RETRY_COUNT) {
+          ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "There is no free slot for current thread", K(ret), K(retry_count));
+        } else {
+          sched_yield();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      slot_id = curr;
     }
   }
 
   return ret;
 }
 
-void GlobalHazardVersion::release()
+void ObKVCacheHazardStation::release(const int64_t slot_id)
 {
   int ret = OB_SUCCESS;
 
-  KVCacheHazardThreadStore *ts = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret  = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret));
-  } else if (OB_FAIL(get_thread_store(ts))) {
-    COMMON_LOG(WARN, "Fail to get thread store", K(ret));
+    COMMON_LOG(WARN, "This hazard station is not inited", K(ret));
+  } else if (OB_UNLIKELY(slot_id < 0 || slot_id >= slot_num_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(slot_num_), K(slot_id));
   } else {
-    ts->set_acquired_version(UINT64_MAX);
-    if (ts->get_waiting_count() >= thread_waiting_node_threshold_) {
-      uint64_t min_version = UINT64_MAX;
-      if (OB_FAIL(get_min_version(min_version))) {
-        COMMON_LOG(WARN, "Fail to get min version", K(ret));
-      } else {
-        ts->retire(min_version, OB_INVALID_TENANT_ID);
-      }
+    ObKVCacheHazardSlot &slot = hazard_slots_[slot_id];
+    slot.release();
+    if (slot.get_waiting_count() >= waiting_node_threshold_) {
+      uint64_t min_version = get_min_version();
+      slot.retire(min_version, OB_INVALID_TENANT_ID);
     }
   }
+
   if (OB_FAIL(ret)) {
     COMMON_LOG(ERROR, "Fail to release version", K(ret));
   }
 }
 
-int GlobalHazardVersion::retire(const uint64_t tenant_id)
+int ObKVCacheHazardStation::retire(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
-  uint64_t min_version = UINT64_MAX;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
-  } else if (OB_FAIL(get_min_version(min_version))) {
-    COMMON_LOG(WARN, "Fail to get current min version", K(ret));
+    COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
   } else {
-    KVCacheHazardThreadStore *ts = thread_stores_;
-    while (ts != nullptr) {
-      ts->retire(min_version, tenant_id);
-      ts = ts->get_next();
+    uint64_t min_version = get_min_version();
+    for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+      hazard_slots_[i].retire(min_version, tenant_id);
     }
   }
 
@@ -314,121 +292,40 @@ int GlobalHazardVersion::retire(const uint64_t tenant_id)
   return ret;
 }
 
-int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
-{
-  int ret = OB_SUCCESS;
-
-  ts = static_cast<KVCacheHazardThreadStore *>(pthread_getspecific(ts_key_));
-  if (OB_UNLIKELY(nullptr == ts)) {
-    int64_t thread_id = GETTID();
-    int syserr = 0;
-
-    // find free thread store to reuse
-    {
-      lib::ObMutexGuard guard(thread_store_lock_);
-      KVCacheHazardThreadStore *free_store = thread_stores_;
-      while (OB_SUCC(ret) && nullptr != free_store) {
-        if (!free_store->is_inited()) {
-          if (OB_FAIL(free_store->init(thread_id))) {
-            if (OB_INIT_TWICE == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              COMMON_LOG(WARN, "Falil to init thread store", K(ret), K(thread_id));
-            }
-          } else if (OB_UNLIKELY(0 != (syserr = pthread_setspecific(ts_key_, free_store)))) {
-            ret = OB_ERR_UNEXPECTED;
-            COMMON_LOG(WARN, "Fail to set thread local pointer when reuse", K(ret), K(syserr));
-            free_store->set_exit();
-          } else {
-            ts = free_store;
-            break;
-          }
-        }
-        free_store = free_store->get_next();
-      }
-
-    }  // thread_store_lock_ guard
-
-    // create new thread store if no free thread store can be reuse
-    if (OB_SUCC(ret) && nullptr == ts) {
-      void *buf = thread_store_allocator_.alloc(sizeof(KVCacheHazardThreadStore));
-      if (OB_UNLIKELY(nullptr == buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        COMMON_LOG(WARN, "Fail to alloc memory for KVCacheHazardThreadStore", K(ret), K(thread_id));
-      } else {
-        ts = new (buf) KVCacheHazardThreadStore();
-        if (OB_FAIL(ts->init(thread_id))) {
-          COMMON_LOG(WARN, "Fail to init KVCacheHazardThreadStore", K(ret));
-        } else if (OB_UNLIKELY(0 != (syserr = pthread_setspecific(ts_key_, ts)))) {
-          ret = OB_ERR_UNEXPECTED;
-          COMMON_LOG(WARN, "Fail to set thread local pointer when creaet", K(ret), K(syserr));
-        } else {
-          lib::ObMutexGuard guard(thread_store_lock_);
-          ts->set_next(thread_stores_);
-          thread_stores_ = ts;
-        }  // thread_store_lock_ guard
-        if (OB_FAIL(ret)) {
-          ts->~KVCacheHazardThreadStore();
-          thread_store_allocator_.free(ts);
-          ts = nullptr;
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int GlobalHazardVersion::print_current_status() const
+int ObKVCacheHazardStation::print_current_status() const
 {
   int ret = OB_SUCCESS;
 
   static const int64_t BUFLEN = 1 << 18;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
+    COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
   } else {
     lib::ContextParam param;
     param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_TEMP_VARIABLES);
     CREATE_WITH_TEMP_CONTEXT(param) {
       int64_t ctxpos = 0;
-      KVCacheHazardThreadStore *ts = thread_stores_;
       int64_t total_nodes_num = 0;
-      uint64_t min_version = UINT64_MAX;
-      int64_t ts_count = 0;
       char *buf = nullptr;
       if (OB_ISNULL(buf = (char *)lib::ctxalp(BUFLEN))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         COMMON_LOG(ERROR, "[KVCACHE-HAZARD] no memory", K(ret));
       } else {
-        while (OB_SUCC(ret) && nullptr != ts) {
-          int64_t waiting_nodes_count = ts->get_waiting_count();
-          uint64_t acquired_version = ts->get_acquired_version();
+        for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+          ObKVCacheHazardSlot &slot = hazard_slots_[i];
+          int64_t waiting_nodes_count = slot.get_waiting_count();
+          int64_t acquired_version = slot.get_acquired_version();
           total_nodes_num += waiting_nodes_count;
           if (waiting_nodes_count == 0 && acquired_version == UINT64_MAX) {
-          } else if (OB_FAIL(databuff_printf(buf, BUFLEN, ctxpos,
-              "[KVCACHE-HAZARD] i=%8ld | thread_id=%8ld | inited=%8d | waiting_nodes_count=%8ld | last_retire_version=%8lu | acquired_version=%12lu |\n",
-              ts_count,
-              ts->get_thread_id(),
-              ts->is_inited(),
-              waiting_nodes_count,
-              ts->get_last_retire_version(),
-              acquired_version))) {
+          } else if (OB_FAIL(ret = databuff_printf(buf, BUFLEN, ctxpos,
+                  "[KVCACHE-HAZARD] i=%8ld | acquire_version=%12lu | waiting_nodes_count=%8ld | last_retire_version=%8lu |\n",
+                  i, acquired_version, waiting_nodes_count, slot.get_last_retire_version()))) {
             COMMON_LOG(WARN, "Fail to write data buf", K(ret), K(ctxpos), K(BUFLEN));
           }
-          ++ts_count;
-          ts = ts->get_next();
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(get_min_version(min_version))) {
-            COMMON_LOG(WARN, "Fail to get min version of hazard version", K(ret));
-          }
-          _OB_LOG(INFO, "[KVCACHE-HAZARD] hazard version status info: current version: %8ld | min_version=%8lu | total thread store count: %8ld | total nodes count: %8ld |\n%s",
-              ATOMIC_LOAD(&version_),
-              min_version,
-              ts_count,
-              total_nodes_num,
-              buf);
+          _OB_LOG(INFO, "[KVCACHE-HAZARD] hazard version status info: current_version: %8ld | min_version=%8ld | total_nodes_count: %8ld |\n%s",
+              version_, get_min_version(), total_nodes_num, buf);
         }
       }
     }
@@ -437,54 +334,39 @@ int GlobalHazardVersion::print_current_status() const
   return ret;
 }
 
-int GlobalHazardVersion::get_min_version(uint64_t &min_version) const
+uint64_t ObKVCacheHazardStation::get_min_version() const
 {
-  int ret = OB_SUCCESS;
-
-  min_version = INT64_MAX;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
-  } else {
-    min_version = ATOMIC_LOAD(&version_);
-    KVCacheHazardThreadStore *ts = thread_stores_;
-    uint64_t thread_version = UINT64_MAX;
-
-    while (nullptr != ts) {
-      thread_version = ts->get_acquired_version();
-      if (thread_version < min_version) {
-        min_version = thread_version;
-      }
-      ts = ts->get_next();
+  uint64_t min_version = ATOMIC_LOAD(&version_);
+  uint64_t slot_version = UINT64_MAX;
+  for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+    slot_version = hazard_slots_[i].get_acquired_version();
+    if (slot_version < min_version) {
+      min_version = slot_version;
     }
   }
-
-  return ret;
+  return min_version;
 }
 
-
-void GlobalHazardVersion::deregister_thread(void *d_ts)
-{
-  COMMON_LOG(INFO, "Deregister from hazard_version", KPC(static_cast<KVCacheHazardThreadStore *>(d_ts)));
-  static_cast<KVCacheHazardThreadStore *>(d_ts)->set_exit();
-}
 
 /*
- * -----------------------------------------------------------GlobalHazardVersionGuard-----------------------------------------------------------
+ * -----------------------------------------------------------ObKVCacheHazardGuard-----------------------------------------------------------
  */
 
-GlobalHazardVersionGuard::GlobalHazardVersionGuard(GlobalHazardVersion &g_version)
-    : global_hazard_version_(g_version),
+ObKVCacheHazardGuard::ObKVCacheHazardGuard(ObKVCacheHazardStation &g_station)
+    : global_hazard_station_(g_station),
+      slot_id_(-1),
       ret_(OB_SUCCESS)
 {
-  if (OB_UNLIKELY( OB_SUCCESS != (ret_ = global_hazard_version_.acquire()) )) {
+  if (OB_UNLIKELY( OB_SUCCESS != (ret_ = global_hazard_station_.acquire(slot_id_)) )) {
     COMMON_LOG_RET(WARN, ret_, "Fail to acquire hazard version", K(ret_));
   }
 }
 
-GlobalHazardVersionGuard::~GlobalHazardVersionGuard()
+ObKVCacheHazardGuard::~ObKVCacheHazardGuard()
 {
-  global_hazard_version_.release();
+  if (slot_id_ != -1) {
+    global_hazard_station_.release(slot_id_);
+  }
 }
 
 

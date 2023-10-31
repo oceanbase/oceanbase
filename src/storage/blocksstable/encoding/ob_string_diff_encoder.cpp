@@ -233,6 +233,16 @@ int ObStringDiffEncoder::traverse_cell(
   return ret;
 }
 
+int ObStringDiffEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  const bool hex_packing = string_size_ - common_size_ != row_store_size_;
+  need_size = sizeof(*header_)
+        + sizeof(ObStringDiffHeader::DiffDesc) * diff_descs_.count()
+        + (hex_packing ? hex_string_map_.size_ : 0) + common_size_;
+  return ret;
+}
+
 int ObStringDiffEncoder::store_meta(ObBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;

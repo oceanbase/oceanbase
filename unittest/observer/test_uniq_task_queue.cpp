@@ -68,6 +68,7 @@ public:
     task_id_ = other.task_id_;
     return ret;
   }
+  virtual void set_start_timestamp() {}
 
   bool is_valid() const { return true; }
 

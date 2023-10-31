@@ -32,6 +32,7 @@ ObAnalyzeStmt::ObAnalyzeStmt()
     partition_infos_(),
     subpartition_infos_(),
     column_params_(),
+    column_group_params_(),
     statistic_type_(InvalidStatistics),
     sample_info_(),
     parallel_degree_(1),
@@ -86,6 +87,7 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
   OZ (param.part_infos_.assign(partition_infos_));
   OZ (param.subpart_infos_.assign(subpartition_infos_));
   OZ (param.column_params_.assign(column_params_));
+  OZ (param.column_group_params_.assign(column_group_params_));
   OZ (param.part_ids_.assign(part_ids_));
   OZ (param.subpart_ids_.assign(subpart_ids_));
   OZ (pl::ObDbmsStats::set_param_global_part_id(ctx, param));

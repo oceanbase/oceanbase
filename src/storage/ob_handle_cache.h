@@ -16,6 +16,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/hash/ob_hashtable.h"
 
+
 namespace oceanbase
 {
 namespace storage
@@ -26,10 +27,11 @@ class ObHandleCacheNode : public common::ObDLinkBase<ObHandleCacheNode<Key, Hand
 {
 public:
   ObHandleCacheNode() : bucket_idx_(-1) {}
-  virtual ~ObHandleCacheNode() { bucket_idx_ = -1; }
+  virtual ~ObHandleCacheNode() { reset(); }
 
   void reset()
   {
+    ObDLinkBase<ObHandleCacheNode<Key, Handle>>::reset();
     handle_.reset();
     bucket_idx_ = -1;
   }
@@ -48,22 +50,20 @@ public:
   ObHandleCache()
   {
     STATIC_ASSERT(N <= 8192, "number of bucket is larger than 8192");
-    for (int64_t i = 0; i < N; ++i) {
-      lru_list_.add_first(&nodes_[i]);
-    }
-    MEMSET(buckets_, -1, sizeof(buckets_));
-    MEMSET(chain_, -1, sizeof(chain_));
+    reset();
   }
 
   virtual ~ObHandleCache() {}
 
-  void reset_handles()
+  void reset()
   {
+    lru_list_.reset();
     for (int64_t i = 0; i < N; ++i) {
       nodes_[i].reset();
     }
     MEMSET(buckets_, -1, sizeof(buckets_));
     MEMSET(chain_, -1, sizeof(chain_));
+    hold_size_ = 0;
   }
 
   int get_handle(const Key &key, Handle &handle)
@@ -92,7 +92,7 @@ public:
   int put_handle(const Key &key, Handle &handle)
   {
     int ret = common::OB_SUCCESS;
-    CacheNode *node = lru_list_.remove_last();
+    CacheNode *node = lru_list_.get_size() >= N ? lru_list_.remove_last() : nodes_ + lru_list_.get_size();
     const int16_t node_idx = static_cast<int16_t>(node - nodes_);
     int16_t *idx_ptr = NULL;
     int16_t idx = 0;
@@ -113,6 +113,7 @@ public:
       }
     }
     if (OB_SUCC(ret)) {
+      hold_size_ += handle.get_handle_size() - node->handle_.get_handle_size();
       node->reset();
       node->key_ = key;
       node->handle_ = handle;
@@ -125,6 +126,7 @@ public:
     }
     return ret;
   }
+  OB_INLINE int64_t hold() const { return hold_size_; }
 private:
   static const uint64_t BUCKET_SIZE = common::next_pow2(N * 2);
   static const uint64_t MASK = BUCKET_SIZE - 1;
@@ -132,6 +134,7 @@ private:
   int16_t buckets_[BUCKET_SIZE];
   int16_t chain_[N];
   LRUList lru_list_;
+  int64_t hold_size_;
 };
 
 

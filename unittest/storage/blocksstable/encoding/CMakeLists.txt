@@ -1,5 +1,5 @@
 storage_unittest(test_bit_stream)
-#storage_unittest(test_micro_block_decoder)
+storage_unittest(test_micro_block_decoder)
 storage_unittest(test_micro_block_encoder)
 
 storage_unittest(test_bitset)

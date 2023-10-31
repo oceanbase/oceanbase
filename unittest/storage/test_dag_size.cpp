@@ -15,7 +15,7 @@
 #define private public
 #include "storage/ob_partition_merge_task.h"
 #include "storage/ob_build_index_task.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 
 namespace oceanbase
 {

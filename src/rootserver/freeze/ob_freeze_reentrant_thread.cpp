@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_freeze_reentrant_thread.h"
 #include "share/ob_service_epoch_proxy.h"
@@ -25,8 +25,8 @@ using namespace share;
 
 namespace rootserver
 {
-ObFreezeReentrantThread::ObFreezeReentrantThread()
-  : ObRsReentrantThread(true), tenant_id_(common::OB_INVALID_TENANT_ID), 
+ObFreezeReentrantThread::ObFreezeReentrantThread(const uint64_t tenant_id)
+  : ObRsReentrantThread(true), tenant_id_(tenant_id),
     sql_proxy_(nullptr), is_paused_(false), epoch_(-1)
 {}
 

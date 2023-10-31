@@ -23,9 +23,6 @@ class MockObMetaReport : public observer::ObIMetaReport
 public:
   MOCK_METHOD2(submit_ls_update_task, int(const uint64_t tenant_id,
                                                   const share::ObLSID &ls_id));
-  MOCK_METHOD3(submit_tablet_update_task, int(const uint64_t tenant_id,
-                                              const share::ObLSID &ls_id,
-                                              const common::ObTabletID &tablet_id));
 };
 
 }

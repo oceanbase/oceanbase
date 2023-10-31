@@ -25,7 +25,6 @@
 #include "storage/access/ob_table_read_info.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 #include "storage/meta_mem/ob_storage_meta_cache.h"
-#include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_table_range.h"
 #include "share/scn.h"
 
@@ -75,6 +74,8 @@ class ObITable
 {
   OB_UNIS_VERSION_V(1);
 public:
+
+  // Attention! keep update with table_types in GV$OB_SSTABLES
   enum TableType : unsigned char
   {
     // < memtable start from here
@@ -85,13 +86,16 @@ public:
     // < add new memtable here
 
     // < sstable start from here
-    MAJOR_SSTABLE = 10,
+    MAJOR_SSTABLE = 10, //Reuse type, also represents row store column group in column store
     MINOR_SSTABLE = 11,
     MINI_SSTABLE = 12,
     META_MAJOR_SSTABLE = 13,
     DDL_DUMP_SSTABLE = 14,
     REMOTE_LOGICAL_MINOR_SSTABLE = 15,
     DDL_MEM_SSTABLE = 16,
+    COLUMN_ORIENTED_SSTABLE = 17,
+    NORMAL_COLUMN_GROUP_SSTABLE = 18,
+    ROWKEY_COLUMN_GROUP_SSTABLE = 19,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
@@ -129,6 +133,12 @@ public:
     OB_INLINE bool is_ddl_mem_sstable() const { return ObITable::is_ddl_mem_sstable(table_type_); }
     OB_INLINE bool is_table_with_scn_range() const { return ObITable::is_table_with_scn_range(table_type_); }
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
+    OB_INLINE bool is_co_sstable() const { return ObITable::is_co_sstable(table_type_); }
+    OB_INLINE bool is_rowkey_cg_sstable() const { return ObITable::is_rowkey_cg_sstable(table_type_); }
+    OB_INLINE bool is_normal_cg_sstable() const { return ObITable::is_normal_cg_sstable(table_type_); }
+    OB_INLINE bool is_cg_sstable() const { return ObITable::is_cg_sstable(table_type_); }
+    OB_INLINE bool is_column_store_sstable() const { return is_co_sstable() || is_cg_sstable(); }
+
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
     OB_INLINE share::SCN get_start_scn() const { return scn_range_.start_scn_; }
     OB_INLINE share::SCN get_end_scn() const { return scn_range_.end_scn_; }
@@ -137,11 +147,13 @@ public:
       OB_ASSERT(is_major_sstable() || is_meta_major_sstable());
       return version_range_.snapshot_version_;
     }
+    OB_INLINE uint16_t get_column_group_id() const { return column_group_idx_; }
     OB_INLINE TableKey& operator=(const TableKey &key)
     {
       table_type_ = key.table_type_;
       tablet_id_ = key.tablet_id_;
       scn_range_ = key.scn_range_;
+      column_group_idx_ = key.column_group_idx_;
       return *this;
     }
 
@@ -219,6 +231,7 @@ public:
   virtual int64_t get_upper_trans_version() const { return get_snapshot_version(); }
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;
+  OB_INLINE uint16_t get_column_group_id() const { return key_.get_column_group_id(); }
 
   virtual void inc_ref();
   virtual int64_t dec_ref();
@@ -226,6 +239,11 @@ public:
 
   // TODO @hanhui so many table type judgement
   virtual bool is_sstable() const { return is_sstable(key_.table_type_); }
+  virtual bool is_co_sstable() const { return is_co_sstable(key_.table_type_); }
+  virtual bool is_rowkey_cg_sstable() const { return is_rowkey_cg_sstable(key_.table_type_); }
+  virtual bool is_normal_cg_sstable() const { return is_normal_cg_sstable(key_.table_type_); }
+  virtual bool is_cg_sstable() const { return is_cg_sstable(key_.table_type_); }
+  virtual bool is_column_store_sstable() const { return is_co_sstable() || is_cg_sstable(); }
   virtual bool is_major_sstable() const { return is_major_sstable(key_.table_type_); }
   virtual bool is_minor_sstable() const { return is_minor_sstable(key_.table_type_); }
   virtual bool is_mini_sstable() const { return is_mini_sstable(key_.table_type_); }
@@ -255,7 +273,7 @@ public:
   }
   static bool is_major_sstable(const TableType table_type)
   {
-    return ObITable::TableType::MAJOR_SSTABLE == table_type;
+    return ObITable::TableType::MAJOR_SSTABLE == table_type || is_co_sstable(table_type) || is_cg_sstable(table_type);
   }
   static bool is_minor_sstable(const TableType table_type)
   {
@@ -283,6 +301,32 @@ public:
   static bool is_mini_sstable(const TableType table_type)
   {
     return ObITable::TableType::MINI_SSTABLE == table_type;
+  }
+
+  /*
+   *column store sstables
+   */
+  static bool is_co_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_type;
+  }
+  static bool is_normal_cg_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE == table_type;
+  }
+  static bool is_rowkey_cg_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE == table_type;
+  }
+  static bool is_cg_sstable(const TableType table_type)
+  {
+    return is_normal_cg_sstable(table_type)
+        || is_rowkey_cg_sstable(table_type);
+  }
+  static bool is_column_store_sstable(const TableType table_type)
+  {
+    return is_co_sstable(table_type)
+        || is_cg_sstable(table_type);
   }
 
   static bool is_remote_logical_minor_sstable(const TableType table_type)
@@ -424,10 +468,9 @@ private:
 class ObTablesHandleArray final
 {
 public:
-  typedef common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> TableArray;
-  typedef common::ObArray<storage::ObStorageMetaHandle> MetaHandleArray;
   typedef common::ObArray<storage::ObTableHandleV2> HandlesArray;
   ObTablesHandleArray();
+  ObTablesHandleArray(const uint64_t tenant_id);
   ~ObTablesHandleArray();
   void reset();
   OB_INLINE bool empty() const { return handles_array_.empty(); }
@@ -478,8 +521,6 @@ OB_INLINE bool ObITable::TableKey::is_valid() const
     valid = false;
   } else if (ObITable::is_major_sstable(table_type_)
       && !version_range_.is_valid()) {
-    valid = false;
-  } else if (column_group_idx_ > 0) {
     valid = false;
   }
 

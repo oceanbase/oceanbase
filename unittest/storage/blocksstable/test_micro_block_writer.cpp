@@ -119,6 +119,8 @@ TEST_F(TestMicroBlockWriter, test_init)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockWriter writer;
+  writer.data_buffer_.allocator_.set_tenant_id(500);
+  writer.index_buffer_.allocator_.set_tenant_id(500);
 
   //invalid macro_block_size
   ret = writer.init(0, 2, 5);
@@ -150,6 +152,8 @@ TEST_F(TestMicroBlockWriter, append_success)
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num + 2));
 
   ObMicroBlockWriter writer;
+  writer.data_buffer_.allocator_.set_tenant_id(500);
+  writer.index_buffer_.allocator_.set_tenant_id(500);
   ret = writer.init(macro_block_size, rowkey_column_count, column_num + 2);
   ASSERT_EQ(OB_SUCCESS, ret);
   for(int64_t i = 0; i < test_row_num; ++i){
@@ -199,6 +203,8 @@ TEST_F(TestMicroBlockWriter, append_row_error)
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num + 2));
   //not init
   ObMicroBlockWriter writer;
+  writer.data_buffer_.allocator_.set_tenant_id(500);
+  writer.index_buffer_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
   convert_to_multi_version_row(row, row_generate_.get_schema(), SNAPSHOT_VERSION, multi_version_row);
   ASSERT_EQ(OB_NOT_INIT, writer.append_row(multi_version_row));
@@ -223,6 +229,8 @@ TEST_F(TestMicroBlockWriter, build_block_error)
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_num));
   //not init
   ObMicroBlockWriter writer;
+  writer.data_buffer_.allocator_.set_tenant_id(500);
+  writer.index_buffer_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
   ASSERT_EQ(OB_NOT_INIT, writer.build_block(buf, size));
 }
@@ -231,6 +239,8 @@ TEST_F(TestMicroBlockWriter, init_max_column_count)
 {
   // data_buffer_ and index_buffer_ in ObMicroBlockWriter should init succeed
   ObMicroBlockWriter writer;
+  writer.data_buffer_.allocator_.set_tenant_id(500);
+  writer.index_buffer_.allocator_.set_tenant_id(500);
   int64_t ret = writer.init(
       common::OB_DEFAULT_MACRO_BLOCK_SIZE,
       1,
@@ -260,6 +270,8 @@ TEST_F(TestMicroBlockWriter, append_large_row)
   row.storage_datums_[1].set_string(ObString(value2_size, ptr2));
 
   ObMicroBlockWriter writer;
+  writer.data_buffer_.allocator_.set_tenant_id(500);
+  writer.index_buffer_.allocator_.set_tenant_id(500);
   int64_t ret = writer.init(common::OB_DEFAULT_MACRO_BLOCK_SIZE, 1, large_row_col_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
 

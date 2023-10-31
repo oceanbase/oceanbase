@@ -1659,7 +1659,8 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
   if (OB_SUCC(ret)) {
     const ObTableSchema *table_schema = ctx.get_table_schema();
     tsc_ctdef.table_param_.get_enable_lob_locator_v2() = (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
-    if (OB_FAIL(tsc_ctdef.table_param_.convert(*table_schema, tsc_ctdef.access_column_ids_))) {
+    if (OB_FAIL(tsc_ctdef.table_param_.convert(*table_schema, tsc_ctdef.access_column_ids_,
+                                               tsc_ctdef.pd_expr_spec_.pd_storage_flag_))) {
       LOG_WARN("fail to convert table param", K(ret));
     } else if (OB_FAIL(ObTableTscCgService::generate_das_result_output(tsc_ctdef, tsc_ctdef.access_column_ids_))) {
       LOG_WARN("generate das result output failed", K(ret));
@@ -2506,6 +2507,7 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
                           = (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0))) {
   } else if (OB_FAIL(das_tsc_ctdef.table_param_.convert(*table_schema,
                                                         das_tsc_ctdef.access_column_ids_,
+                                                        das_tsc_ctdef.pd_expr_spec_.pd_storage_flag_,
                                                         &tsc_out_cols))) {
     LOG_WARN("fail to convert schema", K(ret), K(*table_schema));
   } else if (OB_FAIL(generate_das_result_output(das_tsc_ctdef, tsc_out_cols))) {

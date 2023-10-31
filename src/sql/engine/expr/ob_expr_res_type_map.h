@@ -43,9 +43,9 @@ struct ObArithRule {
   common::ObObjType param1_calc_type;
   common::ObObjType param2_calc_type;
 
-  TO_STRING_KV("result_type", ob_obj_type_str(result_type),
-               "param1_calc_type", ob_obj_type_str(param1_calc_type),
-               "param2_calc_type", ob_obj_type_str(param2_calc_type));
+  TO_STRING_KV("result_type", inner_obj_type_str(result_type),
+               "param1_calc_type", inner_obj_type_str(param1_calc_type),
+               "param2_calc_type", inner_obj_type_str(param2_calc_type));
 };
 
 template<int D1, int D2>

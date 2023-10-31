@@ -234,6 +234,9 @@ void ObFixedMetaObjArray<T>::reset()
     }
     data_ = nullptr;
   }
+  if (allocator_ != nullptr) {
+    allocator_ = nullptr;
+  }
   count_ = 0;
   capacity_ = 0;
   init_cnt_ = 0;

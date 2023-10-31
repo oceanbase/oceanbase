@@ -781,13 +781,14 @@ public:
   int construct_array_param_datum(const common::ObObjParam &obj_param, common::ObIAllocator &alloc);
   int construct_sql_array_obj(common::ObObjParam &obj_param, common::ObIAllocator &allocator);
   template<typename T>
-  int alloc_datum_reserved_buff(const T &obj_meta, common::ObIAllocator &allocator)
+  int alloc_datum_reserved_buff(const T &obj_meta, const int16_t precision,
+                                common::ObIAllocator &allocator)
   {
     int ret = OB_SUCCESS;
     common::ObObjType real_type = obj_meta.is_ext_sql_array() ? common::ObIntType : obj_meta.get_type();
     common::ObObjDatumMapType obj_datum_map = common::ObDatum::get_obj_datum_map_type(real_type);
     if (OB_LIKELY(common::OBJ_DATUM_NULL != obj_datum_map)) {
-      uint32_t def_res_len = common::ObDatum::get_reserved_size(obj_datum_map);
+      uint32_t def_res_len = common::ObDatum::get_reserved_size(obj_datum_map, precision);
       if (OB_ISNULL(datum_.ptr_ = static_cast<char *>(allocator.alloc(def_res_len)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         SQL_ENG_LOG(WARN, "fail to alloc memory", K(def_res_len), K(ret));

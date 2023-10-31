@@ -164,6 +164,7 @@ public:
 
   virtual int set_data_pos(const int64_t offset, const int64_t length) override;
   virtual int get_var_length(const int64_t row_id, int64_t &length) override;
+  virtual int get_encoding_store_meta_need_space(int64_t &need_size) const override;
   virtual int store_meta(ObBufferWriter &buf_writer) override;
   virtual int store_data(
       const int64_t row_id, ObBitStream &bs, char *buf, const int64_t len) override;

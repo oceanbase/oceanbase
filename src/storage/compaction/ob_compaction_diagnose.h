@@ -17,6 +17,7 @@
 #include "ob_tablet_merge_task.h"
 #include "lib/list/ob_dlist.h"
 #include "share/scheduler/ob_diagnose_config.h"
+#include "storage/compaction/ob_compaction_tablet_diagnose.h"
 
 namespace oceanbase
 {
@@ -96,6 +97,7 @@ struct ObDiagnoseInfoParam : public ObIBasicInfoParam
 struct ObIDiagnoseInfo : public common::ObDLinkBase<ObIDiagnoseInfo> {
   ObIDiagnoseInfo()
     : is_deleted_(false),
+      priority_(0),
       seq_num_(0),
       tenant_id_(OB_INVALID_ID),
       info_param_(nullptr)
@@ -117,11 +119,10 @@ struct ObIDiagnoseInfo : public common::ObDLinkBase<ObIDiagnoseInfo> {
   int deep_copy(ObIAllocator &allocator, T *&out_info);
   bool is_deleted() const { return ATOMIC_LOAD(&is_deleted_); }
   void set_deleted() { ATOMIC_SET(&is_deleted_, true); }
-  // for iterator
-  bool is_deleted_;
-  uint64_t seq_num_;
+  bool is_deleted_; // for iterator
+  uint32_t priority_;
+  uint64_t seq_num_; // for iterator
   uint64_t tenant_id_;
-  //
   ObIBasicInfoParam *info_param_;
 };
 
@@ -144,7 +145,6 @@ int ObIDiagnoseInfo::deep_copy(ObIAllocator &allocator, T *&out_info)
         STORAGE_LOG(WARN, "fail to deep copy info param", K(ret));
       }
     }
-
     if (OB_SUCC(ret)) {
       info->shallow_copy(this);
       out_info = info;
@@ -171,9 +171,8 @@ struct ObScheduleSuspectInfo : public ObIDiagnoseInfo, public ObMergeDagHash
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
   virtual int64_t get_add_time() const override;
   virtual int64_t get_hash() const override;
-  share::ObSuspectInfoType get_suspect_info_type() const;
   static int64_t gen_hash(int64_t tenant_id, int64_t dag_hash);
-  TO_STRING_KV(K_(tenant_id), K_(merge_type), K_(ls_id), K_(tablet_id), K_(add_time), K_(hash));
+  TO_STRING_KV(K_(tenant_id), "merge_type", merge_type_to_str(merge_type_), K_(ls_id), K_(tablet_id), K_(add_time), K_(hash));
 
   int64_t add_time_;
   int64_t hash_;
@@ -230,6 +229,8 @@ public:
   }
   virtual ~ObIDiagnoseInfoMgr() { destroy(); }
 
+  static void add_compaction_info_param(char *buf, const int64_t buf_size, const char* str);
+
   int init(bool with_map,
            const uint64_t tenant_id,
            const char* basic_label,
@@ -265,7 +266,7 @@ public:
   static const int64_t GC_LOW_PERCENTAGE = 40;  // GC_LOW_PERCENTAGE/100
   static const int64_t INFO_BUCKET_LIMIT = 1000;
   static const int64_t INFO_PAGE_SIZE = (1 << 16); // 64KB
-  static const int64_t INFO_PAGE_SIZE_LIMIT = (1 << 11); // 2KB
+  static const int64_t INFO_PAGE_SIZE_LIMIT = (1 << 12); // 4KB
   static const int64_t INFO_IDLE_SIZE = 16LL * 1024LL * 1024LL; // 16MB
   static const int64_t INFO_MAX_SIZE = 16LL * 1024LL * 1024LL; // 16MB // lowest
   typedef common::hash::ObHashMap<int64_t, ObIDiagnoseInfo *> InfoMap;
@@ -302,13 +303,15 @@ int ObIDiagnoseInfoMgr::alloc_and_add(const int64_t key, T *input_info)
     common::SpinWLockGuard guard(lock_);
     if (info_map_.created()) {
       if (OB_FAIL(del_with_no_lock(key, input_info))) {
-        if (OB_HASH_NOT_EXIST != ret) {
+        if (OB_HASH_EXIST != ret && OB_HASH_NOT_EXIST != ret) {
           STORAGE_LOG(WARN, "failed to del old info", K(ret), K(key));
         }
       }
     }
-
-    if (OB_HASH_NOT_EXIST == ret || OB_SUCC(ret)) {
+    if (OB_HASH_EXIST == ret) {
+      // do nothing
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret || OB_SUCC(ret)) {
       ret = OB_SUCCESS;
       int64_t retry_nums = MAX_ALLOC_RETRY_TIMES;
       while (OB_SUCC(ret) && retry_nums-- &&
@@ -342,7 +345,6 @@ public:
   int add_suspect_info(const int64_t key_value, ObScheduleSuspectInfo &info);
 
 public:
-  static const int64_t EXTRA_INFO_LEN = 900;
   static constexpr double MEMORY_PERCENTAGE = 0.5;   // max size = tenant memory size * MEMORY_PERCENTAGE / 100
   static const int64_t POOL_MAX_SIZE = 48LL * 1024LL * 1024LL; // 48MB
 };
@@ -370,17 +372,18 @@ struct ObCompactionDiagnoseInfo
   {
     DIA_STATUS_NOT_SCHEDULE = 0,
     DIA_STATUS_RUNNING = 1,
-    DIA_STATUS_FAILED = 2,
-    DIA_STATUS_FINISH = 3,
+    DIA_STATUS_WARN = 2,
+    DIA_STATUS_FAILED = 3,
     DIA_STATUS_RS_UNCOMPACTED = 4, // RS diagnose
+    DIA_STATUS_SPECIAL = 5, // special diagnose : output the count of some different diagnose infos
     DIA_STATUS_MAX
   };
   const static char *ObDiagnoseStatusStr[DIA_STATUS_MAX];
   static const char * get_diagnose_status_str(ObDiagnoseStatus status);
-  TO_STRING_KV(K_(merge_type), K_(tenant_id), K_(ls_id), K_(tablet_id), K_(status), K_(timestamp),
+  TO_STRING_KV("merge_type", merge_type_to_str(merge_type_), K_(tenant_id), K_(ls_id), K_(tablet_id), K_(status), K_(timestamp),
       K_(diagnose_info));
 
-  storage::ObMergeType merge_type_;
+  compaction::ObMergeType merge_type_;
   int64_t tenant_id_;
   int64_t ls_id_;
   int64_t tablet_id_;
@@ -392,26 +395,32 @@ struct ObCompactionDiagnoseInfo
 class ObCompactionDiagnoseMgr
 {
 public:
+  // for real-time diagnosis
+  enum ObCompactionDiagnoseType {
+    COMPACTION_DIAGNOSE_MEDIUM_NOT_SCHEDULE,
+    COMPACTION_DIAGNOSE_MAJOR_NOT_SCHEDULE,
+    COMPACTION_DIAGNOSE_TYPE_MAX
+  };
+  const static char *ObCompactionDiagnoseTypeStr[COMPACTION_DIAGNOSE_TYPE_MAX];
+  static const char * get_compaction_diagnose_type_str(ObCompactionDiagnoseType type);
+  static ObMergeType get_compaction_diagnose_merge_type(ObCompactionDiagnoseType type);
 struct ObLSCheckStatus
   {
   public:
     ObLSCheckStatus() { reset(); }
-    ObLSCheckStatus(bool weak_read_ts_ready, bool need_merge, bool is_leader)
+    ObLSCheckStatus(bool weak_read_ts_ready, bool need_merge)
       : weak_read_ts_ready_(weak_read_ts_ready),
-        need_merge_(need_merge),
-        is_leader_(is_leader)
+        need_merge_(need_merge)
     {}
     ~ObLSCheckStatus() {}
     OB_INLINE void reset() {
       weak_read_ts_ready_ = false;
       need_merge_ = false;
-      is_leader_ = false;
     }
 
-    TO_STRING_KV(K_(weak_read_ts_ready), K_(need_merge), K_(is_leader));
+    TO_STRING_KV(K_(weak_read_ts_ready), K_(need_merge));
     bool weak_read_ts_ready_;
     bool need_merge_;
-    bool is_leader_;
   };
 public:
   ObCompactionDiagnoseMgr();
@@ -420,6 +429,24 @@ public:
   int init(common::ObIAllocator *allocator, ObCompactionDiagnoseInfo *info_array, const int64_t max_cnt);
   int diagnose_all_tablets(const int64_t tenant_id);
   int diagnose_tenant_tablet();
+  int diagnose_tenant(
+    bool &diagnose_major_flag,
+    ObTenantTabletScheduler *scheduler,
+    int64_t &compaction_scn);
+  void diagnose_tenant_ls(
+      const bool diagnose_major_flag,
+      const bool weak_read_ts_ready,
+      const int64_t compaction_scn,
+      const ObLSID &ls_id);
+  // diagnose failed report task
+  void diagnose_failed_report_task(
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const int64_t compaction_scn);
+  // diagnose waiting or processing report task
+  void diagnose_existing_report_task();
+  // output the count of different diagnose infos
+  void diagnose_count_info();
   int diagnose_tenant_major_merge();
   int64_t get_cnt() { return idx_; }
   ObCompactionDiagnoseInfo::ObDiagnoseStatus gen_diagnose_status(int64_t scn)
@@ -429,46 +456,61 @@ public:
         ObCompactionDiagnoseInfo::DIA_STATUS_NOT_SCHEDULE;
   }
   static int diagnose_dag(
-      const storage::ObMergeType merge_type,
+      const compaction::ObMergeType merge_type,
       const ObLSID ls_id,
       const ObTabletID tablet_id,
       const int64_t merge_version,
       ObTabletMergeDag &dag,
       ObDiagnoseTabletCompProgress &input_progress);
-  static int check_system_compaction_config(char *tmp_str, const int64_t buf_len);
+  static bool is_compaction_report_info(const share::ObSuspectInfoType &suspect_info_type)
+  {
+    return ObSuspectInfoType::SUSPECT_COMPACTION_REPORT_ADD_FAILED == suspect_info_type
+      || ObSuspectInfoType::SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED == suspect_info_type;
+  }
 private:
-  int get_next_tablet(ObLSID &ls_id);
-  void release_last_tenant();
-  int gen_ls_check_status(const ObLSID &ls_id, const int64_t compaction_scn, ObLSCheckStatus &ls_status);
-  void diagnose_tenant_ls(
-      const bool diagnose_major_flag,
-      const bool weak_read_ts_ready,
-      const int64_t compaction_scn,
-      const bool is_leader,
-      const ObLSID &ls_id);
+  int check_ls_status(
+    const ObLSID &ls_id,
+    const int64_t compaction_scn,
+    const bool diagnose_major_flag,
+    common::hash::ObHashMap<ObLSID, ObLSCheckStatus> &ls_map,
+    ObLS *&ls,
+    bool &need_merge,
+    bool &weak_read_ts_ready);
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
-  int diagnose_tablet_major_and_medium(
-      const bool diagnose_major_flag,
-      const bool weak_read_ts_ready,
+  int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,
-      ObTablet &tablet,
-      bool &tablet_major_finish);
+      ObTablet &tablet);
+  int diagnose_tablet_medium_merge(
+      const bool diagnose_major_flag,
+      const int64_t compaction_scn,
+      const ObLSID &ls_id,
+      ObTablet &tablet);
   int diagnose_tablet_merge(
-      ObTabletMergeDag &dag,
       const ObMergeType type,
       const ObLSID ls_id,
-      const ObTabletID tablet_id,
-      int64_t merge_version = ObVersionRange::MIN_VERSION);
+      ObTablet &tablet,
+      const int64_t merge_version = ObVersionRange::MIN_VERSION);
+  int diagnose_row_store_dag(
+      const ObMergeType merge_type,
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const int64_t merge_version = ObVersionRange::MIN_VERSION);
+  int diagnose_column_store_dag(
+      const ObMergeType merge_type,
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const lib::Worker::CompatMode &compat_mode,
+      const int64_t merge_version = ObVersionRange::MIN_VERSION);
   int diagnose_no_dag(
-      ObTabletMergeDag &dag,
+      const int64_t dag_key,
       const ObMergeType merge_type,
       const ObLSID ls_id,
       const ObTabletID tablet_id,
       const int64_t compaction_scn);
   int get_suspect_and_warning_info(
-      ObTabletMergeDag &dag,
+      const int64_t dag_key,
       const ObMergeType merge_type,
       const ObLSID ls_id,
       const ObTabletID tablet_id,
@@ -477,12 +519,20 @@ private:
       char *buf,
       const int64_t buf_len);
 
-  int diagnose_medium_scn_table(const int64_t compaction_scn);
-  OB_INLINE bool can_add_diagnose_info() { return idx_ < max_cnt_; }
-  int get_suspect_info_and_print(
+  int diagnose_medium_scn_table();
+  OB_INLINE bool can_add_diagnose_info() { normal_ = false; return idx_ < max_cnt_; }
+  int get_and_set_suspect_info(
       const ObMergeType merge_type,
       const ObLSID &ls_id,
       const ObTabletID &tablet_id);
+  int get_suspect_info(
+      const ObMergeType merge_type,
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      ObScheduleSuspectInfo &ret_info,
+      share::ObSuspectInfoType &suspect_info_type,
+      char *buf,
+      const int64_t buf_len);
   int check_if_need_diagnose(rootserver::ObMajorFreezeService *&major_freeze_service,
                              bool &need_diagnose) const;
   int do_tenant_major_merge_diagnose(rootserver::ObMajorFreezeService *major_freeze_service);
@@ -491,22 +541,20 @@ public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
 private:
   static const int64_t NS_TIME = 1000L * 1000L * 1000L;
-  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 5; // 5 min // ns
+  static const int64_t TOLERATE_DAG_NET_HANG_INTERVAL = 1000L * 1000L * 60L * 10; // 10hour
+  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 5; // 5min // ns
   static const int64_t TOLERATE_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 60L * 36; // 36 hour
-  static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
-  static const int64_t DIAGNOSE_TABELT_MAX_COUNT = 10; // same type diagnose info max count
+  static const int64_t DIAGNOSE_TABELT_MAX_COUNT = 10; // same type diagnose tablet max count
+  static const int64_t MAX_REPORT_TASK_DIAGNOSE_CNT = 3;
+  typedef ObSEArray<ObDiagnoseTablet, ObDiagnoseTabletMgr::DEFAULT_DIAGNOSE_TABLET_COUNT> DiagnoseTabletArray;
   bool is_inited_;
-  ObIAllocator *allocator_;
-  storage::ObTenantTabletIterator *tablet_iter_;
-  common::ObArenaAllocator tablet_allocator_;
-  ObTabletHandle tablet_handle_;
-  void *iter_buf_;
+  bool normal_; // true means the tablet doesn't have any diagnose info
   ObCompactionDiagnoseInfo *info_array_;
-  int32_t suspect_tablet_count_[share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX]; // limit the suspect info with NOT_SCHEDULE status
-  int32_t medium_not_schedule_count_;
-  int32_t major_not_schedule_count_;
   int64_t max_cnt_;
   int64_t idx_;
+  int32_t suspect_tablet_count_[share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX];
+  ObMergeType suspect_merge_type_[share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX];
+  int32_t diagnose_tablet_count_[COMPACTION_DIAGNOSE_TYPE_MAX];
 };
 
 class ObCompactionDiagnoseIterator
@@ -536,29 +584,32 @@ private:
   bool is_opened_;
 };
 
-#define DEL_SUSPECT_INFO(type, ls_id, tablet_id) \
+#define UNKNOW_LS_ID ObLSID(INT64_MAX)
+#define IS_UNKNOW_LS_ID(ls_id) (ObLSID(INT64_MAX) == ls_id)
+#define UNKNOW_TABLET_ID ObTabletID(INT64_MAX)
+#define IS_UNKNOW_TABLET_ID(tablet_id) (ObTabletID(INT64_MAX) == tablet_id)
+#define DEL_SUSPECT_INFO(type, ls_id, tablet_id, diagnose_type) \
 { \
-      int tmp_ret = OB_SUCCESS;                                                                 \
-      compaction::ObMergeDagHash dag_hash;                                                      \
-      dag_hash.merge_type_ = type;                                                                     \
-      dag_hash.ls_id_ = ls_id;                                                                           \
-      dag_hash.tablet_id_ = tablet_id;                                                                   \
-      int64_t tenant_id = MTL_ID();                                                                     \
-      int64_t hash_value = ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
-      if (OB_TMP_FAIL(MTL(ObScheduleSuspectInfoMgr *)->delete_info(hash_value))) { \
-        if (OB_HASH_NOT_EXIST != tmp_ret) {                                                                \
-          STORAGE_LOG(WARN, "failed to del suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
-        } else {                                                                                      \
-          tmp_ret = OB_SUCCESS;                                                                           \
-        }                                                                                            \
-      } else {                                                                                      \
-        STORAGE_LOG(DEBUG, "success to del suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
-      }                                                                                       \
+  compaction::ObMergeDagHash dag_hash;                                                      \
+  dag_hash.merge_type_ = type;                                                                     \
+  dag_hash.ls_id_ = ls_id;                                                                           \
+  dag_hash.tablet_id_ = tablet_id;                                                                   \
+  int64_t tenant_id = MTL_ID();                                                                     \
+  int64_t hash_value = compaction::ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
+  if (OB_TMP_FAIL(MTL(compaction::ObScheduleSuspectInfoMgr *)->delete_info(hash_value))) { \
+    if (OB_HASH_NOT_EXIST != tmp_ret) {                                                                \
+      STORAGE_LOG(WARN, "failed to delete suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
+    }                                                                                      \
+  } else if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->delete_diagnose_tablet(ls_id, tablet_id, diagnose_type))) {  \
+    STORAGE_LOG(WARN, "failed to delete diagnose tablet", K(tmp_ret), K(ls_id), K(tablet_id));         \
+  } else {                                                                                      \
+    STORAGE_LOG(DEBUG, "success to delete suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
+  }                                                                                       \
 }
 
 #define DEFINE_DIAGNOSE_PRINT_KV(n)                                                               \
   template <LOG_TYPENAME_TN##n>                                                                  \
-  int SET_DIAGNOSE_INFO(ObCompactionDiagnoseInfo &diagnose_info, storage::ObMergeType type,     \
+  int SET_DIAGNOSE_INFO(ObCompactionDiagnoseInfo &diagnose_info, compaction::ObMergeType type,     \
                 const int64_t tenant_id, const ObLSID ls_id, const ObTabletID tablet_id,          \
                 ObCompactionDiagnoseInfo::ObDiagnoseStatus status,                               \
                 const int64_t timestamp,                                                         \
@@ -686,16 +737,22 @@ DEFINE_COMPACITON_INFO_ADD_KV(8)
     INT_TO_PARAM_6 \
     info_param->param_int_[6] = param_int7;
 
+#define ADD_COMMON_SUSPECT_INFO(merge_type, diagnose_type, info_type, ...) \
+ADD_SUSPECT_INFO(merge_type, diagnose_type, UNKNOW_LS_ID, UNKNOW_TABLET_ID, info_type, __VA_ARGS__)
+
+#define INFO_PARAM_STR_LENGTH(n) (n * compaction::OB_DIAGNOSE_INFO_PARAM_STR_LENGTH)
+
 #define DEFINE_SUSPECT_INFO_ADD(n_int)                                                           \
   template<typename T = int64_t>                                                                  \
-  int ADD_SUSPECT_INFO(storage::ObMergeType type, const ObLSID ls_id,                      \
-                const ObTabletID tablet_id, ObSuspectInfoType info_type,  \
+  int ADD_SUSPECT_INFO(compaction::ObMergeType type, share::ObDiagnoseTabletType diagnose_type,      \
+                const ObLSID ls_id, const ObTabletID tablet_id, ObSuspectInfoType info_type,      \
                 INFO_PARAM_INT##n_int)                                                           \
   {                                                                                              \
     int64_t __pos = 0;                                                                           \
     int ret = OB_SUCCESS;                                                                        \
     compaction::ObScheduleSuspectInfo info;                                                      \
     info.tenant_id_ = MTL_ID();                                                                  \
+    info.priority_ = static_cast<uint32_t>(OB_SUSPECT_INFO_TYPES[info_type].priority);           \
     info.merge_type_ = type;                                                                     \
     info.ls_id_ = ls_id;                                                                          \
     info.tablet_id_ = tablet_id;                                                                  \
@@ -709,42 +766,49 @@ DEFINE_COMPACITON_INFO_ADD_KV(8)
     info.info_param_ = info_param;                                                               \
     if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->add_suspect_info(info.hash(), info))) { \
       STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(info));                          \
+    } else if (OB_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id, diagnose_type))) {     \
+      STORAGE_LOG(WARN, "failed to add diagnose tablet", K(ret), K(ls_id), K(tablet_id));         \
     } else {                                                                                      \
-      STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(info));                          \
+      STORAGE_LOG(INFO, "success to add suspect info", K(ret), K(info), K(info_type),              \
+          "info_type_str", OB_SUSPECT_INFO_TYPES[info_type].info_str, K(diagnose_type));                          \
     }                                                                                              \
     return ret;                                                                                \
   }
 
 #define DEFINE_SUSPECT_INFO_ADD_EXTRA(n, n_int)                                                  \
   template <typename T = int64_t, LOG_TYPENAME_TN##n>                                            \
-  int ADD_SUSPECT_INFO(storage::ObMergeType type, const ObLSID ls_id,   \
-                const ObTabletID tablet_id, ObSuspectInfoType info_type,  \
+  int ADD_SUSPECT_INFO(compaction::ObMergeType type, share::ObDiagnoseTabletType diagnose_type,     \
+                const ObLSID ls_id, const ObTabletID tablet_id, ObSuspectInfoType info_type,     \
                 INFO_PARAM_INT##n_int, LOG_PARAMETER_KV##n)             \
   {                                                                                              \
     int64_t __pos = 0;                                                                           \
     int ret = OB_SUCCESS;                                                                        \
     compaction::ObScheduleSuspectInfo info;                                                      \
     info.tenant_id_ = MTL_ID();                                                                  \
+    info.priority_ = static_cast<uint32_t>(OB_SUSPECT_INFO_TYPES[info_type].priority);           \
     info.merge_type_ = type;                                                                     \
     info.ls_id_ = ls_id;                                                                          \
     info.tablet_id_ = tablet_id;                                                                  \
     info.add_time_ = ObTimeUtility::fast_current_time();                                          \
     info.hash_ = info.hash();                                                               \
-    ObDiagnoseInfoParam<n_int> param;                                                             \
-    ObDiagnoseInfoParam<n_int> *info_param = &param;                                              \
+    ObDiagnoseInfoParam<n_int, INFO_PARAM_STR_LENGTH(n)> param;                                                             \
+    ObDiagnoseInfoParam<n_int, INFO_PARAM_STR_LENGTH(n)> *info_param = &param;                                              \
     INT_TO_PARAM_##n_int                                                                          \
     info_param->type_.suspect_type_ = info_type;                                                   \
     info_param->struct_type_ = ObInfoParamStructType::SUSPECT_INFO_PARAM;                          \
     char *buf = info_param->comment_;                                                              \
-    const int64_t buf_size = OB_DIAGNOSE_INFO_PARAM_STR_LENGTH;                                    \
+    const int64_t buf_size = INFO_PARAM_STR_LENGTH(n);                                             \
     SIMPLE_TO_STRING_##n                                                                          \
     info.info_param_ = info_param;                                                                \
-    if (OB_FAIL(ret)) {                                                                           \
+    if (OB_FAIL(ret) && OB_SIZE_OVERFLOW != ret) {                                                \
       STORAGE_LOG(WARN, "fail to fill parameter kv into info param", K(ret));                     \
     } else if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->add_suspect_info(info.hash(), info))) { \
       STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(info));                          \
+    } else if (OB_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id, diagnose_type))) { \
+      STORAGE_LOG(WARN, "failed to add diagnose tablet", K(ret), K(ls_id), K(tablet_id));         \
     } else {                                                                                      \
-      STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(info));                          \
+      STORAGE_LOG(INFO, "success to add suspect info", K(ret), K(info), K(info_type),             \
+          "info_type_str", OB_SUSPECT_INFO_TYPES[info_type].info_str, K(diagnose_type));                          \
     }                                                                                              \
     return ret;                                                                                          \
   }
@@ -754,9 +818,10 @@ DEFINE_SUSPECT_INFO_ADD(2)
 DEFINE_SUSPECT_INFO_ADD(3)
 DEFINE_SUSPECT_INFO_ADD(4)
 DEFINE_SUSPECT_INFO_ADD(5)
+DEFINE_SUSPECT_INFO_ADD(6)
 
-DEFINE_SUSPECT_INFO_ADD_EXTRA(1, 1)
-DEFINE_SUSPECT_INFO_ADD_EXTRA(1, 3)
+DEFINE_SUSPECT_INFO_ADD_EXTRA(2, 4)
+
 // ObDiagnoseInfoParam func
 template <int64_t int_size, int64_t str_size>
 void ObDiagnoseInfoParam<int_size, str_size>::destroy()
@@ -791,14 +856,14 @@ int ObDiagnoseInfoParam<int_size, str_size>::fill_comment(char *buf, const int64
     STORAGE_LOG(WARN, "unexpected int size", K(ret), K_(struct_type), K(type), K(int_size),
         K(OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].int_size));
   } else {
-    ADD_COMPACTION_INFO_PARAM(buf, buf_len,
-                              "info", OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].info_str);
+    ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].info_str);
+    ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, ";");
     for (int i = 0; i < int_size; i++) {
       ADD_COMPACTION_INFO_PARAM(buf, buf_len,
                                 OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].info_str_fmt[i], param_int_[i]);
     }
     if (OB_DIAGNOSE_INFO_PARAMS[struct_type_].info_type[type].with_comment) {
-      ADD_COMPACTION_INFO_PARAM(buf, buf_len, "extra_info", comment_);
+      ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, comment_);
     }
   }
   return ret;

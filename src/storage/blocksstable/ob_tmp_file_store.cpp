@@ -568,6 +568,7 @@ int ObTmpMacroBlock::get_wash_io_info(ObTmpBlockIOInfo &info)
     info.macro_block_id_ = get_macro_block_id();
     info.buf_ = buffer_;
     info.io_desc_ = io_desc_;
+    info.io_timeout_ms_ = max(GCONF._data_storage_io_timeout / 1000L, DEFAULT_IO_WAIT_TIME_MS);
   }
   return ret;
 }

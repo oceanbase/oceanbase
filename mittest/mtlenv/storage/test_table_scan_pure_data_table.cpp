@@ -17,6 +17,7 @@
 #define protected public
 #include "storage/test_dml_common.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "storage/access/ob_table_scan_iterator.h"
 #include "storage/test_tablet_helper.h"
 
 namespace oceanbase
@@ -207,9 +208,10 @@ void TestTableScanPureDataTable::table_scan(
   // print data
   int ret = OB_SUCCESS;
   int cnt = 0;
-  ObNewRow *row = nullptr;
+  ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(result);
+  blocksstable::ObDatumRow *row = nullptr;
   while (OB_SUCC(ret)) {
-    ret = result->get_next_row(row);
+    ret = table_scan_iter->get_next_row(row);
     if (OB_SUCCESS == ret) {
       ++cnt;
     }

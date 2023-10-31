@@ -59,7 +59,10 @@ int ObExprFuncPartKey::calc_partition_key(const ObExpr &expr,
     uint64_t hash_value = 0;
     for (int i = 0; i < expr.arg_cnt_ && OB_SUCC(ret); i++) {
       ObDatum &param_datum = expr.locate_param_datum(ctx, i);
-      ObExprHashFuncType hash_func = expr.args_[i]->basic_funcs_->murmur_hash_;
+      ObExprHashFuncType hash_func =
+        (ob_is_decimal_int(expr.args_[i]->datum_meta_.type_) ?
+           wide::PartitionHash<ObMurmurHash, ObDatum>::calculate :
+           expr.args_[i]->basic_funcs_->murmur_hash_);
       if (OB_FAIL(hash_func(param_datum, hash_value, hash_value))) {
         LOG_WARN("hash value failed", K(ret));
       }
@@ -82,15 +85,19 @@ int ObExprFuncPartKey::calc_partition_key_batch(BATCH_EVAL_FUNC_ARG_DECL)
   ObBitVector &flags = expr.get_evaluated_flags(ctx);
   for (int64_t i = 0; i < expr.arg_cnt_ && OB_SUCC(ret) ; i++) {
     ObExpr *e = expr.args_[i];
+    ObBatchDatumHashFunc batch_hash_func =
+      ob_is_decimal_int(e->datum_meta_.type_) ?
+        wide::PartitionHash<ObMurmurHash, ObDatum>::hash_batch :
+        e->basic_funcs_->murmur_hash_batch_;
     if (OB_FAIL(e->eval_batch(ctx, skip, size))) {
       LOG_WARN("evaluate batch failed", K(ret), K(*e));
     } else {
       const bool is_batch_seed = (i > 0);
-      e->basic_funcs_->murmur_hash_batch_(hash_values,
-                                          e->locate_batch_datums(ctx), e->is_batch_result(),
-                                          skip, size,
-                                          is_batch_seed ? hash_values : &seed,
-                                          is_batch_seed);
+      batch_hash_func(hash_values,
+                      e->locate_batch_datums(ctx), e->is_batch_result(),
+                      skip, size,
+                      is_batch_seed ? hash_values : &seed,
+                      is_batch_seed);
 
     }
   }

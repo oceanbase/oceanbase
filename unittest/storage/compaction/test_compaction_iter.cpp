@@ -18,6 +18,7 @@
 
 #include "share/rc/ob_tenant_base.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/compaction/ob_compaction_schedule_iterator.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
@@ -28,13 +29,14 @@ using namespace common;
 namespace unittest
 {
 
-class MockObCompactionScheduleIterator : public storage::ObCompactionScheduleIterator
+class MockObCompactionScheduleIterator : public compaction::ObCompactionScheduleIterator
 {
 public:
-  MockObCompactionScheduleIterator()
+  MockObCompactionScheduleIterator(const int64_t batch_tablet_cnt)
     : ObCompactionScheduleIterator(
       true/*is_major, no meaning*/,
-      ObLSGetMod::STORAGE_MOD),
+      ObLSGetMod::STORAGE_MOD,
+      batch_tablet_cnt),
       mock_tablet_id_cnt_(0),
       error_tablet_idx_(-1),
       errno_(OB_SUCCESS)
@@ -88,12 +90,12 @@ void TestCompactionIter::test_iter(
   const int64_t error_tablet_idx,
   const int input_errno)
 {
-  MockObCompactionScheduleIterator iter;
+  LOG_INFO("test_iter", K(ls_cnt), K(max_batch_tablet_cnt), K(tablet_cnt_per_ls), K(error_tablet_idx), K(input_errno));
+  MockObCompactionScheduleIterator iter(max_batch_tablet_cnt);
   iter.prepare_ls_id_array(ls_cnt);
   iter.mock_tablet_id_cnt_ = tablet_cnt_per_ls;
   iter.error_tablet_idx_ = error_tablet_idx;
   iter.errno_ = input_errno;
-  iter.max_batch_tablet_cnt_ = max_batch_tablet_cnt;
 
   int ret = OB_SUCCESS;
   int iter_cnt = 0;
@@ -101,31 +103,26 @@ void TestCompactionIter::test_iter(
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   while (OB_SUCC(ret)) {
+    if (iter_cnt > 0 && iter_cnt % max_batch_tablet_cnt == 0) {
+      STORAGE_LOG(INFO, "iter batch finish", K(ret), K(iter), K(iter_cnt));
+      ASSERT_EQ(iter.schedule_tablet_cnt_ >= max_batch_tablet_cnt, true);
+      iter.start_cur_batch();
+      loop_cnt++;
+    }
     ret = iter.get_next_ls(ls_handle);
     if (OB_ITER_END == ret) {
       if (iter.ls_idx_ == iter.ls_ids_.count()) {
-        loop_cnt++;
+        if (iter.schedule_tablet_cnt_ > 0) {
+          loop_cnt++;
+        }
       } else {
         STORAGE_LOG(WARN, "unexpected error", K(ret), K(iter), K(iter_cnt));
       }
     }
     while (OB_SUCC(ret)) {
-      ret = iter.get_next_tablet(tablet_handle);
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(iter.get_next_tablet(tablet_handle))) {
         iter_cnt++;
-      } else if (OB_ITER_END != ret) {
-      } else if (iter.tablet_idx_ == iter.tablet_ids_.count()) {
-        STORAGE_LOG(INFO, "iter tablet array finish", K(ret), K(iter), K(iter_cnt));
-      } else if (iter_cnt > 0 && iter_cnt % max_batch_tablet_cnt == 0) {
-        STORAGE_LOG(INFO, "iter batch finish", K(ret), K(iter), K(iter_cnt));
-        ASSERT_EQ(iter.finish_cur_batch_, true);
-        iter.start_cur_batch();
-        loop_cnt++;
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected error", K(ret), K(iter), K(iter_cnt));
-      }
-      if (OB_FAIL(ret)) {
         if (OB_ITER_END != ret) {
           iter.skip_cur_ls();
         }
@@ -139,9 +136,12 @@ void TestCompactionIter::test_iter(
     ASSERT_EQ(loop_cnt, iter_cnt / max_batch_tablet_cnt + (iter_cnt % max_batch_tablet_cnt != 0));
   } else if (error_tablet_idx < 0 || error_tablet_idx >= tablet_cnt_per_ls) {
     // no errno
-  } else {
+  } else if (OB_TABLET_NOT_EXIST == input_errno) {
     // for this errno, just skip this tablet
     ASSERT_EQ(iter_cnt, ls_cnt * (tablet_cnt_per_ls - 1));
+    ASSERT_EQ(loop_cnt, iter_cnt / max_batch_tablet_cnt + (iter_cnt % max_batch_tablet_cnt != 0));
+  } else {
+    ASSERT_EQ(iter_cnt, ls_cnt * error_tablet_idx);
     ASSERT_EQ(loop_cnt, iter_cnt / max_batch_tablet_cnt + (iter_cnt % max_batch_tablet_cnt != 0));
   }
 }

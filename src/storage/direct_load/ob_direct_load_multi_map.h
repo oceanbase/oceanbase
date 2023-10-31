@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_errno.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

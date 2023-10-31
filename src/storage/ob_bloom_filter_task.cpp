@@ -45,7 +45,8 @@ ObBloomFilterBuildTask::ObBloomFilterBuildTask(
       macro_id_(macro_id),
       macro_handle_(),
       prefix_len_(prefix_len),
-      allocator_(ObModIds::OB_BLOOM_FILTER)
+      allocator_(ObModIds::OB_BLOOM_FILTER),
+      io_buf_(nullptr)
 {
   abort_unless(OB_SUCCESS == macro_handle_.set_macro_block_id(macro_id));
 }
@@ -156,14 +157,22 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
       read_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
-      if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
+      if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =
+          reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(OB_DEFAULT_MACRO_BLOCK_SIZE));
+      } else {
+        read_info.buf_ = io_buf_;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else if (OB_FAIL(macro_bare_iter->open(
-          macro_handle.get_buffer(), macro_handle.get_data_size(), true /*check*/))) {
+          read_info.buf_, macro_handle.get_data_size(), true /*check*/))) {
         LOG_WARN("Fail to open bare macro block iterator", K(ret), K(macro_handle));
       } else if (OB_FAIL(macro_bare_iter->get_macro_block_header(macro_header))) {
         LOG_WARN("Fail to get macro block header", K(ret));
-      } else if (OB_UNLIKELY(!macro_header.is_valid())) {
+      } else if (OB_UNLIKELY(!macro_header.is_valid() || macro_header.is_normal_cg_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid macro block header", K(ret), K(macro_header));
       } else if (OB_FAIL(bfcache_value.init(prefix_len_, macro_header.fixed_header_.row_count_))) {

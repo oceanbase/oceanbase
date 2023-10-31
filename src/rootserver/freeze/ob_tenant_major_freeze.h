@@ -14,9 +14,10 @@
 #define OCEANBASE_ROOTSERVER_FREEZE_OB_TENANT_MAJOR_FREEZE_
 
 #include "rootserver/freeze/ob_major_merge_scheduler.h"
-#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "share/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
+#include "rootserver/freeze/ob_major_merge_info_manager.h"
 #include "rootserver/freeze/ob_freeze_info_detector.h"
 #include "rootserver/freeze/ob_daily_major_freeze_launcher.h"
 
@@ -41,10 +42,9 @@ namespace rootserver
 class ObTenantMajorFreeze
 {
 public:
-  ObTenantMajorFreeze();
+  ObTenantMajorFreeze(const uint64_t tenant_id);
   virtual ~ObTenantMajorFreeze();
-  int init(const uint64_t tenant_id,
-           const bool is_primary_service,
+  int init(const bool is_primary_service,
            common::ObMySQLProxy &sql_proxy,
            common::ObServerConfig &config,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -62,10 +62,6 @@ public:
   bool is_paused() const;
 
   uint64_t get_tenant_id() const { return tenant_id_; }
-
-  int get_frozen_scn(share::SCN &frozen_scn);
-  int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
-
   int launch_major_freeze();
 
   int suspend_merge();
@@ -92,9 +88,8 @@ private:
   uint64_t tenant_id_;
   bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
 
-  ObZoneMergeManager zone_merge_mgr_;
-  ObFreezeInfoManager freeze_info_mgr_;
-  ObFreezeInfoDetector freeze_info_detector_;
+  ObMajorMergeInfoManager major_merge_info_mgr_;
+  ObMajorMergeInfoDetector major_merge_info_detector_;
   ObMajorMergeScheduler merge_scheduler_;
   ObDailyMajorFreezeLauncher daily_launcher_;
 

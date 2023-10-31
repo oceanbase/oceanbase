@@ -68,6 +68,23 @@ bool ObTabletChecksumItem::is_same_tablet(const ObTabletChecksumItem &item) cons
     && (ls_id_ == item.ls_id_);
 }
 
+int ObTabletChecksumItem::compare_tablet(const ObTabletReplicaChecksumItem &replica_item) const
+{
+  int ret = 0;
+  if (tablet_id_.id() < replica_item.tablet_id_.id()) {
+    ret = -1;
+  } else if (tablet_id_.id() > replica_item.tablet_id_.id()) {
+    ret = 1;
+  } else {
+    if (ls_id_.id() < replica_item.ls_id_.id()) {
+      ret = -1;
+    } else if (ls_id_.id() > replica_item.ls_id_.id()) {
+      ret = 1;
+    }
+  }
+  return ret;
+}
+
 int ObTabletChecksumItem::verify_tablet_column_checksum(const ObTabletReplicaChecksumItem &replica_item) const
 {
   int ret = OB_SUCCESS;
@@ -338,6 +355,7 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
       compaction_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
   } else {
+    ObSqlString order_by_sql;
     for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
       const ObTabletLSPair &pair = pairs.at(idx);
       if (OB_UNLIKELY(!pair.is_valid())) {
@@ -349,12 +367,15 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
           pair.get_ls_id().id(),
           ((idx == end_idx - 1) ? ")" : ", ")))) {
         LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(pair));
+      } else if (OB_FAIL(order_by_sql.append_fmt(
+          ",%ld",
+          pair.get_tablet_id().id()))) {
+        SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id), K(pair));
       }
     }
-  }
-
-  if (FAILEDx(sql.append_fmt(" ORDER BY tenant_id, tablet_id, ls_id, compaction_scn"))) {
-    LOG_WARN("fail to assign sql string", KR(ret), K(tenant_id), K(pairs_cnt));
+    if (FAILEDx(sql.append_fmt(" ORDER BY FIELD(tablet_id%s)", order_by_sql.string().ptr()))) {
+      SHARE_LOG(WARN, "fail to assign sql string", KR(ret), K(tenant_id), K(compaction_scn), K(pairs_cnt));
+    }
   }
   return ret;
 }
@@ -657,7 +678,7 @@ int ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist(
       ObMySQLResult *result = nullptr;
       uint64_t compaction_scn_val = compaction_scn.get_val_for_inner_table_field();
       if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS cnt FROM %s WHERE tenant_id = '%lu' AND "
-            "compaction_scn = %lu AND tablet_id = %lu AND ls_id = %ld", OB_ALL_TABLET_CHECKSUM_TNAME,
+            "compaction_scn >= %lu AND tablet_id = %lu AND ls_id = %ld", OB_ALL_TABLET_CHECKSUM_TNAME,
             extract_tenant_id, compaction_scn_val, ObTabletID::MIN_VALID_TABLET_ID, ObLSID::SYS_LS_ID))) {
         LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
       } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {

@@ -74,10 +74,13 @@ ObMicroBlockId::ObMicroBlockId(
 
 bool ObMicroBlockEncodingCtx::is_valid() const
 {
-  return macro_block_size_ > 0 && micro_block_size_ > 0 && rowkey_column_cnt_ > 0
+  return macro_block_size_ > 0 && micro_block_size_ > 0 && rowkey_column_cnt_ >= 0
       && column_cnt_ >= rowkey_column_cnt_ && NULL != col_descs_
-      && encoder_opt_.is_valid() && major_working_cluster_version_ >= 0
-      && (ENCODING_ROW_STORE == row_store_type_ || SELECTIVE_ENCODING_ROW_STORE == row_store_type_);
+      && !(CS_ENCODING_ROW_STORE != row_store_type_ && !encoder_opt_.is_valid())
+      && major_working_cluster_version_ >= 0
+      && (FLAT_ROW_STORE != row_store_type_ &&  MAX_ROW_STORE != row_store_type_)
+      && compressor_type_ != ObCompressorType::INVALID_COMPRESSOR
+      && compressor_type_ != ObCompressorType::MAX_COMPRESSOR;
 }
 
 //======================ObPreviousEncodingArray========================

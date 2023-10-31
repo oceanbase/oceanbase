@@ -23,18 +23,17 @@ class ObMySQLProxy;
 }
 namespace rootserver
 {
-class ObFreezeInfoManager;
+class ObMajorMergeInfoManager;
 class ObThreadIdling;
 
-class ObFreezeInfoDetector : public ObFreezeReentrantThread
+class ObMajorMergeInfoDetector : public ObFreezeReentrantThread
 {
 public:
-  ObFreezeInfoDetector();
-  virtual ~ObFreezeInfoDetector() {}
-  int init(const uint64_t tenant_id,
-           const bool is_primary_service,
+  ObMajorMergeInfoDetector(const uint64_t tenant_id);
+  virtual ~ObMajorMergeInfoDetector() {}
+  int init(const bool is_primary_service,
            common::ObMySQLProxy &sql_proxy,
-           ObFreezeInfoManager &freeze_info_manager,
+           ObMajorMergeInfoManager &major_merge_info_mgr,
            ObThreadIdling &major_scheduler_idling);
 
   virtual void run3() override;
@@ -75,11 +74,11 @@ private:
   bool is_global_merge_info_adjusted_;
   bool is_gc_scn_inited_;
   int64_t last_gc_timestamp_;
-  ObFreezeInfoManager *freeze_info_mgr_;
+  ObMajorMergeInfoManager *major_merge_info_mgr_;
   ObThreadIdling *major_scheduler_idling_;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObFreezeInfoDetector);
+  DISALLOW_COPY_AND_ASSIGN(ObMajorMergeInfoDetector);
 };
 
 }

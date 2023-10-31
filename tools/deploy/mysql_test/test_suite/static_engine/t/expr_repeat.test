@@ -3,6 +3,10 @@
 
 --disable_abort_on_error
 --result_format 4
+--disable_query_log
+set global max_allowed_packet=16777216;
+sleep 3;
+--enable_query_log
 
 connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 

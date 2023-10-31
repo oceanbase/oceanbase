@@ -259,4 +259,59 @@ access_specifier:                                                               
 #define DEPRECATED_DEF_LOG_LEVEL(args...)
 #define DEPRECATED_DEF_WORK_AREA_POLICY(args...)
 
+// 对于临时使用的配置项（正式发版前会删除），必须使用下面的宏来定义。
+// ver 请写成 v4.2,  v3.2 等字样，不要写成 master
+#define TEMP_DEF_INT(ver, args...)                                                       \
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Int, args)
+
+#define TEMP_DEF_INT_WITH_CHECKER(ver, args...)                                          \
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Int, args)
+
+#define TEMP_DEF_DBL(ver, args...)                                                       \
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Double, args)
+
+#define TEMP_DEF_CAP(ver, args...)                                                       \
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Capacity, args)
+
+#define TEMP_DEF_CAP_WITH_CHECKER(ver, args...)                                          \
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Capacity, args)
+
+#define TEMP_DEF_TIME(ver, args...)                                                      \
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Time, args)
+
+#define TEMP_DEF_TIME_WITH_CHECKER(ver, args...)                                         \
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Time, args)
+
+#define TEMP_DEF_BOOL(ver, args...)                                                      \
+  _DEF_PARAMETER_SCOPE_EASY(public, Bool, args)
+
+#define TEMP_DEF_STR(ver, args...)                                                       \
+  _DEF_PARAMETER_SCOPE_EASY(public, String, args)
+
+#define TEMP_DEF_VERSION(ver, args...)                                                   \
+  _DEF_PARAMETER_SCOPE_EASY(public, Version, args)
+
+#define TEMP_DEF_STR_WITH_CHECKER(ver, args...)                                          \
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, String, args)
+
+#define TEMP_DEF_IP(ver, args...)                                                        \
+  _DEF_PARAMETER_SCOPE_IP_EASY(public, String, args)
+
+#define TEMP_DEF_MOMENT(ver, args...)                                                    \
+  _DEF_PARAMETER_SCOPE_EASY(public, Moment, args)
+
+#define TEMP_DEF_INT_LIST(ver, args...)                                                  \
+  _DEF_PARAMETER_SCOPE_EASY(public, IntList, args)
+
+#define TEMP_DEF_STR_LIST(ver, args...)                                                  \
+  _DEF_PARAMETER_SCOPE_EASY(public, StrList, args)
+
+#define TEMP_DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(ver, args...)                          \
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, LogArchiveOptions, args)
+#define TEMP_DEF_LOG_LEVEL(ver, args...)                                                 \
+  _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(public, String, args)
+
+#define TEMP_DEF_WORK_AREA_POLICY(ver, args...)                                          \
+  _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(public, String, args)
+
 #endif

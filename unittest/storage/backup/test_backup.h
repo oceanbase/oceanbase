@@ -22,6 +22,7 @@
 #include "storage/backup/ob_backup_data_struct.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/blocksstable/ob_block_sstable_struct.h"
 
 namespace oceanbase
 {
@@ -47,7 +48,10 @@ static void make_random_meta_type(backup::ObBackupMetaType &meta_type)
 static void make_random_logic_id(blocksstable::ObLogicMacroBlockId &logic_id)
 {
   logic_id.tablet_id_ = random(1, 10000000);
-  logic_id.data_seq_ = random(1, 10000000);
+  blocksstable::ObMacroDataSeq seq;
+  seq.macro_data_seq_ = random(1, 10000000);
+  seq.version_ = blocksstable::ObMacroDataSeq::MACRO_DATA_SEQ_VERSION;
+  logic_id.data_seq_ = seq;
   logic_id.logic_version_ = random(1, 10000000);
 }
 

@@ -325,6 +325,20 @@ public:
       ObTablet *tablet,
       bool &is_exist);
 private:
+  static int build_tablet_for_row_store_(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id,
+      const ObTablesHandleArray &major_tables,
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
+  // for column store
+  static int build_tablet_for_column_store_(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id,
+      const ObTablesHandleArray &major_tables,
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
+
   static int get_tablet_(
       const common::ObTabletID &tablet_id,
       ObLS *ls,
@@ -351,6 +365,18 @@ private:
       const ObMigrationTabletParam *src_tablet_meta,
       ObTablet *tablet,
       bool &need_merge);
+  static int get_column_store_tables_(
+      const ObTablesHandleArray &major_tables,
+      common::ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &column_store_tables,
+      int64_t &co_table_cnt);
+  static int build_tablet_with_co_tables_(
+      ObLS *ls,
+      ObTablet *tablet,
+      const ObStorageSchema &storage_schema,
+      const int64_t multi_version_start,
+      const int64_t co_table_cnt,
+      const ObTablesHandleArray &major_tables,
+      common::ObIArray<ObITable *> &co_table_array);
 };
 
 

@@ -363,7 +363,8 @@ static const char* ref_info_type_strs[] = {
   "SCHEMA_RECORDER",
   "SPI_RESULT_SET",
   "PL_PREPARE_RESULT",
-  "PARTITION_BALANCE"
+  "PARTITION_BALANCE",
+  "RS_MAJOR_CHECK"
 };
 
 int ObSchemaMgrCache::get_ref_info_type_str_(const int64_t &index, const char *&type_str) {

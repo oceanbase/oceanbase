@@ -1552,6 +1552,17 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
             LOG_WARN("Simplify select list in EXISTS fails", K(ret));
           }
         }
+        ObExprResType res_type;
+        res_type.set_type(ObIntType);
+        for(int64_t i = 0; OB_SUCC(ret) && i < subquery->get_select_item_size(); i++) {
+          SelectItem &select_item = subquery->get_select_item(i);
+          if(OB_ISNULL(select_item.expr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null select expr", K(ret), K(select_item));
+          } else {
+            select_item.expr_->set_result_type(res_type);
+          }
+        }
         bool has_limit = false;
         bool add_limit_constraint = false;
         if (OB_FAIL(ret)){

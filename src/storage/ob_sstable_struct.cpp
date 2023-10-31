@@ -18,32 +18,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
-
-ObMultiVersionSSTableMergeInfo::ObMultiVersionSSTableMergeInfo()
-  : delete_logic_row_count_(0),
-    update_logic_row_count_(0),
-    insert_logic_row_count_(0),
-    empty_delete_logic_row_count_(0)
-{
-}
-
-void ObMultiVersionSSTableMergeInfo::reset()
-{
-  delete_logic_row_count_ = 0;
-  update_logic_row_count_ = 0;
-  insert_logic_row_count_ = 0;
-  empty_delete_logic_row_count_ = 0;
-}
-
-int ObMultiVersionSSTableMergeInfo::add(const ObMultiVersionSSTableMergeInfo &info)
-{
-  int ret = OB_SUCCESS;
-  delete_logic_row_count_ += info.delete_logic_row_count_;
-  update_logic_row_count_ += info.update_logic_row_count_;
-  insert_logic_row_count_ += info.insert_logic_row_count_;
-  empty_delete_logic_row_count_ += info.empty_delete_logic_row_count_;
-  return ret;
-}
+using namespace oceanbase::compaction;
 
 const char * ObParalleMergeInfo::para_info_type_str[] = {
     "scan_units",
@@ -163,10 +138,13 @@ ObSSTableMergeInfo::ObSSTableMergeInfo()
       progressive_merge_num_(0),
       concurrent_cnt_(0),
       macro_bloomfilter_count_(0),
-      dag_ret_(OB_SUCCESS),
-      task_id_(),
-      retry_cnt_(0),
+      start_cg_idx_(0),
+      end_cg_idx_(0),
       add_time_(0),
+      dag_ret_(OB_SUCCESS),
+      retry_cnt_(0),
+      task_id_(),
+      error_location_(),
       parallel_merge_info_(),
       filter_statistics_(),
       participant_table_info_(),
@@ -238,16 +216,21 @@ void ObSSTableMergeInfo::reset()
   progressive_merge_num_ = 0;
   concurrent_cnt_ = 0;
   macro_bloomfilter_count_ = 0;
-  dag_ret_ = OB_SUCCESS;
-  task_id_.reset();
-  retry_cnt_ = 0;
+  start_cg_idx_ = 0;
+  end_cg_idx_ = 0;
   add_time_ = 0;
+  dag_ret_ = OB_SUCCESS;
+  retry_cnt_ = 0;
+  task_id_.reset();
+  error_location_.reset();
   info_param_ = nullptr; // allow nullptr
   parallel_merge_info_.reset();
   filter_statistics_.reset();
   participant_table_info_.reset();
   MEMSET(macro_id_list_, '\0', sizeof(macro_id_list_));
   MEMSET(comment_, '\0', sizeof(comment_));
+  kept_snapshot_info_.reset();
+  merge_level_ = MERGE_LEVEL_MAX;
 }
 
 void ObSSTableMergeInfo::dump_info(const char *msg)
@@ -262,22 +245,32 @@ void ObSSTableMergeInfo::dump_info(const char *msg)
   FLOG_INFO("dump merge info", K(msg), K(output_row_per_s), K(new_macro_KB_per_s), K(*this));
 }
 
-int ObSSTableMergeInfo::fill_comment(char *buf, const int64_t buf_len) const
+int ObSSTableMergeInfo::fill_comment(char *buf, const int64_t buf_len, const char* other_info) const
 {
   int ret = OB_SUCCESS;
+  compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
+        "comment", comment_);
   if (0 != add_time_) {
+    compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "[suspect info=");
+    compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, other_info);
     compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
-        "add_timestamp", add_time_);
+        "add_time", add_time_);
+    compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "]"); // finish add suspect info
   }
   if (0 != dag_ret_) {
     compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
-        "dag warning info: latest_error_code", dag_ret_,
+        "[dag warning info=latest_error_code", dag_ret_,
         "latest_error_trace", task_id_,
         "retry_cnt", retry_cnt_);
+    compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "]"); // finish add dag warning info
   }
-  compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
-        "extra_info", comment_);
   return ret;
+}
+
+void ObSSTableMergeInfo::update_start_time()
+{
+  int64_t current_time = fast_current_time();
+  (void)ATOMIC_CAS(&merge_start_time_, 0, current_time);
 }
 
 void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
@@ -285,6 +278,7 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
   ObSSTableMergeInfo *info = nullptr;
   if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObSSTableMergeInfo *>(other))) {
     tenant_id_ = info->tenant_id_;
+    priority_ = info->priority_;
     ls_id_ = info->ls_id_;
     tablet_id_ = info->tablet_id_;
     compaction_scn_ = info->compaction_scn_;
@@ -308,6 +302,8 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
     progressive_merge_num_ = info->progressive_merge_num_;
     concurrent_cnt_ = info->concurrent_cnt_;
     macro_bloomfilter_count_ = info->macro_bloomfilter_count_;
+    start_cg_idx_ = info->start_cg_idx_;
+    end_cg_idx_ = info->end_cg_idx_;
     dag_ret_ = info->dag_ret_;
     task_id_ = info->task_id_;
     retry_cnt_ = info->retry_cnt_;
@@ -319,5 +315,7 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
     strncpy(macro_id_list_, info->macro_id_list_, strlen(info->macro_id_list_));
     MEMSET(comment_, '\0', sizeof(comment_));
     strncpy(comment_, info->comment_, strlen(info->comment_));
+    kept_snapshot_info_ = info->kept_snapshot_info_;
+    merge_level_ = info->merge_level_;
   }
 }

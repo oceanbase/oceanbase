@@ -48,6 +48,17 @@ int ObAlterTableStmt::add_column(const share::schema::AlterColumnSchema &column_
   return ret;
 }
 
+int ObAlterTableStmt::add_column_group(const ObColumnGroupSchema &column_group)
+{
+  int ret = OB_SUCCESS;
+  share::schema::AlterTableSchema &alter_table_schema =
+      get_alter_table_arg().alter_table_schema_;
+  if (OB_FAIL(alter_table_schema.add_column_group(column_group))){
+    SQL_RESV_LOG(WARN, "failed to add column schema to alter table schema", K(ret), K(column_group), K(alter_table_schema));
+  }
+  return ret;
+}
+
 int ObAlterTableStmt::add_index_arg(obrpc::ObIndexArg *index_arg)
 {
   int ret = OB_SUCCESS;

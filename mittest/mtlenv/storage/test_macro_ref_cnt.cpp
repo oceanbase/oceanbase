@@ -27,6 +27,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/schema_utils.h"
 #include "share/ob_rpc_struct.h"
+#include "storage/tablet/ob_tablet_create_delete_helper.h"
 
 namespace oceanbase
 {
@@ -46,7 +47,8 @@ public:
 TestTabletRefCnt::TestTabletRefCnt()
   : TestIndexBlockDataPrepare(
       "Test Tablet Ref Cnt",
-      MINI_MERGE,
+      compaction::MINI_MERGE,
+      false,
       OB_DEFAULT_MACRO_BLOCK_SIZE,
       10000,
       65536)

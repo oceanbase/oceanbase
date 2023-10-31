@@ -786,6 +786,18 @@ int ObRpcMinorFreezeP::process()
   return ret;
 }
 
+int ObRpcTabletMajorFreezeP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->tablet_major_freeze(arg_, result_);
+  }
+  return ret;
+}
+
 int ObRpcCheckSchemaVersionElapsedP::process()
 {
   int ret = OB_SUCCESS;
@@ -2239,7 +2251,7 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       write_info.buffer_ = arg_.redo_info_.data_buffer_.ptr();
       write_info.size_= arg_.redo_info_.data_buffer_.length();
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
+      write_info.io_timeout_ms_ = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
       if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(arg_));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -2256,7 +2268,7 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
         LOG_WARN("get ddl kv manager failed", K(ret));
       } else if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
         LOG_WARN("fail to async write block", K(ret), K(write_info), K(macro_handle));
-      } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
+      } else if (OB_FAIL(macro_handle.wait())) {
         LOG_WARN("fail to wait macro block io finish", K(ret));
       } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.redo_info_.table_key_.tablet_id_))) {
         LOG_WARN("init sstable redo writer", K(ret), K_(arg));

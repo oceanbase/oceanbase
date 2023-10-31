@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_BUILD_INDEX_TASK_H_
 #define OCEANBASE_STORAGE_OB_BUILD_INDEX_TASK_H_
 
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ob_store_row_comparer.h"
 #include "storage/ob_parallel_external_sort.h"

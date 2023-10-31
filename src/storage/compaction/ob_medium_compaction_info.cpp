@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -116,17 +117,17 @@ int ObParallelMergeInfo::deserialize(
         for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
           // need to deserialize StoreRowkey
           if (OB_FAIL(parallel_store_rowkey_list_[i].deserialize(allocator, buf, data_len, pos))) {
-            LOG_WARN("failed to encode concurrent cnt", K(ret), K(i), K(list_size_), K(data_len), K(pos));
+            LOG_WARN("failed to decode concurrent cnt", K(ret), K(i), K(list_size_), K(data_len), K(pos));
           }
         } // end of for
       } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
         ALLOC_ROWKEY_ARRAY(parallel_datum_rowkey_list_, ObDatumRowkey);
+        ObStorageDatum tmp_storage_datum[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
         ObDatumRowkey tmp_datum_rowkey;
-        ObStorageDatum datums[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
-        tmp_datum_rowkey.assign(datums, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
+        tmp_datum_rowkey.assign(tmp_storage_datum, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER);
         for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
           if (OB_FAIL(tmp_datum_rowkey.deserialize(buf, data_len, pos))) {
-            LOG_WARN("failed to decode datum rowkey", K(ret), K(i), K(list_size_), K(data_len), K(pos));
+            LOG_WARN("failed to decode concurrent cnt", K(ret), K(i), K(list_size_), K(data_len), K(pos));
           } else if (OB_FAIL(tmp_datum_rowkey.deep_copy(parallel_datum_rowkey_list_[i] /*dst*/, allocator))) {
             LOG_WARN("failed to deep copy datum rowkey", KR(ret), K(i), K(tmp_datum_rowkey));
           }
@@ -183,8 +184,8 @@ int ObParallelMergeInfo::generate_from_range_array(
       list_size_ = sum_range_cnt - 1;
       allocator_ = &allocator;
       uint64_t compat_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-        LOG_WARN("fail to get data version", K(ret));
+      if (OB_FAIL(MTL(ObTenantTabletScheduler*)->get_min_data_version(compat_version))) {
+        LOG_WARN("failed to get min data version", KR(ret));
       } else if (compat_version < DATA_VERSION_4_2_0_0) { // sync store_rowkey_list
         ret = generate_store_rowkey_list(allocator, paral_range);
       } else { // sync datum_rowkey_list

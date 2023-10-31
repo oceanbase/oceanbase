@@ -28,9 +28,10 @@ class ObKVCacheMap
 {
   static constexpr int64_t DEFAULT_BUCKET_SIZE = (16L << 20); // 16M
   static constexpr int64_t MIN_BUCKET_SIZE     = ( 4L << 10); //  4K
+  static const int64_t HAZARD_STATION_WAITING_THRESHOLD = 512;
+  static const int64_t HAZARD_STATION_SLOT_NUM = 1L << 10; //  1K
   static constexpr int64_t BUCKET_SIZE_ARRAY_LEN = 4;
   static constexpr int64_t BUCKET_SIZE_ARRAY[BUCKET_SIZE_ARRAY_LEN] = {MIN_BUCKET_SIZE, MIN_BUCKET_SIZE << 4,  MIN_BUCKET_SIZE << 8, DEFAULT_BUCKET_SIZE};
-  static const int64_t HAZARD_VERSION_THREAD_WAITING_THRESHOLD = 512;
   static const int64_t DEFAULT_LFU_THRESHOLD_BASE = 2;
 public:
   ObKVCacheMap();
@@ -58,7 +59,7 @@ public:
   void print_hazard_version_info();
 private:
   friend class ObKVCacheIterator;
-  struct Node : public KVCacheHazardNode
+  struct Node : public ObKVCacheHazardNode
   {
     ObKVCacheInst *inst_;
     uint64_t hash_code_;
@@ -80,7 +81,7 @@ private:
     {}
     virtual ~Node() {};
     virtual void retire() override;  // only free memory of itself
-    INHERIT_TO_STRING_KV("Node", KVCacheHazardNode, KPC_(inst), K_(hash_code), K_(seq_num), KP_(mb_handle), KP_(key),
+    INHERIT_TO_STRING_KV("Node", ObKVCacheHazardNode, KPC_(inst), K_(hash_code), K_(seq_num), KP_(mb_handle), KP_(key),
                          KP_(value), KP_(next), K_(get_cnt));
   };
   struct Bucket
@@ -89,9 +90,9 @@ private:
   };
 private:
   int multi_get(const int64_t cache_id, const int64_t pos, common::ObList<Node, common::ObArenaAllocator> &list);
-  void internal_map_erase(Node *&prev, Node *&iter, Node *&bucket_ptr);
-  void internal_map_replace(Node *&prev, Node *&iter, Node *&bucket_ptr);
-  int internal_data_move(Node *&prev, Node *&iter, Node *&bucket_ptr);
+  void internal_map_erase(const ObKVCacheHazardGuard &guard, Node *&prev, Node *&iter, Node *&bucket_ptr);
+  void internal_map_replace(const ObKVCacheHazardGuard &guard, Node *&prev, Node *&iter, Node *&bucket_ptr);
+  int internal_data_move(const ObKVCacheHazardGuard &guard, Node *&prev, Node *&iter, Node *&bucket_ptr);
   OB_INLINE bool need_modify_cache(const int64_t iter_get_cnt, const int64_t total_get_cnt, const int64_t kv_cnt) const
   {
     bool ret = false;
@@ -113,7 +114,7 @@ private:
   Bucket *buckets_;
   ObBucketLock bucket_lock_;
   ObKVCacheStore *store_;
-  GlobalHazardVersion global_hazard_version_;
+  ObKVCacheHazardStation global_hazard_station_;
 };
 
 }//end namespace common

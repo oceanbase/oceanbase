@@ -197,6 +197,7 @@ public:
   ObArrayImpl(const ObArrayImpl &other);
   ObArrayImpl &operator=(const ObArrayImpl &other);
   int assign(const ObIArray<T> &other);
+  int push_back(const ObIArray<T> &other);
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   static uint32_t data_offset_bits() { return offsetof(ObArrayImpl, data_) * 8; }
@@ -500,6 +501,33 @@ int ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::assign(con
       }
       if (OB_SUCC(ret)) {
         count_ = N;
+      }
+      if (valid_count_ < count_) {
+        valid_count_ = count_;
+      }
+    }
+  }
+  return ret;
+}
+
+template<typename T, typename BlockAllocatorT, bool auto_free, typename CallBack, typename ItemEncode>
+int ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::push_back(const ObIArray<T> &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.empty()) {
+    const int64_t total_cnt = count_ + other.count();
+    (void)this->reserve(total_cnt);
+    if (OB_UNLIKELY(static_cast<uint64_t>(data_size_) < (sizeof(T)*total_cnt))) {
+      _OB_LOG(WARN, "no memory");
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.count(); ++i) {
+        if (OB_FAIL(construct_assign(data_[count_ + i], other.at(i)))) {
+          LIB_LOG(WARN, "failed to copy data", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        count_ = total_cnt;
       }
       if (valid_count_ < count_) {
         valid_count_ = count_;

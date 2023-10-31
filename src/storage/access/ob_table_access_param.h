@@ -34,44 +34,8 @@ class ObSSTable;
 namespace storage
 {
 class ObRelativeTable;
-
-enum ObFastAggregationType
-{
-  INVALID_AGG_TYPE = 0,
-  AGG_COUNT_ALL,
-  AGG_COUNT_COL,
-  AGG_MAX,
-  AGG_MIN,
-};
-
-struct ObFastAggProjectCell
-{
-  ObFastAggProjectCell() : agg_project_(0) {}
-  ~ObFastAggProjectCell() { reset(); }
-  void reset() { agg_project_ = 0; }
-  inline void set_project_id(const uint32_t id) { project_id_ = id & OBSF_MASK_AGG_PROJECT; }
-  inline void set_type(const ObFastAggregationType type) { type_ = type & OBSF_MASK_AGG_TYPE; }
-  inline int32_t get_project_id() const { return project_id_; }
-  inline ObFastAggregationType get_type() const { return static_cast<ObFastAggregationType>(type_); }
-  TO_STRING_KV(K_(agg_project), K_(project_id), K_(type));
-
-  static const uint32_t OB_AGG_PROJECT_ID = 16;
-  static const uint32_t OB_AGG_TYPE = 8;
-  static const uint32_t OB_AGG_RESERVED = 8;
-
-  static const uint32_t OBSF_MASK_AGG_PROJECT = (0x1UL << OB_AGG_PROJECT_ID) - 1;
-  static const uint32_t OBSF_MASK_AGG_TYPE = (0x1UL << OB_AGG_TYPE) - 1;
-  union
-  {
-    int32_t agg_project_;
-    struct
-    {
-      int32_t project_id_ : OB_AGG_PROJECT_ID;
-      uint32_t type_ : OB_AGG_TYPE;
-      uint32_t reserved_ : OB_AGG_RESERVED;
-    };
-  };
-};
+class ObSSTableIndexFilter;
+static const int64_t AGGREGATE_STORE_BATCH_SIZE = 1024;
 
 // Parameters for row iteration like ObITable get, scan, multi_get, multi_scan
 // and ObStoreRowIterator::init
@@ -84,9 +48,21 @@ public:
   bool is_valid() const;
   int refresh_lob_column_out_status();
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
+  //temp solution
+  int get_cg_column_param(const share::schema::ObColumnParam *&column_param) const;
   const ObITableReadInfo *get_read_info(const bool is_get = false) const
   {
 	  return is_get ? rowkey_read_info_ : read_info_;
+  }
+  int get_index_read_info(const bool is_cg, const ObITableReadInfo *&index_read_info) const
+  {
+    int ret = OB_SUCCESS;
+    if (is_cg) {
+      ret = MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info);
+    } else {
+      index_read_info = read_info_;
+    }
+    return ret;
   }
   OB_INLINE int64_t get_out_col_cnt() const
   {
@@ -120,34 +96,63 @@ public:
   {
     return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->get_group_idx_col_index() : common::OB_INVALID_INDEX;
   }
+  bool can_be_reused(const uint32_t cg_idx, const sql::ObExpr *expr) const
+  {
+    // there is only one column in cg now
+    bool can_reuse = cg_idx == cg_idx_ && nullptr != output_exprs_
+                  && 1 == output_exprs_->count() && output_exprs_->at(0) == expr;
+    return can_reuse;
+  }
   OB_INLINE bool need_fill_group_idx() const
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
   OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
   { return ss_rowkey_prefix_cnt_; }
   OB_INLINE void disable_blockscan()
-  { pd_blockscan_ = 0; }
+  { pd_storage_flag_.set_blockscan_pushdown(false); }
   OB_INLINE bool enable_pd_blockscan() const
-  { return pd_blockscan_; }
+  { return pd_storage_flag_.is_blockscan_pushdown(); }
   OB_INLINE bool enable_pd_filter() const
-  { return  pd_filter_; }
-  OB_INLINE bool enable_pd_aggregate() const
-  { return pd_aggregate_; }
+  { return pd_storage_flag_.is_filter_pushdown(); }
+  OB_INLINE void disable_pd_aggregate()
+  { pd_storage_flag_.set_aggregate_pushdown(false); }
+  OB_INLINE bool enable_pd_aggregate() const // just indicate scalar agg
+  { return !enable_pd_group_by() && pd_storage_flag_.is_aggregate_pushdown(); }
+  OB_INLINE bool enable_pd_group_by() const
+  { return pd_storage_flag_.is_group_by_pushdown(); }
+  OB_INLINE bool enable_skip_index() const
+  { return pd_storage_flag_.is_apply_skip_index(); }
   OB_INLINE bool is_use_iter_pool() const
-  { return use_iter_pool_; }
+  { return pd_storage_flag_.is_use_iter_pool(); }
   OB_INLINE void set_use_iter_pool_flag()
-  { use_iter_pool_ = 1; }
+  { pd_storage_flag_.set_use_iter_pool(true);}
   OB_INLINE bool has_lob_column_out() const
   { return has_lob_column_out_; }
   bool need_trans_info() const;
+  OB_INLINE bool is_use_column_store() const
+  { return !(get_read_info()->has_all_column_group()) || pd_storage_flag_.is_use_column_store(); }
+  OB_INLINE void set_use_column_store()
+  { return pd_storage_flag_.set_use_column_store(true); }
+  OB_INLINE void set_not_use_column_store()
+  { return pd_storage_flag_.set_use_column_store(false); }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
+  uint32_t cg_idx_;
   const ObITableReadInfo *read_info_;
   const ObITableReadInfo *rowkey_read_info_;
+  ObCGReadInfoHandle cg_read_info_handle_;
+  //TODO(huronghui.hrh):temp solution
+  const ObColumnParam *cg_col_param_;
   const common::ObIArray<int32_t> *out_cols_project_;
   const common::ObIArray<int32_t> *agg_cols_project_;
+  const common::ObIArray<int32_t> *group_by_cols_project_;
   sql::ObPushdownFilterExecutor *pushdown_filter_;
+  sql::ObPushdownOperator *op_;
+  ObSSTableIndexFilter *sstable_index_filter_;
+  const sql::ObExprPtrIArray *output_exprs_;
+  const sql::ObExprPtrIArray *aggregate_exprs_;
+  const common::ObIArray<bool> *output_sel_mask_;
   // only used in ObMemTable
   bool is_multi_version_minor_merge_;
   bool need_scn_;
@@ -161,17 +166,7 @@ public:
   bool is_for_foreign_check_;
   bool limit_prefetch_;
   int64_t ss_rowkey_prefix_cnt_;
-  sql::ObPushdownOperator *op_;
-  union {
-    struct {
-      int32_t pd_blockscan_:1;
-      int32_t pd_filter_:1;
-      int32_t pd_aggregate_:1;
-      int32_t use_iter_pool_:1;
-      int32_t reserved_:28;
-    };
-    int32_t pd_storage_flag_;
-  };
+  sql::ObStoragePushdownFlag pd_storage_flag_;
 };
 
 struct ObTableAccessParam
@@ -216,17 +211,12 @@ public:
   const sql::ObExprPtrIArray *op_filters_;
   ObRow2ExprsProjector *row2exprs_projector_;
   const common::ObIArray<bool> *output_sel_mask_;
-
-  // for fast agg project
-  const common::ObIArray<ObFastAggProjectCell> *fast_agg_project_;
-
   bool is_inited_;
 };
 
 //TODO @hanhui remove this func
 int set_row_scn(
     const ObTableIterParam &iter_param,
-    const blocksstable::ObSSTable &sstable,
     const blocksstable::ObDatumRow *store_row);
 
 } // namespace storage

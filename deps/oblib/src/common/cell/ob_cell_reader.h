@@ -39,6 +39,7 @@ private:
   int read_interval_ds(ObObj &obj);
   int read_interval_ym(ObObj &obj);
   int read_urowid();
+  int read_decimal_int(ObObj &);
   int parse(uint64_t *column_id);
   template<class T>
   int read(const T *&ptr);

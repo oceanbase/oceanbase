@@ -113,15 +113,19 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
       type.set_type(ObRawType);
       type.set_collation_level(CS_LEVEL_NUMERIC);
       type.set_collation_type(CS_TYPE_BINARY);
+    } else if (lib::is_oracle_mode() && types_stack[RESULT_TYPE_INDEX].is_decimal_int()) {
+      type.set_type(ObNumberType);
     } else if (lib::is_mysql_mode() && types_stack[RESULT_TYPE_INDEX].is_integer_type()) {
       bool has_number = false;
       for (int64_t i = RESULT_TYPE_INDEX; i < param_num && !has_number; i += 2 /*skip conditions */) {
-        if (ob_is_number_tc(types_stack[i].get_type())) {
+        if (ob_is_number_tc(types_stack[i].get_type())
+            || ob_is_decimal_int(types_stack[i].get_type())) {
           has_number = true;
         }
       }
       if (has_default && !has_number) {
-        has_number = ob_is_number_tc(types_stack[param_num - 1].get_type());
+        has_number = (ob_is_number_tc(types_stack[param_num - 1].get_type())
+                     || ob_is_decimal_int(types_stack[param_num - 1].get_type()));
       }
       if (has_number) {
         type.set_number();
@@ -130,6 +134,9 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
       }
     } else {
       type.set_type(types_stack[RESULT_TYPE_INDEX].get_type());
+    }
+    if (type.is_decimal_int()) { // decode expr's result type is ObNumberType
+      type.set_type(ObNumberType);
     }
     //deduce calc type
     ObExprResType &calc_type = types_stack[CALC_TYPE_INDEX];
@@ -185,7 +192,8 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
             type.set_calc_type(ObDoubleType);
           } else if (ObOBinFloatType == ob_obj_type_to_oracle_type(types_stack[i].get_type())) {
             type.set_calc_type(ObFloatType);
-          } else if (ObNumberType == types_stack[i].get_type()
+          } else if ((ObNumberType == types_stack[i].get_type()
+                      || ObDecimalIntType == types_stack[i].get_type())
                      && !ob_is_float_type(type.get_calc_type())) {
             type.set_calc_type(ObNumberType);
           } else {

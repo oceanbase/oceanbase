@@ -255,6 +255,11 @@ public:
                                     const bool check_deleted,
                                     T &result,
                                     common::ObArray<ObTableSchema *> &table_schema_array);
+  template<typename T>
+  static int retrieve_column_group_schema(const uint64_t tenant_id,
+                                          const bool check_deleted,
+                                          T &result,
+                                          common::ObArray<ObTableSchema *> &table_schema_array);
 
   template<typename T>
   static int retrieve_constraint(const uint64_t tenant_id,
@@ -307,6 +312,18 @@ public:
                                  const bool check_deleted,
                                  T &result,
                                  ObTableSchema *&table_schema);
+
+  template<typename T>
+  static int retrieve_column_group_schema(const uint64_t tenant_id,
+                                          const bool check_deleted,
+                                          T &result,
+                                          ObTableSchema *&table_schema);
+
+  template<typename T>
+  static int retrieve_column_group_mapping(const uint64_t tenant_id,
+                                           const bool check_deleted,
+                                           T &result,
+                                           ObTableSchema *&table_schema);
 
   //for ObColumnSchema ObPartition
   template<typename TABLE_SCHEMA, typename SCHEMA,  typename T>
@@ -532,6 +549,11 @@ public:
   template<typename T>
   static int fill_constraint(const uint64_t tenant_id, const bool check_deleted, T &result,
                              ObConstraint &constraint, bool &is_deleted);
+
+  template<typename T>
+  static int fill_column_group_info(const bool check_deleted, T &result,
+                                    ObColumnGroupSchema &column_group,
+                                    uint64_t &table_id, bool &is_deleted);
 
   template<typename T>
   static int fill_constraint_column_info(

@@ -14,6 +14,7 @@
 
 #include "ob_tablet_table_updater.h"
 
+#include "lib/utility/ob_tracepoint.h"
 #include "share/tablet/ob_tablet_info.h"            // for ObTabletInfo
 #include "share/tablet/ob_tablet_table_operator.h"  // for ObTabletOperator
 #include "observer/ob_service.h"                    // for is_mini_mode
@@ -22,6 +23,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {
@@ -66,29 +68,31 @@ void TSITabletTableUpdatStatistics::dump()
            "avg_exec_us", total_exec_us_ / total_cnt);
 }
 
+/*
+ * ObTabletTableUpdateTask implement
+ * */
 ObTabletTableUpdateTask::~ObTabletTableUpdateTask()
 {
 }
 
 int ObTabletTableUpdateTask::init(
-    const uint64_t tenant_id,
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    const int64_t add_timestamp)
+    const int64_t add_timestamp,
+    const bool need_diagnose/*false*/)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id)
-      || !tablet_id.is_valid_with_tenant(tenant_id)
+  if (OB_UNLIKELY(!ls_id.is_valid()
+      || !tablet_id.is_valid()
       || 0 >= add_timestamp)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("task init failed", KR(ret), K(tenant_id), K(ls_id), K(tablet_id),
+    LOG_WARN("task init failed", KR(ret), K(ls_id), K(tablet_id),
               K(add_timestamp));
   } else {
-    tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     add_timestamp_ = add_timestamp;
-
+    need_diagnose_ = need_diagnose;
   }
   return ret;
 }
@@ -97,10 +101,11 @@ int ObTabletTableUpdateTask::assign(const ObTabletTableUpdateTask &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
-    tenant_id_ = other.get_tenant_id();
     ls_id_ = other.get_ls_id();
     tablet_id_ = other.get_tablet_id();
     add_timestamp_ = other.get_add_timestamp();
+    need_diagnose_ = other.need_diagnose_;
+    start_timestamp_ = other.start_timestamp_;
   }
   return ret;
 }
@@ -111,8 +116,7 @@ bool ObTabletTableUpdateTask::operator ==(const ObTabletTableUpdateTask &other) 
   if (this == &other) { // same pointer
     equal = true;
   } else {
-    equal = (tenant_id_ == other.tenant_id_
-             && ls_id_ == other.ls_id_
+    equal = (ls_id_ == other.ls_id_
              && tablet_id_ == other.tablet_id_);
   }
   return equal;
@@ -120,10 +124,10 @@ bool ObTabletTableUpdateTask::operator ==(const ObTabletTableUpdateTask &other) 
 
 void ObTabletTableUpdateTask::reset()
 {
-  tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
   tablet_id_.reset();
   add_timestamp_ = OB_INVALID_TIMESTAMP;
+  need_diagnose_ = false;
 }
 
 bool ObTabletTableUpdateTask::compare_without_version(
@@ -133,8 +137,7 @@ bool ObTabletTableUpdateTask::compare_without_version(
   if (&other == this) {
     equal = true;
   } else  {
-    equal = (tenant_id_ == other.tenant_id_
-             && ls_id_ == other.ls_id_
+    equal = (ls_id_ == other.ls_id_
              && tablet_id_ == other.tablet_id_);
   }
   return equal;
@@ -151,12 +154,20 @@ void ObTabletTableUpdateTask::check_task_status() const
   }
 }
 
+void ObTabletTableUpdateTask::set_start_timestamp()
+{
+  start_timestamp_ = ObTimeUtility::current_time();
+}
+
+int64_t ObTabletTableUpdateTask::get_start_timestamp() const
+{
+  return start_timestamp_;
+}
+
 bool ObTabletTableUpdateTask::is_valid() const
 {
-  // TODO: do not need to check tenant_id when realized under each tenant
-  return OB_INVALID_TENANT_ID != tenant_id_
-      && ls_id_.is_valid_with_tenant(tenant_id_)
-      && tablet_id_.is_valid_with_tenant(tenant_id_)
+  return ls_id_.is_valid()
+      && tablet_id_.is_valid()
       && 0 < add_timestamp_;
 }
 
@@ -168,50 +179,53 @@ bool ObTabletTableUpdateTask::is_barrier() const
 int64_t ObTabletTableUpdateTask::hash() const
 {
   uint64_t hash_val = 0;
-  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
   hash_val = murmurhash(&ls_id_, sizeof(ls_id_), hash_val);
   hash_val = murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
   return hash_val;
 }
 
-int ObTabletTableUpdater::init(
-    ObService &ob_service,
-    share::ObTabletTableOperator &tablet_operator)
+/*
+ * ObTabletTableUpdater implement
+ * */
+int ObTabletTableUpdater::mtl_init(ObTabletTableUpdater *&tablet_table_updater)
+{
+  return tablet_table_updater->init();
+}
+
+int ObTabletTableUpdater::init()
 {
   int ret = OB_SUCCESS;
   const int64_t update_queue_size = !lib::is_mini_mode()
                                     ? UPDATE_QUEUE_SIZE
                                     : MINI_MODE_UPDATE_QUEUE_SIZE;
   // TODO: allow set thread_cnt in config file
-  const int64_t update_task_thread_cnt = !lib::is_mini_mode()
-                                         ? UPDATE_TASK_THREAD_CNT
-                                         : MINI_MODE_UPDATE_TASK_THREAD_CNT;
-  if (OB_UNLIKELY(inited_)) {
+  const int64_t update_task_thread_cnt = cal_thread_count_();
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", KR(ret));
   } else if (OB_FAIL(update_queue_.init(this,
                                         update_task_thread_cnt,
                                         update_queue_size,
-                                        "TbltTblUp"))) {
+                                        "TbltTblUp",
+                                        MTL_ID()))) {
     LOG_WARN("init tablet table updater queue failed", KR(ret),
              "thread_count", update_task_thread_cnt,
              "queue_size", update_queue_size);
   } else {
-    ob_service_ = &ob_service;
-    tablet_operator_ = &tablet_operator;
-    inited_ = true;
-    stopped_ = false;
+    is_inited_ = true;
+    is_stop_ = false;
+    tenant_id_ = MTL_ID();
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("init a ObTabletTableUpdater success");
+    LOG_INFO("init a ObTabletTableUpdater success", K(update_task_thread_cnt));
   }
   return ret;
 }
 
 void ObTabletTableUpdater::stop()
 {
-  if (inited_) {
-    stopped_ = true;
+  if (is_inited_) {
+    is_stop_ = true;
     update_queue_.stop();
     LOG_INFO("stop ObTabletTableUpdater success");
   }
@@ -219,7 +233,7 @@ void ObTabletTableUpdater::stop()
 
 void ObTabletTableUpdater::wait()
 {
-  if (inited_) {
+  if (is_inited_) {
     update_queue_.wait();
     LOG_INFO("wait ObTabletTableUpdater");
   }
@@ -229,41 +243,75 @@ void ObTabletTableUpdater::destroy()
 {
   stop();
   wait();
-  inited_ = false;
-  stopped_ = true;
-  tablet_operator_ = nullptr;
-  ob_service_ = nullptr;
+  is_inited_ = false;
+  is_stop_ = true;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+}
+
+int64_t ObTabletTableUpdater::cal_thread_count_()
+{
+  int tmp_ret = OB_SUCCESS;
+  int64_t thread_cnt = MINI_MODE_UPDATE_TASK_THREAD_CNT;
+  if (!lib::is_mini_mode()) {
+    double max_cpu = 0;
+    double min_cpu = 0;
+    omt::ObMultiTenant *omt = GCTX.omt_;
+    if (NULL == omt) {
+      tmp_ret = OB_INVALID_ARGUMENT;
+      LOG_WARN_RET(tmp_ret, "invalid argument", K(tmp_ret), KP(omt));
+    } else if (OB_TMP_FAIL(omt->get_tenant_cpu(tenant_id_, min_cpu, max_cpu))) {
+      LOG_WARN_RET(tmp_ret, "fail to get tenant cpu", K(tmp_ret), K(min_cpu), K(max_cpu));
+    } else {
+      thread_cnt = std::max(MIN_UPDATE_TASK_THREAD_CNT,
+          lround(MIN_UPDATE_TASK_THREAD_CNT * UPDATE_TASK_THREAD_RATIO * max_cpu));
+      thread_cnt = std::min(thread_cnt, MAX_UPDATE_TASK_THREAD_CNT);
+    }
+  }
+  return thread_cnt;
+}
+
+int ObTabletTableUpdater::submit_tablet_update_task(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    const bool need_diagnose/*false*/)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletTableUpdater is not inited", KR(ret));
+  } else if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(async_update(ls_id, tablet_id, need_diagnose))) {
+    LOG_WARN("fail to async update tablet", KR(ret), K(ls_id), K(tablet_id));
+  }
+  return ret;
 }
 
 int ObTabletTableUpdater::async_update(
-    const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id)
+    const common::ObTabletID &tablet_id,
+    const bool need_diagnose/*false*/)
 {
   int ret = OB_SUCCESS;
   int64_t add_timestamp = ObTimeUtility::current_time();
   ObTabletTableUpdateTask task;
-  if (OB_UNLIKELY(!is_inited())) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletTableUpdater is not inited", KR(ret));
-  } else if (tablet_id.is_reserved_tablet() || is_virtual_tenant_id(tenant_id)) {
-    LOG_TRACE("no need to report virtual tenant's tablet and reserved tablet",
-             KR(ret), K(tablet_id), K(tenant_id));
-  } else if (OB_INVALID_TENANT_ID == tenant_id
-             || !ls_id.is_valid()
-             || !ls_id.is_valid_with_tenant(tenant_id)
-             || !tablet_id.is_valid()
-             || !tablet_id.is_valid_with_tenant(tenant_id)) {
+  } else if (tablet_id.is_reserved_tablet()) {
+    LOG_TRACE("no need to report reserved tablet", KR(ret), K(tablet_id));
+  } else if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(task.init(tenant_id,
-                               ls_id,
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(task.init(ls_id,
                                tablet_id,
-                               add_timestamp))) {
-    LOG_WARN("set update task failed", KR(ret), K(tenant_id), K(ls_id), K(tablet_id),
+                               add_timestamp,
+                               need_diagnose))) {
+    LOG_WARN("set update task failed", KR(ret), K(ls_id), K(tablet_id),
              K(add_timestamp));
   } else if (OB_FAIL(add_task_(task))){
-    LOG_WARN("fail to add task", KR(ret), K(tenant_id), K(ls_id), K(tablet_id),
+    LOG_WARN("fail to add task", KR(ret), K(ls_id), K(tablet_id),
              K(add_timestamp));
   }
   return ret;
@@ -273,21 +321,45 @@ int ObTabletTableUpdater::add_task_(
     const ObTabletTableUpdateTask &task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
+  int tmp_ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (!task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid task", KR(ret), K(task));
-  } else if (OB_FAIL(update_queue_.add(task))){
+  }
+ #ifdef ERRSIM
+  if (task.need_diagnose()) {
+    ret = OB_E(EventTable::EN_COMPACTION_REPORT_ADD_TASK_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_REPORT_ADD_TASK_FAILED", K(ret));
+    }
+  }
+#endif
+  if (FAILEDx(update_queue_.add(task))){
     // TODO: deal with barrier-tasks when execute
     if (OB_EAGAIN == ret) {
       LOG_TRACE("tablet table update task exist", K(task));
       ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("add tablet table update task failed", KR(ret), K(task));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("add tablet table update task failed", KR(ret), K(task));
+    if (task.need_diagnose() && OB_TMP_FAIL(compaction::ADD_SUSPECT_INFO(
+        compaction::MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_REPORT,
+        task.get_ls_id(), task.get_tablet_id(),
+        ObSuspectInfoType::SUSPECT_COMPACTION_REPORT_ADD_FAILED,
+        static_cast<int64_t>(ret)))) {
+      LOG_WARN_RET(tmp_ret, "fail to add suspect info", K(tmp_ret));
     }
   } else {
+    if (task.need_diagnose()) {
+      DEL_SUSPECT_INFO(
+        compaction::MEDIUM_MERGE,
+        task.get_ls_id(), task.get_tablet_id(),
+        share::ObDiagnoseTabletType::TYPE_REPORT);
+    }
     LOG_TRACE("add tablet table update task success", KR(ret), K(task));
   }
   return ret;
@@ -297,7 +369,7 @@ int ObTabletTableUpdater::reput_to_queue_(
     const ObIArray<ObTabletTableUpdateTask> &tasks)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else { // try to push task back to queue, ignore ret code
@@ -325,6 +397,91 @@ int ObTabletTableUpdater::process_barrier(
   return ret;
 }
 
+int ObTabletTableUpdater::set_thread_count()
+{
+  int ret = OB_SUCCESS;
+  int64_t thread_count = cal_thread_count_();
+  if (OB_FAIL(update_queue_.set_thread_count(thread_count))) {
+    LOG_WARN("fail to set thread count", K(ret), K(thread_count));
+  } else {
+    LOG_TRACE("success to set thread count", K(thread_count));
+  }
+  return ret;
+}
+
+int ObTabletTableUpdater::check_exist(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObTabletTableUpdateTask task(ls_id, tablet_id, ObClockGenerator::getClock());
+    if (OB_FAIL(update_queue_.check_exist(task, exist))) {
+      LOG_WARN("fail to check task exist", K(ret), K(task), K(exist));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableUpdater::check_processing_exist(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (!ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObTabletTableUpdateTask task(ls_id, tablet_id, ObClockGenerator::getClock());
+    if (OB_FAIL(update_queue_.check_processing_exist(task, exist))) {
+      LOG_WARN("fail to check processing task exist", K(ret), K(task), K(exist));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableUpdater::diagnose_existing_task(
+    ObIArray<ObTabletTableUpdateTask> &waiting_tasks,
+    ObIArray<ObTabletTableUpdateTask> &processing_tasks)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(update_queue_.diagnose_waiting_task(waiting_tasks))) {
+    LOG_WARN("fail to diagnose waiting task", K(ret));
+  } else if (OB_FAIL(update_queue_.diagnose_processing_task(processing_tasks))) {
+    LOG_WARN("fail to diagnose processing task", K(ret));
+  }
+  return ret;
+}
+
+void ObTabletTableUpdater::diagnose_batch_tasks_(
+    const ObIArray<ObTabletTableUpdateTask> &batch_tasks,
+    const int error_code)
+{
+  int tmp_ret = OB_SUCCESS;
+  int64_t diagnose_cnt = 0;
+  for (int64_t i = 0; i < batch_tasks.count() && diagnose_cnt < DIAGNOSE_MAX_BATCH_COUNT; ++i) {
+    const ObTabletTableUpdateTask &task = batch_tasks.at(i);
+    if (task.need_diagnose()) {
+      if (OB_TMP_FAIL(compaction::ADD_SUSPECT_INFO(
+          compaction::MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+          task.get_ls_id(), task.get_tablet_id(),
+          ObSuspectInfoType::SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED,
+          static_cast<int64_t>(error_code)))) {
+        LOG_WARN_RET(tmp_ret, "fail to add suspect info", K(tmp_ret));
+      } else {
+        ++diagnose_cnt;
+      }
+    }
+  }
+}
+
 int ObTabletTableUpdater::generate_tasks_(
     const ObIArray<ObTabletTableUpdateTask> &batch_tasks,
     ObArray<ObTabletReplica> &update_tablet_replicas,
@@ -334,20 +491,17 @@ int ObTabletTableUpdater::generate_tasks_(
     RemoveTaskList &remove_tablet_tasks)
 {
   int ret = OB_SUCCESS;
-  int64_t tenant_id = OB_INVALID_TENANT_ID;
   int64_t count = UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM;
-  if (OB_UNLIKELY(!is_inited())) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletTableUpdater is not inited", KR(ret));
-  } else if (OB_ISNULL(tablet_operator_)
-             || OB_ISNULL(ob_service_)) {
+  } else if (OB_ISNULL(GCTX.tablet_operator_)
+             || OB_ISNULL(GCTX.ob_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", KR(ret), KP_(tablet_operator), KP_(ob_service));
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.tablet_operator_), KP(GCTX.ob_service_));
   } else if (OB_UNLIKELY(batch_tasks.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("batch_tasks count <= 0", KR(ret), "tasks_count", batch_tasks.count());
-  } else if (FALSE_IT(tenant_id = batch_tasks.at(0).get_tenant_id())) {
-    // shall never be here
   } else {
     ObTabletReplica replica;
     ObTabletReplicaChecksumItem checksum_item;
@@ -356,14 +510,11 @@ int ObTabletTableUpdater::generate_tasks_(
       if (OB_ISNULL(task)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid task", KR(ret), K(task));
-      } else if (tenant_id != task->get_tenant_id()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("tenant_id not the same", KR(ret), K(tenant_id), KPC(task));
       } else {
         task->check_task_status();
         replica.reset();
         checksum_item.reset();
-        if (OB_FAIL(ob_service_->fill_tablet_report_info(task->get_tenant_id(),
+        if (OB_FAIL(GCTX.ob_service_->fill_tablet_report_info(tenant_id_,
                                                          task->get_ls_id(),
                                                          task->get_tablet_id(),
                                                          replica,
@@ -374,7 +525,7 @@ int ObTabletTableUpdater::generate_tasks_(
             ret = OB_SUCCESS;
             // fill primary keys of the replica for removing
             if (OB_FAIL(replica.init(
-                task->get_tenant_id(),
+                tenant_id_,
                 task->get_tablet_id(),
                 task->get_ls_id(),
                 GCONF.self_addr_,
@@ -451,10 +602,6 @@ int ObTabletTableUpdater::batch_process_tasks(
   UpdateTaskList update_tablet_tasks;
   RemoveTaskList remove_tablet_tasks;
   ObCurTraceId::init(GCONF.self_addr_);
-  uint64_t tenant_id = OB_INVALID_TENANT_ID;
-  uint64_t meta_tenant_id = OB_INVALID_TENANT_ID;
-  bool tenant_dropped = false;
-  bool schema_not_ready = false;
   int64_t succ_cnt = 0;
   int64_t update_task_cnt = 0;
   int64_t remove_task_cnt = 0;
@@ -464,31 +611,12 @@ int ObTabletTableUpdater::batch_process_tasks(
       wait_cost += (start_time - batch_tasks.at(i).get_add_timestamp());
     }
   }
-  if (OB_UNLIKELY(!is_inited())) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletTableUpdater is not inited", KR(ret));
   } else if (batch_tasks.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid batch_tasks", KR(ret), "task count", batch_tasks.count());
-  } else if (FALSE_IT(tenant_id = batch_tasks.at(0).get_tenant_id())) {
-  } else { // TODO: remove check tenant dropped after ObTabletTableUpdater has been moved into MTL
-    meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    (void)check_tenant_status_(meta_tenant_id, tenant_dropped, schema_not_ready);
-  }
-  if (tenant_dropped) { // do nothing to the tenant has been dropped
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
-      FLOG_INFO("REPORT: tasks can't be processed because it's superior tenant has been dropped",
-          KR(ret), K(meta_tenant_id), K(batch_tasks));
-    }
-  } else if (schema_not_ready) { // need wait schema refresh
-    ret = OB_NEED_WAIT;
-    if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
-      LOG_WARN("tenant schema is not ready, need wait", KR(ret), K(meta_tenant_id), K(batch_tasks));
-    }
-    (void) throttle_(ret, ObTimeUtility::current_time() - start_time);
-    if (OB_FAIL(reput_to_queue_(batch_tasks))) {
-      LOG_WARN("fail to reput remove task to queue", KR(ret), K(batch_tasks));
-    }
   } else if (OB_FAIL(generate_tasks_(
       batch_tasks,
       update_tablet_replicas,
@@ -506,14 +634,17 @@ int ObTabletTableUpdater::batch_process_tasks(
   } else {
     update_task_cnt = update_tablet_replicas.count();
     remove_task_cnt = remove_tablet_replicas.count();
-    tmp_ret = do_batch_update_(start_time, update_tablet_tasks, update_tablet_replicas, update_tablet_checksums);
-    if (OB_SUCCESS != tmp_ret) {
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-      LOG_WARN("do_batch_update_ failed", KR(tmp_ret), K(start_time),
-          "tasks count", update_tablet_tasks.count(),
-          "tablet replicas count", update_tablet_replicas.count());
-    } else {
-      succ_cnt += update_task_cnt;
+    if (update_tablet_tasks.count() > 0) {
+      tmp_ret = do_batch_update_(start_time, update_tablet_tasks, update_tablet_replicas, update_tablet_checksums);
+      if (OB_SUCCESS != tmp_ret) {
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_WARN("do_batch_update_ failed", KR(tmp_ret), K(start_time),
+            "tasks count", update_tablet_tasks.count(),
+            "tablet replicas count", update_tablet_replicas.count());
+        diagnose_batch_tasks_(update_tablet_tasks, tmp_ret);
+      } else {
+        succ_cnt += update_task_cnt;
+      }
     }
     if (remove_tablet_tasks.count() > 0) {
       tmp_ret = do_batch_remove_(start_time, remove_tablet_tasks, remove_tablet_replicas);
@@ -522,6 +653,7 @@ int ObTabletTableUpdater::batch_process_tasks(
         LOG_WARN("do_batch_remove_ failed", KR(tmp_ret), K(start_time),
             "tasks count", remove_tablet_tasks.count(),
             "remove replicas count", remove_tablet_replicas.count());
+        diagnose_batch_tasks_(remove_tablet_tasks, tmp_ret);
       } else {
         succ_cnt += remove_task_cnt;
       }
@@ -550,25 +682,23 @@ int ObTabletTableUpdater::do_batch_remove_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t tenant_id = OB_INVALID_TENANT_ID;
   const int64_t tasks_count = tasks.count();
   const int64_t batch_remove_start_time = ObTimeUtility::current_time();
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(tablet_operator_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(tasks_count < 1 || tasks_count != replicas.count())) {
+  } else if (OB_UNLIKELY(tasks_count != replicas.count() || OB_ISNULL(GCTX.tablet_operator_))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tasks count", KR(ret), K(tasks_count));
-  } else if (FALSE_IT(tenant_id = tasks.at(0).get_tenant_id())) {
+    LOG_WARN("invalid tasks count", KR(ret), K(tasks_count), KP(GCTX.tablet_operator_));
   } else {
     common::ObMySQLTransaction trans;
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
-      LOG_WARN("fail to start transaction", KR(ret), K(tenant_id), K(meta_tenant_id));
-    } else if (OB_FAIL(tablet_operator_->batch_remove(trans, tenant_id, replicas))) {
+      LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
+    } else if (OB_FAIL(GCTX.tablet_operator_->batch_remove(trans, tenant_id_, replicas))) {
       LOG_WARN("do tablet table remove failed, try to reput to queue", KR(ret),
                "escape time", ObTimeUtility::current_time() - start_time);
-    } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_remove_with_trans(trans, tenant_id, replicas))) {
+    } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_remove_with_trans(trans, tenant_id_, replicas))) {
       LOG_WARN("do tablet table checksum remove failed, try to reput to queue", KR(ret),
                "escape time", ObTimeUtility::current_time() - start_time);
     }
@@ -589,7 +719,7 @@ int ObTabletTableUpdater::do_batch_remove_(
       }
     }
   }
-  LOG_INFO("REPORT: batch remove tablets finished", KR(ret), K(tasks_count),
+  LOG_INFO("REPORT: batch remove tablets finished", KR(ret), K(tasks_count), K(tasks),
       "cost_time", ObTimeUtility::current_time() - batch_remove_start_time);
   return ret;
 }
@@ -602,25 +732,38 @@ int ObTabletTableUpdater::do_batch_update_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t tenant_id = OB_INVALID_TENANT_ID;
   const int64_t batch_update_start_time = ObTimeUtility::current_time();
-  if (tasks.count() != replicas.count()
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (tasks.count() != replicas.count()
       || tasks.count() != checksums.count()
-      || OB_ISNULL(tablet_operator_)
-      || 0 == tasks.count()) {
+      || OB_ISNULL(GCTX.tablet_operator_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tasks num not match or invalid tablet_operator", KR(ret), "task_cnt", tasks.count(),
-             "replica_cnt", replicas.count(), "checksum_cnt", checksums.count());
-  } else if (FALSE_IT(tenant_id = tasks.at(0).get_tenant_id())) {
+             "replica_cnt", replicas.count(), "checksum_cnt", checksums.count(), K(GCTX.tablet_operator_));
   } else {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      FOREACH_CNT_X(task, tasks, OB_SUCC(ret)) {
+        if (OB_NOT_NULL(task) && task->need_diagnose()) {
+          ret = OB_E(EventTable::EN_COMPACTION_REPORT_PROCESS_TASK_FAILED) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_REPORT_PROCESS_TASK_FAILED", K(ret));
+          }
+          DEBUG_SYNC(COMPACTION_REPORT_PROCESS);
+        }
+      }
+    }
+#endif
     common::ObMySQLTransaction trans;
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
-      LOG_WARN("fail to start transaction", KR(ret), K(tenant_id), K(meta_tenant_id));
-    } else if (OB_FAIL(tablet_operator_->batch_update(trans, tenant_id, replicas))) {
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+    if (FAILEDx(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
+      LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
+    } else if (OB_FAIL(GCTX.tablet_operator_->batch_update(trans, tenant_id_, replicas))) {
       LOG_WARN("do tablet table update failed, try to reput to queue", KR(ret),
              "escape time", ObTimeUtility::current_time() - start_time);
-    } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_update_with_trans(trans, tenant_id, checksums))) {
+    } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_update_with_trans(trans, tenant_id_, checksums))) {
       LOG_WARN("do tablet table checksum update failed, try to reput to queue", KR(ret),
              "escape time", ObTimeUtility::current_time() - start_time);
     }
@@ -641,7 +784,7 @@ int ObTabletTableUpdater::do_batch_update_(
       }
     }
   }
-  LOG_INFO("REPORT: batch update tablets finished", KR(ret), K(replicas.count()),
+  LOG_INFO("REPORT: batch update tablets finished", KR(ret), K(replicas.count()), K(tasks),
       "cost_time", ObTimeUtility::current_time() - batch_update_start_time);
   return ret;
 }
@@ -659,34 +802,9 @@ int ObTabletTableUpdater::throttle_(
     LOG_WARN("detected slow update, may be too many concurrent updating", K(sleep_us));
   }
   const static int64_t sleep_step_us = 20 * 1000; // 20ms
-  for (; !stopped_ && sleep_us > 0;
+  for (; !is_stop_ && sleep_us > 0;
       sleep_us -= sleep_step_us) {
     ob_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)));
-  }
-  return ret;
-}
-
-// TODO: remove this function after ObTabletTableUpdater has been moved into MTL
-int ObTabletTableUpdater::check_tenant_status_(
-    const uint64_t tenant_id,
-    bool &tenant_dropped,
-    bool &schema_not_ready)
-{
-  int ret = OB_SUCCESS;
-  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  schema::ObSchemaGetterGuard guard;
-  tenant_dropped = false;
-  schema_not_ready = false;
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, tenant_dropped))) {
-    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
-  } else if (!schema_service->is_tenant_full_schema(tenant_id)) {
-    // need wait schema refresh
-    schema_not_ready = true;
   }
   return ret;
 }

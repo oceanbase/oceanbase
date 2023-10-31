@@ -31,12 +31,10 @@ ObColumnEqualDecoder::~ObColumnEqualDecoder()
 {
 }
 
-int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int64_t row_id,
+int ObColumnEqualDecoder::decode(const ObColumnDecoderCtx &ctx, ObDatum &datum, const int64_t row_id,
     const ObBitStream &bs, const char *data, const int64_t len) const
 {
   UNUSED(bs);
-  UNUSED(data);
-  UNUSED(len);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -46,10 +44,6 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
     LOG_WARN("invalid arguments", K(ret), K(row_id));
   } else {
     int64_t ref = 0;
-    if (cell.get_meta() != ctx.obj_meta_) {
-      cell.set_meta_type(ctx.obj_meta_);
-    }
-
     if (!has_exc(ctx)) {
       ref = -1;
     } else {
@@ -62,7 +56,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, datum, store_type))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -72,7 +66,17 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, datum, store_type))) {
+            LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
+          }
+          break;
+        }
+        case ObDecimalIntSC: {
+          if (OB_FAIL(ObBitMapMetaReader<ObDecimalIntSC>::read(
+              meta_header_->payload_, ctx.micro_block_header_->row_count_,
+              ctx.is_bit_packing(), row_id,
+              ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
+              ref, datum, store_type))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -85,7 +89,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, datum, store_type))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -95,7 +99,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, datum, store_type))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -105,7 +109,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, datum, store_type))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -118,7 +122,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
 
     // not an exception, get from reffed column
     if (OB_SUCC(ret) && -1 == ref) {
-      if (OB_FAIL(ctx.ref_decoder_->decode(*ctx.ref_ctx_, cell, row_id, bs, data, len))) {
+      if (OB_FAIL(ctx.ref_decoder_->decode(*ctx.ref_ctx_, datum, row_id, bs, data, len))) {
         LOG_WARN("ref_decoder_ decode failed", K(ret),
             K(row_id), KP(data), K(len));
       }

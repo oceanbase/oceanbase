@@ -15,8 +15,8 @@
 #define protected public
 
 #include "storage/ob_partition_range_spliter.h"
-#include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
-#include "storage/blocksstable/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "ob_index_block_data_prepare.h"
 
 namespace oceanbase
@@ -36,7 +36,8 @@ public:
 TestSSTableSecMetaIterator::TestSSTableSecMetaIterator()
   : TestIndexBlockDataPrepare(
       "Test sstable secondary meta iterator",
-      MINI_MERGE,
+      compaction::MINI_MERGE,
+      false,
       OB_DEFAULT_MACRO_BLOCK_SIZE,
       10000,
       65535 * 4)

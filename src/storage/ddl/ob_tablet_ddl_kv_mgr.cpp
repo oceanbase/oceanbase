@@ -18,7 +18,7 @@
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"

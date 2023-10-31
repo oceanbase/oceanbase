@@ -321,9 +321,7 @@ int ObLockRowChecker::check_lock_row_valid(
   return ret;
 }
 
-int ObLockRowChecker::check_lock_row_valid(
-  const blocksstable::ObDatumRow &row,
-  const ObITableReadInfo &read_info)
+int ObLockRowChecker::check_lock_row_valid(const blocksstable::ObDatumRow &row, const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
   int64_t rowkey_read_cnt = MIN(read_info.get_seq_read_column_count(), read_info.get_rowkey_count());

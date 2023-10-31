@@ -156,7 +156,9 @@ int ObPhysicalPlanCtx::init_datum_param_store()
   // 通过param_store, 生成datum_param_store
   for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
     ObDatumObjParam &datum_param = datum_param_store_.at(i);
-    if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_, allocator_))) {
+    if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_,
+                                                      param_store_.at(i).get_precision(),
+                                                      allocator_))) {
       LOG_WARN("alloc datum reserved buffer failed", K(ret));
     } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
       LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
@@ -921,7 +923,8 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
       ObDatumObjParam &datum_param = datum_param_store_.at(i);
-      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_, allocator_))) {
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(
+              param_store_.at(i).meta_, param_store_.at(i).get_precision(), allocator_))) {
         LOG_WARN("alloc datum reserved buffer failed", K(ret));
       } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
         LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));

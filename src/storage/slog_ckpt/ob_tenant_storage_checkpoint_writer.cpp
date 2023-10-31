@@ -352,7 +352,7 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
       }
     } else {
       addr_info.need_rollback_ = false;
-      ObArenaAllocator allocator("CompatLoad");
+      ObArenaAllocator allocator("CompatLoad", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       ObTabletHandle old_tablet_handle;
       do {
         old_tablet_handle.reset();
@@ -392,13 +392,11 @@ int ObTenantStorageCheckpointWriter::rollback()
   if (!is_inited_ || 0 == tablet_item_addr_info_arr_.count()) {
     // there's no new tablet, no need to rollback
   } else {
-    ObArenaAllocator allocator("CkptRollback");
     for (int64_t i = 0; i < tablet_item_addr_info_arr_.count(); i++) {
-      allocator.reuse();
       const TabletItemAddrInfo &addr_info = tablet_item_addr_info_arr_.at(i);
       if (addr_info.need_rollback_) {
         rollback_cnt++;
-        if (OB_FAIL(do_rollback(allocator, addr_info.new_addr_))) {
+        if (OB_FAIL(do_rollback(addr_info.new_addr_))) {
           LOG_ERROR("fail to rollback ref cnt", K(ret), K(addr_info));
         }
       }
@@ -408,14 +406,12 @@ int ObTenantStorageCheckpointWriter::rollback()
   return ret;
 }
 
-int ObTenantStorageCheckpointWriter::do_rollback(
-    common::ObArenaAllocator &allocator,
-    const ObMetaDiskAddr &load_addr)
+int ObTenantStorageCheckpointWriter::do_rollback(const ObMetaDiskAddr &load_addr)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("CkptRollback", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObTablet tablet;
   ObSharedBlockReadInfo read_info;
-  ObSharedBlockReadHandle block_handle;
   int64_t buf_len;
   char *buf = nullptr;
   int64_t pos = 0;
@@ -423,6 +419,8 @@ int ObTenantStorageCheckpointWriter::do_rollback(
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
 
   do {
+    allocator.reuse();
+    ObSharedBlockReadHandle block_handle(allocator);
     if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, block_handle))) {
       LOG_WARN("fail to read tablet buf from macro block", K(ret), K(read_info));
     } else if (OB_FAIL(block_handle.wait())) {
@@ -435,7 +433,7 @@ int ObTenantStorageCheckpointWriter::do_rollback(
     // do nothing
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data of block handle is invalid", K(ret), K(block_handle));
+    LOG_WARN("data of block handle is invalid", K(ret));
   } else if (FALSE_IT(tablet.set_tablet_addr(load_addr))) {
   } else if (OB_FAIL(tablet.rollback_ref_cnt(allocator, buf, buf_len, pos))) {
     LOG_WARN("fail to rollback ref cnt", K(ret), KP(buf), K(buf_len), K(pos));
@@ -458,8 +456,8 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
 
   do {
-    ObArenaAllocator allocator("SlogCkptWriter");
-    ObSharedBlockReadHandle block_handle;
+    ObArenaAllocator allocator("SlogCkptWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObSharedBlockReadHandle block_handle(allocator);
     if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->acquire_tablet_from_pool(
         addr_info.tablet_pool_type_,
         WashTabletPriority::WTP_LOW,

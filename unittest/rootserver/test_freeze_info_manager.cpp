@@ -20,7 +20,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "share/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_common_rpc_proxy.h"
@@ -99,7 +99,7 @@ int TestFreezeInfoManager::init_freeze_info_manager()
   {
     ObMySQLTransaction trans;
     ObFreezeInfoProxy freeze_proxy(DEFAULT_TENANT_ID);
-    ObSimpleFrozenStatus frozen_status(1, ObTimeUtility::current_time(), 3330);
+    ObFreezeInfo frozen_status(1, ObTimeUtility::current_time(), 3330);
     ObMySQLProxy &sql_proxy = db_initer_.get_sql_proxy();
     if (OB_FAIL(trans.start(&sql_proxy, DEFAULT_TENANT_ID))) {
       LOG_WARN("fail to start transaction", KR(ret));
@@ -118,10 +118,8 @@ int TestFreezeInfoManager::init_freeze_info_manager()
   if (OB_FAIL(freeze_info_mgr_.init(DEFAULT_TENANT_ID, db_initer_.get_sql_proxy(), 
         remote_proxy_, zone_merge_mgr_))) {
     LOG_WARN("fail to init freeze_info_manager", KR(ret));
-  } else if (OB_FAIL(freeze_info_mgr_.reload())) {
+  } else if (OB_FAIL(freeze_info_mgr_.reload(share::SCN::min_scn()))) {
     LOG_WARN("fail to reload freeze_info_manager", KR(ret));
-  } else if (OB_FAIL(freeze_info_mgr_.check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
   }
   return ret;
 }
@@ -165,7 +163,7 @@ void TestFreezeInfoManager::check_info(
 TEST_F(TestFreezeInfoManager, common)
 {
   int64_t frozen_version = 2;
-  ObSimpleFrozenStatus frozen_status;
+  ObFreezeInfo frozen_status;
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, freeze_info_mgr_.get_freeze_info(frozen_version, frozen_status));
 
   ASSERT_EQ(OB_SUCCESS, freeze_info_mgr_.set_freeze_info(frozen_version));

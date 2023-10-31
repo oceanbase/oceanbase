@@ -62,13 +62,13 @@ TEST(ObTestDatumCmp, defined_nullsafe_func_by_type)
   std::ofstream of_result(tmp_file);
 
   for (int i = 0; i < ObMaxType; i++) {
-    of_result << "/**************** " << ob_obj_type_str(static_cast<ObObjType>(i))
+    of_result << "/**************** " << inner_obj_type_str(static_cast<ObObjType>(i))
               << " ****************/" << "\n\n";
     for (int j = 0; j < ObMaxType; j++) {
       of_result << "<"
-                << ob_obj_type_str(static_cast<ObObjType>(i))
+                << inner_obj_type_str(static_cast<ObObjType>(i))
                 << ", "
-                << ob_obj_type_str(static_cast<ObObjType>(j))
+                << inner_obj_type_str(static_cast<ObObjType>(j))
                 << ">"
                 << " : ";
       if (NULL != ObDatumFuncs::get_nullsafe_cmp_func(static_cast<ObObjType>(i),
@@ -95,18 +95,20 @@ TEST(ObTestDatumCmp, defined_expr_func_by_type)
   std::ofstream of_result(tmp_file);
 
   for (int i = 0; i < ObMaxType; i++) {
-    of_result << "/**************** " << ob_obj_type_str(static_cast<ObObjType>(i))
+    of_result << "/**************** " << inner_obj_type_str(static_cast<ObObjType>(i))
               << " ****************/" << "\n\n";
     for (int j = 0; j < ObMaxType; j++) {
       of_result << "<"
-                << ob_obj_type_str(static_cast<ObObjType>(i))
+                << inner_obj_type_str(static_cast<ObObjType>(i))
                 << ", "
-                << ob_obj_type_str(static_cast<ObObjType>(j))
+                << inner_obj_type_str(static_cast<ObObjType>(j))
                 << "> : ";
       if (NULL != ObExprCmpFuncsHelper::get_datum_expr_cmp_func(static_cast<ObObjType>(i),
                                                         static_cast<ObObjType>(j),
                                                         SCALE_UNKNOWN_YET,
                                                         SCALE_UNKNOWN_YET,
+                                                        PRECISION_UNKNOWN_YET,
+                                                        PRECISION_UNKNOWN_YET,
                                                         false,
                                                         CS_TYPE_COLLATION_FREE,
                                                         false)) {

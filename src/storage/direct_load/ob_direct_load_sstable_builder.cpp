@@ -672,8 +672,8 @@ int ObDirectLoadIndexBlockReader::read_buffer(int64_t idx)
       LOG_WARN("fail to do aio read from index file", KR(ret));
     }
   } else {
-    if (OB_FAIL(file_io_handle_.wait(io_timeout_ms_))) {
-      LOG_WARN("fail to wait io finish", KR(ret), K(io_timeout_ms_));
+    if (OB_FAIL(file_io_handle_.wait())) {
+      LOG_WARN("fail to wait io finish", KR(ret));
     }
   }
   return ret;

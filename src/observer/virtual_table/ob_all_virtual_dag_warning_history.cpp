@@ -12,7 +12,8 @@
 
 #include "ob_all_virtual_dag_warning_history.h"
 #include "share/ob_errno.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
 {
@@ -66,7 +67,6 @@ int ObAllVirtualDagWarningHistory::process_curr_tenant(ObNewRow *&row)
       STORAGE_LOG(WARN, "fail to begin ObTenantSSTableMergeInfoMgr::Iterator", K(ret));
     }
   }
-
   if (OB_SUCC(ret)) {
     if (FALSE_IT(MEMSET(comment_, '\0', sizeof(comment_)))) {
     } else if (OB_FAIL(dag_warning_info_iter_.get_next(&dag_warning_info_, comment_, sizeof(comment_)))) {
@@ -138,8 +138,17 @@ int ObAllVirtualDagWarningHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_int(dag_warning_info_.retry_cnt_);
       break;
     case WARNING_INFO: {
-      //merge_type
-      cells[i].set_varchar(comment_);
+      MEMSET(warning_info_buf_, '\0', sizeof(warning_info_buf_));
+      int64_t pos = 0;
+      if (dag_warning_info_.location_.is_valid()) {
+        common::databuff_printf(warning_info_buf_, sizeof(warning_info_buf_), pos, "%s:%d(%s),",
+          dag_warning_info_.location_.filename_,
+          dag_warning_info_.location_.line_,
+          dag_warning_info_.location_.function_);
+      }
+      common::databuff_printf(warning_info_buf_, sizeof(warning_info_buf_), pos, "%s",
+        comment_);
+      cells[i].set_varchar(warning_info_buf_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     }
@@ -159,6 +168,7 @@ void ObAllVirtualDagWarningHistory::reset()
   ObVirtualTableScannerIterator::reset();
   memset(ip_buf_, 0, sizeof(ip_buf_));
   memset(task_id_buf_, 0, sizeof(task_id_buf_));
+  memset(warning_info_buf_, 0, sizeof(warning_info_buf_));
   memset(comment_, 0, sizeof(comment_));
 }
 

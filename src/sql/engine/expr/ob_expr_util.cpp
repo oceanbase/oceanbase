@@ -172,11 +172,23 @@ int ObExprUtil::round_num2int64(const common::number::ObNumber &nmb, int64_t &v)
   return ret;
 }
 
-int ObExprUtil::get_int_param_val(ObDatum *datum, int64_t &int_val)
+int ObExprUtil::get_int_param_val(ObDatum *datum, bool is_decint, int64_t &int_val)
 {
   int ret = OB_SUCCESS;
   if (NULL != datum && !datum->is_null()) {
-    if (lib::is_mysql_mode()) {
+    if (is_decint) {
+      bool is_valid_int64 = false;
+      if (OB_FAIL(wide::check_range_valid_int64(datum->get_decimal_int(), datum->get_int_bytes(),
+                                                is_valid_int64, int_val))) {
+        LOG_WARN("check valid int64 failed", K(ret));
+      } else if (OB_UNLIKELY(!is_valid_int64)) {
+        if (wide::is_negative(datum->get_decimal_int(), datum->get_int_bytes())) {
+          int_val = INT64_MIN;
+        } else {
+          int_val = INT64_MAX;
+        }
+      }
+    } else if (lib::is_mysql_mode()) {
       int_val = datum->get_int();
     } else if (OB_FAIL(trunc_num2int64(*datum, int_val))) {
       LOG_WARN("truncate number 2 int failed", K(ret), K(*datum));

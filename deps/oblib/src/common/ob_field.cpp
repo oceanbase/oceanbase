@@ -312,6 +312,7 @@ int ObField::get_field_mb_length(const ObObjType type,
       length = 4; //accuracy.get_precision();
       break;
     case ObNumberTC:
+    case ObDecimalIntTC:
       //already checked the validity of precision and scale for both oracle/mysql mode several times
       //here only do the length calculation
       if (accuracy.get_precision() >= 0 && accuracy.get_scale() >= 0) {

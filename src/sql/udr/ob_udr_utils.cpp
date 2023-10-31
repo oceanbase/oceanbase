@@ -176,11 +176,13 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
   ObObjParam value;
   const bool is_paramlize = false;
   int64_t server_collation = CS_TYPE_INVALID;
+  uint64_t tenant_data_version = 0;
 
   ObIAllocator &allocator = pc_ctx.allocator_;
   ObSQLSessionInfo *session = pc_ctx.exec_ctx_.get_my_session();
   ObIArray<ObPCParam *> &raw_params = pc_ctx.fp_result_.raw_params_;
   ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  bool enable_decimal_int = false;
   if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(session), KP(phy_ctx));
@@ -189,6 +191,8 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimal_int))) {
+    LOG_WARN("fail to check enable decimal int", K(ret));
   } else {
     ObCollationType coll_conn = static_cast<ObCollationType>(session->get_local_collation_connection());
     for (int i = 0; OB_SUCC(ret) && i < dynamic_param_list.count(); ++i) {
@@ -224,7 +228,8 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
                                                         literal_prefix,
                                                         session->get_actual_nls_length_semantics(),
                                                         static_cast<ObCollationType>(server_collation),
-                                                        NULL, session->get_sql_mode()))) {
+                                                        NULL, session->get_sql_mode(),
+                                                        enable_decimal_int))) {
         LOG_WARN("fail to resolve const", K(ret));
       } else if (OB_FAIL(add_param_to_param_store(value, param_store))) {
         LOG_WARN("failed to add param to param store", K(ret), K(value), K(param_store));

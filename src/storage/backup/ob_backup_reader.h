@@ -22,7 +22,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/tablet/ob_tablet_member_wrapper.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ob_i_table.h"
@@ -182,6 +182,7 @@ private:
   int64_t result_code_;
   blocksstable::ObMacroBlockHandle macro_handle_;
   blocksstable::ObBufferReader buffer_reader_;
+  common::ObArenaAllocator io_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockBackupReader);
 };
 

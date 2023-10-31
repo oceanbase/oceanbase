@@ -54,11 +54,13 @@ public:
     int64_t pos = 0;
     J_ARRAY_START();
     int64_t N = count();
+    J_KV("cnt", N);
     for (int64_t index = 0; index < N - 1; ++index) {
-      BUF_PRINTO(at(index));
       J_COMMA();
+      BUF_PRINTO(at(index));
     }
     if (0 < N) {
+      J_COMMA();
       BUF_PRINTO(at(N - 1));
     }
     J_ARRAY_END();

@@ -155,6 +155,44 @@ DEF_EVAL_NEG_FUNC(ObNumberTC) {
   return ret;
 }
 
+#define MAKE_DECIMAL_INT_OPPOSITE(TYPE)            \
+  case sizeof(TYPE##_t): {                         \
+    res_val.from(-(*(decint->TYPE##_v_)));         \
+    break;                                         \
+  }
+
+DEF_EVAL_NEG_FUNC(ObDecimalIntTC)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *param_datum = NULL;
+  bool found_null = false;
+  if (OB_FAIL(check_expr_and_eval_param(expr, eval_ctx, param_datum, found_null))) {
+    LOG_WARN("failed to check expr and eval", K(ret));
+  } else if (found_null) {
+    expr_datum.set_null();
+  } else {
+    const ObDecimalInt *decint = param_datum->get_decimal_int();
+    const int32_t int_bytes = param_datum->get_int_bytes();
+    ObDecimalIntBuilder res_val;
+    switch (int_bytes) {
+      MAKE_DECIMAL_INT_OPPOSITE(int32)
+      MAKE_DECIMAL_INT_OPPOSITE(int64)
+      MAKE_DECIMAL_INT_OPPOSITE(int128)
+      MAKE_DECIMAL_INT_OPPOSITE(int256)
+      MAKE_DECIMAL_INT_OPPOSITE(int512)
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("int_bytes is unexpected", K(ret), K(int_bytes));
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      expr_datum.set_decimal_int(res_val.get_decimal_int(), int_bytes);
+    }
+  }
+  return ret;
+}
+
 static ObExpr::EvalFunc eval_neg_funcs[ObMaxTC];
 
 template<int N>
@@ -231,6 +269,9 @@ int ObExprNeg::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObEx
         LOG_DEBUG("calc reuslt type", K(res_param_type), K(result_type));
         type.set_type(result_type);
         type1.set_calc_type(res_param_type);
+        if (ObDecimalIntType == res_param_type) {
+          type1.set_calc_accuracy(type.get_accuracy());
+        }
       }
     }
   } else {
@@ -326,6 +367,10 @@ int ObExprNeg::calc_param_type(const ObExprResType &param_type,
   case ObJsonTC: {
     result_type = ObDoubleType;
     calc_type = ObDoubleType;
+    break;
+  }
+  case ObDecimalIntTC: {
+    result_type = calc_type = is_oracle_mode() ? ObNumberType : ObDecimalIntType;
     break;
   }
   default: {

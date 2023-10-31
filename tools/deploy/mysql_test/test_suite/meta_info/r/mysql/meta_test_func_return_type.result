@@ -440,7 +440,7 @@ concat('','aaa')
 aaa
 select 1.1/0.0;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					1.1/0.0	246	8	0	Y	32896	5	63
+def					1.1/0.0	246	9	0	Y	32896	5	63
 1.1/0.0
 NULL
 select __OB__MIN__ > 1;
@@ -449,9 +449,9 @@ select __OB__MIN__ < 1;
 ERROR 42S22: Unknown column '__OB__MIN__' in 'field list'
 select dump(1.1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					dump(1.1)	253	16	51	Y	0	0	45
+def					dump(1.1)	253	16	44	Y	0	0	45
 dump(1.1)
-"sign=1 exp=64 se=0xc0 len=2 digits=[1,100000000,]"
+"precision=2 scale=1 int_bytes=4 items=[11]"
 select dump(1);
 ERROR 0A000: The input type of the DUMP function not supported
 select round(1.1234, 3);
@@ -541,42 +541,42 @@ EXTRACT(DAY FROM null)
 NULL
 select abs(10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(10)	8	2	2	N	32897	0	63
+def					abs(10)	8	20	2	N	32897	0	63
 abs(10)
 10
 select abs(-10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-10)	8	2	2	N	32897	0	63
+def					abs(-10)	8	20	2	N	32897	0	63
 abs(-10)
 10
 select abs(-0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0)	8	2	1	N	32897	0	63
+def					abs(-0)	8	20	1	N	32897	0	63
 abs(-0)
 0
 select abs(0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(0)	8	2	1	N	32897	0	63
+def					abs(0)	8	20	1	N	32897	0	63
 abs(0)
 0
 select abs(1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1)	8	2	1	N	32897	0	63
+def					abs(1)	8	20	1	N	32897	0	63
 abs(1)
 1
 select abs(-1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1)	8	2	1	N	32897	0	63
+def					abs(-1)	8	20	1	N	32897	0	63
 abs(-1)
 1
 select abs(-1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1000000000000)	8	2	13	N	32897	0	63
+def					abs(-1000000000000)	8	20	13	N	32897	0	63
 abs(-1000000000000)
 1000000000000
 select abs(1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1000000000000)	8	2	13	N	32897	0	63
+def					abs(1000000000000)	8	20	13	N	32897	0	63
 abs(1000000000000)
 1000000000000
 select abs(0.1);
@@ -611,12 +611,12 @@ abs(Null)
 NULL
 select abs(5-5);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(5-5)	8	3	1	N	32897	0	63
+def					abs(5-5)	8	21	1	N	32897	0	63
 abs(5-5)
 0
 select abs(-0.1*3);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1*3)	246	5	3	N	32897	1	63
+def					abs(-0.1*3)	246	24	3	N	32897	1	63
 abs(-0.1*3)
 0.3
 select abs('10');
@@ -702,16 +702,16 @@ length(repeat(0xa1,215))	length(repeat(0x1a, 310))
 215	310
 select abs(true);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(true)	8	1	1	N	32897	0	63
+def					abs(true)	8	4	1	N	32897	0	63
 abs(true)
 1
 select floor(1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(1)	8	1	1	N	32897	0	63
+def					floor(1)	8	20	1	N	32897	0	63
 floor(1)
 1
 select ceil(1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(1)	8	1	1	N	32897	0	63
+def					ceil(1)	8	20	1	N	32897	0	63
 ceil(1)
 1

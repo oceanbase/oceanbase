@@ -49,7 +49,7 @@ public:
 private:
   int get_origin_param_type(ObExprResType &ori_type) const;
   static int64_t get_format_scale(int64_t scale);
-  static int convert_num_to_str(const common::ObObjType &obj_type,
+  static int convert_num_to_str(const ObDatumMeta &x_meta,
                                 const ObDatum &x_datum,
                                 char *buf,
                                 int64_t buf_len,

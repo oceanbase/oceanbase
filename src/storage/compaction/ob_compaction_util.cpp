@@ -14,10 +14,10 @@
 #include "share/ob_define.h"
 namespace oceanbase
 {
-namespace storage
+namespace compaction
 {
 
-const char * ObMergeTypeStr[] = {
+const static char * ObMergeTypeStr[] = {
     "MINOR_MERGE",
     "HISTORY_MINOR_MERGE",
     "META_MAJOR_MERGE",
@@ -34,13 +34,30 @@ const char *merge_type_to_str(const ObMergeType &merge_type)
 {
   STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX + 1) == ARRAYSIZEOF(ObMergeTypeStr), "merge type str len is mismatch");
   const char *str = "";
-  if (merge_type > MERGE_TYPE_MAX || merge_type <= INVALID_MERGE_TYPE) {
-    str = "invalid_merge_type";
-  } else {
+  if (is_valid_merge_type(merge_type)) {
     str = ObMergeTypeStr[merge_type];
+  } else {
+    str = "invalid_merge_type";
   }
   return str;
 }
 
-} // namespace storage
+const static char * ObMergeLevelStr[] = {
+    "MACRO_BLOCK_LEVEL",
+    "MICRO_BLOCK_LEVEL"
+};
+
+const char *merge_level_to_str(const ObMergeLevel &merge_level)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MERGE_LEVEL_MAX) == ARRAYSIZEOF(ObMergeLevelStr), "merge level str len is mismatch");
+  const char *str = "";
+  if (is_valid_merge_level(merge_level)) {
+    str = ObMergeLevelStr[merge_level];
+  } else {
+    str = "invalid_merge_level";
+  }
+  return str;
+}
+
+} // namespace compaction
 } // namespace oceanbase

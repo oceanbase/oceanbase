@@ -1084,6 +1084,11 @@
         }                                                                                 \
         else \
         { \
+          ObAccuracy res_acc;\
+          if (ObDecimalIntType == data_type) {\
+            res_acc = column.get_accuracy();\
+            cast_ctx.res_accuracy_ = &res_acc;\
+          }\
           def_obj.set_varchar(str_value); \
           if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_info.get_tz_map_wrap())))  \
           {         \

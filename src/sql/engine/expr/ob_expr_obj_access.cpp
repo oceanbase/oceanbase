@@ -127,6 +127,17 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
   return ret;
 }
 
+#define GET_VALID_INT64_PARAM_FROM_NUMBER(obj) \
+  if (!obj.get_number().is_valid_int64(param_value)) { \
+    number::ObNumber number = obj.get_number(); \
+    if (OB_FAIL(number.round(0))) { \
+      LOG_WARN("failed to round number", K(ret), K(number)); \
+    } else if (!number.is_valid_int64(param_value)) { \
+      ret = OB_ARRAY_OUT_OF_RANGE; \
+      LOG_WARN("array index is out of range", K(ret), K(number)); \
+    } \
+  }
+
 #define GET_VALID_INT64_PARAM(obj, skip_check_error) \
   do { \
     if (OB_SUCC(ret)) { \
@@ -134,14 +145,16 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
       if (obj.is_integer_type() || obj.is_ext()) { \
         param_value = obj.get_int(); \
       } else if (obj.is_number()) { \
-        if (!obj.get_number().is_valid_int64(param_value)) { \
-          number::ObNumber number = obj.get_number(); \
-          if (OB_FAIL(number.round(0))) { \
-            LOG_WARN("failed to round number", K(ret), K(number)); \
-          } else if (!number.is_valid_int64(param_value)) { \
-            ret = OB_ARRAY_OUT_OF_RANGE; \
-            LOG_WARN("array index is out of range", K(ret), K(number)); \
-          } \
+        GET_VALID_INT64_PARAM_FROM_NUMBER(obj) \
+      } else if (obj.is_decimal_int()) { \
+        number::ObNumber numb; \
+        ObNumStackOnceAlloc alloc; \
+        ObObj tmp_obj; \
+        if (OB_FAIL(wide::to_number(obj.get_decimal_int(), obj.get_int_bytes(), obj.get_scale(), alloc, numb))) { \
+          LOG_WARN("fail to cast decimal int to number", K(ret)); \
+        } else { \
+          tmp_obj.set_number(numb); \
+          GET_VALID_INT64_PARAM_FROM_NUMBER(tmp_obj); \
         } \
       } else if (obj.is_null()) { \
         if (!skip_check_error) {  \
@@ -210,11 +223,14 @@ int ObExprObjAccess::ExtraInfo::update_coll_first_last(
 }
 
 int ObExprObjAccess::calc_result(ObObj &result,
+                                 ObIAllocator &alloc,
                                  const ObObj *objs_stack,
                                  int64_t param_num,
                                  const ParamStore &param_store) const
 {
+
   return info_.calc(result,
+                    alloc,
                     get_result_type(),
                     get_result_type().get_extend_size(),
                     param_store,
@@ -360,6 +376,7 @@ int ObExprObjAccess::ExtraInfo::get_attr_func(int64_t param_cnt,
 }
 
 int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
+                                     ObIAllocator &alloc,
                                      const ObObjMeta &res_type,
                                      const int32_t extend_size,
                                      const ParamStore &param_store,
@@ -475,10 +492,15 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
       if (ObMaxType == datum->get_type()) { //means has been deleted
         ret = OB_READ_NOTHING;
         LOG_WARN("accessing deleted element, no data found", K(ret), KPC(datum), K(result));
+      } else if (res_type.is_number() && datum->is_decimal_int()) {
+        ObCastCtx cast_ctx(&alloc, NULL, CM_NONE, res_type.get_collation_type(), NULL);
+        const ObObj *res_obj = nullptr;
+        if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, *datum, result, res_obj))) {
+          LOG_WARN("failed to cast decimal int to number", K(ret));
+        }
       } else if (OB_FAIL(result.apply(*datum))) {
         LOG_WARN("apply failed", K(ret), KPC(datum), K(result), K(res_type));
       }
-
       if (OB_SUCC(ret)) {
         if ((ObLongTextType == result.get_meta().get_type()
             && res_type.is_lob_locator())
@@ -567,7 +589,9 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
   }
 
   ObObj result;
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   OZ(info->calc(result,
+                alloc_guard.get_allocator(),
                 expr.obj_meta_,
                 info->extend_size_,
                 param_store,

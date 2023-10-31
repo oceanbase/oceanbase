@@ -23,7 +23,7 @@ int ObArithResultTypeMap::define_rules()
 {
   using C = ObArithResultTypeChoice;
   int ret = OB_SUCCESS;
-
+  // FIXME: use ObDecimalIntType as calc type.
   //null
   OZ (new_rules(ObNullTC, ObNullTC, ADD|SUB|MUL|DIV|MOD|ROUND|SUM).result_as(ObNumberType).cast_param1_as(C::FIRST).cast_param2_as(C::SECOND).get_ret());
   OZ (new_rules(ObNullTC, ObIntTC, ADD|SUB|MUL|DIV|MOD).result_as(ObNumberType).cast_param1_as(C::FIRST).get_ret());
@@ -34,6 +34,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObNullTC, ObDateTimeType, ADD).result_as(ObDateTimeType).cast_param1_as(C::FIRST).get_ret());
   OZ (new_rules(ObNullTC, ObOTimestampTC, ADD).result_as(ObDateTimeType).cast_param1_as(C::FIRST).get_ret());
   OZ (new_rules(ObNullTC, ObIntervalTC, MUL|DIV).result_as(C::SECOND).cast_param1_as(C::FIRST).get_ret());
+  OZ (new_rules(ObNullTC, ObDecimalIntType, ADD|SUB|MUL|DIV|MOD).result_as(ObNumberType).cast_param1_as(C::FIRST).get_ret());
 
   //int
   OZ (new_rules(ObIntTC, ObNullTC, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObNumberType).cast_param2_as(C::SECOND).get_ret());
@@ -45,6 +46,8 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObIntTC, ObDateTimeType, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObIntTC, ObOTimestampTC, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObIntTC, ObIntervalTC, MUL).result_as(C::SECOND).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObIntTC, ObDecimalIntType, ADD|SUB|MUL).result_as(ObDecimalIntType).cast_param1_as(ObDecimalIntType).get_ret());
+  OZ (new_rules(ObIntTC, ObDecimalIntType, DIV|MOD).result_as(ObNumberType).get_ret());
 
   //number
   OZ (new_rules(ObNumberTC, ObNullTC, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObNumberType).cast_param2_as(C::SECOND).get_ret());
@@ -59,6 +62,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObNumberType, ObIntTC, SUM).result_as(ObNumberType).get_ret());
   OZ (new_rules(ObNumberType, ObNumberType, SUM).result_as(ObNumberType).get_ret());
   OZ (new_rules(ObNumberFloatType, ObNumberFloatType, SUM).result_as(ObNumberFloatType).get_ret());
+  OZ (new_rules(ObNumberTC, ObDecimalIntType, ADD|SUB|MUL|DIV|MOD|ROUND|NANVL).result_as(ObNumberType).get_ret());
 
   //float
   OZ (new_rules(ObFloatType, ObNullTC, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObFloatType).cast_param2_as(C::SECOND).get_ret());
@@ -70,6 +74,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObFloatType, ObDateTimeType, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObFloatType, ObOTimestampTC, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObFloatType, ObIntervalTC, MUL).result_as(C::SECOND).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObFloatType, ObDecimalIntType, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObFloatType).get_ret());
 
   //double
   OZ (new_rules(ObDoubleType, ObNullTC, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObDoubleType).cast_param2_as(C::SECOND).get_ret());
@@ -81,6 +86,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObDoubleType, ObDateTimeType, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObDoubleType, ObOTimestampTC, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObDoubleType, ObIntervalTC, MUL).result_as(C::SECOND).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDoubleType, ObDecimalIntType, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObDoubleType).get_ret());
 
   //string
   OZ (new_rules(ObStringTC, ObNullTC, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObNumberType).cast_param2_as(C::SECOND).get_ret());
@@ -92,6 +98,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObStringTC, ObDateTimeType, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObStringTC, ObOTimestampTC, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
   OZ (new_rules(ObStringTC, ObIntervalTC, MUL).result_as(C::SECOND).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObStringTC, ObDecimalIntType, DIV|MOD|ADD|SUB|MUL|NANVL).cast_param1_as(ObNumberType).result_as(ObNumberType).get_ret());
 
   //DATE op others
   OZ (new_rules(ObDateTimeType, ObNullTC, ADD|SUB).result_as(ObDateTimeType).cast_param2_as(C::SECOND).get_ret());
@@ -104,7 +111,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObDateTimeType, ObOTimestampTC, SUB).result_as(ObIntervalDSType).cast_param1_as(ObDateTimeType).cast_param2_as(C::SECOND).get_ret());
   OZ (new_rules(ObDateTimeType, ObDateTimeType, ROUND).result_as(ObDateTimeType).get_ret());
   OZ (new_rules(ObDateTimeType, ObIntervalTC, ADD|SUB).result_as(ObDateTimeType).cast_param2_as(C::SECOND).get_ret());
-
+  OZ (new_rules(ObDateTimeType, ObDecimalIntType, ADD|SUB).result_as(ObDateTimeType).cast_param2_as(ObNumberType).get_ret());
 
   //TIMESTAMP op others
   OZ (new_rules(ObOTimestampTC, ObNullTC, ADD|SUB).result_as(ObDateTimeType).cast_param2_as(C::SECOND).get_ret());
@@ -117,7 +124,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObOTimestampTC, ObOTimestampTC, SUB).result_as(ObIntervalDSType).cast_param1_as(C::FIRST).cast_param2_as(C::SECOND).get_ret());
   OZ (new_rules(ObOTimestampTC, ObOTimestampTC, ROUND).result_as(ObDateTimeType).get_ret());
   OZ (new_rules(ObOTimestampTC, ObIntervalTC, ADD|SUB).result_as(C::FIRST).cast_param2_as(C::SECOND).get_ret());
-
+  OZ (new_rules(ObOTimestampTC, ObDecimalIntType, ADD|SUB).result_as(ObDateTimeType).cast_param2_as(ObNumberType).get_ret());
 
   //INTERVAL op others
   OZ (new_rules(ObIntervalTC, ObNullTC, MUL|DIV).result_as(C::FIRST).cast_param2_as(C::SECOND).get_ret());
@@ -130,6 +137,22 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObIntervalTC, ObOTimestampTC, ADD).result_as(C::SECOND).cast_param1_as(C::FIRST).get_ret());
   OZ (new_rules(ObIntervalYMType, ObIntervalYMType, ADD|SUB).result_as(ObIntervalYMType).get_ret());
   OZ (new_rules(ObIntervalDSType, ObIntervalDSType, ADD|SUB).result_as(ObIntervalDSType).get_ret());
+  OZ (new_rules(ObIntervalTC, ObDecimalIntType, MUL).result_as(C::FIRST).cast_param2_as(ObNumberType).get_ret());
+
+  // DECIMAL_INT op others
+  OZ (new_rules(ObDecimalIntType, ObNullTC, ADD|SUB|MUL|NANVL|DIV|MOD).result_as(ObNumberType).cast_param2_as(C::SECOND).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObIntTC, ADD|SUB|MUL).result_as(ObDecimalIntType).cast_param2_as(ObDecimalIntType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObIntTC, NANVL).result_as(ObDecimalIntType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObIntTC, ROUND|MOD|DIV).result_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObNumberTC, ADD|SUB|MUL|DIV|MOD|ROUND|NANVL).result_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObFloatType, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObFloatType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObDoubleType, ADD|SUB|MUL|DIV|MOD|NANVL).result_as(ObDoubleType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObStringTC, DIV|MOD|ADD|SUB|MUL|NANVL).cast_param1_as(ObNumberType).result_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObDateTimeType, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObOTimestampTC, ADD).result_as(ObDateTimeType).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObIntervalTC, MUL).result_as(C::SECOND).cast_param1_as(ObNumberType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObDecimalIntType, ADD|SUB|MUL).result_as(ObDecimalIntType).cast_param1_as(ObDecimalIntType).cast_param2_as(ObDecimalIntType).get_ret());
+  OZ (new_rules(ObDecimalIntType, ObDecimalIntType, ROUND|DIV|MOD).result_as(ObNumberType).get_ret());
 
   return ret;
 }

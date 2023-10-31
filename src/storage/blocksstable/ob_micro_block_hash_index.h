@@ -27,6 +27,7 @@ namespace blocksstable
 {
 struct ObDataStoreDesc;
 struct ObMicroBlockData;
+class ObMicroBufferWriter;
 class ObMicroBlockHashIndex
 {
 public:
@@ -155,7 +156,7 @@ public:
     is_inited_ = true;
   }
   int add(const ObDatumRow &row);
-  int build_block(ObSelfBufferWriter &buffer);
+  int build_block(ObMicroBufferWriter &buffer);
   static int need_build_hash_index(
       const ObMergeSchema &merge_schema,
       bool &need_build);

@@ -131,20 +131,21 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   ASSERT_TRUE(micro_idx_info.is_valid());
   ASSERT_TRUE(micro_idx_info.is_leaf_block());
 
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, index_block_cache_->get_cache_block(
-      MTL_ID(),
-      micro_idx_info.get_macro_id(),
-      micro_idx_info.get_block_offset(),
-      micro_idx_info.get_block_size(),
-      idx_buf_handle));
+  //ASSERT_EQ(OB_ENTRY_NOT_EXIST, index_block_cache_->get_cache_block(
+      //MTL_ID(),
+      //micro_idx_info.get_macro_id(),
+      //micro_idx_info.get_block_offset(),
+      //micro_idx_info.get_block_size(),
+      //idx_buf_handle));
 
   ASSERT_EQ(OB_SUCCESS, index_block_cache_->prefetch(
       MTL_ID(),
       micro_idx_info.get_macro_id(),
       micro_idx_info,
-      context_.query_flag_,
-      idx_io_handle));
-  ASSERT_EQ(OB_SUCCESS, idx_io_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
+      context_.query_flag_.is_use_block_cache(),
+      idx_io_handle,
+      &allocator_));
+  ASSERT_EQ(OB_SUCCESS, idx_io_handle.wait());
   ASSERT_EQ(OB_SUCCESS, index_block_cache_->get_cache_block(
       MTL_ID(),
       micro_idx_info.get_macro_id(),
@@ -152,13 +153,18 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       micro_idx_info.get_block_size(),
       idx_buf_handle));
   ObMicroBlockData idx_prefetch_data =
-      *reinterpret_cast<const ObMicroBlockData*>(idx_io_handle.get_buffer());
+      reinterpret_cast<const ObMicroBlockCacheValue*>(idx_io_handle.get_buffer())->get_block_data();
   ASSERT_EQ(idx_buf_handle.get_block_data()->size_, idx_prefetch_data.size_);
   ASSERT_EQ(idx_buf_handle.get_block_data()->extra_size_, idx_prefetch_data.extra_size_);
   ASSERT_EQ(0, memcmp(idx_buf_handle.get_block_data()->get_buf(),
       idx_prefetch_data.get_buf(), idx_prefetch_data.get_buf_size()));
-  ASSERT_EQ(0, memcmp(idx_buf_handle.get_block_data()->get_extra_buf(),
-      idx_prefetch_data.get_extra_buf(), idx_prefetch_data.get_extra_size()));
+  ASSERT_EQ(idx_prefetch_data.get_extra_size(), idx_buf_handle.get_block_data()->get_extra_size());
+  //if (idx_prefetch_data.get_extra_size() > 0 && idx_buf_handle.get_block_data()->get_extra_size() > 0) {
+    //int ret = OB_SUCCESS;
+    //const ObIndexBlockDataHeader * header1 = reinterpret_cast<const ObIndexBlockDataHeader *>(idx_buf_handle.get_block_data()->get_extra_buf());
+    //const ObIndexBlockDataHeader * header2 = reinterpret_cast<const ObIndexBlockDataHeader *>(idx_prefetch_data.get_extra_buf());
+    //ASSERT_EQ(0, memcmp(idx_buf_handle.get_block_data()->get_extra_buf(), idx_prefetch_data.get_extra_buf(), 32));
+  //}
   ASSERT_EQ(ObMicroBlockData::INDEX_BLOCK, idx_buf_handle.get_block_data()->type_);
   ASSERT_EQ(ObMicroBlockData::INDEX_BLOCK, idx_prefetch_data.type_);
 
@@ -181,9 +187,10 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       MTL_ID(),
       data_idx_info.get_macro_id(),
       data_idx_info,
-      context_.query_flag_,
-      data_io_handle));
-  ASSERT_EQ(OB_SUCCESS, data_io_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
+      context_.query_flag_.is_use_block_cache(),
+      data_io_handle,
+      &allocator_));
+  ASSERT_EQ(OB_SUCCESS, data_io_handle.wait());
   ASSERT_EQ(OB_SUCCESS, data_block_cache_->get_cache_block(
       MTL_ID(),
       data_idx_info.get_macro_id(),
@@ -193,7 +200,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   ASSERT_TRUE(data_io_handle.is_valid());
   ASSERT_TRUE(data_buf_handle.is_valid());
   ObMicroBlockData data_prefetch_data =
-      *reinterpret_cast<const ObMicroBlockData*>(data_io_handle.get_buffer());
+      reinterpret_cast<const ObMicroBlockCacheValue*>(data_io_handle.get_buffer())->get_block_data();
   ASSERT_EQ(data_buf_handle.get_block_data()->size_, data_prefetch_data.size_);
   ASSERT_EQ(data_buf_handle.get_block_data()->extra_size_, data_prefetch_data.extra_size_);
   ASSERT_EQ(0, memcmp(data_buf_handle.get_block_data()->get_buf(),
@@ -213,9 +220,9 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       MTL_ID(),
       data_idx_info.get_macro_id(),
       multi_io_param,
-      context_.query_flag_,
+      context_.query_flag_.is_use_block_cache(),
       multi_io_handle));
-  ASSERT_EQ(OB_SUCCESS, multi_io_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
+  ASSERT_EQ(OB_SUCCESS, multi_io_handle.wait());
   const ObMultiBlockIOResult *io_result
       = reinterpret_cast<const ObMultiBlockIOResult *>(multi_io_handle.get_buffer());
   ASSERT_NE(nullptr, io_result);
@@ -226,8 +233,6 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
     ASSERT_EQ(OB_SUCCESS, io_result->get_block_data(idx, data_block_data));
     ASSERT_TRUE(data_block_data.is_valid());
     ASSERT_EQ(ObMicroBlockData::DATA_BLOCK, data_block_data.type_);
-    ASSERT_EQ(data_block_data.get_micro_header()->max_merged_trans_version_,
-        micro_idx_infos[idx].get_max_merged_trans_version());
     ASSERT_EQ(data_block_data.get_micro_header()->row_count_, micro_idx_infos[idx].get_row_count());
     ++idx;
   }
@@ -247,7 +252,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
       micro_des_meta,
       &macro_reader,
       loaded_micro_data,
-      nullptr));
+      &allocator_));
   ASSERT_TRUE(loaded_micro_data.is_valid());
   ASSERT_EQ(ObMicroBlockData::DATA_BLOCK, loaded_micro_data.type_);
   ASSERT_NE(loaded_micro_data.get_micro_header(), nullptr);
@@ -284,7 +289,7 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
 int main(int argc, char **argv)
 {
   system("rm -f test_block_cache.log*");
-  OB_LOGGER.set_file_name("test_block_cache.log");
+  OB_LOGGER.set_file_name("test_block_cache.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

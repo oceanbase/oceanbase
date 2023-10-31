@@ -58,14 +58,19 @@ ob_set_subtarget(ob_share cache
   cache/ob_kvcache_struct.cpp
   cache/ob_working_set_mgr.cpp
   cache/ob_kvcache_hazard_version.cpp
-  cache/ob_kvcache_handle_ref_checker.cpp
   cache/ob_kvcache_pre_warmer.cpp
 )
 
 ob_set_subtarget(ob_share scheduler
-  scheduler/ob_dag_scheduler.cpp
+  scheduler/ob_tenant_dag_scheduler.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp
+)
+
+ob_set_subtarget(ob_share compaction
+  compaction/ob_compaction_locality_cache.cpp
+  compaction/ob_table_ckm_items.cpp
+  compaction/ob_compaction_time_guard.cpp
 )
 
 ob_set_subtarget(ob_share common
@@ -150,7 +155,6 @@ ob_set_subtarget(ob_share common
   ob_tablet_autoincrement_service.cpp
   ob_tablet_checksum_iterator.cpp
   ob_tablet_checksum_operator.cpp
-  ob_tablet_replica_checksum_iterator.cpp
   ob_tablet_replica_checksum_operator.cpp
   ob_tablet_meta_table_compaction_operator.cpp
   ob_task_define.cpp
@@ -171,6 +175,7 @@ ob_set_subtarget(ob_share common
   ob_virtual_table_scanner_iterator.cpp
   ob_web_service_root_addr.cpp
   ob_zone_info.cpp
+  ob_freeze_info_manager.cpp
   ob_zone_merge_info.cpp
   ob_zone_merge_table_operator.cpp
   ob_zone_table_operation.cpp
@@ -519,7 +524,8 @@ ob_set_subtarget(ob_share wr
 
 ob_add_new_object_target(ob_share ob_share)
 
-target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
+target_compile_options(ob_share PRIVATE)
+#target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
 target_link_libraries(ob_share PUBLIC ob_base)
 
 add_library(ob_share_static

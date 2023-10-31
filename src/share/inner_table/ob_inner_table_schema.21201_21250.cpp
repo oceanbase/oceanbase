@@ -1460,7 +1460,7 @@ int ObInnerTableSchema::gv_ob_tablet_compaction_progress_schema(ObTableSchema &t
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       COMPACTION_SCN,       TASK_ID,       STATUS,       DATA_SIZE,       UNFINISHED_DATA_SIZE,       PROGRESSIVE_COMPACTION_ROUND,       CREATE_TIME,       START_TIME,       ESTIMATED_FINISH_TIME     FROM oceanbase.__all_virtual_tablet_compaction_progress )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       COMPACTION_SCN,       TASK_ID,       STATUS,       DATA_SIZE,       UNFINISHED_DATA_SIZE,       PROGRESSIVE_COMPACTION_ROUND,       CREATE_TIME,       START_TIME,       ESTIMATED_FINISH_TIME,       START_CG_ID,       END_CG_ID     FROM oceanbase.__all_virtual_tablet_compaction_progress )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1560,7 +1560,7 @@ int ObInnerTableSchema::gv_ob_tablet_compaction_history_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS     FROM oceanbase.__all_virtual_tablet_compaction_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS,       START_CG_ID,       END_CG_ID,       KEPT_SNAPSHOT,       MERGE_LEVEL     FROM oceanbase.__all_virtual_tablet_compaction_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1660,7 +1660,7 @@ int ObInnerTableSchema::gv_ob_compaction_diagnose_info_schema(ObTableSchema &tab
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM oceanbase.__all_virtual_compaction_diagnose_info     WHERE       STATUS != "RS_UNCOMPACTED"     AND       STATUS != "NOT_SCHEDULE" )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM oceanbase.__all_virtual_compaction_diagnose_info     WHERE       STATUS != "RS_UNCOMPACTED"     AND       STATUS != "NOT_SCHEDULE"     AND       STATUS != "SPECIAL" )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

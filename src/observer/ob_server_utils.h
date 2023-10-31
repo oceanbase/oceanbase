@@ -52,8 +52,6 @@ public:
                                     int64_t& log_disk_size,
                                     int64_t& data_disk_percentage,
                                     int64_t& log_disk_percentage);
-  static int check_slog_data_binding(const char *sstable_dir,
-                                     const char *slog_dir);
 
   // Build info for syslog files which is logged when new file created.
   // The following infors are included:

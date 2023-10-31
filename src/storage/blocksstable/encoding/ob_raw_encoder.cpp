@@ -123,6 +123,8 @@ int ObRawEncoder::traverse(const bool force_var_store, bool &suitable)
         break;
       }
       case ObNumberSC:
+      case ObDecimalIntSC:
+        // wide int type is not packed yet, store as fixed-length buf for now
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
@@ -210,6 +212,7 @@ int ObRawEncoder::get_var_length(const int64_t row_id, int64_t &length)
           length = fix_data_size_;
           break;
         }
+        case ObDecimalIntSC:
         case ObNumberSC:
         case ObStringSC:
         case ObTextSC:
@@ -226,6 +229,13 @@ int ObRawEncoder::get_var_length(const int64_t row_id, int64_t &length)
       }
     }
   }
+  return ret;
+}
+
+int ObRawEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = 0;
   return ret;
 }
 

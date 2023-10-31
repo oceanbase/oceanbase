@@ -177,6 +177,7 @@ private:
   int check_alter_part_key_allowed(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::ObColumnSchemaV2 &src_col_schema,
                                    const share::schema::ObColumnSchemaV2 &dst_col_schema);
+  int resolve_column_group();
   int generate_index_arg_cascade();
   bool is_ttl_column(const common::ObString &orig_column_name, const ObIArray<common::ObString> &ttl_columns);
 

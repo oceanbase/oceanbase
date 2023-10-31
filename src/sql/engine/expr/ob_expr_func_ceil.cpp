@@ -21,6 +21,8 @@
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_truncate.h"
+#include "sql/engine/expr/ob_expr_func_round.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
@@ -56,7 +58,12 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
       type.set_scale(NUMBER_SCALE_UNKNOWN_YET);
       type.set_precision(PRECISION_UNKNOWN_YET);
       type.set_calc_scale(0);
-      if (!type1.is_oracle_decimal()) {
+      // select ceil(3.1) as a from dual
+      // '3.1' parsed as decimal int
+      // result type of `ceil` function is ObNumber, therefore we need to add cast expr for decimal int param
+      //
+      // TODO: use decimal int as arg & result type instread.
+      if (!type1.is_oracle_decimal() || type1.is_decimal_int()) {
         type1.set_calc_type(ObNumberType);
       } else {
         type1.set_calc_type(type1.get_type());
@@ -66,11 +73,15 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
       }
     }
   } else {
-    if (type1.is_column() && type1.is_number()) {
-      type.set_number();
+    if (type1.is_column()
+        && (type1.is_number() || type1.is_decimal_int())) {
+      if (type1.is_number()) {
+        type.set_number();
+      } else {
+        type.set_decimal_int(0);
+      }
       int16_t prec = type1.get_precision();
       int16_t scale = type1.get_scale();
-      type.set_number();
       //to be compatible with mysql.
       if (scale > 0) {
         if (prec - scale <= MAX_LIMIT_WITH_SCALE)
@@ -87,14 +98,7 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
         LOG_WARN("unexpected result type", K(ret), K(type1), K(res_type));
       } else {
         type.set_type(res_type);
-        const ObSQLSessionInfo *session =
-          dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-        if (OB_ISNULL(session)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cast basic session to sql session info failed", K(ret));
-        } else {
-          type1.set_calc_type(res_type);
-        }
+        type1.set_calc_type(res_type);
       }
     }
     //no need to test ret here
@@ -110,6 +114,119 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
   ObExprOperator::calc_result_flag1(type, type1);
   return ret;
 }
+
+#define DECIMAL_INT_MOD(TYPE)                                        \
+  case sizeof(TYPE##_t): {                                           \
+    const TYPE##_t &l = *(decint->TYPE##_v_);                        \
+    const TYPE##_t r = get_scale_factor<TYPE##_t>(trunc_scale);      \
+    is_all_zero_truncated = ((l % r) == 0);                          \
+    break;                                                           \
+  }                                                                  \
+
+#define DECIMAL_INT_INC(TYPE)                                        \
+  case sizeof(TYPE##_t) : {                                          \
+    TYPE##_t tmp_num = *(res_val.get_decimal_int()->TYPE##_v_);      \
+    res_val.from(++tmp_num);                                         \
+    break;                                                           \
+  }                                                                  \
+
+#define DECIMAL_INT_DEC(TYPE)                                        \
+  case sizeof(TYPE##_t) : {                                          \
+    TYPE##_t tmp_num = *(res_val.get_decimal_int()->TYPE##_v_);      \
+    res_val.from(--tmp_num);                                         \
+    break;                                                           \
+  }                                                                  \
+
+int ObExprCeilFloor::ceil_floor_decint(
+    const bool is_floor, const ObDatum *arg_datum,
+    const ObDatumMeta &in_meta, const ObDatumMeta &out_meta,
+    ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  const ObDecimalInt *decint = arg_datum->get_decimal_int();
+  const int32_t int_bytes = arg_datum->get_int_bytes();
+  const bool is_neg = wide::is_negative(decint, int_bytes);
+  ObDecimalIntBuilder res_val;
+  if (in_meta.scale_ < out_meta.scale_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("in_scale_ < out_scale is unexpected", K(ret), K(in_meta.scale_), K(out_meta.scale_));
+  } else if (in_meta.scale_ == out_meta.scale_) {
+    res_val.from(decint, int_bytes);
+  } else if (OB_FAIL(ObExprTruncate::do_trunc_decimalint(in_meta.precision_, in_meta.scale_,
+              out_meta.precision_, out_meta.scale_, out_meta.scale_, *arg_datum, res_val))) {
+    LOG_WARN("calc_trunc_decimalint failed", K(ret), K(in_meta.precision_), K(in_meta.scale_),
+             K(out_meta.precision_), K(out_meta.scale_));
+  } else if ((is_floor && !is_neg) || (!is_floor && is_neg)) {
+    // truncate to scale 0 directly when we floor a pos or ceil a neg, do nothing
+  } else {
+    int16_t trunc_scale = in_meta.scale_ - out_meta.scale_;
+    bool is_all_zero_truncated = true; // equal to is_integer while out_scale = 0
+    switch (int_bytes) {
+      DECIMAL_INT_MOD(int32)
+      DECIMAL_INT_MOD(int64)
+      DECIMAL_INT_MOD(int128)
+      DECIMAL_INT_MOD(int256)
+      DECIMAL_INT_MOD(int512)
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("int_bytes is unexpected", K(ret), K(int_bytes));
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!is_all_zero_truncated) { // arg is not integer
+        if (is_floor && is_neg) { // floor a neg, dec after trunc
+          switch (res_val.get_int_bytes()) {
+            DECIMAL_INT_DEC(int32)
+            DECIMAL_INT_DEC(int64)
+            DECIMAL_INT_DEC(int128)
+            DECIMAL_INT_DEC(int256)
+            DECIMAL_INT_DEC(int512)
+            default: {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("int_bytes is unexpected", K(ret), K(int_bytes));
+              break;
+            }
+          }
+        } else if (!is_floor && !is_neg) { // ceil a pos, inc after trunc
+          switch (res_val.get_int_bytes()) {
+            DECIMAL_INT_INC(int32)
+            DECIMAL_INT_INC(int64)
+            DECIMAL_INT_INC(int128)
+            DECIMAL_INT_INC(int256)
+            DECIMAL_INT_INC(int512)
+            default: {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("int_bytes is unexpected", K(ret), K(int_bytes));
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (ob_is_decimal_int(out_meta.type_)) {
+      res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+    } else if (ob_is_integer_type(out_meta.type_)) {
+      int64_t res_int = 0;
+      bool is_valid_int64 = true;
+      if (OB_FAIL(wide::check_range_valid_int64(
+          res_val.get_decimal_int(), res_val.get_int_bytes(), is_valid_int64, res_int))) {
+        LOG_WARN("check_range_valid_int64 failed", K(ret), K(res_val.get_int_bytes()));
+      } else if (is_valid_int64) {
+        res_datum.set_int(res_int);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected res type", K(ret), K(out_meta.type_));
+      }
+    }
+  }
+  return ret;
+}
+#undef DECIMAL_INT_MOD
+#undef DECIMAL_INT_INC
+#undef DECIMAL_INT_DEC
 
 int calc_ceil_floor(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
@@ -153,6 +270,13 @@ int calc_ceil_floor(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
           }
         }
       }
+    } else if (ob_is_decimal_int(arg_type)) {
+      const ObDatumMeta &in_meta = expr.args_[0]->datum_meta_;
+      const ObDatumMeta &out_meta = expr.datum_meta_;
+      if (OB_FAIL(ObExprCeilFloor::ceil_floor_decint(
+                  is_floor, arg_datum, in_meta, out_meta, res_datum))) {
+        LOG_WARN("ceil_floor_decint failed", K(ret), K(is_floor), K(in_meta), K(out_meta));
+      }
     } else if (ob_is_integer_type(arg_type) && ob_is_integer_type(res_type)) {
       res_datum.set_int(arg_datum->get_int());
     } else if (ObFloatType == arg_type && ObFloatType == res_type) {
@@ -175,11 +299,12 @@ int calc_ceil_floor(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   return ret;
 }
 
-//  TYPE         value 
-//  ObNumberTC      0
-//  ObIntegerType   1
-//  ObFloatType     2
-//  ObDoubleType    3
+#define NUMBER_TYPE       0
+#define INTEGER_TYPE      1
+#define FLOAT_TYPE        2
+#define DOUBLE_TYPE       3
+#define DECIMAL_INT_TYPE  4
+
 template <int TYPE, bool IS_FLOOR>
 int do_eval_batch_ceil_floor(const ObExpr &expr,
                             ObEvalCtx &ctx,
@@ -187,13 +312,13 @@ int do_eval_batch_ceil_floor(const ObExpr &expr,
                             const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
-  static_assert(TYPE >= 0 && TYPE <= 3, "TYPE value out of range");
+  static_assert(TYPE >= 0 && TYPE <= 4, "TYPE value out of range");
   ObBitVector &eval_flag = expr.get_evaluated_flags(ctx);
   ObDatumVector arg_datums = expr.args_[0]->locate_expr_datumvector(ctx);
   ObDatum *res_datums = expr.locate_batch_datums(ctx);
   for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; i++) {
     if (!eval_flag.contain(i) && !skip.contain(i)) {
-      if (0 == TYPE) {
+      if (NUMBER_TYPE == TYPE) {
         if (arg_datums.at(i)->is_null()) {
           res_datums[i].set_null();
         } else {
@@ -226,13 +351,13 @@ int do_eval_batch_ceil_floor(const ObExpr &expr,
             }
           }
         }
-      } else if (1 == TYPE) {
+      } else if (INTEGER_TYPE == TYPE) {
         if (arg_datums.at(i)->is_null()) {
           res_datums[i].set_null();
         } else {
           res_datums[i].set_int(arg_datums.at(i)->get_int());
         }
-      } else if (2 == TYPE) {
+      } else if (FLOAT_TYPE == TYPE) {
         if (arg_datums.at(i)->is_null()) {
           res_datums[i].set_null();
         } else if (IS_FLOOR) {
@@ -240,13 +365,23 @@ int do_eval_batch_ceil_floor(const ObExpr &expr,
         } else {
           res_datums[i].set_float(ceilf(arg_datums.at(i)->get_float()));
         }
-      } else if (3 == TYPE) {
+      } else if (DOUBLE_TYPE == TYPE) {
         if (arg_datums.at(i)->is_null()) {
           res_datums[i].set_null();
         } else if (IS_FLOOR) {
           res_datums[i].set_double(floor(arg_datums.at(i)->get_double()));
         } else {
           res_datums[i].set_double(ceil(arg_datums.at(i)->get_double()));
+        }
+      } else if (DECIMAL_INT_TYPE == TYPE) {
+        const ObDatumMeta &in_meta = expr.args_[0]->datum_meta_;
+        const ObDatumMeta &out_meta = expr.datum_meta_;
+        if (arg_datums.at(i)->is_null()) {
+          res_datums[i].set_null();
+        } else if (OB_FAIL(ObExprCeilFloor::ceil_floor_decint(
+                           IS_FLOOR, arg_datums.at(i), in_meta, out_meta, res_datums[i]))) {
+          LOG_WARN("ceil_floor_decint failed",
+                K(ret), K(IS_FLOOR), K(in_meta), K(out_meta), K(arg_datums.at(i)->get_int_bytes()));
         }
       }
       eval_flag.set(i);
@@ -268,18 +403,22 @@ int eval_batch_ceil_floor(const ObExpr &expr,
     const bool is_floor = (T_FUN_SYS_FLOOR == expr.type_) ? true : false;
     if (ObNumberTC == ob_obj_type_class(arg_type)) {
       ret = is_floor
-      ? do_eval_batch_ceil_floor<0,true>(expr, ctx, skip, batch_size)
-      : do_eval_batch_ceil_floor<0,false>(expr, ctx, skip, batch_size);
+      ? do_eval_batch_ceil_floor<NUMBER_TYPE, true>(expr, ctx, skip, batch_size)
+      : do_eval_batch_ceil_floor<NUMBER_TYPE, false>(expr, ctx, skip, batch_size);
     } else if (ob_is_integer_type(arg_type)) {
-      ret = do_eval_batch_ceil_floor<1,true>(expr, ctx, skip, batch_size);
+      ret = do_eval_batch_ceil_floor<INTEGER_TYPE, true>(expr, ctx, skip, batch_size);
     } else if (ObFloatType == arg_type) {
       ret = is_floor
-      ? do_eval_batch_ceil_floor<2,true>(expr, ctx, skip, batch_size)
-      : do_eval_batch_ceil_floor<2,false>(expr, ctx, skip, batch_size);
+      ? do_eval_batch_ceil_floor<FLOAT_TYPE, true>(expr, ctx, skip, batch_size)
+      : do_eval_batch_ceil_floor<FLOAT_TYPE, false>(expr, ctx, skip, batch_size);
     } else if (ObDoubleType == arg_type) {
       ret = is_floor
-      ? do_eval_batch_ceil_floor<3,true>(expr, ctx, skip, batch_size)
-      : do_eval_batch_ceil_floor<3,false>(expr, ctx, skip, batch_size);
+      ? do_eval_batch_ceil_floor<DOUBLE_TYPE, true>(expr, ctx, skip, batch_size)
+      : do_eval_batch_ceil_floor<DOUBLE_TYPE, false>(expr, ctx, skip, batch_size);
+    } else if (ObDecimalIntType == arg_type) {
+      ret = is_floor
+      ? do_eval_batch_ceil_floor<DECIMAL_INT_TYPE, true>(expr, ctx, skip, batch_size)
+      : do_eval_batch_ceil_floor<DECIMAL_INT_TYPE, false>(expr, ctx, skip, batch_size);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected arg type", K(ret), K(arg_type));

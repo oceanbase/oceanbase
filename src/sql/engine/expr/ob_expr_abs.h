@@ -23,15 +23,11 @@ class ObExprAbs : public ObExprOperator
 {
   typedef int (*abs_func)(common::ObObj &res, const common::ObObj &param, common::ObExprCtx &expr_ctx);
 public:
-  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
-public:
   explicit  ObExprAbs(common::ObIAllocator &alloc);
   ~ObExprAbs() {};
 
   virtual int calc_result_type1(ObExprResType &type, ObExprResType &type1,
                                 common::ObExprTypeCtx &type_ctx) const;
-
-  int set_func(common::ObObjType param_type);
 
   virtual int assign(const ObExprOperator &other);
 
@@ -40,8 +36,6 @@ public:
                      ObExpr &rt_expr) const override;
 
 private:
-  int set_func_mysql(common::ObObjType param_type);
-  int set_func_oracle(common::ObObjType param_type);
   //tinyint, mediumint, smallint, int32
   static int abs_int(common::ObObj &res,
                      const common::ObObj &param,

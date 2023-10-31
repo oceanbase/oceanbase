@@ -433,7 +433,7 @@ int ObPartitionExecutorUtils::cast_expr_to_obj(ObExecContext &ctx,
                      OB_FAIL(expr_cal_and_cast(stmt_type,
                                                is_list_part,
                                                ctx,
-                                               fun_expr_type,
+                                               fun_expr->get_result_type(),
                                                fun_expr->get_collation_type(),
                                                expr,
                                                value_obj))) {
@@ -670,7 +670,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
     const stmt::StmtType &stmt_type,
     bool is_list_part,
     ObExecContext &ctx,
-    const ObObjType fun_expr_type,
+    const sql::ObExprResType &dst_res_type,
     const ObCollationType fun_collation_type,
     ObRawExpr *expr,
     ObObj &value_obj)
@@ -678,6 +678,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
   int ret = OB_SUCCESS;
   ObExprCtx expr_ctx;
   ObObj temp_obj;
+  ObObjType fun_expr_type = dst_res_type.get_type();
   if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type, ctx, ctx.get_allocator(), expr_ctx))) {
     LOG_WARN("Failed to wrap expr ctx", K(ret));
   } else {
@@ -736,6 +737,14 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
       EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
       //cast_ctx.dest_collation_ = temp_obj.get_collation_type();
       cast_ctx.dest_collation_ = fun_collation_type;
+      ObAccuracy res_acc;
+      if (ObDecimalIntType == expected_obj_type) {
+        res_acc = dst_res_type.get_accuracy();
+        cast_ctx.res_accuracy_ = &res_acc;
+        if (is_list_part) {
+          cast_ctx.cast_mode_ |= CM_COLUMN_CONVERT;
+        }
+      }
       EXPR_CAST_OBJ_V2(expected_obj_type, temp_obj, out_val_ptr);
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(out_val_ptr)) {
@@ -825,7 +834,17 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
         expected_obj_type = ObTimestampTZType;
       }
       const ObObj *out_val_ptr = NULL;
-      EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
+      ObCastMode cm = CM_NONE;
+      ObAccuracy res_acc;
+      EXPR_DEFINE_CAST_CTX(expr_ctx, cm);
+      if (ObDecimalIntType == expected_obj_type) {
+        // set res accuracy
+        res_acc = dst_res_type.get_accuracy();
+        cast_ctx.res_accuracy_ = &res_acc;
+        if (is_list_part) {
+          cast_ctx.cast_mode_ |= CM_COLUMN_CONVERT;
+        }
+      }
       //cast_ctx.dest_collation_ = temp_obj.get_collation_type();
       cast_ctx.dest_collation_ = fun_collation_type;
       EXPR_CAST_OBJ_V2(expected_obj_type, temp_obj, out_val_ptr);
@@ -961,7 +980,8 @@ int ObPartitionExecutorUtils::cast_range_expr_to_obj(
           } else {
             ObObj value_obj;
             if (OB_FAIL(ObPartitionExecutorUtils::expr_cal_and_cast(
-                        stmt_type, false, ctx, fun_expr_type, expr->get_collation_type(), expr, value_obj))) {
+                  stmt_type, false, ctx, expr->get_result_type(), expr->get_collation_type(), expr,
+                  value_obj))) {
               LOG_WARN("expr cal and cast fail", K(ret));
             } else if (OB_FAIL(range_partition_obj.push_back(value_obj))) {
               LOG_WARN("array push back fail", K(ret));
@@ -1200,7 +1220,9 @@ int ObPartitionExecutorUtils::cast_expr_to_obj(
             ObObjType fun_expr_type = expr->get_data_type();
             ObObj value_obj;
             const stmt::StmtType stmt_type = stmt::T_CREATE_TABLE;
-            if (OB_FAIL(expr_cal_and_cast(stmt_type, false, ctx, fun_expr_type, expr->get_collation_type(), expr, value_obj))) {
+            if (OB_FAIL(expr_cal_and_cast(
+                    stmt_type, false, ctx, expr->get_result_type(),
+                    expr->get_collation_type(), expr, value_obj))) {
               LOG_WARN("expr cal and cast fail", K(ret));
             } else if (OB_FAIL(range_partition_obj.push_back(value_obj))) {
               LOG_WARN("array push back fail", K(ret));

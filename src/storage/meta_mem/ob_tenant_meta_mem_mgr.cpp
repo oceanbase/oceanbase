@@ -14,7 +14,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/meta_mem/ob_meta_pointer.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/multi_data_source/mds_table_mgr.h"
 #include "lib/function/ob_function.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
@@ -1281,7 +1281,7 @@ int ObTenantMetaMemMgr::acquire_tablet_from_pool(
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
     } else if (is_exist) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
-      if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
+      if (OB_FAIL(tablet_map_.get_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
       } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
         LOG_WARN("fail to get tablet pointer handle", K(ret), K(key), K(tablet_handle));
@@ -1403,7 +1403,7 @@ int ObTenantMetaMemMgr::acquire_tmp_tablet(
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
     } else if (is_exist) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
-      if (CLICK_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
+      if (CLICK_FAIL(tablet_map_.get_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
       } else if (CLICK_FAIL(tablet_map_.get(key, ptr_handle))) {
         LOG_WARN("fail to get tablet pointer handle", K(ret), K(key), K(tablet_handle));
@@ -1486,7 +1486,7 @@ int ObTenantMetaMemMgr::acquire_msd_tablet(
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
     } else if (is_exist) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
-      if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
+      if (OB_FAIL(tablet_map_.get_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
       } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
         LOG_WARN("fail to get tablet pointer handle", K(ret), K(key), K(tablet_handle));
@@ -1543,7 +1543,7 @@ int ObTenantMetaMemMgr::create_tablet(
     tablet_ptr.obj_.pool_ = &tablet_buffer_pool_;
     if (OB_FAIL(tablet_map_.set(key, tablet_ptr))) {
       LOG_WARN("fail to set tablet pointer", K(ret), K(key));
-    } else if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
+    } else if (OB_FAIL(tablet_map_.get_attr_for_obj(key, tablet_handle))) {
       LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
     } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
       LOG_WARN("fail to get tablet pointer handle", K(ret), K(key), K(tablet_handle));
@@ -2210,7 +2210,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
         LOG_WARN("fail to get candidate tablet for wash", K(ret));
       }
     } else {
-      time_guard.click("get_candidate_cost");
+      time_guard.click("get_candidate");
       if (OB_FAIL(do_wash_candidate_tablet(info, tablet_handle, free_obj))) {
         LOG_WARN("fail to do wash candidate tablet", K(ret));
       } else if (OB_NOT_NULL(free_obj)) {

@@ -37,6 +37,9 @@ ObKVCacheStore::ObKVCacheStore()
       wash_info_free_heap_(),
       tenant_wash_map_(),
       mb_ptr_pool_(),
+      washable_size_allocator_(),
+      washbale_size_info_(),
+      tmp_washbale_size_info_(),
       tenant_reserve_mem_ratio_(TENANT_RESERVE_MEM_RATIO),
       wash_itid_(-1),
       mem_limit_getter_(NULL)
@@ -254,6 +257,7 @@ bool ObKVCacheStore::wash()
 {
   bool is_wash_valid = true;
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   WashMap::iterator wash_iter;
   TenantWashInfo *tenant_wash_info = NULL;
 
@@ -290,12 +294,19 @@ bool ObKVCacheStore::wash()
     skip_refresh = 0;
 
     if (is_wash_valid) {
+      tmp_washbale_size_info_.reuse();
       //sort mb_handles to wash
       for (int64_t i = 0; OB_SUCC(ret) && i < cur_mb_num_; ++i) {
         if (add_handle_ref(&mb_handles_[i])) {
           enum ObKVMBHandleStatus status = ATOMIC_LOAD(&mb_handles_[i].status_);
-          if (OB_SUCC(tenant_wash_map_.get(mb_handles_[i].inst_->tenant_id_, tenant_wash_info))) {
+          uint64_t tenant_id = mb_handles_[i].inst_->tenant_id_;
+          if (OB_SUCC(tenant_wash_map_.get(tenant_id, tenant_wash_info))) {
             if (FULL == status) {
+              if (2 == get_handle_ref_cnt(mb_handles_ + i)
+                  && OB_TMP_FAIL(tmp_washbale_size_info_.add_washable_size(tenant_id,
+                                mb_handles_[i].mem_block_->get_align_size()))) {
+                COMMON_LOG(WARN, "Fail to add tenant washable size", K(tmp_ret), K(tenant_id));
+              }
               if (OB_FAIL(tenant_wash_info->add(&mb_handles_[i]))) {
                 COMMON_LOG(WARN, "add failed", K(ret));
               }
@@ -313,6 +324,9 @@ bool ObKVCacheStore::wash()
           //any error should not break washing, so reset ret to OB_SUCCESS
           ret = OB_SUCCESS;
         }
+      }
+      if (OB_LIKELY(OB_SUCCESS == tmp_ret)) {
+        washbale_size_info_.copy_from(tmp_washbale_size_info_);
       }
       for (wash_iter = tenant_wash_map_.begin(); wash_iter != tenant_wash_map_.end(); ++wash_iter) {
         wash_iter->second->normalize();
@@ -377,57 +391,13 @@ int ObKVCacheStore::get_avg_cache_item_size(const uint64_t tenant_id, const int6
   return ret;
 }
 
-int ObKVCacheStore::get_washable_size(const uint64_t tenant_id, int64_t &washable_size, const int64_t ratio)
+int ObKVCacheStore::get_washable_size(const uint64_t tenant_id, int64_t &washable_size)
 {
   int ret = OB_SUCCESS;
-  washable_size = 0;
-  ObDLink *head = NULL;
-  ObTenantMBListHandle list_handle;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "not init", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || ratio < 0 || ratio > MAX_RATIO)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
-  } else if (OB_FAIL(insts_->get_mb_list(tenant_id, list_handle, false /* create_list */))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      // Treat OB_ENTRY_NOT EXIST as expected return because tenant_id may not exist. 
-      ret = OB_SUCCESS;
-    } else {
-      COMMON_LOG(WARN, "get_mb_list failed", K(ret), K(tenant_id));
-    }
-  } else if (NULL == (head = list_handle.get_head())) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "head in list_handle is null", K(ret), K(tenant_id));
-  } else {
-    {
-      QClockGuard guard(get_qclock());
-      ObKVMemBlockHandle *handle = static_cast<ObKVMemBlockHandle *>(link_next(head));
-      int64_t list_size = 0;
-      int64_t count = 0;
-      const int64_t mask = (1 << ratio) - 1;
-      while (head != handle) {
-        if (0 == (list_size++ & mask) || count < SAFE_COUNT) {
-          ++count;
-          if (!handle->is_mark_delete()) {
-            if (add_handle_ref(handle)) {
-              if (handle->inst_->tenant_id_ == tenant_id) {
-                enum ObKVMBHandleStatus status = handle->status_;
-                if (FULL == status && 2 == get_handle_ref_cnt(handle)) {
-                  washable_size += handle->mem_block_->get_align_size();
-                }
-              }
-              de_handle_ref(handle);
-            }
-          }
-        }
-        handle = static_cast<ObKVMemBlockHandle *>(link_next(handle));
-      }
-      if (count > SAFE_COUNT) {
-        washable_size = washable_size * list_size / count;
-      }
-    }
+  if (OB_FAIL(washbale_size_info_.get_size(tenant_id, washable_size))) {
+    COMMON_LOG(WARN, "Fail to get tenant wash info", K(ret), K(tenant_id));
   }
+  COMMON_LOG(DEBUG, "get washable size details", K(ret), K(tenant_id), K(washable_size));
 
   return ret;
 }
@@ -642,10 +612,6 @@ int ObKVCacheStore::try_flush_washable_mb(
       }
     } // qclock guard
 
-    INIT_SUCC(tmp_ret);
-    if (OB_TMP_FAIL(print_tenant_memblock_info(head))) {
-      COMMON_LOG(WARN, "Fail to print tenant memblock info", K(tmp_ret));
-    }
     if (size_need_washed == INT64_MAX) {
       // flush
       ObICacheWasher::ObCacheMemBlock *wash_block = wash_blocks;
@@ -657,7 +623,7 @@ int ObKVCacheStore::try_flush_washable_mb(
       }
       wash_blocks = NULL;
     } else {
-      // sync wash 
+      // sync wash
       if (OB_SUCC(ret) && size_washed < size_need_washed) {
         ret = OB_CACHE_FREE_BLOCK_NOT_ENOUGH;
         COMMON_LOG(INFO, "can not find enough memory block to wash", K(ret), K(size_washed), K(size_need_washed));
@@ -678,10 +644,9 @@ int ObKVCacheStore::try_flush_washable_mb(
       EVENT_INC(KVCACHE_SYNC_WASH_COUNT);
     }
 
-    COMMON_LOG(INFO, "ObKVCache try flush washable memblock details", K(ret), K(force_flush), K(tenant_id),
+    COMMON_LOG(DEBUG, "ObKVCache try flush washable memblock details", K(ret), K(force_flush), K(tenant_id),
                K(cache_id), K(size_washed), K(size_need_washed));
     retire_mb_handles(retire_list, true /* do retire */);
-
     COMMON_LOG(DEBUG, "Try flush cache result", K(size_washed), K(size_need_washed), K(tenant_id), K(cache_id), K(ret));
   }
 
@@ -772,7 +737,7 @@ int ObKVCacheStore::print_tenant_memblock_info(ObDLink* head)
         while (OB_SUCC(ret) && head != handle) {
           if (add_handle_ref(handle)) {
             if (OB_FAIL(databuff_printf(buf, BUFLEN, ctx_pos,
-                "[CACHE] tenant_id=%8ld | cache_id=%8ld | ref_count=%8ld | status=%8d | policy=%8d | kv_cnt=%8ld | get_cnt=%8ld | score=%8lf |\n",
+                "[CACHE-SYNC-WASH] tenant_id=%8ld | cache_id=%8ld | ref_count=%8ld | status=%8d | policy=%8d | kv_cnt=%8ld | get_cnt=%8ld | score=%8lf |\n",
                 handle->inst_->tenant_id_,
                 handle->inst_->cache_id_,
                 get_handle_ref_cnt(handle),
@@ -790,7 +755,7 @@ int ObKVCacheStore::print_tenant_memblock_info(ObDLink* head)
           handle = static_cast<ObKVMemBlockHandle *>(link_next(handle));
         }
         if (OB_SUCC(ret)) {
-          _OB_LOG(WARN, "[CACHE] len: %8ld tenant sync wash failed, cache memblock info: \n%s", ctx_pos, buf);
+          _OB_LOG(WARN, "[CACHE-SYNC-WASH] len: %8ld tenant sync wash failed, cache memblock info: \n%s", ctx_pos, buf);
         }
       }
       retire_mb_handles(retire_list, false /* do retire */);
@@ -1153,6 +1118,7 @@ bool ObKVCacheStore::compute_tenant_wash_size()
       }
     }
   }
+
   COMMON_LOG(INFO, "Wash compute wash size", K(is_wash_valid), K(sys_total_wash_size), K(global_cache_size),
       K(tenant_max_wash_size),K(tenant_min_wash_size), K(tenant_ids_));
   return is_wash_valid;
@@ -1281,7 +1247,9 @@ int ObKVCacheStore::prepare_wash_structs()
   int ret = OB_SUCCESS;
   const int64_t tenant_num = MAX_TENANT_NUM_PER_SERVER;
   const int64_t cache_num = MAX_TENANT_NUM_PER_SERVER * MAX_CACHE_NUM;
+  const int64_t bucket_num = DEFAULT_TENANT_BUCKET_NUM;
   const char *label = ObModIds::OB_KVSTORE_CACHE_WASH_STRUCT;
+  washable_size_allocator_.set_label(label);
   if (inited_) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "init twice", K(ret));
@@ -1293,10 +1261,14 @@ int ObKVCacheStore::prepare_wash_structs()
     COMMON_LOG(WARN, "wash_info_free_heap_ init failed", K(ret), K(tenant_num), K(label));
   } else if (OB_FAIL(tenant_wash_map_.init(tenant_num, cache_num, label))) {
     COMMON_LOG(WARN, "tenant_wash_map_ init failed", K(ret), K(tenant_num), K(cache_num), K(label));
+  } else if (OB_FAIL(washbale_size_info_.init(tenant_num, bucket_num, washable_size_allocator_))) {
+    COMMON_LOG(WARN, "Fail to init washable size info", K(ret));
+  } else if (OB_FAIL(tmp_washbale_size_info_.init(tenant_num, bucket_num, washable_size_allocator_))) {
+    COMMON_LOG(WARN, "Fail to init tmp washable size info", K(ret));
   } else if (OB_FAIL(mb_ptr_pool_.init(2 * max_mb_num_, label))) {
     COMMON_LOG(WARN, "mb_ptr_pool_ init failed", K(ret), K_(max_mb_num));
-  } 
-  
+  }
+
   return ret;
 }
 
@@ -1318,6 +1290,9 @@ void ObKVCacheStore::destroy_wash_structs()
   wash_info_free_heap_.destroy();
   tenant_wash_map_.destroy();
   mb_ptr_pool_.destroy();
+  washbale_size_info_.destroy();
+  tmp_washbale_size_info_.destroy();
+  washable_size_allocator_.reset();
 }
 
 void *ObKVCacheStore::alloc_mb(ObTenantResourceMgrHandle &resource_handle,

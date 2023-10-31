@@ -2230,6 +2230,7 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
                                       true,
                                       session_info.get_session_nls_params(),
                                       session_info.get_effective_tenant_id(),
+                                      false, // TODO
                                       convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret));
     } else if (scalar_data_type.get_meta_type().is_string_or_lob_locator_type()

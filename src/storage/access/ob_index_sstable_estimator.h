@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_INDEX_SSTABLE_ESTIMATOR_H
 #define OCEANBASE_STORAGE_OB_INDEX_SSTABLE_ESTIMATOR_H
 
-#include "storage/ob_micro_block_handle_mgr.h"
+#include "storage/access/ob_micro_block_handle_mgr.h"
 
 namespace oceanbase
 {
@@ -109,7 +109,7 @@ private:
   ObMicroBlockDataHandle micro_handles_[DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
   blocksstable::ObMicroBlockData index_block_data_;
   const ObIndexSSTableEstimateContext &context_;
-  common::ObArenaAllocator allocator_;
+  ObFIFOAllocator allocator_;
 };
 
 }

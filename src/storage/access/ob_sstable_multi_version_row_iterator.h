@@ -74,7 +74,7 @@ private:
 };
 
 
-class ObSSTableMultiVersionRowMultiGetter : public ObSSTableRowMultiScanner
+class ObSSTableMultiVersionRowMultiGetter : public ObSSTableRowMultiScanner<>
 {
 public:
   ObSSTableMultiVersionRowMultiGetter()
@@ -103,7 +103,7 @@ private:
   const common::ObIArray<blocksstable::ObDatumRowkey> *base_rowkeys_;
 };
 
-class ObSSTableMultiVersionRowMultiScanner : public ObSSTableRowMultiScanner
+class ObSSTableMultiVersionRowMultiScanner : public ObSSTableRowMultiScanner<>
 {
 public:
   ObSSTableMultiVersionRowMultiScanner()

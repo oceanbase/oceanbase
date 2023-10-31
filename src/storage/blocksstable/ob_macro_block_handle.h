@@ -37,6 +37,7 @@ public:
   void reset_macro_id();
   bool is_valid() const { return io_handle_.is_valid(); }
   bool is_empty() const { return io_handle_.is_empty(); }
+  OB_INLINE bool is_finished() const { return io_handle_.is_empty() || io_handle_.is_finished(); }
   const char *get_buffer() { return io_handle_.get_buffer(); }
   const MacroBlockId& get_macro_id() const { return macro_id_; }
   common::ObIOHandle &get_io_handle() { return io_handle_; }
@@ -44,7 +45,7 @@ public:
   int async_read(const ObMacroBlockReadInfo &read_info);
   int async_write(const ObMacroBlockWriteInfo &write_info);
   int set_macro_block_id(const MacroBlockId &macro_block_id);
-  int wait(const int64_t timeout_ms);
+  int wait();
   TO_STRING_KV(K_(macro_id), K_(io_handle));
 private:
   int report_bad_block() const;

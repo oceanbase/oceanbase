@@ -15,6 +15,8 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -350,16 +352,28 @@ int ObForeignKeyChecker::build_table_range(const ObIArray<ObForeignKeyColumn> &c
   return ret;
 }
 
-int ObForeignKeyChecker::check_fk_column_type(const ObObjMeta &col_obj_meta, const ObObjMeta &dst_obj_meta)
+int ObForeignKeyChecker::check_fk_column_type(const ObObjMeta &col_obj_meta,
+                                              const ObObjMeta &dst_obj_meta,
+                                              const ObPrecision col_precision,
+                                              const ObPrecision dst_precision,
+                                              bool &need_extra_cast)
 {
   int ret = OB_SUCCESS;
+  need_extra_cast = false;
   if (col_obj_meta.get_type() != dst_obj_meta.get_type()) {
     if (lib::is_oracle_mode() && ob_is_number_tc(col_obj_meta.get_type()) && ob_is_number_tc(dst_obj_meta.get_type())) {
       // oracle mode, numberfloat and number type are same
+    } else if ((ob_is_number_tc(col_obj_meta.get_type()) && ob_is_decimal_int_tc(dst_obj_meta.get_type())) ||
+        (ob_is_number_tc(dst_obj_meta.get_type()) && ob_is_decimal_int_tc(col_obj_meta.get_type()))) {
+      need_extra_cast = true;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid type to perform foreign key check", K(col_obj_meta), K(dst_obj_meta));
     }
+  } else if (ob_is_decimal_int_tc(col_obj_meta.get_type()) &&
+      ObRawExprUtils::decimal_int_need_cast(col_precision, col_obj_meta.get_scale(),
+                                            dst_precision, dst_obj_meta.get_scale())) {
+    need_extra_cast = true;
   }
   return ret;
 }
@@ -388,22 +402,41 @@ int ObForeignKeyChecker::build_primary_table_range(const ObIArray<ObForeignKeyCo
   for (int64_t i = 0; OB_SUCC(ret) && i < fk_cnt; ++i) {
     ObObj tmp_obj;
     ObDatum *col_datum = nullptr;
-    const ObObjMeta &col_obj_meta = row.at(columns.at(i).idx_)->obj_meta_;
+    ObExpr *column_expr = row.at(columns.at(i).idx_);
+    const ObObjMeta &col_obj_meta = column_expr->obj_meta_;
     const ObObjMeta &dst_obj_meta = columns.at(i).obj_meta_;
-    const ObObjDatumMapType &obj_datum_map = row.at(columns.at(i).idx_)->obj_datum_map_;
+    const ObObjDatumMapType &obj_datum_map = column_expr->obj_datum_map_;
     int64_t rowkey_index = checker_ctdef_.rowkey_ids_.at(i);
+    bool need_extra_cast = false;
+    const ObPrecision dst_prec = dst_obj_meta.is_decimal_int() ?
+        dst_obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
     if (rowkey_index < 0 || rowkey_index >= rowkey_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid woekey index to build scan range", K(ret), K(rowkey_index));
-    } else if (OB_FAIL(check_fk_column_type(col_obj_meta, dst_obj_meta))) {
+    } else if (OB_FAIL(check_fk_column_type(col_obj_meta, dst_obj_meta,
+        column_expr->datum_meta_.precision_, dst_prec,
+        need_extra_cast))) {
       LOG_WARN("failed to perform foreign key column type check", K(ret), K(i));
-    } else if (OB_FAIL(row.at(columns.at(i).idx_)->eval(eval_ctx_, col_datum))) {
+    } else if (OB_FAIL(column_expr->eval(eval_ctx_, col_datum))) {
       LOG_WARN("evaluate expr failed", K(ret), K(i));
-    } else if (OB_FAIL(col_datum->to_obj(tmp_obj, dst_obj_meta, obj_datum_map))) {
+    } else if (OB_FAIL(col_datum->to_obj(tmp_obj, col_obj_meta, obj_datum_map))) {
       LOG_WARN("convert datum to obj failed", K(ret), K(i));
+    } else if (need_extra_cast) {
+      ObCastMode cm = CM_NONE | CM_CONST_TO_DECIMAL_INT_EQ;
+      ObCastCtx cast_ctx(allocator_, NULL, cm, ObCharset::get_system_collation());
+      ObAccuracy res_acc;
+      if (ObDecimalIntType == dst_obj_meta.get_type()) {
+        res_acc.set_precision(dst_obj_meta.get_stored_precision());
+        res_acc.set_scale(dst_obj_meta.get_scale());
+        cast_ctx.res_accuracy_ = &res_acc;
+      }
+      ObObj ori_obj = tmp_obj;
+      if(OB_FAIL(ObObjCaster::to_type(dst_obj_meta.get_type(), cast_ctx, ori_obj, tmp_obj))) {
+        LOG_WARN("fail to cast type", K(ret), K(col_obj_meta), K(dst_obj_meta));
+      }
     }
-    // 这里需要做深拷贝
-    else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr[rowkey_index]))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr[rowkey_index]))) {// 这里需要做深拷贝
       LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
     }
   }
@@ -456,22 +489,42 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
     if (i < fk_cnt) {
       ObObj tmp_obj;
       ObDatum *col_datum = nullptr;
-      const ObObjMeta &col_obj_meta = row.at(columns.at(i).idx_)->obj_meta_;
+      ObExpr *column_expr = row.at(columns.at(i).idx_);
+      const ObObjMeta &col_obj_meta = column_expr->obj_meta_;
       const ObObjMeta &dst_obj_meta = columns.at(i).obj_meta_;
-      const ObObjDatumMapType &obj_datum_map = row.at(columns.at(i).idx_)->obj_datum_map_;
+      const ObObjDatumMapType &obj_datum_map = column_expr->obj_datum_map_;
       int64_t rowkey_index = checker_ctdef_.rowkey_ids_.at(i);
+      bool need_extra_cast = false;
+      const ObPrecision dst_prec = dst_obj_meta.is_decimal_int() ?
+        dst_obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
       if (rowkey_index < 0 || rowkey_index >= fk_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid woekey index to build scan range", K(ret), K(rowkey_index));
-      } else if (OB_FAIL(check_fk_column_type(col_obj_meta, dst_obj_meta))) {
+      } else if (OB_FAIL(check_fk_column_type(col_obj_meta, dst_obj_meta,
+          column_expr->datum_meta_.precision_, dst_prec,
+          need_extra_cast))) {
         LOG_WARN("failed to perform foreign key column type check", K(ret), K(i));
-      } else if (OB_FAIL(row.at(columns.at(i).idx_)->eval(eval_ctx_, col_datum))) {
+      } else if (OB_FAIL(column_expr->eval(eval_ctx_, col_datum))) {
         LOG_WARN("evaluate expr failed", K(ret), K(i));
-      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, dst_obj_meta, obj_datum_map))) {
+      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, col_obj_meta, obj_datum_map))) {
         LOG_WARN("convert datum to obj failed", K(ret), K(i));
+      } else if (need_extra_cast) {
+        ObCastMode cm = CM_NONE | CM_CONST_TO_DECIMAL_INT_EQ;
+        ObCastCtx cast_ctx(allocator_, NULL, cm, ObCharset::get_system_collation());
+        ObAccuracy res_acc;
+        if (ObDecimalIntType == dst_obj_meta.get_type()) {
+          res_acc.set_precision(dst_obj_meta.get_stored_precision());
+          res_acc.set_scale(dst_obj_meta.get_scale());
+          cast_ctx.res_accuracy_ = &res_acc;
+        }
+        ObObj ori_obj = tmp_obj;
+        if(OB_FAIL(ObObjCaster::to_type(dst_obj_meta.get_type(), cast_ctx, ori_obj, tmp_obj))) {
+          LOG_WARN("fail to cast type", K(ret), K(col_obj_meta), K(dst_obj_meta));
+        }
       }
+      if (OB_FAIL(ret)) {
       // 这里需要做深拷贝
-      else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr[rowkey_index]))) {
+      } else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr[rowkey_index]))) {
         LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
       }
     } else {
@@ -535,19 +588,40 @@ int ObForeignKeyChecker::build_index_table_range_need_shadow_column(const ObIArr
     if (i < fk_cnt) {
       ObObj tmp_obj;
       ObDatum *col_datum = nullptr;
-      const ObObjMeta &col_obj_meta = row.at(columns.at(i).idx_)->obj_meta_;
+      ObExpr *column_expr = row.at(columns.at(i).idx_);
+      const ObObjMeta &col_obj_meta = column_expr->obj_meta_;
       const ObObjMeta &dst_obj_meta = columns.at(i).obj_meta_;
-      const ObObjDatumMapType &obj_datum_map = row.at(columns.at(i).idx_)->obj_datum_map_;
+      const ObObjDatumMapType &obj_datum_map = column_expr->obj_datum_map_;
       int64_t rowkey_index = checker_ctdef_.rowkey_ids_.at(i);
+      bool need_extra_cast = false;
+      const ObPrecision dst_prec = dst_obj_meta.is_decimal_int() ?
+        dst_obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
       if (rowkey_index < 0 || rowkey_index >= fk_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid woekey index to build scan range", K(ret), K(rowkey_index));
-      } else if (OB_FAIL(check_fk_column_type(col_obj_meta, dst_obj_meta))) {
+      } else if (OB_FAIL(check_fk_column_type(col_obj_meta, dst_obj_meta,
+          column_expr->datum_meta_.precision_, dst_prec,
+          need_extra_cast))) {
         LOG_WARN("failed to perform foreign key column type check", K(ret), K(i));
-      } else if (OB_FAIL(row.at(columns.at(i).idx_)->eval(eval_ctx_, col_datum))) {
+      } else if (OB_FAIL(column_expr->eval(eval_ctx_, col_datum))) {
         LOG_WARN("evaluate expr failed", K(ret), K(i));
-      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, dst_obj_meta, obj_datum_map))) {
+      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, col_obj_meta, obj_datum_map))) {
         LOG_WARN("convert datum to obj failed", K(ret), K(i));
+      } else if (need_extra_cast) {
+        ObCastMode cm = CM_NONE | CM_CONST_TO_DECIMAL_INT_EQ;
+        ObCastCtx cast_ctx(allocator_, NULL, cm, ObCharset::get_system_collation());
+        ObAccuracy res_acc;
+        if (ObDecimalIntType == dst_obj_meta.get_type()) {
+          res_acc.set_precision(dst_obj_meta.get_stored_precision());
+          res_acc.set_scale(dst_obj_meta.get_scale());
+          cast_ctx.res_accuracy_ = &res_acc;
+        }
+        ObObj ori_obj = tmp_obj;
+        if(OB_FAIL(ObObjCaster::to_type(dst_obj_meta.get_type(), cast_ctx, ori_obj, tmp_obj))) {
+          LOG_WARN("fail to cast type", K(ret), K(col_obj_meta), K(dst_obj_meta));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr_start[rowkey_index]))) {
         LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
       } else if (OB_FAIL(ob_write_obj(*allocator_, tmp_obj, obj_ptr_end[rowkey_index]))) {

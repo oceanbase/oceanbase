@@ -335,6 +335,9 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
     } else if (OB_NOT_NULL(parse_tree.children_[PARSE_SELECT_LIMIT])) {
       ret = OB_ERR_CTE_ILLEGAL_RECURSIVE_BRANCH;
       LOG_WARN("use limit clause in the recursive cte is not allowed", K(ret));
+    } else if (is_oracle_mode() &&
+               OB_FAIL(adjust_recursive_cte_table_columns(select_stmt, right_select_stmt))) {
+      LOG_WARN("failed to adjust recursive cte table columns", K(ret));
     } else {
       /**
       * 设置这个一个set query是否是with clause中的递归类型
@@ -6645,6 +6648,55 @@ int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectS
     } else {
       order_item.expr_ = expr;
       find = true;
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::adjust_recursive_cte_table_columns(const ObSelectStmt* parent_stmt, ObSelectStmt *right_stmt)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  ObSEArray<ColumnItem, 4> columns;
+  ObSEArray<ObRawExpr*, 4> parent_sel_exprs;
+  if (OB_ISNULL(parent_stmt) ||
+      OB_ISNULL(right_stmt) ||
+      OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(parent_stmt->get_select_exprs(parent_sel_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < right_stmt->get_table_size(); ++i) {
+    columns.reuse();
+    if (OB_ISNULL(table_item = right_stmt->get_table_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!table_item->is_fake_cte_table() ||
+               table_item->table_name_ != cte_ctx_.current_cte_table_name_) {
+      //do nothing
+    } else if (OB_FAIL(right_stmt->get_column_items(table_item->table_id_, columns))) {
+      LOG_WARN("failed to get column items", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < columns.count(); ++j) {
+        ObRawExpr *sel_expr = NULL;
+        ObRawExpr *column_expr = NULL;
+        int64_t idx = columns.at(j).column_id_ - OB_APP_MIN_COLUMN_ID;
+        if (OB_UNLIKELY(idx >= parent_sel_exprs.count()) ||
+            OB_ISNULL(sel_expr = parent_sel_exprs.at(idx)) ||
+            OB_ISNULL(column_expr = columns.at(j).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(sel_expr), K(ret));
+        } else if (OB_FAIL(schema_checker_->adjust_fake_cte_column_type(table_item->ref_id_,
+                                                                        columns.at(j).column_id_,
+                                                                        sel_expr->get_data_type(),
+                                                                        sel_expr->get_accuracy()))) {
+          LOG_WARN("failed to adjust fake cte column type", K(ret));
+        } else {
+          column_expr->set_data_type(sel_expr->get_data_type());
+          column_expr->set_accuracy(sel_expr->get_accuracy());
+        }
+      }
     }
   }
   return ret;

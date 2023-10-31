@@ -144,6 +144,7 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     srs_id_ = src_schema.srs_id_;
     udt_set_id_ = src_schema.udt_set_id_;
     sub_type_ = src_schema.sub_type_;
+    skip_index_attr_ = src_schema.skip_index_attr_;
 
     int ret = OB_SUCCESS;
     if (OB_FAIL(deep_copy_obj(src_schema.orig_default_value_, orig_default_value_))) {
@@ -263,6 +264,7 @@ void ObColumnSchemaV2::reset()
   udt_set_id_ = 0;
   sub_type_ = 0;
   reset_string_array(extended_type_info_);
+  skip_index_attr_.reset();
   ObSchema::reset();
 }
 
@@ -311,7 +313,8 @@ OB_DEF_SERIALIZE(ObColumnSchemaV2)
                 sequence_id_,
                 srs_id_,
                 udt_set_id_,
-                sub_type_);
+                sub_type_,
+                skip_index_attr_);
   }
 
   return ret;
@@ -377,7 +380,8 @@ OB_DEF_DESERIALIZE(ObColumnSchemaV2)
                 sequence_id_,
                 srs_id_,
                 udt_set_id_,
-                sub_type_);
+                sub_type_,
+                skip_index_attr_);
   }
   return ret;
 }
@@ -421,7 +425,8 @@ OB_DEF_SERIALIZE_SIZE(ObColumnSchemaV2)
               sequence_id_,
               srs_id_,
               udt_set_id_,
-              sub_type_);
+              sub_type_,
+              skip_index_attr_);
   return len;
 }
 
@@ -515,6 +520,7 @@ int64_t ObColumnSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(srs_id),
     K_(udt_set_id),
     K_(sub_type),
+    K_(skip_index_attr),
     KPC_(column_ref_idxs));
   J_OBJ_END();
   return pos;

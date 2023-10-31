@@ -468,6 +468,10 @@ public:
                                      char* buf,
                                      const int64_t& buf_len,
                                      int64_t& pos) const;
+  int print_table_definition_column_group(const ObTableSchema &table_schema,
+                                          char* buf,
+                                          const int64_t& buf_len,
+                                          int64_t& pos) const;
   int print_identifier(char* buf,
                        const int64_t& buf_len,
                        int64_t& pos,

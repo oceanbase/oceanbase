@@ -1551,6 +1551,10 @@ int ObLogPlanHint::add_index_hint(const ObDMLStmt &stmt,
     if (NULL == log_table_hint->use_das_hint_ || index_hint.is_enable_hint()) {
       log_table_hint->use_das_hint_ = &index_hint;
     }
+  } else if (T_USE_COLUMN_STORE_HINT == index_hint.get_hint_type()) {
+    if (NULL == log_table_hint->use_column_store_hint_ || index_hint.is_enable_hint()) {
+      log_table_hint->use_column_store_hint_ = &index_hint;
+    }
   } else if (OB_FAIL(log_table_hint->index_hints_.push_back(&index_hint))) {
     LOG_WARN("failed to push back", K(ret));
   }
@@ -1792,6 +1796,22 @@ int ObLogPlanHint::check_use_das(uint64_t table_id, bool &force_das, bool &force
     force_no_das = hint->is_disable_hint();
   } else if (is_outline_data_) {
     force_no_das = true;
+  }
+  return ret;
+}
+
+int ObLogPlanHint::check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const
+{
+  int ret = OB_SUCCESS;
+  force_column_store = false;
+  force_no_column_store = false;
+  const LogTableHint *log_table_hint = get_log_table_hint(table_id);
+  const ObHint *hint = NULL == log_table_hint ? NULL : log_table_hint->use_column_store_hint_;
+  if (NULL != hint) {
+    force_column_store = hint->is_enable_hint();
+    force_no_column_store = hint->is_disable_hint();
+  } else if (is_outline_data_) {
+    force_no_column_store = true;
   }
   return ret;
 }
@@ -2245,6 +2265,7 @@ int LogTableHint::assign(const LogTableHint &other)
   table_ = other.table_;
   parallel_hint_ = other.parallel_hint_;
   use_das_hint_ = other.use_das_hint_;
+  use_column_store_hint_ = other.use_column_store_hint_;
   if (OB_FAIL(index_list_.assign(other.index_list_))) {
     LOG_WARN("failed to assign index list", K(ret));
   } else if (OB_FAIL(index_hints_.assign(other.index_hints_))) {

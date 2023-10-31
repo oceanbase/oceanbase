@@ -88,6 +88,7 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_JSON,       BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObJsonType */
   {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObGeometryType */
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
+  {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL, 0, 0},                           /* ObDecimalIntType */
   /* ObMaxType */
 };
 
@@ -325,6 +326,11 @@ int ObSMUtils::cell_str(
         ret = ObMySQLUtil::sql_utd_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
         break;
       }
+      case ObDecimalIntTC: {
+        ret = ObMySQLUtil::decimalint_cell_str(buf, len, obj.get_decimal_int(), obj.get_int_bytes(),
+                                               obj.get_scale(), pos, zerofill, zflength);
+        break;
+      }
       default:
         _OB_LOG(ERROR, "invalid ob type=%d", obj.get_type());
         ret = OB_ERROR;
@@ -540,6 +546,7 @@ int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type, const
       break;
     case EMySQLFieldType::MYSQL_TYPE_GEOMETRY:
       ob_type = ObGeometryType;
+      break;
     default:
       _OB_LOG(WARN, "unsupport MySQL type %d", mysql_type);
       ret = OB_OBJ_TYPE_ERROR;

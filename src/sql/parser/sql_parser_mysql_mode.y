@@ -8,7 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, 
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. 
  * See the Mulan PubL v2 for more details.
- */ 
+ */
 
 %define api.pure
 %parse-param {ParseResult *result}
@@ -173,6 +173,7 @@ WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST 
 // optimize hint
 INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT
 INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT
+USE_COLUMN_STORE_HINT NO_USE_COLUMN_STORE_HINT
 LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
 USE_NL_MATERIALIZATION NO_USE_NL_MATERIALIZATION
@@ -304,7 +305,7 @@ END_P SET_VAR DELIMITER
         MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU
         LOG_DISK_SIZE MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND
-        MIGRATE MIN MIN_CPU MIN_IOPS MINOR MIN_ROWS MINUS MINUTE MODE MODIFY MONTH MOVE
+        MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MINOR MIN_ROWS MINUS MINUTE MODE MODIFY MONTH MOVE
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
         MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME
 
@@ -333,7 +334,7 @@ END_P SET_VAR DELIMITER
 
         SAMPLE SAVEPOINT SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
-        SET_TP SHARE SHUTDOWN SIGNED SIMPLE SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
+        SET_TP SHARE SHUTDOWN SIGNED SIMPLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY STAT START STARTS STATS_AUTO_RECALC
@@ -379,6 +380,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_shrink_unit_option id_list opt_shrink_tenant_unit_option
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
+%type <node> with_column_group column_group_list column_group_element
 %type <node> opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
@@ -514,6 +516,8 @@ END_P SET_VAR DELIMITER
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_table_partition_option
 %type <node> dynamic_sampling_hint
+%type <node> skip_index_type opt_skip_index_type_list
+%type <node> opt_rebuild_column_store
 %type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
@@ -566,9 +570,9 @@ stmt:
   | create_table_stmt       {
     $$ = $1;
     ParseNode *parse_tree = $1;
-    if (NULL != parse_tree && 7 < parse_tree->num_child_
-                           && NULL != parse_tree->children_[7]
-                           && T_SELECT == parse_tree->children_[7]->type_) {
+    if (NULL != parse_tree && 8 < parse_tree->num_child_
+                           && NULL != parse_tree->children_[8]
+                           && T_SELECT == parse_tree->children_[8]->type_) {
       question_mark_issue($$, result);
     } else {
       check_question_mark($$, result);
@@ -4472,23 +4476,23 @@ opt_table_option_list opt_partition_option
   (void)($1);
   merge_nodes(table_elements, result, T_TABLE_ELEMENT_LIST, $7);
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $9);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 7,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
                            table_elements,       /* columns or primary key */
                            table_options,        /* table option(s) */
-                           $10,                 /* partition optition */
-                           NULL);               /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $10,                  /* partition optition */
+                           NULL,                 /* column group */
+                           NULL);                /* oracle兼容模式下存放临时表的 on commit 选项 */
   $$->reserved_ = 0;
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
- opt_table_option_list opt_partition_option opt_as select_stmt
+opt_table_option_list opt_partition_option with_column_group
 {
-  (void)($1);
-  (void)$11;
   ParseNode *table_elements = NULL;
   ParseNode *table_options = NULL;
+  (void)($1);
   merge_nodes(table_elements, result, T_TABLE_ELEMENT_LIST, $7);
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $9);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
@@ -4497,69 +4501,231 @@ opt_table_option_list opt_partition_option
                            $5,                   /* table name */
                            table_elements,       /* columns or primary key */
                            table_options,        /* table option(s) */
+                           $10,                 /* partition optition */
+                           $11,                 /* column group */
+                           NULL);               /* oracle兼容模式下存放临时表的 on commit 选项 */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
+ opt_table_option_list opt_partition_option select_stmt
+{
+  (void)($1);
+  ParseNode *table_elements = NULL;
+  ParseNode *table_options = NULL;
+  merge_nodes(table_elements, result, T_TABLE_ELEMENT_LIST, $7);
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           table_elements,       /* columns or primary key */
+                           table_options,        /* table option(s) */
                            $10,                  /* partition optition */
+                           NULL,                 /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $11);                 /* select_stmt */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
+ opt_table_option_list opt_partition_option AS select_stmt
+{
+  (void)($1);
+  (void)$11;
+  ParseNode *table_elements = NULL;
+  ParseNode *table_options = NULL;
+  merge_nodes(table_elements, result, T_TABLE_ELEMENT_LIST, $7);
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           table_elements,       /* columns or primary key */
+                           table_options,        /* table option(s) */
+                           $10,                  /* partition optition */
+                           NULL,                 /* column group */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
                            $12);                 /* select_stmt */
   $$->reserved_ = 0;
 }
-| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option opt_as select_stmt
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
+ opt_table_option_list opt_partition_option with_column_group opt_as select_stmt
 {
   (void)($1);
-  (void)$8;
+  (void)$12;
+  ParseNode *table_elements = NULL;
+  ParseNode *table_options = NULL;
+  merge_nodes(table_elements, result, T_TABLE_ELEMENT_LIST, $7);
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           table_elements,       /* columns or primary key */
+                           table_options,        /* table option(s) */
+                           $10,                  /* partition optition */
+                           $11,                  /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $13);                 /* select_stmt */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option select_stmt
+{
+  (void)($1);
   ParseNode *table_options = NULL;
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
                            NULL,                 /* columns or primary key */
                            table_options,        /* table option(s) */
                            $7,                   /* partition optition */
+                           NULL,                 /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $8);                  /* select_stmt */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option AS select_stmt
+{
+  (void)($1);
+  (void)$8;
+  ParseNode *table_options = NULL;
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           NULL,                 /* columns or primary key */
+                           table_options,        /* table option(s) */
+                           $7,                   /* partition optition */
+                           NULL,                 /* column group */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
                            $9);                  /* select_stmt */
   $$->reserved_ = 0;
 }
-| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor partition_option opt_as select_stmt
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option with_column_group opt_as select_stmt
 {
   (void)($1);
-  (void)$7;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  (void)$9;
+  ParseNode *table_options = NULL;
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           NULL,                 /* columns or primary key */
+                           table_options,        /* table option(s) */
+                           $7,                   /* partition optition */
+                           $8,                   /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $10);                  /* select_stmt */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor partition_option select_stmt
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
                            NULL,                 /* columns or primary key */
                            NULL,                 /* table option(s) */
                            $6,                   /* partition optition */
+                           NULL,                 /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $7);                  /* select_stmt */
+  $$->reserved_ = 1; /* mean partition optition is partition_option, not opt_partition_option*/
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor partition_option AS select_stmt
+{
+  (void)($1);
+  (void)$7;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           NULL,                 /* columns or primary key */
+                           NULL,                 /* table option(s) */
+                           $6,                   /* partition optition */
+                           NULL,                 /* column group */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
                            $8);                  /* select_stmt */
+  $$->reserved_ = 1; /* mean partition optition is partition_option, not opt_partition_option*/
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor partition_option with_column_group opt_as select_stmt
+{
+  (void)($1);
+  (void)$8;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           NULL,                 /* columns or primary key */
+                           NULL,                 /* table option(s) */
+                           $6,                   /* partition optition */
+                           $7,                   /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $9);                  /* select_stmt */
   $$->reserved_ = 1; /* mean partition optition is partition_option, not opt_partition_option*/
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor select_stmt
 {
   (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
                            NULL,                 /* columns or primary key */
                            NULL,                 /* table option(s) */
                            NULL,                 /* partition optition */
+                           NULL,                 /* column group */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
                            $6);                  /* select_stmt */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor with_column_group select_stmt
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           NULL,                 /* columns or primary key */
+                           NULL,                 /* table option(s) */
+                           NULL,                 /* partition optition */
+                           $6,                   /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $7);                  /* select_stmt */
   $$->reserved_ = 0;
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor AS select_stmt
 {
   (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
                            NULL,                 /* columns or primary key */
                            NULL,                 /* table option(s) */
                            NULL,                 /* partition optition */
+                           NULL,                 /* column group */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
                            $7);                  /* select_stmt */
+  $$->reserved_ = 0;
+}
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor with_column_group AS select_stmt
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
+                           $2,                   /* temporary option */
+                           $4,                   /* if not exists */
+                           $5,                   /* table name */
+                           NULL,                 /* columns or primary key */
+                           NULL,                 /* table option(s) */
+                           NULL,                 /* partition optition */
+                           $6,                   /* column group */
+                           NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
+                           $8);                  /* select_stmt */
   $$->reserved_ = 0;
 }
 ;
@@ -6070,6 +6236,12 @@ not NULLX
   $$->param_num_ = $2->param_num_;
   $$->sql_str_off_ = $2->sql_str_off_;
 }
+| SKIP_INDEX '(' opt_skip_index_type_list ')'
+{
+  ParseNode *opt_skip_index_type_list = NULL;
+  merge_nodes(opt_skip_index_type_list, result, T_COL_SKIP_INDEX_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COL_SKIP_INDEX, 1, opt_skip_index_type_list);
+}
 ;
 
 now_or_signed_literal:
@@ -6537,6 +6709,43 @@ auto_partition_option:
 auto_partition_type PARTITION SIZE partition_size PARTITIONS AUTO
 {
  malloc_non_terminal_node($$, result->malloc_pool_, T_AUTO_PARTITION, 2, $1, $4);
+}
+;
+
+column_group_element:
+ALL COLUMNS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALL_COLUMN_GROUP);
+}
+|
+EACH COLUMN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SINGLE_COLUMN_GROUP);
+}
+|
+relation_name '(' column_name_list ')'
+{
+  merge_nodes($$, result, T_EXPR_LIST ,$3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NORMAL_COLUMN_GROUP, 2, $1, $3);
+}
+;
+
+column_group_list:
+column_group_element
+{
+  $$ = $1;
+}
+|
+column_group_list ',' column_group_element
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+with_column_group:
+WITH COLUMN GROUP FOR column_group_list
+{
+  merge_nodes($$, result, T_COLUMN_GROUP ,$5);
 }
 ;
 
@@ -9633,6 +9842,14 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 | DYNAMIC_SAMPLING '(' dynamic_sampling_hint ')'
 {
   $$ = $3;
+}
+| USE_COLUMN_STORE_HINT '(' qb_name_option relation_factor_in_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_USE_COLUMN_STORE_HINT, 2, $3, $4);
+}
+| NO_USE_COLUMN_STORE_HINT '(' qb_name_option relation_factor_in_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_COLUMN_STORE_HINT, 2, $3, $4);
 }
 ;
 
@@ -15145,12 +15362,12 @@ ALTER SYSTEM CANCEL cancel_task_type TASK STRING_VALUE
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_TASK, 2, $4, $6);
 }
 |
-ALTER SYSTEM MAJOR FREEZE opt_tenant_list_v2
+ALTER SYSTEM MAJOR FREEZE opt_tenant_list_or_ls_or_tablet_id opt_rebuild_column_store
 {
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
   type->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FREEZE, 2, type, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FREEZE, 3, type, $5, $6);
 }
 |
 ALTER SYSTEM CHECKPOINT
@@ -15158,7 +15375,7 @@ ALTER SYSTEM CHECKPOINT
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
   type->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FREEZE, 2, type, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FREEZE, 3, type, NULL, NULL);
 }
 |
 ALTER SYSTEM MINOR FREEZE opt_tenant_list_or_ls_or_tablet_id opt_server_list opt_zone_desc
@@ -16604,6 +16821,16 @@ tenant_list_tuple opt_tablet_id
 }
 ;
 
+opt_rebuild_column_store:
+REBUILD COLUMN GROUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_REBUILD_COLUMN_STORE);
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+;
 
 ls_server_or_server_or_zone_or_tenant:
 ls ip_port tenant_name
@@ -18123,6 +18350,32 @@ ERROR_P
 }
 ;
 
+opt_skip_index_type_list:
+/*EMPTY*/
+{
+  $$ = NULL;
+}
+| skip_index_type
+{
+  $$ = $1;
+}
+| opt_skip_index_type_list ',' skip_index_type
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+skip_index_type:
+MIN_MAX
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_COL_SKIP_INDEX_MIN_MAX);
+}
+| SUM
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_COL_SKIP_INDEX_SUM)
+}
+;
+
 unreserved_keyword:
 unreserved_keyword_normal { $$=$1;}
 | unreserved_keyword_special { $$=$1;}
@@ -18477,6 +18730,7 @@ ACCOUNT
 |       MINVALUE
 |       MIN_CPU
 |       MIN_IOPS
+|       MIN_MAX
 |       MINOR
 |       MIN_ROWS
 |       MINUTE
@@ -18684,6 +18938,7 @@ ACCOUNT
 |       SIMPLE
 |       SKIP_BLANK_LINES
 |       SKIP_HEADER
+|       SKIP_INDEX
 |       SLAVE
 |       SLOW
 |       SNAPSHOT

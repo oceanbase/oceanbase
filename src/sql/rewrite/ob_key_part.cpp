@@ -1483,10 +1483,15 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocat
 {
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown()
-      && !ObSQLUtils::is_same_type_for_compare(value.get_meta(), pos.column_type_.get_obj_meta())) {
+      && (!ObSQLUtils::is_same_type_for_compare(value.get_meta(), pos.column_type_.get_obj_meta())
+          || value.is_decimal_int())) {
     const ObObj *dest_val = NULL;
     ObCollationType collation_type = pos.column_type_.get_collation_type();
     ObCastCtx cast_ctx(&alloc, &dtc_params, CM_WARN_ON_FAIL, collation_type);
+    ObAccuracy acc(pos.column_type_.get_accuracy());
+    if (pos.column_type_.is_decimal_int()) {
+      cast_ctx.res_accuracy_ = &acc;
+    }
     ObObj &tmp_start = value;
     ObExpectType expect_type;
     expect_type.set_type(pos.column_type_.get_type());

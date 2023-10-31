@@ -158,8 +158,8 @@ int ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(const common::ObStr
       LOG_WARN("failed to read data_header", K(ret), K(*common_header), K(path), K(meta_index), K(buffer_reader));
     } else {
       for (int64_t i = 0; i < id_mappings_meta.sstable_count_; ++i) {
-        const ObBackupMacroBlockIDMapping &mapping = id_mappings_meta.id_map_list_[i];
-        FLOG_INFO("read macro block id mapping metas", K(path), K(meta_index), K(mapping));
+        const ObBackupMacroBlockIDMapping *mapping = id_mappings_meta.id_map_list_[i];
+        FLOG_INFO("read macro block id mapping metas", K(path), K(meta_index), KPC(mapping));
       }
     }
   }

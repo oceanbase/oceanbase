@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace common
 {
-  class ObISQLClient;
+class ObISQLClient;
 }
 namespace rootserver
 {
@@ -43,7 +43,7 @@ private:
 };
 
 #define FREEZE_TIME_GUARD \
-  rootserver::ObFreezeTimeGuard freeze_time_guard(__FILE__, __LINE__, __FUNCTION__, "[RS] ")
+  rootserver::ObFreezeTimeGuard freeze_time_guard(__FILE__, __LINE__, __FUNCTION__, "[RS_COMPACTION] ")
 
 class ObFreezeTimeGuard
 {
@@ -65,6 +65,7 @@ private:
   const char * const func_name_;
   const char * const log_mod_;
 };
+
 
 } // end namespace rootserver
 } // end namespace oceanbase

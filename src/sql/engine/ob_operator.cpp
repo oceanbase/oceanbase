@@ -645,6 +645,67 @@ int ObOperator::output_expr_sanity_check_batch()
   return ret;
 }
 
+int ObOperator::output_expr_decint_datum_len_check()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec_.output_.count(); ++i) {
+    ObDatum *datum = NULL;
+    const ObExpr *expr = spec_.output_[i];
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (!ob_is_decimal_int(expr->datum_meta_.get_type())) {
+      // do nothing
+    } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+      LOG_WARN("evaluate expression failed", K(ret));
+    } else {
+      const int16_t precision = expr->datum_meta_.precision_;
+      if (OB_UNLIKELY(precision < 0)) {
+        LOG_WARN("the precision of decimal int expr is unknown", K(ret), K(precision), K(*expr));
+      } else if (!datum->is_null() && datum->len_ != 0) {
+        const int len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+        OB_ASSERT (len == datum->len_);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOperator::output_expr_decint_datum_len_check_batch()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec_.output_.count(); ++i) {
+    const ObExpr *expr = spec_.output_[i];
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (!ob_is_decimal_int(expr->datum_meta_.get_type())) {
+      // do nothing
+    } else {
+      const int16_t precision = expr->datum_meta_.precision_;
+      const int len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+      if (OB_UNLIKELY(precision < 0)) {
+        LOG_WARN("the precision of decimal int expr is unknown", K(ret), K(precision), K(*expr));
+      } else if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
+        LOG_WARN("evaluate expression failed", K(ret));
+      } else if (!expr->is_batch_result()) {
+        const ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
+        if (!datum.is_null() && datum.len_ != 0) {
+          OB_ASSERT (len == datum.len_);
+        }
+      } else {
+        const ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
+        for (int64_t j = 0; j < brs_.size_; j++) {
+          if (!brs_.skip_->at(j) && !datums[j].is_null()) {
+            OB_ASSERT (len == datums[j].len_);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // copy from ob_phy_operator.cpp
 int ObOperator::open()
 {
@@ -1105,6 +1166,13 @@ int ObOperator::get_next_row()
             }
           }
 #endif
+#ifndef NDEBUG
+          if (OB_SUCC(ret) && !filtered) {
+            if (OB_FAIL(output_expr_decint_datum_len_check())) {
+              LOG_WARN("output expr sanity check failed", K(ret));
+            }
+          }
+#endif
         }
         break;
       }
@@ -1224,6 +1292,13 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
 #ifdef ENABLE_SANITY
         if (OB_SUCC(ret) && !all_filtered) {
           if (OB_FAIL(output_expr_sanity_check_batch())) {
+            LOG_WARN("output expr sanity check batch failed", K(ret));
+          }
+        }
+#endif
+#ifndef NDEBUG
+        if (OB_SUCC(ret) && !all_filtered) {
+          if (OB_FAIL(output_expr_decint_datum_len_check_batch())) {
             LOG_WARN("output expr sanity check batch failed", K(ret));
           }
         }

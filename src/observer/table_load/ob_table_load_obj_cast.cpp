@@ -351,6 +351,11 @@ int ObTableLoadObjCaster::to_type(const ObObjType &expect_type, const share::sch
     if (expect_type == ObJsonType) {
       cast_ctx.cast_mode_ |= CM_ERROR_ON_SCALE_OVER;
     }
+    ObAccuracy res_acc;
+    if (expect_type == ObDecimalIntType) {
+      res_acc = accuracy;
+      cast_ctx.res_accuracy_ = &res_acc;
+    }
     if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, src, dst))) {
       LOG_WARN("fail to cast ObObj", KR(ret), K(src), K(expect_type));
     }

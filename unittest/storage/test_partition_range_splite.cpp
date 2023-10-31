@@ -55,6 +55,8 @@ using namespace memtable;
 namespace storage
 {
 
+static ObArenaAllocator global_allocator_;
+
 class TestRangeSpliter: public ObMultiVersionSSTableTest
 {
 public:

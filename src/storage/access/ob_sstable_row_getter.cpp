@@ -35,6 +35,7 @@ void ObSSTableRowGetter::reset()
   access_ctx_ = nullptr;
   rowkey_ = nullptr;
   prefetcher_.reset();
+  read_handle_.reset();
 }
 
 void ObSSTableRowGetter::reuse()
@@ -43,6 +44,7 @@ void ObSSTableRowGetter::reuse()
   is_opened_ = false;
   has_fetched_ = false;
   prefetcher_.reuse();
+  read_handle_.reset();
 }
 
 int ObSSTableRowGetter::inner_open(
@@ -74,7 +76,7 @@ int ObSSTableRowGetter::inner_open(
         LOG_WARN("fail to init prefetcher", K(ret));
       }
     } else if (OB_FAIL(prefetcher_.switch_context(
-        type_, *sstable_, iter_param.get_read_info()->get_datum_utils(), access_ctx, query_range))) {
+        type_, *sstable_, iter_param, access_ctx, query_range))) {
       LOG_WARN("fail to switch context for prefetcher, ", K(ret));
     }
     if (OB_SUCC(ret)) {
@@ -100,6 +102,8 @@ int ObSSTableRowGetter::inner_get_next_row(const ObDatumRow *&store_row)
     LOG_WARN("The ObSSTableRowGetter has not been opened", K(ret));
   } else if (has_fetched_) {
     ret = OB_ITER_END;
+  } else if (OB_FAIL(prefetcher_.lookup_in_index_tree(read_handle_, true))) {
+    LOG_WARN("Fail to prefetch", K(ret), K_(read_handle));
   } else if (OB_FAIL(fetch_row(read_handle_, store_row))) {
     if (OB_ITER_END == ret) {
       has_fetched_ = true;
@@ -110,7 +114,7 @@ int ObSSTableRowGetter::inner_get_next_row(const ObDatumRow *&store_row)
     ObDatumRow &datum_row = *const_cast<ObDatumRow *>(store_row);
     if (!store_row->row_flag_.is_not_exist() &&
         iter_param_->need_scn_ &&
-        OB_FAIL(set_row_scn(*iter_param_, *sstable_, store_row))) {
+        OB_FAIL(set_row_scn(*iter_param_, store_row))) {
       LOG_WARN("failed to set row scn", K(ret));
     }
     EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);

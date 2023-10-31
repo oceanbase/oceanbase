@@ -18,8 +18,9 @@
 #include "share/schema/ob_table_schema.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_index_block_tree_cursor.h"
+#include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
 #include "storage/blocksstable/ob_macro_block_reader.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/ob_block_manager.h"
 
 namespace oceanbase
@@ -71,9 +72,8 @@ public:
   virtual ~ObIndexBlockMicroIterator() {}
 
   int init(
-      const blocksstable::ObDatumRange &range,
+      const blocksstable::ObMacroBlockDesc &macro_desc,
       const ObITableReadInfo &read_info,
-      const blocksstable::MacroBlockId &macro_id,
       const common::ObIArray<blocksstable::ObMicroIndexInfo> &micro_block_infos,
       const common::ObIArray<blocksstable::ObDatumRowkey> &endkeys,
       const ObRowStoreType row_store_type,
@@ -94,6 +94,7 @@ private:
   blocksstable::ObDatumRange range_;
   blocksstable::ObMicroBlock micro_block_;
   blocksstable::ObMacroBlockHandle macro_handle_;
+  blocksstable::ObCGRowKeyTransHelper rowkey_helper_;
   common::ObArenaAllocator allocator_;
   bool is_inited_;
 

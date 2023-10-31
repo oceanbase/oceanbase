@@ -62,9 +62,7 @@ private:
   int get_tablet_with_addr(
       const TabletItemAddrInfo &addr_info,
       ObTabletHandle &tablet_handle);
-  int do_rollback(
-      common::ObArenaAllocator &allocator,
-      const ObMetaDiskAddr &load_addr);
+  int do_rollback(const ObMetaDiskAddr &load_addr);
   int write_ls_checkpoint(blocksstable::MacroBlockId &ls_entry_block);
   int write_tablet_checkpoint(ObLS &ls, blocksstable::MacroBlockId &tablet_meta_entry);
   int copy_one_tablet_item(

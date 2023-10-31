@@ -46,6 +46,8 @@ private:
   
   int set_basic_infos(const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &aux_vp_table_schema);
+
+  int set_lob_table_column_store_if_need(share::schema::ObTableSchema &table_schema);
 private:
   ObDDLService &ddl_service_;
 private:

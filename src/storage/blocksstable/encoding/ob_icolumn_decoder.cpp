@@ -23,34 +23,36 @@ using namespace common;
 int ObIColumnDecoder::get_is_null_bitmap_from_fixed_column(
     const ObColumnDecoderCtx &col_ctx,
     const unsigned char* col_data,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   // 定长列从column meta中直接读 bit packing 的 is_null_bitmap
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(col_ctx.micro_block_header_->row_count_ != result_bitmap.size())
+  if (OB_UNLIKELY(pd_filter_info.count_!= result_bitmap.size())
           || OB_ISNULL(col_data)
           || OB_UNLIKELY(!col_ctx.is_fix_length()
               && !col_ctx.is_bit_packing())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument for getting isnull bitmap from fixed column", K(ret));
+    LOG_WARN("Invalid argument for getting isnull bitmap from fixed column",
+        K(ret), K(pd_filter_info), K(result_bitmap.size()));
   } else {
     if (col_ctx.has_extend_value()) {
-      int64_t row_count = col_ctx.micro_block_header_->row_count_;
-      int64_t bm_block_count = (row_count % ObBitmap::BITS_PER_BLOCK == 0)
-                                ? row_count / ObBitmap::BITS_PER_BLOCK
-                                : row_count / ObBitmap::BITS_PER_BLOCK + 1;
-      int64_t bm_block_bits = ObBitmap::BITS_PER_BLOCK;
+      int64_t row_count = pd_filter_info.count_;
+      int64_t bm_block_count = (row_count % ObIColumnDecoder::BITS_PER_BLOCK == 0)
+                                ? row_count / ObIColumnDecoder::BITS_PER_BLOCK
+                                : row_count / ObIColumnDecoder::BITS_PER_BLOCK + 1;
+      int64_t bm_block_bits = ObIColumnDecoder::BITS_PER_BLOCK;
       uint64_t read_buf[bm_block_count];
       MEMSET(read_buf, 0, sizeof(uint64_t) * bm_block_count);
       for (int64_t i = 0; OB_SUCC(ret) && i < bm_block_count - 1; ++i) {
-        if (OB_FAIL(ObBitStream::get(col_data, i * bm_block_bits, bm_block_bits, read_buf[i]))) {
+        if (OB_FAIL(ObBitStream::get(col_data, pd_filter_info.start_ + i * bm_block_bits, bm_block_bits, read_buf[i]))) {
           LOG_WARN("Get extended value from column meta failed", K(ret), K(col_ctx));
         }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObBitStream::get(
                     col_data,
-                    (bm_block_count - 1) * bm_block_bits,
+                    pd_filter_info.start_ + (bm_block_count - 1) * bm_block_bits,
                     bm_block_bits,
                     read_buf[bm_block_count - 1]))) {
         LOG_WARN("Get extended value from column meta failed", K(ret), K(col_ctx));
@@ -67,24 +69,26 @@ int ObIColumnDecoder::get_is_null_bitmap_from_fixed_column(
 int ObIColumnDecoder::get_is_null_bitmap_from_var_column(
     const ObColumnDecoderCtx &col_ctx,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   // 变长列需要遍历对应row区并更新result bitmap
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(col_ctx.micro_block_header_->row_count_ != result_bitmap.size())
+  if (OB_UNLIKELY(pd_filter_info.count_ != result_bitmap.size())
           || OB_ISNULL(row_index)
           || OB_UNLIKELY(col_ctx.is_fix_length()
               || col_ctx.is_bit_packing())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument for getting isnull bitmap from var column", K(ret));
+    LOG_WARN("Invalid argument for getting isnull bitmap from var column",
+        K(ret), K(pd_filter_info), K(result_bitmap.size()));
   } else {
     if (col_ctx.has_extend_value()) {
       uint64_t value;
       const char* row_data = nullptr;
       int64_t row_len = 0;
-      for (int64_t row_id = 0;
-          OB_SUCC(ret) && row_id < col_ctx.micro_block_header_->row_count_;
-          ++row_id) {
+      int64_t row_id = 0;
+      for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+        row_id = offset + pd_filter_info.start_;
         if (OB_FAIL(locate_row_data(col_ctx, row_index, row_id, row_data, row_len))) {
           LOG_WARN("Failed to get row_data offset from row index", K(ret));
         } else if (OB_FAIL(ObBitStream::get(
@@ -94,8 +98,8 @@ int ObIColumnDecoder::get_is_null_bitmap_from_var_column(
                               value))) {
           LOG_WARN("Get extended value from row data failed", K(ret), K(col_ctx));
         } else if (value & static_cast<uint64_t>(1)) {
-          if (OB_FAIL(result_bitmap.set(row_id))) {
-            LOG_WARN("Failed to set result bitmap", K(ret), K(row_id));
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
           }
         }
       }
@@ -168,6 +172,7 @@ int ObIColumnDecoder::get_null_count(
   int ret = OB_SUCCESS;
   null_count = 0;
   common::ObObj cell;
+  ObStorageDatum datum;
   const char *row_data = NULL;
   int64_t row_len = 0;
   int64_t row_id = 0;
@@ -178,9 +183,9 @@ int ObIColumnDecoder::get_null_count(
     }
     ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(decode(const_cast<ObColumnDecoderCtx &>(ctx), cell, row_id, bs, row_data, row_len))) {
-      LOG_WARN("failed to decode cell", K(ret));
-    } else if (cell.is_null()) {
+    } else if (OB_FAIL(decode(const_cast<ObColumnDecoderCtx &>(ctx), datum, row_id, bs, row_data, row_len))) {
+      LOG_WARN("failed to decode datum", K(ret));
+    } else if (datum.is_null()) {
       null_count++;
     }
   }

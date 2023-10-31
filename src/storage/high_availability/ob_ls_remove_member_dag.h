@@ -19,7 +19,7 @@
 #include "share/ob_srv_rpc_proxy.h" // ObPartitionServiceRpcProxy
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "observer/ob_rpc_processor_simple.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "ob_ls_remove_member_handler.h"
 #include "storage/ob_storage_rpc.h"
 

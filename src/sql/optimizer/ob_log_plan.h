@@ -489,7 +489,7 @@ public:
   struct GroupingOpHelper
   {
     GroupingOpHelper() :
-      can_scalar_pushdown_(false),
+      can_storage_pushdown_(false),
       can_basic_pushdown_(false),
       can_three_stage_pushdown_(false),
       can_rollup_pushdown_(false),
@@ -510,7 +510,7 @@ public:
     }
     virtual ~GroupingOpHelper() {}
 
-    bool can_scalar_pushdown_;
+    bool can_storage_pushdown_;
     bool can_basic_pushdown_;
     bool can_three_stage_pushdown_;
     bool can_rollup_pushdown_;
@@ -531,19 +531,21 @@ public:
     // for rollup distributor and collector
     ObRawExpr *rollup_id_expr_;
 
+    ObArray<ObRawExpr*> pushdown_groupby_columns_;
     // distinct of group expr
     double group_ndv_;
     // distinct of group expr and distinct expr
     double group_distinct_ndv_;
 
-    TO_STRING_KV(K_(can_scalar_pushdown),
+    TO_STRING_KV(K_(can_storage_pushdown),
                  K_(can_basic_pushdown),
                  K_(can_three_stage_pushdown),
                  K_(can_rollup_pushdown),
                  K_(force_use_hash),
                  K_(force_use_merge),
                  K_(is_scalar_group_by),
-                 K_(distinct_exprs));
+                 K_(distinct_exprs),
+                 K_(pushdown_groupby_columns));
   };
 
   /**
@@ -738,7 +740,12 @@ public:
                           bool &can_pullup);
 
   int try_push_aggr_into_table_scan(ObLogicalOperator *top,
-                                    const ObIArray<ObAggFunRawExpr *> &aggr_items);
+                                    const ObIArray<ObAggFunRawExpr *> &aggr_items,
+                                    const ObIArray<ObRawExpr*> &groupby_columns);
+
+  int try_push_aggr_into_table_scan(ObIArray<CandidatePlan> &candi_plans,
+                                    const ObIArray<ObAggFunRawExpr *> &aggr_items,
+                                    const ObIArray<ObRawExpr*> &groupby_columns);
 
   int get_grouping_style_exchange_info(const common::ObIArray<ObRawExpr*> &partition_exprs,
                                        const EqualSets &equal_sets,
@@ -753,10 +760,31 @@ public:
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
                            GroupingOpHelper &distinct_helper);
 
-  bool is_tenant_enable_aggr_push_down(ObSQLSessionInfo &session_info);
+  int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
+                                      bool &can_push);
 
-  int check_scalar_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &aggrs,
-                                    bool &can_push);
+  int check_tenant_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
+                                         bool &enable_aggr_push_down,
+                                         bool &enable_groupby_push_down);
+
+  int check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &aggrs,
+                                     const ObIArray<ObRawExpr *> &group_exprs,
+                                     ObIArray<ObRawExpr *> &pushdown_groupby_columns,
+                                     bool &can_push);
+
+  int check_table_columns_can_storage_pushdown(const uint64_t tenant_id,
+                                               const uint64_t table_id,
+                                               const ObIArray<ObRawExpr *> &pushdown_groupby_columns,
+                                               bool &can_push);
+
+  int check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
+                                             const ObIArray<ObAggFunRawExpr *> &aggrs,
+                                             ObIArray<ObRawExpr *> &pushdown_groupby_columns,
+                                             bool &can_push);
+
+  int check_normal_aggr_can_storage_pushdown(const uint64_t table_id,
+                                             const ObIArray<ObAggFunRawExpr *> &aggrs,
+                                             bool &can_push);
 
   int check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                    const EqualSets &equal_sets,
@@ -1322,6 +1350,11 @@ public:
                                       const ObIArray<ObRawExpr*> &left_join_conditions,
                                       const ObIArray<ObRawExpr*> &right_join_conditions,
                                       ObIArray<JoinFilterInfo> &join_filter_infos);
+
+  int will_use_column_store(const uint64_t table_id,
+                            const uint64_t index_id,
+                            bool &use_column_store,
+                            bool &use_row_store);
 
   int pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                          ObLogicalOperator* child_op,

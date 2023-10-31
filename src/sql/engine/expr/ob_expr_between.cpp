@@ -104,6 +104,7 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
     if (OB_ISNULL(cmp_func_1 = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                         left_meta.type_, val_meta.type_,
                                                         left_meta.scale_, val_meta.scale_,
+                                                        left_meta.precision_, val_meta.precision_,
                                                         is_oracle_mode(),
                                                         cmp_cs_type,
                                                         has_lob_header1))) {
@@ -113,6 +114,7 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
     } else if (OB_ISNULL(cmp_func_2 = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                         val_meta.type_, right_meta.type_,
                                                         val_meta.scale_, right_meta.scale_,
+                                                        val_meta.precision_, right_meta.precision_,
                                                         is_oracle_mode(),
                                                         cmp_cs_type,
                                                         has_lob_header2))) {

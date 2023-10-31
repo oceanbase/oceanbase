@@ -132,6 +132,7 @@ public:
   void set_data_type(const common::ObObjType &data_type);
   common::ObObjType get_data_type() const;
 
+  inline common::ObScale get_scale() const;
   common::ObObjTypeClass get_type_class() const;
   inline const common::ObObjMeta &get_result_meta() const;
   const sql::ObExprResType &get_result_type() const;
@@ -176,6 +177,11 @@ inline void ObIRawExpr::set_data_type(const common::ObObjType &data_type)
 inline common::ObObjType ObIRawExpr::get_data_type() const
 {
   return result_type_.get_type();
+}
+
+inline common::ObScale ObIRawExpr::get_scale() const
+{
+  return result_type_.get_scale();
 }
 
 inline common::ObObjTypeClass ObIRawExpr::get_type_class() const

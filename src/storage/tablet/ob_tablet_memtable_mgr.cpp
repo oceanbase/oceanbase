@@ -42,7 +42,7 @@ ObTabletMemtableMgr::ObTabletMemtableMgr()
     medium_info_recorder_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTabletMemtableMgr) <= 2048, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletMemtableMgr) <= 480, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -503,7 +503,7 @@ int ObTabletMemtableMgr::unset_logging_blocked_for_active_memtable(memtable::ObI
   return ret;
 }
 
-int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle, bool is_force_freeze)
+int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle)
 {
   handle.reset();
   memtable::ObIMemtable *active_memtable = nullptr;
@@ -524,9 +524,6 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV
   } else if (FALSE_IT(memtable = static_cast<ObMemtable*>(active_memtable))) {
   } else if (memtable->allow_freeze()) {
     memtable->set_is_tablet_freeze();
-    if (is_force_freeze) {
-      memtable->set_is_force_freeze();
-    }
   } else {
     handle.reset();
     ret = OB_ENTRY_NOT_EXIST;

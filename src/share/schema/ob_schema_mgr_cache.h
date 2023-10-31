@@ -78,6 +78,7 @@ struct ObSchemaMgrItem
     MOD_SPI_RESULT_SET       = 13,
     MOD_PL_PREPARE_RESULT    = 14,
     MOD_PARTITION_BALANCE    = 15,
+    MOD_RS_MAJOR_CHECK       = 16,
     MOD_MAX
   };
   ObSchemaMgrItem()

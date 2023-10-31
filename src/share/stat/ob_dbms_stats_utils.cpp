@@ -21,6 +21,11 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_item.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_json_pl_utils.h"
+#endif
 
 namespace oceanbase
 {
@@ -812,25 +817,47 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(const ObObj *old_obj,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null");
   } else if (ObColumnStatParam::is_valid_opt_col_type(old_obj->get_type()) && old_obj->is_string_type()) {
-    ObString str;
-    if (OB_FAIL(old_obj->get_string(str))) {
-      LOG_WARN("failed to get string", K(ret), K(str));
-    } else {
+    if(old_obj->is_lob_storage()) {
       ObObj *tmp_obj = NULL;
-      int64_t truncated_str_len = get_truncated_str_len(str, old_obj->get_collation_type());
-      if (truncated_str_len == str.length()) {
-        //do nothing
-      } else if (OB_UNLIKELY(truncated_str_len < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(old_obj), K(str), K(truncated_str_len));
+      ObString str = old_obj->get_string();
+      bool can_reuse = false;
+      if (OB_FAIL(check_text_can_reuse(*old_obj, can_reuse))) {
+        LOG_WARN("failed to check text obj can reuse", K(ret), K(*old_obj));
+      } else if (can_reuse) {
+        // do nothing
+      } else if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(&alloc, *old_obj, str, OPT_STATS_MAX_VALUE_CHAR_LEN))) {
+        LOG_WARN("failed to read prefix string data", K(ret));
       } else if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc buf", K(ret));
+      } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(alloc, str, *tmp_obj))) {
+        LOG_WARN("failed to convert str to lob", K(ret));
       } else {
-        tmp_obj->set_varchar(str.ptr(), static_cast<int32_t>(truncated_str_len));
-        tmp_obj->set_meta_type(old_obj->get_meta());
+        tmp_obj->set_type(old_obj->get_type());
         new_obj = tmp_obj;
         is_truncated = true;
+      }
+    } else {
+      ObString str;
+      if (OB_FAIL(old_obj->get_string(str))) {
+        LOG_WARN("failed to get string", K(ret), K(str));
+      } else {
+        ObObj *tmp_obj = NULL;
+        int64_t truncated_str_len = get_truncated_str_len(str, old_obj->get_collation_type());
+        if (truncated_str_len == str.length()) {
+          //do nothing
+        } else if (OB_UNLIKELY(truncated_str_len < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(old_obj), K(str), K(truncated_str_len));
+        } else if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc buf", K(ret));
+        } else {
+          tmp_obj->set_varchar(str.ptr(), static_cast<int32_t>(truncated_str_len));
+          tmp_obj->set_meta_type(old_obj->get_meta());
+          new_obj = tmp_obj;
+          is_truncated = true;
+        }
       }
     }
   }
@@ -842,27 +869,44 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(const ObObj *old_obj,
 }
 
 
-int ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(ObObj &obj)
+int ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj.get_type()) && obj.is_string_type()) {
-    ObString str;
-    if (OB_FAIL(obj.get_string(str))) {
-      LOG_WARN("failed to get string", K(ret), K(str), K(obj));
+    if(obj.is_lob_storage()) {
+      ObObjType ori_type = obj.get_type();
+      ObString str = obj.get_string();
+      bool can_reuse = false;
+      if (OB_FAIL(check_text_can_reuse(obj, can_reuse))) {
+        LOG_WARN("failed to check text obj can reuse", K(ret), K(obj));
+      } else if (can_reuse) {
+        // do nothing
+      } else if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(&allocator, obj, str, OPT_STATS_MAX_VALUE_CHAR_LEN))) {
+        LOG_WARN("failed to read prefix string data", K(ret));
+      } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(allocator, str, obj))) {
+        LOG_WARN("failed to convert str to lob", K(ret));
+      } else {
+        obj.set_type(ori_type);
+        LOG_TRACE("Succeed to shadow truncate text obj for opt stats", K(ret), K(obj), K(str));
+      }
     } else {
+      ObString str = obj.get_string();
       int64_t truncated_str_len = get_truncated_str_len(str, obj.get_collation_type());
       if (OB_UNLIKELY(truncated_str_len < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(obj), K(str), K(truncated_str_len));
+      } else if (truncated_str_len == str.length()) {
+        // do nothing
       } else {
         str.assign_ptr(str.ptr(), static_cast<int32_t>(truncated_str_len));
         obj.set_common_value(str);
-        LOG_TRACE("Succeed to shadow truncate string obj for opt stats", K(obj));
       }
+      LOG_TRACE("Succeed to shadow truncate string obj for opt stats", K(ret), K(obj), K(str), K(truncated_str_len));
     }
   }
   return ret;
 }
+
 
 int64_t ObDbmsStatsUtils::get_truncated_str_len(const ObString &str, const ObCollationType cs_type)
 {
@@ -875,6 +919,24 @@ int64_t ObDbmsStatsUtils::get_truncated_str_len(const ObString &str, const ObCol
   }
   LOG_TRACE("Succeed to get truncated str len", K(str), K(cs_type), K(truncated_str_len));
   return truncated_str_len;
+}
+
+int64_t ObDbmsStatsUtils::check_text_can_reuse(const ObObj &obj, bool &can_reuse)
+{
+  int ret = OB_SUCCESS;
+  ObString str = obj.get_string();
+  ObLobLocatorV2 lob(str, obj.has_lob_header());
+  if (lob.has_inrow_data()) {
+    if (OB_FAIL(lob.get_inrow_data(str))) {
+      LOG_WARN("failed to get inrow data", K(ret));
+    } else {
+      int64_t mb_len = ObCharset::strlen_char(obj.get_collation_type(), str.ptr(), str.length());
+      if (mb_len <= OPT_STATS_MAX_VALUE_CHAR_LEN) {
+        can_reuse = true;
+      }
+    }
+  }
+  return ret;
 }
 
 int ObDbmsStatsUtils::get_current_opt_stats(const ObTableStatParam &param,

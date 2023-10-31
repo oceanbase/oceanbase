@@ -154,6 +154,7 @@ int ObExprTimeBase::cg_expr(ObExprCGCtx &op_cg_ctx,
 
 static int ob_expr_convert_to_time(const ObDatum &datum,
                                   ObObjType type,
+                                  const ObScale scale,
                                   bool with_date,
                                   bool is_dayofmonth,
                                   ObEvalCtx &ctx,
@@ -169,7 +170,7 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
     ObTime ot2;
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(session->get_sql_mode());
-    if (OB_FAIL(ob_datum_to_ob_time_with_date(datum, type, get_timezone_info(session),
+    if (OB_FAIL(ob_datum_to_ob_time_with_date(datum, type, scale, get_timezone_info(session),
         ot2, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), is_dayofmonth, date_sql_mode,
         has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
@@ -178,7 +179,8 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
     }
   } else {
     ObTime ot2(DT_TYPE_TIME);
-    if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, get_timezone_info(session), ot2, has_lob_header))) {
+    if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, scale, get_timezone_info(session),
+                                                 ot2, has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
     } else {
       ot = ot2;
@@ -202,8 +204,9 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
     expr_datum.set_null();
   } else {
     ObTime ot;
-    if (OB_FAIL(ob_expr_convert_to_time(*param_datum, expr.args_[0]->datum_meta_.type_, with_date,
-                                        is_dayofmonth, ctx, ot, expr.args_[0]->obj_meta_.has_lob_header()))) {
+    if (OB_FAIL(ob_expr_convert_to_time(*param_datum, expr.args_[0]->datum_meta_.type_,
+                                        expr.args_[0]->datum_meta_.scale_, with_date, is_dayofmonth,
+                                        ctx, ot, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(lbt()), K(session->get_stmt_type()));
       LOG_USER_WARN(OB_ERR_CAST_VARCHAR_TO_TIME);
       uint64_t cast_mode = 0;

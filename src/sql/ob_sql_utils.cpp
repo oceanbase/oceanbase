@@ -100,6 +100,20 @@ ObSqlArrayExpandGuard::~ObSqlArrayExpandGuard()
   }
 }
 
+int ObSQLUtils::check_enable_decimalint(const ObSQLSessionInfo *session, bool &enable_decimalint)
+{
+  int ret = OB_SUCCESS;
+  enable_decimalint = false;
+  if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    enable_decimalint = (const_cast<ObSQLSessionInfo *>(session)->is_enable_decimal_int_type()
+                         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0);
+  }
+  return ret;
+}
+
 bool ObSQLUtils::is_trans_commit_need_disconnect_err(int err)
 {
   bool bool_ret = true;
@@ -3199,6 +3213,9 @@ bool ObSQLUtils::is_same_type_for_compare(const ObObjMeta &meta1, const ObObjMet
     is_same = true;
     if (meta1.is_string_type()) {
       is_same = meta1.get_collation_type() == meta2.get_collation_type();
+    }
+    if (meta1.is_decimal_int()) {
+      is_same = meta1.get_scale() == meta2.get_scale();
     }
   }
   LOG_DEBUG("is same type for compare", K(meta1), K(meta2), K(is_same), K(lbt()));

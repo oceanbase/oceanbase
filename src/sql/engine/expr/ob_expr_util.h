@@ -107,7 +107,7 @@ public:
   // or ObNumberType in oracle.
   //
   // Keep %int_val unchanged if datum is NULL or datum->is_null().
-  static int get_int_param_val(common::ObDatum *datum, int64_t &int_val);
+  static int get_int_param_val(common::ObDatum *datum, bool is_decint, int64_t &int_val);
 
   // Set the ASCII string to expression result.
   // e.g.:

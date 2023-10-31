@@ -22,6 +22,13 @@
 
 namespace oceanbase
 {
+
+namespace blocksstable
+{
+struct ObDatumRowkey;
+struct ObDatumRange;
+}
+
 namespace storage
 {
 class ObLSTabletService;
@@ -325,7 +332,7 @@ public:  // getter && setter
   int64_t inc_write_ref() { return ATOMIC_AAF(&write_ref_, 1); }
   int64_t dec_write_ref() { return ATOMIC_AAF(&write_ref_, -1); }
   int64_t get_write_ref() const override { return ATOMIC_LOAD(&write_ref_); }
-  int64_t get_buckets_cnt() const { return tx_data_map_->get_buckets_cnt(); }
+  int64_t get_buckets_cnt() const { return OB_NOT_NULL(tx_data_map_) ? tx_data_map_->get_buckets_cnt() : 0; }
   ObTxDataMemtable::State get_state() { return state_; }
   ObTxDataLinkNode *get_sorted_list_head() { return &sort_list_head_; }
   const char* get_state_string();

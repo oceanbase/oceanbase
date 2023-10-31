@@ -1784,6 +1784,33 @@ int ObSchemaChecker::find_fake_cte_schema(common::ObString tblname, ObNameCaseMo
   return ret;
 }
 
+int ObSchemaChecker::adjust_fake_cte_column_type(uint64_t table_id,
+                                                 uint64_t column_id,
+                                                 const common::ColumnType &type,
+                                                 const common::ObAccuracy &accuracy)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema *table = NULL;
+  ObColumnSchemaV2 *column_schema = NULL;
+  for (int64_t i = 0; i < tmp_cte_schemas_.count(); i++) {
+    if (tmp_cte_schemas_.at(i)->get_table_id() == table_id) {
+      table = tmp_cte_schemas_.at(i);
+      break;
+    }
+  }
+  if (NULL == table) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table is not exist", K(table_id));
+  } else if (OB_ISNULL(column_schema = table->get_column_schema(column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    column_schema->set_data_type(type);
+    column_schema->set_accuracy(accuracy);
+  }
+  return ret;
+}
+
 int ObSchemaChecker::get_schema_version(const uint64_t tenant_id, uint64_t table_id, share::schema::ObSchemaType schema_type, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;

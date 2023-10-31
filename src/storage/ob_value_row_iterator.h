@@ -86,6 +86,7 @@ private:
   ObRelativeTable *relative_table_;
   share::schema::ObTableParam *table_param_;
   common::ObIAllocator &allocator_;
+  blocksstable::ObNewRowBuilder new_row_builder_;
 };
 } // end namespace storage
 } // end namespace oceanbase

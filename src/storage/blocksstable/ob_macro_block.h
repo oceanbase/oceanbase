@@ -10,10 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OB_MACRO_BLOCK_H_
-#define OB_MACRO_BLOCK_H_
+#ifndef STORAGE_BLOCKSSTABLE_OB_MACRO_BLOCK_H_
+#define STORAGE_BLOCKSSTABLE_OB_MACRO_BLOCK_H_
 
 #include "lib/compress/ob_compress_util.h"
+#include "index_block/ob_index_block_util.h"
 #include "ob_block_sstable_struct.h"
 #include "ob_data_buffer.h"
 #include "ob_imicro_block_writer.h"
@@ -22,7 +23,7 @@
 #include "share/ob_encryption_util.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/compaction/ob_compaction_util.h"
-#include "share/scn.h"
+#include "storage/compaction/ob_compaction_memory_pool.h"
 
 namespace oceanbase {
 namespace storage {
@@ -32,163 +33,8 @@ namespace blocksstable {
 class ObSSTableIndexBuilder;
 struct ObMicroBlockDesc;
 struct ObMacroBlocksWriteCtx;
-class ObBlockMarkDeletionMaker;
 class ObMacroBlockHandle;
-
-struct ObDataStoreDesc
-{
-  static const int64_t DEFAULT_RESERVE_PERCENT = 90;
-  static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
-  static const int64_t MIN_RESERVED_SIZE = 1024; //1KB;
-  static const int64_t MIN_SSTABLE_SNAPSHOT_VERSION = 1; // ref to ORIGIN_FOZEN_VERSION
-  static const int64_t MIN_SSTABLE_END_LOG_TS = 1; // ref to ORIGIN_FOZEN_VERSION
-  static const ObCompressorType DEFAULT_MINOR_COMPRESSOR_TYPE = ObCompressorType::LZ4_COMPRESSOR;
-  // emergency magic table id is 10000
-  static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;
-  static const uint64_t EMERGENCY_LS_ID_MAGIC = 0;
-  static const ObTabletID EMERGENCY_TABLET_ID_MAGIC;
-  share::ObLSID ls_id_;
-  ObTabletID tablet_id_;
-  int64_t macro_block_size_;
-  int64_t macro_store_size_; //macro_block_size_ * reserved_percent
-  int64_t micro_block_size_;
-  int64_t micro_block_size_limit_;
-  int64_t row_column_count_;
-  int64_t rowkey_column_count_; // mv rowkey cnt
-  ObRowStoreType row_store_type_;
-  bool need_build_hash_index_for_micro_block_;
-  int64_t schema_version_;
-  int64_t schema_rowkey_col_cnt_;
-  int64_t full_stored_col_cnt_; // table stored column count including hidden columns
-  ObMicroBlockEncoderOpt encoder_opt_;
-  ObSSTableMergeInfo *merge_info_;
-  storage::ObMergeType merge_type_;
-
-  ObSSTableIndexBuilder *sstable_index_builder_;
-  ObCompressorType compressor_type_;
-  int64_t snapshot_version_;
-  share::SCN end_scn_;
-  int64_t progressive_merge_round_;
-  int64_t encrypt_id_;
-  bool need_prebuild_bloomfilter_;
-  int64_t bloomfilter_rowkey_prefix_; // to be remove
-  int64_t master_key_id_;
-  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  // indicate the min_cluster_version which trigger the major freeze
-  // major_working_cluster_version_ == 0 means upgrade from old cluster
-  // which still use freezeinfo without cluster version
-  int64_t major_working_cluster_version_;
-  bool is_ddl_;
-  bool need_pre_warm_;
-  bool is_force_flat_store_type_;
-  bool default_col_checksum_array_valid_;
-  common::ObArenaAllocator allocator_;
-  common::ObFixedArray<int64_t, common::ObIAllocator> col_default_checksum_array_;
-  blocksstable::ObStorageDatumUtils datum_utils_;
-  ObDataStoreDesc();
-  ~ObDataStoreDesc();
-  //ATTENSION!!! Only decreasing count of parameters is acceptable
-  int init(
-      const share::schema::ObMergeSchema &schema,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID tablet_id,
-      const storage::ObMergeType merge_type,
-      const int64_t snapshot_version = MIN_SSTABLE_SNAPSHOT_VERSION,
-      const int64_t cluster_version = 0);
-  int init_as_index(
-      const share::schema::ObMergeSchema &schema,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID tablet_id,
-      const storage::ObMergeType merge_type,
-      const int64_t snapshot_version = MIN_SSTABLE_SNAPSHOT_VERSION,
-      const int64_t cluster_version = 0);
-  bool is_valid() const;
-  void reset();
-  int assign(const ObDataStoreDesc &desc);
-  bool encoding_enabled() const { return ObStoreFormat::is_row_store_type_with_encoding(row_store_type_); }
-  void force_flat_store_type()
-  {
-    row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    is_force_flat_store_type_ = true;
-  }
-  bool is_store_type_valid() const;
-  OB_INLINE bool is_major_merge() const { return storage::is_major_merge_type(merge_type_); }
-  OB_INLINE bool is_meta_major_merge() const { return storage::is_meta_major_merge(merge_type_); }
-  OB_INLINE bool is_use_pct_free() const { return macro_block_size_ != macro_store_size_; }
-  int64_t get_logical_version() const
-  {
-    return (is_major_merge() || is_meta_major_merge()) ? snapshot_version_ : end_scn_.get_val_for_tx();
-  }
-  const common::ObIArray<share::schema::ObColDesc> &get_rowkey_col_descs() const
-  {
-    return col_desc_array_;
-  }
-  const common::ObIArray<share::schema::ObColDesc> &get_full_stored_col_descs() const
-  {
-    OB_ASSERT_MSG(is_major_merge(), "ObDataStoreDesc dose not promise a full stored col descs");
-    return col_desc_array_;
-  }
-  bool use_old_version_macro_header() const
-  {
-    return is_major_merge() && major_working_cluster_version_ < DATA_VERSION_4_2_0_0;
-  }
-  int64_t get_fixed_header_version() const
-  {
-    return use_old_version_macro_header() ? ObSSTableMacroBlockHeader::SSTABLE_MACRO_BLOCK_HEADER_VERSION_V1 : ObSSTableMacroBlockHeader::SSTABLE_MACRO_BLOCK_HEADER_VERSION_V2;
-  }
-  int64_t get_fixed_header_col_type_cnt() const
-  {
-    return use_old_version_macro_header() ? row_column_count_ : rowkey_column_count_;
-  }
-  TO_STRING_KV(
-      K_(ls_id),
-      K_(tablet_id),
-      K_(micro_block_size),
-      K_(micro_block_size_limit),
-      K_(row_column_count),
-      K_(rowkey_column_count),
-      K_(schema_rowkey_col_cnt),
-      K_(full_stored_col_cnt),
-      K_(row_store_type),
-      K_(encoder_opt),
-      K_(compressor_type),
-      K_(schema_version),
-      KP_(merge_info),
-      K_(merge_type),
-      K_(snapshot_version),
-      K_(end_scn),
-      K_(need_prebuild_bloomfilter),
-      K_(bloomfilter_rowkey_prefix),
-      K_(encrypt_id),
-      K_(master_key_id),
-      KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(major_working_cluster_version),
-      KP_(sstable_index_builder),
-      K_(is_ddl),
-      K_(col_desc_array),
-      K_(default_col_checksum_array_valid),
-      K_(col_default_checksum_array));
-
-private:
-  int inner_init(
-      const share::schema::ObMergeSchema &schema,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID tablet_id,
-      const storage::ObMergeType merge_type,
-      const int64_t snapshot_version,
-      const int64_t cluster_version);
-  int cal_row_store_type(
-      const share::schema::ObMergeSchema &schema,
-      const storage::ObMergeType merge_type);
-  int get_emergency_row_store_type();
-  void fresh_col_meta();
-  int init_col_default_checksum_array(
-    const share::schema::ObMergeSchema &merge_schema,
-    const bool init_by_schema);
-private:
-  common::ObFixedArray<share::schema::ObColDesc, common::ObIAllocator> col_desc_array_;
-  DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);
-};
+struct ObDataStoreDesc;
 
 class ObMicroBlockCompressor
 {
@@ -204,8 +50,8 @@ private:
   bool is_none_;
   int64_t micro_block_size_;
   common::ObCompressor *compressor_;
-  ObSelfBufferWriter comp_buf_;
-  ObSelfBufferWriter decomp_buf_;
+  storage::ObCompactionBufferWriter comp_buf_;
+  storage::ObCompactionBufferWriter decomp_buf_;
 };
 
 
@@ -214,7 +60,7 @@ class ObMacroBlock
 public:
   ObMacroBlock();
   virtual ~ObMacroBlock();
-  int init(ObDataStoreDesc &spec, const int64_t &cur_macro_seq);
+  int init(const ObDataStoreDesc &spec, const int64_t &cur_macro_seq);
   int write_micro_block(const ObMicroBlockDesc &micro_block_desc, int64_t &data_offset);
   int write_index_micro_block(
       const ObMicroBlockDesc &micro_block_desc,
@@ -262,12 +108,12 @@ private:
   OB_INLINE const char *get_micro_block_data_ptr() const { return data_.data() + data_base_offset_; }
   OB_INLINE int64_t get_micro_block_data_size() const { return data_.length() - data_base_offset_; }
 private:
-  ObDataStoreDesc *spec_;
-  ObSelfBufferWriter data_; //micro header + data blocks;
+  const ObDataStoreDesc *spec_;
+  storage::ObCompactionBufferWriter data_; //micro header + data blocks;
   ObSSTableMacroBlockHeader macro_header_; //macro header store in head of data_;
   int64_t data_base_offset_;
   ObDatumRowkey last_rowkey_;
-  ObArenaAllocator rowkey_allocator_;
+  compaction::ObLocalArena rowkey_allocator_;
   bool is_dirty_;
   ObMacroBlockCommonHeader common_header_;
   int64_t max_merged_trans_version_;

@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObIMemtableMgr;
 struct ObUpdateTableStoreParam;
 struct ObBatchUpdateTableStoreParam;
 class ObTablet;
@@ -113,7 +114,7 @@ public:
       const ObTablet &tablet,
       ObTableStoreIterator &iter,
       const bool allow_no_ready_read = false) const;
-  int get_all_sstable(ObTableStoreIterator &iter) const;
+  int get_all_sstable(ObTableStoreIterator &iter, const bool unpack_co_table = false) const;
   int get_read_major_sstable(const int64_t snapshot_version, ObTableStoreIterator &iter) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int update_memtables(const common::ObIArray<storage::ObITable *> &memtables);
@@ -123,10 +124,6 @@ public:
   int get_mini_minor_sstables(
       const bool is_ha_data_status_complete,
       ObTableStoreIterator &iter) const;
-  int64_t get_memtables_count() const
-  {
-    return memtables_.count();
-  }
   int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
   int get_ha_tables(ObTableStoreIterator &iter, bool &is_ready_for_read) const;
   int build_ha_new_table_store(
@@ -141,9 +138,18 @@ public:
   int batch_cache_sstable_meta(
       common::ObArenaAllocator &allocator,
       const int64_t remain_size);
+  int cache_sstable_meta(
+      common::ObArenaAllocator &allocator,
+      blocksstable::ObSSTableMetaHandle &meta_handle,
+      blocksstable::ObSSTable *sstable,
+      int64_t &remain_size);
   int64_t to_string(char *buf, const int64_t buf_len) const;
+
   // Load sstable with @addr, loaded object lifetime guaranteed by @handle
-  static int load_sstable(const ObMetaDiskAddr &addr, ObStorageMetaHandle &handle);
+  static int load_sstable(
+      const ObMetaDiskAddr &addr,
+      const bool load_co_sstable,
+      ObStorageMetaHandle &handle);
   // load @orig_sstable on demand, return @loaded_sstable.
   // Lifetime guaranteed by loaded_sstable_handle if is loaded.
   static int load_sstable_on_demand(
@@ -153,10 +159,12 @@ public:
       blocksstable::ObSSTable *&loaded_sstable);
 private:
   int get_need_to_cache_sstables(
+      common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
   int get_need_to_cache_sstables(
       const ObSSTableArray &sstable_array,
+      common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
   int batch_cache_sstable_meta(
@@ -194,8 +202,9 @@ private:
       int64_t &inc_base_snapshot_version);
   int build_minor_tables(
       common::ObArenaAllocator &allocator,
-      const ObUpdateTableStoreParam &param,
+      const blocksstable::ObSSTable *new_sstable,
       const ObTabletTableStore &old_store,
+      const bool need_check_sstable,
       const int64_t inc_base_snapshot_version);
   int build_meta_major_table(
       common::ObArenaAllocator &allocator,
@@ -293,7 +302,8 @@ private:
   int build_ddl_sstables(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
-      const ObUpdateTableStoreParam &param,
+      const blocksstable::ObSSTable *new_sstable,
+      const bool keep_old_ddl_sstable,
       const ObTabletTableStore &old_store);
   bool is_major_sstable_empty(const ObTablet &tablet) const;
   int get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const;
@@ -311,6 +321,7 @@ private:
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;
   static const int64_t TABLE_STORE_VERSION_V2 = 0x0101;
+  static const int64_t TABLE_STORE_VERSION_V3 = 0x0102;
   static const int64_t MAX_SSTABLE_CNT = 128;
   // limit table store memory size to one ACHUNK
   static const int64_t MAX_TABLE_STORE_MEMORY_SIZE= lib::ACHUNK_SIZE - lib::AOBJECT_META_SIZE;

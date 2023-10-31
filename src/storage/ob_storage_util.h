@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_STORAGE_UTIL_
 
 #include "lib/allocator/ob_allocator.h"
+#include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase
@@ -195,6 +196,26 @@ protected:
   char local_data_buf_[LOCAL_ARRAY_SIZE * sizeof(common::ObObj)];
   common::ObIAllocator *allocator_;
 };
+
+inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjMeta &col_obj_type, const common::ObObjMeta &param_obj_type)
+{
+  common::ObDatumCmpFuncType cmp_func = nullptr;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  if (col_obj_type.get_type_class() != param_obj_type.get_type_class()) {
+    cmp_func = ObDatumFuncs::get_nullsafe_cmp_func(
+        col_obj_type.get_type(),
+        param_obj_type.get_type(),
+        is_oracle_mode ? NULL_LAST : NULL_FIRST,
+        col_obj_type.get_collation_type(),
+        col_obj_type.get_scale(),
+        is_oracle_mode,
+        col_obj_type.has_lob_header() || param_obj_type.has_lob_header());
+  } else {
+    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_obj_type.get_type(), col_obj_type.get_collation_type());
+    cmp_func = is_oracle_mode ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
+  }
+  return cmp_func;
+}
 
 }
 }

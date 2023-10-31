@@ -276,6 +276,8 @@ all_table_def = dict(
       ('ttl_definition', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', ''),
       ('kv_attributes', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', ''),
       ('name_generated_type', 'int', 'false', '0'),
+      ('max_used_column_group_id', 'int', 'false', '1000'),
+      ('column_store', 'int', 'false', '0'),
     ],
 )
 
@@ -322,6 +324,7 @@ all_column_def = dict(
       ('srs_id', 'int', 'false', 'OB_DEFAULT_COLUMN_SRS_ID'),
       ('udt_set_id', 'int', 'false', '0'),
       ('sub_data_type', 'int', 'false', '0'),
+      ('skip_index_attr', 'int', 'false', '0'),
     ],
 )
 
@@ -3181,7 +3184,9 @@ def_table_schema(
       ('spare3', 'int', 'true'),
       ('spare4', 'varchar:MAX_VALUE_LENGTH', 'true'),
       ('spare5', 'varchar:MAX_VALUE_LENGTH', 'true'),
-      ('spare6', 'varchar:MAX_VALUE_LENGTH', 'true')
+      ('spare6', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('cg_macro_blk_cnt', 'int', 'false', '0'),
+      ('cg_micro_blk_cnt', 'int', 'false', '0')
   ],
 )
 
@@ -3308,7 +3313,9 @@ def_table_schema(
       ('spare3', 'int', 'true'),
       ('spare4', 'varchar:MAX_VALUE_LENGTH', 'true'),
       ('spare5', 'varchar:MAX_VALUE_LENGTH', 'true'),
-      ('spare6', 'varchar:MAX_VALUE_LENGTH', 'true')
+      ('spare6', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('cg_macro_blk_cnt', 'int', 'false', '0'),
+      ('cg_micro_blk_cnt', 'int', 'false', '0')
   ],
 )
 
@@ -5235,10 +5242,53 @@ def_table_schema(
 
 # 417 : __all_switchover_checkpoint
 # 418 : EMPTY
-# 419 : __all_column_group
-# 420 : __all_column_group_history
-# 421 : __all_column_group_mapping
-# 422 : __all_column_group_mapping_history
+
+all_column_group = dict(
+    owner = 'donglou.zl',
+    table_name    = '__all_column_group',
+    table_id      = '419',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('table_id', 'int'),
+        ('column_group_id', 'int'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('column_group_name', 'varchar:OB_MAX_COLUMN_GROUP_NAME_LENGTH', 'false', ''),
+      ('column_group_type', 'int'),
+      ('block_size', 'int'),
+      ('compressor_type', 'int'),
+      ('row_store_type', 'int'),
+    ],
+)
+
+def_table_schema(**all_column_group)
+
+def_table_schema(**gen_history_table_def(420, all_column_group))
+
+all_column_group_mapping = dict(
+    owner = 'donglou.zl',
+    table_name    = '__all_column_group_mapping',
+    table_id      = '421',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('table_id', 'int'),
+        ('column_group_id', 'int'),
+        ('column_id', 'int'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [],
+)
+
+def_table_schema(**all_column_group_mapping)
+
+def_table_schema(**gen_history_table_def(422, all_column_group_mapping))
 
 all_transfer_task_def = dict(
     owner = 'wangzhennan.wzn',
@@ -7970,10 +8020,12 @@ def_table_schema(
       ('occupy_size', 'int'),
       ('micro_block_count', 'int'),
       ('data_checksum', 'int'),
-      ('macro_range', 'varchar:OB_MAX_RANGE_LENGTH'),
+      ('start_key', 'varchar:OB_MAX_ROW_KEY_LENGTH'),
+      ('end_key', 'varchar:OB_MAX_ROW_KEY_LENGTH'),
       ('macro_block_type', 'varchar:MAX_VALUE_LENGTH'),
       ('compressor_name', 'varchar:OB_MAX_COMPRESSOR_NAME_LENGTH'),
       ('row_store_type', 'varchar:OB_MAX_COMPRESSOR_NAME_LENGTH'),
+      ('cg_idx', 'int'),
    ],
     partition_columns = ['svr_ip', 'svr_port'],
     vtable_route_policy = 'distributed',
@@ -8723,6 +8775,8 @@ def_table_schema(
     ('create_time', 'timestamp'),
     ('start_time', 'timestamp'),
     ('estimated_finish_time', 'timestamp'),
+    ('start_cg_id', 'int'),
+    ('end_cg_id', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8847,7 +8901,11 @@ def_table_schema(
       ('parallel_info', 'varchar:OB_PARALLEL_MERGE_INFO_LENGTH'),
       ('participant_table', 'varchar:OB_PART_TABLE_INFO_LENGTH'),
       ('macro_id_list', 'varchar:OB_MACRO_ID_INFO_LENGTH'),
-      ('comments', 'varchar:OB_COMPACTION_EVENT_STR_LENGTH')
+      ('comments', 'varchar:OB_COMPACTION_COMMENT_STR_LENGTH'),
+      ('start_cg_id', 'int'),
+      ('end_cg_id', 'int'),
+      ('kept_snapshot', 'varchar:OB_COMPACTION_INFO_LENGTH'),
+      ('merge_level', 'varchar:OB_MERGE_LEVEL_STR_LENGTH'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8935,13 +8993,43 @@ def_table_schema(
     ('type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
     ('compaction_scn', 'uint'),
     ('event_timestamp', 'timestamp'),
-    ('event', 'varchar:OB_COMPACTION_EVENT_STR_LENGTH')
+    ('event', 'varchar:OB_COMPACTION_EVENT_STR_LENGTH'),
+    ('role', 'varchar:OB_MERGE_ROLE_STR_LENGTH'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
 
-# table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
+def_table_schema(
+    owner = 'fengjingkun.fjk',
+    table_name     = '__all_virtual_tablet_stat',
+    table_id       = '11117',
+    table_type     = 'VIRTUAL_TABLE',
+    in_tenant_space = True,
+    gm_columns     = [],
+    rowkey_columns = [],
+    normal_columns = [
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+      ('tenant_id', 'int'),
+      ('ls_id', 'int'),
+      ('tablet_id', 'int'),
+      ('query_cnt', 'int'),
+      ('mini_merge_cnt', 'int'),
+      ('scan_output_row_cnt', 'int'),
+      ('scan_total_row_cnt', 'int'),
+      ('pushdown_micro_block_cnt', 'int'),
+      ('total_micro_block_cnt', 'int'),
+      ('exist_iter_table_cnt', 'int'),
+      ('exist_total_table_cnt', 'int'),
+      ('insert_row_cnt', 'int'),
+      ('update_row_cnt', 'int'),
+      ('delete_row_cnt', 'int')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # table_id = 11118: used for __all_virtual_ddl_sim_point on enhance_ddl_quality branch
 # table_id = 11119: used for __all_virtual_ddl_sim_point_stat on enhance_ddl_quality branch
 
@@ -9325,6 +9413,7 @@ def_table_schema(
       ('start_log_scn', 'uint'),
       ('end_log_scn', 'uint'),
       ('upper_trans_version', 'uint'),
+      ('data_checksum', 'int'),
       ('size', 'int'),
       ('data_block_count', 'int'),
       ('index_block_count', 'int'),
@@ -9334,6 +9423,7 @@ def_table_schema(
       ('contain_uncommitted_row', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
       ('nested_offset', 'int'),
       ('nested_size', 'int'),
+      ('cg_idx', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11952,27 +12042,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_column_checksum_error_info',
   keywords = all_def_keywords['__all_column_checksum_error_info']))
 
-def_table_schema(
-  owner = 'zhaoruizhe.zrz',
-  table_name = '__all_virtual_kvcache_handle_leak_info',
-  table_type = 'VIRTUAL_TABLE',
-  table_id='12331',
-  gm_columns = [],
-  rowkey_columns = [
-  ],
-  normal_columns = [
-    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
-    ('svr_port', 'int'),
-    ('tenant_id', 'int'),
-    ('cache_id', 'int'),
-    ('cache_name', 'varchar:OB_MAX_KVCACHE_NAME_LENGTH'),
-    ('hold_count', 'int'),
-    ('backtrace', 'varchar:DEFAULT_BUF_LENGTH'),
-  ],
-  partition_columns = ['svr_ip', 'svr_port'],
-  vtable_route_policy = 'distributed',
-)
-
+# 13331: __all_virtual_kvcache_handle_leak_info is deprecated, do not reuse
 # 12332: __all_virtual_switchover_checkpoint
 # 12333: EMPTY
 
@@ -12536,6 +12606,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
 # 12377: __all_virtual_dup_ls_follower_lease_info
 
 def_table_schema(
@@ -12840,8 +12911,31 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12398: __all_virtual_column_group
-# 12399: __all_virtual_storage_leak_info
+def_table_schema(**gen_iterate_virtual_table_def(
+    table_id = '12398',
+    table_name = '__all_virtual_column_group',
+    keywords = all_def_keywords['__all_column_group']))
+
+def_table_schema(
+  owner = 'huronghui.hrh',
+  table_name = '__all_virtual_storage_leak_info',
+  table_type = 'VIRTUAL_TABLE',
+  table_id='12399',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('check_id', 'int'),
+    ('check_mod', 'varchar:OB_MAX_KVCACHE_NAME_LENGTH'),
+    ('hold_count', 'int'),
+    ('backtrace', 'varchar:DEFAULT_BUF_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'zhaoyongheng.zyh',
@@ -13378,7 +13472,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15383', all_def_keywords['__all_resource_pool'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
-# 15386: __all_virtual_column_group
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15387', all_def_keywords['__all_virtual_ls_log_restore_status'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388', all_def_keywords['__all_virtual_tenant_parameter'])))
 
@@ -14121,12 +14214,12 @@ def_table_schema(
                     END
                       AS CHARACTER_OCTET_LENGTH,
                       CASE
-                      WHEN rp.param_type IN (1, 2, 3, 4, 5, 15, 16) THEN CAST(rp.param_precision AS UNSIGNED)
+                      WHEN rp.param_type IN (1, 2, 3, 4, 5, 15, 16, 50) THEN CAST(rp.param_precision AS UNSIGNED)
                       ELSE CAST(NULL AS UNSIGNED)
                     END
                       AS NUMERIC_PRECISION,
                       CASE
-                      WHEN rp.param_type IN (15, 16) THEN CAST(rp.param_scale AS SIGNED)
+                      WHEN rp.param_type IN (15, 16, 50) THEN CAST(rp.param_scale AS SIGNED)
                       WHEN rp.param_type IN (1, 2, 3, 4, 5, 11, 12, 13, 14) THEN CAST(0 AS SIGNED)
                       ELSE CAST(NULL AS SIGNED)
                     END
@@ -14166,7 +14259,7 @@ def_table_schema(
                           rp.param_precision,
                           ')'
                         )
-                        WHEN rp.param_type IN (15, 16) THEN CONCAT(
+                        WHEN rp.param_type IN (15, 16, 50) THEN CONCAT(
                           lower(v.data_type_str),
                           '(',
                           rp.param_precision,
@@ -16055,14 +16148,17 @@ SELECT
     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'
     when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
-    when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT'
+    when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'
+    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.TENANT_ID,
  M.LS_ID,
  M.TABLET_ID,
+ M.CG_IDX,
  M.START_LOG_SCN,
  M.END_LOG_SCN,
+ M.DATA_CHECKSUM,
  M.SIZE,
  M.REF,
  M.UPPER_TRANS_VERSION,
@@ -18884,6 +18980,7 @@ SELECT/*+leading(DB,T,C,STAT)*/
         WHEN 44 THEN 'NCHAR'
         WHEN 45 THEN 'UROWID'
         WHEN 46 THEN ''
+        WHEN 50 THEN 'NUMBER'
         ELSE 'UNDEFINED' END AS CHAR(128)) AS  DATA_TYPE,
   CAST(NULL AS CHAR(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS CHAR(128)) AS  DATA_TYPE_OWNER,
@@ -19275,7 +19372,7 @@ def_table_schema(
       CAST(COLUMN_NAME AS CHAR(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS SIGNED) AS COLUMN_POSITION,
 
-      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 THEN CAST(22 AS SIGNED)
+      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 OR DATA_TYPE = 50 THEN CAST(22 AS SIGNED)
            WHEN DATA_TYPE = 17 THEN CAST(7 AS SIGNED)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 2 THEN CAST(DATA_LENGTH AS SIGNED)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 1 AND F.COLLATION_TYPE IN (45, 46, 224, 54, 55, 101) THEN CAST(DATA_LENGTH * 4 AS SIGNED)
@@ -21894,7 +21991,9 @@ def_table_schema(
       PROGRESSIVE_COMPACTION_ROUND,
       CREATE_TIME,
       START_TIME,
-      ESTIMATED_FINISH_TIME
+      ESTIMATED_FINISH_TIME,
+      START_CG_ID,
+      END_CG_ID
     FROM oceanbase.__all_virtual_tablet_compaction_progress
 """.replace("\n", " ")
 )
@@ -21954,7 +22053,11 @@ def_table_schema(
       PARALLEL_INFO,
       PARTICIPANT_TABLE,
       MACRO_ID_LIST,
-      COMMENTS
+      COMMENTS,
+      START_CG_ID,
+      END_CG_ID,
+      KEPT_SNAPSHOT,
+      MERGE_LEVEL
     FROM oceanbase.__all_virtual_tablet_compaction_history
 """.replace("\n", " ")
 )
@@ -22003,6 +22106,8 @@ def_table_schema(
       STATUS != "RS_UNCOMPACTED"
     AND
       STATUS != "NOT_SCHEDULE"
+    AND
+      STATUS != "SPECIAL"
 """.replace("\n", " ")
 )
 
@@ -25357,16 +25462,15 @@ def_table_schema(
          TABLET_ID
   FROM
     (
-      SELECT A.TENANT_ID AS TENANT_ID,
-             A.TABLET_ID AS TABLET_ID,
-             A.ROW_COUNT AS ROW_COUNT,
-             A.DATA_CHECKSUM AS DATA_CHECKSUM,
-             A.B_COLUMN_CHECKSUMS AS B_COLUMN_CHECKSUMS
-      FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM A
-      JOIN OCEANBASE.__ALL_VIRTUAL_MERGE_INFO B
-      ON A.TENANT_ID = B.TENANT_ID AND A.COMPACTION_SCN = B.FROZEN_SCN
+      SELECT TENANT_ID,
+             TABLET_ID,
+             ROW_COUNT,
+             DATA_CHECKSUM,
+             B_COLUMN_CHECKSUMS,
+             COMPACTION_SCN
+      FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM
     ) J
-  GROUP BY J.TENANT_ID, J.TABLET_ID
+  GROUP BY J.TENANT_ID, J.TABLET_ID, J.COMPACTION_SCN
   HAVING MIN(J.DATA_CHECKSUM) != MAX(J.DATA_CHECKSUM)
          OR MIN(J.ROW_COUNT) != MAX(J.ROW_COUNT)
          OR MIN(J.B_COLUMN_CHECKSUMS) != MAX(J.B_COLUMN_CHECKSUMS)
@@ -26439,11 +26543,11 @@ def_table_schema(
                           )
                           ELSE CAST(NULL AS SIGNED)
                         END AS CHARACTER_OCTET_LENGTH,
-                        CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 15, 16)
+                        CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 15, 16, 50)
                           THEN CAST(rp.param_precision AS UNSIGNED)
                           ELSE CAST(NULL AS UNSIGNED)
                         END AS NUMERIC_PRECISION,
-                        CASE WHEN rp.param_type IN (15, 16) THEN CAST(rp.param_scale AS SIGNED)
+                        CASE WHEN rp.param_type IN (15, 16, 50) THEN CAST(rp.param_scale AS SIGNED)
                           WHEN rp.param_type IN (1, 2, 3, 4, 5, 11, 12, 13, 14) THEN CAST(0 AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
                         END AS NUMERIC_SCALE,
@@ -26468,7 +26572,7 @@ def_table_schema(
                         END AS CHAR(64)) AS COLLATION_NAME,
                         CAST(CASE WHEN rp.param_type IN (1, 2, 3, 4, 5)
                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision,')')
-                          WHEN rp.param_type IN (15,16)
+                          WHEN rp.param_type IN (15,16,50)
                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision, ',', rp.param_scale,')')
                           WHEN rp.param_type IN (18, 20)
                           THEN CONCAT(lower(v.data_type_str),'(', rp.param_scale, ')')
@@ -27547,8 +27651,52 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21370: GV$OB_TABLET_STATS
-# 21371: V$OB_TABLET_STATS
+def_table_schema(
+  owner = 'fengjingkun.fjk',
+  table_name      = 'GV$OB_TABLET_STATS',
+  table_id        = '21370',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      LS_ID,
+      TABLET_ID,
+      QUERY_CNT,
+      MINI_MERGE_CNT,
+      SCAN_OUTPUT_ROW_CNT,
+      SCAN_TOTAL_ROW_CNT,
+      PUSHDOWN_MICRO_BLOCK_CNT,
+      TOTAL_MICRO_BLOCK_CNT,
+      EXIST_ITER_TABLE_CNT,
+      EXIST_TOTAL_TABLE_CNT,
+      INSERT_ROW_CNT,
+      UPDATE_ROW_CNT,
+      DELETE_ROW_CNT
+    FROM oceanbase.__all_virtual_tablet_stat
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'fengjingkun.fjk',
+  table_name      = 'V$OB_TABLET_STATS',
+  table_id        = '21371',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT * FROM OCEANBASE.GV$OB_TABLET_STATS
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
 def_table_schema(
   owner           = 'zhaoyongheng.zyh',
   table_name      = 'DBA_OB_ACCESS_POINT',
@@ -31797,7 +31945,7 @@ def_table_schema(
       CAST(COLUMN_NAME AS VARCHAR2(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS NUMBER) AS COLUMN_POSITION,
 
-      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 THEN CAST(22 AS NUMBER)
+      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 OR DATA_TYPE = 50 THEN CAST(22 AS NUMBER)
            WHEN DATA_TYPE = 17 THEN CAST(7 AS NUMBER)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 2 THEN CAST(DATA_LENGTH AS NUMBER)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 1 AND F.COLLATION_TYPE IN (45, 46, 224, 54, 55, 101) THEN CAST(DATA_LENGTH * 4 AS NUMBER)
@@ -31875,7 +32023,7 @@ def_table_schema(
       CAST(COLUMN_NAME AS VARCHAR2(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS NUMBER) AS COLUMN_POSITION,
 
-      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 THEN CAST(22 AS NUMBER)
+      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 OR DATA_TYPE = 50 THEN CAST(22 AS NUMBER)
            WHEN DATA_TYPE = 17 THEN CAST(7 AS NUMBER)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 2 THEN CAST(DATA_LENGTH AS NUMBER)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 1 AND F.COLLATION_TYPE IN (45, 46, 224, 54, 55, 101) THEN CAST(DATA_LENGTH * 4 AS NUMBER)
@@ -31955,7 +32103,7 @@ def_table_schema(
       CAST(COLUMN_NAME AS VARCHAR2(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS NUMBER) AS COLUMN_POSITION,
 
-      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 THEN CAST(22 AS NUMBER)
+      CASE WHEN DATA_TYPE >= 1 AND DATA_TYPE <= 16 OR DATA_TYPE = 50 THEN CAST(22 AS NUMBER)
            WHEN DATA_TYPE = 17 THEN CAST(7 AS NUMBER)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 2 THEN CAST(DATA_LENGTH AS NUMBER)
            WHEN DATA_TYPE IN (22, 23) AND F.DATA_PRECISION = 1 AND F.COLLATION_TYPE IN (45, 46, 224, 54, 55, 101) THEN CAST(DATA_LENGTH * 4 AS NUMBER)
@@ -32704,10 +32852,11 @@ SELECT
         47, 'JSON',
         48, 'GEOMETRY',
         49, DECODE(C.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
+        50, 'NUMBER',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
-  CAST(CASE WHEN C.DATA_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 42) THEN 22
+  CAST(CASE WHEN C.DATA_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 42, 50) THEN 22
             WHEN C.DATA_TYPE = 11 THEN 4
             WHEN C.DATA_TYPE = 12 THEN 8
             WHEN C.DATA_TYPE in (17, 19) THEN 7
@@ -32923,10 +33072,11 @@ SELECT
         47, 'JSON',
         48, 'GEOMETRY',
         49, DECODE(C.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
+        50, 'NUMBER',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
-  CAST(CASE WHEN C.DATA_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 42) THEN 22
+  CAST(CASE WHEN C.DATA_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 42, 50) THEN 22
             WHEN C.DATA_TYPE = 11 THEN 4
             WHEN C.DATA_TYPE = 12 THEN 8
             WHEN C.DATA_TYPE in (17, 19) THEN 7
@@ -33139,10 +33289,11 @@ SELECT
         47, 'JSON',
         48, 'GEOMETRY',
         49, DECODE(C.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
+        50, 'NUMBER',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
-  CAST(CASE WHEN C.DATA_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 42) THEN 22
+  CAST(CASE WHEN C.DATA_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 42, 50) THEN 22
             WHEN C.DATA_TYPE = 11 THEN 4
             WHEN C.DATA_TYPE = 12 THEN 8
             WHEN C.DATA_TYPE in (17, 19) THEN 7
@@ -35598,6 +35749,7 @@ def_table_schema(
             47, 'JSON',
             48, 'GEOMETRY',
             49, 'UDT',
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ATTR_TYPE_NAME,
       A.LENGTH AS LENGTH,
@@ -35683,6 +35835,7 @@ def_table_schema(
             44, 'NCHAR',
             45, '',
             46, DECODE(TAS.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE TS1.TYPE_NAME END AS VARCHAR2(324)) AS ATTR_TYPE_NAME,
       TAS.LENGTH AS LENGTH,
@@ -35771,6 +35924,7 @@ def_table_schema(
             44, 'NCHAR',
             45, '',
             46, DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ATTR_TYPE_NAME,
       A.LENGTH AS LENGTH,
@@ -35858,6 +36012,7 @@ def_table_schema(
             44, 'NCHAR',
             45, '',
             46, DECODE(TAS.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE TS1.TYPE_NAME END AS VARCHAR2(324)) AS ATTR_TYPE_NAME,
       TAS.LENGTH AS LENGTH,
@@ -35945,6 +36100,7 @@ def_table_schema(
             44, 'NCHAR',
             45, '',
             46, DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ATTR_TYPE_NAME,
       A.LENGTH AS LENGTH,
@@ -36048,6 +36204,7 @@ def_table_schema(
             44, 'NCHAR',
             45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
             46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       C.LENGTH AS LENGTH,
@@ -36136,6 +36293,7 @@ def_table_schema(
             44, 'NCHAR',
             45, CONCAT('UROWID(', CONCAT(CS.LENGTH, ')')),
             46, DECODE(CS.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE TS1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       CS.LENGTH AS LENGTH,
@@ -36227,6 +36385,7 @@ def_table_schema(
             44, 'NCHAR',
             45, CONCAT('UROWID(', CONCAT(C.LENGTH, ')')),
             46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       C.LENGTH AS LENGTH,
@@ -36317,6 +36476,7 @@ def_table_schema(
             44, 'NCHAR',
             45, CONCAT('UROWID(', CONCAT(CS.LENGTH, ')')),
             46, '',
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE TS1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       CS.LENGTH AS LENGTH,
@@ -36409,6 +36569,7 @@ def_table_schema(
             46, DECODE(C.COLL_TYPE, 63, 'BLOB', 'CLOB'),
             47, 'JSON',
             48, 'SDO_GEOMETRY',
+            50, 'NUMBER',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ELEM_TYPE_NAME,
       C.LENGTH AS LENGTH,
@@ -52771,7 +52932,9 @@ def_table_schema(
       PROGRESSIVE_COMPACTION_ROUND,
       CREATE_TIME,
       START_TIME,
-      ESTIMATED_FINISH_TIME
+      ESTIMATED_FINISH_TIME,
+      START_CG_ID,
+      END_CG_ID
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_PROGRESS
 """.replace("\n", " ")
 )
@@ -52835,7 +52998,9 @@ def_table_schema(
       PARALLEL_INFO,
       PARTICIPANT_TABLE,
       MACRO_ID_LIST,
-      COMMENTS
+      COMMENTS,
+      START_CG_ID,
+      END_CG_ID
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -52888,6 +53053,8 @@ def_table_schema(
       STATUS != 'RS_UNCOMPACTED'
     AND
       STATUS != 'NOT_SCHEDULE'
+    AND
+      STATUS != 'SPECIAL'
 """.replace("\n", " ")
 )
 

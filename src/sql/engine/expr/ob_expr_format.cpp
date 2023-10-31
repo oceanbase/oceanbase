@@ -17,6 +17,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_func_round.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -127,6 +128,7 @@ int ObExprFormat::calc_result_type(ObExprResType &type, ObExprResType *type_arra
           type.set_length(MAX_DOUBLE_BUFFER_SIZE);
           break;
         }
+        case ObDecimalIntType:
         case ObNumberType:
         case ObUNumberType: {
           int64_t max_char_length = type_array[0].get_length();
@@ -259,7 +261,7 @@ int ObExprFormat::build_format_str(char *buf,
   return ret;
 }
 
-int ObExprFormat::convert_num_to_str(const ObObjType &obj_type,
+int ObExprFormat::convert_num_to_str(const ObDatumMeta &x_meta,
                                      const ObDatum &x_datum,
                                      char *buf,
                                      int64_t buf_len,
@@ -267,6 +269,7 @@ int ObExprFormat::convert_num_to_str(const ObObjType &obj_type,
                                      ObString &num_str)
 {
   int ret = OB_SUCCESS;
+  const ObObjType obj_type = x_meta.type_;
   int64_t str_len = 0;
   if (ObDoubleType == obj_type || ObUDoubleType == obj_type) {
     str_len = ob_fcvt(ObExprUtil::round_double(x_datum.get_double(), scale), scale, buf_len,
@@ -274,6 +277,19 @@ int ObExprFormat::convert_num_to_str(const ObObjType &obj_type,
   } else if (ObFloatType == obj_type || ObUFloatType == obj_type) {
     str_len = ob_fcvt(ObExprUtil::round_double(x_datum.get_float(), scale), scale, buf_len,
                       buf, NULL);
+  } else if (ObDecimalIntType == obj_type) {
+    ObDecimalIntBuilder builder;
+    if (OB_FAIL(ObExprFuncRound::do_round_decimalint(
+                x_meta.precision_, x_meta.scale_,
+                x_meta.precision_ - x_meta.scale_ + 1 + scale, scale, scale,
+                x_datum, builder))) {
+      LOG_WARN("do_round_decimalint failed",
+               K(ret), K(x_meta.precision_), K(x_meta.scale_),
+               K(x_meta.precision_ - x_meta.scale_ + 1 + scale), K(scale));
+    } else if (OB_FAIL(wide::to_string(builder.get_decimal_int(), builder.get_int_bytes(),
+                       scale, buf, buf_len, str_len, false))) {
+      LOG_WARN("to_string failed", K(ret));
+    }
   } else {
     number::ObNumber num = x_datum.get_number();
     number::ObNumber nmb;
@@ -310,7 +326,7 @@ int ObExprFormat::calc_format_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ObString str;
     ObString res_str;
     ObLocale locale;
-    const ObObjType x_type = expr.args_[0]->datum_meta_.type_;
+    const ObDatumMeta &x_meta = expr.args_[0]->datum_meta_;
     char *tmp_buf = NULL;
     char *res_buf = NULL;
     int64_t buf_len = MAX_FORMAT_BUFFER_SIZE + 2 * FLOATING_POINT_BUFFER + 1;
@@ -319,7 +335,7 @@ int ObExprFormat::calc_format_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                             alloc_guard.get_allocator().alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to allocate memory", K(buf_len), K(ret));
-    } else if (OB_FAIL(convert_num_to_str(x_type, *x_datum, tmp_buf, MAX_FORMAT_BUFFER_SIZE,
+    } else if (OB_FAIL(convert_num_to_str(x_meta, *x_datum, tmp_buf, MAX_FORMAT_BUFFER_SIZE,
                                           scale, str))) {
       LOG_WARN("fail to convert num to str", K(ret));
     } else {

@@ -166,7 +166,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           date->set_string(str.ptr() + 1, str.length() - 1);
         }
       }
-      if (OB_FAIL(ob_datum_to_ob_time_with_date(*date, date_type,
+      if (OB_FAIL(ob_datum_to_ob_time_with_date(*date, date_type, expr.args_[0]->datum_meta_.scale_,
                                             get_timezone_info(session),
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),

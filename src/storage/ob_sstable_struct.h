@@ -26,32 +26,6 @@ namespace storage
 {
 
 const int64_t MAX_MERGE_THREAD = 64;
-const int64_t MACRO_BLOCK_CNT_PER_THREAD = 128;
-
-enum ObSSTableMergeInfoStatus
-{
-  MERGE_START = 0,
-  MERGE_RUNNING = 1,
-  MERGE_FINISH = 2,
-  MERGE_STATUS_MAX
-};
-
-struct ObMultiVersionSSTableMergeInfo final
-{
-public:
-  ObMultiVersionSSTableMergeInfo();
-  ~ObMultiVersionSSTableMergeInfo() = default;
-  int add(const ObMultiVersionSSTableMergeInfo &info);
-  void reset();
-  TO_STRING_KV(K_(delete_logic_row_count), K_(update_logic_row_count), K_(insert_logic_row_count),
-      K_(empty_delete_logic_row_count));
-public:
-  uint64_t delete_logic_row_count_;
-  uint64_t update_logic_row_count_;
-  uint64_t insert_logic_row_count_;
-  uint64_t empty_delete_logic_row_count_;
-};
-
 
 struct ObParalleMergeInfo
 {
@@ -141,7 +115,7 @@ public:
   ~ObSSTableMergeInfo() = default;
   bool is_valid() const;
   int add(const ObSSTableMergeInfo &other);
-  OB_INLINE bool is_major_merge_type() const { return storage::is_major_merge_type(merge_type_); }
+  OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(merge_type_); }
   void dump_info(const char *msg);
   void reset();
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(compaction_scn),
@@ -151,12 +125,12 @@ public:
                K_(new_micro_count_in_new_macro), K_(multiplexed_micro_count_in_new_macro),
                K_(total_row_count), K_(incremental_row_count), K_(new_flush_data_rate),
                K_(is_full_merge), K_(progressive_merge_round), K_(progressive_merge_num),
-               K_(concurrent_cnt), K_(dag_ret), K_(task_id), K_(retry_cnt), K_(add_time),
-               K_(parallel_merge_info), K_(filter_statistics), K_(participant_table_info),
+               K_(concurrent_cnt), K_(start_cg_idx), K_(end_cg_idx), K_(add_time), K_(dag_ret), K_(retry_cnt), K_(task_id), K_(error_location),
+               K_(kept_snapshot_info), K_(merge_level), K_(parallel_merge_info), K_(filter_statistics), K_(participant_table_info),
                K_(macro_id_list), K_(comment));
 
-  int fill_comment(char *buf, const int64_t buf_len) const;
-
+  int fill_comment(char *buf, const int64_t buf_len, const char* other_info) const;
+  void update_start_time();
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
   static const int64_t MERGE_INFO_COMMENT_LENGTH = 96;
 
@@ -164,7 +138,7 @@ public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t compaction_scn_; // major_scn OR minor end_log_ts
-  ObMergeType merge_type_;
+  compaction::ObMergeType merge_type_;
   int64_t merge_start_time_;
   int64_t merge_finish_time_;
   common::ObCurTraceId::TraceId dag_id_;
@@ -184,18 +158,22 @@ public:
   int64_t progressive_merge_num_;
   int64_t concurrent_cnt_;
   int64_t macro_bloomfilter_count_;
-  // from dag warn info
-  int64_t dag_ret_;
-  common::ObCurTraceId::TraceId task_id_;
-  int64_t retry_cnt_;
+  int64_t start_cg_idx_;
+  int64_t end_cg_idx_;
   // from suspect info
   int64_t add_time_;
-  //
+  // from dag warn info
+  int64_t dag_ret_;
+  int64_t retry_cnt_;
+  common::ObCurTraceId::TraceId task_id_;
+  share::ObDiagnoseLocation error_location_;
   ObParalleMergeInfo parallel_merge_info_;
   compaction::ObICompactionFilter::ObFilterStatistics filter_statistics_;
   PartTableInfo participant_table_info_;
   char macro_id_list_[common::OB_MACRO_ID_INFO_LENGTH];
   char comment_[MERGE_INFO_COMMENT_LENGTH];
+  ObStorageSnapshotInfo kept_snapshot_info_;
+  compaction::ObMergeLevel merge_level_;
 };
 
 }  // end namespace storage

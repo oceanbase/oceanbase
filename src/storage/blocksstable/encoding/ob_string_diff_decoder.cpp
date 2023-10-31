@@ -33,10 +33,9 @@ ObStringDiffDecoder::~ObStringDiffDecoder()
 {
 }
 
-int ObStringDiffDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+int ObStringDiffDecoder::decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
     const ObBitStream &bs, const char *data, const int64_t len) const
 {
-  UNUSEDx(row_id, bs);
   int ret = OB_SUCCESS;
   uint64_t val = STORED_NOT_EXT;
   ObBitStream fix_bs;
@@ -74,11 +73,8 @@ int ObStringDiffDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, co
 
   if (OB_FAIL(ret)) {
   } else if (STORED_NOT_EXT != val) {
-    set_stored_ext_value(cell, static_cast<ObStoredExtValue>(val));
+    set_stored_ext_value(datum, static_cast<ObStoredExtValue>(val));
   } else {
-    if (cell.get_meta() != ctx.obj_meta_) {
-      cell.set_meta_type(ctx.obj_meta_);
-    }
     const char *cell_data = NULL;
     int64_t cell_len = 0;
     // get cell data offset and length
@@ -118,8 +114,8 @@ int ObStringDiffDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, co
             ObStringDiffHeader::LogicTrue<uint8_t>(),
             cell_data, buf);
       }
-      cell.val_len_ = header_->string_size_;
-      cell.v_.string_ = buf;
+      datum.pack_ = header_->string_size_;
+      datum.ptr_ = buf;
     }
   }
 

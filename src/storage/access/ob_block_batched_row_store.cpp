@@ -98,93 +98,13 @@ int ObBlockBatchedRowStore::reuse_capacity(const int64_t capacity)
   return ret;
 }
 
-int ObBlockBatchedRowStore::filter_micro_block_batch(
-    blocksstable::ObMicroBlockDecoder &block_reader,
-    sql::ObPushdownFilterExecutor *parent,
-    sql::ObBlackFilterExecutor &filter,
-    common::ObBitmap &result_bitmap)
-{
-  int ret = OB_SUCCESS;
-  int64_t cur_row_index = pd_filter_info_.start_;
-  int64_t end_row_index = pd_filter_info_.end_;
-  int64_t last_start = cur_row_index;
-  int64_t capacity = row_capacity_;
-  ObSEArray<common::ObDatum *, 4> datums;
-  if (OB_FAIL(filter.get_datums_from_column(datums))) {
-    LOG_WARN("failed to get filter column datums", K(ret));
-  } else {
-    while (OB_SUCC(ret) && cur_row_index < end_row_index) {
-      last_start = cur_row_index;
-      int64_t filter_rows = min(batch_size_, end_row_index - cur_row_index);
-      if (0 == filter.get_col_count()) {
-        cur_row_index +=  filter_rows;
-      } else if (OB_FAIL(reuse_capacity(filter_rows))) {
-        LOG_WARN("failed to reuse vector store", K(ret));
-      } else if (OB_FAIL(copy_filter_rows(
-                  &block_reader,
-                  cur_row_index,
-                  filter.get_col_offsets(),
-                  filter.get_col_params(),
-                  datums))) {
-        LOG_WARN("failed to get rows", K(ret), K(cur_row_index), K(*this));
-      }
-      if (OB_SUCC(ret) && OB_FAIL(filter.filter_batch(parent, last_start, cur_row_index, result_bitmap))) {
-        LOG_WARN("failed to filter batch", K(ret), K(last_start), K(cur_row_index));
-      }
-    }
-    // restore vector store
-    if (OB_SUCC(ret) && OB_FAIL(reuse_capacity(capacity))) {
-      LOG_WARN("failed to reuse vector store", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObBlockBatchedRowStore::copy_filter_rows(
-    blocksstable::ObMicroBlockDecoder *reader,
-    int64_t &begin_index,
-    const common::ObIArray<int32_t> &cols,
-    const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    common::ObIArray<common::ObDatum *> &datums)
-{
-  int ret = OB_SUCCESS;
-  int64_t row_capacity = 0;
-  int64_t end_index = common::OB_INVALID_INDEX;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("vector store is not inited", K(ret));
-  } else if (OB_ISNULL(reader)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid null reader", K(ret));
-  } else if (!is_empty()) {
-    // defense code: fill rows banned when there is row copied in the front
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected vector store count", K(ret), KPC(this));
-  } else if (FALSE_IT(end_index = reader->row_count())) {
-  } else if (OB_FAIL(get_row_ids(reader, begin_index, end_index, row_capacity, false))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail to get row ids", K(ret), K(begin_index), K(end_index));
-    }
-  } else if (0 == row_capacity) {
-    // skip if no rows selected
-  } else if (OB_FAIL(reader->get_rows(cols, col_params, row_ids_, cell_data_ptrs_, row_capacity, datums))) {
-    LOG_WARN("fail to copy rows", K(ret), K(cols), K(row_capacity),
-             "row_ids", common::ObArrayWrap<const int64_t>(row_ids_, row_capacity));
-  }
-  LOG_TRACE("[Vectorized] vector store copy filter rows", K(ret),
-            K(begin_index), K(end_index), K(row_capacity),
-            "row_ids", common::ObArrayWrap<const int64_t>(row_ids_, row_capacity),
-            KPC(this));
-  return ret;
-}
-
 int ObBlockBatchedRowStore::get_row_ids(
     blocksstable::ObIMicroBlockReader *reader,
     int64_t &begin_index,
     const int64_t end_index,
     int64_t &row_count,
     const bool can_limit,
-    const common::ObBitmap *bitmap)
+    const ObFilterResult &res)
 {
   row_count = 0;
   int ret = OB_SUCCESS;
@@ -200,7 +120,7 @@ int ObBlockBatchedRowStore::get_row_ids(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(reader), K(begin_index), K(end_index), K(reader->row_count()));
   } else {
-    if (nullptr == bitmap || bitmap->is_all_true()) {
+    if (nullptr == res.bitmap_ || res.bitmap_->is_all_true()) {
       if (copy_row_ids(begin_index, capacity, step, row_ids_)) {
         row_count = capacity;
       } else {
@@ -208,49 +128,25 @@ int ObBlockBatchedRowStore::get_row_ids(
           row_ids_[row_count] = begin_index + row_count * step;
         }
       }
-      current_row = begin_index + capacity * step;
-    } else if (bitmap->is_all_false()) {
-      current_row = begin_index + capacity * step;
+      begin_index = begin_index + capacity * step;
+    } else if (res.bitmap_->is_all_false()) {
+      begin_index = begin_index + capacity * step;
     } else {
-      void *bit_ptr = nullptr;
-      if (1 == step && bitmap->get_bit_set(begin_index, row_num, bit_ptr) && nullptr != bit_ptr) {
-        int32_t i = 0;
-        int64_t end = begin_index + row_num / 32 * 32;
-        uint32_t *vals = reinterpret_cast<uint32_t *>(bit_ptr);
-        for (current_row = begin_index;
-             current_row != end && row_count < capacity;
-             current_row += 32) {
-          uint32_t v = vals[i++];
-          while (0 != v && row_count < capacity) {
-            row_ids_[row_count++] = __builtin_ctz(v) + current_row;
-            v = v & (v - 1);
-          }
-        }
-        if (row_count < capacity && current_row < end_index) {
-          uint32_t v = vals[i] & ((1LU << (end_index - current_row)) - 1);
-          while (0 != v && row_count < capacity) {
-            row_ids_[row_count++] = __builtin_ctz(v) + current_row;
-            v = v & (v - 1);
-          }
-        }
-
-        if (row_count >= capacity) {
-          row_count = capacity;
-          current_row = row_ids_[capacity - 1] + step;
-        } else {
-          current_row = end_index;
+      if (1 == step && 0 == res.filter_start_) {
+        if (OB_FAIL(res.bitmap_->get_row_ids(row_ids_, row_count, begin_index, end_index, capacity))) {
+          LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(end_index), K(capacity));
         }
       } else {
         for (current_row = begin_index;
              current_row != end_index && row_count < capacity;
              current_row += step) {
-          if (bitmap->test(current_row)) {
+          if (res.test(current_row)) {
             row_ids_[row_count++] = current_row;
           }
         }
+        begin_index = current_row;
       }
     }
-    begin_index = current_row;
 
     if (can_limit) {
       if (0 == row_count) {

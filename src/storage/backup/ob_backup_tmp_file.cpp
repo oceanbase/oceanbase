@@ -61,9 +61,9 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
   if (!is_opened_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tmp file init twice", K(ret));
-  } else if (OB_FAIL(get_io_info_(buf, size, io_info))) {
+  } else if (OB_FAIL(get_io_info_(buf, size, timeout_ms, io_info))) {
     LOG_WARN("failed to get io info", K(ret), K(buf), K(size));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().write(io_info, timeout_ms))) {
+  } else if (OB_FAIL(ObTmpFileManager::get_instance().write(io_info))) {
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
   } else {
     file_size_ += size;
@@ -87,7 +87,7 @@ int ObBackupTmpFile::close()
   return ret;
 }
 
-int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, ObTmpFileIOInfo &io_info)
+int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, const int64_t timeout_ms, ObTmpFileIOInfo &io_info)
 {
   int ret = OB_SUCCESS;
   io_info.reset();
@@ -96,6 +96,7 @@ int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, ObTmpFile
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = const_cast<char *>(buf);
   io_info.size_ = size;
+  io_info.io_timeout_ms_ = timeout_ms;
   return ret;
 }
 

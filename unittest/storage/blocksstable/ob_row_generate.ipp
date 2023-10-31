@@ -45,6 +45,19 @@
   } \
 }
 
+#define COMPARE_DECIMALINT(value, exist)                                                \
+  {                                                                                                \
+    ObDecimalIntBuilder bld;                                                                       \
+    bld.from(value);                                                                               \
+    int ret = 0;                                                                                   \
+    int cmp_res = 0;                                                                               \
+    if (OB_FAIL(wide::compare(bld, obj, cmp_res))) {                                               \
+      STORAGE_LOG(WARN, "fail to compare", K(ret));                                                \
+    } else {                                                                                       \
+      exist = (cmp_res == 0);                                                                      \
+    }                                                                                              \
+  }
+
 #define SET_VALUE(rowkey_pos, obj_set_fun, type, seed, value) \
 { \
   if (rowkey_pos > 0) { \
@@ -93,6 +106,27 @@
     } \
   } \
 }
+
+#define SET_DECIMALINT(allocator, rowkey_pos, seed, value)                                         \
+  {                                                                                                \
+    ObDecimalIntBuilder bld;                                                                       \
+    if (rowkey_pos > 0) {                                                                          \
+      bld.from(seed);                                                                              \
+    } else {                                                                                       \
+      bld.from(value);                                                                             \
+    }                                                                                              \
+    const ObDecimalInt *decint = nullptr;                                                          \
+    int32_t int_bytes = 0;                                                                         \
+    bld.build(decint, int_bytes);                                                                  \
+    char *buf = nullptr;                                                                           \
+    if (OB_ISNULL(buf = (char *)allocator->alloc(int_bytes))) {                                    \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                             \
+      STORAGE_LOG(WARN, "fail to alloc memory");                                                   \
+    } else {                                                                                       \
+      MEMCPY(buf, decint, int_bytes);                                                              \
+      obj.set_decimal_int(int_bytes, 0, reinterpret_cast<ObDecimalInt *>(buf));                    \
+    }                                                                                              \
+  }
 
 namespace oceanbase
 {
@@ -283,7 +317,7 @@ int ObRowGenerate::generate_one_row(ObDatumRow &row, const int64_t seed, const O
     STORAGE_LOG(WARN, "should init first");
   } else if ((!is_multi_version_row_ && schema_.get_column_count() > row.count_)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(schema_.get_column_count()), K(row.count_));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(schema_.get_column_count()), K(row.count_));
   } else {
     ObObj obj;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_list_.count(); ++i) {
@@ -538,6 +572,10 @@ int ObRowGenerate::set_obj(const ObObjType &column_type,
       }
       break;
     }
+    case ObDecimalIntType: {
+      SET_DECIMALINT(p_allocator_, rowkey_pos, seed, value)
+      break;
+    }
     default:
       STORAGE_LOG(WARN, "not support this data type.", K(column_type));
       ret = OB_NOT_SUPPORTED;
@@ -777,6 +815,10 @@ int ObRowGenerate::compare_obj(const ObObjType &column_type, const int64_t value
     }
     break;
   }
+  case ObDecimalIntType: {
+    COMPARE_DECIMALINT(value, exist);
+    break;
+  }
   default:
     STORAGE_LOG(WARN, "don't support this data type.", K(column_type));
     ret = OB_NOT_SUPPORTED;
@@ -869,6 +911,16 @@ int ObRowGenerate::get_seed(const ObObjType &column_type, const ObObj obj, int64
       STORAGE_LOG(WARN, "unexpected obj count or obj type", K(ret), K(obj_arr));
     } else {
       seed = obj_arr.at(0).get_int();
+    }
+    break;
+  }
+  case ObDecimalIntType: {
+    char buf[256];
+    int64_t length = 0;
+    if (OB_FAIL(wide::to_string(obj.get_decimal_int(), obj.get_int_bytes(), obj.get_scale(), buf, sizeof(buf), length))) {
+      STORAGE_LOG(WARN, "to_string failed", K(ret));
+    } else {
+      seed = static_cast<int64_t>(strtoll(buf, NULL, 10));
     }
     break;
   }

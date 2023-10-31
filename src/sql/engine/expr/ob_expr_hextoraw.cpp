@@ -84,8 +84,10 @@ int ObExprHextoraw::calc_hextoraw_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res_datum.set_null();
-  } else if (OB_FAIL(ObDatumHexUtils::hextoraw(expr, *arg, expr.args_[0]->datum_meta_.type_,
-                                       expr.args_[0]->datum_meta_.cs_type_, ctx, res_datum))) {
+  } else if (OB_FAIL(ObDatumHexUtils::hextoraw(
+                     expr, *arg,
+                     expr.args_[0]->datum_meta_,
+                     ctx, res_datum))) {
     LOG_WARN("hextoraw failed", K(ret));
   }
   return ret;

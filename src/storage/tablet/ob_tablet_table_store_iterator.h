@@ -73,7 +73,8 @@ public:
   int add_tables(
       const ObSSTableArray &sstable_array,
       const int64_t start_pos = 0,
-      const int64_t count = 1);
+      const int64_t count = 1,
+      const bool unpack_co_table = false);
   inline bool check_store_expire() const
   {
     return (NULL == memstore_retired_) ? false : ATOMIC_LOAD(memstore_retired_);

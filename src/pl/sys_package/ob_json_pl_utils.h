@@ -69,8 +69,6 @@ public:
   static bool is_pl_json_element_type(int64_t id) { return (id == JSN_PL_ELEMENT_TYPE_ID); }
   static bool is_pl_json_object_type(int64_t id) { return (id == JSN_PL_OBJECT_TYPE_ID); }
 
-  static int str_to_lob_storage_obj(ObIAllocator &allocator, const ObString& input, common::ObObj& output);
-
   static int get_lob_inner(ObIAllocator& allocator, const ObString& val_str, ObPlJsonUtil::PL_JSN_STRING_TYPE type, ObIJsonBase*& j_base);
 };
 

@@ -24,7 +24,6 @@
 #include "rpc/obmysql/ob_mysql_global.h"
 
 using namespace oceanbase::common;
-
 namespace oceanbase
 {
 namespace common
@@ -33,6 +32,7 @@ class ObOTimestampData;
 struct ObURowIDData;
 struct ObLobLocator;
 class ObDataTypeCastParams;
+struct ObDecimalInt;
 }
 namespace obmysql
 {
@@ -431,8 +431,13 @@ public:
                                   const common::ObLobLocator &lob_locator, int64_t &pos);
   static int json_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObString &val, int64_t &pos);
   static int sql_utd_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObString &val, int64_t &pos);
+
+  static int decimalint_cell_str(char *buf, const int64_t len,
+                                 const ObDecimalInt *decint, const int32_t int_bytes, int16_t scale,
+                                 int64_t &pos, bool zerofill, int32_t zflength);
   static int geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
   static inline int16_t float_length(const int16_t scale);
+
 public:
   static const uint64_t NULL_;
 

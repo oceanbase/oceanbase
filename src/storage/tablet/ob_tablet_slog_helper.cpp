@@ -21,6 +21,7 @@
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_logger.h"
 #include "storage/slog/ob_storage_log_replayer.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::share;

@@ -19,6 +19,7 @@
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_bloom_filter_cache.h"
+#include "storage/compaction/ob_compaction_memory_pool.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,7 @@ private:
   int build_micro_block_header(const int64_t rowkey_column_count, const int64_t row_count);
 private:
   ObBloomFilterMicroBlockHeader *bf_micro_header_;
-  ObSelfBufferWriter data_buffer_;
+  storage::ObCompactionBufferWriter data_buffer_;
   bool is_inited_;
 };
 
@@ -58,7 +59,7 @@ private:
                         const int64_t orig_block_size);
   int flush_macro_block();
 private:
-  ObSelfBufferWriter data_buffer_;
+  storage::ObCompactionBufferWriter data_buffer_;
   ObBloomFilterMacroBlockHeader *bf_macro_header_;
   ObMacroBlockCommonHeader common_header_;
   ObMicroBlockCompressor compressor_;

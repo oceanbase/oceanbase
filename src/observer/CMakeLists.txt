@@ -280,6 +280,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ls_archive_stat.cpp
   virtual_table/ob_all_virtual_server_blacklist.cpp
   virtual_table/ob_all_virtual_server_compaction_progress.cpp
+  virtual_table/ob_all_virtual_tablet_stat.cpp
   virtual_table/ob_all_virtual_server_object_pool.cpp
   virtual_table/ob_all_virtual_server_schema_info.cpp
   virtual_table/ob_all_virtual_schema_memory.cpp
@@ -331,7 +332,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_information_columns_table.cpp
   virtual_table/ob_information_global_status_table.cpp
   virtual_table/ob_information_kvcache_table.cpp
-  virtual_table/ob_all_virtual_kvcache_handle_leak_info.cpp
+  virtual_table/ob_all_virtual_storage_leak_info.cpp
   virtual_table/ob_information_parameters_table.cpp
   virtual_table/ob_information_partitions_table.cpp
   virtual_table/ob_information_referential_constraints_table.cpp

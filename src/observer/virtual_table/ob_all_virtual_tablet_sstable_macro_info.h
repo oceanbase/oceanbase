@@ -18,7 +18,7 @@
 #include "share/ob_scanner.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/blocksstable/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/ob_i_table.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
@@ -58,10 +58,12 @@ class ObAllVirtualTabletSSTableMacroInfo : public common::ObVirtualTableScannerI
     OCCUPY_SIZE,
     MICRO_BLOCK_CNT,
     DATA_CHECKSUM,
-    MACRO_RANGE,
+    START_KEY,
+    END_KEY,
     BLOCK_TYPE,
     COMPRESSOR_NAME,
-    ROW_STORE_TYPE
+    ROW_STORE_TYPE,
+    CG_IDX
   };
 public:
   ObAllVirtualTabletSSTableMacroInfo();
@@ -127,7 +129,8 @@ private:
   common::ObSEArray<ObColDesc, 16> cols_desc_;
   int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];
-  char range_buf_[common::OB_MAX_RANGE_LENGTH + 1]; // extra byte for '\0'
+  char start_key_buf_[common::OB_MAX_ROW_KEY_LENGTH + 1]; // extra byte for '\0'
+  char end_key_buf_[common::OB_MAX_ROW_KEY_LENGTH + 1]; // extra byte for '\0'
   storage::ObTableStoreIterator table_store_iter_;
   blocksstable::ObSSTable *curr_sstable_;
   blocksstable::ObSSTableMetaHandle curr_sstable_meta_handle_;
@@ -139,6 +142,7 @@ private:
   common::ObObj objs_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
   int64_t block_idx_;
   void *iter_buf_;
+  char *io_buf_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTabletSSTableMacroInfo);
 };

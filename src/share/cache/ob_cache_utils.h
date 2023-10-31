@@ -567,6 +567,176 @@ void ObSimpleFixedArray<T>::destroy()
   local_allocator_.reset();
   inited_ = false;
 }
+
+class ObWashableSizeInfo
+{
+public:
+  ObWashableSizeInfo()
+    : buckets_(nullptr),
+      bucket_num_(0),
+      nodes_(nullptr),
+      size_(0),
+      count_(0),
+      allocator_(nullptr),
+      is_inited_(false) {}
+  ~ObWashableSizeInfo()
+  {
+    destroy();
+  }
+  int init(const int64_t size, const int64_t bucket_num, ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_INIT) {
+      ret = OB_INIT_TWICE;
+      COMMON_LOG(WARN, "Init twice", K(ret), K(is_inited_));
+    } else if (OB_UNLIKELY(size <= 0 || bucket_num <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "Invalid argument", K(ret), K(size), K(bucket_num));
+    } else {
+      char *buf = static_cast<char*>(allocator.alloc(sizeof(int32_t) * bucket_num + sizeof(Node) * size));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        COMMON_LOG(WARN, "Fail to alloc memory", K(ret));
+      } else {
+        allocator_ = &allocator;
+        buckets_ = reinterpret_cast<int32_t *>(buf);
+        bucket_num_ = bucket_num;
+        MEMSET(buckets_, -1, sizeof(int32_t) * bucket_num);
+        nodes_ = reinterpret_cast<Node *>(buf + sizeof(int32_t) * bucket_num);
+        new (nodes_) Node[size];
+        size_ = size;
+        is_inited_ = true;
+      }
+    }
+    return ret;
+  }
+  void destroy()
+  {
+    is_inited_= false;
+    if (OB_NOT_NULL(buckets_) && OB_NOT_NULL(allocator_)) {
+      allocator_->free(buckets_);
+    }
+    allocator_ = nullptr;
+    buckets_ = nullptr;
+    bucket_num_ = 0;
+    nodes_ = nullptr;
+    size_ = 0;
+    count_ = 0;
+  }
+  void reuse()
+  {
+    MEMSET(buckets_, -1, sizeof(int32_t) * bucket_num_);
+    for (int i = 0 ; i < size_ ; ++i) {
+      nodes_[i].reuse();
+    }
+    count_ = 0;
+  }
+  int copy_from(const ObWashableSizeInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "Not inited", K(ret));
+    } else if (OB_UNLIKELY(!other.is_inited_ || bucket_num_ != other.bucket_num_ || size_ != other.size_)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "Invalid argument", K(ret), K(other.is_inited_), K(bucket_num_),
+                                           K(other.bucket_num_), K(size_), K(other.size_));
+    } else {
+      MEMCPY(buckets_, other.buckets_, sizeof(int32_t) * bucket_num_ + sizeof(Node) * size_);
+      count_ = other.count_;
+    }
+    return ret;
+  }
+  int get_size(const uint64_t tenant_id, int64_t &washable_size)
+  {
+    int ret = OB_SUCCESS;
+    washable_size = 0;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "Not inited", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
+    } else {
+      Node *tenant_node = find_tenant_node(tenant_id);
+      if (tenant_node != nullptr) {
+        washable_size = tenant_node->washable_size_;
+      }
+    }
+    return ret;
+  }
+  int add_washable_size(const uint64_t tenant_id, const int64_t size)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "Not inited", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || size < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id), K(size));
+    } else {
+      Node *tenant_node = find_tenant_node(tenant_id, true /* add tenant */);
+      if (tenant_node != nullptr) {
+        tenant_node->washable_size_ += size;
+      }
+    }
+    return ret;
+  }
+
+private:
+  struct Node
+  {
+    Node() : tenant_id_(OB_INVALID_TENANT_ID), washable_size_(0), next_(-1) {}
+    void reuse() {
+      tenant_id_ = OB_INVALID_TENANT_ID;
+      washable_size_ = 0;
+      next_ = -1;
+    }
+    TO_STRING_KV(K_(tenant_id), K_(washable_size), K_(next));
+    uint64_t tenant_id_;
+    int64_t washable_size_;
+    int32_t next_;
+  };
+
+  Node *find_tenant_node(const uint64_t tenant_id, const bool add_tenant_node = false)
+  {
+    Node *tenant_node = nullptr;
+    int32_t idx = buckets_[tenant_id % bucket_num_];
+    tenant_node = get_node(idx);
+    while (tenant_node != nullptr) {
+      if (tenant_id == tenant_node->tenant_id_) {
+        break;
+      } else {
+        tenant_node = get_node(tenant_node->next_);
+      }
+    }
+    if (nullptr == tenant_node && add_tenant_node && count_ < size_) {
+      tenant_node = nodes_ + count_;
+      tenant_node->tenant_id_ = tenant_id;
+      tenant_node->next_ = idx;
+      buckets_[tenant_id % bucket_num_] = count_++;
+    }
+    return tenant_node;
+  }
+  Node *get_node(const int32_t idx) const
+  {
+    Node *node = nullptr;
+    if (idx >= 0 && idx < size_) {
+      node = nodes_ + idx;
+    }
+    return node;
+  }
+
+  int32_t *buckets_;
+  int64_t bucket_num_;
+  Node *nodes_;
+  int64_t size_;
+  int32_t count_;
+  ObIAllocator *allocator_;
+  bool is_inited_;
+};
+
+
 }//end namespace common
 }//end namespace oceanbase
 

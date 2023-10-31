@@ -27,6 +27,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*int -> XXX*/
@@ -55,6 +56,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*uint -> XXX*/
@@ -83,6 +85,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*float -> XXX*/
@@ -111,6 +114,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDoubleType,/*DecimalInt*/
   },
   {
     /*double -> XXX*/
@@ -139,6 +143,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDoubleType,/*DecimalInt*/
   },
   {
     /*number -> XXX*/
@@ -167,6 +172,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*datetime -> XXX*/
@@ -195,6 +201,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObVarcharType,/*DecimalInt*/
   },
   {
     /*date -> XXX*/
@@ -223,6 +230,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObVarcharType,/*DecimalInt*/
   },
   {
     /*time -> XXX*/
@@ -251,6 +259,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObVarcharType,/*DecimalInt*/
   },
   {
     /*year -> XXX*/
@@ -279,6 +288,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*string -> XXX*/
@@ -307,6 +317,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObVarcharType,/*DecimalInt*/
   },
   {
     /*extend -> XXX*/
@@ -335,6 +346,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType,/*DecimalInt*/
   },
   {
     /*unknown -> XXX*/
@@ -363,6 +375,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*text -> XXX*/
@@ -391,6 +404,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObLongTextType,/*DecimalInt*/
   },
   {
     /*bit -> XXX*/
@@ -419,6 +433,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDecimalIntType,/*DecimalInt*/
   },
   {
     /*EnumSet -> XXX*/
@@ -447,6 +462,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObVarcharType,/*DecimalInt*/
   },
   {
     /*EnumSetInner -> XXX*/
@@ -475,6 +491,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*OTimestamp -> XXX*/
@@ -503,6 +520,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObVarcharType,/*DecimalInt*/
   },
   {
     /*Raw -> XXX*/
@@ -531,6 +549,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Interval -> XXX*/
@@ -559,6 +578,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*RowID -> XXX*/
@@ -587,6 +607,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Lob -> XXX*/
@@ -615,6 +636,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Json -> XXX*/
@@ -642,6 +664,8 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
     ObMaxType,  /*Geometry*/
+    ObMaxType,  /*UDT*/
+    ObJsonType, /*DecimalInt*/
   },
 {
     /*Geometry -> XXX*/
@@ -669,7 +693,66 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
-    ObMaxType, /*User Defined Type*/
+    ObMaxType, /*UDT*/
+    ObMaxType, /*DecimalInt*/
+  },
+  {
+    /*UDT -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObMaxType, /*string*/
+    ObMaxType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*UDT*/
+    ObMaxType, /*DecimalInt*/
+  },
+  {
+    /*DecimalInt -> XXX*/
+    ObDecimalIntType,/*null*/
+    ObDecimalIntType,/*int*/
+    ObDecimalIntType,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObDecimalIntType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObDecimalIntType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDecimalIntType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObDecimalIntType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*UDT*/
+    ObDecimalIntType,/*DecimalInt*/
   },
 };
 
@@ -703,6 +786,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObUserDefinedSQLType, /*User Defined Type*/
+    ObNumberType, /*DecimalInt*/
   },
   {
     // treat int as number, because const 1 will be parsed to bigint 1, not number 1 now.
@@ -732,6 +816,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObNumberType, /*DecimalInt*/
   },
   {
     /*uint -> XXX*/
@@ -760,6 +845,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*float -> XXX*/
@@ -788,6 +874,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObFloatType, /*DecimalInt*/
   },
   {
     /*double -> XXX*/
@@ -816,6 +903,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObDoubleType, /*DecimalInt*/
   },
   {
     /*number -> XXX*/
@@ -844,6 +932,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObNumberType, /*DecimalInt*/
   },
   {
     /*datetime -> XXX*/
@@ -872,6 +961,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*date -> XXX*/
@@ -900,6 +990,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*time -> XXX*/
@@ -928,6 +1019,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*year -> XXX*/
@@ -956,6 +1048,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*string -> XXX*/
@@ -984,6 +1077,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObVarcharType, /*User Defined Type*/
+    ObVarcharType, /*DecimalInt*/
   },
   {
     /*extend -> XXX*/
@@ -1012,6 +1106,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObUserDefinedSQLType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*unknown -> XXX*/
@@ -1040,6 +1135,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*text -> XXX*/
@@ -1068,6 +1164,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObLongTextType, /*DecimalInt*/
   },
   {
     /*bit -> XXX*/
@@ -1096,6 +1193,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*EnumSet -> XXX*/
@@ -1124,6 +1222,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*EnumSetInner -> XXX*/
@@ -1152,6 +1251,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType, /*Json*/
       ObMaxType, /*Geometry*/
       ObMaxType, /*User Defined Type*/
+      ObMaxType, /*DecimalInt*/
   },
   {
     /*otimestamp-> XXX*/
@@ -1180,6 +1280,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Raw-> XXX*/
@@ -1208,6 +1309,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Interval-> XXX*/
@@ -1236,6 +1338,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*RowID-> XXX*/
@@ -1264,6 +1367,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Lob -> XXX*/
@@ -1292,6 +1396,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Json -> XXX*/
@@ -1320,6 +1425,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObJsonType, /*Json*/
     ObMaxType,  /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*Geometry -> XXX*/
@@ -1348,6 +1454,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObMaxType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
   },
   {
     /*User Defined Type -> XXX*/
@@ -1376,5 +1483,35 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Json*/
     ObMaxType, /*Geometry*/
     ObUserDefinedSQLType, /*User Defined Type*/
+    ObMaxType, /*DecimalInt*/
+  },
+  {
+    /*DecimalInt -> XXX*/
+    ObNumberType,/*null*/
+    ObNumberType,/*int*/
+    ObMaxType,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
+    ObNumberType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
+    ObNumberType,/*text*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
+    ObNumberType,/*Raw*/
+    ObMaxType,/*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
+    ObMaxType, /*UDT*/
+    ObNumberType, /*DecimalInt*/
   },
 };

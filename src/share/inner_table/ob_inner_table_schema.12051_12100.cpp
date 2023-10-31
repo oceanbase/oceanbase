@@ -6478,6 +6478,44 @@ int ObInnerTableSchema::all_virtual_table_schema(ObTableSchema &table_schema)
       name_generated_type_default,
       name_generated_type_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj max_used_column_group_id_default;
+    max_used_column_group_id_default.set_int(1000);
+    ADD_COLUMN_SCHEMA_T("max_used_column_group_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      max_used_column_group_id_default,
+      max_used_column_group_id_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj column_store_default;
+    column_store_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("column_store", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      column_store_default,
+      column_store_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -7883,6 +7921,44 @@ int ObInnerTableSchema::all_virtual_table_history_schema(ObTableSchema &table_sc
       name_generated_type_default,
       name_generated_type_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj max_used_column_group_id_default;
+    max_used_column_group_id_default.set_int(1000);
+    ADD_COLUMN_SCHEMA_T("max_used_column_group_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      max_used_column_group_id_default,
+      max_used_column_group_id_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj column_store_default;
+    column_store_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("column_store", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      column_store_default,
+      column_store_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -8440,6 +8516,25 @@ int ObInnerTableSchema::all_virtual_column_schema(ObTableSchema &table_schema)
       false, //is_autoincrement
       sub_data_type_default,
       sub_data_type_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj skip_index_attr_default;
+    skip_index_attr_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("skip_index_attr", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      skip_index_attr_default,
+      skip_index_attr_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
@@ -9013,6 +9108,25 @@ int ObInnerTableSchema::all_virtual_column_history_schema(ObTableSchema &table_s
       false, //is_autoincrement
       sub_data_type_default,
       sub_data_type_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj skip_index_attr_default;
+    skip_index_attr_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("skip_index_attr", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      skip_index_attr_default,
+      skip_index_attr_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

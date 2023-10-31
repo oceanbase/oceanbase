@@ -19,8 +19,8 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
-#include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
@@ -30,6 +30,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;
@@ -382,7 +383,7 @@ int ObDDLTableMergeTask::process()
       } else if (OB_ISNULL(sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl major sstable is null", K(ret), K(ddl_param));
-      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
+      } else if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
       }
       if (OB_FAIL(ret)) {
@@ -406,8 +407,7 @@ int ObTabletDDLUtil::check_data_integrity(ObTableStoreIterator &ddl_sstable_iter
 {
   int ret = OB_SUCCESS;
   is_data_complete = false;
-  if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min()
-      || prepare_scn <= start_scn)) {
+  if (OB_UNLIKELY(!ddl_sstable_iter.is_valid() || !start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min() || prepare_scn <= start_scn)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(start_scn), K(prepare_scn));
   } else if (0 == ddl_sstable_iter.count()) {
@@ -476,7 +476,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                              const int64_t snapshot_version,
                                              const int64_t data_format_version,
                                              const ObSSTable *first_ddl_sstable,
-                                             ObDataStoreDesc &data_desc)
+                                             ObWholeDataStoreDesc &data_desc)
 {
   int ret = OB_SUCCESS;
   data_desc.reset();
@@ -490,7 +490,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version));
   } else if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("fail to get storage schema", K(ret));
-  } else if (OB_FAIL(data_desc.init_as_index(*storage_schema,
+  } else if (OB_FAIL(data_desc.init(*storage_schema,
                                     ls_id,
                                     tablet_id,
                                     MAJOR_MERGE,
@@ -508,32 +508,12 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
         LOG_WARN("get sstable meta handle fail", K(ret), KPC(first_ddl_sstable));
       } else {
         const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
-        data_desc.row_store_type_ = basic_meta.root_row_store_type_;
-        data_desc.compressor_type_ = basic_meta.compressor_type_;
-        data_desc.master_key_id_ = basic_meta.master_key_id_;
-        data_desc.encrypt_id_ = basic_meta.encrypt_id_;
-        data_desc.encoder_opt_.set_store_type(basic_meta.root_row_store_type_);
-        MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-        data_desc.need_prebuild_bloomfilter_ = false;
-
-        data_desc.full_stored_col_cnt_ = basic_meta.column_cnt_;
-        while (data_desc.col_default_checksum_array_.count() > basic_meta.column_cnt_) {
-          data_desc.col_default_checksum_array_.pop_back();
+        if (OB_FAIL(data_desc.get_desc().update_basic_info_from_macro_meta(
+            meta_handle.get_sstable_meta().get_basic_meta()))) {
+          LOG_WARN("failed to update basic info from macro_meta", KR(ret), K(basic_meta));
         }
       }
-    } else {
-      int64_t column_count = 0;
-      if (OB_FAIL(storage_schema->get_stored_column_count_in_sstable(column_count))) {
-        LOG_WARN("fail to get stored column count in sstable", K(ret));
-      } else {
-        data_desc.full_stored_col_cnt_ = column_count;
-        while (data_desc.col_default_checksum_array_.count() > column_count) {
-          data_desc.col_default_checksum_array_.pop_back();
-        }
-      }
-
     }
-    data_desc.is_ddl_ = true;
   }
   ObTablet::free_storage_schema(tmp_arena, storage_schema);
   return ret;
@@ -576,7 +556,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
   void *buf = nullptr;
   ObSSTableIndexBuilder *sstable_index_builder = nullptr;
   ObIndexBlockRebuilder *index_block_rebuilder = nullptr;
-  ObDataStoreDesc data_desc;
+  ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
   if (OB_UNLIKELY(!ddl_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param));
@@ -590,9 +570,9 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for sstable index builder failed", K(ret));
   } else if (FALSE_IT(sstable_index_builder = new (buf) ObSSTableIndexBuilder)) {
-  } else if (OB_FAIL(sstable_index_builder->init(data_desc,
+  } else if (OB_FAIL(sstable_index_builder->init(data_desc.get_desc(),
                                                  nullptr, // macro block flush callback
-                                                 ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::AUTO : ObSSTableIndexBuilder::DISABLE))) {
+                                                 ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::ENABLE : ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
   } else if (OB_ISNULL(buf = arena.alloc(sizeof(ObIndexBlockRebuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -834,6 +814,7 @@ int ObTabletDDLUtil::compact_ddl_sstable(ObTablet &tablet,
     LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
   } else if (FALSE_IT(ddl_sstable_iter.resume())) {
   } else {
+    ddl_sstable_iter.resume();
     ObDatumRowkey last_rowkey;
     SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
       ObDatumRange query_range;
@@ -891,8 +872,7 @@ int ObTabletDDLUtil::compact_ddl_sstable(ObTablet &tablet,
             }
           }
           LOG_INFO("append meta tree finished", K(ret),
-                   //              "data_macro_block_cnt_in_sstable", cur_sstable->get_meta().get_basic_meta().get_data_macro_block_count(),
-                   K(meta_tree.get_macro_block_cnt()));
+                "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(), K(meta_tree.get_macro_block_cnt()));
 #ifdef ERRSIM
           if (OB_SUCC(ret) && ddl_param.table_key_.is_major_sstable()) {
             ret = OB_E(EventTable::EN_DDL_COMPACT_FAIL) OB_SUCCESS;
@@ -903,6 +883,9 @@ int ObTabletDDLUtil::compact_ddl_sstable(ObTablet &tablet,
 #endif
         }
       }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
     }
   }
   // close

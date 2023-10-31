@@ -21,7 +21,6 @@ namespace observer
 {
 ObAllVirtualServerCompactionEventHistory::ObAllVirtualServerCompactionEventHistory()
     : event_(),
-      last_event_(),
       event_iter_(),
       is_inited_(false)
 {
@@ -68,6 +67,7 @@ int ObAllVirtualServerCompactionEventHistory::inner_get_next_row(common::ObNewRo
 int ObAllVirtualServerCompactionEventHistory::fill_cells()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();
   ObObj *cells = cur_row_.cells_;
   int64_t compression_ratio = 0;
@@ -104,19 +104,16 @@ int ObAllVirtualServerCompactionEventHistory::fill_cells()
       cells[i].set_timestamp(event_.timestamp_);
       break;
     case EVENT:
-      if (last_event_.is_valid()) {
-        if (OB_FAIL(event_.generate_event_str(last_event_, event_buf_, sizeof(event_buf_)))) {
-          SERVER_LOG(WARN, "failed to generate event str", K(ret), K(event_));
-        }
-      } else if (OB_FAIL(event_.generate_event_str(event_buf_, sizeof(event_buf_)))) {
-        SERVER_LOG(WARN, "failed to generate event str", K(ret), K(event_));
-      }
-      if (OB_SUCC(ret)) {
-        cells[i].set_varchar(event_buf_);
-      } else {
-        ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(event_.generate_event_str(event_buf_, sizeof(event_buf_)))) {
+        SERVER_LOG(WARN, "failed to generate event str", K(tmp_ret), K(event_));
         cells[i].set_varchar("");
+      } else {
+        cells[i].set_varchar(event_buf_);
       }
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
+    case ROLE:
+      cells[i].set_varchar(compaction::ObServerCompactionEvent::get_comp_role_str(event_.role_));
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     default:
@@ -124,7 +121,6 @@ int ObAllVirtualServerCompactionEventHistory::fill_cells()
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));
     }
   }
-  last_event_ = event_;
 
   return ret;
 }

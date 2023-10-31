@@ -306,11 +306,10 @@ int ObLSRestoreDagNet::start_running_for_ls_restore_()
   }
 
   if (OB_NOT_NULL(initial_ls_restore_dag) && OB_NOT_NULL(scheduler)) {
-    initial_ls_restore_dag->reset_children();
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_ls_restore_dag))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_ls_restore_dag));
     }
-    scheduler->free_dag(*initial_ls_restore_dag);
+    scheduler->free_dag(*initial_ls_restore_dag); // contain reset_children
     initial_ls_restore_dag = nullptr;
   }
 
@@ -694,7 +693,7 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
         ret = OB_EAGAIN;
       }
 
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_ls_restore_dag, start_ls_restore_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_ls_restore_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_ls_restore_dag));
       } else {
         finish_ls_restore_dag = nullptr;
@@ -707,12 +706,12 @@ int ObInitialLSRestoreTask::generate_ls_restore_dags_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_ls_restore_dag)) {
-        scheduler->free_dag(*finish_ls_restore_dag, start_ls_restore_dag);
+        scheduler->free_dag(*finish_ls_restore_dag);
         finish_ls_restore_dag = nullptr;
       }
 
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_ls_restore_dag)) {
-        scheduler->free_dag(*start_ls_restore_dag, initial_ls_restore_dag);
+        scheduler->free_dag(*start_ls_restore_dag);
         start_ls_restore_dag = nullptr;
       }
       const bool need_retry = true;
@@ -1174,7 +1173,7 @@ int ObStartLSRestoreTask::generate_tablets_restore_dag_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(sys_tablets_restore_dag)) {
-        scheduler->free_dag(*sys_tablets_restore_dag, start_ls_restore_dag);
+        scheduler->free_dag(*sys_tablets_restore_dag);
         sys_tablets_restore_dag = nullptr;
       }
     }
@@ -1442,10 +1441,9 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
         ObIDag *last = tablet_restore_dag_array.at(tablet_restore_dag_array.count() - 1);
         if (last == tablet_restore_dag) {
           tablet_restore_dag_array.pop_back();
-          last = tablet_restore_dag_array.at(tablet_restore_dag_array.count() - 1);
         }
 
-        scheduler->free_dag(*tablet_restore_dag, last);
+        scheduler->free_dag(*tablet_restore_dag);
         tablet_restore_dag = nullptr;
       }
     }
@@ -1454,9 +1452,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
     if (OB_FAIL(ret)) {
       // The i-th dag is the parent dag of (i+1)-th dag.
       for (int64_t child_idx = tablet_restore_dag_array.count() - 1; child_idx > 0; child_idx--) {
-        if (OB_TMP_FAIL(scheduler->cancel_dag(
-              tablet_restore_dag_array.at(child_idx),
-              tablet_restore_dag_array.at(child_idx - 1)))) {
+        if (OB_TMP_FAIL(scheduler->cancel_dag(tablet_restore_dag_array.at(child_idx)))) {
           LOG_WARN("failed to cancel inner tablet restore dag", K(tmp_ret), K(child_idx));
         }
       }
@@ -1716,7 +1712,7 @@ int ObDataTabletsMetaRestoreTask::generate_tablet_group_dag_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(tablet_group_dag)) {
-        scheduler->free_dag(*tablet_group_dag, data_tablets_meta_restore_dag);
+        scheduler->free_dag(*tablet_group_dag);
         tablet_group_dag = nullptr;
       }
     }
@@ -2280,7 +2276,7 @@ int ObFinishLSRestoreTask::generate_initial_ls_restore_dag_()
     }
 
     if (OB_NOT_NULL(initial_ls_restore_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_ls_restore_dag, finish_ls_restore_dag);
+      scheduler->free_dag(*initial_ls_restore_dag);
       initial_ls_restore_dag = nullptr;
     }
   }

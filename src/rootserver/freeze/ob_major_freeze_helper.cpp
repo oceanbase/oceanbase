@@ -10,13 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_tenant_info_proxy.h"
+#include "src/observer/ob_srv_network_frame.h"
 
 namespace oceanbase
 {
@@ -61,6 +62,72 @@ int ObMajorFreezeHelper::major_freeze(
     if (OB_FAIL(do_major_freeze(*param.transport_, freeze_info_array, merge_results))) {
       LOG_WARN("fail to do major freeze", KR(ret), K(freeze_info_array));
     }
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::tablet_major_freeze(const ObTabletMajorFreezeParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(param));
+  } else if (OB_UNLIKELY(nullptr == GCTX.location_service_ || nullptr == GCTX.net_frame_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid GCTX", KR(ret));
+  } else {
+    LOG_INFO("tablet major freeze", K(ret), K(param));
+    const int64_t start_time = ObTimeUtility::fast_current_time();
+    obrpc::ObTabletMajorFreezeRpcProxy proxy;
+    ObAddr leader;
+    uint64_t tenant_id = param.tenant_id_;
+    obrpc::ObTabletMajorFreezeRequest req;
+    req.tenant_id_ = tenant_id;
+    req.tablet_id_ = param.tablet_id_;
+    req.is_rebuild_column_group_ = param.is_rebuild_column_group_;
+    obrpc::ObMajorFreezeResponse resp;
+    bool is_cache_hit = false;
+
+    if (OB_FAIL(GCTX.location_service_->get(
+      tenant_id, param.tablet_id_, MAX_PROCESS_TIME_US, is_cache_hit, req.ls_id_))) {
+      LOG_WARN("failed to get ls_id", K(ret), K(tenant_id), K(param.tablet_id_));
+    } else if (OB_FAIL(proxy.init(GCTX.net_frame_->get_req_transport()))) {
+      LOG_WARN("failed to init proxy", K(ret));
+    } else {
+      const int64_t MAX_RETRY_COUNT = 5;
+      bool major_freeze_done = false;
+
+      for (int64_t i = 0; OB_SUCC(ret) && (!major_freeze_done) && (i < MAX_RETRY_COUNT); ++i) {
+        if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+                    tenant_id, req.ls_id_, leader))) {
+          LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(proxy.to(leader)
+                                .trace_time(true)
+                                .max_process_handler_time(MAX_PROCESS_TIME_US)
+                                .by(tenant_id)
+                                .dst_cluster_id(GCONF.cluster_id)
+                                .tablet_major_freeze(req, resp))) {
+          if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
+            const int64_t idle_time = 200 * 1000 * (i + 1);
+            LOG_WARN("leader may switch or ddl confilict, will retry", KR(ret), K(tenant_id), K(param),
+              "ori_leader", leader, K(idle_time));
+            USLEEP(idle_time);
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to send command", K(ret), K(req));
+          }
+        } else {
+          major_freeze_done = true;
+        }
+      } // end of for
+
+      if (OB_SUCC(ret) && !major_freeze_done) {
+        ret = OB_LEADER_NOT_EXIST;
+        LOG_WARN("fail to retry major freeze cuz switching role", KR(ret), K(MAX_RETRY_COUNT));
+      }
+    }
+    const int64_t cost_time = ObTimeUtility::current_time() - start_time;
+    LOG_INFO("do tenant major freeze", KR(ret), K(tenant_id), K(leader), K(param), K(cost_time));
   }
   return ret;
 }
@@ -297,7 +364,7 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
       bool major_freeze_done = false;
 
       for (int64_t i = 0; OB_SUCC(ret) && (!major_freeze_done) && (i < MAX_RETRY_COUNT); ++i) {
-        if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id, 
+        if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
                     tenant_id, share::SYS_LS, leader))) {
           LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
         } else if (OB_FAIL(proxy.to(leader)
@@ -336,7 +403,7 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
         LOG_WARN("fail to retry major freeze cuz switching role", KR(ret), K(MAX_RETRY_COUNT));
       }
     }
-    
+
     const int64_t launch_cost_time = ObTimeUtility::current_time() - launch_start_time;
     LOG_INFO("do tenant major freeze", KR(ret), K(tenant_id), K(leader), K(freeze_info), K(launch_cost_time));
   }
@@ -361,7 +428,7 @@ int ObMajorFreezeHelper::clear_merge_error(const ObTenantAdminMergeParam &param)
 }
 
 int ObMajorFreezeHelper::do_tenant_admin_merge(
-    const ObTenantAdminMergeParam &param, 
+    const ObTenantAdminMergeParam &param,
     const obrpc::ObTenantAdminMergeType &admin_type)
 {
   int ret = OB_SUCCESS;
@@ -369,7 +436,7 @@ int ObMajorFreezeHelper::do_tenant_admin_merge(
   bool want_to_freeze_all = false;
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(param), KR(ret)); 
+    LOG_WARN("invalid argument", K(param), KR(ret));
   } else {
     want_to_freeze_all = param.need_all_ || param.need_all_user_ || param.need_all_meta_;
     if (want_to_freeze_all) {
@@ -387,7 +454,7 @@ int ObMajorFreezeHelper::do_tenant_admin_merge(
       }
     }
   }
-  
+
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(freeze_info_array.empty() && !want_to_freeze_all)) {
     ret = OB_ERR_UNEXPECTED;
@@ -485,7 +552,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
 int ObMajorFreezeHelper::get_frozen_status(
     const int64_t tenant_id,
     const SCN &frozen_scn,
-    share::ObSimpleFrozenStatus &frozen_status)
+    share::ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
   share::ObFreezeInfoProxy freeze_info_proxy(tenant_id);
@@ -494,7 +561,9 @@ int ObMajorFreezeHelper::get_frozen_status(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid GCTX", KR(ret));
   } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*GCTX.sql_proxy_, frozen_scn, frozen_status))) {
-    LOG_WARN("fail to get freeze info", KR(ret), K(frozen_scn), K(tenant_id));
+    if (OB_ITER_END != ret && OB_TABLE_NOT_EXIST != ret) {
+      LOG_WARN("fail to get freeze info", KR(ret), K(frozen_scn), K(tenant_id));
+    }
   }
 
   return ret;
@@ -505,11 +574,13 @@ int ObMajorFreezeHelper::get_frozen_scn(
     SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
-  share::ObSimpleFrozenStatus frozen_status;
+  share::ObFreezeInfo frozen_status;
 
   // use min_scn to get frozen_status, means get one with biggest frozen_scn
   if (OB_FAIL(get_frozen_status(tenant_id, SCN::min_scn(), frozen_status))) {
-    LOG_WARN("fail to get frozen info", KR(ret));
+    if (OB_ITER_END != ret && OB_TABLE_NOT_EXIST != ret) {
+      LOG_WARN("fail to get frozen info", KR(ret));
+    }
   } else {
     frozen_scn = frozen_status.frozen_scn_;
   }

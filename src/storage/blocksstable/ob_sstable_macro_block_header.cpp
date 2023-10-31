@@ -28,6 +28,7 @@ ObSSTableMacroBlockHeader::ObSSTableMacroBlockHeader()
     column_types_(nullptr),
     column_orders_(nullptr),
     column_checksum_(nullptr),
+    is_normal_cg_(false),
     is_inited_(false)
 {
 }
@@ -43,6 +44,7 @@ void ObSSTableMacroBlockHeader::reset()
   column_types_ = nullptr;
   column_orders_ = nullptr;
   column_checksum_ = nullptr;
+  is_normal_cg_ = false;
   is_inited_ = false;
 }
 
@@ -52,7 +54,7 @@ int64_t ObSSTableMacroBlockHeader::to_string(char* buf, const int64_t buf_len) c
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(fixed_header), KP_(column_types), KP_(column_orders), KP_(column_checksum));
+    J_KV(K_(fixed_header), KP_(column_types), KP_(column_orders), KP_(column_checksum), K_(is_normal_cg));
     J_COMMA();
     J_NAME("column_checksum");
     J_COLON();
@@ -112,8 +114,8 @@ bool ObSSTableMacroBlockHeader::FixedHeader::is_valid() const
       && SSTABLE_MACRO_BLOCK_HEADER_MAGIC == magic_
       && 0 != tablet_id_
       && logical_version_ >= 0
-      && column_count_ >= rowkey_column_count_
-      && rowkey_column_count_ > 0
+      //&& column_count_ >= rowkey_column_count_
+      && rowkey_column_count_ >= 0
       && row_store_type_ >= 0
       && row_count_ > 0
       && occupy_size_ > 0
@@ -165,7 +167,7 @@ int ObSSTableMacroBlockHeader::serialize(char *buf, const int64_t buf_len, int64
   } else if (OB_UNLIKELY(pos + get_serialize_size() > buf_len)) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_ERROR("data buffer is not enough", K(ret), K(pos), K(buf_len), K(*this));
-  } else if (OB_UNLIKELY(!is_valid())) {
+  } else if (OB_UNLIKELY(!is_valid() || get_serialize_size() != fixed_header_.header_size_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("macro block header is invalid", K(ret), K(*this));
   } else {
@@ -186,6 +188,9 @@ int ObSSTableMacroBlockHeader::serialize(char *buf, const int64_t buf_len, int64
       MEMCPY(buf + tmp_pos, column_checksum_, fixed_header_.column_count_ * sizeof(int64_t));
     }
     tmp_pos += fixed_header_.column_count_ * sizeof(int64_t);
+    bool *is_normal_cg = reinterpret_cast<bool *>(buf + tmp_pos);
+    *is_normal_cg = is_normal_cg_;
+    tmp_pos += sizeof(is_normal_cg_);
     if (OB_UNLIKELY(get_serialize_size() != tmp_pos - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("serialize size doesn't match get_serialize_size func", K(ret), K(tmp_pos), K(pos),
@@ -200,39 +205,56 @@ int ObSSTableMacroBlockHeader::serialize(char *buf, const int64_t buf_len, int64
 int ObSSTableMacroBlockHeader::deserialize(const char *buf, const int64_t data_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  const FixedHeader *fixed_header = nullptr;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("maybe initialized, cann't de-serialize again", K(ret), K(is_inited_));
-  } else if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0 || pos < 0)) {
+  } else if (OB_ISNULL(buf)
+      || OB_UNLIKELY(data_len <= 0 || pos < 0 || pos + sizeof(FixedHeader) > data_len)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (FALSE_IT(fixed_header = reinterpret_cast<const FixedHeader *>(buf + pos))) {
+  } else if (OB_UNLIKELY(pos + fixed_header->header_size_ > data_len)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_ERROR("data buffer is not enough", K(ret), K(pos), K(data_len), KPC(fixed_header));
   } else {
     int64_t tmp_pos = pos;
-    const FixedHeader *fixed_header = reinterpret_cast<const FixedHeader *>(buf + tmp_pos);
     fixed_header_ = *fixed_header;
     const int64_t col_type_array_cnt = fixed_header_.get_col_type_array_cnt();
     tmp_pos += get_fixed_header_size();
-    if (buf + tmp_pos != reinterpret_cast<char *>(column_types_)) {
+    const int64_t max_pos = pos + fixed_header->header_size_;
+    const int64_t obj_metas_size =  col_type_array_cnt * sizeof(ObObjMeta);
+    const int64_t ord_types_size = col_type_array_cnt * sizeof(ObOrderType);
+    const int64_t chksum_size = fixed_header->column_count_ * sizeof(int64_t);
+    column_types_ = nullptr;
+    column_orders_ = nullptr;
+    column_checksum_ = nullptr;
+    is_normal_cg_ = false;
+    if (tmp_pos + obj_metas_size <= max_pos) {
       column_types_ = reinterpret_cast<ObObjMeta *>(const_cast<char *>(buf + tmp_pos));
     }
-    tmp_pos += col_type_array_cnt * sizeof(ObObjMeta);
-    if (buf + tmp_pos != reinterpret_cast<char *>(column_orders_)) {
+    tmp_pos += obj_metas_size;
+
+    if (tmp_pos + ord_types_size <= max_pos) {
       column_orders_ = reinterpret_cast<ObOrderType *>(const_cast<char *>(buf + tmp_pos));
     }
-    tmp_pos += col_type_array_cnt * sizeof(ObOrderType);
-    if (buf + tmp_pos != reinterpret_cast<char *>(column_checksum_)) {
+    tmp_pos += ord_types_size;
+
+    if (tmp_pos + chksum_size <= max_pos) {
       column_checksum_ = reinterpret_cast<int64_t *>(const_cast<char *>(buf + tmp_pos));
     }
-    tmp_pos += fixed_header_.column_count_ * sizeof(int64_t);
-    if (OB_UNLIKELY(get_serialize_size() != tmp_pos - pos)) {
+    tmp_pos += chksum_size;
+
+    if (tmp_pos + sizeof(is_normal_cg_) <= max_pos) {
+      is_normal_cg_ = *(reinterpret_cast<bool *>(const_cast<char *>(buf + tmp_pos)));
+      tmp_pos += sizeof(is_normal_cg_);
+    }
+    fixed_header_.header_size_ = get_serialize_size();
+    if (OB_UNLIKELY(!is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("de-serialize size doesn't match get_serialize_size func", K(ret), K(tmp_pos), K(pos),
-          "get_serialize_size()", get_serialize_size());
-    } else if (OB_UNLIKELY(!is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("macro block header is invalid", K(ret), KPC(this));
+      LOG_WARN("macro block header is invalid", K(ret), KPC(this), K(tmp_pos), K(pos));
     } else {
-      pos += get_serialize_size();
+      pos = tmp_pos;
       is_inited_ = true;
     }
   }
@@ -242,7 +264,8 @@ int ObSSTableMacroBlockHeader::deserialize(const char *buf, const int64_t data_l
 int64_t ObSSTableMacroBlockHeader::get_serialize_size() const
 {
   return get_fixed_header_size() + get_variable_size_in_header(
-    fixed_header_.column_count_, fixed_header_.rowkey_column_count_, fixed_header_.version_);
+    fixed_header_.column_count_, fixed_header_.rowkey_column_count_, fixed_header_.version_)
+    + sizeof(is_normal_cg_);
 }
 
 int64_t ObSSTableMacroBlockHeader::get_fixed_header_size()
@@ -280,25 +303,26 @@ int ObSSTableMacroBlockHeader::init(
   } else {
     fixed_header_.version_ = desc.get_fixed_header_version();
     fixed_header_.header_size_ = static_cast<int32_t>(get_fixed_header_size()
-        + get_variable_size_in_header(desc.row_column_count_, desc.rowkey_column_count_, fixed_header_.version_));
-    fixed_header_.tablet_id_ = desc.tablet_id_.id();
+        + get_variable_size_in_header(desc.get_row_column_count(), desc.get_rowkey_column_count(), fixed_header_.version_))
+        + sizeof(is_normal_cg_);
+    fixed_header_.tablet_id_ = desc.get_tablet_id().id();
     fixed_header_.logical_version_ = desc.get_logical_version();
-    fixed_header_.column_count_ =  static_cast<int32_t>(desc.row_column_count_);
-    fixed_header_.rowkey_column_count_ = static_cast<int32_t>(desc.rowkey_column_count_);
-    fixed_header_.row_store_type_ = static_cast<int32_t>(desc.row_store_type_);
+    fixed_header_.column_count_ =  static_cast<int32_t>(desc.get_row_column_count());
+    fixed_header_.rowkey_column_count_ = static_cast<int32_t>(desc.get_rowkey_column_count());
+    fixed_header_.row_store_type_ = static_cast<int32_t>(desc.get_row_store_type());
     fixed_header_.micro_block_data_offset_ = fixed_header_.header_size_
         + static_cast<int32_t>(ObMacroBlockCommonHeader::get_serialize_size());
-    fixed_header_.encrypt_id_ = desc.encrypt_id_;
-    fixed_header_.master_key_id_ = desc.master_key_id_;
+    fixed_header_.encrypt_id_ = desc.get_encrypt_id();
+    fixed_header_.master_key_id_ = desc.get_master_key_id();
     //the length of encrypt_key is always fixed
-    MEMCPY(fixed_header_.encrypt_key_, desc.encrypt_key_, sizeof(desc.encrypt_key_));
-    fixed_header_.compressor_type_ = desc.compressor_type_;
+    MEMCPY(fixed_header_.encrypt_key_, desc.get_encrypt_key(), desc.get_encrypt_key_size());
+    fixed_header_.compressor_type_ = desc.get_compressor_type();
     column_types_ = col_types;
     column_orders_ = col_orders;
     column_checksum_ = col_checksum;
 
 
-    const ObIArray<share::schema::ObColDesc> &col_descs = desc.is_major_merge() ? desc.get_full_stored_col_descs() :desc.get_rowkey_col_descs();
+    const ObIArray<share::schema::ObColDesc> &col_descs = desc.is_major_merge_type() ? desc.get_full_stored_col_descs() :desc.get_rowkey_col_descs();
     const int64_t col_descs_cnt = fixed_header_.get_col_type_array_cnt();
     if (OB_UNLIKELY(col_descs_cnt > col_descs.count())) {
       ret = OB_ERR_UNEXPECTED;
@@ -313,6 +337,7 @@ int ObSSTableMacroBlockHeader::init(
     for (int i = 0; i < fixed_header_.column_count_; i++) {
       column_checksum_[i] = 0;
     }
+    is_normal_cg_ = desc.is_cg();
     is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {

@@ -184,6 +184,7 @@ TEST_F(TestTabletStatus, misc)
   tablet->tablet_meta_.tx_data_.tablet_status_ = ObTabletStatus::CREATING; // mock
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
+  bool make_empty_co_sstable = false;
   ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
       share::SCN::base_scn(), snapshot_version, table_schema, compat_mode, store_flag, nullptr, freezer);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -201,9 +202,10 @@ TEST_F(TestTabletStatus, misc)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // get tablet
+  ObTabletHandle fail_tablet_handle;
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
   const int64_t timeout_us = 100 * 1000;
-  ret = ls_tablet_service.get_tablet(tablet_id, tablet_handle, timeout_us);
+  ret = ls_tablet_service.get_tablet(tablet_id, fail_tablet_handle, timeout_us);
   ASSERT_EQ(OB_TIMEOUT, ret);
 
   // mock
@@ -245,7 +247,7 @@ TEST_F(TestTabletStatus, misc)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // get tablet
-  ret = ls_tablet_service.get_tablet(tablet_id, tablet_handle, timeout_us);
+  ret = ls_tablet_service.get_tablet(tablet_id, fail_tablet_handle, timeout_us);
   ASSERT_EQ(OB_TIMEOUT, ret);
 
   handle.reset();

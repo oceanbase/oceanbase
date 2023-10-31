@@ -64,6 +64,12 @@ namespace common
 #define CM_GEOMETRY_TYPE_RESERVED3       (1ULL << 14)
 #define CM_GEOMETRY_TYPE_RESERVED4       (1ULL << 15)
 #define CM_GEOMETRY_TYPE_RESERVED5       (1ULL << 16)
+
+#define CM_CONST_TO_DECIMAL_INT_UP       (1ULL << 17)
+#define CM_CONST_TO_DECIMAL_INT_DOWN     (1ULL << 18)
+#define CM_CONST_TO_DECIMAL_INT_EQ        (1ULL << 19)
+#define CM_BY_TRANSFORMER                (1ULL << 20)
+
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -134,11 +140,19 @@ typedef uint64_t ObCastMode;
 #define CM_SET_GEOMETRY_MULTILINESTRING(mode)     ((mode) &= 0xFFFE0FFF, (mode) |= (5 << 12))
 #define CM_SET_GEOMETRY_MULTIPOLYGON(mode)        ((mode) &= 0xFFFE0FFF, (mode) |= (6 << 12))
 #define CM_SET_GEOMETRY_GEOMETRYCOLLECTION(mode)  ((mode) &= 0xFFFE0FFF, (mode) |= (7 << 12))
+
 #define CM_GET_CS_LEVEL(mode)                     (((mode) >> CM_CS_LEVEL_SHIFT) & CM_CS_LEVEL_MASK)
 #define CM_SET_CS_LEVEL(mode, level) \
   ((mode) &= ~(CM_CS_LEVEL_MASK << CM_CS_LEVEL_SHIFT), \
   (mode) |= ((level & CM_CS_LEVEL_MASK) << CM_CS_LEVEL_SHIFT))
 #define CM_IS_ADD_ZEROFILL(mode)                 ((CM_ADD_ZEROFILL & (mode)) != 0)
+
+#define CM_IS_CONST_TO_DECIMAL_INT(mode)                                                           \
+  ((((mode)&CM_CONST_TO_DECIMAL_INT_UP) != 0) || (((mode)&CM_CONST_TO_DECIMAL_INT_DOWN) != 0)      \
+   || (((mode)&CM_CONST_TO_DECIMAL_INT_EQ) != 0))
+#define CM_IS_BY_TRANSFORMER(mode) ((CM_BY_TRANSFORMER & (mode)) != 0)
+#define CM_SET_BY_TRANSFORMERN(mode)  (CM_BY_TRANSFORMER | (mode))
+
 struct ObObjCastParams
 {
   // add params when necessary

@@ -50,18 +50,27 @@ int OptColumnMeta::assign(const OptColumnMeta &other)
   min_val_ = other.min_val_;
   max_val_ = other.max_val_;
   min_max_inited_ = other.min_max_inited_;
+  cg_macro_blk_cnt_ = other.cg_macro_blk_cnt_;
+  cg_micro_blk_cnt_ = other.cg_micro_blk_cnt_;
+  cg_skip_rate_ = other.cg_skip_rate_;
   return ret;
 }
 
 void OptColumnMeta::init(const uint64_t column_id,
                          const double ndv,
                          const double num_null,
-                         const double avg_len)
+                         const double avg_len,
+                         const int64_t cg_macro_blk_cnt /*default 0*/,
+                         const int64_t cg_micro_blk_cnt /*default 0*/,
+                         const double cg_skip_rate /*default 1.0*/)
 {
   column_id_ = column_id;
   ndv_ = ndv;
   num_null_ = num_null;
   avg_len_ = avg_len;
+  cg_macro_blk_cnt_ = cg_macro_blk_cnt;
+  cg_micro_blk_cnt_ = cg_micro_blk_cnt;
+  cg_skip_rate_ = cg_skip_rate;
 }
 
 int OptTableMeta::assign(const OptTableMeta &other)
@@ -91,6 +100,7 @@ int OptTableMeta::init(const uint64_t table_id,
                        const ObTableType table_type,
                        const int64_t rows,
                        const OptTableStatType stat_type,
+                       int64_t micro_block_count,
                        ObSqlSchemaGuard &schema_guard,
                        ObIArray<int64_t> &all_used_part_id,
                        common::ObIArray<ObTabletID> &all_used_tablets,
@@ -109,6 +119,7 @@ int OptTableMeta::init(const uint64_t table_id,
   rows_ = rows;
   stat_type_ = stat_type;
   scale_ratio_ = scale_ratio;
+  micro_block_count_ = micro_block_count;
   if (OB_FAIL(all_used_parts_.assign(all_used_part_id))) {
     LOG_WARN("failed to assign all used partition ids", K(ret));
   } else if (OB_FAIL(all_used_tablets_.assign(all_used_tablets))) {
@@ -188,7 +199,13 @@ int OptTableMeta::init_column_meta(const OptSelectivityCtx &ctx,
   }
 
   if (OB_SUCC(ret)) {
-    col_meta.init(column_id, global_ndv, num_null, stat.avglen_val_);
+    col_meta.init(column_id,
+                  global_ndv,
+                  num_null,
+                  stat.avglen_val_,
+                  stat.cg_macro_blk_cnt_,
+                  stat.cg_micro_blk_cnt_,
+                  stat.cg_skip_rate_);
   }
   return ret;
 }
@@ -250,6 +267,7 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
                                             const uint64_t ref_table_id,
                                             const ObTableType table_type,
                                             const int64_t rows,
+                                            const int64_t micro_block_count,
                                             ObIArray<int64_t> &all_used_part_id,
                                             ObIArray<ObTabletID> &all_used_tablets,
                                             ObIArray<uint64_t> &column_ids,
@@ -267,7 +285,7 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
   } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate place holder for table meta", K(ret));
-  } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, table_type, rows, stat_type,
+  } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, table_type, rows, stat_type, micro_block_count,
                                       *schema_guard, all_used_part_id, all_used_tablets,
                                       column_ids, all_used_global_parts, scale_ratio, ctx))) {
     LOG_WARN("failed to init new tstat", K(ret));
@@ -1027,6 +1045,7 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
   } else { //任何处理不了的表达式，都认为是0.5的选择率		  } else { //任何处理不了的表达式，都认为是0.5的选择率
     selectivity = DEFAULT_SEL;
   }
+  selectivity = revise_between_0_1(selectivity);
   if (OB_SUCC(ret)) {
     LOG_PRINT_EXPR(TRACE, "calculate one qual selectivity", qual, K(selectivity));
     // We remember each predicate's selectivity in the plan so that we can reorder them
@@ -1035,7 +1054,6 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
       LOG_WARN("failed to add selectivity to plan", K(ret), K(qual), K(selectivity));
     }
   }
-
   return ret;
 }
 

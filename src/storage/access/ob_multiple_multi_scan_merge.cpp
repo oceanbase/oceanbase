@@ -192,6 +192,12 @@ int ObMultipleMultiScanMerge::construct_iters()
         STORAGE_LOG(DEBUG, "add iter for consumer", KPC(table), KPC(access_param_));
       }
     }
+
+    if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan() &&
+        consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter() &&
+        OB_FAIL(locate_blockscan_border())) {
+      STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret));
+    }
   }
 
   return ret;

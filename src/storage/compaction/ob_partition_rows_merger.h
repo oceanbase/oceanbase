@@ -71,13 +71,12 @@ public:
   int compare(const ObPartitionMergeLoserTreeItem &l,
               const ObPartitionMergeLoserTreeItem &r,
               int64_t &cmp_ret);
-  bool check_cmp_finish(const int64_t cmp_ret);
+  bool check_cmp_finish(const int64_t cmp_ret) const;
   int open_iter_range(const int64_t cmp_ret,
                       const ObPartitionMergeLoserTreeItem &left,
                       const ObPartitionMergeLoserTreeItem &right);
-  OB_INLINE bool need_open_left_macro(const int64_t cmp_ret) { return  LEFT_MACRO_NEED_OPEN == cmp_ret || ALL_MACRO_NEED_OPEN == cmp_ret; }
-  OB_INLINE bool need_open_right_macro(const int64_t cmp_ret) { return  RIGHT_MACRO_NEED_OPEN == cmp_ret || ALL_MACRO_NEED_OPEN == cmp_ret; }
-private:
+  OB_INLINE bool need_open_left_macro(const int64_t cmp_ret) const { return  LEFT_MACRO_NEED_OPEN == cmp_ret || ALL_MACRO_NEED_OPEN == cmp_ret; }
+  OB_INLINE bool need_open_right_macro(const int64_t cmp_ret) const { return  RIGHT_MACRO_NEED_OPEN == cmp_ret || ALL_MACRO_NEED_OPEN == cmp_ret; }
   int compare_range(const blocksstable::ObDatumRange &left_range,
                     const blocksstable::ObDatumRange &right_range,
                     int64_t &cmp_result) const;
@@ -159,15 +158,21 @@ private:
 class ObPartitionMergeHelper
 {
 public:
-  ObPartitionMergeHelper()
-    : allocator_("partMergeHelper"),
-      is_inited_(false),
+  ObPartitionMergeHelper(
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &allocator)
+    : allocator_(allocator),
+      read_info_(read_info),
+      merge_iters_(DEFAULT_ITER_ARRAY_SIZE, ModulePageAllocator(allocator_)),
+      consume_iter_idxs_(DEFAULT_ITER_COUNT * sizeof(int64_t), ModulePageAllocator(allocator_)),
       rows_merger_(nullptr),
-      cmp_(nullptr)
+      cmp_(nullptr),
+      is_inited_(false)
   {}
   virtual ~ObPartitionMergeHelper() { reset(); }
-  int init(const ObIPartitionMergeFuser &fuser, const ObMergeParameter &merge_param, const ObRowStoreType row_store_type);
+  int init(const ObMergeParameter &merge_param);
   virtual void reset();
+  virtual OB_INLINE bool is_co_major_helper() const { return false; }
   int find_rowkey_minimum_iters(MERGE_ITER_ARRAY &minimum_iters);
   static int move_iters_next(MERGE_ITER_ARRAY &merge_iters);
   int rebuild_rows_merger();
@@ -176,46 +181,52 @@ public:
   int check_iter_end() const;
   int64_t get_iters_row_count() const;
   OB_INLINE const MERGE_ITER_ARRAY& get_merge_iters() const { return merge_iters_; }
-  OB_INLINE bool is_iter_end() const { return merge_iters_.empty() || (nullptr != rows_merger_ && rows_merger_->empty()); }
+  OB_INLINE bool is_iter_end() const { return merge_iters_.empty() || (nullptr != rows_merger_ && rows_merger_->empty() && consume_iter_idxs_.empty()); }
   TO_STRING_KV(K_(is_inited), K_(merge_iters), K_(consume_iter_idxs), KPC(rows_merger_))
 protected:
-  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable) = 0;
+  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) = 0;
 private:
-  int init_merge_iters(const ObIPartitionMergeFuser &fuser, const ObMergeParameter &merge_param, const ObRowStoreType row_store_type);
+  int init_merge_iters(const ObMergeParameter &merge_param);
   int prepare_rows_merger();
   int build_rows_merger();
 
-public:
-  common::ObArenaAllocator allocator_;
-private:
-  bool is_inited_;
+protected:
+  common::ObIAllocator &allocator_;
+  const ObITableReadInfo &read_info_;
   MERGE_ITER_ARRAY merge_iters_;
   CONSUME_ITER_IDX_ARRAY consume_iter_idxs_;
   RowsMerger *rows_merger_;
   ObPartitionMergeLoserTreeCmp *cmp_;
+  bool is_inited_;
 };
 
 class ObPartitionMajorMergeHelper : public ObPartitionMergeHelper
 {
 public:
-  ObPartitionMajorMergeHelper()
+  ObPartitionMajorMergeHelper(
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &allocator)
+    : ObPartitionMergeHelper(read_info, allocator)
   {}
   virtual ~ObPartitionMajorMergeHelper() { reset(); }
 protected:
-  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable) override;
+  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) override;
 };
 
 class ObPartitionMinorMergeHelper : public ObPartitionMergeHelper
 {
 public:
-  ObPartitionMinorMergeHelper()
+  ObPartitionMinorMergeHelper(
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &allocator)
+    : ObPartitionMergeHelper(read_info, allocator)
   {}
   virtual ~ObPartitionMinorMergeHelper() { reset(); }
   int collect_tnode_dml_stat(
       const ObMergeType &merge_type,
       storage::ObTransNodeDMLStat &tnode_stat) const;
 protected:
-  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable) override;
+  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) override;
 };
 
 } //namespace compaction

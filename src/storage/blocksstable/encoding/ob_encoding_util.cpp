@@ -24,7 +24,6 @@ const char* OB_ENCODING_LABEL_HASH_TABLE = "EncodeHashTable";
 const char* OB_ENCODING_LABEL_HT_FACTORY = "EncodeHTFactory";
 const char* OB_ENCODING_LABEL_PIVOT = "EncodePivot";
 const char* OB_ENCODING_LABEL_DATA_BUFFER = "EncodeDataBuf";
-const char* OB_ENCODING_LABEL_ROWKEY_BUFFER = "EncodeRowkeyBuf";
 const char* OB_ENCODING_LABEL_ROW_BUFFER = "EncodeRowBuffer";
 const char* OB_ENCODING_LABEL_MULTI_PREFIX_TREE = "EncodeMulPreTree";
 const char* OB_ENCODING_LABEL_PREFIX_TREE_FACTORY = "EncodeTreeFactory";

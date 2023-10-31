@@ -352,6 +352,35 @@ int ObCellWriter::write_urowid(const ObObj &obj, ObObj *clone_obj)
   return ret;
 }
 
+int ObCellWriter::write_decimal_int(const ObObj &obj, ObObj *clone_obj)
+{
+  int ret = OB_SUCCESS;
+  uint32_t val_len = static_cast<uint32_t>(obj.get_val_len());
+  int16_t scale = static_cast<int16_t>(obj.get_scale());
+  int64_t len = sizeof(ObCellWriter::CellMeta) + sizeof(uint32_t) + sizeof(int16_t) + val_len;
+  ObCellWriter::CellMeta meta;
+  if (OB_UNLIKELY(pos_ + len > buf_size_)) {
+    ret = OB_BUF_NOT_ENOUGH;
+  } else {
+    meta.type_ = static_cast<uint32_t>(obj.get_type());
+    *(reinterpret_cast<ObCellWriter::CellMeta *>(buf_ + pos_)) = meta;
+    pos_ += sizeof(ObCellWriter::CellMeta);
+
+    *(reinterpret_cast<int16_t *>(buf_ + pos_)) = scale;
+    pos_ += sizeof(int16_t);
+
+    *(reinterpret_cast<uint32_t *>(buf_ + pos_)) = val_len;
+    pos_ += sizeof(uint32_t);
+
+    MEMCPY(buf_ + pos_, obj.get_decimal_int(), val_len);
+    if (OB_LIKELY(clone_obj != NULL)) {
+      clone_obj->set_decimal_int(val_len, obj.get_scale(), (ObDecimalInt *)(buf_ + pos_));
+    }
+    pos_ += val_len;
+  }
+  return ret;
+}
+
 ObCellWriter::ObCellWriter()
     :buf_(NULL),
      buf_size_(0),
@@ -580,6 +609,10 @@ int ObCellWriter::append(uint64_t column_id, const ObObj &obj, ObObj *clone_obj)
               write_char(obj, ObLobType,
                 ObString(obj.get_val_len(), reinterpret_cast<const char *>(obj.get_lob_locator())),
                 clone_obj);
+        break;
+      }
+      case ObDecimalIntType: {
+        ret = write_decimal_int(obj, clone_obj);
         break;
       }
       default:

@@ -25,17 +25,15 @@ public:
     ObOptEstVectorCostModel(
 			const double (&comparison_params)[common::ObMaxTC + 1],
 			const double (&hash_params)[common::ObMaxTC + 1],
+			const double (&project_params)[2][2][ObOptEstCostModel::MAX_PROJECT_TYPE],
 			const ObCostParams &cost_params)
 		:ObOptEstCostModel(comparison_params,
                           hash_params,
+						  project_params,
                           cost_params)
 	{}
   virtual ~ObOptEstVectorCostModel()=default;
 protected:
-  virtual int cost_table_scan_one_batch_inner(double row_count,
-                                              const ObCostTableScanInfo &est_cost_info,
-                                              bool is_scan_index,
-                                              double &res)override;
 };
 
 }

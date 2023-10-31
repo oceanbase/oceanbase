@@ -418,6 +418,12 @@ int ObLinkScanOp::fetch_row()
                                     value.get_type() == expr->obj_meta_.get_type() &&
                                     value.get_collation_type() != expr->obj_meta_.get_collation_type())))) {
           DEFINE_CAST_CTX(expr->datum_meta_.cs_type_);
+          ObAccuracy res_acc;
+          if (expr->obj_meta_.is_decimal_int()) {
+            res_acc.set_precision(expr->datum_meta_.precision_);
+            res_acc.set_scale(expr->datum_meta_.scale_);
+            cast_ctx.res_accuracy_ = &res_acc;
+          }
           if (OB_FAIL(ObObjCaster::to_type(expr->obj_meta_.get_type(), cast_ctx, value, new_value))) {
             LOG_WARN("cast obj failed", K(ret), K(value), K(expr->obj_meta_));
           } else {

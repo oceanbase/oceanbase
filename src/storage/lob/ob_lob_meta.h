@@ -37,14 +37,14 @@ public:
   static const uint64_t LOB_META_INLINE_PIECE_ID = UINT64_MAX - 1;
   static const uint64_t LOB_OPER_PIECE_DATA_SIZE = 256 * 1024; // 256K
 public:
-  static int transform(common::ObNewRow* row, ObLobMetaInfo &info);
+  static int transform(blocksstable::ObDatumRow *row, ObLobMetaInfo &info);
 private:
-  static int transform_lob_id(common::ObNewRow* row, ObLobMetaInfo &info);
-  static int transform_seq_id(common::ObNewRow* row, ObLobMetaInfo &info);
-  static int transform_byte_len(common::ObNewRow* row, ObLobMetaInfo &info);
-  static int transform_char_len(common::ObNewRow* row, ObLobMetaInfo &info);
-  static int transform_piece_id(common::ObNewRow* row, ObLobMetaInfo &info);
-  static int transform_lob_data(common::ObNewRow* row, ObLobMetaInfo &info);
+  static int transform_lob_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_seq_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_byte_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_char_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_piece_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_lob_data(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
 };
 
 struct ObLobMetaScanResult {

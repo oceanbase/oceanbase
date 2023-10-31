@@ -1390,8 +1390,8 @@ int ObBasicSessionInfo::cast_sys_variable(ObIAllocator &calc_buf,
                                        value,
                                        casted_cell))) {
         _LOG_WARN("failed to cast object, cell=%s from_type=%s to_type=%s ret=%d ",
-                  to_cstring(value), ob_obj_type_str(value.get_type()),
-                  ob_obj_type_str(type.get_type()), ret);
+                  to_cstring(value), inner_obj_type_str(value.get_type()),
+                  inner_obj_type_str(type.get_type()), ret);
       } else if (OB_FAIL(base_sys_var_alloc_.write_obj(casted_cell, &out_value))) {
         LOG_WARN("fail to store variable value", K(casted_cell), K(value), K(ret));
       } else {

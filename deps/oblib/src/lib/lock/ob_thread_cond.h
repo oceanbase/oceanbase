@@ -95,6 +95,7 @@ public:
     }
     return ret;
   }
+  bool is_inited() { return is_inited_; } //for reuse, no need init again
 private:
   pthread_mutex_t mutex_;
   pthread_cond_t cond_;

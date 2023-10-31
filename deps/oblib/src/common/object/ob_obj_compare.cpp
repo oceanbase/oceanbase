@@ -19,6 +19,7 @@
 #include "lib/worker.h"
 #include "lib/json_type/ob_json_base.h" // for ObIJsonBase
 #include "lib/json_type/ob_json_bin.h" // for ObJsonBin
+#include "lib/wide_integer/ob_wide_integer_cmp_funcs.h"
 
 namespace oceanbase
 {
@@ -1686,6 +1687,104 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   return cmp_ret;\
 }
 
+#define DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(op, op_str)                                     \
+  template <>                                                                                      \
+  int ObObjCmpFuncs::cmp_op_func<ObEnumSetInnerTC, ObDecimalIntTC, op>(                            \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &)                                    \
+  {                                                                                                \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObEnumSetInnerTC);                                                  \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObDecimalIntTC);                                                    \
+    ObEnumSetInnerValue inner_value;                                                               \
+    int cmp_res = 0;                                                                               \
+    int ret_val = 0;                                                                               \
+    int ret = OB_SUCCESS;                                                                          \
+    ObScale lh_scale = 0, rh_scale = obj2.get_scale();                                             \
+    ObDecimalIntBuilder lh_val, rh_val;                                                            \
+    ObDecimalIntBuilder tmp_alloc;                                                                 \
+    ObDecimalInt *decint = nullptr;                                                                \
+    uint64_t obj1_value = 0;                                                                       \
+    int32_t int_bytes = 0;                                                                         \
+    if (OB_FAIL(obj1.get_enumset_inner_value(inner_value))) {                                      \
+      ret_val = CR_OB_ERROR;                                                                       \
+    } else if (FALSE_IT(obj1_value = inner_value.numberic_value_)) {                               \
+    } else if (OB_FAIL(wide::from_integer(obj1_value, tmp_alloc, decint, int_bytes))) {            \
+      LOG_ERROR("cast integer to decimal int failed", K(ret));                                     \
+      ret_val = CR_OB_ERROR;                                                                       \
+    } else if (lh_scale > rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(obj2.get_decimal_int(), obj2.get_int_bytes(),      \
+                                                rh_scale, lh_scale, rh_val))) {                    \
+        LOG_ERROR("scale decimal int failed", K(ret));                                             \
+        ret_val = CR_OB_ERROR;                                                                     \
+      } else {                                                                                     \
+        rh_val.from(decint, int_bytes);                                                            \
+      }                                                                                            \
+    } else if (lh_scale < rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(decint, int_bytes, lh_scale, rh_scale, lh_val))) { \
+        LOG_ERROR("scale decimal int failed", K(ret));                                             \
+      } else {                                                                                     \
+        rh_val.from(obj2.get_decimal_int(), obj2.get_int_bytes());                                 \
+      }                                                                                            \
+    } else {                                                                                       \
+      lh_val.from(decint, int_bytes);                                                              \
+      rh_val.from(obj2.get_decimal_int(), obj2.get_int_bytes());                                   \
+    }                                                                                              \
+    if (OB_SUCC(ret)) {                                                                            \
+      if (OB_FAIL(wide::compare(lh_val, rh_val, cmp_res))) {                                       \
+        LOG_ERROR("compare failed", K(ret));                                                       \
+        ret_val = CR_OB_ERROR;                                                                     \
+      } else {                                                                                     \
+        ret_val = (cmp_res op_str 0);                                                              \
+      }                                                                                            \
+    }                                                                                              \
+    return ret_val;                                                                                \
+  }
+
+#define DEFINE_CMP_FUNC_ENUMSETINNER_DECIMALINT()                                                  \
+  template <>                                                                                      \
+  int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, ObDecimalIntTC>(                                   \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &)                                    \
+  {                                                                                                \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObEnumSetInnerTC);                                                  \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObDecimalIntTC);                                                    \
+    ObEnumSetInnerValue inner_value;                                                               \
+    int cmp_res = 0;                                                                               \
+    int ret = OB_SUCCESS;                                                                          \
+    ObScale lh_scale = 0, rh_scale = obj2.get_scale();                                             \
+    ObDecimalIntBuilder lh_val, rh_val;                                                            \
+    ObDecimalIntBuilder tmp_alloc;                                                                 \
+    ObDecimalInt *decint = nullptr;                                                                \
+    uint64_t obj1_value = 0;                                                                       \
+    int32_t int_bytes = 0;                                                                         \
+    if (OB_FAIL(obj1.get_enumset_inner_value(inner_value))) {                                      \
+      LOG_ERROR("get enumset inner value failed", K(ret));                                         \
+    } else if (FALSE_IT(obj1_value = inner_value.numberic_value_)) {                               \
+    } else if (OB_FAIL(wide::from_integer(obj1_value, tmp_alloc, decint, int_bytes))) {            \
+      LOG_ERROR("cast integer to decimal int failed", K(ret));                                     \
+    } else if (lh_scale > rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(obj2.get_decimal_int(), obj2.get_int_bytes(),      \
+                                                rh_scale, lh_scale, rh_val))) {                    \
+        LOG_ERROR("scale decimal int failed", K(ret));                                             \
+      } else {                                                                                     \
+        rh_val.from(decint, int_bytes);                                                            \
+      }                                                                                            \
+    } else if (lh_scale < rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(decint, int_bytes, lh_scale, rh_scale, lh_val))) { \
+        LOG_ERROR("scale decimal int failed", K(ret));                                             \
+      } else {                                                                                     \
+        rh_val.from(obj2.get_decimal_int(), obj2.get_int_bytes());                                 \
+      }                                                                                            \
+    } else {                                                                                       \
+      lh_val.from(decint, int_bytes);                                                              \
+      rh_val.from(obj2.get_decimal_int(), obj2.get_int_bytes());                                   \
+    }                                                                                              \
+    if (OB_SUCC(ret)) {                                                                            \
+      if (OB_FAIL(wide::compare(lh_val, rh_val, cmp_res))) {                                       \
+        LOG_ERROR("compare failed", K(ret));                                                       \
+      }                                                                                            \
+    }                                                                                              \
+    return cmp_res;                                                                                \
+  }
+
 #define DEFINE_CMP_FUNC_LOB_LOB() \
   template <> inline \
   int ObObjCmpFuncs::cmp_func<ObLobTC, ObLobTC>(const ObObj &obj1, \
@@ -1725,6 +1824,231 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
     }   \
 	  return cmp_ret; \
   }
+
+#define DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(op, op_str)                                       \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, ObDecimalIntTC, op>(                       \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &)                                    \
+  {                                                                                                \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObDecimalIntTC);                                                    \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObDecimalIntTC);                                                    \
+    int ret = OB_SUCCESS;                                                                          \
+    int val = 0;                                                                                   \
+    int cmp_res = 0;                                                                               \
+    int16_t lh_scale = obj1.get_scale(), rh_scale = obj2.get_scale();                              \
+    ObDecimalIntBuilder lh_val, rh_val;                                                            \
+    if (lh_scale < rh_scale) {                                                                     \
+      if (OB_FAIL(wide::common_scale_decimalint(obj1.get_decimal_int(), obj1.get_int_bytes(),      \
+                                                lh_scale, rh_scale, lh_val))) {                    \
+        LOG_WARN("scale decimal int failed", K(ret));                                              \
+      } else {                                                                                     \
+        rh_val.from(obj2.get_decimal_int(), obj2.get_int_bytes());                                 \
+      }                                                                                            \
+    } else if (lh_scale > rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(obj2.get_decimal_int(), obj2.get_int_bytes(),      \
+                                                rh_scale, lh_scale, rh_val))) {                    \
+        LOG_WARN("scale decimal int failed", K(ret));                                              \
+      } else {                                                                                     \
+        lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes());                                 \
+      }                                                                                            \
+    } else {                                                                                       \
+      lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes());                                   \
+      rh_val.from(obj2.get_decimal_int(), obj2.get_int_bytes());                                   \
+    }                                                                                              \
+    if (OB_FAIL(ret)) {                                                                            \
+    } else if (OB_FAIL(wide::compare(lh_val, rh_val, cmp_res))) {                                  \
+      LOG_ERROR("compare error", K(ret));                                                          \
+    } else if (op == CO_CMP) {                                                                     \
+      val = cmp_res;                                                                               \
+    } else {                                                                                       \
+      val = (cmp_res op_str 0);                                                                    \
+    }                                                                                              \
+    return val;                                                                                    \
+  }
+
+#define DEFINE_CMP_FUNC_DECIMALINT_DECIMALINT()                                                    \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_func<ObDecimalIntTC, ObDecimalIntTC>(                              \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &ctx)                                 \
+  {                                                                                                \
+    int cmp_res =                                                                                  \
+      ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, ObDecimalIntTC, CO_CMP>(obj1, obj2, ctx);         \
+    return INT_TO_CR(cmp_res);                                                                     \
+  }
+
+#define DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(op, op_str, tc, val_type, val_func)                  \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, tc, op>(                                   \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &)                                    \
+  {                                                                                                \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObDecimalIntTC);                                                    \
+    OBJ_TYPE_CLASS_CHECK(obj2, tc);                                                                \
+    int ret = OB_SUCCESS;                                                                          \
+    int cmp_res = 0;                                                                               \
+    int ret_val = 0;                                                                               \
+    val_type val = obj2.get_##val_func();                                                          \
+    ObDecimalIntBuilder tmp_alloc;                                                                 \
+    ObDecimalInt *rh_decint = nullptr;                                                             \
+    int32_t rh_int_bytes = 0;                                                                      \
+    int16_t lh_scale = obj1.get_scale(), rh_scale = 0;                                             \
+    ObDecimalIntBuilder lh_val, rh_val;                                                            \
+    if (OB_FAIL(wide::from_integer(val, tmp_alloc, rh_decint, rh_int_bytes))) {                    \
+      LOG_ERROR("from_integer failed", K(ret));                                                    \
+    } else if (lh_scale < rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(obj1.get_decimal_int(), obj1.get_int_bytes(),      \
+                                                lh_scale, rh_scale, lh_val))) {                    \
+        LOG_WARN("scale decimal int failed", K(ret));                                              \
+      } else {                                                                                     \
+        rh_val.from(rh_decint, rh_int_bytes);                                                      \
+      }                                                                                            \
+    } else if (lh_scale > rh_scale) {                                                              \
+      if (OB_FAIL(                                                                                 \
+            wide::common_scale_decimalint(rh_decint, rh_int_bytes, rh_scale, lh_scale, rh_val))) { \
+        LOG_WARN("scale decimal int failed", K(ret));                                              \
+      } else {                                                                                     \
+        lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes());                                 \
+      }                                                                                            \
+    } else {                                                                                       \
+      lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes());                                   \
+      rh_val.from(rh_decint, rh_int_bytes);                                                        \
+    }                                                                                              \
+    if (OB_FAIL(ret)) {                                                                            \
+    } else if (OB_FAIL(wide::compare(lh_val, rh_val, cmp_res))) {                                  \
+      LOG_WARN("compare failed", K(ret));                                                          \
+    } else if (op == CO_CMP) {                                                                     \
+      ret_val = cmp_res;                                                                           \
+    } else {                                                                                       \
+      ret_val = (cmp_res op_str 0);                                                                \
+    }                                                                                              \
+    return ret_val;                                                                                \
+  }
+
+#define DEFINE_CMP_FUNC_DECIMALINT_INTEGER(tc, val_type, val_func)                                 \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_func<ObDecimalIntTC, tc>(const ObObj &obj1, const ObObj &obj2,     \
+                                                         const ObCompareCtx &ctx)                  \
+  {                                                                                                \
+    int cmp_ret = ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, tc, CO_CMP>(obj1, obj2, ctx);         \
+    return cmp_ret;                                                                                \
+  }
+
+#define DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(op, op_str, tc)                                      \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_op_func<tc, ObDecimalIntTC, op>(                                   \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &ctx)                                 \
+  {                                                                                                \
+    int ret = ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, tc, op>(obj2, obj1, ctx);                 \
+    return -ret;                                                                                   \
+  }
+
+#define DEFINE_CMP_FUNC_INTEGER_DECIMALINT(tc)                                                     \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_func<tc, ObDecimalIntTC>(const ObObj &obj1, const ObObj &obj2,     \
+                                                         const ObCompareCtx &ctx)                  \
+  {                                                                                                \
+    return -ObObjCmpFuncs::cmp_func<ObDecimalIntTC, tc>(obj2, obj1, ctx);                          \
+  }
+
+#define DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(op, op_str)                                           \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, ObNumberTC, op>(                           \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &)                                    \
+  {                                                                                                \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObDecimalIntTC);                                                    \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObNumberTC);                                                        \
+    int ret = OB_SUCCESS;                                                                          \
+    int cmp_res = 0;                                                                               \
+    int ret_val = 0;                                                                               \
+    ObDecimalInt *decint = nullptr;                                                                \
+    int32_t int_bytes = 0;                                                                         \
+    number::ObNumber nmb = obj2.get_number();                                                      \
+    int16_t lh_scale = obj1.get_scale(), rh_scale = nmb.get_scale();                               \
+    ObDecimalIntBuilder tmp_alloc;                                                                 \
+    ObDecimalIntBuilder lh_val;                                                                    \
+    ObDecimalIntBuilder rh_val;                                                                    \
+    if (OB_FAIL(wide::from_number(nmb, tmp_alloc, rh_scale, decint, int_bytes))) {                 \
+      LOG_ERROR("cast number to decimal int failed", K(ret));                                      \
+    } else if (lh_scale < rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(obj1.get_decimal_int(), obj1.get_int_bytes(),      \
+                                                lh_scale, rh_scale, lh_val))) {                    \
+        LOG_ERROR("scale decimal int failed", K(ret), K(lh_scale), K(rh_scale));                   \
+      } else if (FALSE_IT(rh_val.from(decint, int_bytes))) {                                       \
+      }                                                                                            \
+    } else if (lh_scale > rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(decint, int_bytes, rh_scale, lh_scale, rh_val))) { \
+        LOG_ERROR("scale decimal int failed", K(ret), K(rh_scale), K(lh_scale));                   \
+      } else if (FALSE_IT(lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes()))) {            \
+      }                                                                                            \
+    } else {                                                                                       \
+      lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes());                                   \
+      rh_val.from(decint, int_bytes);                                                              \
+    }                                                                                              \
+    if (OB_SUCC(ret)) {                                                                            \
+      if (OB_FAIL(wide::compare(lh_val, rh_val, cmp_res))) {                                       \
+        LOG_ERROR("compare failed", K(ret));                                                       \
+      } else {                                                                                     \
+        ret_val = (cmp_res op_str 0);                                                              \
+      }                                                                                            \
+    }                                                                                              \
+    return ret_val;                                                                                \
+  }
+
+#define DEFINE_CMP_FUNC_DECIMALINT_NUMBER()                                                        \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_func<ObDecimalIntTC, ObNumberTC>(                                  \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &)                                    \
+  {                                                                                                \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObDecimalIntTC);                                                    \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObNumberTC);                                                        \
+    int ret = OB_SUCCESS;                                                                          \
+    int cmp_res = 0;                                                                               \
+    ObDecimalInt *decint = nullptr;                                                                \
+    int32_t int_bytes = 0;                                                                         \
+    ObDecimalIntBuilder lh_val, rh_val;                                                            \
+    number::ObNumber nmb = obj2.get_number();                                                      \
+    ObScale lh_scale = obj1.get_scale(), rh_scale = nmb.get_scale();                               \
+    ObDecimalIntBuilder tmp_alloc;                                                                 \
+    if (OB_FAIL(wide::from_number(nmb, tmp_alloc, rh_scale, decint, int_bytes))) {                 \
+      LOG_ERROR("scale decimal int failed", K(ret));                                               \
+    } else if (lh_scale < rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(obj1.get_decimal_int(), obj1.get_int_bytes(),      \
+                                                lh_scale, rh_scale, lh_val))) {                    \
+        LOG_ERROR("scale decimal int failed", K(ret), K(lh_scale), K(rh_scale));                   \
+      } else if (FALSE_IT(rh_val.from(decint, int_bytes))) {                                       \
+      }                                                                                            \
+    } else if (lh_scale > rh_scale) {                                                              \
+      if (OB_FAIL(wide::common_scale_decimalint(decint, int_bytes, rh_scale, lh_scale, rh_val))) { \
+        LOG_ERROR("scale decimal int failed", K(ret), K(rh_scale), K(lh_scale));                   \
+      } else if (FALSE_IT(lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes()))) {            \
+      }                                                                                            \
+    } else {                                                                                       \
+      lh_val.from(obj1.get_decimal_int(), obj1.get_int_bytes());                                   \
+      rh_val.from(decint, int_bytes);                                                              \
+    }                                                                                              \
+    if (OB_FAIL(ret)) {                                                                            \
+    } else if (OB_FAIL(wide::compare(lh_val, rh_val, cmp_res))) {                                  \
+      LOG_ERROR("compare failed", K(ret));                                                         \
+    }                                                                                              \
+    return cmp_res;                                                                                \
+  }
+
+#define DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(op, op_str)                                           \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_op_func<ObNumberTC, ObDecimalIntTC, op>(                           \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &ctx)                                 \
+  {                                                                                                \
+    int ret = ObObjCmpFuncs::cmp_op_func<ObDecimalIntTC, ObNumberTC, op>(obj2, obj1, ctx);         \
+    return -ret;                                                                                   \
+  }
+
+#define DEFINE_CMP_FUNC_NUMBER_DECIMALINT()                                                        \
+  template <>                                                                                      \
+  inline int ObObjCmpFuncs::cmp_func<ObNumberTC, ObDecimalIntTC>(                                  \
+    const ObObj &obj1, const ObObj &obj2, const ObCompareCtx &ctx)                                 \
+  {                                                                                                \
+    return -ObObjCmpFuncs::cmp_func<ObDecimalIntTC, ObNumberTC>(obj2, obj1, ctx);                  \
+  }
+
 //==============================
 
 #define DEFINE_CMP_FUNCS(tc, type) \
@@ -1780,6 +2104,54 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   DEFINE_CMP_OP_FUNC_REAL_REAL_GT(real1_tc, real1_type, real2_tc, real2_type); \
   DEFINE_CMP_OP_FUNC_REAL_REAL_NE(real1_tc, real1_type, real2_tc, real2_type); \
   DEFINE_CMP_FUNC_REAL_REAL(real1_tc, real1_type, real2_tc, real2_type)
+
+#define DEFINE_CMP_FUNCS_DECIMALINT_DECIMALINT()                                                   \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_EQ, ==);                                             \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_LE, <=);                                             \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_LT, <);                                              \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_GE, >=);                                             \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_GT, >);                                              \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_NE, !=);                                             \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_DECIMALINT(CO_CMP, =);                                             \
+  DEFINE_CMP_FUNC_DECIMALINT_DECIMALINT()
+
+#define DEFINE_CMP_FUNCS_DECIMALINT_INTEGER(int_tc, val_type, val_func)                            \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_EQ, ==, int_tc, val_type, val_func);                    \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_LE, <=, int_tc, val_type, val_func);                    \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_LT, <, int_tc, val_type, val_func);                     \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_GE, >=, int_tc, val_type, val_func);                    \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_GT, >, int_tc, val_type, val_func);                     \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_NE, !=, int_tc, val_type, val_func);                    \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_INTEGER(CO_CMP, =, int_tc, val_type, val_func);                    \
+  DEFINE_CMP_FUNC_DECIMALINT_INTEGER(int_tc, val_type, val_func)
+
+#define DEFINE_CMP_FUNCS_INTEGER_DECIMALINT(int_tc)                                                \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_EQ, ==, int_tc);                                        \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_LE, <=, int_tc);                                        \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_LT, <, int_tc);                                         \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_GE, >=, int_tc);                                        \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_GT, >, int_tc);                                         \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_NE, !=, int_tc);                                        \
+  DEFINE_CMP_OP_FUNC_INTEGER_DECIMALINT(CO_CMP, =, int_tc);                                        \
+  DEFINE_CMP_FUNC_INTEGER_DECIMALINT(int_tc)
+
+#define DEFINE_CMP_FUNCS_DECIMALINT_NUMBER()                                                       \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(CO_EQ, ==);                                                 \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(CO_LE, <=);                                                 \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(CO_LT, <);                                                  \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(CO_GE, >=);                                                 \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(CO_GT, >);                                                  \
+  DEFINE_CMP_OP_FUNC_DECIMALINT_NUMBER(CO_NE, !=);                                                 \
+  DEFINE_CMP_FUNC_DECIMALINT_NUMBER()
+
+#define DEFINE_CMP_FUNCS_NUMBER_DECIMALINT()                                                       \
+  DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(CO_EQ, ==);                                                 \
+  DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(CO_LE, <=);                                                 \
+  DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(CO_LT, <);                                                  \
+  DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(CO_GE, >=);                                                 \
+  DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(CO_GT, >);                                                  \
+  DEFINE_CMP_OP_FUNC_NUMBER_DECIMALINT(CO_NE, !=);                                                 \
+  DEFINE_CMP_FUNC_NUMBER_DECIMALINT()
 
 //==============================
 
@@ -2089,6 +2461,15 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   DEFINE_CMP_OP_FUNC_ENUMSETINNER_NUMBER(CO_NE, !=); \
   DEFINE_CMP_FUNC_ENUMSETINNER_NUMBER()
 
+#define DEFINE_CMP_FUNCS_ENUMSETINNER_DECIMALINT()                                                 \
+  DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(CO_EQ, ==);                                           \
+  DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(CO_LE, <=);                                           \
+  DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(CO_LT, <);                                            \
+  DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(CO_GE, >=);                                           \
+  DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(CO_GT, >);                                            \
+  DEFINE_CMP_OP_FUNC_ENUMSETINNER_DECIMALINT(CO_NE, !=);                                           \
+  DEFINE_CMP_FUNC_ENUMSETINNER_DECIMALINT();
+
 #define DEFINE_CMP_FUNCS_TEXT_TEXT() \
   DEFINE_CMP_OP_FUNC_TEXT_TEXT(CO_EQ, ==); \
   DEFINE_CMP_OP_FUNC_TEXT_TEXT(CO_LE, <=); \
@@ -2246,6 +2627,17 @@ DEFINE_CMP_FUNCS_NUMBER_UINT();
 DEFINE_CMP_FUNCS_NUMBER_NUMBER();
 DEFINE_CMP_FUNCS_NUMBER_ENUMSET();
 
+
+DEFINE_CMP_FUNCS_DECIMALINT_DECIMALINT();
+DEFINE_CMP_FUNCS_DECIMALINT_INTEGER(ObIntTC, int64_t, int);
+DEFINE_CMP_FUNCS_DECIMALINT_INTEGER(ObUIntTC, uint64_t, uint64);
+DEFINE_CMP_FUNCS_INTEGER_DECIMALINT(ObIntTC);
+DEFINE_CMP_FUNCS_INTEGER_DECIMALINT(ObUIntTC);
+DEFINE_CMP_FUNCS_DECIMALINT_INTEGER(ObEnumSetTC, uint64_t, uint64);
+DEFINE_CMP_FUNCS_INTEGER_DECIMALINT(ObEnumSetTC);
+DEFINE_CMP_FUNCS_DECIMALINT_NUMBER();
+DEFINE_CMP_FUNCS_NUMBER_DECIMALINT();
+
 DEFINE_CMP_FUNCS_DATETIME_DATETIME();
 
 DEFINE_CMP_FUNCS_DATETIME_OTIMESTAMP();
@@ -2273,6 +2665,7 @@ DEFINE_CMP_FUNCS_ENUMSETINNER_UINT();
 DEFINE_CMP_FUNCS_ENUMSETINNER_FLOAT();
 DEFINE_CMP_FUNCS_ENUMSETINNER_DOUBLE();
 DEFINE_CMP_FUNCS_ENUMSETINNER_NUMBER();
+DEFINE_CMP_FUNCS_ENUMSETINNER_DECIMALINT();
 
 DEFINE_CMP_FUNCS_EXT_NULL();
 DEFINE_CMP_FUNCS_EXT_EXT();
@@ -2394,12 +2787,14 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetInnerTC, ObFloatTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetInnerTC, ObIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetInnerTC, ObNumberTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetInnerTC, ObUIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetInnerTC, ObDecimalIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObDoubleTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObEnumSetTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObFloatTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObNumberTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObUIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObDecimalIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObExtendTC, ObExtendTC, ObExtendTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObFloatTC, ObDoubleTC, ObMaxTC, ObMaxTC)
@@ -2413,11 +2808,13 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntTC, ObFloatTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntTC, ObIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntTC, ObNumberTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntTC, ObUIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntTC, ObDecimalIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObMaxTC, ObExtendTC, ObMaxTC, ObExtendTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObNumberTC, ObEnumSetTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObNumberTC, ObIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObNumberTC, ObNumberTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObNumberTC, ObUIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObNumberTC, ObDecimalIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObStringTC, ObStringTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObStringTC, ObTextTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObTextTC, ObStringTC, ObMaxTC, ObMaxTC)
@@ -2426,6 +2823,7 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObTimeTC, ObTimeTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObDoubleTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObEnumSetTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObFloatTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObDecimalIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObIntTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObNumberTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObUIntTC, ObMaxTC, ObMaxTC)
@@ -2439,6 +2837,12 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObRowIDTC, ObRowIDTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObLobTC, ObLobTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObDecimalIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObUIntTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObNumberTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObEnumSetTC, ObMaxTC, ObMaxTC)
+
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObExtendTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC)
@@ -2473,6 +2877,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC),// decimalint
   },
   { // int
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2500,6 +2905,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntTC, ObDecimalIntTC, ObMaxTC, ObMaxTC) // decimal int
   },
   { // uint
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2527,6 +2933,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObUIntTC, ObDecimalIntTC, ObMaxTC, ObMaxTC) // decimal int
   },
   { // float
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2554,6 +2961,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // double
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2581,6 +2989,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // number
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2608,6 +3017,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObNumberTC, ObDecimalIntTC, ObMaxTC, ObMaxTC) // decimal int
   },
   { // datetime
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2635,6 +3045,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
   },
   { // date
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2662,6 +3073,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // time
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2689,6 +3101,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // year
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2716,6 +3129,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // string
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2743,6 +3157,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // extend
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC),
@@ -2770,6 +3185,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC), // decimalint
   },
   { // unknown
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2797,6 +3213,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // text
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2824,6 +3241,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // bit
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2851,6 +3269,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { //enumset
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2878,6 +3297,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetTC, ObDecimalIntTC, ObMaxTC, ObMaxT)
   },
   { //enumsetInner
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2905,6 +3325,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObEnumSetInnerTC, ObDecimalIntTC, ObMaxTC, ObMaxTC) // decimal int
   },
   { // otimestamp
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2932,6 +3353,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // raw
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2959,6 +3381,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // json
    NULL, // geometry
    NULL, // udt
+   NULL, // decimal int
   },
   { // interval
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2986,6 +3409,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // json
    NULL, // geometry
    NULL, // udt
+   NULL, // decimal int
   },
   { // rowid
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3013,6 +3437,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // json
    NULL, // geometry
    NULL, // udt
+   NULL, // decimal int
   },
   { // lob
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3040,6 +3465,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // json
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3067,6 +3493,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC), // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
   { // geometry
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3094,8 +3521,9 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC), // geometry
     NULL, // udt
+    NULL, // decimal int
   },
-    { // udt
+  { // udt
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
     NULL,  // int
     NULL,  // uint
@@ -3121,7 +3549,36 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimal int
   },
+  { // decimal int
+    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC), // null
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObIntTC, ObMaxTC, ObMaxTC), // int
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObUIntTC, ObMaxTC, ObMaxTC), // uint
+    NULL, // float
+    NULL, // double
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObNumberTC, ObMaxTC, ObMaxTC), // number
+    NULL, // datetime
+    NULL, // date
+    NULL, // time
+    NULL, // year
+    NULL, // string
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObMaxTC, ObExtendTC, ObMaxTC, ObExtendTC), // extend
+    NULL, // unknown
+    NULL, // text
+    NULL, // bit
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObEnumSetTC, ObMaxTC, ObMaxTC), // enumset
+    NULL, // enumset inner
+    NULL, // otimestamp
+    NULL, // raw.
+    NULL, // interval
+    NULL, // rowid
+    NULL, // lob
+    NULL, // json
+    NULL, // geometry
+    NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObDecimalIntTC, ObDecimalIntTC, ObMaxTC, ObMaxTC), // decimalint
+  }
 };
 
 const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
@@ -3152,6 +3609,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//json
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//geometry
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//udt
+    DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC), // decimal int
   },
   { // int
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3179,6 +3637,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObIntTC, ObDecimalIntTC), // decimal int
   },
   { // uint
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3206,6 +3665,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObUIntTC, ObDecimalIntTC), // decimal int
   },
   { // float
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3233,6 +3693,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // decimal int
   },
   { // double
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3260,6 +3721,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // number
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3287,6 +3749,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObNumberTC, ObDecimalIntTC), // decimal int
   },
   { // datetime
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3314,6 +3777,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // date
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3341,6 +3805,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // time
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3368,6 +3833,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // year
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3395,6 +3861,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // string
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3422,6 +3889,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // extend
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObNullTC),
@@ -3449,6 +3917,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObMaxTC), // decimal int
   },
   { // unknown
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3476,6 +3945,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //decimal int
   },
   { // text
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3503,6 +3973,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //decimal int
   },
   { // bit
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3530,6 +4001,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { //enumset
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3557,6 +4029,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObEnumSetTC, ObDecimalIntTC), // decimal int
   },
   { //enumsetInner
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3584,6 +4057,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObEnumSetInnerTC, ObDecimalIntTC), // decimal int
   },
   { // otimestamp
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3611,6 +4085,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // raw
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3638,6 +4113,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // interval
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3665,6 +4141,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // rowid
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3692,6 +4169,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // lob
     DEFINE_CMP_FUNCS_ENTRY_NULL, //null
@@ -3719,6 +4197,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // json
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3746,6 +4225,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObJsonTC, ObJsonTC),  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // decimal int
   },
   { // geometry
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3773,6 +4253,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY(ObGeometryTC, ObGeometryTC),  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
   },
   { // udt
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3800,6 +4281,35 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+  },
+  { // decimalint
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
+    DEFINE_CMP_FUNCS_ENTRY(ObDecimalIntTC, ObIntTC), // int
+    DEFINE_CMP_FUNCS_ENTRY(ObDecimalIntTC, ObUIntTC), // uint
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // float
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // double
+    DEFINE_CMP_FUNCS_ENTRY(ObDecimalIntTC, ObNumberTC), // number
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // datetime
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // date
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObExtendTC), // extend
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
+    DEFINE_CMP_FUNCS_ENTRY(ObDecimalIntTC, ObEnumSetTC), // enumset
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumsetInner will not go here
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // otimestamp
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // raw
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // interval
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // udt
+    DEFINE_CMP_FUNCS_ENTRY(ObDecimalIntTC, ObDecimalIntTC), // decimal int
   },
 };
 

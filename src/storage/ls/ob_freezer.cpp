@@ -99,7 +99,7 @@ bool ObFrozenMemtableInfo::is_valid()
 
 ObFreezerStat::ObFreezerStat()
   : tablet_id_(),
-    is_force_(false),
+    need_rewrite_meta_(false),
     state_(ObFreezeState::INVALID),
     freeze_clock_(0),
     start_time_(0),
@@ -120,7 +120,7 @@ void ObFreezerStat::reset()
 {
   ObSpinLockGuard guard(lock_);
   tablet_id_.reset();
-  is_force_ = false;
+  need_rewrite_meta_ = false;
   state_ = ObFreezeState::INVALID;
   freeze_clock_ = 0;
   start_time_ = 0;
@@ -250,16 +250,15 @@ ObTabletID ObFreezerStat::get_tablet_id()
   return tablet_id_;
 }
 
-void ObFreezerStat::set_is_force(bool is_force)
+void ObFreezerStat::set_need_rewrite_meta(bool need_rewrite)
 {
   ObSpinLockGuard guard(lock_);
-  is_force_ = is_force;
+  need_rewrite_meta_ = need_rewrite;
 }
-
-bool ObFreezerStat::get_is_force()
+bool ObFreezerStat::need_rewrite_meta()
 {
   ObSpinLockGuard guard(lock_);
-  return is_force_;
+  return need_rewrite_meta_;
 }
 
 void ObFreezerStat::set_state(int state)
@@ -328,7 +327,7 @@ int ObFreezerStat::deep_copy_to(ObFreezerStat &other)
   other.reset();
   ObSpinLockGuard guard(lock_);
   other.set_tablet_id(tablet_id_);
-  other.set_is_force(is_force_);
+  other.set_need_rewrite_meta(need_rewrite_meta_);
   other.set_state(state_);
   other.set_freeze_clock(freeze_clock_);
   other.set_start_time(start_time_);
@@ -348,7 +347,7 @@ int ObFreezerStat::begin_set_freeze_stat(const int64_t freeze_clock,
                                          const int state,
                                          const share::SCN &freeze_snapshot_version,
                                          const ObTabletID &tablet_id,
-                                         const bool is_force)
+                                         const bool need_rewrite_meta)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
@@ -358,7 +357,7 @@ int ObFreezerStat::begin_set_freeze_stat(const int64_t freeze_clock,
   state_ = state;
   freeze_snapshot_version_ = freeze_snapshot_version;
   tablet_id_ = tablet_id;
-  is_force_ = is_force;
+  need_rewrite_meta_ = need_rewrite_meta;
 
   return ret;
 }
@@ -517,7 +516,7 @@ int ObFreezer::logstream_freeze(ObFuture<int> *result)
                                                  ObFreezeState::NOT_SUBMIT_LOG,
                                                  freeze_snapshot_version,
                                                  ObTabletID(ObTabletID::INVALID_TABLET_ID),
-                                                 false/*is_force*/))) {
+                                                 false/*need_rewrite_meta*/))) {
     TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
   } else if (OB_FAIL(inner_logstream_freeze(result))) {
     TRANS_LOG(WARN, "[Freezer] logstream_freeze failure", K(ret), K(ls_id));
@@ -689,7 +688,7 @@ int ObFreezer::freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> 
                                                    ObFreezeState::NOT_SUBMIT_LOG,
                                                    freeze_snapshot_version,
                                                    tablet_id,
-                                                   false/*is_force*/))) {
+                                                   false/*need_rewrite_meta*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
                                                        handle, 0,
@@ -738,16 +737,16 @@ int ObFreezer::freeze_ls_inner_tablet_(const ObTabletID &tablet_id)
   return ret;
 }
 
-int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
+int ObFreezer::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
-  ObTabletHandle handle;
+  ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletMemtableMgr *memtable_mgr = nullptr;
   ObTableHandleV2 frozen_memtable_handle;
   SCN freeze_snapshot_version;
-  FLOG_INFO("[Freezer] force_tablet_freeze start", K(ret), K(ls_id), K(tablet_id));
+  FLOG_INFO("[Freezer] tablet_freeze_with_rewrite_meta start", K(ret), K(ls_id), K(tablet_id));
   int64_t start_time = ObTimeUtility::current_time();
 
   ObTabletFreezeGuard guard(*this);
@@ -775,32 +774,68 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
                                                    ObFreezeState::NOT_SUBMIT_LOG,
                                                    freeze_snapshot_version,
                                                    tablet_id,
-                                                   true/*is_force*/))) {
+                                                   true/*need_rewrite_meta*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
-                                                       handle, 0,
+                                                       tablet_handle,
+                                                       ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
                                                        ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       TRANS_LOG(WARN, "[Freezer] fail to get tablet for freeze", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to get tablet");
-    } else if (FALSE_IT(tablet = handle.get_obj())) {
-    } else if (OB_FAIL(create_memtable_if_no_active_memtable(tablet))) {
-      if (OB_NO_NEED_UPDATE == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("[Freezer] fail to create an active memtable for force_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
-        stat_.add_diagnose_info("fail to create an active memtable for force_tablet_freeze");
-      }
+    } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
     } else if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr*>(tablet->get_memtable_mgr()))) {
       TRANS_LOG(WARN, "[Freezer] tablet_memtable_mgr is null", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(memtable_mgr->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle, true))) {
-      TRANS_LOG(WARN, "[Freezer] fail to set is_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
-      stat_.add_diagnose_info("fail to set is_tablet_freeze");
+    } else if (OB_FAIL(memtable_mgr->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle))) {
+      if (ret == OB_ENTRY_NOT_EXIST) {
+        ret = OB_SUCCESS;
+        if (!memtable_mgr->has_memtable()) {
+          // We need trigger a dag to rewrite the snapshot version of tablet
+          // meta for the major merge and medium merge. While the implementation
+          // need pay much attentio.
+          // 1. If we trigger the dag each time the freeze happened, there may
+          //    be alive dag not finished, and we rewrite the tablet meta first.
+          //    It will cause the snapshot version to be pushed by mistake.
+          // 2. We need fetch the weak read timestamp at first, otherwise the
+          //    concurrent memtable creation may miscalculate the version
+          //
+          // NOTICE: use freeze_snapshot_version as input parameter
+
+          // check exist mini compaction dag running
+          ObTabletMergeDagParam param;
+          param.merge_type_ = ObMergeType::MINI_MERGE;
+          param.merge_version_ = ObVersionRange::MIN_VERSION;
+          param.ls_id_ = ls_id;
+          param.tablet_id_ = tablet_id;
+          param.skip_get_tablet_ = true;
+
+          ObTabletMiniMergeDag tmp_mini_dag;
+          bool is_exist = false;
+          if (OB_FAIL(tmp_mini_dag.init_by_param(&param))) {
+            LOG_WARN("failed to init mini dag", K(ret), K(param));
+          } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(&tmp_mini_dag, is_exist))) {
+            LOG_WARN("failed to check dag exists", K(ret), K(ls_id), K(tablet_id));
+          } else if (is_exist) {
+            // we need to wait the current mini compaction dag to complete
+            ret = OB_EAGAIN;
+            LOG_WARN("exist running mini compaction dag, try later", K(ret), K(ls_id), K(tablet_id));
+          } else if (OB_FAIL(get_ls_tablet_svr()->update_tablet_snapshot_version(tablet_id, freeze_snapshot_version.get_val_for_tx()))) {
+            LOG_WARN("failed to update tablet snapshot version", K(ret), K(ls_id), K(tablet_id), K(freeze_snapshot_version));
+          } else {
+            TRANS_LOG(INFO, "[Freezer] memtable_mgr doesn't have memtable", K(ret), K(ls_id), K(tablet_id));
+          }
+        } else {
+          TRANS_LOG(INFO, "[Freezer] memtable_mgr has memtable", K(ret), K(ls_id), K(tablet_id));
+        }
+      } else {
+        TRANS_LOG(WARN, "[Freezer] fail to set is_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
+        stat_.add_diagnose_info("fail to set is_tablet_freeze");
+      }
     } else if (FALSE_IT(try_submit_log_for_freeze_())) {
     } else if (OB_FAIL(submit_freeze_task(false/*is_ls_freeze*/, nullptr, frozen_memtable_handle))) {
       TRANS_LOG(WARN, "[Freezer] fail to submit freeze_task", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to submit freeze_task");
     } else {
-      TRANS_LOG(INFO, "[Freezer] succeed to start force_tablet_freeze_task", K(ret), K(ls_id), K(tablet_id));
+      TRANS_LOG(INFO, "[Freezer] succeed to start tablet_freeze_with_rewrite_meta", K(ret), K(ls_id), K(tablet_id));
     }
     if (OB_FAIL(ret) || !frozen_memtable_handle.is_valid()) {
       stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
@@ -808,7 +843,6 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
       unset_freeze_();
     }
   }
-
   return ret;
 }
 
@@ -939,7 +973,7 @@ int ObFreezer::tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id
                                                    ObFreezeState::NOT_SUBMIT_LOG,
                                                    freeze_snapshot_version,
                                                    tablet_id,
-                                                   false/*is_force*/))) {
+                                                   false/*need_rewrite_meta*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(get_ls_tablet_svr()->get_tablet(tablet_id,
                                                   handle, 0,
@@ -1037,7 +1071,7 @@ int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFut
                                                    ObFreezeState::NOT_SUBMIT_LOG,
                                                    freeze_snapshot_version,
                                                    ObTabletID(ObTabletID::INVALID_TABLET_ID),
-                                                   false/*is_force*/))) {
+                                                   false/*need_rewrite_meta*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
     } else if (OB_FAIL(batch_tablet_freeze_(tablet_ids, result, need_freeze))) {
       TRANS_LOG(WARN, "[Freezer] batch_tablet_freeze failed", K(ret), K(ls_id), K(tablet_ids));
@@ -1233,6 +1267,7 @@ int ObFreezer::handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtabl
 int ObFreezer::submit_log_for_freeze(bool is_try)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
   ObTabletID tablet_id(INT64_MAX); // used for diagnose
@@ -1248,8 +1283,7 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
           TRANS_LOG(WARN, "[Freezer] failed to traverse trans ctx to submit redo log", K(ret),
                     K(ls_id), K(cost_time), K(fail_tx_id));
           stat_.add_diagnose_info("traverse_trans_to_submit_redo_log failed");
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINI_MERGE,
+          if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE,
                           ls_id, tablet_id, ObSuspectInfoType::SUSPECT_SUBMIT_LOG_FOR_FREEZE,
                           static_cast<int64_t>(ret), fail_tx_id.get_id()))) {
             TRANS_LOG(WARN, "failed to add suspect info", K(tmp_ret));
@@ -1265,7 +1299,7 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
            && OB_FAIL(ret));
 
   if (OB_SUCC(ret)) {
-    DEL_SUSPECT_INFO(MINI_MERGE, ls_id, tablet_id);
+    DEL_SUSPECT_INFO(MINI_MERGE, ls_id, tablet_id, ObDiagnoseTabletType::TYPE_MINI_MERGE);
 
     if (OB_FAIL(get_ls_tx_svr()->traverse_trans_to_submit_next_log())) {
       TRANS_LOG(WARN, "traverse trans ctx to submit next log failed", K(ret));
@@ -1501,7 +1535,7 @@ int ObFreezer::inc_freeze_clock()
   uint32_t new_v = 0;
 
   // inc freeze_clock when freeze_flag has been set
-  // before used by force_freeze to resolve concurrency problems
+  // before used by rewrite_tablet_meta to resolve concurrency problems
   do {
     old_v = ATOMIC_LOAD(&freeze_flag_);
     if (!is_freeze(old_v)) {

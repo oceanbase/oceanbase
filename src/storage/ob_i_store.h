@@ -80,12 +80,6 @@ public:
   }
 };
 
-enum ObMergeLevel
-{
-  MACRO_BLOCK_MERGE_LEVEL = 0,
-  MICRO_BLOCK_MERGE_LEVEL = 1,
-};
-
 enum ObLockFlag
 {
   LF_NONE = 0,
@@ -223,13 +217,21 @@ struct ObStoreRowLockState
 public:
   ObStoreRowLockState()
     : is_locked_(false),
-    trans_version_(share::SCN::min_scn()),
-    lock_trans_id_(),
-    lock_data_sequence_(),
-    lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
-    is_delayed_cleanout_(false),
-    mvcc_row_(NULL),
-    trans_scn_(share::SCN::max_scn()) {}
+      trans_version_(share::SCN::min_scn()),
+      lock_trans_id_(),
+      lock_data_sequence_(),
+      lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
+      is_delayed_cleanout_(false),
+      mvcc_row_(nullptr),
+      trans_scn_(share::SCN::max_scn()) {}
+  inline bool is_lock_decided() const
+  {
+    return is_locked_ || !trans_version_.is_min();
+  }
+  inline bool is_locked(const transaction::ObTransID trans_id) const
+  {
+    return is_locked_ && lock_trans_id_ != trans_id;
+  }
   void reset();
   TO_STRING_KV(K_(is_locked),
                K_(trans_version),
@@ -249,8 +251,6 @@ public:
   memtable::ObMvccRow *mvcc_row_;
   share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
 };
-
-
 
 struct ObStoreRow
 {

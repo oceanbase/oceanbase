@@ -75,6 +75,9 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   ObSEArray<ObColDesc, COMMON_COLUMN_NUM> all_column_ids;
   ObSEArray<ObColDesc, COMMON_COLUMN_NUM> tmp_col_descs;
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_cols_index;
+  ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_cg_idxs;
+  bool use_cs = false;
+  int32_t cg_idx = 0;
 
   if (OB_ISNULL(schema)) {
     ret = OB_INVALID_ARGUMENT;
@@ -83,6 +86,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_id_ = schema->get_table_id();
     schema_version_ = schema->get_schema_version();
     table_type_ = schema->get_table_type();
+    use_cs = !schema->is_row_store();
   }
 
   if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {
@@ -151,8 +155,14 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       col_index = i - virtual_cols_cnt;
     }
 
-    if (OB_SUCC(ret) && OB_FAIL(tmp_cols_index.push_back(col_index))) {
-      LOG_WARN("fail to push_back col_index", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tmp_cols_index.push_back(col_index))) {
+        LOG_WARN("fail to push_back col_index", K(ret));
+      } else if (use_cs && OB_FAIL(schema->get_column_group_index(*column, cg_idx))) {
+        LOG_WARN("Fail to get column group index", K(ret));
+      } else if (use_cs && OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
+        LOG_WARN("Fail to push back cg idx", K(ret));
+      }
     }
   }
 
@@ -166,7 +176,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 lib::is_oracle_mode(),
                 tmp_col_descs,
                 &tmp_cols_index,
-                &tmp_cols))) {
+                &tmp_cols,
+                use_cs ? &tmp_cg_idxs : nullptr))) {
       LOG_WARN("Fail to init read info", K(ret));
     } else if (!col_map_.is_inited()) {
       if (OB_FAIL(col_map_.init(tmp_cols))) {
@@ -404,7 +415,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   if (OB_SUCC(ret) && (data_len - pos) > MINIMAL_NEEDED_SIZE) {
      ObString tmp_name;
      if (OB_FAIL(tmp_name.deserialize(buf, data_len, pos))) {
-       LOG_WARN("failed to deserialize pk name", K(ret));
+       LOG_WARN("failed to deserialize pk name", K(ret), K(data_len), K(pos));
      } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, pk_name_))) {
        LOG_WARN("failed to copy pk name", K(ret), K(tmp_name));
      }

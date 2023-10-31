@@ -108,7 +108,7 @@ public:
 struct ObTabletStatAnalyzer
 {
 public:
-  ObTabletStatAnalyzer() = default;
+  ObTabletStatAnalyzer();
   ~ObTabletStatAnalyzer() = default;
   bool is_hot_tablet() const;
   bool is_insert_mostly() const;
@@ -338,6 +338,8 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       common::ObIArray<ObTabletStat> &tablet_stats);
+  int get_all_tablet_stats(
+      common::ObIArray<ObTabletStat> &tablet_stats);
   int get_tablet_analyzer(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -372,8 +374,6 @@ private:
 
   static constexpr int64_t TABLET_STAT_PROCESS_INTERVAL = 5 * 1000L * 1000L; //5s
   static constexpr int64_t CHECK_INTERVAL = 120L * 1000L * 1000L; //120s
-  static constexpr int64_t CHECK_RUNNING_TIME_INTERVAL = 120L * 1000L * 1000L; //120s
-  static constexpr int64_t CHECK_SYS_STAT_INTERVAL = 10 * 1000LL * 1000LL; //10s
   static constexpr int32_t DEFAULT_MAX_FREE_STREAM_CNT = 5000;
   static constexpr int32_t DEFAULT_UP_LIMIT_STREAM_CNT = 20000;
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1543; // should be a prime to guarantee the bucket nums of hashmap and bucketlock are equal

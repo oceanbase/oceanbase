@@ -477,7 +477,7 @@ int ObTenantMetaChecker::check_dangling_replicas_(
         LOG_WARN("fail to check tablet whether exist in local", KR(ret), K(ls_id), K(tablet_id));
       } else if (not_exist) {
         ++dangling_count;
-        if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id_, ls_id, tablet_id))) {
+        if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(ls_id, tablet_id))) {
           LOG_WARN("fail to submit tablet update task",
               KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
         } else {
@@ -671,7 +671,7 @@ int ObTenantMetaChecker::check_report_replicas_(
               table_replica))) {
             if (OB_HASH_NOT_EXIST == ret) { // not exist in table while exist in local
               ret = OB_SUCCESS;
-              if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id_, ls_id, tablet_id))) {
+              if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(ls_id, tablet_id))) {
                 LOG_WARN("fail to submit tablet update task",
                     KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
               } else {
@@ -694,7 +694,7 @@ int ObTenantMetaChecker::check_report_replicas_(
           } else if (table_replica.is_equal_for_report(local_replica)) {
             continue;
           } else { // not equal
-            if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id_, ls_id, tablet_id))) {
+            if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(ls_id, tablet_id))) {
               LOG_WARN("fail to submit tablet update task",
                   KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
             } else {

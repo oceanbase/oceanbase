@@ -106,8 +106,13 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
                                  ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObSQLSessionInfo *session =
+    dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
   if (OB_FAIL(ObExprNvlUtil::calc_result_type(type, type1, type2, type_ctx))) {
     LOG_WARN("calc_result_type failed", K(ret), K(type1), K(type2));
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cast basic session to sql session failed", K(ret));
   } else {
     // accuracy.
     if (type.get_type() == type1.get_type()) {
@@ -125,10 +130,10 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
     if (lib::is_mysql_mode() && SCALE_UNKNOWN_YET != type.get_scale()) {
       if (ob_is_real_type(type.get_type())) {
         type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
-      } else if (ob_is_number_tc(type.get_type())) { // TODO:@zuojiao.hzj add decimal_int here
+      } else if (ob_is_number_or_decimal_int_tc(type.get_type())) {
         const int16_t intd1 = type1.get_precision() - type1.get_scale();
         const int16_t intd2 = type2.get_precision() - type2.get_scale();
-        const int16_t prec = MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale());
+        const int16_t prec = MIN(OB_MAX_DECIMAL_POSSIBLE_PRECISION, MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale()));
         type.set_precision(static_cast<ObPrecision>(prec));
       }
     }
@@ -137,41 +142,54 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
     if (lib::is_mysql_mode()
         && (ObUInt64Type == type1.get_type() || ObUInt64Type == type2.get_type())
         && ObIntType == type.get_type()) {
-      type.set_type(ObNumberType);
+      bool enable_decimalint = false;
+      if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimalint))) {
+        LOG_WARN("fail to check_enable_decimalint",
+            K(ret), K(session->get_effective_tenant_id()));
+      } else if (enable_decimalint) {
+        type.set_type(ObDecimalIntType);
+      } else {
+        type.set_type(ObNumberType);
+      }
       type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].get_accuracy());
     }
-    // enumset.
-    const bool type1_is_enumset = ob_is_enumset_tc(type1.get_type());
-    const bool type2_is_enumset = ob_is_enumset_tc(type2.get_type());
-    const ObSQLSessionInfo *session =
-      dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-    if (OB_ISNULL(session)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cast basic session to sql session failed", K(ret));
-    } else if (type1_is_enumset || type2_is_enumset) {
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
-      if (OB_UNLIKELY(ObMaxType == calc_type)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(WARN, "invalid type of parameter ", K(type1), K(type2), K(ret));
-      } else if (ObVarcharType == calc_type) {
-        if (type1_is_enumset) {
-          type1.set_calc_type(calc_type);
-          type1.set_calc_collation_type(ObCharset::get_system_collation());
+    if (OB_SUCC(ret)) {
+      if (ObDecimalIntType == type.get_type()) {
+        type.set_scale(static_cast<ObScale>(max(scale1, scale2)));
+        type.set_precision(max(type1.get_precision() - type1.get_scale(),
+                               type2.get_precision() - type2.get_scale())
+                         + max(type1.get_scale(), type2.get_scale()));
+        type1.set_calc_accuracy(type.get_accuracy());
+        type2.set_calc_accuracy(type.get_accuracy());
+      }
+      // enumset.
+      const bool type1_is_enumset = ob_is_enumset_tc(type1.get_type());
+      const bool type2_is_enumset = ob_is_enumset_tc(type2.get_type());
+      if (type1_is_enumset || type2_is_enumset) {
+        ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
+        if (OB_UNLIKELY(ObMaxType == calc_type)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(WARN, "invalid type of parameter ", K(type1), K(type2), K(ret));
+        } else if (ObVarcharType == calc_type) {
+          if (type1_is_enumset) {
+            type1.set_calc_type(calc_type);
+            type1.set_calc_collation_type(ObCharset::get_system_collation());
+          } else {
+            set_calc_type(type, type1);
+          }
+          if (type2_is_enumset) {
+            type2.set_calc_type(calc_type);
+          } else {
+            set_calc_type(type, type2);
+          }
         } else {
           set_calc_type(type, type1);
-        }
-        if (type2_is_enumset) {
-          type2.set_calc_type(calc_type);
-        } else {
           set_calc_type(type, type2);
         }
       } else {
         set_calc_type(type, type1);
         set_calc_type(type, type2);
       }
-    } else {
-      set_calc_type(type, type1);
-      set_calc_type(type, type2);
     }
   }
   return ret;

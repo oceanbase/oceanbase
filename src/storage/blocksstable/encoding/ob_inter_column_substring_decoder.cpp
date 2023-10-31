@@ -31,7 +31,7 @@ ObInterColSubStrDecoder::~ObInterColSubStrDecoder()
 {
 }
 
-int ObInterColSubStrDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int64_t row_id,
+int ObInterColSubStrDecoder::decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
     const ObBitStream &bs, const char *data, const int64_t len) const
 {
   int ret = OB_SUCCESS;
@@ -43,10 +43,6 @@ int ObInterColSubStrDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const 
     LOG_WARN("invalid argument", K(ret), KP(data), K(len));
   } else {
     int64_t ref = 0;
-    if (cell.get_meta() != ctx.obj_meta_) {
-      cell.set_meta_type(ctx.obj_meta_);
-    }
-
     if (!has_exc(ctx)) {
       ref = -1;
     } else {
@@ -55,21 +51,22 @@ int ObInterColSubStrDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const 
           ctx.micro_block_header_->row_count_,
           ctx.is_bit_packing(), row_id,
           ctx.col_header_->length_ - sizeof(ObInterColSubStrMetaHeader),
-          ref, cell, ctx.col_header_->get_store_obj_type()))) {
+          ref, datum, ctx.col_header_->get_store_obj_type()))) {
         LOG_WARN("meta_reader_ read failed", K(ret), K(row_id));
       }
     }
 
     // not an exception data
     if (OB_SUCC(ret) && -1 == ref) {
-      ObObj ref_cell;
-      if (OB_FAIL(ctx.ref_decoder_->decode(*ctx.ref_ctx_, ref_cell, row_id, bs, data, len))) {
+      ObDatum ref_datum;
+      if (OB_FAIL(ctx.ref_decoder_->decode(*ctx.ref_ctx_, ref_datum, row_id, bs, data, len))) {
         LOG_WARN("ref_decoder decode failed", K(ret),
             K(row_id), KP(data), K(len));
-      } else if (ref_cell.is_null()) {
-        cell.set_null();
-      } else if (ObActionFlag::OP_NOP == ref_cell.get_ext()) {
-        cell.set_ext(ObActionFlag::OP_NOP);
+      } else if (ref_datum.is_null()) {
+        datum.set_null();
+      } else if (ref_datum.is_nop()) {
+        datum.set_ext();
+        datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);
       } else {
         const char *cell_data =
             reinterpret_cast<const char *>(meta_header_) + ctx.col_header_->length_
@@ -87,8 +84,8 @@ int ObInterColSubStrDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const 
           val_len = meta_header_->length_;
         }
 
-        cell.v_.string_ = ref_cell.v_.string_ + start_pos;
-        cell.val_len_ = static_cast<int32_t>(val_len);
+        datum.pack_ =  static_cast<int32_t>(val_len);
+        datum.ptr_ = ref_datum.ptr_ + start_pos;
       }
     }
   }

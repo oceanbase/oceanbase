@@ -53,7 +53,9 @@ bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
       type_class == ColumnTypeClass::ObBitTC ||
       type_class == ColumnTypeClass::ObEnumSetTC ||
       type_class == ColumnTypeClass::ObIntervalTC ||
-      (lib::is_mysql_mode() && type == ObTinyTextType)) {
+      type_class == ColumnTypeClass::ObDecimalIntTC ||
+      (lib::is_mysql_mode() && (type == ObTinyTextType ||
+                                type == ObTextType))) {
     ret = true;
   }
   return ret;
@@ -200,6 +202,8 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   } else if (OB_FAIL(all_part_infos_.assign(other.all_part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(all_subpart_infos_.assign(other.all_subpart_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(column_group_params_.assign(other.column_group_params_))) {
     LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
   return ret;

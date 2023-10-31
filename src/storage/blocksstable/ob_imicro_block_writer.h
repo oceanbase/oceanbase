@@ -22,6 +22,8 @@
 #include "ob_macro_block_id.h"
 #include "ob_micro_block_hash_index.h"
 #include "ob_micro_block_header.h"
+#include "ob_micro_block_checksum_helper.h"
+#include "storage/compaction/ob_compaction_memory_context.h"
 
 namespace oceanbase
 {
@@ -32,6 +34,7 @@ struct ObMicroBlockDesc
   ObDatumRowkey last_rowkey_;
   const char *buf_; // buf does not contain any header
   const ObMicroBlockHeader *header_;
+  const ObDatumRow *aggregated_row_;
   int64_t buf_size_;
   int64_t data_size_; // encoding data size
   int64_t original_size_; // original data size
@@ -53,11 +56,13 @@ struct ObMicroBlockDesc
   bool is_valid() const;
   void reset();
   int64_t get_block_size() const { return buf_size_ + header_->header_size_; }
+  const char *get_block_buf() const { return reinterpret_cast<const char *>(header_); }
 
   TO_STRING_KV(
       K_(last_rowkey),
       KPC_(header),
       KP_(buf),
+      KPC_(aggregated_row),
       K_(buf_size),
       K_(data_size),
       K_(row_count),
@@ -82,6 +87,110 @@ enum MICRO_BLOCK_MERGE_VERIFY_LEVEL
   ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE = 3,
 };
 
+class ObMicroBufferWriter final
+{
+public:
+  ObMicroBufferWriter(const int64_t page_size = DEFAULT_MIDDLE_BLOCK_SIZE)
+    : allocator_("MicroBuffer"),
+      is_inited_(false),
+      capacity_(0),
+      buffer_size_(0),
+      len_(0),
+      data_(nullptr),
+      reset_memory_threshold_(0),
+      memory_reclaim_cnt_(0),
+      has_expand_(false),
+      lazy_move_(false),
+      old_buf_(nullptr),
+      old_size_(0)
+  {}
+  ~ObMicroBufferWriter() { reset(); };
+  int init(const int64_t capacity, const int64_t reserve_size = DEFAULT_MIDDLE_BLOCK_SIZE);
+  inline bool is_inited() const { return is_inited_; }
+  inline int64_t remain() const { return capacity_ - len_; }
+  inline int64_t remain_buffer_size() const { return buffer_size_ - len_; }
+  inline int64_t size() const { return buffer_size_; } //curr buffer size
+  inline bool has_expand() const { return has_expand_; }
+  inline char *data() { assert(old_buf_ == nullptr); return data_; }
+  inline char *current() { return data_ + len_; }
+  int reserve(const int64_t size);
+  int ensure_space(const int64_t append_size);
+  // don't use it, only for encoding
+  int set_lazy_move_cur_buf()
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(old_buf_ != nullptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected old buf", K(ret));
+    } else {
+      lazy_move_ = true;
+    }
+    return ret;
+  }
+  void move_buf()
+  {
+    lazy_move_ = false;
+    if (old_buf_ != nullptr) {
+      MEMCPY(data_, old_buf_, old_size_);
+      allocator_.free(old_buf_);
+      old_buf_ = nullptr;
+      old_size_ = 0;
+    }
+  }
+  inline void pop_back(const int64_t size) { len_ = MAX(0, len_ - size); }
+  int write_nop(const int64_t size, bool is_zero = false);
+  int write(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &len);
+  int write(const void *buf, int64_t size);
+  template<typename T>
+  int write(const T &value)
+  {
+    int ret = OB_SUCCESS;
+    static_assert(std::is_trivially_copyable<T>::value, "invalid type");
+    if (OB_FAIL(ensure_space(sizeof(T)))) {
+      if (ret != OB_BUF_NOT_ENOUGH) {
+        STORAGE_LOG(WARN, "failed to ensure space", K(ret), K(sizeof(T)));
+      }
+    } else {
+      *((T *)(data_ + len_)) = value;
+      len_ += sizeof(T);
+    }
+    return ret;
+  }
+  int advance(const int64_t size);
+  int set_length(const int64_t len);
+
+  void reuse();
+  void reset();
+  inline int64_t length() const { return len_; }
+  TO_STRING_KV(K_(capacity), K_(buffer_size), K_(len), K_(data), K_(default_reserve), K_(reset_memory_threshold),
+      K_(memory_reclaim_cnt), K_(has_expand), K_(lazy_move), K_(old_buf), K_(old_size));
+private:
+  int expand(const int64_t size);
+private:
+  compaction::ObLocalArena allocator_;
+  bool is_inited_;
+  int64_t capacity_;
+  int64_t buffer_size_; //curr buffer size
+  int64_t len_; //curr pos
+  char *data_;
+
+  // for reclaim memory
+  int64_t default_reserve_;
+  int64_t reset_memory_threshold_;
+  int64_t memory_reclaim_cnt_;
+  bool has_expand_;
+
+  bool lazy_move_;
+  char *old_buf_;
+  int64_t old_size_;
+
+private:
+  static const int64_t MIN_BUFFER_SIZE = 1 << 12; //4kb
+  static const int64_t MAX_DATA_BUFFER_SIZE = 2 * common::OB_DEFAULT_MACRO_BLOCK_SIZE; // 4m
+  static const int64_t DEFAULT_MIDDLE_BLOCK_SIZE = 1 << 16; //64K
+  static const int64_t DEFAULT_RESET_MEMORY_THRESHOLD = 5;
+};
+
 // Some common interface of ObMicroBlockWriter and ObMicroBlockEncoder, not all features.
 class ObIMicroBlockWriter
 {
@@ -90,7 +199,6 @@ public:
   ObIMicroBlockWriter() :
     row_count_delta_(0),
     last_rows_count_(0),
-    micro_block_checksum_(0),
     micro_block_merge_verify_level_(MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION),
     max_merged_trans_version_(0),
     block_size_upper_bound_(DEFAULT_UPPER_BOUND),
@@ -99,19 +207,22 @@ public:
     has_lob_out_row_(false),
     need_check_lob_(false),
     is_last_row_last_flag_(false),
-    header_(nullptr)
+    checksum_helper_()
   {
   }
   virtual ~ObIMicroBlockWriter() {}
   virtual int append_row(const ObDatumRow &row) = 0;
   virtual int build_block(char *&buf, int64_t &size) = 0;
   virtual int64_t get_row_count() const = 0;
-  virtual int64_t get_data_size() const = 0;
-  virtual int64_t get_block_size() const = 0;
+  virtual int64_t get_block_size() const = 0; // estimate block size after encoding
+  virtual int64_t get_original_size() const = 0; // estimate block size before ecnoding
   virtual int64_t get_column_count() const = 0;
-  virtual int64_t get_original_size() const = 0;
-  virtual void reset() = 0;
-  virtual void dump_diagnose_info() const {};
+  virtual void reset()
+  {
+    reuse();
+    checksum_helper_.reset();
+  }
+  virtual void dump_diagnose_info() const { STORAGE_LOG(INFO, "IMicroBlockWriter", K(checksum_helper_)); }
   virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
   {
     int ret = OB_NOT_SUPPORTED;
@@ -126,7 +237,7 @@ public:
   {
     row_count_delta_ = 0;
     last_rows_count_ = 0;
-    micro_block_checksum_ = 0;
+    checksum_helper_.reuse();
     max_merged_trans_version_ = 0;
     block_size_upper_bound_ = DEFAULT_UPPER_BOUND;
     contain_uncommitted_row_ = false;
@@ -134,6 +245,7 @@ public:
     has_lob_out_row_ = false;
     is_last_row_last_flag_ = false;
   }
+
   void set_block_size_upper_bound(const int64_t &size) { block_size_upper_bound_ = size; }
   int build_micro_block_desc(ObMicroBlockDesc &micro_block_desc);
   int32_t get_row_count_delta() const { return row_count_delta_; }
@@ -142,28 +254,7 @@ public:
     return micro_block_merge_verify_level_;
   }
 
-  static int64_t cal_row_checksum(const ObDatumRow &row, int64_t checksum)
-  {
-    for (int64_t i = 0; i < row.get_column_count(); ++i) {
-      checksum = row.storage_datums_[i].checksum(checksum);
-    }
-    return checksum;
-  }
-  static int cal_column_checksum(const ObDatumRow &row, int64_t *curr_micro_column_checksum)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(!row.is_valid() || nullptr == curr_micro_column_checksum)) {
-      ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "invalid arguments", K(ret), K(row), K(curr_micro_column_checksum));
-    } else {
-      for (int64_t i = 0; i < row.get_column_count(); ++i) {
-        curr_micro_column_checksum[i] += row.storage_datums_[i].checksum(0);
-      }
-    }
-    return ret;
-  }
-
-  int64_t get_micro_block_checksum() const { return micro_block_checksum_; }
+  int64_t get_micro_block_checksum() const { return checksum_helper_.get_row_checksum(); }
   int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
   void update_max_merged_trans_version(const int64_t max_merged_trans_version)
   {
@@ -184,8 +275,8 @@ public:
   {
     micro_block_merge_verify_level_ = verify_level;
   }
-  VIRTUAL_TO_STRING_KV(K_(row_count_delta), K_(micro_block_checksum), K_(contain_uncommitted_row),
-      K_(max_merged_trans_version));
+  VIRTUAL_TO_STRING_KV(K_(row_count_delta), K_(contain_uncommitted_row),
+      K_(max_merged_trans_version), K_(checksum_helper));
 
 protected:
   OB_INLINE void cal_row_stat(const ObDatumRow &row)
@@ -210,6 +301,21 @@ protected:
     return MICRO_BLOCK_MERGE_VERIFY_LEVEL::NONE < micro_block_merge_verify_level_;
   }
 
+  OB_INLINE ObMicroBlockHeader* get_header(ObMicroBufferWriter &data_buffer)
+  {
+    ObMicroBlockHeader *header = reinterpret_cast<ObMicroBlockHeader*>(data_buffer.data());
+    calc_column_checksums_ptr(data_buffer);
+    return header;
+  }
+
+  OB_INLINE void calc_column_checksums_ptr(ObMicroBufferWriter &data_buffer)
+  {
+    ObMicroBlockHeader *header = reinterpret_cast<ObMicroBlockHeader*>(data_buffer.data());
+    if (header->column_checksums_ != nullptr) {
+      header->column_checksums_ = reinterpret_cast<int64_t *>(
+            data_buffer.data() + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
+    }
+  }
 public:
   static const int64_t DEFAULT_MICRO_MAX_SIZE = 256 * 1024; //256K
 
@@ -218,7 +324,6 @@ protected:
   int32_t row_count_delta_;
   // count of rows contain last flag
   int32_t last_rows_count_;
-  int64_t micro_block_checksum_;
   int64_t micro_block_merge_verify_level_;
   int64_t max_merged_trans_version_;
   int64_t block_size_upper_bound_;
@@ -227,7 +332,7 @@ protected:
   bool has_lob_out_row_;
   bool need_check_lob_;
   bool is_last_row_last_flag_;
-  ObMicroBlockHeader *header_;
+  ObMicroBlockChecksumHelper checksum_helper_;
 };
 
 } // end namespace blocksstable

@@ -36,6 +36,10 @@ namespace transaction
 {
 class ObLSTxCtxMgr;
 }
+namespace share
+{
+struct ObDiagnoseLocation;
+}
 
 namespace storage
 {
@@ -175,7 +179,11 @@ inline bool need_migrate_trans_table(const ObReplicaOpType replica_op)
 struct ObTabletReportStatus
 {
   ObTabletReportStatus()
-    : merge_snapshot_version_(0), cur_report_version_(0), data_checksum_(0), row_count_(0)
+    : merge_snapshot_version_(0),
+      cur_report_version_(0),
+      data_checksum_(0),
+      row_count_(0),
+      found_cg_checksum_error_(false)
   {
   }
   ~ObTabletReportStatus() { };
@@ -186,12 +194,14 @@ struct ObTabletReportStatus
     data_checksum_ = 0;
     row_count_ = 0;
   }
-  bool need_report() const { return merge_snapshot_version_ > cur_report_version_; }
-  TO_STRING_KV(K_(merge_snapshot_version), K_(cur_report_version), K_(data_checksum), K_(row_count));
+  bool need_report() const { return merge_snapshot_version_ > cur_report_version_ && INVALID_VAL != cur_report_version_; }
+  TO_STRING_KV(K_(merge_snapshot_version), K_(cur_report_version), K_(data_checksum), K_(row_count), K_(found_cg_checksum_error));
+  static constexpr int64_t INVALID_VAL = INT64_MIN;
   int64_t merge_snapshot_version_;
   int64_t cur_report_version_;
   int64_t data_checksum_;
   int64_t row_count_;
+  bool found_cg_checksum_error_;
   OB_UNIS_VERSION(1);
 };
 
@@ -277,15 +287,15 @@ private:
 
 struct ObGetMergeTablesParam
 {
-  ObMergeType merge_type_;
+  compaction::ObMergeType merge_type_;
   int64_t merge_version_;
   ObGetMergeTablesParam();
   bool is_valid() const;
   OB_INLINE bool is_major_valid() const
   {
-    return storage::is_major_merge_type(merge_type_) && merge_version_ > 0;
+    return compaction::is_major_merge_type(merge_type_) && merge_version_ > 0;
   }
-  TO_STRING_KV(K_(merge_type), K_(merge_version));
+  TO_STRING_KV("merge_type", merge_type_to_str(merge_type_), K_(merge_version));
 };
 
 struct ObGetMergeTablesResult
@@ -294,22 +304,23 @@ struct ObGetMergeTablesResult
   ObTablesHandleArray handle_;
   int64_t merge_version_;
   int64_t create_snapshot_version_;
-  ObMergeType suggest_merge_type_;
   bool update_tablet_directly_;
   bool schedule_major_;
+  bool is_simplified_;
   share::ObScnRange scn_range_;
   int64_t read_base_version_;
-
+  share::ObDiagnoseLocation *error_location_;
+  ObStorageSnapshotInfo snapshot_info_;
   static const int64_t INVALID_INT_VALUE = -1;
-
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
+  void simplify_handle(); // called when schedule ExeMergeDag
   void reset();
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
-      K_(create_snapshot_version), K_(suggest_merge_type), K_(handle),
+      K_(create_snapshot_version), K_(handle),
       K_(update_tablet_directly), K_(schedule_major), K_(read_base_version));
 };
 
@@ -317,6 +328,7 @@ OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
 {
   return status >= OB_MIGRATE_STATUS_NONE && status < OB_MIGRATE_STATUS_MAX;
 }
+
 
 struct ObDDLTableStoreParam final
 {
@@ -338,6 +350,7 @@ public:
 
 struct ObUpdateTableStoreParam
 {
+  ObUpdateTableStoreParam() = default;
   ObUpdateTableStoreParam(
     const int64_t snapshot_version,
     const int64_t multi_version_start,
@@ -355,7 +368,7 @@ struct ObUpdateTableStoreParam
     const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
     const bool need_check_sstable = false,
     const bool allow_duplicate_sstable = false,
-    const ObMergeType merge_type = MERGE_TYPE_MAX);
+    const compaction::ObMergeType merge_type = compaction::MERGE_TYPE_MAX);
 
   ObUpdateTableStoreParam( // for ddl merge task only
     const blocksstable::ObSSTable *sstable,
@@ -364,7 +377,7 @@ struct ObUpdateTableStoreParam
     const int64_t rebuild_seq,
     const ObStorageSchema *storage_schema,
     const bool update_with_major_flag,
-    const ObMergeType merge_type,
+    const compaction::ObMergeType merge_type,
     const bool need_report);
 
   bool is_valid() const;
@@ -387,7 +400,7 @@ struct ObUpdateTableStoreParam
   bool allow_duplicate_sstable_;
   bool need_check_transfer_seq_;
   int64_t transfer_seq_;
-  ObMergeType merge_type_; // set merge_type only when update tablet in compaction
+  compaction::ObMergeType merge_type_; // set merge_type only when update tablet in compaction
 };
 
 struct ObBatchUpdateTableStoreParam final

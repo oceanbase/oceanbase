@@ -157,6 +157,15 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
         case ObLobTC:
           COMMON_LOG(ERROR, "lob type rowkey not support", K(tc));
           break;
+        case ObDecimalIntTC: {
+          int cmp_res = 0;
+          if (OB_FAIL(wide::compare(obj, rhs_obj, cmp_res))) {
+             // do nothing
+          } else {
+           is_equal = (cmp_res == 0);
+          }
+          break;
+        }
         default:
           COMMON_LOG(WARN, "not_supported type class", K(tc));
           ret = OB_ERR_UNEXPECTED;
@@ -262,6 +271,15 @@ bool ObRowkey::simple_equal(const ObRowkey &rhs) const
         case ObLobTC:
           COMMON_LOG(ERROR, "lob type rowkey not support", K(tc));
           break;
+        case ObDecimalIntTC: {
+          int cmp_res = 0;
+          if (OB_FAIL(wide::compare(obj, rhs_obj, cmp_res))) {
+            common::right_to_die_or_duty_to_live();
+          } else {
+           ret = (cmp_res == 0);
+          }
+          break;
+        }
         default:
           COMMON_LOG(WARN, "not_supported type class", K(tc));
           common::right_to_die_or_duty_to_live();

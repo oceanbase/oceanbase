@@ -27,57 +27,63 @@ template <int CMP_TYPE>
 struct DictCmpRefAVX512Func_T<1, CMP_TYPE>
 {
   static void dict_cmp_ref_func(
-      const int64_t row_cnt,
       const int64_t dict_ref,
       const int64_t dict_cnt,
       const unsigned char *col_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       sql::ObBitVector &result)
   {
-    const uint8_t *ref_arr = reinterpret_cast<const uint8_t *>(col_data);
+    const unsigned char *filter_col_data = col_data + pd_filter_info.start_ * sizeof(uint8_t);
+    const uint8_t *ref_arr = reinterpret_cast<const uint8_t *>(filter_col_data);
     const uint8_t casted_dict_ref = *reinterpret_cast<const uint8_t *>(&dict_ref);
     const uint8_t casted_dict_cnt = *reinterpret_cast<const uint8_t *>(&dict_cnt);
     constexpr static int op = ObCmpTypeToAvxOpMap<CMP_TYPE>::value_;
+    const int64_t row_cnt = pd_filter_info.count_;
 
     if (CMP_TYPE <= sql::WHITE_OP_LT) {
       __m128i dict_ref_vec = _mm_set1_epi8(casted_dict_ref);
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
-        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(col_data + i * 16));
+        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(filter_col_data + i * 16));
         __mmask16 cmp_res_ref = _mm_cmp_epu8_mask(data_vec, dict_ref_vec, op);
         result.reinterpret_data<uint16_t>()[i] = cmp_res_ref;
         LOG_DEBUG("[SIMD filter] batch filter result",
             K(i), K(result.reinterpret_data<uint16_t>()[i]),
-            "ref_arr:", common::ObArrayWrap<uint8_t>(ref_arr + i * 16, 16));
+            K(pd_filter_info), "ref_arr:", common::ObArrayWrap<uint8_t>(ref_arr + i * 16, 16));
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 16 * 16;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
         LOG_DEBUG("[SIMD filter] filter result",
-            K(row_id), K(ref_arr[row_id]), K(result.at(row_id)));
+            K(row_id), K(ref_arr[row_id]),
+            K(pd_filter_info), K(result.at(row_id)));
       }
     } else {
       __m128i dict_ref_vec = _mm_set1_epi8(casted_dict_ref);
       __m128i dict_cnt_vec = _mm_set1_epi8(casted_dict_cnt);
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
-        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(col_data + i * 16));
+        __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(filter_col_data + i * 16));
         __mmask16 cmp_res_ref = _mm_cmp_epu8_mask(data_vec, dict_ref_vec, op);
         // op == 5: greater than or equal to
         __mmask16 cmp_res_cnt = _mm_cmp_epu8_mask(data_vec, dict_cnt_vec, 5);
         result.reinterpret_data<uint16_t>()[i] = cmp_res_ref & (~cmp_res_cnt);
         LOG_DEBUG("[SIMD filter] batch filter result",
             K(i), K(result.reinterpret_data<uint16_t>()[i]),
-            "ref_arr:", common::ObArrayWrap<uint8_t>(ref_arr + i * 16, 16));
+            K(pd_filter_info), "ref_arr:", common::ObArrayWrap<uint8_t>(ref_arr + i * 16, 16));
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 16 * 16;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint8_t, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
           // null value
         } else if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
         LOG_DEBUG("[SIMD filter] filter result",
-            K(row_id), K(ref_arr[row_id]), K(result.at(row_id)));
+            K(row_id), K(ref_arr[row_id]),
+            K(pd_filter_info), K(result.at(row_id)));
       }
     }
     LOG_DEBUG("[SIMD filter] fast cmp dict ref for 1 byte",
@@ -90,57 +96,63 @@ template <int CMP_TYPE>
 struct DictCmpRefAVX512Func_T<2, CMP_TYPE>
 {
   static void dict_cmp_ref_func(
-      const int64_t row_cnt,
       const int64_t dict_ref,
       const int64_t dict_cnt,
       const unsigned char *col_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       sql::ObBitVector &result)
   {
-    const uint16_t *ref_arr = reinterpret_cast<const uint16_t *>(col_data);
+    const unsigned char *filter_col_data = col_data + pd_filter_info.start_ * sizeof(uint16_t);
+    const uint16_t *ref_arr = reinterpret_cast<const uint16_t *>(filter_col_data);
     const uint16_t casted_dict_ref = *reinterpret_cast<const uint16_t *>(&dict_ref);
     const uint16_t casted_dict_cnt = *reinterpret_cast<const uint16_t *>(&dict_cnt);
     constexpr static int op = ObCmpTypeToAvxOpMap<CMP_TYPE>::value_;
+    const int64_t row_cnt = pd_filter_info.count_;
 
     if (CMP_TYPE <= sql::WHITE_OP_LT) {
       __m256i dict_ref_vec = _mm256_set1_epi16(casted_dict_ref);
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
-        __m256i data_vec = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(col_data + i * 32));
+        __m256i data_vec = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(filter_col_data + i * 32));
         __mmask16 cmp_res_ref = _mm256_cmp_epu16_mask(data_vec, dict_ref_vec, op);
         result.reinterpret_data<uint16_t>()[i] = cmp_res_ref;
         LOG_DEBUG("[SIMD filter] batch filter result",
-            K(i), K(result.reinterpret_data<uint16_t>()[i]),
+            K(i), K(result.reinterpret_data<uint16_t>()[i]), K(pd_filter_info),
             "ref_arr:", common::ObArrayWrap<uint16_t>(ref_arr + i * 16, 16));
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 16 * 16;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint16_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
         LOG_DEBUG("[SIMD filter] filter result",
-            K(row_id), K(ref_arr[row_id]), K(result.at(row_id)));
+            K(row_id), K(ref_arr[row_id]),
+            K(pd_filter_info), K(result.at(row_id)));
       }
     } else {
       __m256i dict_ref_vec = _mm256_set1_epi16(casted_dict_ref);
       __m256i dict_cnt_vec = _mm256_set1_epi16(casted_dict_cnt);
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
-        __m256i data_vec = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(col_data + i * 32));
+        __m256i data_vec = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(filter_col_data + i * 32));
         __mmask16 cmp_res_ref = _mm256_cmp_epu16_mask(data_vec, dict_ref_vec, op);
         // op == 5: greater than or equal to
         __mmask16 cmp_res_cnt = _mm256_cmp_epu16_mask(data_vec, dict_cnt_vec, 5);
         result.reinterpret_data<uint16_t>()[i] = cmp_res_ref & (~cmp_res_cnt);
         LOG_DEBUG("[SIMD filter] batch filter result",
-            K(i), K(result.reinterpret_data<uint16_t>()[i]),
+            K(i), K(result.reinterpret_data<uint16_t>()[i]), K(pd_filter_info),
             "ref_arr:", common::ObArrayWrap<uint16_t>(ref_arr + i * 16, 16));
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 16 * 16;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint16_t, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
           // null value
         } else if (value_cmp_t<uint16_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
         LOG_DEBUG("[SIMD filter] filter result",
-            K(row_id), K(ref_arr[row_id]), K(result.at(row_id)));
+            K(row_id), K(ref_arr[row_id]),
+            K(pd_filter_info), K(result.at(row_id)));
       }
     }
     LOG_DEBUG("[SIMD filter] fast cmp dict ref for 2 bytes",

@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "storage/blocksstable/ob_index_block_row_struct.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "storage/blocksstable/ob_macro_block.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
@@ -30,15 +30,17 @@ class TestIndexBlockRowStruct : public ::testing::Test
 public:
   static const int64_t rowkey_column_count = 2;
 public:
-  TestIndexBlockRowStruct() : desc_(), allocator_() {}
+  TestIndexBlockRowStruct() : allocator_(), index_data_allocator_(), desc_(), data_desc_()  {}
   virtual ~TestIndexBlockRowStruct() {}
   static void SetUpTestCase();
   static void TearDownTestCase();
   virtual void SetUp();
   virtual void TearDown();
 public:
-  ObDataStoreDesc desc_;
   ObArenaAllocator allocator_;
+  ObArenaAllocator index_data_allocator_;
+  ObWholeDataStoreDesc desc_;
+  ObWholeDataStoreDesc data_desc_;
 };
 
 void TestIndexBlockRowStruct::SetUpTestCase()
@@ -54,29 +56,49 @@ void TestIndexBlockRowStruct::TearDownTestCase()
 void TestIndexBlockRowStruct::SetUp()
 {
   ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
-  desc_.ls_id_.id_ = 1;
-  desc_.tablet_id_.id_ = 1;
-  desc_.micro_block_size_ = 8 * 1024;
-  desc_.micro_block_size_limit_ = 8 * 1024;
-  desc_.row_column_count_ = rowkey_column_count + 1;
-  desc_.rowkey_column_count_ = rowkey_column_count;
-  desc_.schema_version_ = 0;
-  desc_.schema_rowkey_col_cnt_ = rowkey_column_count;
-  desc_.snapshot_version_ = 1;
-  desc_.end_scn_.set_base();
-  desc_.merge_type_ = MAJOR_MERGE;
-  desc_.col_desc_array_.init(desc_.row_column_count_);
-  desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  ObDataStoreDesc &data_desc = desc_.get_desc();
+  ObStaticDataStoreDesc &static_desc = desc_.get_static_desc();
+  ObColDataStoreDesc &col_desc = desc_.get_col_desc();
+  data_desc.static_desc_ = &static_desc;
+  data_desc.col_desc_ = &col_desc;
+
+  static_desc.ls_id_.id_ = 1;
+  static_desc.tablet_id_.id_ = 1;
+  static_desc.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  data_desc.micro_block_size_ = 8 * 1024;
+  static_desc.micro_block_size_limit_ = 8 * 1024;
+  col_desc.row_column_count_ = rowkey_column_count + 1;
+  col_desc.rowkey_column_count_ = rowkey_column_count;
+  static_desc.schema_version_ = 0;
+  col_desc.schema_rowkey_col_cnt_ = rowkey_column_count;
+  static_desc.snapshot_version_ = 1;
+  static_desc.end_scn_.set_base();
+  static_desc.merge_type_ = compaction::MAJOR_MERGE;
+  col_desc.col_desc_array_.init(col_desc.row_column_count_);
+  col_desc.agg_meta_array_.init(col_desc.row_column_count_ * 3);
   for (int64_t i = 0; i < 3; i++) {
-    share::schema::ObColDesc col_desc;
-    col_desc.col_type_.set_int32();
-    EXPECT_EQ(OB_SUCCESS, desc_.col_desc_array_.push_back(col_desc));
+    share::schema::ObColDesc col;
+    col.col_type_.set_int32();
+    EXPECT_EQ(OB_SUCCESS, col_desc.col_desc_array_.push_back(col));
+
+    ObSkipIndexColMeta agg_meta;
+    agg_meta.col_idx_ = i;
+    agg_meta.col_type_ = ObSkipIndexColType::SK_IDX_MIN;
+    EXPECT_EQ(OB_SUCCESS, col_desc.agg_meta_array_.push_back(agg_meta));
+    agg_meta.col_type_ = ObSkipIndexColType::SK_IDX_MAX;
+    EXPECT_EQ(OB_SUCCESS, col_desc.agg_meta_array_.push_back(agg_meta));
+    agg_meta.col_type_ = ObSkipIndexColType::SK_IDX_NULL_COUNT;
+    EXPECT_EQ(OB_SUCCESS, col_desc.agg_meta_array_.push_back(agg_meta));
   }
-  desc_.rowkey_column_count_ = rowkey_column_count;
+  col_desc.rowkey_column_count_ = rowkey_column_count;
+  EXPECT_EQ(OB_SUCCESS, col_desc.datum_utils_.init(col_desc.col_desc_array_, col_desc.schema_rowkey_col_cnt_, lib::is_oracle_mode(), allocator_)); // data desc same with index desc
+  EXPECT_EQ(OB_SUCCESS, data_desc_.assign(desc_.get_desc())); // data desc same with index desc
 }
 
 void TestIndexBlockRowStruct::TearDown()
 {
+  allocator_.reset();
+  index_data_allocator_.reset();
 }
 
 TEST_F(TestIndexBlockRowStruct, test_invalid)
@@ -91,9 +113,9 @@ TEST_F(TestIndexBlockRowStruct, test_invalid)
   EXPECT_EQ(OB_SUCCESS, row_key.assign(obj, 2));
 
   ObIndexBlockRowBuilder row_builder;
-  ret = row_builder.init(desc_);
+  ret = row_builder.init(allocator_, index_data_allocator_, data_desc_.get_desc(), data_desc_.get_desc());
   EXPECT_EQ(OB_SUCCESS, ret);
-  ret = row_builder.init(desc_);
+  ret = row_builder.init(allocator_, index_data_allocator_, data_desc_.get_desc(), data_desc_.get_desc());
   EXPECT_NE(OB_SUCCESS, ret);
 
   const ObDatumRow *row;
@@ -115,11 +137,11 @@ TEST_F(TestIndexBlockRowStruct, test_normal)
   EXPECT_EQ(OB_SUCCESS, row_key.assign(obj, 2));
 
   ObIndexBlockRowBuilder row_builder;
-  ret = row_builder.init(desc_);
+  ret = row_builder.init(allocator_, index_data_allocator_, data_desc_.get_desc(), data_desc_.get_desc());
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObIndexBlockRowDesc row_desc;
-  row_desc.data_store_desc_ = &desc_;
+  row_desc.data_store_desc_ = &desc_.get_desc();
   row_desc.row_key_ = row_key;
   ASSERT_TRUE(row_desc.is_valid());
 
@@ -140,9 +162,14 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   ObDatumRowkey row_key;
   EXPECT_EQ(OB_SUCCESS, row_key.assign(obj, 2));
 
+  ObDatumRow agg_row;
+  ASSERT_EQ(OB_SUCCESS, agg_row.init(allocator_, desc_.get_col_desc().agg_meta_array_.count()));
+  for (int64_t i = 0; i < agg_row.get_column_count(); ++i) {
+    agg_row.storage_datums_[i].set_int(0);
+  }
+
   ObIndexBlockRowBuilder row_builder;
-  ret = row_builder.init(desc_);
-  EXPECT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, row_builder.init(allocator_, index_data_allocator_, data_desc_.get_desc(), data_desc_.get_desc()));
 
   ObIndexBlockRowDesc row_desc;
   row_desc.block_size_ = 1024;
@@ -151,8 +178,10 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   row_desc.is_data_block_ = true;
   row_desc.is_macro_node_ = false;
   row_desc.micro_block_count_ = 1;
+  row_desc.aggregated_row_ = &agg_row;
+  row_desc.is_serialized_agg_row_ = false;
 
-  row_desc.data_store_desc_ = &desc_;
+  row_desc.data_store_desc_ = &desc_.get_desc();
   row_desc.row_key_ = row_key;
   const ObDatumRow *row;
   ret = row_builder.build_row(row_desc, row);
@@ -179,6 +208,19 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   ret = row_parser.get_minor_meta(minor_meta);
   EXPECT_NE(OB_SUCCESS, ret);
 
+  const char *pre_agg_row = nullptr;
+  int64_t row_size = 0;
+  EXPECT_EQ(OB_SUCCESS, row_parser.get_agg_row(pre_agg_row, row_size));
+
+  ObAggRowReader agg_row_reader;
+  EXPECT_EQ(OB_SUCCESS, agg_row_reader.init(pre_agg_row, row_size));
+  for (int64_t i = 0; i < desc_.get_col_desc().agg_meta_array_.count(); ++i) {
+    ObStorageDatum tmp_datum;
+    EXPECT_EQ(OB_SUCCESS, agg_row_reader.read(desc_.get_col_desc().agg_meta_array_.at(i), tmp_datum));
+    ASSERT_EQ(false, tmp_datum.is_null());
+    ASSERT_EQ(0, tmp_datum.get_int());
+  }
+
   row_builder.reset();
 }
 
@@ -197,11 +239,11 @@ TEST_F(TestIndexBlockRowStruct, test_set_rowkey)
   EXPECT_EQ(OB_SUCCESS, row_key.assign(obj, 2));
 
   ObIndexBlockRowBuilder row_builder;
-  ret = row_builder.init(desc_);
+  ret = row_builder.init(allocator_, index_data_allocator_, data_desc_.get_desc(), data_desc_.get_desc());
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ObIndexBlockRowDesc row_desc;
-  row_desc.data_store_desc_ = &desc_;
+  row_desc.data_store_desc_ = &desc_.get_desc();
   ASSERT_TRUE(row_desc.is_valid());
 
   const ObDatumRow *row;

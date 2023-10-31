@@ -218,6 +218,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 412	__all_service_epoch	0	201001	1
 413	__all_spatial_reference_systems	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
+419	__all_column_group	0	201001	1
+420	__all_column_group_history	0	201001	1
+421	__all_column_group_mapping	0	201001	1
+422	__all_column_group_mapping_history	0	201001	1
 423	__all_transfer_task	0	201001	1
 424	__all_transfer_task_history	0	201001	1
 425	__all_balance_job	0	201001	1
@@ -348,6 +352,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11114	__all_virtual_io_benchmark	2	201001	1
 11115	__all_virtual_io_quota	2	201001	1
 11116	__all_virtual_server_compaction_event_history	2	201001	1
+11117	__all_virtual_tablet_stat	2	201001	1
 12001	SESSION_VARIABLES	2	201002	1
 12006	GLOBAL_STATUS	2	201002	1
 12008	SESSION_STATUS	2	201002	1
@@ -588,7 +593,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12326	__all_virtual_kv_ttl_task	2	201001	1
 12327	__all_virtual_kv_ttl_task_history	2	201001	1
 12330	__all_virtual_column_checksum_error_info	2	201001	1
-12331	__all_virtual_kvcache_handle_leak_info	2	201001	1
 12334	__all_virtual_tablet_compaction_info	2	201001	1
 12335	__all_virtual_ls_replica_task_plan	2	201001	1
 12336	__all_virtual_schema_memory	2	201001	1
@@ -644,6 +648,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12395	__all_virtual_timestamp_service	2	201001	1
 12396	__all_virtual_resource_pool_mysql_sys_agent	2	201001	1
 12397	__all_virtual_px_p2p_datahub	2	201001	1
+12398	__all_virtual_column_group	2	201001	1
+12399	__all_virtual_storage_leak_info	2	201001	1
 12400	__all_virtual_ls_log_restore_status	2	201001	1
 12401	__all_virtual_tenant_parameter	2	201001	1
 12405	__all_virtual_tablet_buffer_info	2	201001	1
@@ -952,6 +958,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21363	DBA_OB_LS_LOG_ARCHIVE_PROGRESS	1	201001	1
 21364	CDB_OB_LS_LOG_ARCHIVE_PROGRESS	1	201001	1
 21369	DBA_OB_RSRC_IO_DIRECTIVES	1	201001	1
+21370	GV$OB_TABLET_STATS	1	201001	1
+21371	V$OB_TABLET_STATS	1	201001	1
 21372	DBA_OB_ACCESS_POINT	1	201001	1
 21373	CDB_OB_ACCESS_POINT	1	201001	1
 21374	CDB_OB_DATA_DICTIONARY_IN_LOG	1	201001	1

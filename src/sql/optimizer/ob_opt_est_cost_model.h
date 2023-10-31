@@ -161,6 +161,34 @@ struct ObTwoNodeCostInfo
   OptSelectivityCtx *sel_ctx_;
 };
 
+struct ObCostColumnGroupInfo {
+  ObCostColumnGroupInfo()
+  :micro_block_count_(0.0),
+  filter_sel_(1.0),
+  skip_rate_(1.0),
+  skip_filter_sel_(1.0)
+  {
+  }
+  int assign(const ObCostColumnGroupInfo& info);
+
+  TO_STRING_KV(
+    K_(filters),
+    K_(access_column_items),
+    K_(column_id),
+    K_(micro_block_count),
+    K_(filter_sel),
+    K_(skip_rate),
+    K_(skip_filter_sel)
+  );
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> filters_;
+  common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_;
+  uint64_t column_id_;
+  int64_t micro_block_count_;
+  double filter_sel_;
+  double skip_rate_;
+  double skip_filter_sel_;
+};
+
 /*
  * store all the info needed to cost table scan
  */
@@ -194,7 +222,12 @@ struct ObCostTableScanInfo
      join_filter_sel_(1.0),
      ss_prefix_ndv_(1.0),
      ss_postfix_range_filters_sel_(1.0),
-     batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE)
+     logical_query_range_row_count_(0.0),
+     phy_query_range_row_count_(0.0),
+     index_back_row_count_(0.0),
+     output_row_count_(0.0),
+     batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
+     use_column_store_(false)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -208,7 +241,9 @@ struct ObCostTableScanInfo
                K_(is_inner_path), K_(can_use_batch_nlj),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
-               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel));
+               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
+               K_(use_column_store),
+               K_(column_group_infos));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -245,8 +280,15 @@ struct ObCostTableScanInfo
   double join_filter_sel_;
   double ss_prefix_ndv_;  // skip scan prefix columns NDV
   double ss_postfix_range_filters_sel_;
+  double logical_query_range_row_count_;// 估计出的抽出的query range中所包含的行数(logical)
+  double phy_query_range_row_count_;// 估计出的抽出的query range中所包含的行数(physical)
+  double index_back_row_count_;// 估计出的需要回表的行数
+  double output_row_count_;
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
+  bool use_column_store_;
+  common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> column_group_infos_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
@@ -591,6 +633,12 @@ public:
   const static int64_t DEFAULT_LOCAL_ORDER_DEGREE;
   const static int64_t DEFAULT_MAX_STRING_WIDTH;
   const static int64_t DEFAULT_FIXED_OBJ_WIDTH;
+  enum PROJECT_TYPE {
+    PROJECT_INT = 0,
+    PROJECT_NUMBER,
+    PROJECT_CHAR,
+    MAX_PROJECT_TYPE
+  };
 
   struct ObCostParams
   {
@@ -599,22 +647,8 @@ public:
     const double DEFAULT_TABLE_SCAN_CPU_TUPLE_COST,
     const double DEFAULT_MICRO_BLOCK_SEQ_COST,
     const double DEFAULT_MICRO_BLOCK_RND_COST,
-    const double DEFAULT_PROJECT_COLUMN_SEQ_INT_COST,
-    const double DEFAULT_PROJECT_COLUMN_SEQ_NUMBER_COST,
-    const double DEFAULT_PROJECT_COLUMN_SEQ_CHAR_COST,
-    const double DEFAULT_PROJECT_COLUMN_RND_INT_COST,
-    const double DEFAULT_PROJECT_COLUMN_RND_NUMBER_COST,
-    const double DEFAULT_PROJECT_COLUMN_RND_CHAR_COST,
     const double DEFAULT_FETCH_ROW_RND_COST,
-    const double DEFAULT_CMP_INT_COST,
-    const double DEFAULT_CMP_NUMBER_COST,
-    const double DEFAULT_CMP_CHAR_COST,
     const double DEFAULT_CMP_GEO_COST,
-    const double INVALID_CMP_COST,
-    const double DEFAULT_HASH_INT_COST,
-    const double DEFAULT_HASH_NUMBER_COST,
-    const double DEFAULT_HASH_CHAR_COST,
-    const double INVALID_HASH_COST,
     const double DEFAULT_MATERIALIZE_PER_BYTE_WRITE_COST,
     const double DEFAULT_READ_MATERIALIZED_PER_ROW_COST,
     const double DEFAULT_PER_AGGR_FUNC_COST,
@@ -650,22 +684,8 @@ public:
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
       MICRO_BLOCK_SEQ_COST(DEFAULT_MICRO_BLOCK_SEQ_COST),
       MICRO_BLOCK_RND_COST(DEFAULT_MICRO_BLOCK_RND_COST),
-      PROJECT_COLUMN_SEQ_INT_COST(DEFAULT_PROJECT_COLUMN_SEQ_INT_COST),
-      PROJECT_COLUMN_SEQ_NUMBER_COST(DEFAULT_PROJECT_COLUMN_SEQ_NUMBER_COST),
-      PROJECT_COLUMN_SEQ_CHAR_COST(DEFAULT_PROJECT_COLUMN_SEQ_CHAR_COST),
-      PROJECT_COLUMN_RND_INT_COST(DEFAULT_PROJECT_COLUMN_RND_INT_COST),
-      PROJECT_COLUMN_RND_NUMBER_COST(DEFAULT_PROJECT_COLUMN_RND_NUMBER_COST),
-      PROJECT_COLUMN_RND_CHAR_COST(DEFAULT_PROJECT_COLUMN_RND_CHAR_COST),
       FETCH_ROW_RND_COST(DEFAULT_FETCH_ROW_RND_COST),
-      CMP_DEFAULT_COST(DEFAULT_CMP_NUMBER_COST),
-      CMP_INT_COST(DEFAULT_CMP_INT_COST),
-      CMP_NUMBER_COST(DEFAULT_CMP_NUMBER_COST),
-      CMP_CHAR_COST(DEFAULT_CMP_CHAR_COST),
       CMP_SPATIAL_COST(DEFAULT_CMP_GEO_COST),
-      HASH_DEFAULT_COST(DEFAULT_HASH_INT_COST),
-      HASH_INT_COST(DEFAULT_HASH_INT_COST),
-      HASH_NUMBER_COST(DEFAULT_HASH_NUMBER_COST),
-      HASH_CHAR_COST(DEFAULT_HASH_CHAR_COST),
       MATERIALIZE_PER_BYTE_WRITE_COST(DEFAULT_MATERIALIZE_PER_BYTE_WRITE_COST),
       READ_MATERIALIZED_PER_ROW_COST(DEFAULT_READ_MATERIALIZED_PER_ROW_COST),
       PER_AGGR_FUNC_COST(DEFAULT_PER_AGGR_FUNC_COST),
@@ -705,38 +725,10 @@ public:
     double MICRO_BLOCK_SEQ_COST;
     /** 随机读取一个微块并反序列化的开销 */
     double MICRO_BLOCK_RND_COST;
-    /** 顺序读取时投影一列int类型的开销 */
-    double PROJECT_COLUMN_SEQ_INT_COST;
-    /** 顺序读取时投影一列number类型的开销 */
-    double PROJECT_COLUMN_SEQ_NUMBER_COST;
-    /** 顺序读取时投影一个字符的开销 */
-    double PROJECT_COLUMN_SEQ_CHAR_COST;
-    /** 随机读取时投影一列int类型的开销 */
-    double PROJECT_COLUMN_RND_INT_COST;
-    /** 随机读取时投影一列number类型的开销 */
-    double PROJECT_COLUMN_RND_NUMBER_COST;
-    /** 随机读取时投影一个字符的开销 */
-    double PROJECT_COLUMN_RND_CHAR_COST;
     /** 随机读取中定位某一行所在位置的开销 */
     double FETCH_ROW_RND_COST;
-    /** 对于无法获取数据类型的情况，默认的比较代价 */
-    double CMP_DEFAULT_COST;
-    /** 比较一次整型变量的代价 */
-    double CMP_INT_COST;
-    /** 比较一次ObNumber的代价 */
-    double CMP_NUMBER_COST;
-    /** 比较一次字符串的代价 */
-    double CMP_CHAR_COST;
     /** 比较一次空间数据的代价 */
     double CMP_SPATIAL_COST;
-    /** 对于无法获取数据类型的情况，默认的hash代价 */
-    double HASH_DEFAULT_COST;
-    /** 计算一个整型变量的hash值的代价 */
-    double HASH_INT_COST;
-    /** 计算一个ObNumber的hash值的代价 */
-    double HASH_NUMBER_COST;
-    /** 计算一个字符串的hash值的代价 */
-    double HASH_CHAR_COST;
     /** 物化一个字节的代价 */
     double MATERIALIZE_PER_BYTE_WRITE_COST;
     /** 读取物化后的行的代价，即对物化后数据结构的get_next_row() */
@@ -800,9 +792,11 @@ public:
 	ObOptEstCostModel(
 			const double (&comparison_params)[common::ObMaxTC + 1],
 			const double (&hash_params)[common::ObMaxTC + 1],
+			const double (&project_params)[2][2][MAX_PROJECT_TYPE],
 			const ObCostParams &cost_params)
 		:comparison_params_(comparison_params),
 		hash_params_(hash_params),
+    project_params_(project_params),
 		cost_params_(cost_params)
 	{}
 
@@ -893,9 +887,22 @@ public:
 
   int cost_hash_set(const ObCostHashSetInfo &info, double &cost);
 
-  int cost_project(double rows, const ObIArray<ColumnItem> &columns, bool is_seq, double &cost);
+  int cost_project(double rows,
+                   const ObIArray<ColumnItem> &columns,
+                   bool is_get,
+                   bool use_column_store,
+                   double &cost);
 
-  int cost_full_table_scan_project(double rows, const ObCostTableScanInfo &est_cost_info, double &cost);
+  int cost_project(double rows,
+                   const ObIArray<ObRawExpr*> &columns,
+                   bool is_get,
+                   bool use_column_store,
+                   double &cost);
+
+  int cost_full_table_scan_project(double rows,
+                                   const ObCostTableScanInfo &est_cost_info,
+                                   bool is_get,
+                                   double &cost);
 
   double cost_quals(double rows, const ObIArray<ObRawExpr *> &quals, bool need_scale = true);
 
@@ -929,22 +936,17 @@ public:
    */
   int cost_table(const ObCostTableScanInfo &est_cost_info,
 								int64_t parallel,
-								double query_range_row_count,
-								double phy_query_range_row_count,
-								double &cost,
-								double &index_back_cost);
+								double &cost);
 
   int cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
                               const int64_t parallel,
                               const double part_cnt_per_dop,
-                              double query_range_row_count,
-                              double phy_query_range_row_count,
                               double &px_cost,
                               double &cost);
 
   int cost_px(int64_t parallel, double &px_cost);
 
-  int cost_range_scan(const ObTableMetaInfo& table_meta_info,
+  int calc_range_cost(const ObTableMetaInfo& table_meta_info,
                       const ObIArray<ObRawExpr *> &filters,
                       int64_t index_column_count,
                       int64_t range_count,
@@ -989,71 +991,68 @@ protected:
 																	double &cost);
 
   // estimate cost for non-virtual table
-  int cost_normal_table(const ObCostTableScanInfo &est_cost_info,
-												int64_t parallel,
-												const double query_range_row_count,
-												const double phy_query_range_row_count,
-												double &cost,
-												double &index_back_cost);
+  int cost_basic_table(const ObCostTableScanInfo &est_cost_info,
+                        const double part_cnt_per_dop,
+												double &cost);
 
-  //estimate one batch
-  int cost_table_one_batch(const ObCostTableScanInfo &est_cost_info,
-                          const double part_cnt_per_dop,
-													const common::ObSimpleBatch::ObBatchType &type,
-													const double logical_output_row_count,
-													const double physical_output_row_count,
-													double &cost,
-													double &index_back_cost);
+  int cost_row_store_basic_table(const ObCostTableScanInfo &est_cost_info,
+                                double row_count,
+                                double &cost);
 
-  // estimate one batch table scan cost
-  int cost_table_scan_one_batch(const ObCostTableScanInfo &est_cost_info,
-																const double logical_output_row_count,
-																const double physical_output_row_count,
-																double &cost,
-																double &index_back_cost);
+  int cost_column_store_basic_table(const ObCostTableScanInfo &est_cost_info,
+                                    double row_count,
+                                    double &cost);
 
-  //estimate one batch table get cost
-  int cost_table_get_one_batch(const ObCostTableScanInfo &est_cost_info,
-															const double output_row_count,
-															double &cost,
-															double &index_back_cost);
+  int cost_index_scan(const ObCostTableScanInfo &est_cost_info,
+                      double row_count,
+                      double &cost);
 
+  int cost_index_back(const ObCostTableScanInfo &est_cost_info,
+                      double row_count,
+                      double &cost);
   // estimate the network transform and rpc cost for global index
-  int cost_table_lookup_rpc(double row_count,
-														const ObCostTableScanInfo &est_cost_info,
-														double &cost);
+  int cost_global_index_back_with_rp(double row_count,
+                                    const ObCostTableScanInfo &est_cost_info,
+                                    double &cost);
 
-  // estimate the spatial calculation and sort cost for spatial index
-  int cost_table_get_one_batch_spatial(double row_count,
-                                       const ObCostTableScanInfo &est_cost_info,
-                                       double &cost);
+  int cost_range_scan(const ObCostTableScanInfo &est_cost_info,
+                      bool is_scan_index,
+                      double row_count,
+                      double &cost);
 
-  // @param[in] is_index_back 仅在对索引扫描的回表扫描进行估计时为true
-  //estimate one batch table get cost, truly estimation function
-  int cost_table_get_one_batch_inner(double row_count,
-																		const ObCostTableScanInfo &est_cost_info,
-																		bool is_scan_index,
-																		double &res);
+  int cost_range_get(const ObCostTableScanInfo &est_cost_info,
+                    bool is_scan_index,
+                    double row_count,
+                    double &cost);
 
-  // @param[in] is_index_back 仅在对索引扫描的回表扫描进行估计时为true
-  //estimate one batch table scan cost, truly estimation function
-  virtual int cost_table_scan_one_batch_inner(double row_count,
-                                              const ObCostTableScanInfo &est_cost_info,
-                                              bool is_scan_index,
-                                              double &res);
-  int cost_table_scan_one_batch_io_cost(double row_count,
-                                        const ObCostTableScanInfo &est_cost_info,
-                                        double &io_cost);
-  int cost_table_get_one_batch_io_cost(const double row_count,
-                                       const ObCostTableScanInfo &est_cost_info,
-																			 bool is_scan_index,
-                                       double &io_cost);
+  int range_get_io_cost(const ObCostTableScanInfo &est_cost_info,
+                        bool is_scan_index,
+                        double row_count,
+                        double &cost);
 
-  int cost_skip_scan_prefix_scan_one_row(const ObCostTableScanInfo &est_cost_info,
-                                         double &cost);
+  int range_scan_io_cost(const ObCostTableScanInfo &est_cost_info,
+                        bool is_scan_index,
+                        double row_count,
+                        double &cost);
+
+  int range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_info,
+                          bool is_scan_index,
+                          double row_count,
+                          bool is_get,
+                          double &cost);
 protected:
   const double (&comparison_params_)[common::ObMaxTC + 1];
   const double (&hash_params_)[common::ObMaxTC + 1];
+  /*
+   *                             +-sequence access project
+   *              +-row store----+
+   *              |              +-random access project
+   * project cost-+
+   *              |              +-sequence access project
+   *              +-column store-+
+   *                             +-random access project
+   */
+  const double (&project_params_)[2][2][MAX_PROJECT_TYPE];
   const ObCostParams &cost_params_;
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCostModel);
 };

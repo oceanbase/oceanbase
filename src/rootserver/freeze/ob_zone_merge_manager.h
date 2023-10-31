@@ -32,19 +32,17 @@ public:
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
   virtual int reload();
   virtual int try_reload();
+  void reset_merge_info();
   void reset_merge_info_without_lock();
 
-  int is_in_merge(bool &merge) const;
-  int is_merge_error(bool &merge_error) const;
-
   int get_zone_merge_info(share::ObZoneMergeInfo &info) const;
-  int get_zone_merge_info(const int64_t idx, share::ObZoneMergeInfo &info) const;
   int get_zone_merge_info(const common::ObZone &zone, share::ObZoneMergeInfo &info) const;
-  int get_zone_merge_info(common::ObIArray<share::ObZoneMergeInfo> &infos) const;
   int get_zone(common::ObIArray<common::ObZone> &zone_list) const;
-  int get_zone_count() const { return zone_count_; }
-  int get_snapshot(share::ObGlobalMergeInfo &global_info, 
+  int get_snapshot(share::ObGlobalMergeInfo &global_info,
                    common::ObIArray<share::ObZoneMergeInfo> &info_array);
+  int get_snapshot(share::ObGlobalMergeInfo &global_info);
+  virtual int finish_all_zone_merge(const int64_t expected_epoch,
+                                    const uint64_t &merged_scn_val);
 
   virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
   virtual int finish_zone_merge(const common::ObZone &zone,
@@ -54,7 +52,7 @@ public:
   int suspend_merge(const int64_t expected_epoch);
   int resume_merge(const int64_t expected_epoch);
   int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
-  
+
   int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
   int check_need_broadcast(const share::SCN &frozen_scn, bool &need_broadcast);
   int set_global_freeze_info(const share::SCN &frozen_scn, const int64_t expected_epoch);
@@ -74,7 +72,7 @@ public:
 private:
   int check_valid(const common::ObZone &zone, int64_t &idx) const;
   int find_zone(const common::ObZone &zone, int64_t &idx) const;
-  int check_inner_stat() const;
+  inline int check_inner_stat() const;
   int check_freeze_service_epoch(common::ObMySQLTransaction &trans, const int64_t expected_epoch);
   void handle_trans_stat(common::ObMySQLTransaction &trans, int &ret);
 
@@ -110,6 +108,23 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObZoneMergeManagerBase);
 };
 
+// destruct shadow_copy_guard before return
+// otherwise the ret_ in shadow_copy_guard will never be returned
+#define ZONE_MERGE_MANAGER_FUNC(func_name)                                     \
+  template <typename... Args> int func_name(Args &&...args) {                  \
+    int ret = OB_SUCCESS;                                                      \
+    SpinWLockGuard guard(write_lock_);                                         \
+    {                                                                          \
+      ObZoneMergeMgrGuard shadow_guard(                                        \
+          lock_, *(static_cast<ObZoneMergeManagerBase *>(this)), shadow_,      \
+          ret);                                                                \
+      if (OB_SUCC(ret)) {                                                      \
+        ret = shadow_.func_name(std::forward<Args>(args)...);                  \
+      }                                                                        \
+    }                                                                          \
+    return ret;                                                                \
+  }
+
 class ObZoneMergeManager : public ObZoneMergeManagerBase
 {
 public:
@@ -117,30 +132,22 @@ public:
   virtual ~ObZoneMergeManager();
 
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
-  virtual int reload();
-  virtual int try_reload();
-
-  virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
-  virtual int finish_zone_merge(const common::ObZone &zone,
-                                const int64_t expected_epoch,
-                                const share::SCN &last_merged_scn,
-                                const share::SCN &all_merged_scn);
-  virtual int suspend_merge(const int64_t expected_epoch);
-  virtual int resume_merge(const int64_t expected_epoch);
-  virtual int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
-
-  virtual int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
-  virtual int check_need_broadcast(const share::SCN &frozen_scn,
-                                   bool &need_broadcast);
-  virtual int set_global_freeze_info(const share::SCN &frozen_scn, const int64_t expected_epoch);
-
-  virtual int generate_next_global_broadcast_scn(const int64_t expected_epoch, share::SCN &next_scn);
-  virtual int try_update_global_last_merged_scn(const int64_t expected_epoch);
-  virtual int update_global_merge_info_after_merge(const int64_t expected_epoch);
-  virtual int try_update_zone_merge_info(const int64_t expected_epoch);
-  virtual int adjust_global_merge_info(const int64_t expected_epoch);
-  void reset_merge_info();
-
+  ZONE_MERGE_MANAGER_FUNC(reload);
+  ZONE_MERGE_MANAGER_FUNC(try_reload);
+  ZONE_MERGE_MANAGER_FUNC(start_zone_merge);
+  ZONE_MERGE_MANAGER_FUNC(finish_zone_merge);
+  ZONE_MERGE_MANAGER_FUNC(finish_all_zone_merge);
+  ZONE_MERGE_MANAGER_FUNC(suspend_merge);
+  ZONE_MERGE_MANAGER_FUNC(resume_merge);
+  ZONE_MERGE_MANAGER_FUNC(set_merge_error);
+  ZONE_MERGE_MANAGER_FUNC(set_zone_merging);
+  ZONE_MERGE_MANAGER_FUNC(check_need_broadcast);
+  ZONE_MERGE_MANAGER_FUNC(set_global_freeze_info);
+  ZONE_MERGE_MANAGER_FUNC(generate_next_global_broadcast_scn);
+  ZONE_MERGE_MANAGER_FUNC(try_update_global_last_merged_scn);
+  ZONE_MERGE_MANAGER_FUNC(update_global_merge_info_after_merge);
+  ZONE_MERGE_MANAGER_FUNC(try_update_zone_merge_info);
+  ZONE_MERGE_MANAGER_FUNC(adjust_global_merge_info);
 public:
   class ObZoneMergeMgrGuard
   {

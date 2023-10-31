@@ -107,13 +107,15 @@ struct ObTenantSuperBlock final
 {
 public:
   static const int64_t MIN_SUPER_BLOCK_VERSION = 0;
-  static const int64_t TENANT_SUPER_BLOCK_VERSION = 2;
+  static const int64_t TENANT_SUPER_BLOCK_VERSION_V1 = 1;
+  static const int64_t TENANT_SUPER_BLOCK_VERSION = 3;
   ObTenantSuperBlock();
   ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden = false);
   ~ObTenantSuperBlock() = default;
   void reset();
   bool is_valid() const;
   bool is_old_version() const { return version_ < TENANT_SUPER_BLOCK_VERSION; }
+  bool is_trival_version() const { return version_ == TENANT_SUPER_BLOCK_VERSION_V1; }
 
   TO_STRING_KV(K_(tenant_id),
                K_(replay_start_point),

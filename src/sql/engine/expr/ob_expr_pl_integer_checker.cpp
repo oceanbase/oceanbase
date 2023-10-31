@@ -135,7 +135,7 @@ int ObExprPLIntegerChecker::check_range(const T &obj, const ObObjType type, int6
                         static_cast<int64_t>(min), static_cast<int64_t>(max));                  \
     default: {                                                                                  \
     }                                                                                           \
-  }
+  } // TODO:@xiaofeng.lby, 这里应该需要处理 decimal int 类型，PL 相关
   ObPLIntegerRange pls_range(range);
   if (pls_range.valid()) {
     CHECK_OVERFLOW(pls_range.get_lower(), pls_range.get_upper());

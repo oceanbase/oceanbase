@@ -35,6 +35,7 @@ public:
       table_param_(alloc),
       pd_expr_spec_(alloc),
       aggregate_column_ids_(alloc),
+      group_by_column_ids_(alloc),
       group_id_expr_(nullptr),
       result_output_(alloc),
       is_get_(false),
@@ -65,6 +66,7 @@ public:
                        K_(ref_table_id),
                        K_(access_column_ids),
                        K_(aggregate_column_ids),
+                       K_(group_by_column_ids),
                        K_(schema_version),
                        K_(table_param),
                        K_(pd_expr_spec),
@@ -82,6 +84,7 @@ public:
   share::schema::ObTableParam table_param_;
   ObPushdownExprSpec pd_expr_spec_;
   UIntFixedArray aggregate_column_ids_;
+  UIntFixedArray group_by_column_ids_;
   ObExpr *group_id_expr_;
   //different from access expr, since we may eliminate some exprs
   //which could not be output in access exprs,

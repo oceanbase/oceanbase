@@ -437,11 +437,7 @@ public:
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false);
 
-  int parse_aux_meta_table_cols(
-      const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info)
-  {
-    return row_.parse_cols(lob_aux_table_schema_info);
-  }
+  int parse_aux_meta_table_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
 
   // For the JSON or GIS(outrow storage)
   // The JSON/GIS data column size is over 4K and is outrow storage, reusing the basic capabilities of LOB.

@@ -29,6 +29,7 @@ void ObSSTableRowWholeScanner::MacroScanHandle::reset()
 {
   macro_io_handle_.reset();
   macro_block_desc_.reset();
+  start_row_offset_ = 0;
   is_left_border_ = false;
   is_right_border_ = false;
 }
@@ -39,6 +40,21 @@ ObSSTableRowWholeScanner::~ObSSTableRowWholeScanner()
     micro_scanner_->~ObIMicroBlockRowScanner();
     micro_scanner_ = nullptr;
   }
+}
+
+int ObSSTableRowWholeScanner::alloc_io_buf()
+{
+  int ret = OB_SUCCESS;
+  int64_t size = common::OB_DEFAULT_MACRO_BLOCK_SIZE * PREFETCH_DEPTH;
+  if (OB_ISNULL(buf_ = reinterpret_cast<char*>(io_allocator_.alloc(size)))) { //continuous memory
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc ObSSTableRowWholeScanner read info buffer", K(ret), K(size));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < PREFETCH_DEPTH; ++i) {
+      io_buf_[i] = buf_ + common::OB_DEFAULT_MACRO_BLOCK_SIZE * i;
+    }
+  }
+  return ret;
 }
 
 void ObSSTableRowWholeScanner::reset()
@@ -61,6 +77,8 @@ void ObSSTableRowWholeScanner::reset()
     micro_scanner_ = nullptr;
   }
   allocator_.reset();
+  io_allocator_.reset();
+  buf_ = nullptr;
   is_inited_ = false;
   last_micro_block_recycled_ = false;
   last_mvcc_row_already_output_ = false;
@@ -86,6 +104,8 @@ void ObSSTableRowWholeScanner::reuse()
     micro_scanner_ = nullptr;
   }
   allocator_.reuse();
+  io_allocator_.reuse();
+  buf_ = nullptr;
   is_inited_ = false;
   last_micro_block_recycled_ = false;
   last_mvcc_row_already_output_ = false;
@@ -178,13 +198,24 @@ int ObSSTableRowWholeScanner::inner_open(
     prefetch_macro_cursor_ = 0;
     cur_macro_cursor_ = 0;
     last_mvcc_row_already_output_ = true;
+    const ObITableReadInfo *rowkey_read_info = nullptr;
 
-    if (OB_FAIL(init_micro_scanner(range))) {
+    if (table->is_normal_cg_sstable()) {
+      if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(rowkey_read_info))) {
+        STORAGE_LOG(WARN, "unexpected null index read info", K(ret));
+      }
+    } else {
+      rowkey_read_info = iter_param.read_info_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(alloc_io_buf())) {
+      LOG_WARN("alloc io buffers failed", K(ret));
+    } else if (OB_FAIL(init_micro_scanner(range))) {
       LOG_WARN("Failed to init micro scanner", K(ret));
     } else if (OB_FAIL(macro_block_iter_.open(
                 *sstable_,
                 query_range_,
-                *iter_param.read_info_,
+                *rowkey_read_info,
                 allocator_))) {
       LOG_WARN("Fail to open macro_block_iter ", K(ret));
     }
@@ -241,10 +272,13 @@ int ObSSTableRowWholeScanner::open(
     MacroScanHandle &scan_handle = scan_handles_[0];
     scan_handle.reset();
 
-    if (OB_FAIL(init_micro_scanner(&query_range))) {
+    if (OB_FAIL(alloc_io_buf())) {
+      LOG_WARN("alloc io buffers failed", K(ret));
+    } else if (OB_FAIL(init_micro_scanner(&query_range))) {
       LOG_WARN("Fail to init micro scanner", K(ret));
     } else {
       ObMacroBlockReadInfo read_info;
+      scan_handle.start_row_offset_ = macro_desc.start_row_offset_;
       scan_handle.is_left_border_ = true;
       scan_handle.is_right_border_ = true;
       scan_handle.macro_block_desc_ = macro_desc;
@@ -252,9 +286,11 @@ int ObSSTableRowWholeScanner::open(
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_callback_ = access_ctx_->io_callback_;
       read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
-      if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
+      read_info.buf_ = io_buf_[0];
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else {
         ++prefetch_macro_cursor_;
@@ -280,6 +316,18 @@ int ObSSTableRowWholeScanner::open(
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
+  }
+  return ret;
+}
+
+int ObSSTableRowWholeScanner::set_ignore_shadow_row()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(micro_scanner_ == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null micro scanner", K(ret));
+  } else if (OB_FAIL(micro_scanner_->set_ignore_shadow_row())) {
+    STORAGE_LOG(WARN, "fail to set ignore shadow row", K(ret));
   }
   return ret;
 }
@@ -339,6 +387,25 @@ int ObSSTableRowWholeScanner::open_next_valid_micro_block()
   return ret;
 }
 
+void ObSSTableRowWholeScanner::reset_query_range()
+{
+  query_range_.reset();
+}
+
+int ObSSTableRowWholeScanner::switch_query_range(const blocksstable::ObDatumRange &query_range)
+{
+  int ret = OB_SUCCESS;
+  if (FALSE_IT(query_range_ = query_range)) {
+  } else if (OB_FAIL(micro_scanner_->set_range(query_range_))) {
+    LOG_WARN("failed to set range", K(ret), K(query_range_));
+  } else if (OB_FAIL(open_macro_block())) {
+    STORAGE_LOG(WARN, "fail to open macro block", K(ret));
+  } else if (OB_FAIL(open_next_valid_micro_block())) {
+    LOG_WARN("Fail to open next valid micro block", K(ret));
+  }
+  return ret;
+}
+
 int ObSSTableRowWholeScanner::prefetch()
 {
   int ret = OB_SUCCESS;
@@ -346,7 +413,8 @@ int ObSSTableRowWholeScanner::prefetch()
   } else {
     blocksstable::ObMacroBlockReadInfo read_info;
     const bool is_left_border = 0 == prefetch_macro_cursor_;
-    MacroScanHandle &scan_handle = scan_handles_[prefetch_macro_cursor_ % PREFETCH_DEPTH];
+    int64_t io_index = prefetch_macro_cursor_ % PREFETCH_DEPTH;
+    MacroScanHandle &scan_handle = scan_handles_[io_index];
     micro_block_iter_.reuse(); // reuse micro iter before release scan handle
     scan_handle.reset();
     if (OB_FAIL(macro_block_iter_.get_next_macro_block(scan_handle.macro_block_desc_))) {
@@ -359,13 +427,15 @@ int ObSSTableRowWholeScanner::prefetch()
     } else {
       scan_handle.is_left_border_ = (0 == prefetch_macro_cursor_);
       scan_handle.is_right_border_ = false; // set right border correctly when open macro block
+      scan_handle.start_row_offset_ = scan_handle.macro_block_desc_.start_row_offset_;
       read_info.macro_block_id_ = scan_handle.macro_block_desc_.macro_block_id_;
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
       read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
-      read_info.io_callback_ = access_ctx_->io_callback_;
-      if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
+      read_info.buf_ = io_buf_[io_index];
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block, ", K(ret), K(read_info));
       } else {
         ++prefetch_macro_cursor_;
@@ -403,23 +473,32 @@ int ObSSTableRowWholeScanner::open_macro_block()
       ret = OB_ITER_END;
     } else {
       bool can_recycle = false;
-      const int64_t io_timeout_ms = std::max(DEFAULT_IO_WAIT_TIME_MS, GCONF._data_storage_io_timeout / 1000);
       MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
+      ObDatumRange range;
+      const bool is_need_trans_range = sstable_->is_normal_cg_sstable() && 0 != scan_handle.start_row_offset_;
       scan_handle.is_right_border_ = (cur_macro_cursor_ == prefetch_macro_cursor_ - 1);
-      if (access_ctx_->query_flag_.is_multi_version_minor_merge() &&
+      const ObITableReadInfo *rowkey_read_info = nullptr;
+      micro_block_iter_.reset();
+
+      if (OB_FAIL(iter_param_->get_index_read_info(sstable_->is_normal_cg_sstable(), rowkey_read_info))) {
+        STORAGE_LOG(WARN, "unexpected null index read info", K(ret), K(sstable_->is_normal_cg_sstable()));
+      } else if (is_need_trans_range && OB_FAIL(rowkey_helper_.trans_to_cg_range(scan_handle.start_row_offset_, query_range_))) {
+        LOG_WARN("failed to trans cg range", K(ret), K(query_range_), K(scan_handle.start_row_offset_));
+      } else if (FALSE_IT(range = is_need_trans_range ? rowkey_helper_.get_result_range() : query_range_)) {
+      } else  if (access_ctx_->query_flag_.is_multi_version_minor_merge() &&
           OB_FAIL(check_macro_block_recycle(scan_handle.macro_block_desc_, can_recycle))) {
         LOG_WARN("failed to check macro block recycle", K(ret), K(cur_macro_cursor_));
       } else if (can_recycle) {
         last_micro_block_recycled_ = true;
         cur_macro_cursor_++;
         FLOG_INFO("macro block recycled", K(scan_handle.macro_block_desc_.macro_block_id_));
-      } else if (OB_FAIL(scan_handle.macro_io_handle_.wait(io_timeout_ms))) {
-        LOG_WARN("failed to read macro block from io", K(ret), K(io_timeout_ms));
+      } else if (OB_FAIL(scan_handle.macro_io_handle_.wait())) {
+        LOG_WARN("failed to read macro block from io", K(ret));
       } else if (OB_FAIL(micro_block_iter_.open(
                   scan_handle.macro_io_handle_.get_buffer(),
                   scan_handle.macro_io_handle_.get_data_size(),
-                  query_range_,
-                  *(iter_param_->read_info_),
+                  range,
+                  *rowkey_read_info,
                   scan_handle.is_left_border_,
                   scan_handle.is_right_border_))) {
         LOG_WARN("failed to open micro block iter", K(ret), K(scan_handle.macro_io_handle_));
@@ -454,9 +533,15 @@ int ObSSTableRowWholeScanner::check_micro_block_recycle(const ObMicroBlockHeader
 int ObSSTableRowWholeScanner::open_micro_block()
 {
   int ret = OB_SUCCESS;
-  ObMicroBlockData block_data;
-  bool can_recycle = false;
-  while (OB_SUCC(ret)) {
+
+  if (sstable_->is_normal_cg_sstable()) {
+    if (OB_FAIL(open_cg_micro_block()) && OB_ITER_END != ret) {
+      STORAGE_LOG(WARN, "failed to open cg micro block", K(ret));
+    }
+  } else {
+    ObMicroBlockData block_data;
+    bool can_recycle = false;
+    while (OB_SUCC(ret)) {
     MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
     bool is_left_border = scan_handle.is_left_border_ && micro_block_iter_.is_left_border();
     bool is_right_border = scan_handle.is_right_border_ && micro_block_iter_.is_right_border();
@@ -469,19 +554,19 @@ int ObSSTableRowWholeScanner::open_micro_block()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null micro header", K(ret), K(micro_header));
     } else if (access_ctx_->query_flag_.is_multi_version_minor_merge() &&
-               OB_FAIL(check_micro_block_recycle(*micro_header, can_recycle))) {
+        OB_FAIL(check_micro_block_recycle(*micro_header, can_recycle))) {
       LOG_WARN("failed to check micro block recycle", K(ret));
     } else if (can_recycle) {
       last_micro_block_recycled_ = true;
       last_mvcc_row_already_output_ = micro_header->is_last_row_last_flag();
       FLOG_INFO("micro block recycled", KPC(micro_header));
     } else if (OB_FAIL(micro_scanner_->open(
-                scan_handle.macro_io_handle_.get_macro_id(),
-                block_data,
-                is_left_border,
-                is_right_border))) {
+            scan_handle.macro_io_handle_.get_macro_id(),
+            block_data,
+            is_left_border,
+            is_right_border))) {
       LOG_WARN("failed to open micro scanner", K(ret),
-               K_(cur_macro_cursor), K(scan_handle.macro_io_handle_));
+          K_(cur_macro_cursor), K(scan_handle.macro_io_handle_));
     } else {
       if (last_micro_block_recycled_ && !last_mvcc_row_already_output_) {
         if (OB_FAIL(recycle_last_rowkey_in_micro_block())) {
@@ -492,6 +577,7 @@ int ObSSTableRowWholeScanner::open_micro_block()
       last_mvcc_row_already_output_ = micro_header->is_last_row_last_flag();
       break;
     }
+  }
   }
   return ret;
 }
@@ -532,6 +618,75 @@ int ObSSTableRowWholeScanner::recycle_last_rowkey_in_micro_block()
       }
     }
   }
+  return ret;
+}
+
+int ObSSTableRowWholeScanner::open_cg_micro_block()
+{
+  int ret = OB_SUCCESS;
+  ObMicroBlockData block_data;
+  int64_t micro_block_start_row_offset = -1;
+  const MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
+  const bool is_left_border = scan_handle.is_left_border_ && micro_block_iter_.is_left_border();
+  const bool is_right_border = scan_handle.is_right_border_ && micro_block_iter_.is_right_border();
+
+  if (!query_range_.is_whole_range() && OB_FAIL(micro_block_iter_.get_curr_start_row_offset(micro_block_start_row_offset))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      STORAGE_LOG(WARN, "failed to get prev row offset", K(ret), K(micro_block_iter_));
+    }
+  } else if (OB_FAIL(micro_block_iter_.get_next_micro_block_data(block_data))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("Fail to get micro block count", K(ret), K(scan_handle.macro_io_handle_));
+    }
+  } else {
+    ObCSRange range;
+    if (OB_FAIL(get_cs_range(is_left_border, is_right_border,
+                              scan_handle.start_row_offset_, micro_block_start_row_offset, range))) {
+      STORAGE_LOG(WARN, "failed to get cs range", K(ret), K(scan_handle), K(micro_block_start_row_offset));
+    } else if (OB_UNLIKELY(!range.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid range", K(ret), K(range), K(is_left_border), K(is_right_border), K(scan_handle.start_row_offset_), K(micro_block_start_row_offset));
+    } else if (OB_FAIL(micro_scanner_->open_column_block(scan_handle.macro_io_handle_.get_macro_id(), block_data, range))) {
+      STORAGE_LOG(WARN, "failed to open column block", K(ret), K(scan_handle), K(block_data), K(range));
+    }
+  }
+
+  return ret;
+}
+
+int ObSSTableRowWholeScanner::get_cs_range(
+    const bool is_left_border,
+    const bool is_right_border,
+    const int64_t macro_block_start_row_offset,
+    const int64_t micro_block_start_row_offset,
+    ObCSRange &range)
+{
+  int ret = OB_SUCCESS;
+  range.start_row_id_ = 0;
+  range.end_row_id_ = INT64_MAX;
+
+  if (is_left_border && !query_range_.start_key_.is_min_rowkey()) {
+    if (OB_UNLIKELY(query_range_.start_key_.is_static_rowkey() || query_range_.start_key_.datum_cnt_ != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpcted query range", K(ret), K(query_range_));
+    } else {
+      const int64_t range_start_row_offset = query_range_.is_left_closed() ?
+                                           query_range_.start_key_.datums_[0].get_int() : query_range_.start_key_.datums_[0].get_int() + 1;
+      range.start_row_id_ = MAX(0, range_start_row_offset - macro_block_start_row_offset - micro_block_start_row_offset);
+    }
+  }
+
+  if (OB_SUCC(ret) && is_right_border && !query_range_.end_key_.is_max_rowkey()) {
+    if (OB_UNLIKELY(query_range_.end_key_.is_static_rowkey() || query_range_.end_key_.datum_cnt_ != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpcted query range", K(ret), K(query_range_));
+    } else {
+      const int64_t range_end_row_offset = query_range_.is_right_closed() ?
+                                           query_range_.end_key_.datums_[0].get_int() : query_range_.end_key_.datums_[0].get_int() - 1;
+      range.end_row_id_ =  range_end_row_offset - macro_block_start_row_offset - micro_block_start_row_offset;
+    }
+  }
+
   return ret;
 }
 

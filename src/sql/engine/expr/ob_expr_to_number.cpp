@@ -62,7 +62,8 @@ int ObExprToNumberBase::calc_result_typeN(ObExprResType &type,
     } else if (param_num >= 2 && (ObOBinFloatType == o_type || ObOBinDoubleType == o_type)) {
       ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
       LOG_WARN("binarydouble or binaryfloat only support one argument", K(ret));
-    } else if (param_num >= 2 || (!types[0].is_number() && !types[0].is_number_float())) {
+    } else if (param_num >= 2
+        || (!types[0].is_number() && !types[0].is_number_float() && !types[0].is_decimal_int())) {
       types[0].set_calc_type_default_varchar();
     }
     if (OB_SUCC(ret)) {
@@ -137,6 +138,14 @@ int ObExprToNumber::calc_tonumber_expr(const ObExpr &expr, ObEvalCtx &ctx,
         } else {
           res_datum.set_number(res_nmb);
         }
+      } else if (ObDecimalIntTC == ob_obj_type_class(ori_type)) {
+        ObNumStackOnceAlloc tmp_alloc;
+        if (OB_FAIL(wide::to_number(ori->get_decimal_int(), ori->get_int_bytes(),
+                                    expr.args_[0]->datum_meta_.scale_, tmp_alloc, res_nmb))) {
+          LOG_WARN("to_number failed", K(ret));
+        } else {
+          res_datum.set_number(res_nmb);
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected arg type", K(ret), K(ori_type));
@@ -193,7 +202,8 @@ int ObExprToNumber::calc_tonumber_expr_batch(
     const ObCollationType &ori_cs_type = expr.args_[0]->datum_meta_.cs_type_;
     if (1 == expr.arg_cnt_) {
       if (!ob_is_varchar_or_char(ori_type, ori_cs_type)
-          && (ObNumberTC != ob_obj_type_class(ori_type))) {
+          && (ObNumberTC != ob_obj_type_class(ori_type))
+          && (ObDecimalIntTC != ob_obj_type_class(ori_type))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected arg type", K(ret), K(ori_type));
       }
@@ -249,6 +259,11 @@ int ObExprToNumber::calc_tonumber_expr_batch(
           } else if (ObNumberTC == ob_obj_type_class(ori_type)
                      && OB_FAIL(res_nmb.from(datum_array[j].get_number(), tmp_alloc))) {
               LOG_WARN("get nmb failed", K(ret));
+          } else if (ObDecimalIntTC == ob_obj_type_class(ori_type)
+                     && OB_FAIL(wide::to_number(
+                         datum_array[j].get_decimal_int(), datum_array[j].get_int_bytes(),
+                         expr.args_[0]->datum_meta_.scale_, tmp_alloc, res_nmb))) {
+            LOG_WARN("to_number failed", K(ret));
           } else {
             results[j].set_number(res_nmb);
             eval_flags.set(j);

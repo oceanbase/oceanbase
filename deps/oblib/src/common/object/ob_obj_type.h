@@ -91,6 +91,7 @@ enum ObObjType
   ObGeometryType      = 48, // Geometry type
 
   ObUserDefinedSQLType = 49, // User defined type in SQL
+  ObDecimalIntType     = 50, // decimal int type
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -199,6 +200,7 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOJsonType,               //ObJsonType = 47,
   ObOGeometryType,           //ObGeometryType = 48,
   ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
+  ObONumberType,             //ObDecimalIntType = 50,
   ObONotSupport              //ObMaxType,
 };
 
@@ -230,6 +232,7 @@ enum ObObjTypeClass
   ObJsonTC          = 22, // json type class 
   ObGeometryTC      = 23, // geometry type class
   ObUserDefinedSQLTC = 24, // user defined type class in SQL
+  ObDecimalIntTC     = 25, // decimal int class
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -290,7 +293,8 @@ enum ObObjTypeClass
     (ObLobType, ObLobTC),                      \
     (ObJsonType, ObJsonTC),                    \
     (ObGeometryType, ObGeometryTC),            \
-    (ObUserDefinedSQLType, ObUserDefinedSQLTC)
+    (ObUserDefinedSQLType, ObUserDefinedSQLTC),\
+    (ObDecimalIntType, ObDecimalIntTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -330,6 +334,7 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObJsonType,       // json
   ObGeometryType,   // geometry
   ObUserDefinedSQLType, // user defined type in sql
+  ObDecimalIntType, // decimal int
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -1136,7 +1141,7 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
       || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc
-      || ObUserDefinedSQLTC == tc;
+      || ObUserDefinedSQLTC == tc || ObDecimalIntTC == tc;
 }
 
 //used for arithmetic
@@ -1147,6 +1152,8 @@ OB_INLINE bool ob_is_int_uint(ObObjTypeClass left_tc, ObObjTypeClass right_tc)
 
 // print obj type string
 const char *ob_obj_type_str(ObObjType type);
+
+const char *inner_obj_type_str(ObObjType type);
 const char *ob_sql_type_str(ObObjType type);
 
 //such as "double(10,7)". with accuracy
@@ -1191,10 +1198,14 @@ inline bool ob_is_valid_obj_o_type(ObObjType type) { return ObNullType <= type &
 inline bool ob_is_invalid_obj_o_type(ObObjType type) { return !ob_is_valid_obj_o_type(type); }
 inline bool ob_is_valid_obj_o_tc(ObObjTypeClass tc) { return ObNullTC <= tc && tc < ObMaxTC; }
 inline bool ob_is_invalid_obj_o_tc(ObObjTypeClass tc) { return !ob_is_valid_obj_tc(tc); }
-inline bool ob_is_numeric_tc(ObObjTypeClass tc) { return (tc >= ObIntTC && tc <= ObNumberTC) || tc == ObBitTC; }
+inline bool ob_is_numeric_tc(ObObjTypeClass tc)
+{
+  return (tc >= ObIntTC && tc <= ObNumberTC) || tc == ObBitTC || ObDecimalIntTC == tc;
+}
 
 inline bool ob_is_int_tc(ObObjType type) { return ObIntTC == ob_obj_type_class(type); }
 inline bool ob_is_uint_tc(ObObjType type) { return ObUIntTC == ob_obj_type_class(type); }
+inline bool ob_is_int_uint_tc(ObObjType type) { return ob_is_int_tc(type) || ob_is_uint_tc(type); }
 inline bool ob_is_float_tc(ObObjType type) { return ObFloatTC == ob_obj_type_class(type); }
 inline bool ob_is_double_tc(ObObjType type) { return ObDoubleTC == ob_obj_type_class(type); }
 inline bool ob_is_number_tc(ObObjType type) { return ObNumberTC == ob_obj_type_class(type); }
@@ -1211,17 +1222,26 @@ inline bool ob_is_interval_tc(ObObjType type) { return ObIntervalTC == ob_obj_ty
 inline bool ob_is_lob_tc(ObObjType type) { return ObLobTC == ob_obj_type_class(type); }
 inline bool ob_is_json_tc(ObObjType type) { return ObJsonTC == ob_obj_type_class(type); }
 inline bool ob_is_geometry_tc(ObObjType type) { return ObGeometryTC == ob_obj_type_class(type); }
+inline bool ob_is_decimal_int_tc(ObObjType type) { return ObDecimalIntTC == ob_obj_type_class(type); }
 
 inline bool is_lob(ObObjType type) { return ob_is_text_tc(type); }
 inline bool is_lob_locator(ObObjType type) { return ObLobType == type; }
 
 // test type catalog
 inline bool ob_is_integer_type(ObObjType type) { return ObTinyIntType <= type && type <= ObUInt64Type; }
-inline bool ob_is_numeric_type(ObObjType type) { return (ObTinyIntType <= type && type <= ObUNumberType) || type == ObBitType || type == ObNumberFloatType; }
+inline bool ob_is_numeric_type(ObObjType type)
+{
+  return (ObTinyIntType <= type && type <= ObUNumberType) || type == ObBitType
+         || type == ObNumberFloatType || type == ObDecimalIntType;
+}
 inline bool ob_is_real_type(ObObjType type) { return ObFloatType <= type && type <= ObUDoubleType; }
 inline bool ob_is_float_type(ObObjType type) { return ObFloatType == type || ObUFloatType == type; }
 inline bool ob_is_double_type(ObObjType type) { return ObDoubleType == type || ObUDoubleType == type; }
-inline bool ob_is_accurate_numeric_type(ObObjType type) {  return (ObTinyIntType <= type && type <= ObUInt64Type) || (ob_is_number_tc(type)); }
+inline bool ob_is_accurate_numeric_type(ObObjType type)
+{
+  return (ObTinyIntType <= type && type <= ObUInt64Type)
+         || (ob_is_number_tc(type)) || ObDecimalIntType == type;
+}
 inline bool ob_is_unsigned_type(ObObjType type)
 {
   return (ObUTinyIntType <= type && type <= ObUInt64Type)
@@ -1265,7 +1285,12 @@ inline void convert_unsigned_type_to_signed(ObObjType &type)
 
 inline bool ob_is_oracle_numeric_type(ObObjType type)
 {
-  return ObIntType == type || ob_is_number_tc(type) || ObFloatType == type || ObDoubleType == type;
+  return ObIntType == type || ob_is_number_tc(type) || ObFloatType == type || ObDoubleType == type
+         || ObDecimalIntType == type;
+}
+inline bool ob_is_number_or_decimal_int_tc(ObObjType type)
+{
+  return ob_is_number_tc(type) || ob_is_decimal_int_tc(type);
 }
 inline bool ob_is_oracle_temporal_type(ObObjType type)
 {
@@ -1369,6 +1394,12 @@ inline bool ob_is_var_len_type(const ObObjType type) {
 }
 inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
 inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
+inline bool ob_is_lob_group(const ObObjType type) { return ob_is_json(type) || ob_is_geometry(type) || ob_is_large_text(type); }
+inline bool ob_is_decimal_int(const ObObjType type) { return ObDecimalIntType == type; }
+inline bool is_decimal_int_accuracy_valid(const int16_t precision, const int16_t scale)
+{
+  return scale >= 0 && precision >= scale;
+}
 
 inline bool ob_is_user_defined_sql_type(const ObObjType type) { return ObUserDefinedSQLType == type; }
 inline bool ob_is_user_defined_pl_type(const ObObjType type) { return ObExtendType == type; }
@@ -1388,13 +1419,13 @@ inline bool ob_is_xml_pl_type(const ObObjType type, const uint64_t udt_id) {
 template<>
 inline int databuff_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const ObObjType &t)
 {
-  return databuff_printf(buf, buf_len, pos, "\"%s\"", ob_obj_type_str(t));
+  return databuff_printf(buf, buf_len, pos, "\"%s\"", inner_obj_type_str(t));
 }
 template<>
 inline int databuff_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos, const char *key,
                                   const bool with_comma, const ObObjType &t)
 {
-  return databuff_printf(buf, buf_len, pos, WITH_COMMA("%s:\"%s\""), key, ob_obj_type_str(t));
+  return databuff_printf(buf, buf_len, pos, WITH_COMMA("%s:\"%s\""), key, inner_obj_type_str(t));
 }
 
 bool ob_can_static_cast(const ObObjType src, const ObObjType dst);
@@ -1406,6 +1437,20 @@ enum ObOTimestampMetaAttrType
   OTMAT_TIMESTAMP_LTZ,
   OTMAT_TIMESTAMP_NANO
 };
+
+enum ObDecimalIntWideType
+{
+  DECIMAL_INT_32 = 0, // precision from 1 to 9
+  DECIMAL_INT_64,     // precision from 1 to 18
+  DECIMAL_INT_128,    // precision from 1 to 38
+  DECIMAL_INT_256,    // precision from 1 to 76
+  DECIMAL_INT_512,    // precision from 1 to 154
+  DECIMAL_INT_MAX
+};
+
+ObDecimalIntWideType get_decimalint_type(const int16_t precision);
+int16_t get_max_decimalint_precision(const int16_t precision);
+
 }  // end namespace common
 }  // end namespace oceanbase
 

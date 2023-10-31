@@ -20,7 +20,7 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 
 namespace oceanbase
 {
@@ -28,6 +28,10 @@ namespace storage
 {
 using namespace blocksstable;
 using namespace common;
+
+void ObCompactionBufferWriter::reset()
+{
+}
 
 static int get_number(const char *str, const char *&endpos, int64_t &num)
 {
@@ -503,8 +507,6 @@ int ObMockIncrementalIterator::get_next_row(const ObDatumRow *&row)
           obj.set_int(range.start_ + cur_rowkey_pos_);
           if (OB_FAIL(row_.storage_datums_[0].from_obj(obj))) {
             STORAGE_LOG(WARN, "failed to datum from obj", KR(ret));
-          } else if (OB_FAIL(row_.prepare_new_row(out_cols_))) {
-            STORAGE_LOG(WARN, "failed to prepare new row", KR(ret));
           } else {
             row = &row_;
             ++cur_rowkey_pos_;
@@ -630,7 +632,9 @@ private:
     major_sstable_.meta_->basic_meta_.occupy_size_ = occupy_size;
     major_sstable_.meta_->basic_meta_.row_count_ = row_count;
     major_sstable_.addr_.set_none_addr();
-    major_sstable_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_cache_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_cache_.occupy_size_ = occupy_size;
+    major_sstable_.meta_cache_.row_count_ = row_count;
     major_sstable_.meta_->is_inited_ = true;
   }
   int set_major_sstable_macro_blocks(const ObString &str);
@@ -709,20 +713,21 @@ void TestPartitionIncrementalRangeSliter::SetUp()
     major_sstable_.meta_->basic_meta_.row_count_ = 0;
     major_sstable_.valid_for_reading_ = true;
     major_sstable_.addr_.set_none_addr();
-    major_sstable_.data_macro_block_count_ =  major_sstable_.meta_->basic_meta_.data_macro_block_count_;
+    major_sstable_.meta_cache_.data_macro_block_count_ =  major_sstable_.meta_->basic_meta_.data_macro_block_count_;
     major_sstable_.meta_->is_inited_ = true;
 
     // minor sstable
     minor_sstable_.set_table_type(ObITable::MINOR_SSTABLE);
     minor_sstable_.key_.tablet_id_ = 1;
     minor_sstable_.addr_.set_none_addr();
-    minor_sstable_.data_macro_block_count_ = minor_sstable_.meta_->basic_meta_.data_macro_block_count_;
+    minor_sstable_.meta_cache_.data_macro_block_count_ = minor_sstable_.meta_->basic_meta_.data_macro_block_count_;
     minor_sstable_.meta_->is_inited_ = true;
 
     // merge ctx
-    merge_ctx_.schema_ctx_.storage_schema_ = &storage_schema_;
-    ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_sstable(&major_sstable_, mock_major_sstable_handle_));
-    ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_sstable(&minor_sstable_, mock_minor_sstable_handle_));
+    compaction::ObStaticMergeParam &static_param = merge_ctx_.static_param_;
+    merge_ctx_.static_param_.schema_ = &storage_schema_;
+    ASSERT_EQ(OB_SUCCESS, static_param.tables_handle_.add_sstable(&major_sstable_, mock_major_sstable_handle_));
+    ASSERT_EQ(OB_SUCCESS, static_param.tables_handle_.add_sstable(&minor_sstable_, mock_minor_sstable_handle_));
     merge_ctx_.tablet_handle_.obj_ = &tablet_;
     merge_ctx_.tablet_handle_.allocator_ = &allocator_;
     ObColDesc col_desc;
@@ -955,7 +960,7 @@ void TestPartitionIncrementalRangeSliter::inner_test_split_ranges(const ObString
   bool equal = false;
   ObSEArray<ObDatumRange, 64> range_array;
 
-  merge_ctx_.is_full_merge_ = full_merge;
+  merge_ctx_.static_param_.is_full_merge_ = full_merge;
 
   ASSERT_EQ(OB_SUCCESS, set_ranges(ranges_str));
 

@@ -55,6 +55,24 @@ int ObExprGetUserVar::calc_result_type1(ObExprResType &type,
     } else {
       type.set_type(session_var.meta_.get_type());
       type.set_scale(session_var.meta_.get_scale());
+      if (type.is_numeric_type()
+          && (type.get_precision() == PRECISION_UNKNOWN_YET
+              || type.get_scale() == NUMBER_SCALE_UNKNOWN_YET)) {
+        ObPrecision default_prec =
+          ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision();
+        ObScale default_scale =
+          ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_scale();
+        if (type.get_precision() == PRECISION_UNKNOWN_YET) {
+          type.set_precision(default_prec);
+        }
+        if (type.get_scale() == NUMBER_SCALE_UNKNOWN_YET) {
+          type.set_scale(default_scale);
+        }
+      }
+      if (session_var.meta_.is_decimal_int()) {
+        type.set_precision(wide::ObDecimalIntConstValue::get_max_precision_by_int_bytes(
+          session_var.value_.get_int_bytes()));
+      }
       type.set_collation_level(session_var.meta_.get_collation_level());
       type.set_collation_type(session_var.meta_.get_collation_type());
     }
@@ -76,6 +94,7 @@ int ObExprGetUserVar::calc_result_type1(ObExprResType &type,
       type.set_length_semantics(type_ctx.get_session()->get_actual_nls_length_semantics());
     }
   }
+  LOG_DEBUG("get_user_var calc_result_type", K(type1), K(type1), K(type));
   return ret;
 }
 
@@ -111,8 +130,9 @@ int ObExprGetUserVar::eval_get_user_var(const ObExpr &expr, ObEvalCtx &ctx, ObDa
           //TODO @peihan.dph
           //incompatible with mysql, return errcode controled by cast_mode
           //pl.sp-vars_mysql
-          OZ(ObDatumCast::cast_obj(ctx, calc_alloc, expr.datum_meta_.type_,
-                                  expr.datum_meta_.cs_type_, sess_obj, res_obj));
+          ObAccuracy res_acc(expr.datum_meta_.precision_, expr.datum_meta_.scale_);
+          OZ(ObDatumCast::cast_obj(ctx, calc_alloc, expr.datum_meta_.type_, res_acc,
+                                   expr.datum_meta_.cs_type_, sess_obj, res_obj));
           OZ(res.from_obj(res_obj));
           if (is_lob_storage(res_obj.get_type())) {
             OZ(ob_adjust_lob_datum(res_obj, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));

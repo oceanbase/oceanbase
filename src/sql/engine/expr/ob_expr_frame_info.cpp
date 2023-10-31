@@ -527,7 +527,8 @@ OB_NOINLINE int ObPreCalcExprFrameInfo::do_batch_stmt_eval(ObExecContext &exec_c
     if (OB_SUCC(ret)) {
       datum_param.meta_.type_ = ObExtendType;
       datum_param.meta_.scale_ = T_EXT_SQL_ARRAY;
-      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(datum_param.meta_,
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(datum_param.meta_, // is_ext_sql_array
+                                                        PRECISION_UNKNOWN_YET, // precision is unknown
                                                         exec_ctx.get_allocator()))) {
         LOG_WARN("alloc datum reserved buffer failed", K(ret));
       } else if (FALSE_IT(datum_param.set_sql_array_datum(datum_array))) {

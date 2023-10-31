@@ -1753,6 +1753,8 @@ int ObSql::add_param_to_param_store(const ObObjParam &param,
             || (param.is_nstring() && 0 == param.get_string_len()) )) {
     const_cast<ObObjParam &>(param).set_null();
     const_cast<ObObjParam &>(param).set_param_meta();
+  } else if (param.is_numeric_type()) {
+    const_cast<ObObjParam &>(param).set_param_meta();
   }
   if (OB_FAIL(param_store.push_back(param))) {
     LOG_WARN("pushback param failed", K(ret));
@@ -1877,6 +1879,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   ObObjParam value;
   const bool is_paramlize = false;
   int64_t server_collation = CS_TYPE_INVALID;
+  bool enable_decimal_int = false;
   if (raw_params.empty()) {
     // do nothing
   } else if (raw_params_idx.count() != raw_params.count()) {
@@ -1888,6 +1891,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session, enable_decimal_int))) {
+    LOG_WARN("fail to check enable decimal int", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < raw_params.count(); ++i) {
     value.reset();
@@ -1899,17 +1904,18 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("node is null", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param,
-                                                      stmt_type,
-                                                      allocator,
-                                                      collation_connection,
-                                                      session.get_nls_collation_nation(),
-                                                      session.get_timezone_info(),
-                                                      value,
-                                                      is_paramlize,
-                                                      literal_prefix,
-                                                      session.get_actual_nls_length_semantics(),
-                                                      static_cast<ObCollationType>(server_collation),
-                                                      NULL, session.get_sql_mode()))) {
+                                                  stmt_type,
+                                                  allocator,
+                                                  collation_connection,
+                                                  session.get_nls_collation_nation(),
+                                                  session.get_timezone_info(),
+                                                  value,
+                                                  is_paramlize,
+                                                  literal_prefix,
+                                                  session.get_actual_nls_length_semantics(),
+                                                  static_cast<ObCollationType>(server_collation),
+                                                  NULL, session.get_sql_mode(),
+                                                  enable_decimal_int))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));

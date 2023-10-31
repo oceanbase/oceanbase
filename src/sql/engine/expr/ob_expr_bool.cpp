@@ -131,6 +131,40 @@ CHECK_IS_TRUE_FUNC_NAME(other_type)
   return ret;
 }
 
+CHECK_IS_TRUE_FUNC_NAME(decint_type)
+{
+  EVAL_ARG()
+  {
+    bool is_zero = false;
+    switch (get_decimalint_type(expr.args_[0]->datum_meta_.precision_))
+    {
+    case common::DECIMAL_INT_32:
+      is_zero = (*reinterpret_cast<const int32_t *>(child_datum->get_decimal_int()) == 0);
+      break;
+    case common::DECIMAL_INT_64:
+      is_zero = (*reinterpret_cast<const int64_t *>(child_datum->get_decimal_int()) == 0);
+      break;
+    case common::DECIMAL_INT_128:
+      is_zero = (*reinterpret_cast<const int128_t *>(child_datum->get_decimal_int()) == 0);
+      break;
+    case common::DECIMAL_INT_256:
+      is_zero = (*reinterpret_cast<const int256_t *>(child_datum->get_decimal_int()) == 0);
+      break;
+    case common::DECIMAL_INT_512:
+      is_zero = (*reinterpret_cast<const int512_t *>(child_datum->get_decimal_int()) == 0);
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected precision", K(ret), K(expr.args_[0]->datum_meta_));
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      res_datum.set_int32(!is_zero);
+    }
+  }
+  return ret;
+}
+
 int ObExprBool::cg_expr(ObExprCGCtx &expr_cg_ctx,
                         const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
@@ -174,6 +208,10 @@ int ObExprBool::cg_expr(ObExprCGCtx &expr_cg_ctx,
       case ObJsonType: {
           rt_expr.eval_func_ = calc_bool_expr_for_other_type;
           break;
+      }
+      case ObDecimalIntType: {
+        rt_expr.eval_func_ = calc_bool_expr_for_decint_type;
+        break;
       }
       case ObMaxType: {
           ret = OB_ERR_UNEXPECTED;

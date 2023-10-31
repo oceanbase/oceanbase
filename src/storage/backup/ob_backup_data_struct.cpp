@@ -726,7 +726,9 @@ bool ObBackupMacroBlockIDPair::is_valid() const
 /* ObBackupMacroBlockIDMapping */
 
 ObBackupMacroBlockIDMapping::ObBackupMacroBlockIDMapping() : table_key_(), id_pair_list_(), map_()
-{}
+{
+  id_pair_list_.set_attr(lib::ObMemAttr(MTL_ID(), ObModIds::BACKUP));
+}
 
 ObBackupMacroBlockIDMapping::~ObBackupMacroBlockIDMapping()
 {}
@@ -772,19 +774,74 @@ int ObBackupMacroBlockIDMapping::prepare_tablet_sstable(const uint64_t tenant_id
 /* ObBackupMacroBlockIDMappingsMeta */
 
 ObBackupMacroBlockIDMappingsMeta::ObBackupMacroBlockIDMappingsMeta()
-    : version_(MAPPING_META_VERSION_MAX), sstable_count_(0), id_map_list_()
+  : allocator_("BkpMBIDMapMeta", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    id_map_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),
+    version_(MAPPING_META_VERSION_MAX),
+    sstable_count_(0)
 {}
 
 ObBackupMacroBlockIDMappingsMeta::~ObBackupMacroBlockIDMappingsMeta()
-{}
+{
+  for (int64_t i = 0; i < id_map_list_.count(); ++i) {
+    if (OB_NOT_NULL(id_map_list_[i])) {
+      ObBackupMacroBlockIDMapping *tmp = id_map_list_[i];
+      tmp->~ObBackupMacroBlockIDMapping();
+      allocator_.free(tmp);
+      id_map_list_[i] = nullptr;
+    }
+  }
+  id_map_list_.reset();
+  allocator_.reset();
+}
 
 void ObBackupMacroBlockIDMappingsMeta::reuse()
 {
   version_ = MAPPING_META_VERSION_MAX;
   sstable_count_ = 0;
-  for (int64_t i = 0; i < MAX_SSTABLE_CNT_IN_STORAGE; ++i) {
-    id_map_list_[i].reuse();
+  for (int64_t i = 0; i < id_map_list_.count(); ++i) {
+    if (OB_NOT_NULL(id_map_list_[i])) {
+      id_map_list_[i]->reuse();
+    }
   }
+}
+
+int ObBackupMacroBlockIDMappingsMeta::prepare_id_mappings(const int64_t sstable_count)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(sstable_count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sstable count is unexpected zero", K(ret), K(sstable_count), K(version_));
+  } else if (OB_UNLIKELY(sstable_count_ > 0)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("sstable_count_ is unexpected not zero", K(ret), K(sstable_count_));
+  } else if (FALSE_IT(sstable_count_ = sstable_count)) {
+  } else if (0 == sstable_count_) {
+    // do nothing
+  } else {
+    if (OB_FAIL(id_map_list_.prepare_allocate(sstable_count_))) {
+      LOG_WARN("failed to reserve ip map list", K(ret), K(sstable_count_));
+    }
+
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < sstable_count; ++idx) {
+      void *buf = nullptr;
+      ObBackupMacroBlockIDMapping *new_id_mapping = nullptr;
+
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObBackupMacroBlockIDMapping)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc mem for id mapping", K(ret), K(idx));
+      } else {
+        ObBackupMacroBlockIDMapping *new_id_mapping = new (buf) ObBackupMacroBlockIDMapping();
+        id_map_list_[idx] = new_id_mapping;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      id_map_list_.reset();
+      allocator_.reset();
+    }
+  }
+  return ret;
 }
 
 DEFINE_SERIALIZE(ObBackupMacroBlockIDMappingsMeta)
@@ -802,23 +859,28 @@ DEFINE_SERIALIZE(ObBackupMacroBlockIDMappingsMeta)
   }
   if (OB_SUCC(ret) && num_of_sstable > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_count_; ++i) {
-      const ObBackupMacroBlockIDMapping &item = id_map_list_[i];
-      const ObITable::TableKey &table_key = item.table_key_;
-      int64_t num_of_entries = item.id_pair_list_.count();
-      if (!table_key.is_valid()) {
+      if (OB_ISNULL(id_map_list_.at(i))) {
         ret = OB_ERR_SYS;
-        LOG_WARN("get invalid data", K(ret), K(table_key));
+        LOG_WARN("get invalid null id mapping", K(ret), K(i));
       } else {
-        OB_UNIS_ENCODE(table_key);
-        OB_UNIS_ENCODE(num_of_entries);
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && j < item.id_pair_list_.count(); ++j) {
-        const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
-        if (!pair.is_valid()) {
+        const ObBackupMacroBlockIDMapping &item = *id_map_list_[i];
+        const ObITable::TableKey &table_key = item.table_key_;
+        int64_t num_of_entries = item.id_pair_list_.count();
+        if (!table_key.is_valid()) {
           ret = OB_ERR_SYS;
-          LOG_WARN("get invalid data", K(ret), K(pair));
+          LOG_WARN("get invalid data", K(ret), K(table_key));
         } else {
-          OB_UNIS_ENCODE(pair);
+          OB_UNIS_ENCODE(table_key);
+          OB_UNIS_ENCODE(num_of_entries);
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < item.id_pair_list_.count(); ++j) {
+          const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
+          if (!pair.is_valid()) {
+            ret = OB_ERR_SYS;
+            LOG_WARN("get invalid data", K(ret), K(pair));
+          } else {
+            OB_UNIS_ENCODE(pair);
+          }
         }
       }
     }
@@ -840,29 +902,32 @@ DEFINE_DESERIALIZE(ObBackupMacroBlockIDMappingsMeta)
     version_ = version;
   }
   OB_UNIS_DECODE(num_of_sstable);
-  sstable_count_ = num_of_sstable;
-  ObITable::TableKey table_key;
-  ObLogicMacroBlockId logic_id;
-  ObBackupMacroBlockIDPair pair;
-  int64_t num_of_entries = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < num_of_sstable; ++i) {
-    table_key.reset();
-    OB_UNIS_DECODE(table_key);
-    OB_UNIS_DECODE(num_of_entries);
-    if (!table_key.is_valid() || num_of_entries < 0) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("table key is not valid", K(ret), K(table_key), K(num_of_entries));
-    } else {
-      id_map_list_[i].table_key_ = table_key;
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
-      pair.reset();
-      OB_UNIS_DECODE(pair);
-      if (!pair.is_valid()) {
+  if (OB_FAIL(prepare_id_mappings(num_of_sstable))) {
+    LOG_WARN("failed to prepare id mappings", K(ret), K(num_of_sstable));
+  } else {
+    ObITable::TableKey table_key;
+    ObLogicMacroBlockId logic_id;
+    ObBackupMacroBlockIDPair pair;
+    int64_t num_of_entries = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < num_of_sstable; ++i) {
+      table_key.reset();
+      OB_UNIS_DECODE(table_key);
+      OB_UNIS_DECODE(num_of_entries);
+      if (!table_key.is_valid() || num_of_entries < 0) {
         ret = OB_ERR_SYS;
-        LOG_WARN("get invalid data", K(ret), K(pair));
-      } else if (OB_FAIL(id_map_list_[i].id_pair_list_.push_back(pair))) {
-        LOG_WARN("failed to push back", K(ret), K(pair));
+        LOG_WARN("table key is not valid", K(ret), K(table_key), K(num_of_entries));
+      } else {
+        id_map_list_[i]->table_key_ = table_key;
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
+        pair.reset();
+        OB_UNIS_DECODE(pair);
+        if (!pair.is_valid()) {
+          ret = OB_ERR_SYS;
+          LOG_WARN("get invalid data", K(ret), K(pair));
+        } else if (OB_FAIL(id_map_list_[i]->id_pair_list_.push_back(pair))) {
+          LOG_WARN("failed to push back", K(ret), K(pair));
+        }
       }
     }
   }
@@ -874,19 +939,32 @@ DEFINE_GET_SERIALIZE_SIZE(ObBackupMacroBlockIDMappingsMeta)
   int64_t len = 0;
   int64_t version = version_;
   int64_t num_of_sstable = sstable_count_;
-  OB_UNIS_ADD_LEN(version);
-  OB_UNIS_ADD_LEN(num_of_sstable);
-  if (num_of_sstable > 0) {
-    for (int64_t i = 0; i < sstable_count_; ++i) {
-      const ObBackupMacroBlockIDMapping &item = id_map_list_[i];
-      const ObITable::TableKey &table_key = item.table_key_;
-      const ObArray<ObBackupMacroBlockIDPair> &id_pair_list = item.id_pair_list_;
-      int64_t num_of_entries = id_pair_list.count();
-      OB_UNIS_ADD_LEN(table_key);
-      OB_UNIS_ADD_LEN(num_of_entries);
-      for (int64_t j = 0; j < num_of_entries; ++j) {
-        const ObBackupMacroBlockIDPair &pair = id_pair_list.at(j);
-        OB_UNIS_ADD_LEN(pair);
+  int ret = OB_SUCCESS;
+  if (sstable_count_ != id_map_list_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("sstable count must be equal with the count of id map list",
+        K(ret), K(sstable_count_), K(id_map_list_.count()));
+  } else {
+    OB_UNIS_ADD_LEN(version);
+    OB_UNIS_ADD_LEN(num_of_sstable);
+    if (num_of_sstable > 0) {
+      for (int64_t i = 0; i < id_map_list_.count(); ++i) {
+        const ObBackupMacroBlockIDMapping *item = id_map_list_[i];
+        if (OB_ISNULL(item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("sstable count must be equal with the count of id map list",
+              K(ret), K(sstable_count_), K(i), K(id_map_list_));
+        } else {
+          const ObITable::TableKey &table_key = item->table_key_;
+          const ObArray<ObBackupMacroBlockIDPair> &id_pair_list = item->id_pair_list_;
+          int64_t num_of_entries = id_pair_list.count();
+          OB_UNIS_ADD_LEN(table_key);
+          OB_UNIS_ADD_LEN(num_of_entries);
+          for (int64_t j = 0; j < num_of_entries; ++j) {
+            const ObBackupMacroBlockIDPair &pair = id_pair_list.at(j);
+            OB_UNIS_ADD_LEN(pair);
+          }
+        }
       }
     }
   }

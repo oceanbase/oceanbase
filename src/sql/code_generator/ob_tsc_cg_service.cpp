@@ -198,11 +198,17 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op, ObDASScanCtDe
   int ret = OB_SUCCESS;
   ObTableID index_id = scan_ctdef.ref_table_id_;
   const ObTableSchema *table_schema = NULL;
-  const bool pd_agg = ObPushdownFilterUtils::is_aggregate_pushdown_storage(scan_ctdef.pd_expr_spec_.pd_storage_flag_);
+  const bool pd_agg = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown();
+  const bool pd_group_by =  scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_group_by_pushdown();
   ObArray<uint64_t> tsc_out_cols;
   ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
   CK(OB_NOT_NULL(schema_guard));
-  if (OB_INVALID == index_id) {
+  if (OB_UNLIKELY((pd_agg && 0 == scan_ctdef.aggregate_column_ids_.count()) ||
+      pd_group_by && 0 == scan_ctdef.group_by_column_ids_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(pd_agg), K(scan_ctdef.aggregate_column_ids_.count()),
+        K(pd_group_by), K(scan_ctdef.group_by_column_ids_.count()));
+  } else if (OB_INVALID == index_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid id", K(index_id), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(op.get_table_id(), index_id, op.get_stmt(), table_schema))) {
@@ -217,14 +223,19 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op, ObDASScanCtDe
                           = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0))) {
   } else if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema,
                                                      scan_ctdef.access_column_ids_,
+                                                     scan_ctdef.pd_expr_spec_.pd_storage_flag_,
                                                      &tsc_out_cols,
                                                      is_oracle_mapping_real_virtual_table(op.get_ref_table_id())))) {/* for real agent table , use mysql mode compulsory*/
     LOG_WARN("convert schema failed", K(ret), K(*table_schema),
              K(scan_ctdef.access_column_ids_), K(op.get_index_back()));
-  } else if (pd_agg && OB_FAIL(scan_ctdef.table_param_.convert_agg(scan_ctdef.access_column_ids_,
-                                                                   scan_ctdef.aggregate_column_ids_))) {
-    LOG_WARN("convert agg failed", K(ret), K(*table_schema),
-              K(scan_ctdef.aggregate_column_ids_), K(op.get_index_back()));
+  } else if ((pd_agg || pd_group_by) &&
+             OB_FAIL(scan_ctdef.table_param_.convert_group_by(*table_schema,
+                                                              scan_ctdef.access_column_ids_,
+                                                              scan_ctdef.aggregate_column_ids_,
+                                                              scan_ctdef.group_by_column_ids_,
+                                                              scan_ctdef.pd_expr_spec_.pd_storage_flag_))) {
+    LOG_WARN("convert group by failed", K(ret), K(*table_schema),
+             K(scan_ctdef.aggregate_column_ids_), K(scan_ctdef.group_by_column_ids_));
   } else if (OB_FAIL(generate_das_result_output(tsc_out_cols, scan_ctdef, op.get_trans_info_expr(), pd_agg))) {
     LOG_WARN("failed to init result outputs", K(ret));
   }
@@ -424,8 +435,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
   }
 
   if (OB_SUCC(ret) && !scan_pushdown_filters.empty()) {
-    bool pd_filter = ObPushdownFilterUtils::is_filter_pushdown_storage(
-        scan_ctdef.pd_expr_spec_.pd_storage_flag_);
+    bool pd_filter = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_filter_pushdown();
     if (OB_FAIL(cg_.generate_rt_exprs(scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pushdown_filters_))) {
       LOG_WARN("generate scan ctdef pushdown filter");
     } else if (pd_filter) {
@@ -437,8 +447,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     }
   }
   if (OB_SUCC(ret) && !lookup_pushdown_filters.empty()) {
-    bool pd_filter = ObPushdownFilterUtils::is_filter_pushdown_storage(
-        lookup_ctdef->pd_expr_spec_.pd_storage_flag_);
+    bool pd_filter = lookup_ctdef->pd_expr_spec_.pd_storage_flag_.is_filter_pushdown();
     if (OB_FAIL(cg_.generate_rt_exprs(lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pushdown_filters_))) {
       LOG_WARN("generate lookup ctdef pushdown filter failed", K(ret));
     } else if (pd_filter) {
@@ -466,64 +475,54 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
                                              ObPushdownExprSpec &pd_spec)
 {
   int ret = OB_SUCCESS;
-  ObSqlSchemaGuard *schema_guard = NULL;
-  bool pd_blockscan = false, pd_filter = false;
+  bool pd_blockscan = false;
+  bool pd_filter = false;
+  bool enable_skip_index = false;
   ObBasicSessionInfo *session_info = NULL;
-  if (OB_ISNULL(log_plan) ||
-      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
+  if (OB_ISNULL(log_plan)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), K(log_plan), K(schema_guard));
+    LOG_WARN("invalid argument", K(ret));
   } else if (OB_FALSE_IT(session_info = log_plan->get_optimizer_context().get_session_info())) {
   } else if (OB_ISNULL(session_info) ||
              is_sys_table(ref_table_id) ||
              is_virtual_table(ref_table_id)) {
   } else {
-    int pd_level = 0;
-    uint64_t tenant_id = session_info->get_effective_tenant_id();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (OB_UNLIKELY(!tenant_config.is_valid())) {
-      LOG_WARN("failed to init tenant config", K(tenant_id));
-    } else {
-      pd_level = tenant_config->_pushdown_storage_level;
-      pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
-      pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
-
-      // pushdown filter only support scan now
-      if (pd_blockscan) {
-        if (log_op_def::LOG_TABLE_SCAN == op_type) {
-          if (is_global_index_lookup) {
-            pd_blockscan = false;
-          }
-        } else {
+    pd_blockscan = pd_spec.pd_storage_flag_.is_blockscan_pushdown();
+    pd_filter = pd_spec.pd_storage_flag_.is_filter_pushdown();
+    enable_skip_index = pd_spec.pd_storage_flag_.is_apply_skip_index();
+    // pushdown filter only support scan now
+    if (pd_blockscan) {
+      if (log_op_def::LOG_TABLE_SCAN == op_type) {
+        if (is_global_index_lookup) {
           pd_blockscan = false;
         }
-      }
-      LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan));
-      if (!pd_blockscan) {
-        pd_filter = false;
       } else {
-        FOREACH_CNT_X(e, access_exprs, pd_blockscan || pd_filter) {
-          if (T_ORA_ROWSCN == (*e)->get_expr_type()) {
-            pd_blockscan = false;
+        pd_blockscan = false;
+      }
+    }
+
+    if (!pd_blockscan) {
+      pd_filter = false;
+    } else {
+      FOREACH_CNT_X(e, access_exprs, pd_blockscan || pd_filter) {
+        if (T_ORA_ROWSCN == (*e)->get_expr_type()) {
+          pd_blockscan = false;
+          pd_filter = false;
+        } else {
+          auto col = static_cast<ObColumnRefRawExpr *>(*e);
+          if (col->is_lob_column() && cg_.cur_cluster_version_ < CLUSTER_VERSION_4_1_0_0) {
             pd_filter = false;
-          } else {
-            auto col = static_cast<ObColumnRefRawExpr *>(*e);
-            if (col->is_lob_column() && cg_.cur_cluster_version_ < CLUSTER_VERSION_4_1_0_0) {
-              pd_filter = false;
-            }
           }
         }
       }
     }
   }
-
   if (OB_SUCC(ret)) {
-    if (pd_blockscan) {
-      ObPushdownFilterUtils::set_blockscan_pushdown_storage(pd_spec.pd_storage_flag_);
-    }
-    if (pd_filter) {
-      ObPushdownFilterUtils::set_filter_pushdown_storage(pd_spec.pd_storage_flag_);
-    }
+    enable_skip_index = enable_skip_index && pd_filter;
+    pd_spec.pd_storage_flag_.set_blockscan_pushdown(pd_blockscan);
+    pd_spec.pd_storage_flag_.set_filter_pushdown(pd_filter);
+    pd_spec.pd_storage_flag_.set_enable_skip_index(enable_skip_index);
+    LOG_DEBUG("chaser debug pd block", K(op_type), K(pd_blockscan), K(pd_filter), K(enable_skip_index));
   }
   return ret;
 }
@@ -752,6 +751,8 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
   int ret = OB_SUCCESS;
   const ObIArray<ObAggFunRawExpr*> &pushdown_aggr_exprs = op.get_pushdown_aggr_exprs();
   const uint64_t aggregate_output_count = pushdown_aggr_exprs.count();
+  const ObIArray<ObRawExpr*> &group_by_columns = op.get_pushdown_groupby_columns();
+  const uint64_t group_by_column_count = group_by_columns.count();
   if (op.get_index_back() && aggregate_output_count > 0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("pushdown aggr to table scan not supported in index lookup",
@@ -760,7 +761,7 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
   } else {
     ExprFixedArray &aggregate_output = scan_ctdef.pd_expr_spec_.pd_storage_aggregate_output_;
     if (aggregate_output_count > 0) {
-      ObPushdownFilterUtils::set_aggregate_pushdown_storage(scan_ctdef.pd_expr_spec_.pd_storage_flag_);
+      scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_aggregate_pushdown(true);
       OZ(scan_ctdef.aggregate_column_ids_.init(aggregate_output_count));
       if (OB_FAIL(aggregate_output.reserve(aggregate_output_count))) {
         LOG_WARN("init aggregate output array", K(ret), K(aggregate_output_count));
@@ -797,6 +798,29 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
                                            K(op.get_table_id()));
       } else {
         OZ(scan_ctdef.aggregate_column_ids_.push_back(col_expr->get_column_id()));
+      }
+    }
+
+    if (OB_SUCC(ret) && group_by_column_count > 0) {
+      scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_group_by_pushdown(true);
+      OZ(scan_ctdef.group_by_column_ids_.init(group_by_column_count));
+      ARRAY_FOREACH(group_by_columns, i) {
+        ObRawExpr *group_expr = group_by_columns.at(i);
+        ObColumnRefRawExpr* col_expr = NULL;
+        if (OB_ISNULL(group_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("group expr is null", K(ret));
+        } else if (OB_UNLIKELY(!group_expr->is_column_ref_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expected basic column", K(ret), K(group_expr));
+        } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(group_expr))) {
+        } else if (OB_UNLIKELY(col_expr->get_table_id() != op.get_table_id())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expected basic column", K(ret), K(col_expr->get_table_id()),
+                                            K(op.get_table_id()));
+        } else {
+          OZ(scan_ctdef.group_by_column_ids_.push_back(col_expr->get_column_id()));
+        }
       }
     }
   }

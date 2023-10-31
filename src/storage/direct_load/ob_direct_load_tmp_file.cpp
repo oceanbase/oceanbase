@@ -248,7 +248,7 @@ int ObDirectLoadTmpFileIOHandle::aio_pread(char *buf, int64_t size, int64_t offs
   return ret;
 }
 
-int ObDirectLoadTmpFileIOHandle::read(char *buf, int64_t &size, int64_t timeout_ms)
+int ObDirectLoadTmpFileIOHandle::read(char *buf, int64_t &size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -262,7 +262,8 @@ int ObDirectLoadTmpFileIOHandle::read(char *buf, int64_t &size, int64_t timeout_
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.read(io_info_, timeout_ms, file_io_handle_))) {
+    io_info_.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.read(io_info_, file_io_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to do read from tmp file", KR(ret), K_(io_info));
       } else {
@@ -273,7 +274,7 @@ int ObDirectLoadTmpFileIOHandle::read(char *buf, int64_t &size, int64_t timeout_
   return ret;
 }
 
-int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t &size, int64_t offset, int64_t timeout_ms)
+int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t &size, int64_t offset)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -287,7 +288,8 @@ int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t &size, int64_t offset,
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_info_, offset, timeout_ms, file_io_handle_))) {
+    io_info_.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_info_, offset, file_io_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to do pread from tmp file", KR(ret), K_(io_info), K(offset));
       } else {
@@ -312,6 +314,7 @@ int ObDirectLoadTmpFileIOHandle::aio_write(char *buf, int64_t size)
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
+    io_info_.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info_, file_io_handle_))) {
       LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
     }
@@ -319,7 +322,7 @@ int ObDirectLoadTmpFileIOHandle::aio_write(char *buf, int64_t size)
   return ret;
 }
 
-int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size, int64_t timeout_ms)
+int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -333,17 +336,17 @@ int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size, int64_t timeout_
     io_info_.buf_ = buf;
     io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io_info_, timeout_ms))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io_info_))) {
       LOG_WARN("fail to do write to tmp file", KR(ret), K_(io_info));
     }
   }
   return ret;
 }
 
-int ObDirectLoadTmpFileIOHandle::wait(int64_t timeout_ms)
+int ObDirectLoadTmpFileIOHandle::wait()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(file_io_handle_.wait(timeout_ms))) {
+  if (OB_FAIL(file_io_handle_.wait())) {
     LOG_WARN("fail to wait io finish", KR(ret));
   }
   return ret;

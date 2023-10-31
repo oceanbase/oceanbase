@@ -73,16 +73,16 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                                |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR                          |        |26      |80          |
-|1 |└─EXCHANGE OUT DISTR                    |:EX10001|26      |54          |
-|2 |  └─NESTED-LOOP JOIN                    |        |26      |25          |
-|3 |    ├─PX BLOCK ITERATOR                 |        |28      |13          |
-|4 |    │ └─TABLE FULL SCAN                 |score   |28      |13          |
-|5 |    └─MATERIAL                          |        |1       |14          |
-|6 |      └─EXCHANGE IN DISTR               |        |1       |14          |
-|7 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |13          |
-|8 |          └─PX BLOCK ITERATOR           |        |1       |12          |
-|9 |            └─TABLE FULL SCAN           |stu     |1       |12          |
+|0 |PX COORDINATOR                          |        |26      |63          |
+|1 |└─EXCHANGE OUT DISTR                    |:EX10001|26      |37          |
+|2 |  └─NESTED-LOOP JOIN                    |        |26      |8           |
+|3 |    ├─PX BLOCK ITERATOR                 |        |28      |8           |
+|4 |    │ └─TABLE FULL SCAN                 |score   |28      |8           |
+|5 |    └─MATERIAL                          |        |1       |8           |
+|6 |      └─EXCHANGE IN DISTR               |        |1       |8           |
+|7 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |8           |
+|8 |          └─PX BLOCK ITERATOR           |        |1       |7           |
+|9 |            └─TABLE FULL SCAN           |stu     |1       |7           |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -138,15 +138,15 @@ Query Plan
 ==========================================================================
 |ID|OPERATOR                              |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------
-|0 |PX COORDINATOR                        |        |14      |46          |
-|1 |└─EXCHANGE OUT DISTR                  |:EX10001|14      |32          |
-|2 |  └─NESTED-LOOP JOIN                  |        |14      |17          |
-|3 |    ├─EXCHANGE IN DISTR               |        |1       |3           |
-|4 |    │ └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |2           |
-|5 |    │   └─PX BLOCK ITERATOR           |        |1       |2           |
-|6 |    │     └─TABLE GET                 |teacher |1       |2           |
-|7 |    └─PX BLOCK ITERATOR               |        |28      |13          |
-|8 |      └─TABLE FULL SCAN               |score   |28      |13          |
+|0 |PX COORDINATOR                        |        |14      |42          |
+|1 |└─EXCHANGE OUT DISTR                  |:EX10001|14      |28          |
+|2 |  └─NESTED-LOOP JOIN                  |        |14      |13          |
+|3 |    ├─EXCHANGE IN DISTR               |        |1       |4           |
+|4 |    │ └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |3           |
+|5 |    │   └─PX BLOCK ITERATOR           |        |1       |3           |
+|6 |    │     └─TABLE GET                 |teacher |1       |3           |
+|7 |    └─PX BLOCK ITERATOR               |        |28      |8           |
+|8 |      └─TABLE FULL SCAN               |score   |28      |8           |
 ==========================================================================
 Outputs & filters:
 -------------------------------------

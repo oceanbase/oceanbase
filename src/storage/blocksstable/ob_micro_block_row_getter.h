@@ -28,6 +28,7 @@ struct ObSSTableReadHandle;
 namespace blocksstable
 {
 class ObMacroBlockReader;
+class ObCSEncodeBlockGetReader;
 
 class ObIMicroBlockRowFetcher {
 public:
@@ -49,13 +50,15 @@ protected:
   ObIMicroBlockGetReader *reader_;
   ObMicroBlockGetReader *flat_reader_;
   ObEncodeBlockGetReader *encode_reader_;
+  ObCSEncodeBlockGetReader *cs_encode_reader_;
+  const ObITableReadInfo *read_info_;
   bool is_inited_;
 };
 
 class ObMicroBlockRowGetter : public ObIMicroBlockRowFetcher
 {
 public:
-  ObMicroBlockRowGetter() : read_info_(nullptr), row_(), cache_project_row_() {};
+  ObMicroBlockRowGetter() : row_(), cache_project_row_() {};
   virtual ~ObMicroBlockRowGetter() {};
   virtual int init(
       const storage::ObTableIterParam &param,
@@ -80,9 +83,37 @@ private:
       const ObMicroBlockData &block_data,
       const ObDatumRow *&row);
 private:
-  const ObITableReadInfo *read_info_;
   ObDatumRow row_;
   ObDatumRow cache_project_row_;
+};
+
+class ObMicroBlockCGRowGetter : public ObIMicroBlockRowFetcher
+{
+public:
+  ObMicroBlockCGRowGetter() : row_() {};
+  virtual ~ObMicroBlockCGRowGetter() {};
+  virtual int init(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const blocksstable::ObSSTable *sstable) override;
+  virtual int switch_context(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const blocksstable::ObSSTable *sstable) override;
+  int get_row(
+      ObSSTableReadHandle &read_handle,
+      ObMacroBlockReader &block_reader,
+      const uint32_t row_idx,
+      const ObDatumRow *&store_row);
+private:
+  int get_block_row(ObSSTableReadHandle &read_handle,
+                    ObMacroBlockReader &block_reader,
+                    const uint32_t row_idx,
+                    const ObDatumRow *&row);
+  int get_not_exist_row(const ObDatumRow *&row);
+
+private:
+  ObDatumRow row_;
 };
 
 }

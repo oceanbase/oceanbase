@@ -38,6 +38,11 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const override;
 
+  static int ceil_floor_decint(
+      const bool is_floor, const ObDatum *arg_datum,
+      const ObDatumMeta &in_meta, const ObDatumMeta &out_meta,
+      ObDatum &res_datum);
+
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCeilFloor);

@@ -132,7 +132,7 @@ int ObMediumListChecker::check_next_schedule_medium(
                  KR(ret), KPC(next_medium_info), K(last_major_snapshot));
       }
     } else if (next_medium_info->is_major_compaction()) { // check next freeze info in inner_table & medium_info
-      ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
+      share::ObFreezeInfo freeze_info;
       if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(
               get_freeze_info_behind_snapshot_version,
               last_major_snapshot, freeze_info))) {
@@ -145,10 +145,10 @@ int ObMediumListChecker::check_next_schedule_medium(
         } else { // if force_check = false, not return errno; check next time
           ret = OB_SUCCESS;
         }
-      } else if (OB_UNLIKELY(freeze_info.freeze_version < next_medium_info->medium_snapshot_)) {
+      } else if (OB_UNLIKELY(freeze_info.frozen_scn_.get_val_for_tx() < next_medium_info->medium_snapshot_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("next major medium info may lost",
-          KR(ret), "freeze_version", freeze_info.freeze_version, KPC(next_medium_info), K(last_major_snapshot));
+          KR(ret), "freeze_version", freeze_info.frozen_scn_.get_val_for_tx(), KPC(next_medium_info), K(last_major_snapshot));
       }
     } else {
       // medium info from same cluster_id, can't make sure all medium info exists, so not check medium & last_major_snapshot

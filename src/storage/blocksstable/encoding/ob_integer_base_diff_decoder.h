@@ -40,7 +40,7 @@ public:
       const ObColumnHeader &column_header,
       const char *meta);
 
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
@@ -64,6 +64,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 
   virtual int get_null_count(
@@ -82,9 +83,9 @@ private:
       common::ObDatum *datums) const;
 
   template <typename T>
-  inline int get_delta(const common::ObObj &cell, uint64_t &delta) const
+  inline int get_delta(const ObObjType &obj_type, const common::ObDatum &datum, uint64_t &delta) const
   {
-    UNUSEDx(cell, delta);
+    UNUSEDx(datum, delta);
     int ret = common::OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Undefined delta calculation", K(ret));
     return ret;
@@ -95,6 +96,7 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int bt_operator(
@@ -102,6 +104,7 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int in_operator(
@@ -109,6 +112,7 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int traverse_all_data(
@@ -116,9 +120,11 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap,
       int (*lambda)(
-          uint64_t &cur_int,
+          const ObObjMeta &obj_meta,
+          const ObDatum &cur_datum,
           const sql::ObWhiteFilterExecutor &filter,
           bool &result)) const;
 private:

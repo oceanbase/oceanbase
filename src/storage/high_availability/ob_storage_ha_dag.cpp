@@ -752,7 +752,6 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
         //Need copy should be false and reuse local minor sstable.
       }
     }
-
     if (OB_SUCC(ret) && !found) {
       need_copy = true;
     }

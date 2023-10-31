@@ -55,7 +55,7 @@ public:
            const int64_t schema_version, const char* comment);
   void reset();
   bool is_valid() const;
-  const char * get_snapshot_type_str() const;
+  static const char * get_snapshot_type_str(const ObSnapShotType &snapshot_type);
   static const char *ObSnapShotTypeStr[];
   TO_STRING_KV(K_(snapshot_type),
                K_(snapshot_scn),

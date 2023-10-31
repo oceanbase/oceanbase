@@ -18,7 +18,7 @@
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "ob_storage_ha_reader.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase
 {

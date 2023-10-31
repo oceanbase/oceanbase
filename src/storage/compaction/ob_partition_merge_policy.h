@@ -16,25 +16,21 @@
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "share/ob_table_range.h"
+#include "share/scheduler/ob_diagnose_config.h"
 namespace oceanbase
 {
 namespace storage
 {
 class ObITable;
 class ObGetMergeTablesParam;
-class ObSSTableArray;
 class ObTablet;
-class ObTabletTableStore;
 class ObGetMergeTablesResult;
 class ObTablesHandleArray;
-class ObStorageSchema;
 struct ObTabletStatAnalyzer;
 struct ObTableHandleV2;
 struct ObStorageMetaHandle;
 class ObLS;
-class ObTableStoreIterator;
 }
-using namespace storage;
 
 namespace blocksstable
 {
@@ -50,77 +46,87 @@ class ObPartitionMergePolicy
 public:
   static int get_mini_merge_tables(
       const storage::ObGetMergeTablesParam &param,
-      ObLS &ls,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
 
   static int get_minor_merge_tables(
       const storage::ObGetMergeTablesParam &param,
-      ObLS &ls,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
 
   static int get_hist_minor_merge_tables(
       const storage::ObGetMergeTablesParam &param,
-      ObLS &ls,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
 
   static int get_medium_merge_tables(
       const storage::ObGetMergeTablesParam &param,
-      ObLS &ls,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
    static int check_need_medium_merge(
-      ObLS &ls,
+      storage::ObLS &ls,
       storage::ObTablet &tablet,
       const int64_t medium_snapshot,
       bool &need_merge,
       bool &can_merge,
       bool &need_force_freeze);
   static int generate_parallel_minor_interval(
+      const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
-      const ObGetMergeTablesResult &input_result,
+      const storage::ObGetMergeTablesResult &input_result,
       ObMinorExecuteRangeMgr &minor_range_mgr,
-      ObIArray<ObGetMergeTablesResult> &parallel_result);
+      ObIArray<storage::ObGetMergeTablesResult> &parallel_result);
 
   static int get_boundary_snapshot_version(
-      const ObTablet &tablet,
+      const storage::ObTablet &tablet,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
       const bool check_table_cnt,
       const bool is_multi_version_merge);
 
   static int diagnose_table_count_unsafe(
-      const storage::ObMergeType merge_type,
+      const compaction::ObMergeType merge_type,
+      const share::ObDiagnoseTabletType diagnose_type,
       const storage::ObTablet &tablet);
 
   static int get_multi_version_start(
-      const ObMergeType merge_type,
-      ObLS &ls,
-      const ObTablet &tablet,
-      ObVersionRange &result_version_range);
+      const compaction::ObMergeType merge_type,
+      storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      ObVersionRange &result_version_range,
+      ObStorageSnapshotInfo &snapshot_info);
+
+  static int add_table_with_check(storage::ObGetMergeTablesResult &result, storage::ObTableHandleV2 &table_handle);
+  static int get_result_by_snapshot(
+    storage::ObTablet &tablet,
+    const int64_t snapshot,
+    storage::ObGetMergeTablesResult &result);
   static bool is_sstable_count_not_safe(const int64_t minor_table_cnt);
+
 private:
   static int find_mini_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       const storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
-      ObLS &ls,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       common::ObIArray<ObTableHandleV2> &memtable_handles,
       storage::ObGetMergeTablesResult &result);
 
   static int find_minor_merge_tables(
-      const ObGetMergeTablesParam &param,
+      const storage::ObGetMergeTablesParam &param,
       const int64_t min_snapshot_version,
       const int64_t max_snapshot_version,
-      ObLS &ls,
-      const ObTablet &tablet,
+      storage::ObLS &ls,
+      const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
 
   static int refine_minor_merge_tables(
-      const ObTablet &tablet,
-      const ObTablesHandleArray &merge_tables,
+      const storage::ObTablet &tablet,
+      const storage::ObTablesHandleArray &merge_tables,
       int64_t &left_border,
       int64_t &right_border);
 
@@ -130,41 +136,43 @@ private:
       storage::ObGetMergeTablesResult &result,
       bool &need_check_tablet);
   static int refine_minor_merge_result(
+      const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       storage::ObGetMergeTablesResult &result);
 
   static int deal_with_minor_result(
-      const storage::ObMergeType &merge_type,
-      ObLS &ls,
+      const compaction::ObMergeType &merge_type,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
 
   static int get_neighbour_freeze_info(
       const int64_t snapshot_version,
-      const storage::ObITable *last_major_table,
-      storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info);
+      const int64_t last_major_snapshot_version,
+      storage::ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
+      const bool is_multi_version_merge);
 
   static int64_t cal_hist_minor_merge_threshold();
   static int generate_input_result_array(
-      const ObGetMergeTablesResult &input_result,
+      const storage::ObGetMergeTablesResult &input_result,
       ObMinorExecuteRangeMgr &minor_range_mgr,
       int64_t &fixed_input_table_cnt,
-      common::ObIArray<ObGetMergeTablesResult> &input_result_array);
+      common::ObIArray<storage::ObGetMergeTablesResult> &input_result_array);
 
   static int split_parallel_minor_range(
       const int64_t table_count_threshold,
-      const ObGetMergeTablesResult &input_result,
-      common::ObIArray<ObGetMergeTablesResult> &parallel_result);
+      const storage::ObGetMergeTablesResult &input_result,
+      common::ObIArray<storage::ObGetMergeTablesResult> &parallel_result);
 
   static int deal_hist_minor_merge(
-      const ObTablet &tablet,
+      const storage::ObTablet &tablet,
       int64_t &max_snapshot_version);
 
   // diagnose part
   static int diagnose_minor_dag(
-      storage::ObMergeType merge_type,
+      compaction::ObMergeType merge_type,
       const share::ObLSID ls_id,
-      const ObTabletID tablet_id,
+      const common::ObTabletID tablet_id,
       char *buf,
       const int64_t buf_len);
 public:
@@ -179,10 +187,10 @@ public:
   static const int64_t OB_LARGE_MINOR_SSTABLE_ROW_COUNT = 2000000;
 
   typedef int (*GetMergeTables)(const storage::ObGetMergeTablesParam&,
-                                ObLS &ls,
+                                storage::ObLS &ls,
                                 const storage::ObTablet &,
                                 storage::ObGetMergeTablesResult&);
-  static GetMergeTables get_merge_tables[storage::ObMergeType::MERGE_TYPE_MAX];
+  static GetMergeTables get_merge_tables[compaction::ObMergeType::MERGE_TYPE_MAX];
 };
 
 struct ObMinorExecuteRangeMgr
@@ -201,7 +209,7 @@ struct ObMinorExecuteRangeMgr
 
   int get_merge_ranges(
       const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id);
+      const common::ObTabletID &tablet_id);
   bool in_execute_range(const storage::ObITable *table) const;
   int sort_ranges();
 
@@ -219,6 +227,8 @@ public:
     INEFFICIENT_QUERY = 3,
     FREQUENT_WRITE = 4,
     TENANT_MAJOR = 5,
+    USER_REQUEST = 6,
+    REBUILD_COLUMN_GROUP = 7,
     INVALID_REASON
   };
 
@@ -227,7 +237,7 @@ public:
 
   static int get_meta_merge_tables(
       const storage::ObGetMergeTablesParam &param,
-      ObLS &ls,
+      storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
 
@@ -260,7 +270,7 @@ private:
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_inc_sstable_row_cnt_percentage(
-      const ObTablet &tablet,
+      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
 
 private:

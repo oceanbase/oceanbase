@@ -5814,6 +5814,28 @@ public:
   share::ObLSID ls_id_;
 };
 
+struct ObTabletMajorFreezeArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletMajorFreezeArg()
+    : tenant_id_(0),
+      ls_id_(),
+      tablet_id_(),
+      is_rebuild_column_group_(false)
+    {}
+  ~ObTabletMajorFreezeArg() = default;
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && ls_id_.is_valid() && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(is_rebuild_column_group));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  bool is_rebuild_column_group_;
+};
+
 struct ObSyncPGPartitionMTFinishArg
 {
   OB_UNIS_VERSION(1);
@@ -9392,13 +9414,14 @@ struct ObEstBlockArgElement
 {
   OB_UNIS_VERSION(1);
 public:
-  ObEstBlockArgElement() : tenant_id_(0), tablet_id_(), ls_id_() {}
+  ObEstBlockArgElement() : tenant_id_(0), tablet_id_(), ls_id_(), column_group_ids_() {}
   bool is_valid() const { return tenant_id_ > 0 && tablet_id_.is_valid() && ls_id_.is_valid(); }
   int assign(const ObEstBlockArgElement &other);
   uint64_t tenant_id_;
   ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(ls_id));
+  common::ObSEArray<uint64_t, 4> column_group_ids_;
+  TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(ls_id), K_(column_group_ids));
 };
 
 struct ObEstBlockArg
@@ -9420,10 +9443,13 @@ public:
   int64_t micro_block_count_;
   int64_t sstable_row_count_;
   int64_t memtable_row_count_;
+  common::ObSEArray<int64_t, 4> cg_macro_cnt_arr_;
+  common::ObSEArray<int64_t, 4> cg_micro_cnt_arr_;
   bool is_valid() const { return true; }
   int assign(const ObEstBlockResElement &other);
   ObEstBlockResElement() : macro_block_count_(0), micro_block_count_(0), sstable_row_count_(0), memtable_row_count_(0) {}
-  TO_STRING_KV(K(macro_block_count_), K(micro_block_count_), K(sstable_row_count_), K(memtable_row_count_));
+  TO_STRING_KV(K(macro_block_count_), K(micro_block_count_),
+      K(sstable_row_count_), K(memtable_row_count_), K(cg_macro_cnt_arr_), K(cg_micro_cnt_arr_));
 };
 
 struct ObEstBlockRes

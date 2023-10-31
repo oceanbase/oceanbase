@@ -864,7 +864,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
         wash_ratio = -tmp_ret;
       }
       if (0 <= wash_ratio && wash_ratio <=6 && auto_calc) {
-        if (OB_FAIL(ObKVGlobalCache::get_instance().get_washable_size(tenant_id_, washable_size, wash_ratio))) {
+        if (OB_FAIL(ObKVGlobalCache::get_instance().get_washable_size(tenant_id_, washable_size))) {
           LOG_WARN("failed to get washable memory size", K(ret));
         } else {
           max_tenant_memory_size += washable_size;

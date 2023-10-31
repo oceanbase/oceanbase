@@ -128,7 +128,14 @@ int ObUniqueIndexChecker::calc_column_checksum(
         for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
           column_checksum.at(i) += row->storage_datums_[i].checksum(0);
         }
-        dag_yield();
+        if (OB_FAIL(dag_yield())) {
+          if (OB_CANCELED == ret) {
+            STORAGE_LOG(INFO, "Cancel this task since the whole dag is canceled", K(ret));
+            break;
+          } else {
+            STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
+          }
+        }
       }
     }
   }
@@ -558,7 +565,14 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
           ret, *index_schema_, task_id, tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0", report_ret_code))) {
         LOG_WARN("fail to generate index ddl error message", K(ret), K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));
         ob_usleep(RETRY_INTERVAL);
-        dag_yield();
+        if (OB_FAIL(dag_yield())) {
+          if (OB_CANCELED == ret) {
+            LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
+            break;
+          } else {
+            LOG_WARN("Invalid return value for dag_yield", K(ret));
+          }
+        }
       } else {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
           //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
@@ -601,7 +615,14 @@ int ObUniqueIndexChecker::wait_trans_end(ObIDag *dag)
         if (OB_EAGAIN == ret && ObTimeUtility::current_time() - now < timeout_us) {
           ret = OB_SUCCESS;
           ob_usleep(RETRY_INTERVAL);
-          dag_yield();
+          if (OB_FAIL(dag_yield())) {
+            if (OB_CANCELED == ret) {
+              LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
+              break;
+            } else {
+              LOG_WARN("Invalid return value for dag_yield", K(ret));
+            }
+          }
         } else {
           LOG_WARN("fail to check modify time elapsed", K(ret));
           break;

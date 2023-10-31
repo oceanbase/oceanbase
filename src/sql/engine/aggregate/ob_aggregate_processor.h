@@ -139,6 +139,8 @@ public:
   virtual ~ObAggrInfo();
 
   inline ObObjType get_first_child_type() const;
+  inline ObPrecision get_first_child_datum_precision() const;
+  inline ObScale get_first_child_datum_scale() const;
   inline bool is_number() const;
   inline bool is_implicit_first_aggr() const { return is_implicit_first_aggr_; }
   int64_t get_child_output_count() const
@@ -221,6 +223,16 @@ inline ObObjType ObAggrInfo::get_first_child_type() const
 {
  // OB_ASSERT(param_exprs_.count() == 1);
   return param_exprs_.at(0)->datum_meta_.type_;
+}
+
+inline ObPrecision ObAggrInfo::get_first_child_datum_precision() const
+{
+  return param_exprs_.at(0)->datum_meta_.precision_;
+}
+
+inline ObScale ObAggrInfo::get_first_child_datum_scale() const
+{
+  return param_exprs_.at(0)->datum_meta_.scale_;
 }
 
 inline bool ObAggrInfo::is_number() const
@@ -460,9 +472,11 @@ public:
     void dec_row_count() { --row_count_; }
     int64_t get_row_count() { return row_count_; }
     void add_row_count(const int64_t value) { row_count_ += value; }
+    void set_row_count(const int64_t value) { row_count_ = value; }
     ObDatum &get_iter_result() { return iter_result_; }
-    int64_t get_tiny_num_int() { return tiny_num_int_; }
-    uint64_t get_tiny_num_uint() { return tiny_num_uint_; }
+    const ObDatum &get_iter_result() const { return iter_result_; }
+    int64_t get_tiny_num_int() const { return tiny_num_int_; }
+    uint64_t get_tiny_num_uint() const { return tiny_num_uint_; }
     void set_iter_result(const ObDatum &value) { iter_result_ = value; }
     void set_tiny_num_int(const int64_t value) { tiny_num_int_ = value; }
     void set_tiny_num_uint(const uint64_t value) { tiny_num_uint_ = value; }
@@ -472,6 +486,7 @@ public:
     void set_is_evaluated(const bool is_evaluated) { is_evaluated_ = is_evaluated; }
     int collect_result(const ObObjTypeClass tc, ObEvalCtx &eval_ctx, const ObAggrInfo &aggr_info);
     ExtraResult *get_extra() { return extra_; }
+    const ExtraResult *get_extra() const { return extra_; }
     void set_extra(ExtraResult *extra) { extra_ = extra; }
     inline const char* get_buf() { return iter_result_.ptr_
                                           ? (iter_result_.ptr_ - 2 * sizeof(int64_t)) : nullptr; }
@@ -525,13 +540,13 @@ public:
     ObDatum advance_collect_result_;
   };
 
-
   struct ObSelector
   {
     ObSelector() : brs_(nullptr), selector_array_(nullptr), count_(0) {}
     ObSelector(const ObBatchRows *brs, const uint16_t *selector_array_, uint16_t count)
       : brs_(brs), selector_array_(selector_array_), count_(count) {}
     ~ObSelector() {}
+    static const int32_t DECIMAL_INT_BATCH_FUNC_IDX = 0;
     bool is_valid() const { return nullptr != selector_array_; }
     uint16_t begin() const {
       return 0;
@@ -561,6 +576,7 @@ public:
     ObBatchRowsSlice(const ObBatchRows *brs, uint16_t begin_pos, uint16_t end_pos)
     : brs_(brs), begin_pos_(begin_pos), end_pos_(end_pos) {}
     ~ObBatchRowsSlice() {}
+    static const int32_t DECIMAL_INT_BATCH_FUNC_IDX = 1;
     bool is_valid() const { return nullptr != brs_; }
     uint16_t begin() const {
       uint16_t i = begin_pos_;
@@ -779,10 +795,6 @@ private:
       const ObIArray<ObExpr *> *param_exprs,
       AggrCell &aggr_cell, const ObAggrInfo &aggr_info, const T &param);
   template <typename T>
-  int number_accumulator(
-      const ObDatumVector &src, ObDataBuffer &allocator1, ObDataBuffer &allocator2,
-      number::ObNumber &result, uint32_t *sum_digits, bool &all_skip, const T &param);
-  template <typename T>
   int max_calc_batch(
       AggrCell &aggr_cell,
       ObDatum &dst,
@@ -863,9 +875,10 @@ private:
                           const int64_t max_group_cnt = INT64_MIN);
   int process_aggr_result_from_distinct(AggrCell &aggr_cell, const ObAggrInfo &aggr_info);
 
+public:
   OB_INLINE int clone_number_cell(const number::ObNumber &src_cell,
                                   AggrCell &aggr_cell);
-
+private:
   int init_group_extra_aggr_info(
         AggrCell &aggr_cell,
         const ObAggrInfo &aggr_info);
@@ -882,8 +895,11 @@ private:
 
   int prepare_add_calc(const ObDatum &iter_value, AggrCell &aggr_cell, const ObAggrInfo &aggr_info);
   int add_calc(const ObDatum &iter_value, AggrCell &aggr_cell, const ObAggrInfo &aggr_info);
+  template<typename T, bool IS_ADD = true>
+  int calc_overflow_res_to_decimal_int(ObDatum &result_datum, AggrCell &aggr_cell,
+                                       const int16_t precision, const T val1, const T val2 = 0);
   int sub_calc(const ObDatum &iter_value, AggrCell &aggr_cell, const ObAggrInfo &aggr_info);
-  int rollup_add_calc(AggrCell &aggr_cell, AggrCell &rollup_cell, const ObAggrInfo &aggr_info);
+  int rollup_add_calc(const AggrCell &aggr_cell, AggrCell &rollup_cell, const ObAggrInfo &aggr_info);
   int search_op_expr(ObExpr *upper_expr,
                      const ObItemType dst_op,
                      ObExpr *&res_expr);
@@ -901,7 +917,9 @@ private:
                            number::ObNumber &factor,
                            ObDataBuffer &allocator);
   int rollup_add_calc(AggrCell &aggr_cell, AggrCell &rollup_cell);
-  int rollup_add_number_calc(ObDatum &aggr_result, AggrCell &aggr_cell);
+  int rollup_add_number_calc(const ObDatum &aggr_result, AggrCell &aggr_cell);
+  int rollup_add_decimalint_calc(const ObDatum &aggr_result, AggrCell &rollup_cell,
+                                 const ObAggrInfo &aggr_info);
   int rollup_aggregation(AggrCell &aggr_cell, AggrCell &rollup_cell,
                          const ObExpr *diff_expr, const ObAggrInfo &aggr_info,
                          int64_t cur_rollup_group_idx,
@@ -1001,6 +1019,87 @@ private:
     return idx >= 0 && idx < aggr_func_ctxs_.count() ? aggr_func_ctxs_.at(idx) : NULL;
   }
 
+  // Decimal int related agg funcs
+  typedef int (*ObDecIntAggOpFunc)(ObDatum &result, const ObDecimalInt *arg, const int16_t scale);
+  typedef int (*ObDecIntAggOpBatchFunc)(ObDatum &result, ObAggregateProcessor *processor,
+                                        AggrCell &aggr_cell, const ObDatumVector &src,
+                                        const void *selector, const int16_t scale);
+public:
+/*
+ *  DEC_INT_OP_FUNCS: array of decimal_int aggregation operation(add, sub and store) functions.
+ *    1. First dimension: the type of decimal_int argument, type can be int32_t, int64_t, int128_t,
+ *       int256_t or int512_t.
+ *    2. Second dimension: the result type of op functions. The sum aggregation function will
+ *       increase the precision by 22. Based on this rule, we can get the mapping of each input
+ *       to output:
+ *           a. int32_t [0 - 9] => result precision range [22 - 31], which always be int128_t.
+ *           b. int64_t [10 - 18] => result P range [32, 40], which can be int128_t or int256_t.
+ *           c. int128_t [19 - 38] => result P range [41, 60], which always be int256.
+ *           d. int256_t [39 - 76] => result P range [61, 98], which can be int256_t or int512_t.
+ *           e. int512_t [77 - 154] => decimal int result type only can be int512_t.
+ *       So we reserve 3 spaces for each input type, the result type of the first two spaces is
+ *       decimal_int, and the last one is number in oracle mode:
+ *           a. int32_t => [int128_t, null, number]
+ *           b. int64_t => [int128_t, int256_t, number]
+ *           c. int128_t => [int256_t, null, number]
+ *           b. int256_t => [int256_t, int512_t, number]
+ *           b. int512_t => [int512_t, null, number]
+ *    3. Third dimension: operation type(add, sub or store).
+*/
+  static ObDecIntAggOpFunc DEC_INT_OP_FUNCS[DECIMAL_INT_MAX][3][3];
+/*
+ *  DEC_INT_MERGE_FUNCS: array of decimal_int merge functions. The input and result type is same,
+ *  only used in decimal_int op.
+ *    1. First dimension: the type of decimal_int merging.
+ *    2. Second dimension: operation type(add, sub or store).
+*/
+  static ObDecIntAggOpFunc DEC_INT_MERGE_FUNCS[DECIMAL_INT_MAX][3];
+/*
+ *  DEC_INT_ADD_BATCH_FUNCS: array of decimal_int batch add functions.
+ *    1. First dimension: the type of decimal_int argument, same with `DEC_INT_OP_FUNCS`.
+ *    2. Second dimension: the result type of add functions, same with `DEC_INT_OP_FUNCS`.
+ *    3. Third dimension: whether it is necessary to increase one precision type during the
+ *       accumulation agg.
+ *    4. Fourth demension: the selector of batch agg functions, 0 for `ObSelector` and
+ *       1 for `ObBatchRowsSlice`
+*/
+  static ObDecIntAggOpBatchFunc DEC_INT_ADD_BATCH_FUNCS[DECIMAL_INT_MAX][3][2][2];
+/*
+ *  DEC_INT_MERGE_BATCH_FUNCS: array of decimal_int batch merge functions.
+ *    1. First dimension: the type of decimal_int merging., same with `DEC_INT_MERGE_FUNCS`.
+ *    2. Second demension: the selector of batch agg functions, same with `DEC_INT_ADD_BATCH_FUNCS`.
+*/
+  static ObDecIntAggOpBatchFunc DEC_INT_MERGE_BATCH_FUNCS[DECIMAL_INT_MAX][2];
+
+private:
+  struct DecIntAggFuncCtx : public IAggrFuncCtx
+  {
+  public:
+    DecIntAggFuncCtx(): add_func(nullptr), sub_func(nullptr), merge_func(nullptr),
+                        add_batch_func(nullptr) {}
+    int init(const ObAggrInfo &aggr_info, const int64_t batch_size);
+    ObDecIntAggOpFunc add_func; // for sum agg
+    ObDecIntAggOpFunc sub_func; // for removable opt
+    ObDecIntAggOpFunc store_func; // for first value store and fast single row agg
+    ObDecIntAggOpFunc merge_func; // for rollup
+    ObDecIntAggOpBatchFunc *add_batch_func; // for batch sum agg
+  public:
+    // functions that converts int/uint to decimal_int
+    template<typename T>
+    static int int_to_decimalint(const T int_val, const int16_t precision, ObDatum &result);
+    template<typename T>
+    static int add_int(ObDatum &result, const int16_t precison, const T val1, const T val2 = 0);
+    template<typename T>
+    static int sub_int(ObDatum &result, const int16_t precison, const T val1);
+  };
+
+  OB_INLINE DecIntAggFuncCtx *get_decint_aggr_func_ctx(const ObAggrInfo &info) const
+  {
+    return static_cast<DecIntAggFuncCtx*>(get_aggr_func_ctx(info));
+  }
+
+  static void check_mysql_decimal_int_overflow(ObDatum &datum);
+
   // HyperLogLogCount-related data members
   // banliu.zyd: hllc算法中桶数这里取相对合理的值(1<<10)。
   static const int8_t LLC_BUCKET_BITS = 10;
@@ -1066,9 +1165,14 @@ struct ObAggregateCalcFunc
 {
   const static int64_t STORED_ROW_MAGIC_NUM  = 0xaaaabbbbccccdddd;
   static int add_calc(const ObDatum &left_value, const ObDatum &right_value,
-      ObDatum &result_datum, const ObObjTypeClass type, ObIAllocator &allocator);
+      ObDatum &result_datum, const ObObjTypeClass type, const ObPrecision precision,
+      ObIAllocator &allocator);
   static int clone_number_cell(const number::ObNumber &src_cell,
       ObDatum &target_cell, ObIAllocator &allocator);
+  static int add_decimalint_with_same_precision(const ObDatum &left_value,
+                                                const ObDatum &right_value,
+                                                const ObPrecision precision,
+                                                ObDatum &result);
 };
 
 OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType expr_type)

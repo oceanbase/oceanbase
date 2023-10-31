@@ -21,23 +21,43 @@ namespace oceanbase
 namespace compaction
 {
 
-const char *ObServerCompactionEvent::ObCompactionEventStr[] = {
+const static char *ObCompactionEventStr[] = {
     "RECEIVE_BROADCAST_SCN",
     "GET_FREEZE_INFO",
     "WEAK_READ_TS_READY",
     "SCHEDULER_LOOP",
     "TABLET_COMPACTION_FINISHED",
+    "COMPACTION_FINISH_CHECK",
     "COMPACTION_REPORT",
+    "RS_REPAPRE_UNFINISH_TABLE_IDS",
+    "RS_FINISH_CUR_LOOP"
 };
 
 const char *ObServerCompactionEvent::get_comp_event_str(enum ObCompactionEvent event)
 {
-  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(ObCompactionEventStr), "events str len is mismatch");
+  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(ObCompactionEventStr), "compaction event str len is mismatch");
   const char *str = "";
   if (event >= COMPACTION_EVENT_MAX || event < RECEIVE_BROADCAST_SCN) {
     str = "invalid_type";
   } else {
     str = ObCompactionEventStr[event];
+  }
+  return str;
+}
+
+const static char *ObCompactionRoleStr[] = {
+    "TENANT_RS",
+    "STORAGE"
+};
+
+const char *ObServerCompactionEvent::get_comp_role_str(enum ObCompactionRole role)
+{
+  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_ROLE_MAX) == ARRAYSIZEOF(ObCompactionRoleStr), "compaction role str len is mismatch");
+  const char *str = "";
+  if (role >= COMPACTION_ROLE_MAX || role < TENANT_RS) {
+    str = "invalid_role";
+  } else {
+    str = ObCompactionRoleStr[role];
   }
   return str;
 }
@@ -51,32 +71,6 @@ int ObServerCompactionEvent::generate_event_str(char *buf, const int64_t buf_len
     }
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "%s:%s", get_comp_event_str(event_), comment_))) {
     LOG_WARN("failed to generate str", K(ret), KPC(this));
-  }
-  return ret;
-}
-
-int ObServerCompactionEvent::generate_event_str(
-    const ObServerCompactionEvent &last_event, char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!last_event.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("last event is invalid", K(ret), K(last_event));
-  } else {
-    if (last_event.merge_type_ == merge_type_
-        && last_event.compaction_scn_ == compaction_scn_
-        && last_event.event_ != event_) {
-      const int64_t cost_time = timestamp_ - last_event.timestamp_;
-      if (0 == strlen(comment_)) {
-        if (OB_FAIL(databuff_printf(buf, buf_len, "cost_time:%.2fs | %s", (float)cost_time/1_s, get_comp_event_str(event_)))) {
-          LOG_WARN("failed to generate str", K(ret), KPC(this));
-        }
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, "cost_time:%.2fs | %s:%s", (float)cost_time/1_s, get_comp_event_str(event_), comment_))) {
-        LOG_WARN("failed to generate str", K(ret), KPC(this));
-      }
-    } else {
-      ret = generate_event_str(buf, buf_len);
-    }
   }
   return ret;
 }

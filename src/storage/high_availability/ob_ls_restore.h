@@ -19,7 +19,7 @@
 #include "share/ob_srv_rpc_proxy.h" // ObPartitionServiceRpcProxy
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "observer/ob_rpc_processor_simple.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 #include "ob_storage_restore_struct.h"
 #include "ob_physical_copy_task.h"
@@ -99,7 +99,6 @@ public:
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
   virtual int deal_with_cancel() override;
-  bool is_ha_dag_net() const override { return true; }
 
   ObLSRestoreCtx *get_ls_restore_ctx() { return ctx_; }
   common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }

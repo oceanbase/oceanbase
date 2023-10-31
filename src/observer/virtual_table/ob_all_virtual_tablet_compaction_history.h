@@ -54,7 +54,11 @@ public:
     PARALLEL_INFO,
     PARTICIPANT_TABLE_INFO,
     MACRO_ID_LIST,
-    COMMENT
+    COMMENT,
+    START_CG_ID,
+    END_CG_ID,
+    KEPT_SNAPSHOT,
+    MERGE_LEVEL
   };
   ObAllVirtualTabletCompactionHistory();
   virtual ~ObAllVirtualTabletCompactionHistory();
@@ -76,7 +80,9 @@ private:
   char dag_id_buf_[common::OB_TRACE_STAT_BUFFER_SIZE];
   char participant_table_str_[common::OB_PART_TABLE_INFO_LENGTH];
   char macro_id_list_[common::OB_MACRO_ID_INFO_LENGTH];
-  char comment_[common::OB_COMPACTION_EVENT_STR_LENGTH];
+  char other_info_[common::OB_COMPACTION_EVENT_STR_LENGTH];
+  char comment_[common::OB_COMPACTION_COMMENT_STR_LENGTH];
+  char kept_snapshot_info_[common::OB_COMPACTION_INFO_LENGTH];
   ObSSTableMergeInfo merge_info_;
   compaction::ObIDiagnoseInfoMgr::Iterator major_merge_info_iter_;
   compaction::ObIDiagnoseInfoMgr::Iterator minor_merge_info_iter_;

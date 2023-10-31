@@ -1168,6 +1168,36 @@ int ObMySQLUtil::json_cell_str(uint64_t tenant_id, char *buf, const int64_t len,
   return ret;
 }
 
+int ObMySQLUtil::decimalint_cell_str(char *buf, const int64_t len, const ObDecimalInt *decint,
+                                     const int32_t int_bytes, int16_t scale, int64_t &pos,
+                                     bool zerofill, int32_t zflength)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null buffer", K(ret), K(buf));
+  } else {
+    int64_t length = 0;
+    if (OB_UNLIKELY(zerofill && pos + zflength + 1 > len)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("buffer not enough", K(ret), K(zerofill), K(pos), K(zflength), K(len));
+    } else if (OB_FAIL(
+                 wide::to_string(decint, int_bytes, scale, buf + pos + 1, len - pos - 1, length))) {
+      LOG_WARN("to_string failed", K(ret), K(scale), K(pos), K(len));
+    } else {
+      int64_t zero_cnt = 0;
+      if (zerofill && (zero_cnt = zflength - length) > 0) {
+        ObMySQLUtil::prepend_zeros(buf + pos + 1, length, zero_cnt);
+        length = zflength;
+      }
+
+      ret = ObMySQLUtil::store_length(buf, len, length, pos);
+      pos += length;
+    }
+  }
+  return ret;
+}
+
 int ObMySQLUtil::geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos)
 {
   int ret = OB_SUCCESS;

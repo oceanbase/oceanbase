@@ -283,8 +283,7 @@ public:
       common::ObIAllocator &allocator,
       common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
 private:
-  static const int64_t MIN_SPLIT_TASK_SIZE = 16 << 10;
-  static const int64_t MIN_SPLIT_TARGET_SSTABLE_SIZE = MIN_SPLIT_TASK_SIZE * 3;
+  static const int64_t MIN_SPLIT_TARGET_SSTABLE_SIZE = 16 << 10; //16kb
   static const int64_t SPLIT_TASK_SIZE_HIGH_WATER_MARK_FACTOR = 125;
   static const int64_t SPLIT_TASK_SIZE_LOW_WATER_MARK_FACTOR = 75;
   static const int64_t DEFAULT_STORE_RANGE_ARRAY_SIZE = 8;

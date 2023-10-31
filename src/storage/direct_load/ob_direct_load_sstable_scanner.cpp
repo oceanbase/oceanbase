@@ -377,7 +377,7 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
   int ret = OB_SUCCESS;
   int64_t read_size = size;
   if (size <= sstable_data_block_size_) {
-    if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset, io_timeout_ms_))) {
+    if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset))) {
       LOG_WARN("fail to do pread from data file", KR(ret));
     }
   } else {
@@ -389,7 +389,7 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
         LOG_WARN("fail to allocate buffer", KR(ret), K(large_buf_size));
       }
     }
-    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset, io_timeout_ms_))) {
+    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset))) {
       LOG_WARN("fail to do pread from data file", KR(ret));
     }
   }
@@ -405,7 +405,7 @@ int ObDirectLoadSSTableScanner::get_large_buffer(int64_t buf_size)
   } else {
     int64_t read_size = buf_size;
     data_block_reader_.reset();
-    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset_, io_timeout_ms_))) {
+    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset_))) {
       LOG_WARN("fail to do pread from data file", KR(ret));
     } else if (OB_FAIL(data_block_reader_.init(buf_size, large_buf_, column_count_))) {
       LOG_WARN("fail to init data block reader", KR(ret));
@@ -724,7 +724,7 @@ int ObDirectLoadIndexBlockMetaIterator::read_buffer(uint64_t offset, uint64_t si
 {
   int ret = OB_SUCCESS;
   int64_t read_size = size;
-  if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset, io_timeout_ms_))) {
+  if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset))) {
     LOG_WARN("fail to do pread from data file", KR(ret));
   } else {
     buf_pos_ = 0;

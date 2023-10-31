@@ -21,6 +21,9 @@
 #include "common/ob_clock_generator.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "lib/geo/ob_s2adapter.h"
+#define private public
+#include "observer/ob_server.h"
+#undef private
 #include <fstream>
 #undef protected
 #undef private
@@ -1304,7 +1307,7 @@ int main(int argc, char **argv)
   ContextParam param;
   param.set_mem_attr(1001, "QueryRange", ObCtxIds::WORK_AREA)
        .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
-
+  OBSERVER.init_version();
   ::testing::InitGoogleTest(&argc,argv);
   CREATE_WITH_TEMP_CONTEXT(param) {
     ret = RUN_ALL_TESTS();

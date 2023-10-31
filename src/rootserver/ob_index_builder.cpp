@@ -796,6 +796,8 @@ int ObIndexBuilder::generate_schema(
         LOG_WARN("set_index_table_columns failed", K(arg), K(data_schema), K(ret));
       } else if (OB_FAIL(set_index_table_options(arg, data_schema, schema))) {
         LOG_WARN("set_index_table_options failed", K(arg), K(data_schema), K(ret));
+      } else if (OB_FAIL(set_index_table_column_store_if_need(schema))) {
+        LOG_WARN("fail to set index table column store if need", KR(ret));
       } else {
         schema.set_name_generated_type(arg.index_schema_.get_name_generated_type());
         LOG_INFO("finish generate index schema", K(schema));
@@ -967,6 +969,29 @@ bool ObIndexBuilder::is_final_index_status(const ObIndexStatus index_status) con
   return (INDEX_STATUS_AVAILABLE == index_status
           || INDEX_STATUS_UNIQUE_INELIGIBLE == index_status
           || is_error_index_status(index_status));
+}
+
+int ObIndexBuilder::set_index_table_column_store_if_need(
+    share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t table_id = table_schema.get_table_id();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id), K(table_id));
+  } else if (compat_version >= DATA_VERSION_4_2_0_0) {
+    table_schema.set_column_store(true);
+    if (table_schema.get_column_group_count() == 0) {
+      if (OB_FAIL(table_schema.add_default_column_group())) {
+        LOG_WARN("fail to add default column group", KR(ret), K(tenant_id), K(table_id));
+      }
+    }
+  }
+  return ret;
 }
 
 }//end namespace rootserver

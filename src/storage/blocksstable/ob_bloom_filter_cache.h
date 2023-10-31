@@ -19,6 +19,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObRowsInfo;
+}
 namespace blocksstable
 {
 
@@ -114,70 +118,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCacheValue);
 };
 
-struct ObEmptyReadCell
-{
-  enum CellState {
-    IDLE = 0,
-    BUILDING = 1
-  };
-  ObEmptyReadCell(): state_(IDLE), count_(0), hashcode_(0), build_time_(0) {}
-  virtual ~ObEmptyReadCell() {}
-  void reset()
-  {
-    state_ = IDLE;
-    count_ = 0;
-    hashcode_ = 0;
-    build_time_ = 0;
-  }
-  void set(const uint64_t hashcode)
-  {
-    state_ = IDLE;
-    count_ = 1;
-    hashcode_ = hashcode;
-    build_time_ = ObTimeUtility::current_time();
-  }
-  bool is_valid() const
-  {
-    return build_time_ > 0 && count_ > 0;
-  }
-  int inc_and_fetch(const uint64_t hashcode, uint64_t &cur_cnt)
-  {
-    int ret = OB_SUCCESS;
-    if(hashcode_ != hashcode) {
-      if(ObTimeUtility::current_time() - ELIMINATE_TIMEOUT_US >  build_time_){
-        set(hashcode);
-      } else {
-      //bucket is in use recently,ignore in 2min
-      }
-      cur_cnt = 1;
-    } else {
-      cur_cnt = ++count_;
-    }
-    return ret;
-  }
-  bool check_timeout()
-  {
-    bool bool_ret = false;
-    int64_t cur_time = ObTimeUtility::current_time();
-    if (cur_time - build_time_ > ELIMINATE_TIMEOUT_US) {
-      bool_ret = true;
-      count_ /= 2;
-      build_time_ = cur_time;
-    }
-    return bool_ret;
-  }
-  inline bool is_building() const { return BUILDING == state_; }
-  inline void set_building() { state_ = BUILDING; }
-  TO_STRING_KV(K_(state), K_(count), K_(hashcode), K_(build_time));
-  static const int64_t ELIMINATE_TIMEOUT_US = 1000 * 1000 * 120; //2min
-  volatile int32_t state_; //0:init,1:building
-  volatile int32_t count_;
-  volatile uint64_t hashcode_;
-  volatile int64_t build_time_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObEmptyReadCell);
-};
-
 class ObBFCacheKeyHashFunc
 {
 public:
@@ -193,7 +133,7 @@ class ObBloomFilterCache : public common::ObKVCache<ObBloomFilterCacheKey, ObBlo
 public:
   ObBloomFilterCache();
   virtual ~ObBloomFilterCache();
-  int init(const char *cache_name, const int64_t priority, const int64_t size = DEFAULT_BUCKET_SIZE);
+  int init(const char *cache_name, const int64_t priority);
   void destroy();
   /**
    * put bloom filter to cache
@@ -220,6 +160,14 @@ public:
       const ObDatumRowkey &rowkey,
       const ObStorageDatumUtils &datum_utils,
       bool &is_contain);
+  int may_contain(
+      const uint64_t tenant_id,
+      const MacroBlockId &macro_block_id,
+      const storage::ObRowsInfo *rows_info,
+      const int64_t rowkey_begin_idx,
+      const int64_t rowkey_end_idx,
+      const ObStorageDatumUtils &datum_utils,
+      bool &is_contain);
   /**
    * inc empty read count of the macro block, then try build build bloom filter for it if it is
    * necessary
@@ -233,7 +181,8 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id,
       const MacroBlockId &macro_id,
-      const int64_t empty_read_prefix);
+      const int64_t empty_read_prefix,
+      const int64_t empty_read_cnt = 1);
   int get_sstable_bloom_filter(
       const uint64_t tenant_id,
       const MacroBlockId &macro_block_id,
@@ -260,23 +209,13 @@ public:
   }
   int check_need_build(const ObBloomFilterCacheKey &bf_key,
       bool &need_build);
-  OB_INLINE bool is_valid() const { return NULL != buckets_; }
-  TO_STRING_KV(K_(bf_cache_miss_count_threshold), KP_(buckets), K_(bucket_size), K_(bucket_magic));
+  TO_STRING_KV(K_(bf_cache_miss_count_threshold));
 
 private:
-  int get_cell(const uint64_t hashcode, ObEmptyReadCell *&cell);
-  OB_INLINE uint64_t get_bucket_size() const { return bucket_size_; }
-  OB_INLINE uint64_t get_bucket_magic() const { return bucket_magic_; }
   static const int64_t BF_BUILD_SPEED_SHIFT = 4;
   static const int64_t DEFAULT_EMPTY_READ_CNT_THRESHOLD = 100;
   static const int64_t MAX_EMPTY_READ_CNT_THRESHOLD = 1000000;
-  static const int64_t MIN_REBUILD_PERIOD_US = 1000 * 1000 * 120; //2min
-  static constexpr int64_t DEFAULT_BUCKET_SIZE = 1<<20;//1048576
   volatile int64_t bf_cache_miss_count_threshold_;
-  ObArenaAllocator allocator_;
-  ObEmptyReadCell *buckets_;
-  uint64_t bucket_size_;
-  uint64_t bucket_magic_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCache);

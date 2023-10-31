@@ -186,6 +186,7 @@ void AlterColumnSchema::reset()
   next_column_name_.reset();
   prev_column_name_.reset();
   is_first_ = false;
+  column_group_name_.reset();
 }
 
 
@@ -202,7 +203,8 @@ OB_SERIALIZE_MEMBER((AlterColumnSchema, ObColumnSchemaV2),
                     is_no_zero_date_,
                     next_column_name_,
                     prev_column_name_,
-                    is_first_);
+                    is_first_,
+                    column_group_name_);
 
 DEFINE_SERIALIZE(AlterTableSchema)
 {
@@ -346,6 +348,8 @@ AlterColumnSchema &AlterColumnSchema::operator=(const AlterColumnSchema &src_sch
       SHARE_LOG(WARN, "failed to deep copy next_column_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_schema.get_prev_column_name(), prev_column_name_))) {
       SHARE_LOG(WARN, "failed to deep copy prev_column_name", K(ret));
+    } else if (OB_FAIL(deep_copy_str(src_schema.get_column_group_name(), column_group_name_))) {
+      SHARE_LOG(WARN, "failed to deep copy column_group_name", K(ret));
     } else {
       is_first_ = src_schema.is_first_;
     }
@@ -393,6 +397,8 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       index_attributes_set_ = src_schema.index_attributes_set_;
       session_id_ = src_schema.session_id_;
       compressor_type_ = src_schema.compressor_type_;
+      is_column_store_supported_ = src_schema.is_column_store_supported_;
+      max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -513,6 +519,12 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to add column", K(ret));
       } else {
         LOG_DEBUG("add column success", K(column));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(assign_column_group(src_schema))) {
+        LOG_WARN("fail to assign column_group", KR(ret), K(src_schema));
       }
     }
   }

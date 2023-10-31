@@ -51,8 +51,9 @@ public:
   virtual ~ObTableScanIterator();
   int init( ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
   int switch_param( ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
+  int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_row(common::ObNewRow *&row) override;
-  virtual int get_next_row() override { common::ObNewRow *r = NULL; return get_next_row(r); }
+  virtual int get_next_row() override { blocksstable::ObDatumRow *r = nullptr; return get_next_row(r); }
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   int rescan(ObTableScanParam &scan_param);
   void reuse();

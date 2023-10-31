@@ -42,13 +42,13 @@ int ObExprBitNeg::calc_bitneg_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("eval arg failed", K(ret));
   } else if (child_res->is_null()) {
     res_datum.set_null();
-  } else if (OB_FAIL(choose_get_int_func(expr.args_[0]->datum_meta_.type_, get_uint_func))) {
+  } else if (OB_FAIL(choose_get_int_func(expr.args_[0]->datum_meta_, get_uint_func))) {
     LOG_WARN("choose_get_int_func failed", K(ret), K(expr.args_[0]->datum_meta_));
   } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0,
                                     ctx.exec_ctx_.get_my_session(), cast_mode))) {
     LOG_WARN("get_default_cast_mode failed", K(ret));
-  } else if (OB_FAIL((reinterpret_cast<GetUIntFunc>(get_uint_func)(*child_res, true,
-                                                                   uint_val, cast_mode)))) {
+  } else if (OB_FAIL((reinterpret_cast<GetUIntFunc>(get_uint_func)(
+                     expr.args_[0]->datum_meta_, *child_res, true, uint_val, cast_mode)))) {
     LOG_WARN("get uint from datum failed", K(ret), K(*child_res), K(cast_mode));
   } else {
     res_datum.set_uint(~uint_val);

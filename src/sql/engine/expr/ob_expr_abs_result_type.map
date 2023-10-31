@@ -47,9 +47,10 @@ static ObObjType ABS_RESULT_TYPE[ObMaxType] =
     ObMaxType,      /* ObNCharType          */
     ObMaxType,      /* ObURowIDType         */
     ObMaxType,      /* ObLobType     */
-    ObDoubleType,    /* ObJsonType     */
+    ObDoubleType,   /* ObJsonType     */
     ObMaxType,      /* ObGeometryType  */
     ObMaxType,      /* ObUserDefinedSqlType  */
+    ObDecimalIntType,   /* ObDecimalIntType */
 };
 
 static_assert(sizeof(ABS_RESULT_TYPE) / sizeof(ObObjType) == ObMaxType,
@@ -107,6 +108,7 @@ static ObObjType ABS_RESULT_TYPE_ORACLE[ObMaxType] =
     ObDoubleType,    /* ObJsonType     */
     ObMaxType,      /* ObGeometryType  */
     ObMaxType,      /* ObUserDefinedSqlType  */
+    ObNumberType,   /* ObDecimalIntType     */
 };
 
 static_assert(sizeof(ABS_RESULT_TYPE_ORACLE) / sizeof(ObObjType) == ObMaxType,

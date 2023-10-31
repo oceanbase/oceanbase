@@ -74,6 +74,7 @@ ObObjDatumMapType ObDatum::get_obj_datum_map_type(const ObObjType type)
     OBJ_DATUM_STRING,         // ObJsonType
     OBJ_DATUM_STRING,         // ObGeometryType
     OBJ_DATUM_STRING,         // ObUserDefinedSQLType
+    OBJ_DATUM_DECIMALINT,     // ObDecimalIntType
   };
   static_assert(sizeof(maps) / sizeof(maps[0]) == ObMaxType,
       "new added type should extend this map");
@@ -87,7 +88,8 @@ ObObjDatumMapType ObDatum::get_obj_datum_map_type(const ObObjType type)
   return t;
 }
 
-uint32_t ObDatum::get_reserved_size(const ObObjDatumMapType type)
+uint32_t ObDatum::get_reserved_size(const ObObjDatumMapType type,
+                                    const int16_t prec /*PRECISION_UNKNOWN_YET*/)
 {
   static const uint32_t OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP[] =
   {
@@ -100,14 +102,25 @@ uint32_t ObDatum::get_reserved_size(const ObObjDatumMapType type)
     OBJ_DATUM_4BYTE_LEN_DATA_RES_SIZE, // OBJ_DATUM_4BYTE_LEN_DATA
     OBJ_DATUM_2BYTE_LEN_DATA_RES_SIZE, // OBJ_DATUM_2BYTE_LEN_DATA
     OBJ_DATUM_FULL_DATA_RES_SIZE,      // OBJ_DATUM_FULL
+    OBJ_DATUM_DECIMALINT_MAX_RES_SIZE, // OBJ_DATUM_DECIMALINT
   };
   static_assert(sizeof(OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP)
                 / sizeof(OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP[0]) == OBJ_DATUM_MAPPING_MAX,
       "new added ObObjDatumMapType should extend this map");
-
+  static const uint32_t OBOBJ_DECIMAL_INT_TO_RES_SIZE_MAP[] =
+  {
+    sizeof(int32_t),   // DECIMAL_INT_32
+    sizeof(int64_t),   // DECIMAL_INT_64
+    sizeof(int128_t),  // DECIMAL_INT_128
+    sizeof(int256_t),  // DECIMAL_INT_256
+    sizeof(int512_t),  // DECIMAL_INT_512
+  };
   uint32_t res_size = 0;
   if (type >= OBJ_DATUM_MAPPING_MAX) {
     LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid obj type", K(type));
+  } else if (OBJ_DATUM_DECIMALINT == type && prec > 0) {
+    const ObDecimalIntWideType decimalint_type = get_decimalint_type(prec);
+    res_size = OBOBJ_DECIMAL_INT_TO_RES_SIZE_MAP[decimalint_type];
   } else {
     res_size = OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP[type];
   }

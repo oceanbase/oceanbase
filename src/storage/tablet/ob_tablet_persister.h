@@ -25,6 +25,8 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObCOSSTableV2;
+
 class ObTabletTransformArg final
 {
 public:
@@ -47,7 +49,8 @@ public:
                K_(medium_info_list_addr),
                K_(auto_inc_seq_addr),
                K_(tablet_status_cache),
-               K_(aux_tablet_info_cache));
+               K_(aux_tablet_info_cache),
+               K_(is_row_store));
 public:
   const share::ObTabletAutoincSeq *auto_inc_seq_ptr_;
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
@@ -63,6 +66,7 @@ public:
   ObMetaDiskAddr auto_inc_seq_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;
   ObTabletBindingMdsUserData aux_tablet_info_cache_;
+  bool is_row_store_;
   ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;
   // memtable::ObIMemtable **memtables_;
@@ -72,6 +76,23 @@ public:
   // ObTabletPersister::convert_tablet_to_mem_arg
   // ObTabletPersister::convert_tablet_to_disk_arg
 };
+
+
+class ObSSTablePersistWrapper final
+{
+public:
+  explicit ObSSTablePersistWrapper(blocksstable::ObSSTable *sstable) : sstable_(sstable) { }
+  ~ObSSTablePersistWrapper() { reset(); }
+  void reset() { sstable_ = nullptr; }
+  bool is_valid() const;
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t get_serialize_size() const;
+  TO_STRING_KV(KPC_(sstable));
+private:
+  const blocksstable::ObSSTable *sstable_;
+  DISALLOW_COPY_AND_ASSIGN(ObSSTablePersistWrapper);
+};
+
 
 class ObTabletPersister final
 {
@@ -140,6 +161,16 @@ private:
       ObTableStoreIterator &table_iter,
       ObTabletTableStore &new_table_store,
       common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
+  static int fetch_and_persist_co_sstable(
+    common::ObArenaAllocator &allocator,
+    storage::ObCOSSTableV2 *co_sstable,
+    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+    common::ObIArray<ObMetaDiskAddr> &cg_addrs);
+  static int batch_write_sstable_info(
+    common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
+    common::ObIArray<ObSharedBlocksWriteCtx> &write_ctxs,
+    common::ObIArray<ObMetaDiskAddr> &addrs,
+    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
   static int load_auto_inc_seq_and_write_info(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
@@ -191,6 +222,9 @@ private:
       const ObTablet &tablet,
       const ObMetaDiskAddr &addr,
       ObTabletTableStore *&table_store);
+
+public:
+  static const int64_t SSTABLE_MAX_SERIALIZE_SIZE = 1966080L;  // 1.875MB
 };
 
 template <typename T>
@@ -200,12 +234,16 @@ int ObTabletPersister::fill_write_info(
     common::ObIArray<ObSharedBlockWriteInfo> &write_infos)
 {
   int ret = common::OB_SUCCESS;
+  int64_t size = 0;
 
   if (OB_ISNULL(t)) {
-    ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), KP(t));
+    ret = common::OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected error, tablet member is nullptr", K(ret), KP(t));
+  } else if (FALSE_IT(size = t->get_serialize_size())) {
+  } else if (OB_UNLIKELY(size <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "failed to get serialize size", K(ret), KPC(t));
   } else {
-    const int64_t size = t->get_serialize_size();
     char *buf = static_cast<char *>(allocator.alloc(size));
     int64_t pos = 0;
     if (OB_ISNULL(buf)) {

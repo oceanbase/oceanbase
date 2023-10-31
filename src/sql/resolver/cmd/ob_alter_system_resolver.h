@@ -230,7 +230,7 @@ public:
   virtual ~ObFreezeResolver() {}
   virtual int resolve(const ParseNode &parse_tree);
 private:
-  int resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2);
+  int resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_or_tablet_id, const ParseNode *opt_rebuild_column_group);
   int resolve_minor_freeze_(ObFreezeStmt *freeze_stmt,
                             ParseNode *opt_tenant_list_or_ls_or_tablet_id,
                             ParseNode *opt_server_list,

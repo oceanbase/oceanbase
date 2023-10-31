@@ -13695,6 +13695,328 @@ OB_SERIALIZE_MEMBER(ObRlsContextSchema,
                     context_name_,
                     attribute_);
 
+// ObColumnGroupSchema
+OB_DEF_SERIALIZE(ObColumnGroupSchema)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              column_group_id_,
+              column_group_name_,
+              column_group_type_,
+              schema_version_,
+              block_size_,
+              compressor_type_,
+              row_store_type_);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, column_id_cnt_))) {
+      LOG_WARN("fail to encode column_id_cnt", KR(ret), K_(column_id_cnt));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && (i < column_id_cnt_); ++i) {
+      if (OB_FAIL(serialization::encode(buf, buf_len, pos, column_id_arr_[i]))) {
+        LOG_WARN("fail to encode column_id", KR(ret), K(column_id_arr_[i]), K(i), K_(column_id_cnt));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObColumnGroupSchema)
+{
+  int ret = OB_SUCCESS;
+  ObString column_group_name;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              column_group_id_,
+              column_group_name,
+              column_group_type_,
+              schema_version_,
+              block_size_,
+              compressor_type_,
+              row_store_type_);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(deep_copy_str(column_group_name, column_group_name_))) {
+    LOG_WARN("fail to deep copy column_group_name", KR(ret), K(column_group_name));
+  } else {
+    int64_t column_id_count = 0;
+    OB_UNIS_DECODE(column_id_count);
+    if (OB_SUCC(ret) && column_id_count > 0) {
+      const int64_t arr_size = sizeof(uint64_t) * column_id_count;
+      column_id_arr_ = static_cast<uint64_t*>(alloc(arr_size));
+      if (OB_ISNULL(column_id_arr_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to allocate memory for column_id_array", KR(ret), K(column_id_count), K(arr_size));
+      } else {
+        MEMSET(column_id_arr_, 0, sizeof(uint64_t) * column_id_count);
+        column_id_arr_capacity_ = column_id_count;
+
+        uint64_t column_id = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && (i < column_id_count); ++i) {
+          column_id = 0;
+          if (OB_FAIL(serialization::decode(buf, data_len, pos, column_id))) {
+            LOG_WARN("fail to deserialize column_id", KR(ret), K(i));
+          } else if (OB_FAIL(add_column_id(column_id))) {
+            LOG_WARN("fail to add column_id", KR(ret), K(i), K(column_id), K(column_id_count),
+              K_(column_id_cnt), K_(column_id_arr_capacity));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObColumnGroupSchema)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              column_group_id_,
+              column_group_name_,
+              column_group_type_,
+              schema_version_,
+              block_size_,
+              compressor_type_,
+              row_store_type_);
+
+  len += serialization::encoded_length_vi64(column_id_cnt_);
+  for (int64_t i = 0; i < column_id_cnt_; ++i) {
+    len += serialization::encoded_length_vi64(column_id_arr_[i]);
+  }
+  return len;
+}
+
+ObColumnGroupSchema::ObColumnGroupSchema()
+  : ObSchema()
+{
+  reset();
+}
+
+ObColumnGroupSchema::ObColumnGroupSchema(ObIAllocator *allocator)
+  : ObSchema(allocator)
+{
+  reset();
+}
+
+ObColumnGroupSchema::ObColumnGroupSchema(const ObColumnGroupSchema &src_schema)
+  : ObSchema()
+{
+  reset();
+  *this = src_schema;
+}
+
+ObColumnGroupSchema::~ObColumnGroupSchema()
+{
+}
+
+ObColumnGroupSchema& ObColumnGroupSchema::operator =(const ObColumnGroupSchema &src_schema)
+{
+  if (this != &src_schema) {
+    reset();
+    int ret = OB_SUCCESS;
+    error_ret_ = src_schema.error_ret_;
+    set_column_group_id(src_schema.column_group_id_);
+    set_column_group_type(src_schema.column_group_type_);
+    set_schema_version(src_schema.schema_version_);
+    set_block_size(src_schema.block_size_);
+    set_compressor_type(src_schema.compressor_type_);
+    set_row_store_type(src_schema.row_store_type_);
+    if (OB_FAIL(set_column_group_name(src_schema.column_group_name_))) {
+      LOG_WARN("fail to set column group name", KR(ret), K(src_schema));
+    } else {
+      // column_id_cnt_ will increase when add_column_id()
+      const int64_t column_id_cnt = src_schema.get_column_id_count();
+      if (OB_SUCCESS == ret && column_id_cnt > 0) {
+        const int64_t arr_size = sizeof(uint64_t) * column_id_cnt;
+        column_id_arr_ = static_cast<uint64_t*>(alloc(arr_size));
+        if (OB_ISNULL(column_id_arr_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("fail to allocate memory for column_id_array", KR(ret), K(column_id_cnt), K(arr_size));
+        } else {
+          MEMSET(column_id_arr_, 0, sizeof(uint64_t) * column_id_cnt);
+          column_id_arr_capacity_ = column_id_cnt;
+        }
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && (i < column_id_cnt); ++i) {
+        uint64_t tmp_column_id = 0;
+        if (OB_FAIL(src_schema.get_column_id(i, tmp_column_id))) {
+          LOG_WARN("fail to get column_id from src_schema", KR(ret), K(i), K(src_schema));
+        } else if (OB_FAIL(add_column_id(tmp_column_id))) {
+          LOG_WARN("fail to add column_id", KR(ret), K(i), K(tmp_column_id), K(column_id_cnt));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      error_ret_ = ret;
+    }
+  }
+  return *this;
+}
+
+int ObColumnGroupSchema::assign(const ObColumnGroupSchema &src_schema)
+{
+  int ret = OB_SUCCESS;
+  *this = src_schema;
+  ret = get_err_ret();
+  return ret;
+}
+
+void ObColumnGroupSchema::reset()
+{
+  error_ret_ = OB_SUCCESS;
+  column_group_id_ = OB_INVALID_ID;
+  column_group_type_ = ObColumnGroupType::MAX_COLUMN_GROUP;
+  schema_version_ = OB_INVALID_VERSION;
+  block_size_ = 0;
+  compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
+  row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
+  column_id_cnt_ = 0;
+  column_id_arr_capacity_ = 0;
+  column_id_arr_ = NULL;
+  reset_string(column_group_name_);
+  ObSchema::reset();
+}
+
+bool ObColumnGroupSchema::is_valid() const
+{
+  return !((column_group_id_ == OB_INVALID_ID)
+         || (column_group_type_ == ObColumnGroupType::MAX_COLUMN_GROUP)
+         || (column_group_name_.empty()));
+}
+
+int64_t ObColumnGroupSchema::get_convert_size() const
+{
+  int64_t convert_size = 0;
+  convert_size += sizeof(ObColumnGroupSchema);
+  convert_size += column_id_cnt_ * sizeof(uint64_t);
+  convert_size += column_group_name_.length() + 1;
+  return convert_size;
+}
+
+int ObColumnGroupSchema::add_column_id(const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  if (0 == column_id_arr_capacity_) {
+    const int64_t arr_size = sizeof(uint64_t) * DEFAULT_COLUMN_ID_ARRAY_CAPACITY;
+    if (OB_ISNULL(column_id_arr_ = static_cast<uint64_t*>(alloc(arr_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("fail to allocate memory for column_id_arr", KR(ret), K(arr_size));
+    } else {
+      column_id_arr_capacity_ = DEFAULT_COLUMN_ID_ARRAY_CAPACITY;
+      MEMSET(column_id_arr_, 0, arr_size);
+    }
+  } else if (column_id_cnt_ >= column_id_arr_capacity_) {
+    int64_t tmp_capacity = 2 * column_id_arr_capacity_;
+    uint64_t *tmp_arr = NULL;
+    if (OB_ISNULL(tmp_arr = static_cast<uint64_t*>(
+        alloc(sizeof(uint64_t) * tmp_capacity)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("fail to allocate memory for column_id_arr", KR(ret), K(tmp_capacity));
+    } else {
+      MEMCPY(tmp_arr, column_id_arr_, sizeof(uint64_t) * column_id_arr_capacity_);
+      // free old column_id_arr_
+      free(column_id_arr_);
+      column_id_arr_ = tmp_arr;
+      column_id_arr_capacity_ = tmp_capacity;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // check column_id exist or not
+    bool exist = false;
+    for (int64_t i = 0; (i < column_id_cnt_) && (!exist); ++i) {
+      if (column_id == column_id_arr_[i]) {
+        exist = true;
+      }
+    }
+    if (exist) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("column_id should be unique", KR(ret), K(column_id));
+    } else {
+      column_id_arr_[column_id_cnt_++] = column_id;
+    }
+  }
+
+  return ret;
+}
+
+int ObColumnGroupSchema::get_column_id(const int64_t idx, uint64_t &column_id) const
+{
+  int ret = OB_SUCCESS;
+  column_id = 0;
+  if (idx >= column_id_cnt_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(idx), K_(column_id_cnt));
+  } else {
+    column_id = column_id_arr_[idx];
+  }
+  return ret;
+}
+
+int ObColumnGroupSchema::remove_column_id(const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; i < column_id_cnt_; ++i) {
+    if (column_id == column_id_arr_[i]) {
+      idx = i;
+      break;
+    }
+  }
+
+  if (OB_INVALID_INDEX == idx) {
+    ret = OB_ENTRY_NOT_EXIST;
+  } else {
+    for (int64_t i = idx; i < column_id_cnt_ - 1; ++i) {
+      column_id_arr_[i] = column_id_arr_[i + 1];
+    }
+    --column_id_cnt_;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObSkipIndexColumnAttr)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, pack_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObSkipIndexColumnAttr)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, pack_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSkipIndexColumnAttr)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, pack_);
+  return len;
+}
+
+OB_DEF_SERIALIZE(ObSkipIndexAttrWithId)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, col_idx_, skip_idx_attr_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObSkipIndexAttrWithId)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, col_idx_, skip_idx_attr_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSkipIndexAttrWithId)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, col_idx_, skip_idx_attr_);
+  return len;
+}
+
 ObTableLatestSchemaVersion::ObTableLatestSchemaVersion()
     : table_id_(OB_INVALID_ID),
       schema_version_(OB_INVALID_VERSION),

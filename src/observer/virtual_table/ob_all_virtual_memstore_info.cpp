@@ -122,7 +122,7 @@ int ObAllVirtualMemstoreInfo::get_next_tablet(ObTabletHandle &tablet_handle)
         if (OB_ITER_END != ret) {
           SERVER_LOG(WARN, "fail to get next ls", K(ret));
         }
-      } else if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(ls_tablet_iter_))) {
+      } else if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(ls_tablet_iter_, true /* except_ls_inner_tablet */))) {
         SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
       }
     } else {

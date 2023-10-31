@@ -349,7 +349,7 @@ int ObRawExpr::get_type_and_length(char *buf, const int64_t buf_len, int64_t &po
 {
   int ret = OB_SUCCESS;
   if (EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type) {
-    const char* type_str = common::ob_obj_type_str(get_data_type());
+    const char* type_str = common::inner_obj_type_str(get_data_type());
     if (nullptr == type_str || strlen(type_str) > INT32_MAX) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("some error happend");
@@ -3715,7 +3715,8 @@ bool ObSysFunRawExpr::inner_same_as(
               || T_FUN_SYS_UTC_TIME == get_expr_type())) {
         bool_ret = result_type_.get_scale() == s_expr->get_result_type().get_scale();
       }
-      if ((T_FUN_SYS == get_expr_type() ||
+      if ((T_FUN_SYS_CAST == get_expr_type() ||
+           T_FUN_SYS == get_expr_type() ||
            T_FUN_SYS_CALC_TABLET_ID == get_expr_type() ||
            T_FUN_SYS_CALC_PARTITION_ID == get_expr_type() ||
            T_FUN_SYS_CALC_PARTITION_TABLET_ID == get_expr_type()) &&
@@ -3983,7 +3984,7 @@ int ObSysFunRawExpr::get_cast_type_name(char *buf, int64_t buf_len, int64_t &pos
       int32_t length = 0;
       int16_t precision = 0;
       int16_t scale = 0;
-      const char *type_str = ob_obj_type_str(dest_type);
+      const char *type_str = inner_obj_type_str(dest_type);
       if (ob_is_string_tc(dest_type)) {
         length = node.int32_values_[1] < 0 ?
             static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH) : node.int32_values_[1];
@@ -4046,7 +4047,7 @@ int ObSysFunRawExpr::get_column_conv_name(char *buf, int64_t buf_len, int64_t &p
     accuracy.set_accuracy(accuray_value);
     const ObConstRawExpr *bool_expr = static_cast<const ObConstRawExpr*>(get_param_expr(3));
     bool is_nullable = bool_expr->get_value().get_bool();
-    const char *type_str = ob_obj_type_str(type);
+    const char *type_str = inner_obj_type_str(type);
     if (ob_is_string_type(type)) {
       if (OB_FAIL(BUF_PRINTF("%s,%s,length:%d,%s,", type_str, ObCharset::collation_name(cs_type),
                              accuracy.get_length(), is_nullable ? "NULL" : "NOT NULL"))) {

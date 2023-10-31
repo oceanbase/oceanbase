@@ -440,6 +440,17 @@ int ObExprAlignDate4Cmp::datum_to_ob_time(const ObExpr &expr,
         }
         break;
       }
+      case ObDecimalIntType: {
+        ObNumStackOnceAlloc tmp_alloc;
+        number::ObNumber nmb;
+        if (OB_FAIL(wide::to_number(date_datum->get_decimal_int(), date_datum->get_int_bytes(),
+                                    expr.args_[0]->datum_meta_.scale_, tmp_alloc, nmb))) {
+          LOG_WARN("to_number failed", K(ret), K(date_datum));
+        } else if (OB_FAIL(number_to_ob_time(nmb, date_arg_type, ob_time))) {
+          LOG_WARN("number_to_ob_time fail.", K(ret), K(nmb));
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("date_arg_obj_type error: ", K(ret), K(date_arg_obj_type));
@@ -548,6 +559,8 @@ bool ObExprAlignDate4Cmp::is_align_date4cmp_support_obj_type(const ObObjType &ob
   if (ObNullType <= obj_type && obj_type <= ObUNumberType) {
     res = true;
   } else if (ob_is_string_type(obj_type)) {
+    res = true;
+  } else if (ob_is_decimal_int_tc(obj_type)) {
     res = true;
   }
   return res;

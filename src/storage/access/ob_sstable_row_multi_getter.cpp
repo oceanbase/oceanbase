@@ -64,7 +64,7 @@ int ObSSTableRowMultiGetter::inner_open(
         LOG_WARN("fail to init prefetcher, ", K(ret));
       }
     } else if (OB_FAIL(prefetcher_.switch_context(
-        type_, *sstable_, iter_param.get_read_info()->get_datum_utils(), access_ctx, query_range))) {
+        type_, *sstable_, iter_param, access_ctx, query_range))) {
       LOG_WARN("fail to switch context for prefetcher, ", K(ret));
     }
     if (OB_SUCC(ret)) {
@@ -118,7 +118,7 @@ int ObSSTableRowMultiGetter::inner_get_next_row(const blocksstable::ObDatumRow *
       ObDatumRow &datum_row = *const_cast<ObDatumRow *>(store_row);
       if (!store_row->row_flag_.is_not_exist() &&
           iter_param_->need_scn_ &&
-          OB_FAIL(set_row_scn(*iter_param_, *sstable_, store_row))) {
+          OB_FAIL(set_row_scn(*iter_param_, store_row))) {
         LOG_WARN("failed to set row scn", K(ret));
       }
       EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);

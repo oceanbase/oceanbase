@@ -291,6 +291,11 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
                                type_ctx.get_raw_expr()->get_extra() |
                                CM_COLUMN_CONVERT);
         types[4].set_calc_meta(type);
+        if (ob_is_decimal_int_tc(type.get_type())) {
+          // decimal int need to setup calc accuracy
+          types[4].set_calc_accuracy(type.get_accuracy());
+          type.set_collation_level(common::CS_LEVEL_NUMERIC);
+        }
       }
     }
     LOG_DEBUG("finish calc_result_typeN", K(type), K(types[4]), K(types[0]), K(enumset_to_varchar));

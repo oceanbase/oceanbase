@@ -32,6 +32,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/compaction/ob_partition_merge_iter.h"
+#include "storage/compaction/ob_partition_merger.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
 
@@ -45,6 +46,8 @@
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
 #include "storage/tx/ob_tx_data_define.h"
 #include "share/scn.h"
+#include "src/storage/column_store/ob_column_oriented_sstable.h"
+#include "mtlenv/storage/test_merge_basic.h"
 
 namespace oceanbase
 {
@@ -94,7 +97,7 @@ int clear_tx_data()
 };
 
 
-class TestMultiVersionMerge : public ObMultiVersionSSTableTest
+class TestMultiVersionMerge : public TestMergeBasic
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -117,8 +120,8 @@ public:
   void fake_freeze_info();
 
 public:
-  ObStorageSchema table_merge_schema_;
   ObStoreCtx store_ctx_;
+  ObTabletMergeExecuteDag merge_dag_;
 };
 
 void TestMultiVersionMerge::SetUpTestCase()
@@ -149,7 +152,7 @@ void TestMultiVersionMerge::TearDownTestCase()
 }
 
 TestMultiVersionMerge::TestMultiVersionMerge()
-  : ObMultiVersionSSTableTest("test_multi_version_merge")
+  : TestMergeBasic("test_multi_version_merge")
 {}
 
 void TestMultiVersionMerge::SetUp()
@@ -159,24 +162,20 @@ void TestMultiVersionMerge::SetUp()
 
 void TestMultiVersionMerge::fake_freeze_info()
 {
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
+  share::ObFreezeInfoList &info_list = MTL(ObTenantFreezeInfoMgr *)->freeze_info_mgr_.freeze_info_;
+  info_list.reset();
 
-  const int64_t snapshot_gc_ts = 500;
-  bool changed = false;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 100;
+  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 200;
+  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 400;
+  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
 
-  share::SCN scn;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(100, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(200, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(400, 1, 0)));
-
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantFreezeInfoMgr *)->update_info(
-        snapshot_gc_ts,
-        freeze_info,
-        snapshots,
-        INT64_MAX,
-        changed));
+  info_list.latest_snapshot_gc_scn_.val_ = 500;
 }
 
 void TestMultiVersionMerge::TearDown()
@@ -226,56 +225,33 @@ void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
                                                   const ObVersionRange &trans_version_range,
                                                   ObTabletMergeCtx &merge_context)
 {
-  bool has_lob = false;
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  merge_context.ls_handle_ = ls_handle;
-
-  ObTabletHandle tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
-  merge_context.tablet_handle_ = tablet_handle;
-
-  table_merge_schema_.reset();
-  OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  merge_context.schema_ctx_.base_schema_version_ = table_schema_.get_schema_version();
-  merge_context.schema_ctx_.schema_version_ = table_schema_.get_schema_version();
-  merge_context.schema_ctx_.storage_schema_ = &table_merge_schema_;
-
-  merge_context.is_full_merge_ = is_full_merge;
-  merge_context.merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-  merge_context.param_.merge_type_ = merge_type;
-  merge_context.param_.merge_version_ = 0;
-  merge_context.param_.ls_id_ = ls_id_;
-  merge_context.param_.tablet_id_ = tablet_id_;
-  merge_context.sstable_version_range_ = trans_version_range;
-  merge_context.param_.report_ = &rs_reporter_;
-  merge_context.progressive_merge_num_ = 0;
-  const int64_t tables_count = merge_context.tables_handle_.get_count();
-  merge_context.scn_range_.start_scn_ = merge_context.tables_handle_.get_table(0)->get_start_scn();
-  merge_context.scn_range_.end_scn_ = merge_context.tables_handle_.get_table(tables_count - 1)->get_end_scn();
-  merge_context.merge_scn_ = merge_context.scn_range_.end_scn_;
-
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_merge_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder(index_desc_));
+  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  merge_context.static_param_.data_version_ = DATA_VERSION_4_2_0_0;
+  ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_param_and_desc());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.init(merge_context.static_desc_, table_merge_schema_));
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
+  merge_context.merge_dag_ = &merge_dag_;
 }
 
 void TestMultiVersionMerge::build_sstable(
     ObTabletMergeCtx &ctx,
     ObSSTable *&merged_sstable)
 {
-  ASSERT_EQ(OB_SUCCESS, ctx.merge_info_.create_sstable(ctx));
-  merged_sstable = &ctx.merged_sstable_;
+  bool tmp_bool = false; // placeholder
+  ASSERT_EQ(OB_SUCCESS, ctx.merge_info_.create_sstable(ctx, ctx.merged_table_handle_, tmp_bool));
+  ASSERT_EQ(OB_SUCCESS, ctx.merged_table_handle_.get_sstable(merged_sstable));
 }
 
 TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -304,7 +280,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtere
   prepare_one_macro(micro_data, 2);
   prepare_one_macro(&micro_data[2], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -322,7 +298,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtere
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -371,9 +347,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtere
 TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[4];
@@ -409,7 +385,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
   prepare_one_macro(&micro_data[2], 1);
   prepare_one_macro(&micro_data[3], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -426,7 +402,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -478,9 +454,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
 TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -507,7 +483,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -524,7 +500,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -575,9 +551,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
 TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -601,7 +577,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -618,7 +594,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -666,9 +642,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
 TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_last)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -693,7 +669,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -710,7 +686,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -760,9 +736,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
 TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_shadow)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -789,7 +765,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -806,7 +782,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -857,9 +833,9 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
 TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[4];
@@ -895,7 +871,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
   prepare_one_macro(&micro_data[2], 1);
   prepare_one_macro(&micro_data[3], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -912,7 +888,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -964,9 +940,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
 TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -995,7 +971,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
   prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1014,7 +990,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1, INT64_MAX, true);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObTableHandleV2 handle3;
@@ -1030,7 +1006,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data3, 1);
   prepare_data_end(handle3);
-  merge_context.tables_handle_.add_table(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
   ObLSID ls_id(ls_id_);
@@ -1119,9 +1095,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
 TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[4];
@@ -1155,7 +1131,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
   prepare_one_macro(&micro_data[3], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1193,7 +1169,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   prepare_one_macro(&micro_data2[3], 1, INT64_MAX, true);
   prepare_one_macro(&micro_data2[4], 1, INT64_MAX, true);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObLSID ls_id(ls_id_);
@@ -1279,9 +1255,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
 TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[5];
@@ -1320,7 +1296,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
   prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1340,7 +1316,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1, INT64_MAX, true);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObTableHandleV2 handle3;
@@ -1356,7 +1332,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data3, 1);
   prepare_data_end(handle3);
-  merge_context.tables_handle_.add_table(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
   ObLSID ls_id(ls_id_);
@@ -1447,9 +1423,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
 TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -1476,7 +1452,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1494,7 +1470,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObLSID ls_id(ls_id_);
@@ -1552,9 +1528,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
 TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -1583,7 +1559,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1599,7 +1575,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObLSID ls_id(ls_id_);
@@ -1678,9 +1654,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
 TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -1699,7 +1675,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1717,7 +1693,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -1761,9 +1737,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version)
 TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -1783,7 +1759,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1, INT64_MAX, true);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1802,7 +1778,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -1873,9 +1849,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
 TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
@@ -1895,7 +1871,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1, INT64_MAX, true);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -1912,7 +1888,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1, INT64_MAX, true);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObTableHandleV2 handle3;
@@ -1930,7 +1906,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data3, 1, INT64_MAX, true);
   prepare_data_end(handle3);
-  merge_context.tables_handle_.add_table(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
   ObLSID ls_id(ls_id_);
@@ -2008,9 +1984,9 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
 TEST_F(TestMultiVersionMerge, compare_dml_flag)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
@@ -2029,7 +2005,7 @@ TEST_F(TestMultiVersionMerge, compare_dml_flag)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2046,7 +2022,7 @@ TEST_F(TestMultiVersionMerge, compare_dml_flag)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -2092,9 +2068,9 @@ TEST_F(TestMultiVersionMerge, compare_dml_flag)
 TEST_F(TestMultiVersionMerge, get_last_after_reuse)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -2124,7 +2100,7 @@ TEST_F(TestMultiVersionMerge, get_last_after_reuse)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2140,7 +2116,7 @@ TEST_F(TestMultiVersionMerge, get_last_after_reuse)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -2190,9 +2166,9 @@ TEST_F(TestMultiVersionMerge, get_last_after_reuse)
 TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_version_start)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -2220,7 +2196,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_
   prepare_one_macro(micro_data, 2);
   prepare_one_macro(&micro_data[2], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2237,7 +2213,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -2283,9 +2259,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_
 TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_than_multi_version)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -2314,7 +2290,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   prepare_one_macro(micro_data, 2);
   prepare_one_macro(&micro_data[2], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2331,7 +2307,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObLSID ls_id(ls_id_);
@@ -2405,9 +2381,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
 TEST_F(TestMultiVersionMerge, shadow_row_is_last_in_macro)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -2436,7 +2412,7 @@ TEST_F(TestMultiVersionMerge, shadow_row_is_last_in_macro)
   prepare_one_macro(micro_data, 2);
   prepare_one_macro(&micro_data[2], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2457,7 +2433,7 @@ TEST_F(TestMultiVersionMerge, shadow_row_is_last_in_macro)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -2505,9 +2481,9 @@ TEST_F(TestMultiVersionMerge, shadow_row_is_last_in_macro)
 TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -2538,7 +2514,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   prepare_one_macro(&micro_data[1], 1);
   prepare_one_macro(&micro_data[2], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2555,7 +2531,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObLSID ls_id(ls_id_);
@@ -2628,9 +2604,9 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
 TEST_F(TestMultiVersionMerge, range_cross_macro)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -2664,7 +2640,7 @@ TEST_F(TestMultiVersionMerge, range_cross_macro)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 2);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2681,7 +2657,7 @@ TEST_F(TestMultiVersionMerge, range_cross_macro)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -2735,9 +2711,9 @@ TEST_F(TestMultiVersionMerge, range_cross_macro)
 TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -2761,7 +2737,7 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   prepare_one_macro(micro_data, 1, INT64_MAX, true);
   prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2779,7 +2755,7 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1, INT64_MAX, true);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObTableHandleV2 handle3;
@@ -2797,7 +2773,7 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data3, 1, INT64_MAX, true);
   prepare_data_end(handle3);
-  merge_context.tables_handle_.add_table(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
   ObLSID ls_id(ls_id_);
@@ -2879,26 +2855,26 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
 {
   int ret = OB_SUCCESS;
   fake_freeze_info();
-  ObPartitionMajorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag \n"
-      "0        var0  -10       0        2       2     EXIST   CLF    \n"
-      "1        var1  -30     -11      1       15    EXIST   CLF    \n"
-      "2        var2  -20     -11      2       15    EXIST   CLF    \n";
+      "0        var0  -10       0        2       2     EXIST   N    \n"
+      "1        var1  -30     -11      1       15    EXIST   N    \n"
+      "2        var2  -20     -11      2       15    EXIST   N    \n";
 
   micro_data[1] =
       "bigint   var   bigint   bigint   bigint  bigint flag    multi_version_row_flag \n"
-      "3        var3  -20     0        25       25      EXIST  CLF \n"
-      "4        var4  -20     0         25       8      EXIST  CLF  \n";
+      "3        var3  -20     0        25       25      EXIST  N \n"
+      "4        var4  -20     0         25       8      EXIST  N  \n";
 
   micro_data[2] =
       "bigint   var   bigint   bigint   bigint  bigint flag    multi_version_row_flag \n"
-      "5        var5  -5        0        7        7      EXIST   CLF \n";
+      "5        var5  -5        0        7        7      EXIST   N \n";
 
   int schema_rowkey_cnt = 2;
 
@@ -2911,7 +2887,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 2);
   prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -2927,7 +2903,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data2, 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;

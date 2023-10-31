@@ -24,6 +24,7 @@
 #include "sql/engine/expr/ob_expr_minus.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_truncate.h"
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
@@ -454,9 +455,6 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
   value = 0;
   if (OB_FAIL(expr.eval(eval_ctx, result))) {
     LOG_WARN("eval failed", K(ret));
-  } else if (need_number && !expr.obj_meta_.is_number()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params is not number type", K(expr), K(ret));
   } else if (result->is_null()) {
     is_null = true;
     is_valid_param = !need_check_valid;
@@ -469,6 +467,28 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
     is_valid_param = !need_check_valid || !result_nmb.is_negative();
     if (OB_FAIL(result_nmb.extract_valid_int64_with_trunc(value))) {
       LOG_WARN("extract_valid_int64_with_trunc failed", K(ret));
+    }
+  } else if (expr.obj_meta_.is_decimal_int()) {
+    ObDecimalIntBuilder trunc_res_val;
+    const int16_t in_prec = expr.datum_meta_.precision_;
+    const int16_t in_scale = expr.datum_meta_.scale_;
+    const int16_t out_scale = 0;
+    if (in_scale == out_scale) {
+      trunc_res_val.from(result->get_decimal_int(), result->get_int_bytes());
+    } else if (OB_FAIL(ObExprTruncate::do_trunc_decimalint(in_prec, in_scale,
+        in_prec, out_scale, out_scale, *result, trunc_res_val))) {
+      LOG_WARN("calc_trunc_decimalint failed", K(ret), K(in_prec), K(in_scale),
+             K(in_prec), K(out_scale), K(result->get_int_bytes()));
+    }
+    if (OB_SUCC(ret)) {
+      bool is_in_val_valid = false;
+      if (OB_FAIL(wide::check_range_valid_int64(trunc_res_val.get_decimal_int(),
+                  trunc_res_val.get_int_bytes(), is_in_val_valid, value))) {
+        LOG_WARN("check_range_valid_int64 failed", K(ret), K(trunc_res_val.get_int_bytes()));
+      } else if (!is_in_val_valid) {
+        ret = OB_DATA_OUT_OF_RANGE;
+        LOG_WARN("res_val is not a valid int64", K(ret), K(result->get_int_bytes()), K(in_scale));
+      }
     }
   } else {
     switch (expr.obj_meta_.get_type_class()) {
@@ -1167,6 +1187,11 @@ int ObWindowFunctionOp::init()
     rescan_alloc_.set_label("WfRescanAlloc");
     patch_alloc_.set_tenant_id(tenant_id);
     patch_alloc_.set_label("WfPatchAlloc");
+    ObMemAttr attr(tenant_id, "WfArray");
+    participator_whole_msg_array_.set_attr(attr);
+    pby_hash_values_.set_attr(attr);
+    pby_hash_values_sets_.set_attr(attr);
+    pby_expr_cnt_idx_array_.set_attr(attr);
     FuncAllocer func_alloc;
     func_alloc.local_allocator_ = &local_allocator_;
     int64_t prev_pushdown_pby_col_count = -1;
@@ -2689,7 +2714,7 @@ int ObWindowFunctionOp::merge_aggregated_result(ObDatum &res,
       if (src0.is_null() && !src1.is_null()) {
         res = src1;
       } else if (OB_FAIL(ObAggregateCalcFunc::add_calc(
-            src0, src1, res, tc, alloc))) {
+            src0, src1, res, tc, wf_info.expr_->datum_meta_.precision_, alloc))) {
         LOG_WARN("fail to add calc", K(ret));
       }
       break;

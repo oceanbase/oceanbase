@@ -13,9 +13,11 @@
 #define USING_LOG_PREFIX STORAGE
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
+#include "storage/blocksstable/cs_encoding/ob_cs_micro_block_transformer.h"
 #include "lib/compress/ob_compressor_pool.h"
 #include "share/ob_encryption_util.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "ob_macro_block.h"
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_macro_block_reader.h"
@@ -38,10 +40,12 @@ ObMacroBlockReader::ObMacroBlockReader()
      uncomp_buf_size_(0),
      decrypt_buf_(NULL),
      decrypt_buf_size_(0),
-     allocator_(ObModIds::OB_CS_SSTABLE_READER),
+     allocator_(ObModIds::OB_CS_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      encryption_(nullptr)
 {
-  allocator_.set_tenant_id(MTL_ID());
+  if (share::is_reserve_mode()) {
+    allocator_.set_ctx_id(ObCtxIds::MERGE_RESERVE_CTX_ID);
+  }
 }
 
 ObMacroBlockReader::~ObMacroBlockReader()
@@ -123,6 +127,7 @@ int ObMacroBlockReader::decompress_data_buf(
   // uncomp_buf: header + uncomp_data
   int ret = OB_SUCCESS;
   ObMicroBlockHeader header;
+  ObMicroBlockHeader *copied_header = nullptr;
   int64_t pos = 0;
   if (OB_ISNULL(data_buf) || OB_ISNULL(header_buf)) {
     ret = OB_INVALID_ARGUMENT;
@@ -149,7 +154,7 @@ int ObMacroBlockReader::decompress_data_buf(
         if (OB_FAIL(compressor_->decompress(data_buf, data_buf_size,
             ext_uncomp_buf + header_size, data_length, uncomp_size))) {
           LOG_WARN("compressor fail to decompress.", K(ret));
-        } else if (OB_FAIL(header.serialize(ext_uncomp_buf, header_size, pos))) {
+        } else if (OB_FAIL(header.deep_copy(ext_uncomp_buf, header_size, pos, copied_header))) {
           LOG_WARN("Fail to serialize header", K(ret), K(header));
         } else {
           uncomp_buf = ext_uncomp_buf;
@@ -165,13 +170,49 @@ int ObMacroBlockReader::decompress_data_buf(
     } else if (OB_FAIL(compressor_->decompress(data_buf, data_buf_size,
         uncomp_buf_ + header_size, data_length, uncomp_size))) {
       LOG_WARN("Fail to decompress", K(ret));
-    } else if (OB_FAIL(header.serialize(uncomp_buf_, header_size, pos))) {
+    } else if (OB_FAIL(header.deep_copy(uncomp_buf_, header_size, pos, copied_header))) {
           LOG_WARN("Fail to serialize header", K(ret), K(header));
     } else {
       uncomp_buf = uncomp_buf_;
       uncomp_size += header_size;
     }
   }
+  return ret;
+}
+
+int ObMacroBlockReader::decompress_payload_buf(
+    const common::ObCompressorType compressor_type,
+    const char *payload_buf,
+    const int64_t payload_buf_size,
+    const char *&uncomp_buf,
+    const int64_t uncomp_size)
+{
+  // both payload_buf and uncomp_buf don't contain micro block header
+  int ret = OB_SUCCESS;
+  int64_t real_uncomp_size = 0;
+  if (OB_ISNULL(payload_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid input", K(ret), KP(payload_buf));
+  } else {
+    if (nullptr == compressor_ || compressor_->get_compressor_type() != compressor_type) {
+      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(compressor_type, compressor_))) {
+        STORAGE_LOG(WARN, "Fail to get compressor, ", K(ret), K(compressor_type));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(alloc_buf(uncomp_size, uncomp_buf_, uncomp_buf_size_))) {
+      LOG_WARN("Fail to allocate buf", K(ret));
+    } else if (OB_FAIL(compressor_->decompress(payload_buf, payload_buf_size,
+        uncomp_buf_, uncomp_size, real_uncomp_size))) {
+      LOG_WARN("Fail to decompress", K(ret));
+    } else if (OB_UNLIKELY(uncomp_size != real_uncomp_size)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("uncomp_size and real_uncomp_size not equal", K(ret), K(uncomp_size), K(real_uncomp_size));
+    } else {
+      uncomp_buf = uncomp_buf_;
+    }
+  }
+
   return ret;
 }
 
@@ -192,8 +233,11 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
         K(ret), KP(buf), K(size), K(block_header));
   } else {
     ObMicroBlockDesMeta deserialize_meta(
-        block_header.fixed_header_.compressor_type_, block_header.fixed_header_.encrypt_id_,
-        block_header.fixed_header_.master_key_id_, block_header.fixed_header_.encrypt_key_);
+        block_header.fixed_header_.compressor_type_,
+        static_cast<common::ObRowStoreType>(block_header.fixed_header_.row_store_type_),
+        block_header.fixed_header_.encrypt_id_,
+        block_header.fixed_header_.master_key_id_,
+        block_header.fixed_header_.encrypt_key_);
     if (OB_FAIL(decrypt_and_decompress_data(deserialize_meta, buf, size, uncomp_buf, uncomp_size,
         is_compressed, false/*need_deep_copy*/, nullptr/*ext_allocator*/))) {
       STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
@@ -317,38 +361,59 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
 {
   int ret = OB_SUCCESS;
   ObMicroBlockHeader header;
-  int64_t header_size = 0;
+  if (OB_ISNULL(input)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid input data", K(ret), KP(input), K(size));
+  } else if (OB_FAIL(header.deserialize_and_check_header(input, size))) {
+    LOG_WARN("Fail to deserialize record header", K(ret));
+  } else if (OB_UNLIKELY(size < header.header_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input size", K(ret), K(size), K(header));
+  } else if (OB_FAIL(do_decrypt_and_decompress_data(header, deserialize_meta, input, size,
+      uncomp_buf, uncomp_size, is_compressed, need_deep_copy, ext_allocator))) {
+    LOG_WARN("fail to do_decrypt_and_decompress_data", K(ret), K(header));
+  }
+
+  return ret;
+}
+
+int ObMacroBlockReader::do_decrypt_and_decompress_data(
+    const ObMicroBlockHeader &header,
+    const ObMicroBlockDesMeta &deserialize_meta,
+    const char *src_buf,
+    const int64_t src_buf_size,
+    const char *&uncomp_buf,
+    int64_t &uncomp_size,
+    bool &is_compressed,
+    const bool need_deep_copy,
+    ObIAllocator *ext_allocator)
+{
+  int ret = OB_SUCCESS;
   const char *decrypt_buf = NULL;
   int64_t decrypt_size = 0;
   bool is_encrypted = false;
   int64_t pos = 0;
-  if (OB_ISNULL(input)) {
+  ObMicroBlockHeader *copied_micro_header = nullptr;
+  if (OB_ISNULL(src_buf)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid input data", K(ret), KP(input), K(size));
-  } else if (OB_FAIL(header.deserialize(input, size, pos))) {
-    LOG_WARN("Fail to deserialize record header", K(ret));
-  } else if (OB_UNLIKELY(size < (header_size = header.get_serialize_size()))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Fail to deserialize record header", K(ret), K(size), K(header_size));
-  } else if (OB_FAIL(header.check_header_checksum())) {
-    LOG_WARN("Fail to check record header checksum", K(ret));
+    LOG_WARN("Invalid input data", K(ret), KP(src_buf), K(src_buf_size));
   } else {
-    const char *data_buf = input + header_size;
-    int64_t data_buf_size = size - header_size;
+    const char *payload_buf = src_buf + header.header_size_;
+    int64_t payload_size = src_buf_size - header.header_size_;
 #ifndef OB_BUILD_TDE_SECURITY
     is_compressed = header.is_compressed_data();
 #else
     if (OB_UNLIKELY(ObEncryptionUtil::need_encrypt(
                                       static_cast<ObCipherOpMode>(deserialize_meta.encrypt_id_)))) {
-      LOG_DEBUG("Macro data need decrypt", K(deserialize_meta.encrypt_id_), K(data_buf_size));
+      LOG_DEBUG("Macro data need decrypt", K(deserialize_meta.encrypt_id_), K(payload_size));
       const char *decrypt_buf = NULL;
       int64_t decrypt_size = 0;
       if (OB_FAIL(ObMacroBlockReader::decrypt_buf(
-          deserialize_meta, data_buf, data_buf_size, decrypt_buf, decrypt_size))) {
+          deserialize_meta, payload_buf, payload_size, decrypt_buf, decrypt_size))) {
         STORAGE_LOG(WARN, "fail to decrypt buf", K(ret));
       } else {
-        data_buf = decrypt_buf;
-        data_buf_size = decrypt_size;
+        payload_buf = decrypt_buf;
+        payload_size = decrypt_size;
         is_compressed = (header.data_length_ != decrypt_size);
         is_encrypted = true;
       }
@@ -357,23 +422,22 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
       is_encrypted = false;
     }
 #endif
-
     if (OB_SUCC(ret) && !is_compressed) {
-      uncomp_size = header_size + data_buf_size;
+      uncomp_size = header.header_size_ + payload_size;
       int64_t pos = 0;
       // if need_deep_copy = false and is_encrypted = true, we also use alloc_buf() to concatenate header with data
       if (!need_deep_copy && !is_encrypted) {
         // no need to concatenate
-        uncomp_buf = input;
+        uncomp_buf = src_buf;
       } else if (need_deep_copy && OB_NOT_NULL(ext_allocator)) {
         // deep copy data to buffer from external allocator
         char *ext_uncomp_buf = nullptr;
         if (OB_FAIL(alloc_buf(*ext_allocator, uncomp_size, ext_uncomp_buf))) {
           LOG_WARN("Fail to allocate buf", K(ret), K(uncomp_size));
-        } else if (OB_FAIL(header.serialize(ext_uncomp_buf, uncomp_size, pos))) {
+        } else if (OB_FAIL(header.deep_copy(ext_uncomp_buf, uncomp_size, pos, copied_micro_header))) {
           LOG_WARN("Fail to serialize header", K(ret), K(header));
         } else {
-          MEMCPY(ext_uncomp_buf + pos, data_buf, data_buf_size);
+          MEMCPY(ext_uncomp_buf + pos, payload_buf, payload_size);
           uncomp_buf = ext_uncomp_buf;
         }
 
@@ -382,22 +446,88 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
         }
       } else if (OB_FAIL(alloc_buf(uncomp_size, uncomp_buf_, uncomp_buf_size_))) {
         LOG_WARN("Fail to allocate buf for deepcopy", K(uncomp_size), K(ret));
-      } else if (OB_FAIL(header.serialize(uncomp_buf_, uncomp_size, pos))) {
+      } else if (OB_FAIL(header.deep_copy(uncomp_buf_, uncomp_size, pos, copied_micro_header))) {
           LOG_WARN("Fail to serialize header", K(ret), K(header));
       } else {
-        MEMCPY(uncomp_buf_ + pos, data_buf, data_buf_size);
+        MEMCPY(uncomp_buf_ + pos, payload_buf, payload_size);
         uncomp_buf = uncomp_buf_;
       }
     }
 
     if (OB_SUCC(ret) && is_compressed) {
-      if (OB_FAIL(decompress_data_buf(deserialize_meta.compressor_type_, input, header_size,
-          data_buf, data_buf_size, uncomp_buf, uncomp_size, ext_allocator))) {
+      if (OB_FAIL(decompress_data_buf(deserialize_meta.compressor_type_, src_buf, header.header_size_,
+          payload_buf, payload_size, uncomp_buf, uncomp_size, ext_allocator))) {
         LOG_WARN("Fail to decompress data buffer", K(ret), K(header));
       }
     }
-
   }
+
+  return ret;
+}
+
+int ObMacroBlockReader::decrypt_and_full_transform_data(
+    const ObMicroBlockHeader &header,
+    const ObMicroBlockDesMeta &block_des_meta,
+    const char *src_buf,
+    const int64_t src_buf_size,
+    const char *&dst_buf,
+    int64_t &dst_buf_size,
+    ObIAllocator *ext_allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only do full transform for cs_encoding", K(ret), K(header));
+  } else if (OB_UNLIKELY(src_buf_size < header.header_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid src buf size", K(ret), K(src_buf_size), K(header));
+  } else {
+    const char *payload_buf = src_buf + header.header_size_;
+    int64_t payload_size = src_buf_size - header.header_size_;
+    bool is_compressed = false;
+#ifdef OB_BUILD_TDE_SECURITY
+    const char *decrypted_buf = NULL;
+    int64_t decrypted_len = 0;
+    if (OB_FAIL(decrypt_buf(block_des_meta, payload_buf, payload_size, decrypted_buf, decrypted_len))) {
+      LOG_WARN("fail to decrypt data", K(ret));
+    } else {
+      payload_buf = decrypted_buf;
+      payload_size = decrypted_len;
+      is_compressed = (header.data_length_ != decrypted_len);
+    }
+#else
+    is_compressed = header.is_compressed_data();
+#endif
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(is_compressed)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cs encoding must has no block-level compression", K(ret), K(header));
+    } else {
+      int64_t pos = 0;
+      ObCSMicroBlockTransformer transformer;
+      char *ext_dst_buf = nullptr;
+      if (OB_FAIL(transformer.init(&header, payload_buf, payload_size))) {
+        LOG_WARN("fail to init cs micro block transformer", K(ret), K(header));
+      } else if (OB_FAIL(transformer.calc_full_transform_size(dst_buf_size))) {
+        LOG_WARN("fail to calc transformed size", K(ret), K(transformer));
+      } else if (nullptr != ext_allocator && OB_FAIL(alloc_buf(*ext_allocator, dst_buf_size, ext_dst_buf))) {
+        LOG_WARN("fail to alloc_buf", K(ret), K(dst_buf_size), KP(ext_allocator));
+      } else if (nullptr == ext_allocator && OB_FAIL(alloc_buf(dst_buf_size, uncomp_buf_, uncomp_buf_size_))) {
+        LOG_WARN("fail to alloc_buf", K(ret), K(dst_buf_size));
+      } else if (OB_FAIL(transformer.full_transform(ext_dst_buf ? ext_dst_buf : uncomp_buf_, dst_buf_size, pos))) {
+        LOG_WARN("fail to transfrom cs encoding mirco blcok", K(ret));
+      } else if (OB_UNLIKELY(pos != dst_buf_size)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pos should equal to buf_size", K(ret), K(pos), K(dst_buf_size));
+      } else {
+        dst_buf = ext_dst_buf ? ext_dst_buf : uncomp_buf_;
+      }
+      if (OB_FAIL(ret) && nullptr != ext_allocator && nullptr != ext_dst_buf) {
+        ext_allocator->free(ext_dst_buf);
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -595,7 +725,6 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
 {
   int ret = OB_SUCCESS;
 
-  ObMicroBlockBareIterator micro_iter;
   ObMacroBlockRowBareIterator macro_iter(allocator_);
   if (OB_FAIL(macro_iter.open(data_, size_))) {
     LOG_WARN("Fail to init bare macro block row iterator", K(ret));
@@ -643,7 +772,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_block(
   } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected invalid micro block data", K(ret), KPC(micro_data));
-  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, micro_idx, is_index_block))) {
+  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, micro_idx, is_index_block ? MicroBlockType::INDEX : MicroBlockType::DATA))) {
     LOG_ERROR("Failed to dump sstble micro block header", K(ret));
   } else if (OB_FAIL(dump_sstable_micro_data(is_index_block, macro_iter))) {
     LOG_ERROR("Failed to dump sstble micro block data", K(ret));
@@ -654,7 +783,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_block(
 int ObSSTableDataBlockReader::dump_sstable_micro_header(
     const ObMicroBlockData &micro_data,
     const int64_t micro_idx,
-    const bool is_index_block)
+    const MicroBlockType type)
 {
   int ret = OB_SUCCESS;
   const char *micro_block_buf = micro_data.get_buf();
@@ -668,27 +797,36 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
   if (OB_FAIL(micro_block_header.deserialize(micro_block_buf, micro_block_size, pos))) {
     LOG_ERROR("Failed to deserialize sstble micro block header", K(ret), K(micro_data));
   } else {
+    if (MicroBlockType::DATA == type) {
+      ObSSTablePrinter::print_title("Data Micro Block", micro_idx, 1);
+    } else if (MicroBlockType::INDEX == type) {
+      ObSSTablePrinter::print_title("Index Micro Block", micro_idx, 1);
+    } else {
+      ObSSTablePrinter::print_title("Macro Meta Micro Block", micro_idx, 1);
+    }
+
+    ObSSTablePrinter::print_micro_header(&micro_block_header);
+    row_cnt = micro_block_header.row_count_;
     if (ObRowStoreType::FLAT_ROW_STORE == row_store_type) {
-      ObSSTablePrinter::print_micro_header(&micro_block_header);
-      row_cnt = micro_block_header.row_count_;
-    } else if (ObStoreFormat::is_row_store_type_with_encoding(row_store_type)) {
-      const ObColumnHeader * encode_col_header = reinterpret_cast<const ObColumnHeader *>(micro_block_buf + pos);
-      ObSSTablePrinter::print_encoding_micro_header(&micro_block_header);
-      row_cnt = micro_block_header.row_count_;
+    } else if (ObStoreFormat::is_row_store_type_with_pax_encoding(row_store_type)) {
+      const ObColumnHeader *encode_col_header = reinterpret_cast<const ObColumnHeader *>(micro_block_buf + pos);
       for (int64_t i = 0; i < macro_header_.fixed_header_.column_count_; ++i) {
         ObSSTablePrinter::print_encoding_column_header(&encode_col_header[i], i);
+      }
+    } else if (ObStoreFormat::is_row_store_type_with_cs_encoding(row_store_type)) {
+      ObCSMicroBlockTransformer transformer;
+      if (OB_FAIL(transformer.init(&micro_block_header, micro_block_buf + pos, micro_block_size - pos, true/*is_part_tranform*/))) {
+        LOG_ERROR("fail to init transformer", KR(ret), K(pos), K(micro_block_size), K(micro_block_header));
+      } else {
+        transformer.dump_cs_encoding_info(hex_print_buf_, OB_DEFAULT_MACRO_BLOCK_SIZE);
       }
     } else {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "not supported store type", K(ret), K(row_store_type));
     }
   }
+
   if (OB_SUCC(ret)) {
-    if (is_index_block) {
-      ObSSTablePrinter::print_title("Index Micro Block", micro_idx, 1);
-    } else {
-      ObSSTablePrinter::print_title("Micro Block", micro_idx, 1);
-    }
     ObSSTablePrinter::print_title("Total Rows", row_cnt, 1);
   }
 
@@ -735,6 +873,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
       }
 
       if (is_index_block) {
+        idx_row_parser.reset();
         if (OB_FAIL(idx_row_parser.init(block_header->rowkey_column_count_, *row))) {
           LOG_WARN("Fail to init idx row parser", K(ret));
         } else if (OB_FAIL(idx_row_parser.get_header(idx_row_header))) {
@@ -753,6 +892,19 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         } else {
           ObSSTablePrinter::print_index_minor_meta(minor_meta);
         }
+
+        if (OB_SUCC(ret) && idx_row_header->is_pre_aggregated()) {
+          const char *agg_row_buf = nullptr;
+          int64_t agg_row_buf_size = 0;
+          ObAggRowReader agg_row_reader;
+          if (OB_FAIL(idx_row_parser.get_agg_row(agg_row_buf, agg_row_buf_size))) {
+            LOG_WARN("Failed to get agg row", K(ret), KP(agg_row_buf), K(agg_row_buf_size));
+          } else if (OB_FAIL(agg_row_reader.init(agg_row_buf, agg_row_buf_size))) {
+            LOG_WARN("Failed to init agg row reader", K(ret));
+          } else {
+            ObSSTablePrinter::print_pre_agg_row(macro_header_.fixed_header_.column_count_, agg_row_reader);
+          }
+        }
       }
     }
   }
@@ -768,7 +920,6 @@ int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIte
   const ObMicroBlockData *micro_data = nullptr;
   const ObDatumRow *row = nullptr;
   ObDataMacroBlockMeta macro_meta;
-  ObSSTablePrinter::print_title("Macro Meta Micro Block");
   if (OB_FAIL(macro_iter.open_leaf_index_micro_block(true /*macro meta*/))) {
     LOG_WARN("Fail to open macro meta block in macro block", K(ret));
   } else if (OB_FAIL(macro_iter.get_curr_micro_block_data(micro_data))) {
@@ -776,7 +927,7 @@ int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIte
   } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected invalid micro block data", K(ret), KPC(micro_data));
-  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, 0, true))) {
+  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, 0, MicroBlockType::MACRO_META))) {
     LOG_WARN("Failed to dump sstble micro block header", K(ret));
   } else if (OB_FAIL(macro_iter.get_next_row(row))) {
     LOG_WARN("Failed to get next meta block row", K(ret));

@@ -45,6 +45,8 @@ inline int ObExprUuidShort::calc_result_type0(ObExprResType &type,
 {
   UNUSED(type_ctx);
   type.set_uint64();
+  type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].scale_);
+  type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObUInt64Type].precision_);
   return common::OB_SUCCESS;
 }
 

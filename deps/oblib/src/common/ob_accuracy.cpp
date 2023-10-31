@@ -71,8 +71,8 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // geometry
   ObAccuracy(),              // user defined type in sql
+  ObAccuracy(10, 0),         // decimal int
 };
-
 
 const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
   {
@@ -126,6 +126,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(10, 0),         // decimal int
   },
   {
     ObAccuracy(),         // null.
@@ -178,6 +179,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(10, 0),         // decimal int
   }
 };
 
@@ -232,6 +234,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
   ObAccuracy(),              // user defined type in sql
+  ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
@@ -286,6 +289,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
   },
   { /* Oracle */
     ObAccuracy(),         // null.
@@ -336,7 +340,9 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(),              // urowid
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
+    ObAccuracy(),              // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
   }
 };
 
@@ -391,6 +397,7 @@ const ObAccuracy ObAccuracy::DML_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
   ObAccuracy(),              // user defined type in sql
+  ObAccuracy(),              // decimal int
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY_OLD[ObMaxType] = {

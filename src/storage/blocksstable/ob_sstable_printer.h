@@ -15,9 +15,12 @@
 
 #include <stdint.h>
 #include "ob_block_sstable_struct.h"
-#include "ob_index_block_row_struct.h"
 #include "ob_macro_block_common_header.h"
+#include "index_block/ob_index_block_row_struct.h"
+#include "index_block/ob_agg_row_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
+#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
+#include "storage/blocksstable/cs_encoding/ob_icolumn_cs_decoder.h"
 
 #define NONE_COLOR "\033[m"
 #define RED "\033[0;32;31m"
@@ -40,6 +43,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObMicroBlockTransformDesc;
 class ObSSTablePrinter
 {
 public:
@@ -65,6 +69,7 @@ public:
   static void print_macro_block_header(const storage::ObLinkedMacroBlockHeader *linked_macro_header);
   static void print_index_row_header(const ObIndexBlockRowHeader *idx_row_header);
   static void print_index_minor_meta(const ObIndexBlockRowMinorMetaInfo *minor_meta);
+  static void print_pre_agg_row(const int64_t column_cnt, ObAggRowReader &agg_row_reader);
   static void print_macro_meta(const ObDataMacroBlockMeta *macro_meta);
   static void print_store_row(
       const blocksstable::ObDatumRow *row,
@@ -76,6 +81,19 @@ public:
   static void print_micro_header(const ObMicroBlockHeader *micro_block_header);
   static void print_encoding_micro_header(const ObMicroBlockHeader *micro_header);
   static void print_encoding_column_header(const ObColumnHeader *col_header, const int64_t col_id);
+  static void print_cs_encoding_all_column_header(const ObAllColumnHeader &all_header);
+  static void print_cs_encoding_column_header(const ObCSColumnHeader &col_header, const int64_t col_id);
+  static void print_cs_encoding_column_meta(const char *start, const int64_t len,
+                                            const ObCSColumnHeader::Type type, const int64_t col_id,
+                                            char *hex_print_buf, const int64_t hex_buf_size);
+  static void print_cs_encoding_orig_stream_data(
+      const uint32_t stream_cnt, const ObMicroBlockTransformDesc &desc, const char *payload,
+      const uint32_t all_string_data_offset, const uint32_t all_string_data_length);
+
+  static void print_integer_stream_decoder_ctx(const uint32_t stream_idx, const ObIntegerStreamDecoderCtx &ctx,
+                                               char *hex_print_buf, const int64_t hex_buf_size);
+  static void print_string_stream_decoder_ctx(const uint32_t stream_idx, const ObStringStreamDecoderCtx &ctx,
+                                              char *hex_print_buf, const int64_t hex_buf_size);
   static void print_bloom_filter_micro_header(const ObBloomFilterMicroBlockHeader *micro_block_header);
   static void print_bloom_filter_micro_block(const char* micro_block_buf, const int64_t micro_block_size);
 };

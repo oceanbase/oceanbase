@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_all_virtual_dag.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "lib/utility/ob_print_utils.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
@@ -178,7 +178,7 @@ int ObAllVirtualDag::fill_cells(share::ObDagInfo &dag_info)
       if (dag_info.dag_type_ >= ObDagType::DAG_TYPE_MINI_MERGE && dag_info.dag_type_ < ObDagType::DAG_TYPE_MAX) {
         cells[i].set_varchar(share::ObIDag::get_dag_type_str(dag_info.dag_type_));
         cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-      } else if (dag_info.dag_net_type_ >= ObDagNetType::DAG_NET_TYPE_MIGARTION
+      } else if (dag_info.dag_net_type_ >= ObDagNetType::DAG_NET_TYPE_MIGRATION
           && dag_info.dag_net_type_ < ObDagNetType::DAG_NET_TYPE_MAX) {
         cells[i].set_varchar(share::ObIDagNet::get_dag_net_type_str(dag_info.dag_net_type_));
         cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));

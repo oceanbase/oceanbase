@@ -76,11 +76,34 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geometry_cast.cpp
 )
 
+ob_set_subtarget(oblib_lib encode
+  encode/ob_base64_encode.cpp
+  encode/ob_quoted_printable_encode.cpp
+  encode/ob_uuencode.cpp
+)
+
+ob_set_subtarget(oblib_lib codec
+  codec/ob_fast_bp_func.cpp
+  codec/ob_generated_scalar_bp_func.cpp
+)
+
+ob_set_subtarget(oblib_lib_simd codec_simd
+  codec/ob_fast_delta.cpp
+  codec/ob_generated_unalign_simd_bp_func.cpp
+)
+
+ob_lib_add_target(oblib_lib_simd)
+
+if (${ARCHITECTURE} STREQUAL "x86_64")
+  target_compile_options(oblib_lib_simd
+    PRIVATE -mavx2 -mssse3
+    )
+endif()
+
 ob_set_subtarget(oblib_lib common_mixed
   atomic/ob_atomic_reference.cpp
   checksum/ob_crc64.cpp
   checksum/ob_parity_check.cpp
-  container/ob_bitmap.cpp
   container/ob_vector.ipp
   cpu/ob_cpu_topology.cpp
   encode/ob_base64_encode.cpp
@@ -148,6 +171,9 @@ ob_set_subtarget(oblib_lib common_mixed
   trace/ob_trace_event.cpp
   wait_event/ob_wait_class.cpp
   wait_event/ob_wait_event.cpp
+  wide_integer/ob_wide_integer.cpp
+  wide_integer/ob_wide_integer_cmp_funcs.cpp
+  wide_integer/ob_wide_integer_str_funcs.cpp
 )
 
 ob_set_subtarget(oblib_lib lock
@@ -245,6 +271,18 @@ ob_set_subtarget(oblib_lib vtoa
 )
 
 ob_lib_add_target(oblib_lib)
+
+ob_set_subtarget(oblib_lib_bitmap common
+  container/ob_bitmap.cpp
+)
+
+ob_lib_add_target(oblib_lib_bitmap)
+if (${ARCHITECTURE} STREQUAL "x86_64")
+  target_compile_options(oblib_lib_bitmap
+    PRIVATE
+    -mbmi2
+  )
+endif()
 
 ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/abit_set.cpp

@@ -31,7 +31,7 @@ namespace sql
 {
 bool ObOptEstUtils::is_monotonic_op(const ObItemType type)
 {
-  return  (T_OP_ADD == type || T_OP_MINUS == type || T_OP_MUL == type);
+  return  (T_OP_ADD == type || T_OP_MINUS == type || T_OP_MUL == type || T_FUN_SYS_CAST == type);
 }
 
 int ObOptEstUtils::extract_column_exprs_with_op_check(
@@ -305,6 +305,7 @@ int ObOptEstUtils::if_expr_value_equal(ObOptimizerContext &opt_ctx,
     ObExprResType second_type = second_expr.get_result_type();
     ObOpRawExpr equal_expr(const_cast<ObRawExpr *>(&first_expr), const_cast<ObRawExpr *>(&second_expr), T_OP_EQ);
     type_ctx.set_raw_expr(&equal_expr);
+    equal_op.set_raw_expr(&equal_expr);
     if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt->get_stmt_type(), *exec_ctx, allocator, expr_ctx))) {
       LOG_WARN("Failed to wrap expr ctx", K(ret));
     } else if (OB_FAIL(equal_op.calc_result_type2(result_type, first_type, second_type, type_ctx))) {
@@ -415,6 +416,7 @@ double ObOptEstObjToScalar::convert_obj_to_scalar(const ObObj *obj)
     case ObNumberType:
     case ObUNumberType:
     case ObNumberFloatType:
+    case ObDecimalIntType:
         // aka decimal/numeric, already converted to double in `convert_obj_to_scalar_obj`
         scalar = static_cast<double>(obj->get_double());
         break;
@@ -490,7 +492,8 @@ int ObOptEstObjToScalar::convert_obj_to_double(const ObObj *obj, double &num)
   if (OB_ISNULL(obj)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("obj is null", K(ret));
-  } else if (ObNumberType == obj->get_type() || ObUNumberType == obj->get_type()) {
+  } else if (ObNumberType == obj->get_type() || ObUNumberType == obj->get_type()
+             || ObDecimalIntType == obj->get_type()) {
     ObObj calc_obj;
     ObArenaAllocator calc_buffer(ObModIds::OB_BUFFER);
     // tz_info is UNUSED in converting number to double
@@ -524,6 +527,7 @@ int ObOptEstObjToScalar::convert_obj_to_scalar_obj(const common::ObObj* obj, com
     LOG_WARN("input or output is null", KP(obj), KP(out), K(ret));
   } else {
     switch (obj->get_type()) {
+    case ObDecimalIntType:
     case ObNumberFloatType:
     case ObNumberType: // aka decimal/numeric
         // same as under
@@ -542,7 +546,13 @@ int ObOptEstObjToScalar::convert_obj_to_scalar_obj(const common::ObObj* obj, com
         }
       } else {
         if (OB_LIKELY(OB_DATA_OUT_OF_RANGE == ret)) {
-          if (obj->get_number().is_negative()) {
+          if (obj->is_decimal_int()) {
+            if (wide::is_negative(obj->get_decimal_int(), obj->get_int_bytes())) {
+              out->set_min_value();
+            } else {
+              out->set_max_value();
+            }
+          } else if (obj->get_number().is_negative()) {
             out->set_min_value();
           } else {
             out->set_max_value();

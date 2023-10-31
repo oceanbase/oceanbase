@@ -199,7 +199,7 @@ ObService::ObService(const ObGlobalContext &gctx)
     lease_state_mgr_(), heartbeat_process_(gctx, schema_updater_, lease_state_mgr_),
     gctx_(gctx), server_trace_task_(), schema_release_task_(),
     schema_status_task_(), remote_master_rs_update_task_(gctx), ls_table_updater_(),
-    tablet_table_updater_(), meta_table_checker_()
+    meta_table_checker_()
   {
   }
 
@@ -238,8 +238,6 @@ int ObService::init(common::ObMySQLProxy &sql_proxy,
     FLOG_WARN("init schema release task failed", KR(ret));
   } else if (OB_FAIL(remote_master_rs_update_task_.init(lib::TGDefIDs::ServerGTimer))) {
     FLOG_WARN("init remote master rs update task failed", KR(ret));
-  } else if (OB_FAIL(tablet_table_updater_.init(*this, *gctx_.tablet_operator_))) {
-    FLOG_WARN("init tablet table updater failed", KR(ret));
   } else if (OB_FAIL(ls_table_updater_.init())) {
     FLOG_WARN("init log stream table updater failed", KR(ret));
   } else if (OB_FAIL(meta_table_checker_.init(
@@ -337,10 +335,6 @@ void ObService::stop()
     ls_table_updater_.stop();
     FLOG_INFO("ls table updater stopped");
 
-    FLOG_INFO("begin to stop tablet table updater");
-    tablet_table_updater_.stop();
-    FLOG_INFO("tablet table updater stopped");
-
     FLOG_INFO("begin to stop meta table checker");
     meta_table_checker_.stop();
     FLOG_INFO("meta table checker stopped");
@@ -377,10 +371,6 @@ void ObService::wait()
     FLOG_INFO("begin to wait ls table updater");
     ls_table_updater_.wait();
     FLOG_INFO("wait ls table updater success");
-
-    FLOG_INFO("begin to wait tablet table updater");
-    tablet_table_updater_.wait();
-    FLOG_INFO("wait tablet table updater success");
 
     FLOG_INFO("begin to wait meta table checker");
     meta_table_checker_.wait();
@@ -488,25 +478,6 @@ int ObService::submit_ls_update_task(
   return ret;
 }
 
-int ObService::submit_tablet_update_task(
-    const uint64_t tenant_id,
-    const ObLSID &ls_id,
-    const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (!ls_id.is_valid_with_tenant(tenant_id) || !tablet_id.is_valid_with_tenant(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(tablet_table_updater_.async_update(tenant_id, ls_id, tablet_id))) {
-    LOG_WARN("fail to async update tablet", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
-  }
-  return ret;
-}
-
-
 int ObService::submit_async_refresh_schema_task(
     const uint64_t tenant_id,
     const int64_t schema_version)
@@ -575,7 +546,7 @@ int ObService::get_min_sstable_schema_version(
         LOG_WARN("fail to get recycle schema version", KR(tmp_ret), K(tenant_id));
       } else {
         MTL_SWITCH(tenant_id) {
-          if (OB_TMP_FAIL(MTL(ObTenantTabletScheduler *)->get_min_dependent_schema_version(tmp_min_schema_version))) {
+          if (OB_TMP_FAIL(MTL(compaction::ObTenantTabletScheduler *)->get_min_dependent_schema_version(tmp_min_schema_version))) {
             min_schema_version = OB_INVALID_VERSION;
             if (OB_ENTRY_NOT_EXIST != tmp_ret) {
               LOG_WARN("failed to get min dependent schema version", K(tmp_ret));
@@ -1100,6 +1071,34 @@ int ObService::tenant_freeze_(const uint64_t tenant_id)
     }
   }
 
+  return ret;
+}
+
+int ObService::tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
+                            obrpc::Int64 &result)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
+  LOG_INFO("receive tablet major freeze request", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_) {
+      if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->try_schedule_tablet_medium_merge(
+        arg.ls_id_, arg.tablet_id_, arg.is_rebuild_column_group_))) {
+        LOG_WARN("failed to try schedule tablet major freeze", K(ret), K(arg));
+      }
+    }
+  }
+
+  result = ret;
+  const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+  LOG_INFO("finish tablet major freeze request", K(ret), K(arg), K(cost_ts));
   return ret;
 }
 

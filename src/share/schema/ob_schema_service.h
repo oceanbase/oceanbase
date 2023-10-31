@@ -484,7 +484,8 @@ public:
       is_no_zero_date_(false),
       next_column_name_(),
       prev_column_name_(),
-      is_first_(false)
+      is_first_(false),
+      column_group_name_()
   {}
 
   explicit AlterColumnSchema(common::ObIAllocator *allocator)
@@ -501,7 +502,8 @@ public:
       is_no_zero_date_(false),
       next_column_name_(),
       prev_column_name_(),
-      is_first_(false)
+      is_first_(false),
+      column_group_name_()
   {}
   AlterColumnSchema &operator=(const AlterColumnSchema &alter_column_schema);
   int assign(const ObColumnSchemaV2 &other);
@@ -514,7 +516,9 @@ public:
   const common::ObString& get_prev_column_name() const { return prev_column_name_;};
   int set_prev_column_name(const common::ObString& prev_column_name)
     { return deep_copy_str(prev_column_name, prev_column_name_); }
-
+  const common::ObString& get_column_group_name() const { return column_group_name_;};
+  int set_column_group_name(const common::ObString& column_group_name)
+    { return deep_copy_str(column_group_name, column_group_name_); }
   void reset();
 
   ObSchemaOperationType alter_type_;
@@ -530,6 +534,7 @@ public:
   common::ObString next_column_name_;
   common::ObString prev_column_name_;
   bool is_first_;
+  common::ObString column_group_name_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

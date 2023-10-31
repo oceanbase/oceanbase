@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_imicro_block_reader.h"
-#include "ob_index_block_row_struct.h"
+#include "index_block/ob_index_block_row_struct.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
@@ -65,7 +65,7 @@ int ObIMicroBlockReader::locate_range(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected state", K(ret), K(end_key_begin_idx), K(end_key_end_idx), K(range));
       } else  {
-        const bool is_precise_rowkey = datum_utils_->get_rowkey_count() == range.get_end_key().get_datum_cnt();
+        const bool is_percise_rowkey = datum_utils_->get_rowkey_count() == range.get_end_key().get_datum_cnt();
         // we should use upper_bound if the range include endkey
         if (OB_FAIL(find_bound(range.get_end_key(),
                                !range.get_border_flag().inclusive_end()/*lower_bound*/,
@@ -75,7 +75,7 @@ int ObIMicroBlockReader::locate_range(
           LOG_WARN("fail to get lower bound endkey", K(ret));
         } else if (end_idx == row_count_) {
           --end_idx;
-        } else if (is_index_block && !(equal && range.get_border_flag().inclusive_end() && is_precise_rowkey)) {
+        } else if (is_index_block && !(equal && range.get_border_flag().inclusive_end() && is_percise_rowkey)) {
           // Skip
           // When right border is closed and found rowkey is equal to end key of range, do --end_idx
         } else if (end_idx == 0) {
@@ -91,6 +91,7 @@ int ObIMicroBlockReader::locate_range(
 }
 
 int ObIMicroBlockReader::validate_filter_info(
+    const sql::PushdownFilterInfo &pd_filter_info,
     const sql::ObPushdownFilterExecutor &filter,
     const void* col_buf,
     const int64_t col_capacity,
@@ -98,7 +99,7 @@ int ObIMicroBlockReader::validate_filter_info(
 {
   int ret = OB_SUCCESS;
   int64_t col_count = filter.get_col_count();
-  const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets();
+  const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
   const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -127,7 +128,8 @@ int ObIMicroBlockReader::validate_filter_info(
 
 int ObIMicroBlockReader::filter_white_filter(
     const sql::ObWhiteFilterExecutor &filter,
-    const common::ObObj &obj,
+    const common::ObObjMeta &obj_meta,
+    const common::ObDatum &datum,
     bool &filtered)
 {
   int ret = OB_SUCCESS;
@@ -137,18 +139,17 @@ int ObIMicroBlockReader::filter_white_filter(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid operator type of Filter node", K(ret), K(filter));
   } else {
-    const ObIArray<ObObj> &ref_objs = filter.get_objs();
+    const common::ObIArray<common::ObDatum> &ref_datums = filter.get_datums();
+    ObDatumCmpFuncType cmp_func = filter.cmp_func_;
     switch (op_type) {
       case sql::WHITE_OP_NN: {
-        if ((lib::is_mysql_mode() && !obj.is_null())
-            || (lib::is_oracle_mode() && !obj.is_null_oracle())) {
+        if (!datum.is_null()) {
           filtered = false;
         }
         break;
       }
       case sql::WHITE_OP_NU: {
-        if ((lib::is_mysql_mode() && obj.is_null())
-            || (lib::is_oracle_mode() && obj.is_null_oracle())) {
+        if (datum.is_null()) {
           filtered = false;
         }
         break;
@@ -159,37 +160,50 @@ int ObIMicroBlockReader::filter_white_filter(
       case sql::WHITE_OP_GE:
       case sql::WHITE_OP_LT:
       case sql::WHITE_OP_LE: {
-        if (OB_UNLIKELY(ref_objs.count() != 1)) {
+        bool cmp_ret = false;
+        if (OB_UNLIKELY(ref_datums.count() != 1)) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("Invalid argument for comparison operator", K(ret), K(ref_objs));
-        } else if ((lib::is_mysql_mode() && (obj.is_null() || ref_objs.at(0).is_null()))
-                    || (lib::is_oracle_mode() && (obj.is_null_oracle() || ref_objs.at(0).is_null_oracle()))) {
+          LOG_WARN("Invalid argument for comparison operator", K(ret), K(ref_datums));
+        } else if (datum.is_null() || ref_datums.at(0).is_null()) {
           // Result of compare with null is null
-        } else if (ObObjCmpFuncs::compare_oper_nullsafe(
-                   obj,
-                   ref_objs.at(0),
-                   obj.get_collation_type(),
-                   sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[op_type])) {
+        } else if (OB_FAIL(compare_datum(
+                   datum, ref_datums.at(0),
+                   cmp_func,
+                   sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[filter.get_op_type()],
+                   cmp_ret))) {
+          LOG_WARN("Failed to compare datum", K(ret), K(datum), K(ref_datums.at(0)),
+              K(sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[filter.get_op_type()]));
+        } else if (cmp_ret) {
           filtered = false;
         }
         break;
       }
       case sql::WHITE_OP_BT: {
-        if (OB_UNLIKELY(ref_objs.count() != 2)) {
+        int cmp_ret_0 = 0;
+        int cmp_ret_1 = 0;
+        if (OB_UNLIKELY(ref_datums.count() != 2)) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("Invalid argument for between operators", K(ret), K(ref_objs));
-        } else if ((lib::is_mysql_mode() && obj.is_null())
-                    || (lib::is_oracle_mode() && obj.is_null_oracle())) {
+          LOG_WARN("Invalid argument for between operators", K(ret), K(ref_datums));
+        } else if (datum.is_null()) {
           // Result of compare with null is null
-        } else if (obj >= ref_objs.at(0) && obj <= ref_objs.at(1)) {
+        } else if (OB_FAIL(cmp_func(datum, ref_datums.at(0), cmp_ret_0))) {
+          LOG_WARN("Failed to compare datum", K(ret), K(datum), K(ref_datums.at(0)));
+        } else if (cmp_ret_0 < 0) {
+        } else if (OB_FAIL(cmp_func(datum, ref_datums.at(1), cmp_ret_1))) {
+          LOG_WARN("Failed to compare datum", K(ret), K(datum), K(ref_datums.at(0)));
+        } else if (cmp_ret_1 <= 0) {
+          //cmp_ret_0 >= 0 && cmp_ret_1 <= 0
           filtered = false;
         }
         break;
       }
       case sql::WHITE_OP_IN: {
         bool is_existed = false;
-        if (OB_FAIL(filter.exist_in_obj_set(obj, is_existed))) {
-          LOG_WARN("Failed to check object in hashset", K(ret), K(obj));
+        ObObj cur_obj;
+        if (OB_FAIL(datum.to_obj(cur_obj, obj_meta))) {
+          LOG_WARN("convert datum to obj failed", K(ret), K(datum), K(obj_meta));
+        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, is_existed))) {
+          LOG_WARN("Failed to check object in hashset", K(ret), K(cur_obj));
         } else if (is_existed) {
           filtered = false;
         }
@@ -203,6 +217,5 @@ int ObIMicroBlockReader::filter_white_filter(
   }
   return ret;
 }
-
 }
 }

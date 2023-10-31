@@ -64,7 +64,7 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-      || nullptr == svr_ip || svr_port <= 0 || seq_num <= 0)) {
+      || nullptr == svr_ip || svr_port <= 0 || seq_num < 0)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(svr_ip), K(svr_port),
         K(file_type), K(data_size), K(used_size), K(seq_num));

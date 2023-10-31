@@ -97,7 +97,7 @@ int ObExprOracleNullif::calc_result_type2(ObExprResType &type,
       }
     } else {
       if (type2.is_null()) {
-        if (type1.is_number()) {
+        if (type1.is_number() || type1.is_decimal_int()) {
           type.set_number();
           type.set_precision(PRECISION_UNKNOWN_YET);
           type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
@@ -248,6 +248,8 @@ int ObExprOracleNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
                                                       right_meta.type_,
                                                       left_meta.scale_,
                                                       right_meta.scale_,
+                                                      left_meta.precision_,
+                                                      right_meta.precision_,
                                                       lib::is_oracle_mode(),
                                                       cmp_cs_type,
                                                       has_lob_header)));

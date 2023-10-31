@@ -10,12 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_daily_major_freeze_launcher.h"
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "share/ob_freeze_info_manager.h"
+#include "rootserver/freeze/ob_major_merge_info_manager.h"
 #include "share/ob_debug_sync.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_tablet_checksum_operator.h"
@@ -31,33 +32,31 @@ using namespace obrpc;
 using namespace share::schema;
 namespace rootserver
 {
-ObDailyMajorFreezeLauncher::ObDailyMajorFreezeLauncher()
-  : ObFreezeReentrantThread(),
+ObDailyMajorFreezeLauncher::ObDailyMajorFreezeLauncher(const uint64_t tenant_id)
+  : ObFreezeReentrantThread(tenant_id),
     is_inited_(false),
     already_launch_(false),
     config_(nullptr),
     gc_freeze_info_last_timestamp_(0),
-    freeze_info_mgr_(nullptr),
+    merge_info_mgr_(nullptr),
     last_check_tablet_ckm_us_(0),
     tablet_ckm_gc_compaction_scn_(SCN::invalid_scn())
 {
 }
 
 int ObDailyMajorFreezeLauncher::init(
-    const uint64_t tenant_id,
     ObServerConfig &config,
     ObMySQLProxy &proxy,
-    ObFreezeInfoManager &freeze_info_manager)
+    ObMajorMergeInfoManager &merge_info_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
   } else {
-    tenant_id_ = tenant_id;
     config_ = &config;
     gc_freeze_info_last_timestamp_ = ObTimeUtility::current_time();
-    freeze_info_mgr_ = &freeze_info_manager;
+    merge_info_mgr_ = &merge_info_manager;
     last_check_tablet_ckm_us_ = ObTimeUtility::current_time();
     tablet_ckm_gc_compaction_scn_ = SCN::invalid_scn();
     sql_proxy_ = &proxy;
@@ -87,6 +86,7 @@ int ObDailyMajorFreezeLauncher::start()
 void ObDailyMajorFreezeLauncher::run3()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to run, not init", KR(ret));
@@ -101,16 +101,12 @@ void ObDailyMajorFreezeLauncher::run3()
       if (OB_FAIL(try_launch_major_freeze())) {
         LOG_WARN("fail to try_launch_major_freeze", KR(ret), K_(tenant_id));
       }
-      // ignore ret
-      if (OB_FAIL(try_gc_freeze_info())) {
-        LOG_WARN("fail to try_gc_freeze_info", KR(ret), K_(tenant_id));
+      if (OB_TMP_FAIL(try_gc_freeze_info())) {
+        LOG_WARN("fail to try_gc_freeze_info", KR(tmp_ret), K_(tenant_id));
       }
-      // ignore ret
-      if (OB_FAIL(try_gc_tablet_checksum())) {
-        LOG_WARN("fail to try_gc_tablet_checksum", KR(ret), K_(tenant_id));
+      if (OB_TMP_FAIL(try_gc_tablet_checksum())) {
+        LOG_WARN("fail to try_gc_tablet_checksum", KR(tmp_ret), K_(tenant_id));
       }
-
-      int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(try_idle(LAUNCHER_INTERVAL_US, ret))) {
         LOG_WARN("fail to try_idle", KR(ret), KR(tmp_ret));
       }
@@ -202,7 +198,7 @@ int ObDailyMajorFreezeLauncher::try_gc_freeze_info()
     LOG_WARN("not init", KR(ret));
   } else if ((now - gc_freeze_info_last_timestamp_) < MODIFY_GC_INTERVAL) {
     // nothing
-  } else if (OB_FAIL(freeze_info_mgr_->try_gc_freeze_info())) {
+  } else if (OB_FAIL(merge_info_mgr_->try_gc_freeze_info())) {
     LOG_WARN("fail to gc_freeze_info", KR(ret), K_(tenant_id));
   } else {
     gc_freeze_info_last_timestamp_ = now;
@@ -220,9 +216,9 @@ int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
   SCN min_keep_compaction_scn;
   int64_t now = ObTimeUtility::current_time();
   const static int64_t BATCH_DELETE_CNT = 2000;
-  if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_) || OB_ISNULL(freeze_info_mgr_))) {
+  if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_) || OB_ISNULL(merge_info_mgr_))) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(is_inited), KP(sql_proxy_), KP(freeze_info_mgr_));
+    LOG_WARN("not init", KR(ret), K_(is_inited), KP(sql_proxy_), KP(merge_info_mgr_));
   } else {
     SMART_VAR(ObArray<SCN>, all_compaction_scn) {
       // 1. load all distinct compaction_scn, when reach 30 min interval time and no valid
@@ -239,7 +235,7 @@ int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
         if (all_compaction_scn.count() > MIN_RESERVED_COUNT) {
           const int64_t compaction_scn_cnt = all_compaction_scn.count();
           tablet_ckm_gc_compaction_scn_ = all_compaction_scn.at(compaction_scn_cnt - MIN_RESERVED_COUNT - 1);
-          if (OB_FAIL(freeze_info_mgr_->get_gts(cur_gts_scn))) {
+          if (OB_FAIL(merge_info_mgr_->get_gts(cur_gts_scn))) {
             LOG_WARN("fail to get_gts", KR(ret), K_(tenant_id));
           } else {
             min_keep_compaction_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS);

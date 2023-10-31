@@ -138,17 +138,12 @@ public:
    */
   static int cost_table(const ObCostTableScanInfo &est_cost_info,
                         int64_t parallel,
-                        double query_range_row_count,
-                        double phy_query_range_row_count,
                         double &cost,
-                        double &index_back_cost,
                         MODEL_TYPE model_type);
 
   static int cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
                                      const int64_t parallel,
                                      const double part_cnt_per_dop,
-                                     double query_range_row_count,
-                                     double phy_query_range_row_count,
                                      double &px_cost,
                                      double &cost,
                                      MODEL_TYPE model_type);
@@ -181,7 +176,7 @@ public:
 
   static int cost_delete(ObDelUpCostInfo& cost_info, double &cost, MODEL_TYPE model_type);
 
-  static int cost_range_scan(const ObTableMetaInfo& table_meta_info,
+  static int calc_range_cost(const ObTableMetaInfo& table_meta_info,
                             const ObIArray<ObRawExpr *> &filters,
                             int64_t index_column_count,
                             int64_t range_count,

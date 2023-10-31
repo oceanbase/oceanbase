@@ -234,6 +234,9 @@ int ObAnalyzeStmtResolver::resolve_table_info(const ParseNode *table_node,
                                                               *table_schema,
                                                               analyze_stmt.get_column_params()))) {
     LOG_WARN("failed to init column stat param", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::init_column_group_stat_param(*table_schema,
+                                                                   analyze_stmt.get_column_group_params()))) {
+    LOG_WARN("failed to init column stat param", K(ret));
   } else {
     analyze_stmt.set_table(database_name, database_id, table_name, table_schema->get_table_id(),
                            table_schema->get_table_type());

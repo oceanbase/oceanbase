@@ -59,12 +59,12 @@ int ObLinkedMacroBlockWriter::write_block(const char *buf, const int64_t buf_len
     write_info.size_ = buf_len;
     write_info.io_desc_ = io_desc_;
     write_info.buffer_ = buf;
+    write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     write_info.io_desc_.set_group_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
     MacroBlockId previous_block_id;
     previous_block_id.set_block_index(MacroBlockId::EMPTY_ENTRY_BLOCK_INDEX);
     if (!handle_.is_empty()) {
-      const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
-      if (OB_FAIL(handle_.wait(io_timeout_ms))) {
+      if (OB_FAIL(handle_.wait())) {
         LOG_WARN("fail to wait io finish", K(ret));
       } else {
         previous_block_id = handle_.get_macro_id();
@@ -99,8 +99,7 @@ int ObLinkedMacroBlockWriter::close(MacroBlockId &pre_block_id)
   } else if (handle_.is_empty()) {
     // do nothing
   } else {
-    const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
-    if (OB_FAIL(handle_.wait(io_timeout_ms))) {
+    if (OB_FAIL(handle_.wait())) {
       LOG_WARN("fail to wait io finish", K(ret));
     } else {
       entry_block_id_ = handle_.get_macro_id();

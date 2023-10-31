@@ -61,7 +61,7 @@ int ObAllDataTypeTable::inner_get_next_row(common::ObNewRow *&row)
                 break;
               }
             case DATA_TYPE_STR: {
-                  cells[cell_idx].set_varchar(ob_obj_type_str(type));
+                  cells[cell_idx].set_varchar(inner_obj_type_str(type));
                   cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                          ObCharset::get_default_charset()));
                 break;

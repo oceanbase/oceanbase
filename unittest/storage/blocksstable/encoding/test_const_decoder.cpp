@@ -50,7 +50,7 @@ TEST_F(TestConstDecoder, no_exception_nu_nn)
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
   sql::ObPushdownWhiteFilterNode white_filter(allocator_);
   ObMalloc mallocer;
@@ -94,7 +94,7 @@ TEST_F(TestConstDecoder, no_exception_other)
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
   // Dedcode and filter_push_down
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
@@ -190,7 +190,7 @@ TEST_F(TestConstDecoder, filter_push_down_nu_nn_eq_ne)
   int64_t size = 0;
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
   sql::ObPushdownWhiteFilterNode white_filter(allocator_);
 
@@ -212,20 +212,34 @@ TEST_F(TestConstDecoder, filter_push_down_nu_nn_eq_ne)
     setup_obj(ref_obj_2, i, seed_2);
     objs.push_back(ref_obj_1);
 
+    // 0 --- ROW_CNT-3 --- ROW_CNT-1 --- ROW_CNT
+    // |    seed1   |   seed2    |     null   |
+    //     |            |
+    // ROW_CNT-32   ROW_CNT-2
     int32_t col_idx = i;
     white_filter.op_type_ = sql::WHITE_OP_EQ;
 
     ObBitmap result_bitmap(allocator_);
     result_bitmap.init(ROW_CNT);
     ASSERT_EQ(0, result_bitmap.popcnt());
+    ObBitmap pd_result_bitmap(allocator_);
+    pd_result_bitmap.init(30);
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed1_count, result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 32, ROW_CNT - 2, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(29, pd_result_bitmap.popcnt());
 
     white_filter.op_type_ = sql::WHITE_OP_NE;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed2_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 32, ROW_CNT - 2, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(1, pd_result_bitmap.popcnt());
 
     objs.pop_back();
     objs.push_back(ref_obj_2);
@@ -234,24 +248,40 @@ TEST_F(TestConstDecoder, filter_push_down_nu_nn_eq_ne)
     ASSERT_EQ(0, result_bitmap.popcnt());
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed2_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 32, ROW_CNT - 2, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(1, pd_result_bitmap.popcnt());
 
     white_filter.op_type_ = sql::WHITE_OP_NE;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed1_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 32, ROW_CNT - 2, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(29, pd_result_bitmap.popcnt());
 
     white_filter.op_type_ = sql::WHITE_OP_NU;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(null_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 32, ROW_CNT - 2, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
 
     white_filter.op_type_ = sql::WHITE_OP_NN;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed1_count + seed2_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 32, ROW_CNT - 2, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(30, pd_result_bitmap.popcnt());
   }
 }
 
@@ -293,7 +323,7 @@ TEST_F(TestConstDecoder, filter_push_down_gt_lt_ge_le)
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_ - 1; ++i) {
@@ -313,32 +343,47 @@ TEST_F(TestConstDecoder, filter_push_down_gt_lt_ge_le)
 
     objs.push_back(ref_obj_1);
 
+    // 0 --- ROW_CNT-5 --- ROW_CNT-2  --- ROW_CNT-1 --- ROW_CNT
+    // |    seed0 |    seed1    |   seed2      |     null     |
+    //     |               |
+    // ROW_CNT-33      ROW_CNT-3
     int32_t col_idx = i;
     white_filter.op_type_ = sql::WHITE_OP_GT;
 
     ObBitmap result_bitmap(allocator_);
     result_bitmap.init(ROW_CNT);
     ASSERT_EQ(0, result_bitmap.popcnt());
+    ObBitmap pd_result_bitmap(allocator_);
+    pd_result_bitmap.init(30);
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
 
     // Greater Than
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed2_count, result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
 
     // Less Than
     white_filter.op_type_ = sql::WHITE_OP_LT;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
-
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed0_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(28, pd_result_bitmap.popcnt());
 
     // Greater than or Equal to
     white_filter.op_type_ = sql::WHITE_OP_GE;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
-
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(ROW_CNT - seed0_count - null_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(1 + seed2_count, pd_result_bitmap.popcnt());
 
     // Less than or Equal to
     white_filter.op_type_ = sql::WHITE_OP_LE;
@@ -347,6 +392,10 @@ TEST_F(TestConstDecoder, filter_push_down_gt_lt_ge_le)
 
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed0_count + seed1_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(30, pd_result_bitmap.popcnt());
   }
 
   for (int64_t i = 0; i < full_column_cnt_ - 1; ++i) {
@@ -372,25 +421,37 @@ TEST_F(TestConstDecoder, filter_push_down_gt_lt_ge_le)
     ObBitmap result_bitmap(allocator_);
     result_bitmap.init(ROW_CNT);
     ASSERT_EQ(0, result_bitmap.popcnt());
+    ObBitmap pd_result_bitmap(allocator_);
+    pd_result_bitmap.init(30);
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+
     // Greater Than
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed2_count + seed1_count, result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(2, pd_result_bitmap.popcnt());
 
     // Less Than
     white_filter.op_type_ = sql::WHITE_OP_LT;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
-
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(0, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
 
     // Greater than or Equal to
     white_filter.op_type_ = sql::WHITE_OP_GE;
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
-
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(64 - null_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(30, pd_result_bitmap.popcnt());
 
     // Less than or Equal to
     white_filter.op_type_ = sql::WHITE_OP_LE;
@@ -399,6 +460,10 @@ TEST_F(TestConstDecoder, filter_push_down_gt_lt_ge_le)
 
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed0_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(28, pd_result_bitmap.popcnt());
   }
 }
 
@@ -438,7 +503,7 @@ TEST_F(TestConstDecoder, filter_push_down_bt)
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
@@ -462,15 +527,24 @@ TEST_F(TestConstDecoder, filter_push_down_bt)
     objs.push_back(ref_obj_2);
     objs.push_back(ref_obj_3);
 
+    // 0 --- ROW_CNT-63 --- ROW_CNT-5  --- ROW_CNT-1 --- ROW_CNT
+    // |  seed0 |    seed1        |   seed2    |   seed3   |
+    //                 |                 |
+    //             ROW_CNT-33          ROW_CNT-3
     int32_t col_idx = i;
     white_filter.op_type_ = sql::WHITE_OP_BT;
 
     ObBitmap result_bitmap(allocator_);
     result_bitmap.init(ROW_CNT);
     ASSERT_EQ(0, result_bitmap.popcnt());
+    ObBitmap pd_result_bitmap(allocator_);
+    pd_result_bitmap.init(30);
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
 
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed2_count + seed3_count, result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(2, pd_result_bitmap.popcnt());
 
     // const value not in range
     objs.reuse();
@@ -480,9 +554,12 @@ TEST_F(TestConstDecoder, filter_push_down_bt)
 
     result_bitmap.reuse();
     ASSERT_EQ(0, result_bitmap.popcnt());
-
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed1_count + seed2_count + seed3_count, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(28 + 2, pd_result_bitmap.popcnt());
   }
 }
 
@@ -535,7 +612,7 @@ TEST_F(TestConstDecoder, filter_push_down_in)
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
 
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
@@ -563,15 +640,24 @@ TEST_F(TestConstDecoder, filter_push_down_in)
     objs.push_back(ref_obj2);
     objs.push_back(ref_obj5);
 
+    // 0 --- ROW_CNT-4 --- ROW_CNT-3  --- ROW_CNT-2 --- ROW_CNT-1 --- ROW_CNT
+    // |  seed0 |    seed1        |   seed2    |   seed3   |     null       |
+    //     |                     |
+    //   ROW_CNT-33          ROW_CNT-3
     int32_t col_idx = i;
     white_filter.op_type_ = sql::WHITE_OP_IN;
 
     ObBitmap result_bitmap(allocator_);
     result_bitmap.init(ROW_CNT);
     ASSERT_EQ(0, result_bitmap.popcnt());
+    ObBitmap pd_result_bitmap(allocator_);
+    pd_result_bitmap.init(30);
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
 
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter, result_bitmap, objs));
     ASSERT_EQ(seed1_count + seed2_count, result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(seed1_count, pd_result_bitmap.popcnt());
 
 
     objs.reuse();
@@ -585,11 +671,20 @@ TEST_F(TestConstDecoder, filter_push_down_in)
     ASSERT_EQ(0, result_bitmap.popcnt());
     ASSERT_EQ(OB_SUCCESS, test_filter_pushdown(col_idx, false, decoder, white_filter_2, result_bitmap, objs));
     ASSERT_EQ(0, result_bitmap.popcnt());
+    pd_result_bitmap.reuse();
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
+    ASSERT_EQ(OB_SUCCESS, test_filter_pushdown_with_pd_info(ROW_CNT - 33, ROW_CNT - 3, col_idx, false, decoder, white_filter, pd_result_bitmap, objs));
+    ASSERT_EQ(0, pd_result_bitmap.popcnt());
   }
 }
 
 TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
 {
+  void *row_buf = allocator_.alloc(sizeof(ObDatumRow) * ROW_CNT);
+  ObDatumRow *rows = new (row_buf) ObDatumRow[ROW_CNT];
+  for (int64_t i = 0; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, rows[i].init(allocator_, full_column_cnt_));
+  }
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
   int64_t seed0 = 10000;
@@ -597,20 +692,20 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
   for (int64_t i = 0; i < ROW_CNT ; ++i) {
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+    rows[i].deep_copy(row, allocator_);
   }
 
   char *buf = NULL;
   int64_t size = 0;
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
   const ObRowHeader *row_header = nullptr;
   int64_t row_len = 0;
   const char *row_data = nullptr;
   const char *cell_datas[ROW_CNT];
-  void *datum_buf_1 = allocator_.alloc(sizeof(int8_t) * 128 * ROW_CNT);
-  void *datum_buf_2 = allocator_.alloc(sizeof(int8_t) * 128);
+  void *datum_buf = allocator_.alloc(sizeof(int8_t) * 128 * ROW_CNT);
 
   for (int64_t i = 0; i < full_column_cnt_; ++i) {
     int32_t col_offset = i;
@@ -618,25 +713,14 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
     ObDatum datums[ROW_CNT];
     int64_t row_ids[ROW_CNT];
     for (int64_t j = 0; j < ROW_CNT; ++j) {
-      datums[j].ptr_ = reinterpret_cast<char *>(datum_buf_1) + j * 128;
+      datums[j].ptr_ = reinterpret_cast<char *>(datum_buf) + j * 128;
       row_ids[j] = j;
     }
     ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset]
         .batch_decode(decoder.row_index_, row_ids, cell_datas, ROW_CNT, datums));
     for (int64_t j = 0; j < ROW_CNT; ++j) {
-      ObObj obj;
-      ASSERT_EQ(OB_SUCCESS, decoder.row_index_->get(row_ids[j], row_data, row_len));
-      ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
-      ASSERT_EQ(OB_SUCCESS,
-          decoder.decoders_[col_offset].decode(obj, row_ids[j], bs, row_data, row_len));
-      STORAGE_LOG(INFO, "row: ", K(j), K(obj));
-      ObObj obj_cast_from_datum;
-      ASSERT_EQ(OB_SUCCESS, datums[j].to_obj(obj_cast_from_datum, col_descs_.at(i).col_type_));
-      ASSERT_EQ(obj, obj_cast_from_datum);
-      ObDatum datum_cast_from_obj;
-      datum_cast_from_obj.ptr_ = reinterpret_cast<char *>(datum_buf_2);
-      ASSERT_EQ(OB_SUCCESS, datum_cast_from_obj.from_obj(obj));
-      ASSERT_TRUE(ObDatum::binary_equal(datum_cast_from_obj, datums[j]));
+      LOG_INFO("Current row: ", K(j), K(col_offset), K(rows[j].storage_datums_[i]), K(datums[j]));
+      ASSERT_TRUE(ObDatum::binary_equal(rows[j].storage_datums_[i], datums[j]));
     }
   }
 }
@@ -644,6 +728,57 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
 TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
 {
   batch_decode_to_datum_test();
+}
+
+
+TEST_F(TestConstDecoder, cell_decode_to_datum_test_without_expection)
+{
+  void *row_buf = allocator_.alloc(sizeof(ObDatumRow) * ROW_CNT);
+  ObDatumRow *rows = new (row_buf) ObDatumRow[ROW_CNT];
+  for (int64_t i = 0; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, rows[i].init(allocator_, full_column_cnt_));
+  }
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+  int64_t seed0 = 10000;
+  int64_t row_cnt = 30;
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
+    row.storage_datums_[0].set_null();
+    row.storage_datums_[1].set_nop();
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+    rows[i].deep_copy(row, allocator_);
+  }
+
+  char *buf = NULL;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
+  int64_t row_len = 0;
+  const char *row_data = nullptr;
+  void *datum_buf = allocator_.alloc(sizeof(int8_t) * 128);
+
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
+    int32_t col_offset = i;
+    LOG_INFO("Current col: ", K(i), K(col_descs_.at(i)),  K(*decoder.decoders_[col_offset].ctx_));
+    for (int64_t j = 0; j < row_cnt; ++j) {
+      ObDatum datum;
+      datum.ptr_ = reinterpret_cast<char *>(datum_buf);
+      ASSERT_EQ(OB_SUCCESS, decoder.row_index_->get(j, row_data, row_len));
+      ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
+      ASSERT_EQ(OB_SUCCESS,
+          decoder.decoders_[col_offset].decode(datum,j, bs, row_data, row_len));
+      LOG_INFO("Current row: ", K(j), K(col_offset), K(rows[j].storage_datums_[col_offset]), K(datum));
+      ASSERT_TRUE(ObDatum::binary_equal(rows[j].storage_datums_[col_offset], datum));
+    }
+  }
+}
+
+TEST_F(TestConstDecoder, cell_decode_to_datum_test_with_expection)
+{
+  cell_decode_to_datum_test();
 }
 
 // TEST_F(TestConstDecoder, batch_get_row_perf_test)

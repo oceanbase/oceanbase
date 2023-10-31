@@ -81,6 +81,20 @@ public:
   virtual ~TestStringPrefixDecoder() {}
 };
 
+class TestColumnEqualDecoder : public TestColumnDecoder
+{
+public:
+  TestColumnEqualDecoder() : TestColumnDecoder(ObColumnHeader::Type::COLUMN_EQUAL) {}
+  virtual ~TestColumnEqualDecoder() {}
+};
+
+class TestInterColumnSubstringDecoder : public TestColumnDecoder
+{
+public:
+  TestInterColumnSubstringDecoder() : TestColumnDecoder(ObColumnHeader::Type::COLUMN_SUBSTR) {}
+  virtual ~TestInterColumnSubstringDecoder() {}
+};
+
 TEST_F(TestIntBaseDiffDecoder, filter_pushdown_comaprison_neg_test)
 {
   filter_pushdown_comaprison_neg_test();
@@ -104,6 +118,11 @@ TEST_F(TestDictDecoder, batch_decode_to_datum_condense_test)
 TEST_F(TestDictDecoder, batch_decode_to_datum_test)
 {
   batch_decode_to_datum_test();
+}
+
+TEST_F(TestDictDecoder, cell_decode_to_datum_test)
+{
+  cell_decode_to_datum_test();
 }
 
 TEST_F(TestDictDecoder, batch_decode_single_var_len_dict) {
@@ -131,7 +150,7 @@ TEST_F(TestDictDecoder, batch_decode_single_var_len_dict) {
   int64_t size = 0;
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
   int64_t row_id = 0;
   const char *cell_data = nullptr;
@@ -151,9 +170,19 @@ TEST_F(TestRLEDecoder, batch_decode_to_datum_test)
   batch_decode_to_datum_test();
 }
 
+TEST_F(TestRLEDecoder, cell_decode_to_datum_test)
+{
+  cell_decode_to_datum_test();
+}
+
 TEST_F(TestIntBaseDiffDecoder, batch_decode_to_datum_test)
 {
   batch_decode_to_datum_test();
+}
+
+TEST_F(TestIntBaseDiffDecoder, cell_decode_to_datum_test)
+{
+  cell_decode_to_datum_test();
 }
 
 TEST_F(TestHexDecoder, batch_decode_to_datum_test)
@@ -161,9 +190,19 @@ TEST_F(TestHexDecoder, batch_decode_to_datum_test)
   batch_decode_to_datum_test();
 }
 
+TEST_F(TestHexDecoder, cell_decode_to_datum_test)
+{
+  cell_decode_to_datum_test();
+}
+
 TEST_F(TestStringDiffDecoder, batch_decode_to_datum_test)
 {
   batch_decode_to_datum_test();
+}
+
+TEST_F(TestStringDiffDecoder, cell_decode_to_datum_test)
+{
+  cell_decode_to_datum_test();
 }
 
 TEST_F(TestStringPrefixDecoder, batch_decode_to_datum_test)
@@ -171,6 +210,25 @@ TEST_F(TestStringPrefixDecoder, batch_decode_to_datum_test)
   batch_decode_to_datum_test();
 }
 
+TEST_F(TestStringPrefixDecoder, cell_decode_to_datum_test)
+{
+  cell_decode_to_datum_test();
+}
+
+TEST_F(TestStringPrefixDecoder, cell_decode_to_datum_test_without_hex)
+{
+  cell_decode_to_datum_test_without_hex();
+}
+
+TEST_F(TestColumnEqualDecoder, cell_decode_to_datum_test)
+{
+  cell_column_equal_decode_to_datum_test();
+}
+
+TEST_F(TestInterColumnSubstringDecoder, cell_decode_to_datum_test)
+{
+  cell_inter_column_substring_to_datum_test();
+}
 // TEST_F(TestDictDecoder, batch_decode_perf_test)
 // {
 //   batch_get_row_perf_test();

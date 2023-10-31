@@ -29,6 +29,8 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/ob_storage_schema_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -203,8 +205,8 @@ TEST_F(TestLSMigrationParam, test_placeholder_storage_schema)
 
   void *ptr = nullptr;
   ObTablet placeholder_tablet;
-  ASSERT_NE(nullptr, ptr = allocator.alloc(sizeof(ObStorageSchema)));
-  placeholder_tablet.storage_schema_addr_.ptr_ = new (ptr) ObStorageSchema();
+  ret = ObStorageSchemaUtil::alloc_storage_schema(allocator, placeholder_tablet.storage_schema_addr_.ptr_);
+  ASSERT_EQ(OB_SUCCESS, ret);
   ret = placeholder_tablet.storage_schema_addr_.get_ptr()->init(allocator, storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -237,13 +239,11 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   TestSchemaUtils::prepare_data_schema(table_schema);
 
   ObTabletID empty_tablet_id;
-  ObTabletTableStoreFlag store_flag;
-  store_flag.set_with_major_sstable();
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, nullptr, ls_handle.get_ls()->get_freezer());
+      lib::Worker::CompatMode::MYSQL, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;
@@ -299,13 +299,11 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   TestSchemaUtils::prepare_data_schema(table_schema);
 
   ObTabletID empty_tablet_id;
-  ObTabletTableStoreFlag store_flag;
-  store_flag.set_with_major_sstable();
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, nullptr, ls_handle.get_ls()->get_freezer());
+      lib::Worker::CompatMode::MYSQL, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;

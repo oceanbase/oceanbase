@@ -153,6 +153,8 @@ int ObSchemaPrinter::print_table_definition(const uint64_t tenant_id,
       SHARE_SCHEMA_LOG(WARN, "fail to print table options", K(ret), K(*table_schema));
     } else if (OB_FAIL(print_table_definition_partition_options(*table_schema, buf, buf_len, pos, agent_mode, tz_info))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print partition options", K(ret), K(*table_schema));
+    } else if (OB_FAIL(print_table_definition_column_group(*table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print column_group", K(ret), K(*table_schema));
     } else if (OB_FAIL(print_table_definition_on_commit_options(*table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print on commit options", K(ret), K(*table_schema));
     }
@@ -5225,6 +5227,28 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
           SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::print_table_definition_column_group(const ObTableSchema &table_schema,
+                                                         char *buf,
+                                                         const int64_t &buf_len,
+                                                         int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  bool has_all_column_group = false;
+  if (table_schema.get_column_group_count() <= 1) {
+  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to check row store", K(ret));
+  } else if (has_all_column_group) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, " WITH COLUMN GROUP FOR all columns, each column "))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print column group", K(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, " WITH COLUMN GROUP FOR each column "))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print column group", K(ret));
     }
   }
   return ret;

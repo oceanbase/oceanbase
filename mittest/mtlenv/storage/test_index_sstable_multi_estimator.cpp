@@ -31,7 +31,7 @@ namespace unittest
 class TestMultiVersionIndexSSTableEstimator : public TestIndexBlockDataPrepare
 {
 public:
-  TestMultiVersionIndexSSTableEstimator() : TestIndexBlockDataPrepare("Test multi version index sstable estimator", MINI_MERGE) {}
+  TestMultiVersionIndexSSTableEstimator() : TestIndexBlockDataPrepare("Test multi version index sstable estimator", compaction::MINI_MERGE) {}
   virtual ~TestMultiVersionIndexSSTableEstimator() {}
   virtual void SetUp();
   virtual void TearDown();

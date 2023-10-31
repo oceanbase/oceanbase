@@ -56,7 +56,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_access_info_,
                     external_files_,
                     external_file_format_str_,
-                    trans_info_expr_);
+                    trans_info_expr_,
+                    group_by_column_ids_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -248,7 +249,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.tenant_schema_version_ = scan_rtdef_->tenant_schema_version_;
   scan_param_.limit_param_ = scan_rtdef_->limit_param_;
   scan_param_.need_scn_ = scan_rtdef_->need_scn_;
-  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_;
+  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_.pd_flag_;
   scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = scan_rtdef_->fb_read_tx_uncommitted_;
   if (scan_rtdef_->is_for_foreign_check_) {
@@ -473,6 +474,11 @@ void ObDASScanOp::reset_access_datums_ptr()
 {
   if (scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
     FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.access_exprs_) {
+      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
+      info.point_to_frame_ = true;
+    }
+    FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_) {
       (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
@@ -1246,7 +1252,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.tenant_schema_version_ = lookup_rtdef_->tenant_schema_version_;
   scan_param_.limit_param_ = lookup_rtdef_->limit_param_;
   scan_param_.need_scn_ = lookup_rtdef_->need_scn_;
-  scan_param_.pd_storage_flag_ = lookup_ctdef_->pd_expr_spec_.pd_storage_flag_;
+  scan_param_.pd_storage_flag_ = lookup_ctdef_->pd_expr_spec_.pd_storage_flag_.pd_flag_;
   scan_param_.fb_snapshot_ = lookup_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = lookup_rtdef_->fb_read_tx_uncommitted_;
   scan_param_.ls_id_ = ls_id_;

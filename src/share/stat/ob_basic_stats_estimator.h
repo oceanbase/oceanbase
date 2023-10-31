@@ -24,17 +24,29 @@ namespace common
 
 struct EstimateBlockRes
 {
-  EstimateBlockRes() : part_id_(), macro_block_count_(0), micro_block_count_(0), sstable_row_count_(0), memtable_row_count_(0) {}
+  EstimateBlockRes() :
+    part_id_(),
+    macro_block_count_(0),
+    micro_block_count_(0),
+    sstable_row_count_(0),
+    memtable_row_count_(0),
+    cg_macro_cnt_arr_(),
+    cg_micro_cnt_arr_()
+  {}
   ObObjectID part_id_;
   int64_t macro_block_count_;
   int64_t micro_block_count_;
   int64_t sstable_row_count_;
   int64_t memtable_row_count_;
+  ObArray<int64_t> cg_macro_cnt_arr_;
+  ObArray<int64_t> cg_micro_cnt_arr_;
   TO_STRING_KV(K(part_id_),
                K(macro_block_count_),
                K(micro_block_count_),
                K(sstable_row_count_),
-               K(memtable_row_count_));
+               K(memtable_row_count_),
+               K(cg_macro_cnt_arr_),
+               K(cg_micro_cnt_arr_));
 };
 
 class ObBasicStatsEstimator : public ObStatsEstimator
@@ -96,6 +108,7 @@ public:
                                                    const uint64_t table_id,
                                                    const ObIArray<ObTabletID> &tablet_ids,
                                                    const ObIArray<ObObjectID> &partition_ids,
+                                                   const ObIArray<uint64_t> &column_group_ids,
                                                    ObIArray<EstimateBlockRes> &estimate_res);
 
   static int get_tablet_locations(ObExecContext &ctx,
@@ -146,6 +159,9 @@ private:
                                   ObExtraParam &new_extra);
 
   int fill_hints(common::ObIAllocator &alloc, const ObString &table_name);
+
+  static int generate_column_group_ids(const ObTableStatParam &param,
+                                       ObIArray<uint64_t> &column_group_ids);
 };
 
 }

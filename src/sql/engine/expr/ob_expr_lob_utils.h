@@ -105,11 +105,16 @@ public:
     if (datum.is_null()) {
       str.reset();
     } else if (is_lob_storage(meta.type_)) {
-      ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
-      if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
-        COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
-      } else if (OB_FAIL(str_iter.get_full_data(str))) {
-        COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+      const ObLobCommon& lob = datum.get_lob_data();
+      if (datum.len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) {
+        str.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(datum.len_)));
+      } else {
+        ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
+        if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
+          COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
+        } else if (OB_FAIL(str_iter.get_full_data(str))) {
+          COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+        }
       }
     }
     return ret;
@@ -227,6 +232,24 @@ public:
     }
     return ret;
   };
+
+  static int str_to_lob_storage_obj(ObIAllocator &allocator, const ObString& input, common::ObObj& output)
+  {
+    INIT_SUCC(ret);
+    // pl must has lob header
+    bool has_lob_header = true;
+    ObTextStringObObjResult text_result(ObLongTextType, nullptr, &output, has_lob_header);
+    if(OB_FAIL(text_result.init(input.length(), &allocator))) {
+      COMMON_LOG(WARN, "init lob result failed", K(ret));
+    } else if (OB_FAIL(text_result.append(input.ptr(), input.length()))) {
+      COMMON_LOG(WARN, "failed to append realdata", K(ret), K(input), K(text_result));
+    } else {
+      text_result.set_result();
+    }
+    return ret;
+  }
+
+
 
 };
 

@@ -38,6 +38,7 @@ void ObParamInfo::reset()
   ext_real_type_ = common::ObNullType;
   is_oracle_empty_string_ = false;
   col_type_ = common::CS_TYPE_INVALID;
+  precision_ = PRECISION_UNKNOWN_YET;
 }
 
 OB_SERIALIZE_MEMBER(ObParamInfo,
@@ -46,7 +47,8 @@ OB_SERIALIZE_MEMBER(ObParamInfo,
                     type_,
                     ext_real_type_,
                     is_oracle_empty_string_,
-                    col_type_);
+                    col_type_,
+                    precision_);
 
 ObPlanCacheObject::ObPlanCacheObject(ObLibCacheNameSpace ns, lib::MemoryContext &mem_context)
   : ObILibCacheObject(ns, mem_context),
@@ -97,6 +99,7 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
     } else {
       param_info.scale_ = params.at(i).get_scale();
+      param_info.precision_ = params.at(i).get_precision();
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(params_info_.push_back(param_info))) {

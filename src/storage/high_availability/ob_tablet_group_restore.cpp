@@ -990,7 +990,7 @@ int ObInitialTabletGroupRestoreTask::generate_tablet_restore_dags_()
       }
     } else if (OB_FAIL(scheduler->add_dag(start_restore_dag))) {
       LOG_WARN("failed to add dag", K(ret), K(*start_restore_dag));
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_restore_dag, start_restore_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_restore_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_restore_dag));
       } else {
         finish_restore_dag = nullptr;
@@ -1006,12 +1006,12 @@ int ObInitialTabletGroupRestoreTask::generate_tablet_restore_dags_()
     if (OB_FAIL(ret)) {
 
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_restore_dag)) {
-        scheduler->free_dag(*finish_restore_dag, start_restore_dag);
+        scheduler->free_dag(*finish_restore_dag);
         finish_restore_dag = nullptr;
       }
 
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_restore_dag)) {
-        scheduler->free_dag(*start_restore_dag, initial_tablets_group_restore_dag);
+        scheduler->free_dag(*start_restore_dag);
         start_restore_dag = nullptr;
       }
 
@@ -1359,7 +1359,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
 
       if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(tablet_restore_dag)) {
-          scheduler->free_dag(*tablet_restore_dag, start_tablet_group_restore_dag);
+          scheduler->free_dag(*tablet_restore_dag);
           tablet_restore_dag = nullptr;
         }
       }
@@ -1631,7 +1631,7 @@ int ObFinishTabletGroupRestoreTask::generate_restore_init_dag_()
     }
 
     if (OB_NOT_NULL(initial_restore_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_restore_dag, finish_tablet_group_restore_dag);
+      scheduler->free_dag(*initial_restore_dag);
       initial_restore_dag = nullptr;
     }
   }
@@ -2278,6 +2278,7 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
   } else if (FALSE_IT(init_param.restore_base_info_ = tablet_restore_ctx_->restore_base_info_)) {
   } else if (FALSE_IT(init_param.meta_index_store_ = tablet_restore_ctx_->meta_index_store_)) {
   } else if (FALSE_IT(init_param.second_meta_index_store_ = tablet_restore_ctx_->second_meta_index_store_)) {
+  } else if (FALSE_IT(init_param.need_sort_macro_meta_ = !copy_table_key.is_normal_cg_sstable())) {
   } else if (FALSE_IT(init_param.need_check_seq_ = tablet_restore_ctx_->need_check_seq_)) {
   } else if (FALSE_IT(init_param.ls_rebuild_seq_ = tablet_restore_ctx_->ls_rebuild_seq_)) {
   } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_table_info(tablet_restore_ctx_->tablet_id_,
@@ -2298,7 +2299,7 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
     // parent->copy->finish->child
     if (OB_FAIL(dag_->alloc_task(copy_task))) {
       LOG_WARN("failed to alloc copy task", K(ret));
-    } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task))) {
+    } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task, 0))) {
       LOG_WARN("failed to init copy task", K(ret));
     } else if (OB_FAIL(parent_task->add_child(*copy_task))) {
       LOG_WARN("failed to add child copy task", K(ret));

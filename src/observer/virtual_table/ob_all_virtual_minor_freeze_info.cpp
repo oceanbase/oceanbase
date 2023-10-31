@@ -151,7 +151,7 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
           // is_force
-          cur_row_.cells_[i].set_varchar(freeze_stat.get_is_force() ? "YES" : "NO");
+          cur_row_.cells_[i].set_varchar(freeze_stat.need_rewrite_meta() ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 6:

@@ -991,7 +991,7 @@ public:
 class ObConfigInfoInPC
 {
 public:
-  static const int DEFAULT_PUSHDOWN_STORAGE_LEVEL = 3;
+  static const int DEFAULT_PUSHDOWN_STORAGE_LEVEL = 4;
 
   ObConfigInfoInPC()
   : pushdown_storage_level_(DEFAULT_PUSHDOWN_STORAGE_LEVEL),

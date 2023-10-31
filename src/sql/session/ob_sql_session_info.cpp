@@ -2763,6 +2763,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_sql_extension_ = tenant_config->enable_sql_extension;
       px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
       px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
+      enable_column_store_ = tenant_config->_enable_column_store;
+      enable_decimal_int_type_ = tenant_config->_enable_decimal_int_type;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }

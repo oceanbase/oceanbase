@@ -173,7 +173,6 @@ void ObTableScanIterator::reuse()
   table_scan_range_.reset();
   main_iter_ = NULL;
   reuse_row_iters();
-  main_table_ctx_.reuse();
   sample_ranges_.reuse();
 }
 
@@ -181,6 +180,7 @@ void ObTableScanIterator::reset_for_switch()
 {
   reuse();
   main_table_param_.reset();
+  main_table_ctx_.reuse();
   get_table_param_.reset();
   ctx_guard_.reset();
   sample_ranges_.reset();
@@ -199,12 +199,12 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
     STORAGE_LOG(WARN, "scan_param is not the same", K(ret), K(scan_param_), K(&scan_param));
   } else {
     STORAGE_LOG(DEBUG, "table scan iterate rescan", K_(is_inited), K(scan_param_));
-    // there's no need to reset main_table_param_
+    // there's no need to reset main_table_param_ and table_ctx
     // scan_param only reset query range fields in ObTableScan::rt_rescan()
-    if (OB_FAIL(table_scan_range_.init(*scan_param_))) {
+    if (OB_FAIL(main_table_ctx_.rescan_reuse(scan_param))) {
+      LOG_WARN("Failed to rescan reuse", K(ret));
+    } else if (OB_FAIL(table_scan_range_.init(*scan_param_))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
-    } else if (OB_FAIL(prepare_table_context())) {
-      STORAGE_LOG(WARN, "fail to prepare table context", K(ret));
     } else if (OB_FAIL(open_iter())) {
       STORAGE_LOG(WARN, "fail to open iter", K(ret));
     } else {
@@ -421,6 +421,7 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
         STORAGE_LOG(WARN, "check scan range count failed", KR(ret), KPC(scan_param_));
       } else if (need_scan_multiple_range) {
         // this branch means the sample is row(memtable row) sample
+        main_table_param_.iter_param_.disable_blockscan();
         INIT_AND_OPEN_ITER(multi_scan_merge_, sample_ranges_, false);
         if (OB_FAIL(ret)) {
         } else if (scan_param_->sample_info_.is_row_sample()) {
@@ -470,10 +471,13 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
 
 int ObTableScanIterator::get_next_row(ObNewRow *&row)
 {
+  return OB_NOT_IMPLEMENT;
+}
+
+int ObTableScanIterator::get_next_row(blocksstable::ObDatumRow *&row)
+{
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
   int ret = OB_SUCCESS;
-  ObDatumRow *store_row = NULL;
-
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObTableScanStoreRowIterator has not been inited, ", K(ret));
@@ -485,14 +489,12 @@ int ObTableScanIterator::get_next_row(ObNewRow *&row)
       scan_param_->op_->clear_datum_eval_flag();
       scan_param_->op_->reset_trans_info_datum();
     }
-    if (OB_FAIL(main_iter_->get_next_row(store_row))) {
+    if (OB_FAIL(main_iter_->get_next_row(row))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "Fail to get next row, ", K(ret), KPC_(scan_param), K_(main_table_param),
             KP(single_merge_), KP(get_merge_), KP(scan_merge_), KP(multi_scan_merge_),
             KP(skip_scan_merge_));
       }
-    } else {
-      row = &(store_row->get_new_row());
     }
   }
   if (OB_SUCC(ret) || OB_ITER_END == ret) {

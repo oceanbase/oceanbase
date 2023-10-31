@@ -73,13 +73,13 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |28      |87          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|28      |59          |
-|2 |  └─PX PARTITION ITERATOR|        |28      |27          |
-|3 |    └─MERGE JOIN         |        |28      |27          |
-|4 |      ├─TABLE FULL SCAN  |score   |28      |13          |
-|5 |      └─SORT             |        |14      |13          |
-|6 |        └─TABLE FULL SCAN|stu     |14      |12          |
+|0 |PX COORDINATOR           |        |28      |77          |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|28      |49          |
+|2 |  └─PX PARTITION ITERATOR|        |28      |17          |
+|3 |    └─MERGE JOIN         |        |28      |17          |
+|4 |      ├─TABLE FULL SCAN  |score   |28      |8           |
+|5 |      └─SORT             |        |14      |8           |
+|6 |        └─TABLE FULL SCAN|stu     |14      |7           |
 =============================================================
 Outputs & filters:
 -------------------------------------

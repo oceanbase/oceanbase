@@ -83,10 +83,10 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
     if (lib::is_mysql_mode() && SCALE_UNKNOWN_YET != type.get_scale()) {
       if (ob_is_real_type(type.get_type())) {
         type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
-      } else if (ob_is_number_tc(type.get_type())) { // TODO:@zuojiao.hzj add decimal_int here
+      } else if (ob_is_number_or_decimal_int_tc(type.get_type())) {
         const int16_t intd1 = type1.get_precision() - type1.get_scale();
         const int16_t intd2 = type2.get_precision() - type2.get_scale();
-        const int16_t prec = MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale());
+        const int16_t prec = MIN(OB_MAX_DECIMAL_POSSIBLE_PRECISION, MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale()));
         type.set_precision(static_cast<ObPrecision>(prec));
       }
     }

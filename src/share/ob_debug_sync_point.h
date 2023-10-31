@@ -55,7 +55,8 @@ class ObString;
     ACT(BEFORE_AUTO_COORDINATE,)                                   \
     ACT(DELAY_PARTITION_SERVICE_FREEZE_LOG_TASK,)                  \
     ACT(MINOR_MERGE_TIMER_TASK,)                                   \
-    ACT(MERGE_TASK_PROCESS,)                                 \
+    ACT(MERGE_TASK_PROCESS,)                                       \
+    ACT(COMPACTION_REPORT_PROCESS,)                                \
     ACT(MINOR_MERGE_SCHEDULE,)                                     \
     ACT(DELAY_INDEX_WRITE,)                                        \
     ACT(BEFORE_MINOR_FREEZE_GET_BASE_STORAGE_INFO,)                \
@@ -418,7 +419,6 @@ class ObString;
     ACT(AFTER_DATA_TABLETS_MIGRATION,)\
     ACT(MERGE_PARTITION_FINISH_TASK,)\
     ACT(RS_VALIDATE_CHECKSUM,)\
-    ACT(HA_REPORT_META_TABLE,)\
     ACT(AFTER_CHANGE_MIGRATION_STATUS_HOLD,)\
     ACT(AFTER_CREATE_META_TENANT_SYS_LOGSTREAM,)\
     ACT(AFTER_CREATE_USER_TENANT_SYS_LOGSTREAM,)\

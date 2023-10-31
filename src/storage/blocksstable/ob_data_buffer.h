@@ -356,7 +356,8 @@ public:
   ObSelfBufferWriter(
       const char *label,
       const int64_t size = 0,
-      const bool need_align = false);
+      const bool need_align = false,
+      const bool use_fixed_blk = true);
   virtual ~ObSelfBufferWriter();
   int ensure_space(const int64_t size);
   bool is_dirty() const { return OB_NOT_NULL(data_) && pos_ > 0; }
@@ -373,6 +374,7 @@ private:
 private:
   const char *label_;
   bool is_aligned_;
+  bool use_fixed_blk_;
   common::ObMacroBlockSizeMemoryContext macro_block_mem_ctx_;
 };
 

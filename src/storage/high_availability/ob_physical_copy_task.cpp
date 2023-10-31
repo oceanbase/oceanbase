@@ -15,14 +15,17 @@
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/report/ob_tablet_table_updater.h"
 #include "share/ob_cluster_version.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
 using namespace share;
+using namespace compaction;
 namespace storage
 {
 
@@ -45,6 +48,7 @@ ObPhysicalCopyCtx::ObPhysicalCopyCtx()
     ha_dag_(nullptr),
     sstable_index_builder_(nullptr),
     restore_macro_block_id_mgr_(nullptr),
+    need_sort_macro_meta_(true),
     need_check_seq_(false),
     ls_rebuild_seq_(-1)
 {
@@ -86,6 +90,7 @@ void ObPhysicalCopyCtx::reset()
   ha_dag_ = nullptr;
   sstable_index_builder_ = nullptr;
   restore_macro_block_id_mgr_ = nullptr;
+  need_sort_macro_meta_ = true;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
 }
@@ -104,6 +109,7 @@ ObPhysicalCopyTaskInitParam::ObPhysicalCopyTaskInitParam()
     restore_base_info_(nullptr),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
+    need_sort_macro_meta_(true),
     need_check_seq_(false),
     ls_rebuild_seq_(-1)
 {
@@ -145,6 +151,7 @@ void ObPhysicalCopyTaskInitParam::reset()
   restore_base_info_ = nullptr;
   meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
+  need_sort_macro_meta_ = true;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
 }
@@ -156,7 +163,8 @@ ObPhysicalCopyTask::ObPhysicalCopyTask()
     copy_ctx_(nullptr),
     finish_task_(nullptr),
     copy_table_key_(),
-    copy_macro_range_info_()
+    copy_macro_range_info_(),
+    task_idx_(0)
 {
 }
 
@@ -166,20 +174,22 @@ ObPhysicalCopyTask::~ObPhysicalCopyTask()
 
 int ObPhysicalCopyTask::init(
     ObPhysicalCopyCtx *copy_ctx,
-    ObSSTableCopyFinishTask *finish_task)
+    ObSSTableCopyFinishTask *finish_task,
+    const int64_t task_idx)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("physical copy task init tiwce", K(ret));
-  } else if (OB_ISNULL(copy_ctx) || !copy_ctx->is_valid() || OB_ISNULL(finish_task)) {
+  } else if (OB_ISNULL(copy_ctx) || !copy_ctx->is_valid() || OB_ISNULL(finish_task) || task_idx < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("physical copy task get invalid argument", K(ret), KPC(copy_ctx), KPC(finish_task));
+    LOG_WARN("physical copy task get invalid argument", K(ret), KPC(copy_ctx), KPC(finish_task), K(task_idx));
   } else if (OB_FAIL(build_macro_block_copy_info_(finish_task))) {
     LOG_WARN("failed to build macro block copy info", K(ret), KPC(copy_ctx));
   } else {
     copy_ctx_ = copy_ctx;
     finish_task_ = finish_task;
+    task_idx_ = task_idx;
     is_inited_ = true;
   }
   return ret;
@@ -315,9 +325,13 @@ int ObPhysicalCopyTask::fetch_macro_block_(
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy physical task do not init", K(ret));
   } else {
+    const int64_t *task_idx = nullptr;
     LOG_INFO("init reader", K(copy_table_key_));
-
-    if (OB_FAIL(index_block_rebuilder.init(*copy_ctx_->sstable_index_builder_))) {
+    if (!copy_ctx_->is_leader_restore_) {
+      task_idx = &task_idx_;
+    }
+    if (OB_FAIL(index_block_rebuilder.init(
+            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, task_idx))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));
@@ -510,7 +524,7 @@ int ObPhysicalCopyTask::generate_next_task(ObITask *&next_task)
     ret = OB_ITER_END;
   } else if (OB_FAIL(dag_->alloc_task(tmp_next_task))) {
     LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(tmp_next_task->init(copy_ctx_, finish_task_))) {
+  } else if (OB_FAIL(tmp_next_task->init(copy_ctx_, finish_task_, task_idx_ + 1))) {
     LOG_WARN("failed to init next task", K(ret), K(*copy_ctx_));
   } else {
     next_task = tmp_next_task;
@@ -654,6 +668,7 @@ int ObSSTableCopyFinishTask::init(
     copy_ctx_.ha_dag_ = ha_dag;
     copy_ctx_.sstable_index_builder_ = &sstable_index_builder_;
     copy_ctx_.restore_macro_block_id_mgr_ = restore_macro_block_id_mgr_;
+    copy_ctx_.need_sort_macro_meta_ = init_param.need_sort_macro_meta_;
     copy_ctx_.need_check_seq_ = init_param.need_check_seq_;
     copy_ctx_.ls_rebuild_seq_ = init_param.ls_rebuild_seq_;
     macro_range_info_index_ = 0;
@@ -766,20 +781,26 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
     const common::ObTabletID &tablet_id,
     const ObMigrationSSTableParam *sstable_param,
     const int64_t cluster_version,
-    ObDataStoreDesc &desc)
+    ObWholeDataStoreDesc &desc)
 {
   int ret = OB_SUCCESS;
   desc.reset();
   ObTablet *tablet = nullptr;
   ObMergeType merge_type;
-  ObArenaAllocator allocator;
+  const ObMigrationTabletParam *src_tablet_param = nullptr;
   const ObStorageSchema *storage_schema = nullptr;
   ObTabletHandle tablet_handle;
   const uint64_t tenant_id = MTL_ID();
 
-  if (!tablet_id.is_valid() || cluster_version < 0 || OB_ISNULL(sstable_param)) {
+  if (OB_UNLIKELY(!tablet_id.is_valid() || cluster_version < 0
+               || NULL == sstable_param || NULL == tablet_copy_finish_task_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("prepare sstable index builder get invalid argument", K(ret), K(tablet_id), K(cluster_version), KP(sstable_param));
+  } else if (FALSE_IT(src_tablet_param = tablet_copy_finish_task_->get_src_tablet_meta())) {
+  } else if (OB_UNLIKELY(NULL == src_tablet_param || !src_tablet_param->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected invalid tablet param", K(ret), K(ls_id), K(tablet_id), K(sstable_param), KPC(src_tablet_param));
+  } else if (FALSE_IT(storage_schema = &src_tablet_param->storage_schema_)) {
   } else if (OB_FAIL(get_merge_type_(sstable_param, merge_type))) {
     LOG_WARN("failed to get merge type", K(ret), KPC(sstable_param));
   } else if (OB_FAIL(ls_->ha_get_tablet(tablet_id, tablet_handle))) {
@@ -798,32 +819,38 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
-  } else if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
-    LOG_WARN("fail to load storage schema failed", K(ret));
-  } else if (OB_FAIL(desc.init_as_index(*storage_schema,
-      ls_id,
-      tablet_id,
-      merge_type,
-      tablet->get_snapshot_version()))) {
-    LOG_WARN("failed to init index store desc", K(ret), K(tablet_id), K(merge_type), KPC(sstable_param));
   } else {
-    /* Since the storage_schema of migration maybe newer or older than the original sstable,
-      we always use the col_cnt in sstable_param to re-generate sstable for dst.
-      Besides, we fill default chksum array with zeros since there's no need to recalculate*/
-    desc.full_stored_col_cnt_ = sstable_param->basic_meta_.column_cnt_;
-    desc.col_default_checksum_array_.reset();
-    desc.default_col_checksum_array_valid_ = true;
-    if (OB_FAIL(desc.col_default_checksum_array_.init(desc.full_stored_col_cnt_))) {
-      LOG_WARN("fail to init col default chksum array", K(ret));
+    const uint16_t cg_idx = sstable_param->table_key_.get_column_group_id();
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    if (sstable_param->table_key_.is_cg_sstable()) {
+      if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
+      } else {
+        cg_schema = &storage_schema->get_column_groups().at(cg_idx);
+      }
+    }
+    if (FAILEDx(desc.init(
+        *storage_schema,
+        ls_id,
+        tablet_id,
+        merge_type,
+        tablet->get_snapshot_version(),
+        0/*cluster_version*/,
+        sstable_param->table_key_.get_end_scn(),
+        cg_schema,
+        cg_idx))) {
+      LOG_WARN("failed to init index store desc for column store table", K(ret), K(cg_idx), KPC(sstable_param), K(cg_schema));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < desc.full_stored_col_cnt_; ++i) {
-        if (OB_FAIL(desc.col_default_checksum_array_.push_back(0))) {
-          LOG_WARN("fail to push default checksum", K(ret), K(i), K(desc));
-        }
+      /* Since the storage_schema of migration maybe newer or older than the original sstable,
+        we always use the col_cnt in sstable_param to re-generate sstable for dst.
+        Besides, we fill default chksum array with zeros since there's no need to recalculate*/
+      int64_t column_cnt = sstable_param->basic_meta_.column_cnt_;
+      if (OB_FAIL(desc.get_col_desc().mock_valid_col_default_checksum_array(column_cnt))) {
+        LOG_WARN("fail to mock valid col default checksum array", K(ret));
       }
     }
   }
-  ObTablet::free_storage_schema(allocator, storage_schema);
   return ret;
 }
 
@@ -859,10 +886,10 @@ int ObSSTableCopyFinishTask::prepare_sstable_index_builder_(
     const int64_t cluster_version)
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc desc;
+  ObWholeDataStoreDesc desc;
   const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode =
       (sstable_param->table_key_.is_ddl_sstable() || !sstable_param->is_small_sstable_)
-      ? ObSSTableIndexBuilder::DISABLE : ObSSTableIndexBuilder::AUTO;
+      ? ObSSTableIndexBuilder::DISABLE : ObSSTableIndexBuilder::ENABLE;
 
   if (!tablet_id.is_valid() || OB_ISNULL(sstable_param)) {
     ret = OB_INVALID_ARGUMENT;
@@ -879,7 +906,7 @@ int ObSSTableCopyFinishTask::prepare_sstable_index_builder_(
       LOG_WARN("failed to prepare data store desc", K(ret), K(tablet_id), K(cluster_version));
     }
   } else if (OB_FAIL(sstable_index_builder_.init(
-      desc,
+      desc.get_desc(),
       nullptr, // macro block flush callback, default value is nullptr
       mode))) {
     LOG_WARN("failed to init sstable index builder", K(ret), K(desc));
@@ -940,10 +967,36 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
     LOG_WARN("sstable copy finish task do not init", K(ret));
   } else if (OB_FAIL(build_create_sstable_param_(param))) {
     LOG_WARN("failed to build create sstable param", K(ret));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable_for_migrate(param,
-      tablet_copy_finish_task_->get_allocator(), table_handle))) {
+  } else if (param.table_key_.is_co_sstable()) {
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = nullptr;
+    common::ObArenaAllocator tmp_allocator; // for storage schema
+    const ObStorageSchema *storage_schema_ptr = nullptr;
+    if (OB_FAIL(ls_->get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
+      LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
+    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet should not be NULL", K(ret), K(copy_ctx_));
+    } else if (OB_FAIL(tablet->load_storage_schema(tmp_allocator, storage_schema_ptr))) {
+      LOG_WARN("failed to load storage_schema", K(ret), KPC(tablet));
+    } else if (FALSE_IT(param.column_group_cnt_ = sstable_param_->column_group_cnt_)) {
+    } else if (FALSE_IT(param.is_empty_co_table_ = true)) {
+    } else if (FALSE_IT(param.full_column_cnt_ = sstable_param_->full_column_cnt_)) {
+      LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret), KPC(storage_schema_ptr));
+    } else if (FALSE_IT(param.co_base_type_ = storage_schema_ptr->has_all_column_group()
+                                            ? ObCOSSTableBaseType::ALL_CG_TYPE
+                                            : ObCOSSTableBaseType::ROWKEY_CG_TYPE)) {
+    } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
+            tablet_copy_finish_task_->get_allocator(), table_handle))) {
+      LOG_WARN("failed to create co sstable", K(ret), K(param), K(copy_ctx_));
+    }
+    ObTablet::free_storage_schema(tmp_allocator, storage_schema_ptr);
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
+          tablet_copy_finish_task_->get_allocator(), table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param), K(copy_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task_->add_sstable(table_handle))) {
+  }
+
+  if (FAILEDx(tablet_copy_finish_task_->add_sstable(table_handle))) {
     LOG_WARN("failed to add table handle", K(ret), K(table_handle), K(copy_ctx_));
   }
   return ret;
@@ -976,10 +1029,25 @@ int ObSSTableCopyFinishTask::create_sstable_with_index_builder_()
         LOG_WARN("failed to close sstable index builder", K(ret), K(copy_ctx_));
       } else if (OB_FAIL(build_create_sstable_param_(tablet, res, param))) {
         LOG_WARN("failed to build create sstable param", K(ret), K(copy_ctx_));
-      } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable_for_migrate(param,
-          tablet_copy_finish_task_->get_allocator(), table_handle))) {
+      } else if (param.table_key_.is_co_sstable()) {
+        if (sstable_param_->co_base_type_ <= ObCOSSTableBaseType::INVALID_TYPE ||
+            sstable_param_->co_base_type_ >= ObCOSSTableBaseType::MAX_TYPE ||
+            sstable_param_->column_group_cnt_ <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("co sstable with invalid co sstable param", K(ret), KPC(sstable_param_));
+        } else if (FALSE_IT(param.column_group_cnt_ = sstable_param_->column_group_cnt_)) {
+        } else if (FALSE_IT(param.full_column_cnt_ = sstable_param_->full_column_cnt_)) {
+        } else if (FALSE_IT(param.co_base_type_ = sstable_param_->co_base_type_)) {
+        } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
+              tablet_copy_finish_task_->get_allocator(), table_handle))) {
+          LOG_WARN("failed to create co sstable", K(ret), K(copy_ctx_), KPC(sstable_param_));
+        }
+      } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
+              tablet_copy_finish_task_->get_allocator(), table_handle))) {
         LOG_WARN("failed to create sstable", K(ret), K(copy_ctx_), KPC(sstable_param_));
-      } else if (OB_FAIL(tablet_copy_finish_task_->add_sstable(table_handle))) {
+      }
+
+      if (FAILEDx(tablet_copy_finish_task_->add_sstable(table_handle))) {
         LOG_WARN("failed to add table handle", K(ret), K(table_handle), K(copy_ctx_));
       }
     }
@@ -1113,8 +1181,8 @@ int ObSSTableCopyFinishTask::build_restore_macro_block_id_mgr_(
       LOG_WARN("failed to alloc memory", K(ret), KP(buf));
     } else if (FALSE_IT(restore_macro_block_id_mgr = new(buf) ObRestoreMacroBlockIdMgr())) {
     } else if (OB_FAIL(restore_macro_block_id_mgr->init(init_param.tablet_id_,
-        init_param.sstable_macro_range_info_.copy_table_key_,
-        *init_param.restore_base_info_, *init_param.second_meta_index_store_))) {
+        init_param.sstable_macro_range_info_.copy_table_key_, *init_param.restore_base_info_,
+        *init_param.meta_index_store_, *init_param.second_meta_index_store_))) {
       STORAGE_LOG(WARN, "failed to init restore macro block id mgr", K(ret), K(init_param));
     } else {
       restore_macro_block_id_mgr_ = restore_macro_block_id_mgr;
@@ -1395,6 +1463,7 @@ int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
 int ObTabletCopyFinishTask::create_new_table_store_with_major_()
 {
   int ret = OB_SUCCESS;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
@@ -1403,8 +1472,22 @@ int ObTabletCopyFinishTask::create_new_table_store_with_major_()
     LOG_WARN("src tablet meta should not be null", K(ret));
   } else if (major_tables_handle_.empty()) {
     // do nothing
-  } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(ls_,
-      tablet_id_, major_tables_handle_, src_tablet_meta_->storage_schema_, src_tablet_meta_->medium_info_list_))) {
+  } else if (ObTabletRestoreAction::is_restore_major(restore_action_)) {
+    if (1 == major_tables_handle_.get_count()) {
+      // do nothing
+    } else if (OB_NOT_NULL(major_tables_handle_.get_table(0))
+        && major_tables_handle_.get_table(0)->is_column_store_sstable()) {
+      // if more than one major table, it should be column store tables
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("major tablet should only has one sstable", K(ret),
+               "major_sstable_count", major_tables_handle_.get_count(), K(major_tables_handle_));
+    }
+  }
+
+  if (OB_FAIL(ret) || major_tables_handle_.empty()) {
+  } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(ls_, tablet_id_,
+      major_tables_handle_, src_tablet_meta_->storage_schema_, src_tablet_meta_->medium_info_list_))) {
     LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id_), K(major_tables_handle_), KPC(src_tablet_meta_));
   }
   return ret;
@@ -1445,12 +1528,12 @@ int ObTabletCopyFinishTask::check_finish_copy_tablet_data_valid_()
         && !tablet->get_tablet_meta().has_transfer_table()
         && major_sstables.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet should has major sstable, unexpected", K(ret), KPC(tablet), K(major_sstables));
+      LOG_WARN("tablet should has major sstable, unexpected", K(ret), KPC(tablet));
     }
 
     if (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = reporter_->submit_tablet_update_task(ls_->get_tenant_id(),
+      if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
           ls_->get_ls_id(), tablet_id_))) {
         LOG_WARN("failed to submit tablet update task", K(tmp_ret), KPC(ls_), K(tablet_id_));
       }

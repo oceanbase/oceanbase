@@ -52,6 +52,7 @@ int ObExprField::calc_result_typeN(ObExprResType &type,
   bool has_num = false;
   bool has_string = false;
   bool has_real = false;
+  bool is_all_integer_or_decimal_int = true;
   CK(NULL != type_ctx.get_session());
   if (OB_FAIL(ret)) {
   } else if (param_num < 2) {
@@ -65,14 +66,23 @@ int ObExprField::calc_result_typeN(ObExprResType &type,
         // nothing to do
       } else if (ObFloatTC == type_class || ObDoubleTC == type_class) {
         has_real = true;
-      } else if (type_class >= ObDateTimeTC && type_class < ObMaxTC && type_class != ObYearTC
-                 && ObEnumSetInnerTC != type_class) {
+      } else if (type_class >= ObDateTimeTC
+                 && type_class < ObMaxTC
+                 && type_class != ObYearTC
+                 && ObEnumSetInnerTC != type_class
+                 && ObDecimalIntTC != type_class) {
         has_string = true;
-      } else if ((type_class < ObDateTimeTC && type_class > ObNullTC) || type_class == ObYearTC) {
+      } else if ((type_class < ObDateTimeTC && type_class > ObNullTC)
+                 || type_class == ObYearTC
+                 || type_class == ObDecimalIntTC) {
         has_num = true;
       } else {
         ret = OB_ERR_ILLEGAL_TYPE;
         LOG_WARN("invalid type", K(ret), K(type_class));
+      }
+      if (!ob_is_integer_type(types_stack[i].get_type()) &&
+            !ob_is_decimal_int(types_stack[i].get_type())) {
+        is_all_integer_or_decimal_int = false;
       }
     }
     if (OB_SUCC(ret)) {
@@ -81,7 +91,15 @@ int ObExprField::calc_result_typeN(ObExprResType &type,
       } else if (has_string) {
         type.set_calc_type(ObVarcharType);
       } else if (has_num) {
-        type.set_calc_type(ObNumberType);
+        bool enable_decimalint = false;
+        if (OB_FAIL(ObSQLUtils::check_enable_decimalint(type_ctx.get_session(), enable_decimalint))) {
+          LOG_WARN("fail to check_enable_decimalint_type",
+              K(ret), K(type_ctx.get_session()->get_effective_tenant_id()));
+        } else if (enable_decimalint && is_all_integer_or_decimal_int) {
+          type.set_calc_type(ObDecimalIntType); // field is an expr in mysql mode
+        } else {
+          type.set_calc_type(ObNumberType);
+        }
       }
 
       ObObjType calc_type = type.get_calc_type();
@@ -102,9 +120,13 @@ int ObExprField::calc_result_typeN(ObExprResType &type,
       if (ob_is_string_type(type.get_calc_type())) {
         ret = aggregate_charsets_for_comparison(type, types_stack, param_num, type_ctx.get_coll_type());
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !types_stack[0].is_null()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
           types_stack[i].set_calc_meta(type.get_calc_meta());
+          types_stack[i].set_calc_accuracy(types_stack[0].get_accuracy());
+          if (type.get_calc_meta().is_decimal_int()) {
+            types_stack[i].add_cast_mode(CM_CONST_TO_DECIMAL_INT_EQ);
+          }
         }
       }
     }

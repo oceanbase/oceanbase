@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_TABLET_TABLE_OPERATOR
 
 #include "lib/container/ob_iarray.h" //ObIArray
+#include "storage/compaction/ob_tenant_medium_checker.h"
 #include "share/tablet/ob_tablet_info.h" // ObTabletReplica, ObTabletInfo
 
 namespace oceanbase
@@ -136,13 +137,19 @@ public:
       const int64_t limit,
       int64_t &affected_rows);
 public:
-  static int get_tablet_info(
+  static int batch_get_tablet_info(
       common::ObISQLClient *sql_proxy,
       const uint64_t tenant_id,
-      const common::ObTabletID &tablet_id,
-      const ObLSID &ls_id,
-      ObTabletInfo &tablet_info);
+      const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
+      ObIArray<ObTabletInfo> &tablet_infos);
 private:
+  static int inner_batch_get_tablet_by_sql_(
+      ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      ObIArray<ObTabletInfo> &tablet_infos);
   static int inner_batch_get_by_sql_(
       ObISQLClient &sql_client,
       const uint64_t tenant_id,

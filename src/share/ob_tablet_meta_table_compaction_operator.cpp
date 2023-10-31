@@ -29,44 +29,71 @@ namespace share
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
-// update status of all rows
-int ObTabletMetaTableCompactionOperator::set_info_status(
-    const ObTabletCompactionScnInfo &input_info,
-    ObTabletCompactionScnInfo &ret_info,
+int ObTabletMetaTableCompactionOperator::batch_set_info_status(
+    const uint64_t tenant_id,
+    const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  ObSqlString sql;
-  ObDMLSqlSplicer dml;
-  affected_rows = 0;
-  if (OB_UNLIKELY(!input_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(input_info));
-  } else {
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(input_info.tenant_id_);
-    if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {// start trans
-      LOG_WARN("fail to start transaction", KR(ret), K(input_info), K(meta_tenant_id));
-    } else if (OB_FAIL(do_select(trans, true/*select_with_update*/, input_info, ret_info))) {
-      LOG_WARN("failed to do select", K(ret), K(input_info));
-    } else if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == ret_info.status_) {
-      // do nothing
-    } else if (OB_FAIL(dml.add_pk_column("tenant_id", input_info.tenant_id_))
-        || OB_FAIL(dml.add_pk_column("ls_id", input_info.ls_id_))
-        || OB_FAIL(dml.add_pk_column("tablet_id", input_info.tablet_id_))
-        || OB_FAIL(dml.add_column("status", (int64_t)input_info.status_))) {
-      LOG_WARN("add column failed", KR(ret), K(input_info));
-    } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_TABLET_META_TABLE_TNAME, sql))) {
-      LOG_WARN("fail to splice batch insert update sql", KR(ret), K(sql));
-    } else if (OB_FAIL(trans.write(meta_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", K(input_info), K(meta_tenant_id), K(sql));
-    } else if (OB_UNLIKELY(0 == affected_rows)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("affected rows is invalid", K(ret), K(input_info), K(affected_rows));
+  int64_t pairs_count = tablet_ls_pairs.count();
+  int64_t start_idx = 0;
+  int64_t end_idx = min(MAX_BATCH_COUNT, pairs_count);
+  while (OB_SUCC(ret) && (start_idx < end_idx)) {
+    if (OB_FAIL(inner_batch_set_info_status_(
+        tenant_id,
+        tablet_ls_pairs,
+        start_idx,
+        end_idx,
+        affected_rows))) {
+      LOG_WARN("fail to inner batch set by sql",
+          KR(ret), K(tenant_id), K(tablet_ls_pairs), K(start_idx), K(end_idx));
     } else {
-      FLOG_INFO("success to set info status", K(ret), K(input_info), K(ret_info));
+      start_idx = end_idx;
+      end_idx = min(start_idx + MAX_BATCH_COUNT, pairs_count);
     }
-    handle_trans_stat(trans, ret);
+  }
+  return ret;
+}
+
+int ObTabletMetaTableCompactionOperator::inner_batch_set_info_status_(
+    const uint64_t tenant_id,
+    const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_FAIL(sql.append_fmt(
+      "UPDATE %s SET status = '%ld' WHERE tenant_id = %ld AND (tablet_id,ls_id) IN ((",
+      OB_ALL_TABLET_META_TABLE_TNAME,
+      (int64_t)ObTabletReplica::ScnStatus::SCN_STATUS_ERROR,
+      tenant_id))) {
+    LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
+      const ObTabletID &tablet_id = tablet_ls_pairs.at(idx).get_tablet_id();
+      const ObLSID &ls_id = tablet_ls_pairs.at(idx).get_ls_id();
+      if (OB_UNLIKELY(!tablet_id.is_valid_with_tenant(tenant_id)
+          || !ls_id.is_valid_with_tenant(tenant_id))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid tablet_id with tenant", KR(ret), K(tenant_id), K(tablet_id), K(ls_id));
+      } else if (OB_FAIL(sql.append_fmt(
+          "'%lu', %ld%s",
+          tablet_id.id(),
+          ls_id.id(),
+          ((idx == end_idx - 1) ? "))" : "), (")))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tablet_id));
+      }
+    }
+  }
+  int64_t tmp_affected_rows = 0;
+  if (FAILEDx(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), tmp_affected_rows))) {
+    LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+  } else if (tmp_affected_rows > 0) {
+    affected_rows += tmp_affected_rows;
+    LOG_INFO("success to update checksum error status", K(ret), K(sql), K(tenant_id), K(tablet_ls_pairs), K(tmp_affected_rows));
   }
   return ret;
 }
@@ -90,19 +117,6 @@ int ObTabletMetaTableCompactionOperator::get_status(
     }
   }
   return ret;
-}
-
-void ObTabletMetaTableCompactionOperator::handle_trans_stat(
-    ObMySQLTransaction &trans,
-    int &ret)
-{
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
 }
 
 int ObTabletMetaTableCompactionOperator::do_select(
@@ -170,6 +184,9 @@ int ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is unexpected null", K(ret));
+  } else {
+    LOG_INFO("start to update unequal tablet id array", KR(ret), K(ls_id), K(major_frozen_scn),
+      "input_tablet_id_array_cnt", input_tablet_id_array.count());
   }
   while (OB_SUCC(ret) && (start_idx < end_idx)) {
     ObSqlString sql;
@@ -196,8 +213,9 @@ int ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
           LOG_WARN("fail to construct tablet id array", KR(ret), "sql", sql.ptr());
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (unequal_tablet_id_array.empty()) {
+      if (OB_FAIL(ret) || unequal_tablet_id_array.empty()) {
+      } else if (unequal_tablet_id_array.count() < MAX_BATCH_COUNT
+        && end_idx != input_tablet_id_array.count()) { // before last round, check count
         // do nothing
       } else if (OB_FAIL(inner_batch_update_unequal_report_scn_tablet(
               tenant_id,
@@ -424,7 +442,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
           ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
           LOG_WARN("freeze_service_epoch mismatch, do not update report_scn on this server", KR(ret), K(tenant_id));
         }
-        handle_trans_stat(trans, ret);
+        ret = trans.handle_trans_in_the_end(ret);
         LOG_INFO("finish one round of batch update report scn", KR(ret), K(tenant_id),
                  K(affected_rows), K(BATCH_UPDATE_CNT));
       }
@@ -480,7 +498,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_status(
           ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
           LOG_WARN("freeze_service_epoch mismatch, do not update status on this server", KR(ret), K(tenant_id));
         }
-        handle_trans_stat(trans, ret);
+        ret = trans.handle_trans_in_the_end(ret);
         LOG_INFO("finish one round of batch update status", KR(ret), K(tenant_id), K(affected_rows), K(BATCH_UPDATE_CNT));
       }
     }
@@ -703,7 +721,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
           LOG_WARN("freeze_service_epoch mismatch, do not update report_scn on this server", KR(ret), K(tenant_id));
         }
       }
-      handle_trans_stat(trans, ret);
+      ret = trans.handle_trans_in_the_end(ret);
     }
   }
 

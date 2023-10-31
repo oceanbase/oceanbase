@@ -25,6 +25,7 @@ ObAllVirtualTabletCompactionHistory::ObAllVirtualTabletCompactionHistory()
       dag_id_buf_(),
       participant_table_str_(),
       macro_id_list_(),
+      other_info_(),
       comment_(),
       merge_info_(),
       major_merge_info_iter_(),
@@ -72,9 +73,10 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
 
   if (OB_SUCC(ret)) {
     if (FALSE_IT(MEMSET(comment_, '\0', sizeof(comment_)))) {
+    } else if (FALSE_IT(MEMSET(other_info_, '\0', sizeof(other_info_)))) {
     } else if (OB_FAIL(ObTenantSSTableMergeInfoMgr::get_next_info(major_merge_info_iter_,
                 minor_merge_info_iter_,
-                merge_info_, comment_, sizeof(comment_)))){
+                merge_info_, other_info_, sizeof(other_info_)))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to get next sstable merge info", K(ret));
       }
@@ -103,6 +105,13 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       break;
     case TABLET_ID:
       cells[i].set_int(merge_info_.tablet_id_.id());
+      break;
+    case START_CG_ID:
+      cells[i].set_int(merge_info_.start_cg_idx_);
+      break;
+    case END_CG_ID:
+      // start_cg_id == end_cg_id == 0 means row store merge
+      cells[i].set_int(merge_info_.end_cg_idx_);
       break;
     case MERGE_TYPE: {
       cells[i].set_varchar(merge_type_to_str(merge_info_.merge_type_));
@@ -202,8 +211,26 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     case COMMENT:
-      merge_info_.fill_comment(comment_, sizeof(comment_));
+      merge_info_.fill_comment(comment_, sizeof(comment_), other_info_);
       cells[i].set_varchar(comment_);
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
+    case KEPT_SNAPSHOT:
+      if (merge_info_.kept_snapshot_info_.is_valid()) {
+        MEMSET(kept_snapshot_info_, '\0', sizeof(kept_snapshot_info_));
+        merge_info_.kept_snapshot_info_.to_string(kept_snapshot_info_, sizeof(kept_snapshot_info_));
+        cells[i].set_varchar(kept_snapshot_info_);
+      } else {
+        cells[i].set_varchar("");
+      }
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      break;
+    case MERGE_LEVEL:
+      if (is_valid_merge_level(merge_info_.merge_level_)) {
+        cells[i].set_varchar(merge_level_to_str(merge_info_.merge_level_));
+      } else {
+        cells[i].set_varchar("");
+      }
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     default:
@@ -226,6 +253,7 @@ void ObAllVirtualTabletCompactionHistory::reset()
   memset(participant_table_str_, 0, sizeof(participant_table_str_));
   memset(macro_id_list_, 0, sizeof(macro_id_list_));
   memset(comment_, 0, sizeof(comment_));
+  memset(other_info_, 0, sizeof(other_info_));
 }
 
 

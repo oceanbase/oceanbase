@@ -58,14 +58,18 @@ public:
       K_(micro_block_cnt),
       K_(use_old_macro_block_count),
       K_(row_count),
+      K_(column_group_cnt),
+      K_(co_base_type),
       K_(rowkey_column_cnt),
       K_(column_cnt),
+      K_(full_column_cnt),
       K_(column_checksums),
       K_(data_checksum),
       K_(occupy_size),
       K_(original_size),
       K_(max_merged_trans_version),
       K_(ddl_scn),
+      K_(is_empty_co_table),
       K_(contain_uncommitted_row),
       K_(is_meta_root),
       K_(compressor_type),
@@ -99,8 +103,11 @@ public:
   int64_t micro_block_cnt_;
   int64_t use_old_macro_block_count_;
   int64_t row_count_;
+  int64_t column_group_cnt_; // only used for column_store
+  int32_t co_base_type_; // used for co sstable
   int64_t rowkey_column_cnt_;
   int64_t column_cnt_;
+  int64_t full_column_cnt_;
   common::ObSEArray<int64_t, common::OB_ROW_DEFAULT_COLUMNS_COUNT> column_checksums_;
   int64_t data_checksum_;
   int64_t occupy_size_;
@@ -108,6 +115,7 @@ public:
   int64_t max_merged_trans_version_;
   share::SCN ddl_scn_; // saved into sstable meta
   share::SCN filled_tx_scn_;
+  bool is_empty_co_table_; // only used for creating empty co sstable
   bool contain_uncommitted_row_;
   bool is_meta_root_;
   common::ObCompressorType compressor_type_;

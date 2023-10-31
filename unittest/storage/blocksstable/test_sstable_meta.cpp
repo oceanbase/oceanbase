@@ -23,7 +23,7 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/schema_utils.h"
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "storage/tablet/ob_tablet_meta.h"
@@ -78,6 +78,7 @@ void TestRootBlockInfo::SetUp()
   prepare_tablet_read_info();
   des_meta_.encrypt_id_ = ObCipherOpMode::ob_invalid_mode;
   des_meta_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  des_meta_.row_store_type_ = ObRowStoreType::ENCODING_ROW_STORE;
   ASSERT_TRUE(!root_info_.is_valid());
   root_info_.reset();
   ASSERT_TRUE(!root_info_.is_valid());
@@ -155,9 +156,12 @@ void TestRootBlockInfo::prepare_block_root()
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
   write_info.buffer_ = io_buf;
   write_info.size_ = buf_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::write_block(write_info, handle));
   block_addr_.second_id_ = handle.get_macro_id().second_id();
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, block_addr_, block_data_));
+  ObRowStoreType row_store_type = ObRowStoreType::ENCODING_ROW_STORE;
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, block_addr_, block_data_, row_store_type));
   ASSERT_TRUE(root_info_.is_valid());
 }
 
@@ -368,7 +372,7 @@ TEST_F(TestRootBlockInfo, test_load_and_transform_root_block)
 {
   ASSERT_TRUE(root_info_.get_addr().is_block());
   ASSERT_EQ(OB_SUCCESS, root_info_.load_root_block_data(allocator_, des_meta_));
-  ASSERT_EQ(OB_SUCCESS, root_info_.transform_root_block_data(allocator_));
+  ASSERT_EQ(OB_SUCCESS, root_info_.transform_root_block_extra_buf(allocator_));
 }
 
 TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
@@ -396,20 +400,19 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   root_info_.reset();
   ASSERT_TRUE(!root_info_.is_valid());
   const char data[BUF_LEN] = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'};
-  ObMicroBlockData block_data;
   ObMetaDiskAddr addr;
   addr.type_ = ObMetaDiskAddr::MEM;
-  addr.size_ = BUF_LEN;
-  block_data.buf_ = data;
-  block_data.size_ = BUF_LEN;
+  addr.size_ = block_data_.size_;
+  ObMicroBlockData block_data(block_data_.buf_, block_data_.size_);
   block_data.type_ = ObMicroBlockData::INDEX_BLOCK;
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data));
+  const ObRowStoreType row_store_type = ObRowStoreType::ENCODING_ROW_STORE;
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data, row_store_type));
   ASSERT_TRUE(root_info_.is_valid());
   ASSERT_TRUE(root_info_.get_addr().is_memory());
 
   pos = 0;
   const int64_t buf_len_2 = root_info_.get_serialize_size();
-  buf = new char [buf_len_2];
+  buf = (char *)allocator_.alloc(buf_len_2);
   ASSERT_EQ(OB_SUCCESS, root_info_.serialize(buf, buf_len_2, pos));
   ASSERT_EQ(buf_len_2, pos);
   ASSERT_TRUE(root_info_.is_valid());
@@ -422,19 +425,20 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   ASSERT_EQ(root_info_.get_addr(), tmp_info.get_addr());
   ASSERT_TRUE(tmp_info.get_addr().is_memory());
   ASSERT_EQ(0, memcmp(tmp_info.block_data_.get_buf(), block_data.buf_, BUF_LEN));
-  delete [] buf;
+  allocator_.free(buf);
+  buf = nullptr;
 
   // test none address.
   root_info_.reset();
   ASSERT_TRUE(!root_info_.is_valid());
   addr.set_none_addr();
   block_data.type_ = ObMicroBlockData::INDEX_BLOCK;
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data));
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data, row_store_type));
   ASSERT_TRUE(root_info_.is_valid());
   ASSERT_TRUE(root_info_.get_addr().is_none());
 
   const int64_t buf_len_3= root_info_.get_serialize_size();
-  buf = new char [buf_len_3];
+  buf = (char *)allocator_.alloc(buf_len_3);
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, root_info_.serialize(buf, buf_len_3, pos));
   ASSERT_EQ(buf_len_3, pos);
@@ -447,7 +451,8 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   ASSERT_EQ(buf_len_3, pos);
   ASSERT_TRUE(tmp_info.is_valid());
   ASSERT_EQ(root_info_.get_addr(), tmp_info.get_addr());
-  delete [] buf;
+  allocator_.free(buf);
+  buf = nullptr;
 }
 
 TEST_F(TestSSTableMacroInfo, test_serialize_and_deserialize)

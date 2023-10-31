@@ -31,7 +31,7 @@ ObMicroBlockHeader::ObMicroBlockHeader()
     row_count_(0),
     row_store_type_(common::MAX_ROW_STORE),
     opt_(0),
-    var_column_count_(0),
+    opt2_(0),
     row_offset_(0),
     original_length_(0),
     max_merged_trans_version_(0),
@@ -52,8 +52,7 @@ bool ObMicroBlockHeader::is_valid() const
       && version_ >= MICRO_BLOCK_HEADER_VERSION_1
       && MICRO_BLOCK_HEADER_MAGIC == magic_
       && column_count_ >= rowkey_column_count_
-      && rowkey_column_count_ > 0
-      && var_column_count_ <= column_count_
+      && rowkey_column_count_ >= 0
       && row_store_type_ < common::MAX_ROW_STORE; // ObMicroBlockHeader::is_valid
   return valid_data;
 }
@@ -71,7 +70,7 @@ void ObMicroBlockHeader::set_header_checksum()
   format_i32(column_count_, checksum);
   format_i32(rowkey_column_count_, checksum);
   format_i32(has_column_checksum_, checksum);
-  format_i32(var_column_count_, checksum);
+  format_i32(opt2_, checksum);
 
   format_i64(header_size_, checksum);
   format_i64(row_count_, checksum);
@@ -104,7 +103,7 @@ int ObMicroBlockHeader::check_header_checksum() const
   format_i32(column_count_, checksum);
   format_i32(rowkey_column_count_, checksum);
   format_i32(has_column_checksum_, checksum);
-  format_i32(var_column_count_, checksum);
+  format_i32(opt2_, checksum);
 
   format_i64(header_size_, checksum);
   format_i64(row_count_, checksum);
@@ -161,6 +160,21 @@ int ObMicroBlockHeader::deserialize_and_check_record(
     LOG_WARN("fail to check and get record", K(ret));
   }
 
+  return ret;
+}
+
+int ObMicroBlockHeader::deserialize_and_check_header(const char *ptr, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_ISNULL(ptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(ptr));
+  } else if (OB_FAIL(deserialize(ptr, size, pos))) {
+    LOG_WARN("fail to deserialize header", K(ret));
+  } else if (OB_FAIL(check_header_checksum())) {
+    LOG_WARN("fail to check header checksum", K(ret));
+  }
   return ret;
 }
 
@@ -221,7 +235,8 @@ int ObMicroBlockHeader::deserialize_and_check_record(const char *ptr, const int6
   return ret;
 }
 
-int ObMicroBlockHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObMicroBlockHeader::deep_copy(
+    char *buf, const int64_t buf_len, int64_t &pos, ObMicroBlockHeader *&header) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == buf
@@ -235,7 +250,7 @@ int ObMicroBlockHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos
     int64_t new_pos = 0;
 
     const int64_t serialize_size = header_size_;
-    ObMicroBlockHeader *header = reinterpret_cast<ObMicroBlockHeader *>(buf);
+    header = reinterpret_cast<ObMicroBlockHeader *>(buf);
     *header = *this;
     new_pos += COLUMN_CHECKSUM_PTR_OFFSET ;
     if (has_column_checksum_) {
@@ -246,12 +261,23 @@ int ObMicroBlockHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos
       } else {
         MEMCPY(header->column_checksums_, column_checksums_, column_count_ * sizeof(int64_t));
         new_pos += column_count_ * sizeof(int64_t);
-        header->column_checksums_ = nullptr; //always serialize nullptr
       }
     } else {
       header->column_checksums_ = nullptr;
     }
     pos += new_pos;
+  }
+  return ret;
+}
+
+int ObMicroBlockHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+   ObMicroBlockHeader *new_header = nullptr;
+  if (OB_FAIL(deep_copy(buf, buf_len, pos, new_header))) {
+    LOG_WARN("fail to deep copy micro block header to serialize buf", K(ret));
+  } else if (has_column_checksum_) {
+    new_header->column_checksums_ = nullptr; //always serialize nullptr
   }
   return ret;
 }

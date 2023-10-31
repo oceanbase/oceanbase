@@ -13,7 +13,7 @@
 #ifndef _OB_MACRO_UTILS_H_
 #define _OB_MACRO_UTILS_H_
 
-#define SELECT100_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,           \
+#define SELECT110_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9,           \
                    _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
                    _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, \
                    _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, \
@@ -23,16 +23,17 @@
                    _70, _71, _72, _73, _74, _75, _76, _77, _78, _79, \
                    _80, _81, _82, _83, _84, _85, _86, _87, _88, _89, \
                    _90, _91, _92, _93, _94, _95, _96, _97, _98, _99, \
-                   _100, ...) _100
+                   _100, _101, _102, _103, _104, _105, _106, _107, _108, _109, _110, ...) _110
 
-// These two macros do same work that select the 100th argument from
+// These two macros do same work that select the 110th argument from
 // argument list.
-#define SELECT100(...) SELECT100_(__VA_ARGS__)
+#define SELECT110(...) SELECT110_(__VA_ARGS__)
 
 // Expand to the number of arguments
 #define ARGS_NUM(args...)                               \
-  SELECT100(, ##args,                                   \
-            99, 98, 97, 96, 95, 94, 93, 92, 91, 90,     \
+  SELECT110(, ##args,                                   \
+            109, 108, 107, 106, 105, 104, 103, 102, 101, 100, \
+            99, 98, 97, 96, 95, 94, 93, 92, 91, 90,\
             89, 88, 87, 86, 85, 84, 83, 82, 81, 80,     \
             79, 78, 77, 76, 75, 74, 73, 72, 71, 70,     \
             69, 68, 67, 66, 65, 64, 63, 62, 61, 60,     \
@@ -165,6 +166,16 @@
 #define APPLY98(f, ...) APPLY_VARGS(f, APPLY97(f, ##__VA_ARGS__))
 #define APPLY99(f, ...) APPLY_VARGS(f, APPLY98(f, ##__VA_ARGS__))
 #define APPLY100(f, ...) APPLY_VARGS(f, APPLY99(f, ##__VA_ARGS__))
+#define APPLY101(f, ...) APPLY_VARGS(f, APPLY100(f, ##__VA_ARGS__))
+#define APPLY102(f, ...) APPLY_VARGS(f, APPLY101(f, ##__VA_ARGS__))
+#define APPLY103(f, ...) APPLY_VARGS(f, APPLY102(f, ##__VA_ARGS__))
+#define APPLY104(f, ...) APPLY_VARGS(f, APPLY103(f, ##__VA_ARGS__))
+#define APPLY105(f, ...) APPLY_VARGS(f, APPLY104(f, ##__VA_ARGS__))
+#define APPLY106(f, ...) APPLY_VARGS(f, APPLY105(f, ##__VA_ARGS__))
+#define APPLY107(f, ...) APPLY_VARGS(f, APPLY106(f, ##__VA_ARGS__))
+#define APPLY108(f, ...) APPLY_VARGS(f, APPLY107(f, ##__VA_ARGS__))
+#define APPLY109(f, ...) APPLY_VARGS(f, APPLY108(f, ##__VA_ARGS__))
+#define APPLY110(f, ...) APPLY_VARGS(f, APPLY109(f, ##__VA_ARGS__))
 #define APPLY(n, f, ...) APPLY ## n (f, ##__VA_ARGS__)
 
 // select nth argument
@@ -276,6 +287,16 @@
 #define LST_DO_98(M, s, P, ...) LST_DO_97(M, s, P, ##__VA_ARGS__)SELF s P(M, 98, ##__VA_ARGS__)
 #define LST_DO_99(M, s, P, ...) LST_DO_98(M, s, P, ##__VA_ARGS__)SELF s P(M, 99, ##__VA_ARGS__)
 #define LST_DO_100(M, s, P, ...) LST_DO_99(M, s, P, ##__VA_ARGS__)SELF s P(M, 100, ##__VA_ARGS__)
+#define LST_DO_101(M, s, P, ...) LST_DO_100(M, s, P, ##__VA_ARGS__)SELF s P(M, 101, ##__VA_ARGS__)
+#define LST_DO_102(M, s, P, ...) LST_DO_101(M, s, P, ##__VA_ARGS__)SELF s P(M, 102, ##__VA_ARGS__)
+#define LST_DO_103(M, s, P, ...) LST_DO_102(M, s, P, ##__VA_ARGS__)SELF s P(M, 103, ##__VA_ARGS__)
+#define LST_DO_104(M, s, P, ...) LST_DO_103(M, s, P, ##__VA_ARGS__)SELF s P(M, 104, ##__VA_ARGS__)
+#define LST_DO_105(M, s, P, ...) LST_DO_104(M, s, P, ##__VA_ARGS__)SELF s P(M, 105, ##__VA_ARGS__)
+#define LST_DO_106(M, s, P, ...) LST_DO_105(M, s, P, ##__VA_ARGS__)SELF s P(M, 106, ##__VA_ARGS__)
+#define LST_DO_107(M, s, P, ...) LST_DO_106(M, s, P, ##__VA_ARGS__)SELF s P(M, 107, ##__VA_ARGS__)
+#define LST_DO_108(M, s, P, ...) LST_DO_107(M, s, P, ##__VA_ARGS__)SELF s P(M, 108, ##__VA_ARGS__)
+#define LST_DO_109(M, s, P, ...) LST_DO_108(M, s, P, ##__VA_ARGS__)SELF s P(M, 109, ##__VA_ARGS__)
+#define LST_DO_110(M, s, P, ...) LST_DO_109(M, s, P, ##__VA_ARGS__)SELF s P(M, 110, ##__VA_ARGS__)
 
 #define LST_DO__(N, M, s, P, ...) LST_DO_ ## N(M, s, P, ##__VA_ARGS__)
 #define LST_DO_(...) LST_DO__(__VA_ARGS__)
@@ -301,7 +322,8 @@
     60, 61, 62, 63, 64, 65, 66, 67, 68, 69,    \
     70, 71, 72, 73, 74, 75, 76, 77, 78, 79,    \
     80, 81, 82, 83, 84, 85, 86, 87, 88, 89,    \
-        90, 91, 92, 93, 94, 95, 96, 97, 98, 99,100
+    90, 91, 92, 93, 94, 95, 96, 97, 98, 99,    \
+    100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110
 
 #define MSTR(X) #X
 
@@ -645,8 +667,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
 #define REACH_TENANT_TIME_INTERVAL(i) \
   ({ \
     bool bret = false; \
-    RLOCAL_STATIC(int64_t, last_time) = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
-    int64_t cur_time = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
+    RLOCAL_STATIC(int64_t, last_time) = ObClockGenerator::getClock(); \
+    int64_t cur_time = ObClockGenerator::getClock(); \
     int64_t old_time = last_time; \
     if (OB_UNLIKELY((i + last_time) < cur_time) \
         && old_time == ATOMIC_CAS(&last_time, old_time, cur_time)) \

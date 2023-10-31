@@ -193,6 +193,26 @@ struct ObNullSafeFixedDoubleCmp
   }
 };
 
+template<ObDecimalIntWideType width1, ObDecimalIntWideType width2, bool NULL_FIRST>
+struct ObNullSafeDecintCmp
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    int ret = OB_SUCCESS;
+    cmp_ret = 0;
+    if (OB_UNLIKELY(l.is_null()) && OB_UNLIKELY(r.is_null())) {
+      cmp_ret = 0;
+    } else if (OB_UNLIKELY(l.is_null())) {
+      cmp_ret = NULL_FIRST ? -1 : 1;
+    } else if (OB_UNLIKELY(r.is_null())) {
+      cmp_ret = NULL_FIRST ? 1 : -1;
+    } else {
+      ret = datum_cmp::ObDecintCmp<width1, width2>::cmp(l, r, cmp_ret);
+    }
+    return OB_SUCCESS;
+  }
+};
+
 static ObDatumCmpFuncType NULLSAFE_TYPE_CMP_FUNCS[ObMaxType][ObMaxType][2];
 // init type type compare function array
 template <int X, int Y>
@@ -365,10 +385,29 @@ struct InitFixedDoubleCmpArray
 bool g_fixed_double_cmp_array_inited =
   ObArrayConstIniter<OB_NOT_FIXED_SCALE, InitFixedDoubleCmpArray>::init();
 
+static ObDatumCmpFuncType DECINT_CMP_FUNCS[DECIMAL_INT_MAX][DECIMAL_INT_MAX][2];
+
+template<int width1, int width2>
+struct InitDecintCmpArray
+{
+  static void init_array()
+  {
+    auto &funcs = DECINT_CMP_FUNCS;
+    funcs[width1][width2][0] =
+      ObNullSafeDecintCmp<static_cast<ObDecimalIntWideType>(width1),
+                          static_cast<ObDecimalIntWideType>(width2), false>::cmp;
+    funcs[width1][width2][1] = ObNullSafeDecintCmp<static_cast<ObDecimalIntWideType>(width1),
+                          static_cast<ObDecimalIntWideType>(width2), true>::cmp;
+  }
+};
+
+bool g_decint_cmp_array_inited =
+  Ob2DArrayConstIniter<DECIMAL_INT_MAX, DECIMAL_INT_MAX, InitDecintCmpArray>::init();
+
 ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(
     const ObObjType type1, const ObObjType type2, const ObCmpNullPos null_pos,
     const ObCollationType cs_type, const ObScale max_scale, const bool is_oracle_mode,
-    const bool has_lob_header) {
+    const bool has_lob_header, const ObPrecision prec1, const ObPrecision prec2) {
   OB_ASSERT(type1 >= ObNullType && type1 < ObMaxType);
   OB_ASSERT(type2 >= ObNullType && type2 < ObMaxType);
   OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
@@ -397,6 +436,13 @@ ObDatumCmpFuncType ObDatumFuncs::get_nullsafe_cmp_func(
     func_ptr = FIXED_DOUBLE_CMP_FUNCS[max_scale][null_pos_idx];
   } else if (is_geometry(type1) && is_geometry(type2)) {
     func_ptr = NULLSAFE_GEO_CMP_FUNCS[null_pos_idx][has_lob_header];
+  } else if (ob_is_decimal_int(type1) && ob_is_decimal_int(type2) && prec1 != PRECISION_UNKNOWN_YET
+             && prec2 != PRECISION_UNKNOWN_YET) {
+    ObDecimalIntWideType lw = get_decimalint_type(prec1);
+    ObDecimalIntWideType rw = get_decimalint_type(prec2);
+    OB_ASSERT(lw >= 0 && lw < DECIMAL_INT_MAX);
+    OB_ASSERT(rw >= 0 && rw < DECIMAL_INT_MAX);
+    func_ptr = DECINT_CMP_FUNCS[lw][rw][null_pos_idx];
   } else if (ob_is_user_defined_sql_type(type1) || ob_is_user_defined_sql_type(type2)) {
     func_ptr = NULL;
   } else {
@@ -718,13 +764,19 @@ struct DatumStrHashCalculator<CS_TYPE_UTF8MB4_BIN, calc_end_space, T, true /* is
   {
     int ret = OB_SUCCESS;
     ObString inrow_data = datum.get_string();
-    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    // all lob tc can use longtext type for lob iter
-    if (OB_FAIL(datum_lob_locator_get_string(datum, allocator, inrow_data))) {
-      LOG_WARN("Lob: get string failed ", K(ret), K(datum));
-    } else {
+    const ObLobCommon &lob = datum.get_lob_data();
+    if (datum.len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) {
       res = datum_varchar_hash_utf8mb4_bin<calc_end_space, T>(
-            inrow_data.ptr(), inrow_data.length(), seed);
+              lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(datum.len_)), seed);
+    } else {
+      common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      // all lob tc can use longtext type for lob iter
+      if (OB_FAIL(datum_lob_locator_get_string(datum, allocator, inrow_data))) {
+        LOG_WARN("Lob: get string failed ", K(ret), K(datum));
+      } else {
+        res = datum_varchar_hash_utf8mb4_bin<calc_end_space, T>(
+              inrow_data.ptr(), inrow_data.length(), seed);
+      }
     }
     return ret;
   }
@@ -1143,6 +1195,38 @@ bool g_basic_geo_array_inited = ObArrayConstIniter<1, InitBasicGeoFuncArray>::in
 bool g_fixed_double_basic_func_array_inited =
   ObArrayConstIniter<OB_NOT_FIXED_SCALE, InitFixedDoubleBasicFuncArray>::init();
 
+static ObExprBasicFuncs DECINT_BASIC_FUNCS[DECIMAL_INT_MAX];
+
+template<int width>
+struct InitDecintBasicFuncArray
+{
+  template<typename T>
+  using Hash = DefHashFunc<DatumHashCalculator<ObDecimalIntType, T>>;
+
+  static void init_array()
+  {
+    auto &basic_funcs = DECINT_BASIC_FUNCS;
+    basic_funcs[width].default_hash_ = Hash<ObDefaultHash>::hash;
+    basic_funcs[width].default_hash_batch_= Hash<ObDefaultHash>::hash_batch;
+    basic_funcs[width].murmur_hash_ = Hash<ObMurmurHash>::hash;
+    basic_funcs[width].murmur_hash_batch_ = Hash<ObMurmurHash>::hash_batch;
+    basic_funcs[width].xx_hash_ = Hash<ObXxHash>::hash;
+    basic_funcs[width].xx_hash_batch_ = Hash<ObXxHash>::hash_batch;
+    basic_funcs[width].wy_hash_ = Hash<ObWyHash>::hash;
+    basic_funcs[width].wy_hash_batch_ = Hash<ObWyHash>::hash_batch;
+    basic_funcs[width].null_first_cmp_ =
+      ObNullSafeDecintCmp<static_cast<ObDecimalIntWideType>(width),
+                          static_cast<ObDecimalIntWideType>(width), true>::cmp;
+    basic_funcs[width].null_last_cmp_ =
+      ObNullSafeDecintCmp<static_cast<ObDecimalIntWideType>(width),
+                          static_cast<ObDecimalIntWideType>(width), false>::cmp;
+    basic_funcs[width].murmur_hash_v2_ = Hash<ObMurmurHash>::hash_v2;
+    basic_funcs[width].murmur_hash_v2_batch_ = Hash<ObMurmurHash>::hash_v2_batch;
+  }
+};
+
+bool g_decint_basic_func_array_inited =
+  ObArrayConstIniter<DECIMAL_INT_MAX, InitDecintBasicFuncArray>::init();
 bool g_basic_udt_array_inited = ObArrayConstIniter<1, InitUDTBasicFuncArray>::init();
 
 // for observer 4.0 text tc compare always use ObNullSafeDatumStrCmp
@@ -1152,7 +1236,8 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
                                                const ObCollationType cs_type,
                                                const ObScale scale,
                                                const bool is_oracle_mode,
-                                               const bool has_lob_locator)
+                                               const bool has_lob_locator,
+                                               const ObPrecision precision)
 {
   ObExprBasicFuncs *res = NULL;
   if ((type >= ObNullType && type < ObMaxType)) {
@@ -1178,6 +1263,10 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
     } else if (!is_oracle_mode && ob_is_double_type(type) &&
                 scale > SCALE_UNKNOWN_YET && scale < OB_NOT_FIXED_SCALE) {
       res = &FIXED_DOUBLE_BASIC_FUNCS[scale];
+    } else if (ob_is_decimal_int(type) && precision != PRECISION_UNKNOWN_YET) {
+      ObDecimalIntWideType width = get_decimalint_type(precision);
+      OB_ASSERT(width >= 0 && width < DECIMAL_INT_MAX);
+      res = &DECINT_BASIC_FUNCS[width];
     } else {
       res = &EXPR_BASIC_FUNCS[type];
     }
@@ -1253,6 +1342,12 @@ REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_NULLSAFE_CMP,
                    FIXED_DOUBLE_CMP_FUNCS,
                    sizeof(FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
 
+static_assert(DECIMAL_INT_MAX * DECIMAL_INT_MAX * 2 == sizeof(DECINT_CMP_FUNCS) / sizeof(void *),
+              "unexpected size");
+
+REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_NULLSAFE_CMP, DECINT_CMP_FUNCS,
+                   sizeof(DECINT_CMP_FUNCS) / sizeof(void *));
+
 // When new function add to ObExprBasicFuncs, EXPR_BASIC_FUNCS should split into
 // multi arrays for register.
 struct ExprBasicFuncSerPart1
@@ -1294,6 +1389,8 @@ static ExprBasicFuncSerPart1 EXPR_BASIC_GEO_FUNCS_PART1[2];
 static ExprBasicFuncSerPart2 EXPR_BASIC_GEO_FUNCS_PART2[2];
 static ExprBasicFuncSerPart1 EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1[OB_NOT_FIXED_SCALE];
 static ExprBasicFuncSerPart2 EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2[OB_NOT_FIXED_SCALE];
+static ExprBasicFuncSerPart1 EXPR_BASIC_DECINT_FUNCS_PART1[DECIMAL_INT_MAX];
+static ExprBasicFuncSerPart2 EXPR_BASIC_DECINT_FUNCS_PART2[DECIMAL_INT_MAX];
 
 static ExprBasicFuncSerPart1 EXPR_BASIC_UDT_FUNCS_PART1[1];
 static ExprBasicFuncSerPart2 EXPR_BASIC_UDT_FUNCS_PART2[1];
@@ -1321,6 +1418,11 @@ bool split_basic_func_for_ser(void)
   for (int64_t i = 0; i < sizeof(FIXED_DOUBLE_BASIC_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
     EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1[i].from(FIXED_DOUBLE_BASIC_FUNCS[i]);
     EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2[i].from(FIXED_DOUBLE_BASIC_FUNCS[i]);
+  }
+
+  for (int64_t i = 0; i < sizeof(DECINT_BASIC_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
+    EXPR_BASIC_DECINT_FUNCS_PART1[i].from(DECINT_BASIC_FUNCS[i]);
+    EXPR_BASIC_DECINT_FUNCS_PART2[i].from(DECINT_BASIC_FUNCS[i]);
   }
   for (int64_t i = 0; i < sizeof(EXPR_BASIC_UDT_FUNCS)/sizeof(ObExprBasicFuncs); i++) {
     EXPR_BASIC_UDT_FUNCS_PART1[i].from(EXPR_BASIC_UDT_FUNCS[i]);
@@ -1376,6 +1478,13 @@ REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_BASIC_PART1,
 REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_BASIC_PART2,
                    EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2,
                    sizeof(EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART2) / sizeof(void *));
+
+
+REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_BASIC_PART1, EXPR_BASIC_DECINT_FUNCS_PART1,
+                   sizeof(EXPR_BASIC_DECINT_FUNCS_PART1) / sizeof(void *));
+
+REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_BASIC_PART2, EXPR_BASIC_DECINT_FUNCS_PART2,
+                   sizeof(EXPR_BASIC_DECINT_FUNCS_PART2) / sizeof(void *));
 
 static_assert(1 * 12 == sizeof(EXPR_BASIC_UDT_FUNCS) / sizeof(void *),
               "unexpected size");

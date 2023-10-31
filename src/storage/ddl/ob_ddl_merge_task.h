@@ -15,14 +15,13 @@
 
 #include "share/scn.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
-#include "share/scheduler/ob_dag_scheduler.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
@@ -149,7 +148,7 @@ public:
                                      const int64_t snapshot_version,
                                      const int64_t ddl_format_version,
                                      const blocksstable::ObSSTable *first_ddl_sstable,
-                                     blocksstable::ObDataStoreDesc &data_desc);
+                                     blocksstable::ObWholeDataStoreDesc &data_desc);
   static int try_get_first_ddl_sstable(ObTablet &tablet,
                                        blocksstable::ObSSTable *&first_sstable);
   static int create_ddl_sstable(ObTablet &tablet,

@@ -143,7 +143,8 @@ ObSingleRowGetter::ObSingleRowGetter(ObIAllocator &allocator, ObTablet &tablet)
     output_projector_(allocator),
     relative_table_(nullptr),
     table_param_(nullptr),
-    allocator_(allocator)
+    allocator_(allocator),
+    new_row_builder_()
 {
 }
 
@@ -248,6 +249,7 @@ int ObSingleRowGetter::open(const ObDatumRowkey &rowkey, bool use_fuse_row_cache
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
+  const common::ObIArray<share::schema::ObColDesc> * col_descs = nullptr;
 
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSingleMerge)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -266,6 +268,8 @@ int ObSingleRowGetter::open(const ObDatumRowkey &rowkey, bool use_fuse_row_cache
       STORAGE_LOG(WARN, "Fail to init ObSingleMerge, ", K(ret));
     } else if (OB_FAIL(single_merge_->open(rowkey))) {
       STORAGE_LOG(WARN, "Fail to open iter, ", K(ret));
+    } else if (OB_FAIL(new_row_builder_.init(single_merge_->get_out_project_cells(), allocator_))) {
+      LOG_WARN("Failed to init ObNewRowBuilder", K(ret));
     }
     if (use_fuse_row_cache) {
       access_ctx_.use_fuse_row_cache_ = true;
@@ -285,8 +289,9 @@ int ObSingleRowGetter::get_next_row(ObNewRow *&row)
         STORAGE_LOG(WARN, "failed to get next row", K(ret));
       }
     } else if (store_row->row_flag_.is_exist_without_delete()) {
-      //TODO remove obnewrow
-      row = &store_row->get_new_row();
+      if (OB_FAIL(new_row_builder_.build(*store_row, row))) {
+        STORAGE_LOG(WARN, "Failed to build new row", K(ret), KPC(store_row));
+      }
       break;
     }
   }

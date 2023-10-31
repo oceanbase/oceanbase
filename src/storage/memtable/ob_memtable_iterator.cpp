@@ -182,7 +182,8 @@ ObMemtableScanIterator::ObMemtableScanIterator()
 ObMemtableScanIterator::~ObMemtableScanIterator()
 {
   GARL_DEL(&active_resource_);
-  reset();
+  //reset is not necessary since there is no resource to release
+  //reset();
 }
 
 /*

@@ -19,6 +19,7 @@
 #include "storage/ob_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
@@ -49,14 +50,18 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     micro_block_cnt_(0),
     use_old_macro_block_count_(0),
     row_count_(0),
+    column_group_cnt_(1),
+    co_base_type_(ObCOSSTableBaseType::INVALID_TYPE),
     rowkey_column_cnt_(0),
     column_cnt_(0),
+    full_column_cnt_(0),
     data_checksum_(0),
     occupy_size_(0),
     original_size_(0),
     max_merged_trans_version_(0),
     ddl_scn_(SCN::min_scn()),
     filled_tx_scn_(SCN::min_scn()),
+    is_empty_co_table_(false),
     contain_uncommitted_row_(false),
     is_meta_root_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
@@ -93,6 +98,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && micro_block_cnt_ >= 0
                && use_old_macro_block_count_ >= 0
                && row_count_ >= 0
+               && column_group_cnt_ > 0
                && rowkey_column_cnt_ >= 0
                && column_cnt_ >= 0
                && occupy_size_ >= 0
@@ -104,8 +110,8 @@ bool ObTabletCreateSSTableParam::is_valid() const
     LOG_WARN("invalid basic params", K(schema_version_), K_(sstable_logic_seq), K(create_snapshot_version_), K(index_type_),
              K(root_row_store_type_), K_(latest_row_store_type), K(data_index_tree_height_), K(index_blocks_cnt_),
              K(data_blocks_cnt_), K(micro_block_cnt_), K(use_old_macro_block_count_),
-             K(row_count_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
-             K(ddl_scn_), K(filled_tx_scn_), K(original_size_), K_(recycle_version));
+             K(row_count_), K(column_group_cnt_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
+             K(original_size_), K(ddl_scn_), K(filled_tx_scn_), K_(recycle_version));
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
     // ddl sstable can have invalid meta addr, so skip following ifs
     if (!ddl_scn_.is_valid_and_not_min()) {

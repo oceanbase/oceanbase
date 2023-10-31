@@ -269,6 +269,16 @@ int64_t ObInterColSubStrEncoder::calc_size() const
   return size;
 }
 
+int ObInterColSubStrEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = sizeof(ObInterColSubStrMetaHeader);
+  if (0 < exc_row_ids_.count()) {
+    need_size += meta_writer_.size();
+  }
+  return ret;
+}
+
 int ObInterColSubStrEncoder::store_meta(ObBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;

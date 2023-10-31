@@ -97,6 +97,11 @@ blocksstable::ObDmlFlag ObMvccTransNode::get_dml_flag() const
   return reinterpret_cast<const ObMemtableDataHeader *>(buf_)->dml_flag_;
 }
 
+int64_t ObMvccTransNode::get_data_size() const
+{
+  return reinterpret_cast<const ObMemtableDataHeader *>(buf_)->buf_len_;
+}
+
 void ObMvccTransNode::set_safe_read_barrier(const bool is_weak_consistent_read)
 {
   uint8_t consistent_flag = F_STRONG_CONSISTENT_READ_BARRIER;

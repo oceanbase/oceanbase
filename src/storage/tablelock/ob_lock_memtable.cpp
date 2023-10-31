@@ -898,7 +898,7 @@ int ObLockMemtable::flush(SCN recycle_scn,
       compaction::ObTabletMergeDagParam param;
       param.ls_id_ = ls_id_;
       param.tablet_id_ = LS_LOCK_TABLET;
-      param.merge_type_ = MINI_MERGE;
+      param.merge_type_ = compaction::MINI_MERGE;
       param.merge_version_ = ObVersion::MIN_VERSION;
       if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
         if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {

@@ -18,7 +18,7 @@
 #include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_task_define.h"
@@ -232,10 +232,17 @@ int ObServerReloadConfig::operator()()
       // do-nothing
     } else {
       reset_mem_leak_checker_label(GCONF.leak_mod_to_check.str());
-      ObKVGlobalCache::get_instance().set_checker_cache_name(GCONF.leak_mod_to_check.str());  // TODO : @lvling add system variable to set cache handle diagnose filter
 
       STRNCPY(last_value, GCONF.leak_mod_to_check.str(), sizeof(last_value));
       last_value[sizeof(last_value) - 1] = '\0';
+    }
+  }
+
+  {
+    static char last_storage_check_mod[MAX_CACHE_NAME_LENGTH];
+    if (0 != STRNCMP(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod))) {
+      ObKVGlobalCache::get_instance().set_storage_leak_check_mod(GCONF._storage_leak_check_mod.str());
+      STRNCPY(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod));
     }
   }
 #ifndef ENABLE_SANITY
@@ -334,7 +341,7 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
   } else {
     auto f = [] () {
       (void)MTL(ObTenantDagScheduler *)->reload_config();
-      (void)MTL(ObTenantTabletScheduler *)->reload_tenant_config();
+      (void)MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
       return OB_SUCCESS;
     };
     omt->operate_in_each_tenant(f);

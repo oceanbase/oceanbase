@@ -132,16 +132,10 @@ private:
 
   static int estimate_prefix_range_rowcount(
       const obrpc::ObEstPartResElement &result,
-      ObCostTableScanInfo &est_cost_info,
-      double &logical_row_count,
-      double &physical_row_count);
+      ObCostTableScanInfo &est_cost_info);
 
   static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info,
-                                       const RowCountEstMethod est_method,
-                                       double &output_row_count,
-                                       double &logical_row_count,
-                                       double &physical_row_count,
-                                       double &index_back_row_count);
+                                       const RowCountEstMethod est_method);
 
   static int get_key_ranges(ObOptimizerContext &ctx,
                             ObIAllocator &allocator,

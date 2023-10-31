@@ -11,6 +11,7 @@
 #include "ob_macro_block.h"
 #include "ob_micro_block_hash_index.h"
 #include "ob_imicro_block_reader.h"
+#include "ob_imicro_block_writer.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_table_schema.h"
 
@@ -25,8 +26,8 @@ namespace blocksstable
 int ObMicroBlockHashIndexBuilder::add(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  const ObStorageDatumUtils &datum_utils = data_store_desc_->datum_utils_;
-  const int64_t schema_rowkey_col_cnt = data_store_desc_->schema_rowkey_col_cnt_;
+  const ObStorageDatumUtils &datum_utils = data_store_desc_->get_datum_utils();
+  const int64_t schema_rowkey_col_cnt = data_store_desc_->get_schema_rowkey_col_cnt();
   if (OB_UNLIKELY(!row.is_valid() || row.get_column_count() < schema_rowkey_col_cnt)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid input argument", K(ret),
@@ -52,7 +53,7 @@ int ObMicroBlockHashIndexBuilder::add(const ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockHashIndexBuilder::build_block(ObSelfBufferWriter &buffer)
+int ObMicroBlockHashIndexBuilder::build_block(ObMicroBufferWriter &buffer)
 {
   int ret = OB_SUCCESS;
   // ObMicroBlockHashIndexBuilder must be valid when call build_block.
@@ -89,7 +90,7 @@ int ObMicroBlockHashIndexBuilder::build_block(ObSelfBufferWriter &buffer)
           STORAGE_LOG(WARN, "Data buffer fail to write reserved byte", K(ret), K(num_buckets), K(count_), K(reserved_byte));
         } else if (OB_FAIL(buffer.write(num_buckets))) {
           STORAGE_LOG(WARN, "Data buffer fail to write hash index buckets number", K(ret), K(num_buckets), K(count_));
-        } else if (OB_FAIL(buffer.write(reinterpret_cast<const char *>(buckets_), num_buckets))) {
+        } else if (OB_FAIL(buffer.write(reinterpret_cast<const void *>(buckets_), num_buckets))) {
           STORAGE_LOG(WARN, "Data buffer fail to write hash index buckets", K(ret), K(num_buckets), K(count_));
         }
       } else {
@@ -127,7 +128,7 @@ int ObMicroBlockHashIndexBuilder::need_build_hash_index(
 
 OB_INLINE bool ObMicroBlockHashIndexBuilder::can_be_added_to_hash_index(const ObDatumRow &row)
 {
-  return (data_store_desc_->is_major_merge()
+  return (data_store_desc_->is_major_merge_type()
               || last_key_with_L_flag_
               || is_empty())
              && !row.is_ghost_row();
@@ -174,8 +175,8 @@ int ObMicroBlockHashIndex::init(const ObMicroBlockData &micro_block_data)
                         && get_serialize_size(num_buckets_) == hash_index_offset_from_end;
     if (OB_UNLIKELY(!is_valid)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected hash index", K(ret), K(num_buckets_), K(reserved_byte),
-                     K(hash_index_offset_from_end));
+      STORAGE_LOG(WARN, "Unexpected hash index in data micro block", K_(num_buckets),
+                   K(reserved_byte), K(hash_index_offset_from_end), KPC(micro_block_header));
     } else {
       is_inited_ = true;
     }

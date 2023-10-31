@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS_COMPACTION
 #include "rootserver/freeze/ob_tenant_all_zone_merge_strategy.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "share/ob_errno.h"

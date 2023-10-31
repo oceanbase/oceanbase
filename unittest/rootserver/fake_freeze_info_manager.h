@@ -10,13 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "rootserver/freeze/ob_major_merge_info_manager.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
-class FakeFreezeInfoManager : public ObFreezeInfoManager
+class FakeFreezeInfoManager : public ObMajorMergeInfoManager
 {
 public:
   FakeFreezeInfoManager();

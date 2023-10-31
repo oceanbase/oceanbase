@@ -124,17 +124,19 @@ public:
   public:
     ObITmpPageIOCallback();
     virtual ~ObITmpPageIOCallback();
+    virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
   protected:
     friend class ObTmpPageCache;
     virtual int process_page(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value);
+    virtual ObIAllocator *get_allocator() { return allocator_; }
 
   protected:
     BasePageCache *cache_;
     common::ObIAllocator *allocator_;
     int64_t offset_;   // offset in block
-    int64_t buf_size_; // read size in block
     char *data_buf_;   // actual data buffer
   };
+
   class ObTmpPageIOCallback final : public ObITmpPageIOCallback
   {
   public:
@@ -142,9 +144,9 @@ public:
     ~ObTmpPageIOCallback();
     int64_t size() const override;
     int inner_process(const char *data_buffer, const int64_t size) override;
-    int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
     const char *get_data() override;
-    TO_STRING_KV(KP_(data_buf));
+    TO_STRING_KV("callback_type:", "ObTmpPageIOCallback", KP_(data_buf));
+    DISALLOW_COPY_AND_ASSIGN(ObTmpPageIOCallback);
   private:
     friend class ObTmpPageCache;
     ObTmpPageCacheKey key_;
@@ -156,9 +158,9 @@ public:
     ~ObTmpMultiPageIOCallback();
     int64_t size() const override;
     int inner_process(const char *data_buffer, const int64_t size) override;
-    int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
     const char *get_data() override;
-    TO_STRING_KV(KP_(data_buf));
+    TO_STRING_KV("callback_type:", "ObTmpMultiPageIOCallback", KP_(data_buf));
+    DISALLOW_COPY_AND_ASSIGN(ObTmpMultiPageIOCallback);
   private:
     friend class ObTmpPageCache;
     common::ObArray<ObTmpPageIOInfo> page_io_infos_;
@@ -281,7 +283,7 @@ public:
     void inc_ref();
     void dec_ref();
     int wait(const int64_t timout_ms);
-    int exec_wait(const int64_t timout_ms);
+    int exec_wait();
     void reset_io();
     int broadcast();
     OB_INLINE ObTmpMacroBlock& get_block() { return block_; };

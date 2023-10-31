@@ -28,6 +28,40 @@ class ObTabletToLSTableOperator;
 class ObTabletTableOperator;
 class ObTabletInfo;
 
+class ObCompactionTabletMetaIterator
+{
+public:
+  ObCompactionTabletMetaIterator();
+  ~ObCompactionTabletMetaIterator() { reset(); }
+  int init(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    share::ObIServerTrace &server_trace,
+    ObIArray<share::ObTabletLSPair> &tablet_ls_pairs);
+  void reset();
+  int next(ObTabletInfo &tablet_info);
+  void set_batch_size(int64_t batch_size) {tablet_table_operator_.set_batch_size(batch_size);}
+
+private:
+  int prefetch();
+  int iter_prefetch_info_finish() const
+  {
+    return prefetch_tablet_idx_ >= prefetched_tablets_.count();
+  }
+  const static int64_t TABLET_META_TABLE_RANGE_GET_SIZE = 150;
+private:
+  bool is_inited_;
+  bool first_prefetch_;
+  common::ObISQLClient *sql_proxy_;
+  ObTabletTableOperator tablet_table_operator_;
+  uint64_t tenant_id_;
+  ObIArray<share::ObTabletLSPair> *tablet_ls_pairs_;
+  int64_t prefetch_tablet_idx_;
+  common::ObArray<ObTabletInfo> prefetched_tablets_;
+  ObTabletReplicaFilterHolder filters_;
+};
+
+//TOOD @lixia merge ObTenantTabletMetaIterator and ObCompactionTabletMetaIterator
 class ObTenantTabletMetaIterator
 {
 public:

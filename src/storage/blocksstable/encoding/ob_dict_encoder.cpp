@@ -144,10 +144,15 @@ int ObDictEncoder::build_dict()
     LOG_WARN("not init", K(ret));
   } else {
     if (need_sort_) {
+      ObPrecision precision = PRECISION_UNKNOWN_YET;
+      if (column_type_.is_decimal_int()) {
+        precision = column_type_.get_stored_precision();
+        OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
+      }
       bool has_lob_header = is_lob_storage(column_type_.get_type());
       sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
           column_type_.get_type(), column_type_.get_collation_type(), column_type_.get_scale(),
-          lib::is_oracle_mode(), has_lob_header);
+          lib::is_oracle_mode(), has_lob_header, precision);
       ObCmpFunc cmp_func;
       cmp_func.cmp_func_ = lib::is_oracle_mode()
           ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
@@ -165,6 +170,20 @@ int ObDictEncoder::build_dict()
       LOG_DEBUG("dict", K_(column_index), K(*l),
           K(*l->header_->datum_), K(*l->header_));
     }
+  }
+  return ret;
+}
+
+int ObDictEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = 0;
+  if (store_var_dict()) {
+    need_size = sizeof(ObDictMetaHeader) +
+        (count_ - 1) * dict_index_byte_ + var_data_size_;
+  } else {
+    need_size = sizeof(ObDictMetaHeader) +
+        count_ * dict_fix_data_size_;
   }
   return ret;
 }
@@ -274,6 +293,8 @@ int ObDictEncoder::store_dict(const ObDatum &datum, char *buf, int64_t &len)
         len = dict_fix_data_size_;
         break;
       case ObNumberSC:
+      case ObDecimalIntSC:
+        // wide int type is not packed yet, store as fixed-length buf for now
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:

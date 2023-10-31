@@ -113,18 +113,13 @@ inline int TestTabletHelper::create_tablet(
 
   ObTabletCreateSSTableParam param;
   prepare_sstable_param(tablet_id, table_schema, param);
-  ObSSTable *sstable = nullptr;
-  if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, sstable))) {
-    STORAGE_LOG(WARN, "fail to alloc and new", K(ret));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, *sstable))) {
-    STORAGE_LOG(WARN, "failed to acquire sstable", K(ret));
-  } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
+  void *buff = nullptr;
+  if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
     STORAGE_LOG(WARN, "fill column checksum failed", K(ret), K(param));
   } else {
     const int64_t snapshot_version = 1;
     const share::ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
     ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
-    ObTabletTableStoreFlag store_flag;
     const lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
     ObTabletHandle tablet_handle;
     const ObTabletMapKey key(ls_id, tablet_id);
@@ -133,7 +128,7 @@ inline int TestTabletHelper::create_tablet(
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, table_schema, compat_mode, store_flag, sstable, freezer))){
+        snapshot_version, table_schema, compat_mode, true, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;

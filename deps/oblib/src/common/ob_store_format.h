@@ -27,6 +27,7 @@ enum ObRowStoreType : uint8_t
   FLAT_ROW_STORE = 0,
   ENCODING_ROW_STORE = 1,
   SELECTIVE_ENCODING_ROW_STORE = 2,
+  CS_ENCODING_ROW_STORE = 3,
   MAX_ROW_STORE,
   DUMMY_ROW_STORE = UINT8_MAX, // invalid dummy row store type for compatibility
 };
@@ -47,6 +48,7 @@ enum ObStoreFormatType
   OB_STORE_FORMAT_QUERY_ORACLE = 14,
   OB_STORE_FORMAT_ARCHIVE_ORACLE = 15,
   OB_STORE_FORMAT_QUERY_LOW_ORACLE = 16,
+  OB_STORE_FORMAT_ARCHIVE_HIGH_ORACLE = 17,
   OB_STORE_FORMAT_MAX
 };
 
@@ -115,8 +117,17 @@ public:
   }
   static inline bool is_row_store_type_with_encoding(const ObRowStoreType type)
   {
+    return ENCODING_ROW_STORE == type || SELECTIVE_ENCODING_ROW_STORE == type || CS_ENCODING_ROW_STORE == type;
+  }
+  static inline bool is_row_store_type_with_pax_encoding(const ObRowStoreType type)
+  {
     return ENCODING_ROW_STORE == type || SELECTIVE_ENCODING_ROW_STORE == type;
   }
+  static inline bool is_row_store_type_with_cs_encoding(const ObRowStoreType type)
+  {
+    return CS_ENCODING_ROW_STORE == type;
+  }
+
   static int find_store_format_type(const ObString &store_format,
                                     const ObStoreFormatType start,
                                     const ObStoreFormatType end,

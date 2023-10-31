@@ -35,8 +35,15 @@ using namespace oceanbase::jit::expr;
 // using share::schema::ObSchemaGetterGuard;
 
 const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
-ObOptEstCostModel normal_model_(comparison_params_normal, hash_params_normal, cost_params_normal);
-ObOptEstVectorCostModel vector_model_(comparison_params_vector, hash_params_vector, cost_params_vector);
+ObOptEstCostModel normal_model_(comparison_params_normal,
+                                hash_params_normal,
+                                project_params_normal,
+                                cost_params_normal);
+
+ObOptEstVectorCostModel vector_model_(comparison_params_vector,
+                                      hash_params_vector,
+                                      project_params_vector,
+                                      cost_params_vector);
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
@@ -300,19 +307,14 @@ double ObOptEstCost::cost_quals(double rows,
 
 int ObOptEstCost::cost_table(const ObCostTableScanInfo &est_cost_info,
                              int64_t parallel,
-                             double query_range_row_count,
-                             double phy_query_range_row_count,
                              double &cost,
-                             double &index_back_cost,
                              MODEL_TYPE model_type)
 {
   int ret = OB_SUCCESS;
+  double index_back_cost = 0;
   if (OB_FAIL(get_model(model_type).cost_table(est_cost_info,
                                                parallel,
-                                               query_range_row_count,
-                                               phy_query_range_row_count,
-                                               cost,
-                                               index_back_cost))) {
+                                               cost))) {
     LOG_WARN("failed to est cost for table scan", K(model_type), K(ret));
   }
   return ret;
@@ -321,8 +323,6 @@ int ObOptEstCost::cost_table(const ObCostTableScanInfo &est_cost_info,
 int ObOptEstCost::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
                                           const int64_t parallel,
                                           const double part_cnt_per_dop,
-                                          double query_range_row_count,
-                                          double phy_query_range_row_count,
                                           double &px_cost,
                                           double &cost,
                                           MODEL_TYPE model_type)
@@ -331,8 +331,6 @@ int ObOptEstCost::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_in
   if (OB_FAIL(get_model(model_type).cost_table_for_parallel(est_cost_info,
                                                             parallel,
                                                             part_cnt_per_dop,
-                                                            query_range_row_count,
-                                                            phy_query_range_row_count,
                                                             px_cost,
                                                             cost))) {
     LOG_WARN("failed to est cost for table scan parallel", K(model_type), K(ret));
@@ -425,7 +423,7 @@ int ObOptEstCost::cost_delete(ObDelUpCostInfo& cost_info,
   return ret;
 }
 
-int ObOptEstCost::cost_range_scan(const ObTableMetaInfo& table_meta_info,
+int ObOptEstCost::calc_range_cost(const ObTableMetaInfo& table_meta_info,
                                   const ObIArray<ObRawExpr *> &filters,
                                   int64_t index_column_count,
                                   int64_t range_count,
@@ -434,7 +432,7 @@ int ObOptEstCost::cost_range_scan(const ObTableMetaInfo& table_meta_info,
                                   MODEL_TYPE model_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_model(model_type).cost_range_scan(table_meta_info,
+  if (OB_FAIL(get_model(model_type).calc_range_cost(table_meta_info,
                                                     filters,
                                                     index_column_count,
                                                     range_count,

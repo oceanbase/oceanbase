@@ -138,8 +138,35 @@ int ObTabletAutoincSeq::deep_copy(
 
 int ObTabletAutoincSeq::deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator)
 {
-  int ret = OB_NOT_SUPPORTED;
-
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid src info", K(ret));
+  }  else if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid allocator", K(ret));
+  } else if (OB_UNLIKELY(src->type() != type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(ret), K(src->type()), K(type()));
+  } else {
+    // free origin data
+    reset();
+    void *buf = nullptr;
+    const ObTabletAutoincSeq *other = nullptr;
+    if (OB_ISNULL(other = static_cast<const ObTabletAutoincSeq*>(src))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid type", K(ret), K(src->type()), K(type()));
+    } else if (0 == other->intervals_count_) {
+      LOG_DEBUG("intervals count equals 0");
+    } else if (OB_ISNULL(buf = allocator->alloc(other->intervals_count_ * sizeof(ObTabletAutoincInterval)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret));
+    } else {
+      intervals_ = new (buf) ObTabletAutoincInterval[other->intervals_count_];
+      MEMCPY(intervals_, other->intervals_, sizeof(share::ObTabletAutoincInterval) * other->intervals_count_);
+      intervals_count_ = other->intervals_count_;
+    }
+  }
   return ret;
 }
 
@@ -195,7 +222,7 @@ int ObTabletAutoincSeq::set_autoinc_seq_value(
     interval.end_ = INT64_MAX;
     intervals_count_ = 1;
     void *buf = nullptr;
-    if(OB_ISNULL(buf = allocator.alloc(sizeof(share::ObTabletAutoincInterval) * intervals_count_))) {
+    if (OB_ISNULL(buf = allocator.alloc(sizeof(share::ObTabletAutoincInterval) * intervals_count_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret));
     } else {

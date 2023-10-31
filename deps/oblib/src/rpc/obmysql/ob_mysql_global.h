@@ -223,6 +223,8 @@ namespace obmysql
 #define NOT_NULL_WRITE_FLAG (1 << 20)
 #define HAS_NOT_NULL_VALIDATE_CONSTRAINT_FLAG (1 << 21)
 #define HAS_LOB_HEADER_FLAG (1 << 22)
+#define DECIMAL_INT_ADJUST_FLAG (1 << 23)
+
 enum EMySQLFieldType
 {
   MYSQL_TYPE_DECIMAL,

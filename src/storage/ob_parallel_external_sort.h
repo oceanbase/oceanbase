@@ -20,7 +20,7 @@
 #include "lib/container/ob_heap.h"
 #include "lib/container/ob_vector.h"
 #include "share/io/ob_io_manager.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "blocksstable/ob_block_sstable_struct.h"
 #include "blocksstable/ob_tmp_file.h"
 #include "share/config/ob_server_config.h"
@@ -297,7 +297,7 @@ int ObFragmentWriterV2<T>::flush_buffer()
     STORAGE_LOG(WARN, "ObFragmentWriterV2 has not been inited", K(ret));
   } else if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, timeout_ms))) {
     STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_));
-  } else if (OB_FAIL(file_io_handle_.wait(timeout_ms))) {
+  } else if (OB_FAIL(file_io_handle_.wait())) {
     STORAGE_LOG(WARN, "fail to wait io finish", K(ret));
   } else if (OB_FAIL(macro_buffer_writer_.serialize_header())) {
     STORAGE_LOG(WARN, "fail to serialize header", K(ret));
@@ -309,6 +309,7 @@ int ObFragmentWriterV2<T>::flush_buffer()
     io_info.tenant_id_ = tenant_id_;
     io_info.buf_ = buf_;
     io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
+    io_info.io_timeout_ms_ = timeout_ms;
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info, file_io_handle_))) {
       STORAGE_LOG(WARN, "fail to do aio write macro file", K(ret), K(io_info));
     } else {
@@ -333,9 +334,7 @@ int ObFragmentWriterV2<T>::sync()
     }
     if (OB_SUCC(ret)) {
       int64_t timeout_ms = 0;
-      if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, timeout_ms))) {
-        STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_));
-      } else if (OB_FAIL(file_io_handle_.wait(timeout_ms))) {
+      if (OB_FAIL(file_io_handle_.wait())) {
         STORAGE_LOG(WARN, "fail to wait io finish", K(ret));
       } else if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, timeout_ms))) {
         STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_));
@@ -561,9 +560,11 @@ int ObFragmentReaderV2<T>::prefetch()
       io_info.tenant_id_ = tenant_id_;
       io_info.buf_ = buf_;
       io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_READ);
-      if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_read(io_info, file_io_handles_[handle_cursor_ % MAX_HANDLE_COUNT]))) {
+      if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, io_info.io_timeout_ms_))) {
+        STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_), K(io_info.io_timeout_ms_));
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_read(io_info, file_io_handles_[handle_cursor_ % MAX_HANDLE_COUNT]))) {
         if (common::OB_ITER_END != ret) {
-          STORAGE_LOG(WARN, "fail to do aio read from macro file", K(ret), K(fd_));
+          STORAGE_LOG(WARN, "fail to do aio read from macro file", K(ret), K(fd_), K(io_info));
         } else {
           is_prefetch_end_ = true;
           ret = OB_SUCCESS;
@@ -581,16 +582,13 @@ int ObFragmentReaderV2<T>::wait()
 {
   int ret = common::OB_SUCCESS;
   const int64_t wait_cursor = (handle_cursor_ +  1) % MAX_HANDLE_COUNT;
-  int64_t timeout_ms = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObFragmentReaderV2 has not been inited", K(ret));
   } else if (is_prefetch_end_) {
     ret = common::OB_ITER_END;
-  } else if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, timeout_ms))) {
-    STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_), K(timeout_ms));
-  } else if (OB_FAIL(file_io_handles_[wait_cursor].wait(timeout_ms))) {
-    STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(timeout_ms));
+  } else if (OB_FAIL(file_io_handles_[wait_cursor].wait())) {
+    STORAGE_LOG(WARN, "fail to wait io finish", K(ret));
   } else {
     macro_buffer_reader_.assign(0, buf_size_, file_io_handles_[wait_cursor].get_buffer());
   }
@@ -1254,7 +1252,14 @@ int ObExternalSortRound<T, Compare>::do_one_run(
     }
 
     while (OB_SUCC(ret)) {
-      share::dag_yield();
+      if (OB_FAIL(share::dag_yield())) {
+        if (OB_CANCELED == ret) {
+          STORAGE_LOG(INFO, "Cancel this task since the whole dag is canceled", K(ret));
+          break;
+        } else {
+          STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
+        }
+      }
       if (OB_FAIL(merger_.get_next_item(item))) {
         if (common::OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "fail to get next item", K(ret));

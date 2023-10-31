@@ -377,6 +377,16 @@ private:
                                          const uint64_t table_id);
 
 public:
+  int insert_column_ids_into_column_group(ObISQLClient &sql_client,
+                                          const ObTableSchema &table,
+                                          const int64_t schema_version,
+                                          const ObIArray<uint64_t> &column_ids,
+                                          const ObColumnGroupSchema &column_group,
+                                          const bool only_history = false);
+  int add_column_groups(ObISQLClient &sql_client,
+                        const ObTableSchema &table,
+                        const int64_t schema_version,
+                        const bool only_history = false);
   int insert_temp_table_info(common::ObISQLClient &trans, const ObTableSchema &table_schema);
   int delete_from_all_temp_table(common::ObISQLClient &sql_client,
                                  const uint64_t tenant_id,
@@ -410,6 +420,22 @@ private:
   bool is_user_subpartition_table(const ObTableSchema &table);
   int check_ddl_allowed(const ObSimpleTableSchemaV2 &table_schema);
 
+  int check_column_store_valid(const ObTableSchema &table,
+                               const uint64_t data_version);
+  int exec_insert_column_group(common::ObISQLClient &sql_client,
+                               const ObTableSchema &table,
+                               const int64_t schema_version,
+                               bool is_history);
+  int exec_insert_column_group_mapping(common::ObISQLClient &sql_client,
+                                       const ObTableSchema &table,
+	                                   const int64_t schema_version,
+                                       bool is_history);
+	int exec_insert_column_group_mapping(ObISQLClient &sql_client,
+                                         const ObTableSchema &table,
+                                         const int64_t schema_version,
+                                         const ObColumnGroupSchema &column_group,
+                                         const ObIArray<uint64_t> &column_ids,
+                                         const bool is_history);
 // MockFKParentTable begin
 public:
   int add_mock_fk_parent_table(

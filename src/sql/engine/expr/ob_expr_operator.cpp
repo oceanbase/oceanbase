@@ -33,6 +33,7 @@
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/engine/expr/ob_expr_func_round.h"
 
 namespace oceanbase
 {
@@ -1119,6 +1120,8 @@ int ObExprOperator::aggregate_result_type_for_merge(
     type.set_collation_type(session->get_local_collation_connection());
   } else {
     ObObjType res_type = types[0].get_type();
+    bool is_oracle_all_same_number = is_oracle_mode &&
+      ob_is_number_or_decimal_int_tc(types[0].get_type());
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
       if (OB_FAIL(ObExprResultTypeUtil::get_merge_result_type(res_type,
                                                               res_type,
@@ -1127,12 +1130,24 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (OB_UNLIKELY(ObMaxType == res_type)) {
         ret = OB_INVALID_ARGUMENT; // not compatible input
         LOG_WARN("invalid argument. wrong type for merge", K(i), K(types[i].get_type()), K(ret));
+      } else if (is_oracle_all_same_number) {
+        is_oracle_all_same_number = types[i].get_type() == types[i-1].get_type() &&
+          types[i].get_precision() == types[i-1].get_precision() &&
+          types[i].get_scale() == types[i-1].get_scale();
       }
     }
-
     if (OB_SUCC(ret)) {
+      if (is_oracle_all_same_number) {
+        // in oracle mode, When all inputs are of the same number type with same PS info,
+        // the result type is also the same as the inputs
+        res_type = types[0].get_type();
+      }
       type.set_type(res_type);
-      if (ob_is_numeric_type(res_type)) {
+      if ((ob_is_decimal_int_tc(res_type) || ob_is_number_tc(res_type))
+          && is_oracle_all_same_number) {
+        // no need to aggregate numeric accuracy again
+        type.set_accuracy(types[0].get_accuracy());
+      } else if (ob_is_numeric_type(res_type)) {
         ret = aggregate_numeric_accuracy_for_merge(type, types, param_num, is_oracle_mode);
       } else if (ob_is_temporal_type(res_type) || ob_is_otimestamp_type(res_type)) {
         ret = aggregate_temporal_accuracy_for_merge(type, types, param_num);
@@ -1406,6 +1421,7 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(ObExprResType &type,
                           types[i].get_precision());
           scale = 0;
         } else if (ob_is_number_tc(types[i].get_type())
+                || ob_is_decimal_int_tc(types[i].get_type())
                 || ob_is_temporal_type(types[i].get_type())
                 || ob_is_bit_tc(types[i].get_type())) {
           precision = types[i].get_precision();
@@ -1444,12 +1460,18 @@ int ObExprOperator::aggregate_numeric_accuracy_for_merge(ObExprResType &type,
     } else {
       if (max_integer_digits + max_decimal_digits >= 0) {
         precision = static_cast<ObPrecision>(max_integer_digits + max_decimal_digits);
-        type.set_precision(MIN(precision, ObAccuracy::MAX_ACCURACY2[is_oracle_mode][type.get_type()].precision_));
+        if (type.is_decimal_int()) {
+          type.set_precision(MIN(precision, OB_MAX_DECIMAL_POSSIBLE_PRECISION));
+        } else {
+          type.set_precision(
+            MIN(precision, ObAccuracy::MAX_ACCURACY2[is_oracle_mode][type.get_type()].precision_));
+        }
       }
       if (max_decimal_digits >= 0) {
         type.set_scale(MIN(max_decimal_digits, ObAccuracy::MAX_ACCURACY2[is_oracle_mode][type.get_type()].scale_));
       }
     }
+    LOG_DEBUG("aggregate numeric accuracy", K(max_integer_digits), K(max_decimal_digits), K(type));
   }
   return ret;
 }
@@ -1545,6 +1567,15 @@ ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
   ObUInt64Type,/*ObBitTC*/
   ObVarcharType,/*ObEnumSetTC*/
   ObVarcharType,/*ObEnumSetInnerTC*/
+  ObVarcharType, /*ObOTimestampTC*/
+  ObNullType, /*ObRawTC*/
+  ObVarcharType, /*ObInternalTC*/
+  ObVarcharType, /*ObRowIDTC*/
+  ObMaxType, /*ObLobTC*/
+  ObVarcharType, /*ObJsonTC*/
+  ObMaxType, /*ObGeometryTC*/
+  ObNullType, /*UDT*/
+  ObUInt64Type, /*ObDecimalIntTC*/
 };
 ////////////////////////////////////////////////////////////////
 
@@ -1816,14 +1847,22 @@ int ObRelationalExprOperator::compare_cast(ObObj &result,
   const ObObj *res_obj2 = NULL;
   bool need_cast = false;
   cast_ctx.dest_collation_ = cmp_ctx.cmp_cs_type_;
-  if (OB_FAIL(ObObjCaster::to_type(cmp_ctx.cmp_type_, cast_ctx, obj1, buf_obj1, res_obj1))) {
-    LOG_WARN("failed to cast obj", K(ret), K(cmp_ctx.cmp_type_), K(obj1));
-  } else if (OB_FAIL(ObObjCaster::to_type(cmp_ctx.cmp_type_, cast_ctx, obj2, buf_obj2, res_obj2))) {
-    LOG_WARN("failed to cast obj", K(ret), K(cmp_ctx.cmp_type_), K(obj2));
+  ObCompareCtx tmp_cmp_ctx = cmp_ctx;
+  if (ob_is_decimal_int(tmp_cmp_ctx.cmp_type_)) {
+    // result accuracy can't determined here,
+    // just use ObNumberType instead
+    tmp_cmp_ctx.cmp_type_ = ObNumberType;
+  }
+  if (OB_FAIL(ObObjCaster::to_type(tmp_cmp_ctx.cmp_type_, cast_ctx, obj1, buf_obj1, res_obj1))) {
+    LOG_WARN("failed to cast obj", K(ret), K(tmp_cmp_ctx), K(obj1));
+  } else if (OB_FAIL(
+               ObObjCaster::to_type(tmp_cmp_ctx.cmp_type_, cast_ctx, obj2, buf_obj2, res_obj2))) {
+    LOG_WARN("failed to cast obj", K(ret), K(tmp_cmp_ctx), K(obj2));
   } else if (OB_ISNULL(res_obj1) || OB_ISNULL(res_obj2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("res_obj1 or res_obj2 is null");
-  } else if (OB_FAIL(ObObjCmpFuncs::compare(result, *res_obj1, *res_obj2, cmp_ctx, cmp_op, need_cast))) {
+  } else if (OB_FAIL(ObObjCmpFuncs::compare(result, *res_obj1, *res_obj2, tmp_cmp_ctx, cmp_op,
+                                            need_cast))) {
     LOG_WARN("failed to compare objects", K(ret), K(*res_obj1), K(*res_obj2), K(cmp_op));
   } else if (need_cast) {
     ret = OB_ERR_UNEXPECTED;
@@ -1860,12 +1899,10 @@ int ObRelationalExprOperator::compare_nullsafe(int64_t &result,
 
 bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
                                                     ObExprResType type2,
-                                                    ObCmpOp cmp_op,
-                                                    const ObSQLSessionInfo &session)
+                                                    ObCmpOp cmp_op)
 {
   bool need_no_cast = false;
   bool has_lob_header = type1.has_lob_header() || type2.has_lob_header();
-  UNUSED(session);
   //特殊处理显示调用compare(例如：c1 > c2)，此时enum/set均应该转换成string处理
   //内部比较（order by）,enum/set不需要转换。
   if (ob_is_enum_or_set_type(type1.get_type())
@@ -1890,11 +1927,18 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
                                                           lib::is_oracle_mode(),
                                                           type2.get_collation_type(),
                                                           type2.get_collation_type()));
+    } else if (ob_is_decimal_int_tc(type1.get_type()) && ob_is_decimal_int_tc(type2.get_type())) {
+      // if scale1 != scale2 or int_bytes1 != int_bytes2
+      need_no_cast = (type1.get_scale() == type2.get_scale()
+                      && get_decimalint_type(type1.get_precision())
+                           == get_decimalint_type(type2.get_precision()));
     } else {
       auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(type1.get_type(),
                                                                    type2.get_type(),
                                                                    type1.get_scale(),
                                                                    type2.get_scale(),
+                                                                   type1.get_precision(),
+                                                                   type2.get_precision(),
                                                                    cmp_op,
                                                                    lib::is_oracle_mode(),
                                                                    CS_TYPE_BINARY,
@@ -1974,14 +2018,42 @@ int ObRelationalExprOperator::get_equal_meta(ObObjMeta &meta,
 int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                                    const ObExprResType &type1,
                                    const ObExprResType &type2,
-                                   const ObCollationType coll_type) const
+                                   const ObCollationType coll_type,
+                                   const bool left_is_const, /* false */
+                                   const bool right_is_const /* false*/) const
 {
   int ret = OB_SUCCESS;
   ObObjType cmp_type = ObMaxType;
   // todo(jiuren): we can add such code after plan cache add same optimization.
 //  if (is_int_cmp_const_str(&type1, &type2, cmp_type)) {
 //  } else
-  if (is_oracle_mode() && (type1.is_blob() || type2.is_blob()
+  ObObjType obj_type1 = type1.get_type();
+  ObObjType obj_type2 = type2.get_type();
+  bool is_finish = false;
+  // decimal int cmps number, rules are follows:
+  // 1. if decimal int is not const, number is const, cast number_const as decimal_int
+  // 2. if number's (P, S) does not satisfy: P >= S && S >= 0,  cast decimal int as number
+  if (ObDecimalIntType == obj_type1 && ObNumberTC == ob_obj_type_class(obj_type2)) {
+    if (!left_is_const && right_is_const) {
+      cmp_type = ObDecimalIntType;
+      is_finish = true;
+    } else if (type2.get_precision() == PRECISION_UNKNOWN_YET || type2.get_scale() < 0
+               || type2.get_precision() < type2.get_scale()) {
+      cmp_type = ObNumberType;
+      is_finish = true;
+    }
+  } else if (ObDecimalIntType == obj_type2 && ObNumberTC == ob_obj_type_class(obj_type1)) {
+    if (!right_is_const && left_is_const) {
+      cmp_type = ObDecimalIntType;
+      is_finish = true;
+    } else if (type1.get_precision() == PRECISION_UNKNOWN_YET || type1.get_scale() < 0
+               || type1.get_precision() < type1.get_scale()) {
+      cmp_type = ObNumberType;
+      is_finish = true;
+    }
+  }
+  if (is_finish) {// do nothing
+  } else if (is_oracle_mode() && (type1.is_blob() || type2.is_blob()
                           || type1.is_blob_locator() || type2.is_blob_locator())
       && type_ != T_OP_IS && type_ != T_OP_IS_NOT) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -2018,6 +2090,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     LOG_WARN("fail to get cmp_type",K(ret));
   } else if (OB_UNLIKELY(ObMaxType == cmp_type)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid cmp type", K(ret), K(type1), K(type2), K(left_is_const), K(right_is_const));
   } else if (ObURowIDType == cmp_type) {
     // 如果比较是urwoid类型，只支持<urwoid, urowid>,<string, urwoid>, <urowid, string>,
     // <NULL, urowid>, <urowid, NULL>
@@ -2047,7 +2120,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     } else if (ObRawType == cmp_type) {
       type.get_calc_meta().set_collation_type(CS_TYPE_BINARY);
     }
-    LOG_DEBUG("calc cmp type", K(type1), K(type2), K(type.get_calc_meta()));
+    LOG_DEBUG("calc cmp type", K(type1), K(type2), K(type.get_calc_meta()), K(lbt()));
   }
   return ret;
 }
@@ -2242,8 +2315,26 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
   int ret = OB_SUCCESS;
   ObExprResType cmp_type;
   CK(NULL != type_ctx.get_session());
+  ObRawExpr *left_param = nullptr, *right_param = nullptr;
+  ObRawExpr *op_expr = expr.get_raw_expr();
+  if (OB_ISNULL(op_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null operator raw expr", K(ret), K(op_expr));
+  } else if (OB_UNLIKELY(op_expr->get_param_count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param count", K(ret), K(op_expr->get_param_count()));
+  } else if (OB_ISNULL(op_expr->get_param_expr(0)) || OB_ISNULL(op_expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null param expr", K(ret), K(op_expr->get_param_expr(0)),
+             K(op_expr->get_param_expr(1)));
+  } else {
+    left_param = op_expr->get_param_expr(0);
+    right_param = op_expr->get_param_expr(1);
+  }
   if (OB_FAIL(ret)) {
-  } else if (OB_SUCC(expr.calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  } else if (OB_SUCC(expr.calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type(),
+                                         left_param->is_static_const_expr(),
+                                         right_param->is_static_const_expr()))) {
     type.set_int32(); // not tinyint, compatible with MySQL
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
@@ -2251,10 +2342,23 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
     type.set_calc_type(cmp_type.get_calc_type());
     ObExprOperator::calc_result_flag2(type, type1, type2);
     bool need_no_cast = can_cmp_without_cast(
-        type1, type2, get_cmp_op(expr.get_type()), *type_ctx.get_session());
+        type1, type2, get_cmp_op(expr.get_type()));
     type1.set_calc_type(need_no_cast ? type1.get_type() : cmp_type.get_calc_type());
     type2.set_calc_type(need_no_cast ? type2.get_type() : cmp_type.get_calc_type());
-    if (ob_is_string_or_lob_type(cmp_type.get_calc_type())) {
+    if (cmp_type.get_calc_type() == ObDecimalIntType) {
+      if (OB_FAIL(deduce_decimalint_cmp_calc_type(left_param->is_static_const_expr(),
+                                                  right_param->is_static_const_expr(), need_no_cast,
+                                                  expr.get_type(), type1, type2))) {
+        LOG_WARN("deduce decimal int calc type failed", K(ret));
+      }
+    } else if (is_oracle_mode() && cmp_type.get_calc_type() == ObNumberType) {
+      if (ObDecimalIntType == type1.get_type() && ObNumberTC == type2.get_type_class()) {
+        type1.set_calc_accuracy(type2.get_accuracy());
+      } else if (ObDecimalIntType == type2.get_type() && ObNumberTC == type1.get_type_class()) {
+        type2.set_calc_accuracy(type1.get_accuracy());
+      }
+      LOG_DEBUG("decimalint vs number compare", K(type1), K(type2));
+    } else if (ob_is_string_or_lob_type(cmp_type.get_calc_type())) {
       type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
       type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
     } else if (ObRawType == cmp_type.get_calc_type()) {
@@ -2372,7 +2476,9 @@ int ObRelationalExprOperator::calc_calc_type3(ObExprResType &type1,
   ObExprResType cmp_type21; // b <= a
   ObExprResType cmp_type13; // a <= c
   bool need_no_cast = false;
+  bool need_no_cast_21 = false, need_no_cast_13 = false;
   CK(NULL != type_ctx.get_session());
+  CK(NULL != raw_expr_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(calc_cmp_type2(cmp_type21, type2, type1, type_ctx.get_coll_type()))) {
     LOG_WARN("get cmp failed", K(ret), K(type2), K(type1));
@@ -2383,29 +2489,71 @@ int ObRelationalExprOperator::calc_calc_type3(ObExprResType &type1,
     ObObjType type13 = cmp_type13.get_calc_type();
     if (OB_LIKELY(type21 == type13 && type13 == cmp_type)) {
       //type21 == type13 == cmp_type
-      bool need_no_cast_21 = can_cmp_without_cast(
-          type2, type1, get_cmp_op(type_), *type_ctx.get_session());
-      bool need_no_cast_13 = can_cmp_without_cast(
-          type1, type3, get_cmp_op(type_), *type_ctx.get_session());
+      need_no_cast_21 = can_cmp_without_cast(
+          type2, type1, get_cmp_op(type_));
+      need_no_cast_13 = can_cmp_without_cast(
+          type1, type3, get_cmp_op(type_));
       need_no_cast = need_no_cast_21 && need_no_cast_13;
     }
   }
   if (OB_SUCC(ret)) {
     if (need_no_cast) {
       type1.set_calc_type(type1.get_type());
+      type1.set_calc_accuracy(type1.get_accuracy());
       type2.set_calc_type(type2.get_type());
+      type2.set_calc_accuracy(type2.get_accuracy());
       type3.set_calc_type(type3.get_type());
+      type3.set_calc_accuracy(type3.get_calc_accuracy());
+    } else if (cmp_type == ObDecimalIntType) {
+      if (type1.is_decimal_int()) {
+        type1.set_calc_type(type1.get_type());
+        type1.set_calc_accuracy(type1.get_accuracy());
+        // b >= a >= c, if cmp_type is decimal int
+        // 1. if a is decimal int, cast b & c to decimal int with cm_const_to_decint mode
+        if (need_no_cast_21) {
+          type2.set_calc_accuracy(type2.get_accuracy());
+          type2.set_calc_type(type2.get_type());
+        } else {
+          type2.set_calc_accuracy(type1.get_accuracy());
+          type2.set_calc_type(ObDecimalIntType);
+          // between expr: a >= b, expr_type using T_OP_GE, right is const
+          // not between expr: a < b, expr_type using T_OP_LT, right, is const
+          type2.add_cast_mode(
+            get_const_cast_mode(raw_expr_->get_expr_type() == T_OP_BTW ? T_OP_GE : T_OP_LT, true));
+        }
+        if (need_no_cast_13) {
+          type3.set_calc_accuracy(type3.get_accuracy());
+          type3.set_calc_type(type3.get_type());
+        } else {
+          type3.set_calc_accuracy(type1.get_accuracy());
+          type3.set_calc_type(ObDecimalIntType);
+          // between expr: a <= c, expr_type using T_OP_LE, right is const
+          // not between expr: a > b
+          type3.add_cast_mode(
+            get_const_cast_mode(raw_expr_->get_expr_type() == T_OP_BTW ? T_OP_LE : T_OP_GT, true));
+        }
+      } else {
+        type1.set_calc_type(ObNumberType);
+        type2.set_calc_type(ObNumberType);
+        type3.set_calc_type(ObNumberType);
+      }
     } else {
       type1.set_calc_type(cmp_type);
       type2.set_calc_type(cmp_type);
       type3.set_calc_type(cmp_type);
     }
+    LOG_DEBUG("calc type3", K(type1.get_calc_type()), K(type2.get_calc_type()),
+              K(type3.get_calc_type()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()),
+              K(type3.get_calc_accuracy()), K(type1.get_cast_mode()), K(type2.get_cast_mode()),
+              K(type3.get_cast_mode()));
   }
   return ret;
 }
 
 int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &need_no_cast,
-    const ObExprResType *types, const int64_t param_num, const sql::ObSQLSessionInfo &my_session)
+                                                   ObExprResType *types,
+                                                   const int64_t param_num, const bool has_lower,
+                                                   const sql::ObSQLSessionInfo &my_session)
 {
   int ret = OB_SUCCESS;
   need_no_cast = false;
@@ -2421,14 +2569,40 @@ int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &ne
     if (OB_FAIL(my_session.get_collation_connection(coll_type))) {
       LOG_WARN("fail to get_collation_connection", K(ret));
     } else if (2 == param_num) {
-      need_no_cast = can_cmp_without_cast(types[1], types[0], CO_CMP, my_session);
+      need_no_cast = can_cmp_without_cast(types[1], types[0], CO_CMP);
       if (!need_no_cast) {
-        ret = calc_cmp_type2(type, types[0], types[1], coll_type);
+        if (OB_FAIL(calc_cmp_type2(type, types[0], types[1], coll_type))) {
+          LOG_WARN("calc_cmp_type2 failed", K(ret));
+        } else if (type.get_calc_type() == ObDecimalIntType) {
+          if (types[0].is_decimal_int()) {
+            types[0].set_calc_type(types[0].get_type());
+            types[0].set_calc_accuracy(types[0].get_accuracy());
+            // cast to order type
+            types[1].set_calc_type(ObDecimalIntType);
+            types[1].set_calc_accuracy(types[0].get_accuracy());
+            if (has_lower) { // order_expr >= low_expr
+              types[1].add_cast_mode(get_const_cast_mode(T_OP_GE, true));
+            } else { // order_expr <= upper_expr
+              types[1].add_cast_mode(get_const_cast_mode(T_OP_LE, true));
+            }
+          } else {
+            types[0].set_calc_type(ObNumberType);
+            types[1].set_calc_type(ObNumberType);
+          }
+        } else {
+          types[0].set_calc_meta(type.get_calc_meta());
+          types[1].set_calc_meta(type.get_calc_meta());
+        }
+      } else {
+        types[0].set_calc_type(types[0].get_type());
+        types[0].set_calc_accuracy(types[0].get_accuracy());
+        types[1].set_calc_type(types[0].get_type());
+        types[1].set_calc_accuracy(types[1].get_accuracy());
       }
     } else {
-      const ObExprResType &type1 = types[0];
-      const ObExprResType &type2 = types[1];
-      const ObExprResType &type3 = types[2];
+      ObExprResType &type1 = types[0];
+      ObExprResType &type2 = types[1];
+      ObExprResType &type3 = types[2];
       //a(type1) between b(type2) and c(type3) <==> b<=a && a <=c
       ObExprResType cmp_type21; // b <= a
       ObExprResType cmp_type13; // a <= c
@@ -2441,9 +2615,18 @@ int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &ne
       } else if (cmp_type21.get_calc_type() == cmp_type13.get_calc_type()
                  && cmp_type13.get_calc_type() == type.get_calc_type()) {
         //type21 == type13 == cmp_type
-        bool need_no_cast_21 = can_cmp_without_cast(type2, type1, CO_CMP, my_session);
-        bool need_no_cast_13 = can_cmp_without_cast(type1, type3, CO_CMP, my_session);
+        bool need_no_cast_21 = can_cmp_without_cast(type2, type1, CO_CMP);
+        bool need_no_cast_13 = can_cmp_without_cast(type1, type3, CO_CMP);
         need_no_cast = need_no_cast_21 && need_no_cast_13;
+      }
+      if (OB_SUCC(ret)) {
+        ObExprTypeCtx dummy_ctx;
+        dummy_ctx.set_raw_expr(raw_expr_);
+        ObSQLUtils::init_type_ctx(&my_session, dummy_ctx);
+        ObExprResType dummy_res;
+        if (OB_FAIL(calc_result_type3(dummy_res, type1, type2, type3, dummy_ctx))) {
+          LOG_WARN("calc_result_type3 failed", K(ret));
+        }
       }
     }
   }
@@ -3345,14 +3528,14 @@ int ObSubQueryRelationalExpr::compare_single_row(const ObNewRow &left_row,
 }
 
 int ObSubQueryRelationalExpr::get_param_types(
-    const ObRawExpr &param, const bool is_iter, ObIArray<ObObjMeta> &types) const
+    const ObRawExpr &param, const bool is_iter, ObIArray<ObExprResType> &types) const
 {
   int ret = OB_SUCCESS;
   if (param.get_expr_type() == T_OP_ROW) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.get_param_count(); i++) {
       const ObRawExpr *e = param.get_param_expr(i);
       CK(NULL != e);
-      OZ(types.push_back(e->get_result_meta()));
+      OZ(types.push_back(e->get_result_type()));
     }
   } else if (param.get_expr_type() == T_REF_QUERY && is_iter) {
     const ObQueryRefRawExpr &ref = static_cast<const ObQueryRefRawExpr &>(param);
@@ -3360,7 +3543,7 @@ int ObSubQueryRelationalExpr::get_param_types(
       OZ(types.push_back(*t));
     }
   } else {
-    OZ(types.push_back(param.get_result_meta()));
+    OZ(types.push_back(param.get_result_type()));
   }
   return ret;
 }
@@ -3370,8 +3553,8 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
                                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObObjMeta, 1> left_types;
-  ObSEArray<ObObjMeta, 1> right_types;
+  ObSEArray<ObExprResType, 1> left_types;
+  ObSEArray<ObExprResType, 1> right_types;
   void **funcs = NULL;
 
   CK(NULL != op_cg_ctx.allocator_);
@@ -3405,8 +3588,8 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
       }
       if (OB_SUCC(ret)) {
         funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-            l.get_type(), r.get_type(), l.get_scale(), r.get_scale(),
-            lib::is_oracle_mode(), l.get_collation_type(), has_lob_header);
+          l.get_type(), r.get_type(), l.get_scale(), r.get_scale(), l.get_precision(),
+          r.get_precision(), lib::is_oracle_mode(), l.get_collation_type(), has_lob_header);
         CK(NULL != funcs[i]);
       }
     }
@@ -3928,11 +4111,16 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(types) || OB_UNLIKELY(param_num <= 0 || 0 >= row_dimension_)
-      || OB_ISNULL(type_ctx.get_session())) {
+  if (OB_ISNULL(get_raw_expr()) || OB_ISNULL(get_raw_expr()->get_param_expr(0))
+      || OB_ISNULL(get_raw_expr()->get_param_expr(1))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("types is null or invalid param num or row_dimension_",
-             K(types), K(param_num), K(row_dimension_), K(type_ctx.get_session()), K(ret));
+    LOG_WARN("invalid null raw expr", K(ret), K(get_raw_expr()),
+             K(get_raw_expr()->get_param_expr(0)), K(get_raw_expr()->get_param_expr(1)));
+  } else if (OB_ISNULL(types) || OB_UNLIKELY(param_num <= 0 || 0 >= row_dimension_)
+        || OB_ISNULL(type_ctx.get_session())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("types is null or invalid param num or row_dimension_", K(types), K(param_num),
+               K(row_dimension_), K(type_ctx.get_session()), K(ret));
   } else {
     int64_t left_start_idx = 0;
     int64_t right_start_idx = row_dimension_;
@@ -3945,36 +4133,38 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
     bool has_composite_elem = false;
     // in 可能是nest table, (nt1 in (nt2, nt3, nt4))
     for (int64_t k = 0; lib::is_oracle_mode() && k < param_num; ++k) {
-      if (!types[k].is_ext()) {
-        not_composite_elem_idx = k;
-      }
+      if (!types[k].is_ext()) { not_composite_elem_idx = k; }
       has_composite_elem |= types[k].is_ext();
     }
     if (lib::is_oracle_mode() && has_composite_elem) {
       if (row_dimension_ != 1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("in condition of nest table can only have one left operator", K(ret),
-                                                              K(row_dimension_),
-                                                              K(param_num));
+                 K(row_dimension_), K(param_num));
       } else if (not_composite_elem_idx != OB_INVALID_INDEX) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP,
-          ob_obj_type_str(types[not_composite_elem_idx].get_type()), ob_obj_type_str(ObExtendType));
+                       ob_obj_type_str(types[not_composite_elem_idx].get_type()),
+                       ob_obj_type_str(ObExtendType));
       } else {
         // 在这儿extend type不知道具体元素的类型。需要在计算时获取。
         // do nothing
       }
     } else {
+      const ObRawExpr *left_param = get_raw_expr()->get_param_expr(0);
+      const ObRawExpr *right_vec_param = get_raw_expr()->get_param_expr(1);
       for (int64_t i = 0; OB_SUCC(ret) && i < right_element_count;
-          ++i, right_start_idx += row_dimension_) {
+           ++i, right_start_idx += row_dimension_) {
         tmp_res_type.reset();
         for (int64_t j = 0; OB_SUCC(ret) && j < row_dimension_; ++j) {
-          if (OB_FAIL(ObVectorExprOperator::calc_result_type2_(tmp_res_type,
-                                                              types[left_start_idx+ j],
-                                                              types[right_start_idx + j],
-                                                              type_ctx))) {
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(ObVectorExprOperator::calc_result_type2_(
+                       tmp_res_type, types[left_start_idx + j], types[right_start_idx + j],
+                       type_ctx))) {
             LOG_WARN("failed to calc result types", K(ret));
-          } else if (OB_FAIL(type.get_row_calc_cmp_types().push_back(tmp_res_type.get_calc_meta()))) {
+          } else if (OB_FAIL(
+                       type.get_row_calc_cmp_types().push_back(tmp_res_type.get_calc_meta()))) {
             LOG_WARN("failed to push back cmp type", K(ret));
           }
         }
@@ -3998,6 +4188,7 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObExprResType cmp_type;
+  bool left_is_const = false, right_is_const = true;
   if (lib::is_oracle_mode() && (type1.is_lob()
                                 || type1.is_lob_locator())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -4011,7 +4202,8 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
   } else if (lib::is_oracle_mode() && (type1.is_json() || type2.is_json())) {
     ret = OB_ERR_INVALID_CMP_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_CMP_OP);
-  } else if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  } else if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type(), left_is_const,
+                                    right_is_const))) {
     type.set_int(); // not tinyint, compatiable with MySQL
     type.set_calc_collation(cmp_type);
     type.set_calc_type(cmp_type.get_calc_type());
@@ -4022,7 +4214,23 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
                                                                        CO_EQ);
     type1.set_calc_type(need_no_cast ? type1.get_type() : cmp_type.get_calc_type());
     type2.set_calc_type(need_no_cast ? type2.get_type() : cmp_type.get_calc_type());
-    if (ob_is_string_type(cmp_type.get_calc_type())) {
+    // a in (x0, x1, x2) and calc_cmp_type is ObDecimalIntType
+    // if a is decimal int, cast x to decimal int type with CM_CONST_TO_DECIMAL_INT_EQ
+    // else if fallback to ObNumberType, i.e. cast a and x to ObNumberType
+    if (ObDecimalIntType == cmp_type.get_calc_type()) {
+      if (OB_FAIL(ObRelationalExprOperator::deduce_decimalint_cmp_calc_type(
+            left_is_const, right_is_const, need_no_cast, T_OP_EQ, type1, type2))) {
+        LOG_WARN("deduce decimal int calc type failed", K(ret));
+      } else {
+        if (!type1.is_decimal_int()) {
+          type1.set_calc_type(ObNumberType);
+          type2.set_calc_type(ObNumberType);
+          type.set_calc_type(ObNumberType);
+        }
+        LOG_DEBUG("decimal int calc meta for vector", K(type1), K(type1.get_calc_accuracy()),
+                  K(type2), K(type2.get_calc_accuracy()));
+      }
+    } else if (ob_is_string_type(cmp_type.get_calc_type())) {
       if (OB_ISNULL(type_ctx.get_session())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null session", K(type_ctx.get_session()));
@@ -4062,6 +4270,62 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
       }
     }
   }
+  return ret;
+}
+
+int ObRelationalExprOperator::deduce_decimalint_cmp_calc_type(
+  const bool left_is_const, const bool right_is_const, const bool need_no_cast,
+  const ObExprOperatorType expr_type, ObExprResType &type1, ObExprResType &type2)
+{
+  int ret = OB_SUCCESS;
+  if (need_no_cast) {
+    // no need to cast, set calc_type's scale to org type's scale
+    ObAccuracy calc_accuracy;
+    calc_accuracy.set_scale(type1.get_scale());
+    calc_accuracy.set_precision(type1.get_precision());
+    type1.set_calc_accuracy(calc_accuracy);
+
+    calc_accuracy.set_scale(type2.get_scale());
+    calc_accuracy.set_precision(type2.get_precision());
+    type2.set_calc_accuracy(calc_accuracy);
+  } else {
+    // align scale for decimalint comparasion
+    // one side cast:
+    // not_decint(col/const) cmp col_decint
+    // decint_const cmp col_decint
+    ObAccuracy calc_accuracy;
+    bool all_decint_arg = type1.is_decimal_int() && type2.is_decimal_int();
+
+    bool left_const_to_decint = all_decint_arg && left_is_const && !right_is_const;
+    bool right_const_to_decint = all_decint_arg && right_is_const && !left_is_const;
+
+    bool left_to_decint = (!type1.is_decimal_int() || left_const_to_decint);
+    bool right_to_decint = (!type2.is_decimal_int() || right_const_to_decint);
+    if (!left_to_decint && !right_to_decint) {
+      ObScale calc_scale = MAX(type1.get_scale(), type2.get_scale());
+      ObPrecision calc_prec1 = (calc_scale > type1.get_scale() ?
+                                  calc_scale - type1.get_scale() + MAX(type1.get_precision(), 0) :
+                                  type1.get_precision());
+      ObPrecision calc_prec2 = (calc_scale > type2.get_scale() ?
+                                  calc_scale - type2.get_scale() + MAX(type2.get_precision(), 0) :
+                                  type2.get_precision());
+      calc_accuracy.set_precision(MAX(calc_prec1, calc_prec2));
+      calc_accuracy.set_scale(calc_scale);
+    } else if (left_to_decint) { // align to right
+      calc_accuracy.set_precision(type2.get_precision());
+      calc_accuracy.set_scale(type2.get_scale());
+      type1.add_cast_mode(get_const_cast_mode(expr_type, false));
+    } else if (right_to_decint) { // align to left
+      calc_accuracy.set_precision(type1.get_precision());
+      calc_accuracy.set_scale(type1.get_scale());
+      type2.add_cast_mode(get_const_cast_mode(expr_type, true));
+    }
+    type1.set_calc_accuracy(calc_accuracy);
+    type2.set_calc_accuracy(calc_accuracy);
+  }
+  LOG_DEBUG("decimal int calc accuracy", K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()),
+            K(type1), K(type2), K(need_no_cast), K(left_is_const), K(type1.get_cast_mode()),
+            K(type2.get_cast_mode()), K(right_is_const));
   return ret;
 }
 
@@ -4280,8 +4544,7 @@ int ObBitwiseExprOperator::set_calc_type(ObExprResType &type)
     type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
     type.set_scale(DEFAULT_NUMBER_SCALE_FOR_INTEGER);
   } else {
-    if (ObNumberType == type.get_type()) {
-      type.set_calc_type(ObNumberType);
+    if (ObNumberType == type.get_type() || ObDecimalIntType == type.get_type()) {
       type.set_precision(DEFAULT_NUMBER_PRECISION_FOR_INTEGER);
       type.set_scale(DEFAULT_NUMBER_SCALE_FOR_INTEGER);
     } else {
@@ -4508,19 +4771,18 @@ int ObBitwiseExprOperator::calc_result2_mysql(const ObExpr &expr, ObEvalCtx &ctx
     uint64_t right_uint = 0;
     void *get_uint_func0 = NULL;
     void *get_uint_func1 = NULL;
-    const ObObjType &left_type = expr.args_[0]->datum_meta_.type_;
-    const ObObjType &right_type = expr.args_[1]->datum_meta_.type_;
-
+    const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+    const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
     // choose_get_int_func可以想办法放到cg阶段，但是bitwise表达式
     // 应该不是性能敏感的地方
-    if (OB_FAIL(choose_get_int_func(left_type, get_uint_func0))) {
-      LOG_WARN("choose_get_int_func failed", K(ret), K(left_type));
-    } else if (OB_FAIL((reinterpret_cast<GetUIntFunc>(get_uint_func0)(*left, true,
+    if (OB_FAIL(choose_get_int_func(left_meta, get_uint_func0))) {
+      LOG_WARN("choose_get_int_func failed", K(ret), K(left_meta));
+    } else if (OB_FAIL((reinterpret_cast<GetUIntFunc>(get_uint_func0)(left_meta, *left, true,
                                                         left_uint, cast_mode)))) {
       LOG_WARN("get uint64 failed", K(ret), K(*left));
-    } else if (OB_FAIL(choose_get_int_func(right_type, get_uint_func1))) {
-      LOG_WARN("choose_get_int_func failed", K(ret), K(right_type));
-    } else if (OB_FAIL((reinterpret_cast<GetUIntFunc>(get_uint_func1)(*right, true,
+    } else if (OB_FAIL(choose_get_int_func(right_meta, get_uint_func1))) {
+      LOG_WARN("choose_get_int_func failed", K(ret), K(right_meta));
+    } else if (OB_FAIL((reinterpret_cast<GetUIntFunc>(get_uint_func1)(right_meta, *right, true,
                                                         right_uint, cast_mode)))) {
       LOG_WARN("get uint64 failed", K(ret), K(*right));
     } else {
@@ -4571,19 +4833,18 @@ int ObBitwiseExprOperator::calc_result2_oracle(const ObExpr &expr, ObEvalCtx &ct
     ObNumber result;
     void *get_int_func0 = NULL;
     void *get_int_func1 = NULL;
-    const ObObjType &left_type = expr.args_[0]->datum_meta_.type_;
-    const ObObjType &right_type = expr.args_[1]->datum_meta_.type_;
-
+    const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+    const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
     // choose_get_int_func可以想办法放到cg阶段，但是bitwise表达式
     // 应该不是性能敏感的地方
-    if (OB_FAIL(choose_get_int_func(left_type, get_int_func0))) {
-      LOG_WARN("choose_get_int_func failed", K(ret), K(left_type));
-    } else if (OB_FAIL((reinterpret_cast<GetIntFunc>(get_int_func0)(*left, false,
+    if (OB_FAIL(choose_get_int_func(left_meta, get_int_func0))) {
+      LOG_WARN("choose_get_int_func failed", K(ret), K(left_meta));
+    } else if (OB_FAIL((reinterpret_cast<GetIntFunc>(get_int_func0)(left_meta, *left, false,
                                                       left_int, cast_mode)))) {
       LOG_WARN("get uint64 failed", K(ret), K(*left));
-    } else if (OB_FAIL(choose_get_int_func(right_type, get_int_func1))) {
-      LOG_WARN("choose_get_int_func failed", K(ret), K(right_type));
-    } else if (OB_FAIL((reinterpret_cast<GetIntFunc>(get_int_func1)(*right, false,
+    } else if (OB_FAIL(choose_get_int_func(right_meta, get_int_func1))) {
+      LOG_WARN("choose_get_int_func failed", K(ret), K(right_meta));
+    } else if (OB_FAIL((reinterpret_cast<GetIntFunc>(get_int_func1)(right_meta, *right, false,
                                                       right_int, cast_mode)))) {
       LOG_WARN("get uint64 failed", K(ret), K(*right));
     } else if (OB_FAIL(result.from((left_int & right_int), tmp_alloc))) {
@@ -4625,9 +4886,10 @@ int ObBitwiseExprOperator::cg_bitwise_expr(ObExprCGCtx &expr_cg_ctx,
   return ret;
 }
 
-int ObBitwiseExprOperator::choose_get_int_func(const ObObjType type, void *&out_func)
+int ObBitwiseExprOperator::choose_get_int_func(const ObDatumMeta datum_meta, void *&out_func)
 {
   int ret = OB_SUCCESS;
+  ObObjType type = datum_meta.get_type();
   if (ObNumberTC == ob_obj_type_class(type)) {
     if (lib::is_oracle_mode()) {
       out_func = reinterpret_cast<void*>(
@@ -4635,6 +4897,13 @@ int ObBitwiseExprOperator::choose_get_int_func(const ObObjType type, void *&out_
     } else {
       out_func = reinterpret_cast<void*>(
           ObBitwiseExprOperator::get_uint64_from_number_type);
+    }
+  } else if (ObDecimalIntTC == ob_obj_type_class(type)) {
+    if (lib::is_oracle_mode()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("type of params in bitwise expr is unexpected", K(ret), K(type));
+    } else { // mysql mode
+      out_func = reinterpret_cast<void*>(ObBitwiseExprOperator::get_uint64_from_decimalint_type);
     }
   } else {
     // 针对非number的输入，类型推导阶段会增加implicit cast将其转为int64/uint64
@@ -4647,32 +4916,38 @@ int ObBitwiseExprOperator::choose_get_int_func(const ObObjType type, void *&out_
   return ret;
 }
 
-int ObBitwiseExprOperator::get_int64_from_int_tc(const ObDatum &datum, bool is_round,
-                                              int64_t &out, const ObCastMode &cast_mode)
+int ObBitwiseExprOperator::get_int64_from_int_tc(
+    const ObDatumMeta &datum_meta, const ObDatum &datum, bool is_round,
+    int64_t &out, const ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_round);
   UNUSED(cast_mode);
+  UNUSED(datum_meta);
   out = datum.get_int();
   return ret;
 }
 
-int ObBitwiseExprOperator::get_uint64_from_int_tc(const ObDatum &datum, bool is_round,
-                                                  uint64_t &out, const ObCastMode &cast_mode)
+int ObBitwiseExprOperator::get_uint64_from_int_tc(
+    const ObDatumMeta &datum_meta, const ObDatum &datum, bool is_round,
+    uint64_t &out, const ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_round);
   UNUSED(cast_mode);
+  UNUSED(datum_meta);
   out = datum.get_uint();
   return ret;
 }
 
-int ObBitwiseExprOperator::get_int64_from_number_type(const ObDatum &datum,
+int ObBitwiseExprOperator::get_int64_from_number_type(const ObDatumMeta &datum_meta,
+                                                      const ObDatum &datum,
                                                       bool is_round,
                                                       int64_t &out,
                                                       const ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
+  UNUSED(datum_meta);
   int64_t tmp_int = 0;
   ObNumStackAllocator<> num_allocator;
   number::ObNumber nmb;
@@ -4692,12 +4967,14 @@ int ObBitwiseExprOperator::get_int64_from_number_type(const ObDatum &datum,
   return ret;
 }
 
-int ObBitwiseExprOperator::get_uint64_from_number_type(const ObDatum &datum,
-                                                      bool is_round,
-                                                      uint64_t &out,
-                                                      const ObCastMode &cast_mode)
+int ObBitwiseExprOperator::get_uint64_from_number_type(const ObDatumMeta &datum_meta,
+                                                       const ObDatum &datum,
+                                                       bool is_round,
+                                                       uint64_t &out,
+                                                       const ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
+  UNUSED(datum_meta);
   ObNumStackAllocator<> num_allocator;
   number::ObNumber nmb;
   int64_t tmp_int = 0;
@@ -4709,6 +4986,43 @@ int ObBitwiseExprOperator::get_uint64_from_number_type(const ObDatum &datum,
   } else if (nmb.is_valid_int64(tmp_int)) {
     out = static_cast<uint64_t>(tmp_int);
   } else if (nmb.is_valid_uint64(tmp_uint)) {
+    out = tmp_uint;
+  } else {
+    ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+    if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+      ret = OB_SUCCESS;
+      out = 0;
+    }
+  }
+  return ret;
+}
+
+int ObBitwiseExprOperator::get_uint64_from_decimalint_type(
+    const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
+    uint64_t &out, const common::ObCastMode &cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_int = 0;
+  uint64_t tmp_uint = 0;
+  ObDecimalIntBuilder builder;
+  bool is_valid_int64 = true;
+  bool is_valid_uint64 = true;
+  if (false == is_round) { // this func is only used in mysql mode, is_round can only be true
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("is_round is false", K(ret));
+  } else if (OB_FAIL(ObExprFuncRound::do_round_decimalint(datum_meta.precision_, datum_meta.scale_,
+                     DEFAULT_NUMBER_PRECISION_FOR_INTEGER, DEFAULT_NUMBER_SCALE_FOR_INTEGER, 0,
+                     datum, builder))) {
+    LOG_WARN("do_round_decimalint failed", K(ret), K(datum_meta));
+  } else if (OB_FAIL(wide::check_range_valid_int64(
+             builder.get_decimal_int(), builder.get_int_bytes(), is_valid_int64, tmp_int))) {
+    LOG_WARN("check_range_valid_int64 failed", K(ret), K(builder.get_int_bytes()));
+  } else if (is_valid_int64) {
+    out = static_cast<uint64_t>(tmp_int);
+  } else if (OB_FAIL(wide::check_range_valid_uint64(
+             builder.get_decimal_int(), builder.get_int_bytes(), is_valid_uint64, tmp_uint))) {
+    LOG_WARN("check_range_valid_int64 failed", K(ret), K(builder.get_int_bytes()));
+  } else if (is_valid_uint64) {
     out = tmp_uint;
   } else {
     ret = OB_ERR_TRUNCATED_WRONG_VALUE;
@@ -4865,8 +5179,15 @@ int ObMinMaxExprOperator::aggregate_cmp_type_for_comparison(ObExprResType &type,
         ret = OB_INVALID_ARGUMENT; // not compatible input
       }
     }
+    ObScale calc_scale = types[0].get_scale();
+    for (int64_t i = 1; i < param_num; i++) {
+      calc_scale = MAX(calc_scale, types[i].get_scale());
+    }
     if (OB_SUCC(ret)) {
       type.set_calc_type(cmp_type);
+      if (ob_is_decimal_int(cmp_type)) {
+        type.get_calc_meta().set_scale(calc_scale);
+      }
     }
   }
 
@@ -4878,7 +5199,8 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
   ObExprResType *types_stack,
   int64_t param_num,
   const ObCollationType coll_type,
-  const ObLengthSemantics default_length_semantics) const
+  const ObLengthSemantics default_length_semantics,
+  const bool enable_decimal_int) const
 {
   UNUSED(default_length_semantics);
   int ret = OB_SUCCESS;
@@ -4926,15 +5248,23 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
       int64_t max_scale = 0;
       int64_t max_precision = 0;
       for (i = 0; i < param_num; ++i) {
-        max_scale = MAX(max_scale, types_stack[i].get_mysql_compatible_scale());
-        max_precision = MAX(max_precision, types_stack[i].get_precision());
+        if (types_stack[i].is_integer_type()) { // integer scale is zero
+          max_scale = MAX(max_scale, 0);
+        } else if (!types_stack[i].is_null()) {
+          max_scale = MAX(max_scale, types_stack[i].get_mysql_compatible_scale());
+          max_precision = MAX(max_precision, types_stack[i].get_precision());
+        }
       }
       ObScale result_scale = static_cast<ObScale>(NOT_FIXED_DEC == max_scale ? -1 : max_scale);
       const int64_t int32_max_precision = 11;
       if (result_scale > 0 && ob_is_int_tc(type.get_type())) {
       //兼容mysql行为，least(datetime/time/timestamp,int)结果类型为int
       //least(datetime(3)/time(3)/timestamp(3),int)结果类型为decimal。
-        type.set_type(ObNumberType);
+        if (enable_decimal_int) {
+          type.set_type(ObDecimalIntType);
+        } else {
+          type.set_type(ObNumberType);
+        }
       } else if (max_precision > int32_max_precision && ObInt32Type == type.get_type()) {
       //兼容mysql行为对类型进行提升。
         type.set_type(ObIntType);
@@ -4949,7 +5279,11 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
         }
       } else {
         type.set_scale(result_scale);
-        type.set_precision(static_cast<ObPrecision>(max_precision + max_scale)); // esti, not accurate
+        int16_t result_precision = max_precision + max_scale;
+        if (ob_is_number_or_decimal_int_tc(type.get_type())) {
+          result_precision = MIN(result_precision, OB_MAX_DECIMAL_POSSIBLE_PRECISION);
+        }
+        type.set_precision(static_cast<ObPrecision>(result_precision)); // esti, not accurate
       }
     }
   }
@@ -5972,6 +6306,8 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
                                 rt_expr.args_[1]->obj_meta_.has_lob_header();
     const ObScale input_scale1 = rt_expr.args_[0]->datum_meta_.scale_;
     const ObScale input_scale2 = rt_expr.args_[1]->datum_meta_.scale_;
+    const ObPrecision in_prec1 = rt_expr.args_[0]->datum_meta_.precision_;
+    const ObPrecision in_prec2 = rt_expr.args_[1]->datum_meta_.precision_;
     LOG_DEBUG("CG Datum CMP Expr", K(input_type1), K(input_type2), K(cmp_op));
     const ObCollationType cs_type = rt_expr.args_[0]->datum_meta_.cs_type_;
     if (ObDatumFuncs::is_string_type(input_type1) && ObDatumFuncs::is_string_type(input_type2)) {
@@ -5979,11 +6315,11 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     }
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
-          input_type1, input_type2, input_scale1, input_scale2, cmp_op, lib::is_oracle_mode(),
-          cs_type, has_lob_header);
+        input_type1, input_type2, input_scale1, input_scale2, in_prec1, in_prec2, cmp_op,
+        lib::is_oracle_mode(), cs_type, has_lob_header);
       rt_expr.eval_batch_func_ = ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
-          input_type1, input_type2, input_scale1, input_scale2, cmp_op, lib::is_oracle_mode(),
-          cs_type, has_lob_header);
+        input_type1, input_type2, input_scale1, input_scale2, in_prec1, in_prec2, cmp_op,
+        lib::is_oracle_mode(), cs_type, has_lob_header);
     }
     CK(NULL != rt_expr.eval_func_);
     CK(NULL != rt_expr.eval_batch_func_);
@@ -6045,6 +6381,8 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension,
         const ObObjType type2 = right_row->args_[i]->datum_meta_.type_;
         const ObScale scale1 = left_row->args_[i]->datum_meta_.scale_;
         const ObScale scale2 = right_row->args_[i]->datum_meta_.scale_;
+        const ObPrecision prec1 = left_row->args_[i]->datum_meta_.precision_;
+        const ObPrecision prec2 = right_row->args_[i]->datum_meta_.precision_;
         const ObCollationType cs_type = left_row->args_[i]->datum_meta_.cs_type_;
         const bool has_lob_header = left_row->args_[i]->obj_meta_.has_lob_header() ||
                                     right_row->args_[i]->obj_meta_.has_lob_header();
@@ -6054,12 +6392,14 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension,
           rt_expr.inner_functions_[i] = (void*)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                                   type1, type2,
                                                                   scale1, scale2,
+                                                                  prec1, prec2,
                                                                   lib::is_oracle_mode(),
                                                                   cs_type,
                                                                   has_lob_header);
         } else {
           rt_expr.inner_functions_[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              type1, type2, scale1, scale2, lib::is_oracle_mode(), cs_type, has_lob_header);
+            type1, type2, scale1, scale2, prec1, prec2, lib::is_oracle_mode(), cs_type,
+            has_lob_header);
           if (OB_ISNULL(rt_expr.inner_functions_[i])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null function", K(ret), K(i), K(type1), K(type2));

@@ -95,6 +95,8 @@ int ObObj2strHelper::init_ob_charset_utils()
     OBLOG_LOG(ERROR, "failed to init ORACLE_ARITH_RESULT_TYPE", KR(ret));
   } else if (OB_FAIL(ObCharsetUtils::init(*allocator))) {
     OBLOG_LOG(ERROR, "fail to init ObCharsetUtils", KR(ret));
+  } else if (OB_FAIL(wide::ObDecimalIntConstValue::init_const_values(*allocator, attr))) {
+    OBLOG_LOG(ERROR, "failed to init ObDecimalIntConstValue", KR(ret));
   }
   return ret;
 }

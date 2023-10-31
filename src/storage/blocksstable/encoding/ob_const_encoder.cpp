@@ -212,6 +212,7 @@ int ObConstEncoder::get_cell_len(const ObDatum &datum, int64_t &length) const
         break;
       }
       case ObNumberSC:
+      case ObDecimalIntSC:
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
@@ -245,6 +246,7 @@ int ObConstEncoder::store_value(const ObDatum &datum, char *buf)
         MEMCPY(buf, datum.ptr_, len);
         break;
       }
+      case ObDecimalIntSC:
       case ObNumberSC:
       case ObStringSC:
       case ObTextSC:
@@ -262,6 +264,33 @@ int ObConstEncoder::store_value(const ObDatum &datum, char *buf)
       }
     }
   }
+  return ret;
+}
+
+int ObConstEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = 0;
+
+  if (count_ == 0) {
+    const ObDatum &datum = *const_list_header_->datum_;
+    int64_t cell_len = 0;
+    if (OB_FAIL(get_cell_len(datum, cell_len))) {
+      LOG_WARN("failed to get cell len", K(ret), K(datum));
+    } else {
+      need_size = cell_len + 2 * sizeof(ObConstMetaHeader);
+    }
+  } else {
+    need_size = sizeof(ObConstMetaHeader)
+        + count_ * (row_id_byte_ + 1);
+    int64_t dict_encoder_need_size = 0;
+    if (OB_FAIL(dict_encoder_.get_encoding_store_meta_need_space(dict_encoder_need_size))) {
+      LOG_WARN("failed to get_encoding_store_meta_need_space", K(ret));
+    } else {
+      need_size += dict_encoder_need_size;
+    }
+  }
+
   return ret;
 }
 

@@ -204,11 +204,11 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &handle)
     write_info.buffer_ = redo_info.data_buffer_.ptr();
     write_info.size_= redo_info.data_buffer_.length();
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
+    write_info.io_timeout_ms_ = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
     ObDDLMacroBlock macro_block;
     if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
       LOG_WARN("fail to async write block", K(ret), K(write_info), K(macro_handle));
-    } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
+    } else if (OB_FAIL(macro_handle.wait())) {
       LOG_WARN("fail to wait macro block io finish", K(ret));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_handle.get_macro_id()))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_handle.get_macro_id()));

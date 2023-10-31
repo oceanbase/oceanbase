@@ -274,8 +274,8 @@ int ObDirectLoadDataBlockWriter<Header, T>::close()
   } else {
     if (data_block_writer_.has_item() && OB_FAIL(flush_buffer())) {
       STORAGE_LOG(WARN, "fail to flush buffer", KR(ret));
-    } else if (OB_FAIL(file_io_handle_.wait(io_timeout_ms_))) {
-      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret), K(io_timeout_ms_));
+    } else if (OB_FAIL(file_io_handle_.wait())) {
+      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret));
     } else {
       is_opened_ = false;
     }

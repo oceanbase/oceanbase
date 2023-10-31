@@ -128,6 +128,7 @@ int ObMacroBlockDataIterator::next_micro_block(ObMicroBlock &micro_block)
       micro_range.end_key_ = endkeys_->at(cur_micro_cursor_);
       micro_range.border_flag_.unset_inclusive_start();
       micro_range.border_flag_.set_inclusive_end();
+      micro_block_info.copy_lob_out_row_flag();
       micro_block.micro_index_info_ = &micro_block_info;
     }
     ++cur_micro_cursor_;
@@ -137,7 +138,7 @@ int ObMacroBlockDataIterator::next_micro_block(ObMicroBlock &micro_block)
 
 ObIndexBlockMicroIterator::ObIndexBlockMicroIterator()
   : data_iter_(), range_(), micro_block_(),
-    macro_handle_(), is_inited_(false) {}
+    macro_handle_(), allocator_("IBMI_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), is_inited_(false) {}
 
 void ObIndexBlockMicroIterator::reset()
 {
@@ -149,41 +150,51 @@ void ObIndexBlockMicroIterator::reset()
 }
 
 int ObIndexBlockMicroIterator::init(
-    const blocksstable::ObDatumRange &range,
+    const blocksstable::ObMacroBlockDesc &macro_desc,
     const ObITableReadInfo &table_read_info,
-    const blocksstable::MacroBlockId &macro_id,
     const common::ObIArray<blocksstable::ObMicroIndexInfo> &micro_block_infos,
     const common::ObIArray<blocksstable::ObDatumRowkey> &endkeys,
     const ObRowStoreType row_store_type,
     const ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
+  const bool is_normal_cg = sstable->is_normal_cg_sstable();
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Init twice", K(ret));
-  } else if (OB_UNLIKELY(!table_read_info.is_valid())) {
+  } else if (OB_UNLIKELY(!table_read_info.is_valid() || !macro_desc.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected read info", K(ret), K(table_read_info));
-  } else if (OB_FAIL(check_range_include_rowkey_array(range, endkeys, table_read_info.get_datum_utils()))) {
-    STORAGE_LOG(WARN, "Failed to check range include rowkey", K(ret), K(range), K(endkeys));
+    LOG_WARN("Unexpected read info", K(ret), K(table_read_info), K(macro_desc));
+  } else if (is_normal_cg && OB_FAIL(rowkey_helper_.trans_to_cg_range(macro_desc.start_row_offset_, macro_desc.range_))) {
+      STORAGE_LOG(WARN, "failed to trans cg range", K(ret), K(macro_desc));
   } else {
-    range_ = range;
+    range_ = is_normal_cg ? rowkey_helper_.get_result_range() : macro_desc.range_;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_range_include_rowkey_array(range_, endkeys, table_read_info.get_datum_utils()))) {
+    STORAGE_LOG(WARN, "Failed to check range include rowkey", K(ret), K(range_), K(endkeys));
+  } else {
     ObMacroBlockReadInfo read_info;
-    const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-    read_info.macro_block_id_ = macro_id;
+    read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+    read_info.macro_block_id_ = macro_desc.macro_block_id_;
     read_info.offset_ = sstable->get_macro_offset();
     read_info.size_ = sstable->get_macro_read_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_desc_.set_group_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
-    if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle_))) {
-      LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_id));
-    } else if (OB_FAIL(macro_handle_.wait(io_timeout_ms))) {
-      LOG_WARN("io wait failed", K(ret), K(macro_id), K(io_timeout_ms));
+    if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator_.alloc(read_info.size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret));
+    } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle_))) {
+      LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_desc));
+    } else if (OB_FAIL(macro_handle_.wait())) {
+      LOG_WARN("io wait failed", K(ret), K(macro_desc), K(read_info));
     } else if (OB_ISNULL(macro_handle_.get_buffer())
         || OB_UNLIKELY(macro_handle_.get_data_size() != read_info.size_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("buf is null or buf size is too small, ",
-          K(ret), K(macro_id), KP(macro_handle_.get_buffer()),
+          K(ret), K(macro_desc), KP(macro_handle_.get_buffer()),
           K(macro_handle_.get_data_size()), K(read_info.size_));
     } else if (OB_FAIL(data_iter_.init(
         macro_handle_.get_buffer(),
@@ -191,7 +202,7 @@ int ObIndexBlockMicroIterator::init(
         micro_block_infos,
         endkeys,
         &range_))){
-      LOG_WARN("Fail to init data iterator, ", K(ret), K(macro_id),
+      LOG_WARN("Fail to init data iterator, ", K(ret), K(macro_desc),
           KP(macro_handle_.get_buffer()), K(macro_handle_.get_data_size()), K(range_));
     } else {
       micro_block_.read_info_ = &table_read_info;

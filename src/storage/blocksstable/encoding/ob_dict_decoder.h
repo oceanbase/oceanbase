@@ -45,10 +45,10 @@ typedef void (*dict_fix_batch_decode_func)(
                   common::ObDatum *datums);
 
 typedef void (*dict_cmp_ref_func)(
-                  const int64_t row_cnt,
                   const int64_t dict_ref,
                   const int64_t dict_cnt,
                   const unsigned char *col_data,
+                  const sql::PushdownFilterInfo &pd_filter_info,
                   sql::ObBitVector &result);
 
 class ObDictDecoder : public ObIColumnDecoder
@@ -65,7 +65,7 @@ public:
            const ObColumnHeader &column_header,
            const char *meta);
   int init(const common::ObObjType &store_obj_type, const char *meta_header);
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
   virtual int batch_decode(
@@ -85,7 +85,7 @@ public:
 
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
 
-  int decode(common::ObObjMeta cell_meta, common::ObObj &cell, const int64_t ref, const int64_t meta_legnth) const;
+  int decode(const common::ObObjType &obj_type, common::ObDatum &datum, const int64_t ref, const int64_t meta_legnth) const;
 
   int batch_decode_dict(
       const common::ObObjType &obj_type,
@@ -105,15 +105,50 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 
+  virtual int pushdown_operator(
+      const sql::ObPushdownFilterExecutor *parent,
+      const ObColumnDecoderCtx &col_ctx,
+      sql::ObBlackFilterExecutor &filter,
+      const char* meta_data,
+      const ObIRowIndex* row_index,
+      sql::PushdownFilterInfo &pd_filter_info,
+      ObBitmap &result_bitmap,
+      bool &filter_applied) const override;
+
   OB_INLINE const ObDictMetaHeader* get_dict_header() const { return meta_header_; }
+  virtual bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const override;
+
+  virtual int get_distinct_count(int64_t &distinct_count) const override;
+
+  virtual int read_distinct(
+    const ObColumnDecoderCtx &ctx,
+    const char **cell_datas,
+    storage::ObGroupByCell &group_by_cell) const;
+
+  virtual int read_reference(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObGroupByCell &group_by_cell) const override;
+  int batch_read_distinct(
+      const ObColumnDecoderCtx &ctx,
+      const char **cell_datas,
+      const int64_t meta_length,
+      storage::ObGroupByCell &group_by_cell) const;
 public:
   ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
   ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
 
 private:
-  bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const;
+  bool fast_eq_ne_operator_valid(
+      const int64_t dict_ref_cnt,
+      const ObColumnDecoderCtx &col_ctx) const;
+  bool fast_string_equal_valid(
+      const ObColumnDecoderCtx &col_ctx,
+      const ObDatum &ref_datum) const;
 
   // unpacked refs should be stores in datums.pack_
   int batch_get_bitpacked_refs(
@@ -133,6 +168,7 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int eq_ne_operator(
@@ -140,6 +176,14 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      ObBitmap &result_bitmap) const;
+
+  int fast_eq_ne_operator(
+      const uint64_t cmp_value,
+      const unsigned char* col_data,
+      const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int comparison_operator(
@@ -147,6 +191,7 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int bt_operator(
@@ -154,6 +199,7 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int in_operator(
@@ -161,17 +207,17 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
-
-  int load_data_to_obj_cell(const ObObjMeta cell_meta, const char *cell_data, int64_t cell_len, ObObj &load_obj) const;
 
   int cmp_ref_and_set_res(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const int64_t dict_ref,
       const unsigned char *col_data,
-      ObFPIntCmpOpType cmp_op,
+      const sql::ObWhiteFilterOperatorType cmp_op,
       bool flag,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int fast_cmp_ref_and_set_res(
@@ -179,6 +225,7 @@ private:
       const int64_t dict_ref,
       const unsigned char *col_data,
       const sql::ObWhiteFilterOperatorType op_type,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int set_res_with_bitset(
@@ -186,13 +233,55 @@ private:
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char *col_data,
       const sql::ObBitVector *ref_bitset,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
+
+  int set_res_with_bitmap(
+      const sql::ObPushdownFilterExecutor *parent,
+      const ObColumnDecoderCtx &col_ctx,
+      const common::ObBitmap *ref_bitmap,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObDatum *datums,
+      ObBitmap &result_bitmap) const;
+
+  int fast_to_accquire_dict_codes(
+      const ObColumnDecoderCtx &col_ctx,
+      sql::ObBitVector &ref_bitset,
+      int64_t &dict_ref_cnt,
+      uint64_t &cmp_value) const;
 
   OB_INLINE int read_ref(
       const int64_t row_id,
       const bool is_bit_packing,
       const unsigned char *col_data,
       int64_t &ref) const;
+
+  enum ObReadRefType
+  {
+    PACKED_LEN_LESS_THAN_10 = 0,
+    PACKED_LEN_LESS_THAN_26,
+    DEFAULT_BIT_PACKED,
+    NOT_BIT_PACKED
+  };
+
+  template <ObReadRefType type>
+  OB_INLINE int read_ref(
+      const int64_t row_id,
+      const bool is_bit_packing,
+      const unsigned char *col_data,
+      int64_t &ref) const;
+
+  template <int32_t LEN_TAG>
+  OB_INLINE void empty_strings_equal(
+      const int64_t meta_length,
+      sql::ObBitVector &ref_bitset,
+      int64_t &dict_ref_cnt,
+      uint64_t &cmp_value) const;
+
+  OB_INLINE bool empty_string_equal_space_padded(
+      const char* a,
+      const uint64_t a_size) const;
+  int check_has_null(const ObColumnDecoderCtx &ctx, const int64_t meta_length, bool &has_null) const;
 
 private:
   ObObjTypeStoreClass store_class_;
@@ -272,16 +361,108 @@ OB_INLINE int ObDictDecoder::read_ref(
   return ret;
 }
 
+template <>
+OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::PACKED_LEN_LESS_THAN_10>(
+    const int64_t row_id,
+    const bool is_bit_packing,
+    const unsigned char *col_data,
+    int64_t &ref) const
+{
+  const uint8_t &row_ref_size = meta_header_->row_ref_size_;
+  const int64_t &bs_len = meta_header_->count_ * row_ref_size;
+  return ObBitStream::get<ObBitStream::PACKED_LEN_LESS_THAN_10>(col_data, row_id * row_ref_size, row_ref_size, bs_len, ref);
+}
+
+template <>
+OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::PACKED_LEN_LESS_THAN_26>(
+    const int64_t row_id,
+    const bool is_bit_packing,
+    const unsigned char *col_data,
+    int64_t &ref) const
+{
+  const uint8_t &row_ref_size = meta_header_->row_ref_size_;
+  const int64_t &bs_len = meta_header_->count_ * row_ref_size;
+  return ObBitStream::get<ObBitStream::PACKED_LEN_LESS_THAN_26>(col_data, row_id * row_ref_size, row_ref_size, bs_len, ref);
+}
+
+template <>
+OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::DEFAULT_BIT_PACKED>(
+    const int64_t row_id,
+    const bool is_bit_packing,
+    const unsigned char *col_data,
+    int64_t &ref) const
+{
+  const uint8_t &row_ref_size = meta_header_->row_ref_size_;
+  const int64_t &bs_len = meta_header_->count_ * row_ref_size;
+  return ObBitStream::get<ObBitStream::DEFAULT>(col_data, row_id * row_ref_size, row_ref_size, bs_len, ref);
+}
+
+template <>
+OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::NOT_BIT_PACKED>(
+    const int64_t row_id,
+    const bool is_bit_packing,
+    const unsigned char *col_data,
+    int64_t &ref) const
+{
+  MEMCPY(&ref, col_data + row_id * meta_header_->row_ref_size_,
+        meta_header_->row_ref_size_);
+  return OB_SUCCESS;
+}
+
+template <int32_t LEN_TAG>
+OB_INLINE void ObDictDecoder::empty_strings_equal(
+    const int64_t meta_length,
+    sql::ObBitVector &ref_bitset,
+    int64_t &dict_ref_cnt,
+    uint64_t &cmp_value) const
+{
+  typedef typename ObEncodingTypeInference<false, LEN_TAG>::Type DataType;
+  const char *cell_data = nullptr;
+  dict_ref_cnt = 0;
+  int64_t cell_len = 0;
+  const int64_t count = meta_header_->count_;
+  const DataType *offsets = reinterpret_cast<const DataType *>(meta_header_->payload_);
+  uint64_t prev_offset = 0;
+  for (uint64_t ref = 0; ref < count; ++ref) {
+    cell_data = var_data_ + prev_offset;
+    if (ref != (count - 1)) {
+      cell_len = offsets[ref] - prev_offset;
+    } else {
+      cell_len = reinterpret_cast<const char *>(meta_header_) + meta_length - cell_data;
+    }
+    if (empty_string_equal_space_padded(cell_data, cell_len)) {
+      cmp_value = ref;
+      ref_bitset.set(ref);
+      ++dict_ref_cnt;
+    }
+    prev_offset = offsets[ref];
+  }
+}
+
+OB_INLINE bool ObDictDecoder::empty_string_equal_space_padded(
+    const char* a,
+    const uint64_t a_size) const
+{
+  bool ret = true;
+  for (uint64_t offset = 0; offset < a_size; ++offset) {
+    if (' ' != a[offset]) {
+      ret = false;
+      break;
+    }
+  }
+  return ret;
+}
+
 /**
  *  Iterator to traverse the dictionary for DICT / CONST / RLE encoding
  */
 class ObDictDecoderIterator
 {
 public:
-  typedef ObObj value_type;
+  typedef ObStorageDatum value_type;
   typedef int64_t difference_type;
-  typedef ObObj *pointer;
-  typedef ObObj &reference;
+  typedef ObStorageDatum *pointer;
+  typedef ObStorageDatum &reference;
   typedef std::random_access_iterator_tag iterator_category;
 public:
   ObDictDecoderIterator() : decoder_(nullptr), ctx_(nullptr),
@@ -297,7 +478,7 @@ public:
       const ObColumnDecoderCtx *ctx,
       int64_t index,
       int64_t meta_length,
-      ObObj& cell)
+      ObStorageDatum& cell)
   {
     decoder_ = decoder;
     ctx_ = ctx;
@@ -308,10 +489,9 @@ public:
   inline value_type &operator*()
   {
     OB_ASSERT(nullptr != decoder_);
-    cell_.set_meta_type(ctx_->obj_meta_);
-    OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_, cell_, index_, meta_length_));
-    if (cell_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
-      OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->col_param_->get_accuracy(),
+    OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_.get_type(), cell_, index_, meta_length_));
+    if (ctx_->obj_meta_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
+      OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->obj_meta_, ctx_->col_param_->get_accuracy(),
                                                   *(ctx_->allocator_), cell_));
     }
     return cell_;
@@ -319,10 +499,9 @@ public:
   inline value_type *operator->()
   {
     OB_ASSERT(nullptr != decoder_);
-    cell_.set_meta_type(ctx_->obj_meta_);
-    OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_, cell_, index_, meta_length_));
-    if (cell_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
-      OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->col_param_->get_accuracy(),
+    OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_.get_type(), cell_, index_, meta_length_));
+    if (ctx_->obj_meta_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
+      OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->obj_meta_, ctx_->col_param_->get_accuracy(),
                                                   *(ctx_->allocator_), cell_));
     }
     return &cell_;
@@ -399,10 +578,10 @@ template <int32_t REF_LEN, int32_t CMP_TYPE>
 struct DictCmpRefFunc_T
 {
   static void dict_cmp_ref_func(
-      const int64_t row_cnt,
       const int64_t dict_ref,
       const int64_t dict_cnt,
       const unsigned char *col_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       sql::ObBitVector &result)
   {
     typedef typename ObEncodingByteLenMap<false, REF_LEN>::Type RefType;
@@ -410,19 +589,22 @@ struct DictCmpRefFunc_T
     const RefType casted_dict_ref = *reinterpret_cast<const RefType *>(&dict_ref);
     const RefType casted_dict_cnt = *reinterpret_cast<const RefType *>(&dict_cnt);
     RefType ref = 0;
+    int64_t row_id = 0;
     if (CMP_TYPE <= sql::WHITE_OP_LT) {
       // equal, less than, less than or equal to
-      for (int64_t row_id = 0; row_id < row_cnt; ++row_id) {
+      for (int64_t offset = 0; offset < pd_filter_info.count_; ++offset) {
+        row_id = offset + pd_filter_info.start_;
         if (value_cmp_t<RefType, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
-          result.set(row_id);
+          result.set(offset);
         }
       }
     } else {
-      for (int64_t row_id = 0; row_id < row_cnt; ++row_id) {
+      for (int64_t offset = 0; offset < pd_filter_info.count_; ++offset) {
+        row_id = offset + pd_filter_info.start_;
         if (value_cmp_t<RefType, sql::WHITE_OP_GE>(ref_arr[row_id], casted_dict_cnt)) {
           // null value
         } else if (value_cmp_t<RefType, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
-          result.set(row_id);
+          result.set(offset);
         }
       }
     }

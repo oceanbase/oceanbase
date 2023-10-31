@@ -145,9 +145,9 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     int64_t int64_diff = 0;
     ObTime ot1(DT_TYPE_TIME);
     ObTime ot2(DT_TYPE_TIME);
-    if (OB_FAIL(ob_datum_to_ob_time_without_date(*param_datum1, expr.args_[0]->datum_meta_.type_,
-                                                get_timezone_info(session), ot1,
-                                                expr.args_[0]->obj_meta_.has_lob_header()))) {
+    if (OB_FAIL(ob_datum_to_ob_time_without_date(
+          *param_datum1, expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.scale_,
+          get_timezone_info(session), ot1, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the first param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
@@ -156,15 +156,14 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
       LOG_WARN("eval param value failed", K(ret));
     } else if (param_datum2->is_null()) {
       expr_datum.set_null();
-    } else if (OB_FAIL(ob_datum_to_ob_time_without_date(*param_datum2,
-                                                expr.args_[1]->datum_meta_.type_,
-                                                get_timezone_info(session), ot2,
-                                                expr.args_[1]->obj_meta_.has_lob_header()))) {
+    } else if (OB_FAIL(ob_datum_to_ob_time_without_date(
+                 *param_datum2, expr.args_[1]->datum_meta_.type_, expr.args_[1]->datum_meta_.scale_,
+                 get_timezone_info(session), ot2, expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
-    } else if (OB_FAIL(get_diff_value_with_ob_time(ot1, ot2, get_timezone_info(session),
-                                                  int64_diff))) {
+    } else if (OB_FAIL(
+                 get_diff_value_with_ob_time(ot1, ot2, get_timezone_info(session), int64_diff))) {
       LOG_WARN("get diff value with ob time failed", K(ret));
       expr_datum.set_null();
     } else {

@@ -31,7 +31,7 @@
 #include "sql/ob_sql.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/executor/ob_mini_task_executor.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "rootserver/ob_root_service.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 

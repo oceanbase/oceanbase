@@ -42,6 +42,10 @@ class ObTabletMemtableMgr;
 class ObFreezer;
 class ObStoreRowIterator;
 }
+namespace compaction
+{
+class ObTabletMergeDagParam;
+}
 namespace memtable
 {
 class ObMemtableScanIterator;
@@ -49,7 +53,12 @@ class ObMemtableGetIterator;
 
 struct ObMtStat
 {
+  ObMtStat() { reset(); }
+  ~ObMtStat() = default;
   void reset() { memset(this, 0, sizeof(*this));}
+  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count), K_(purge_row_count),
+               K_(purge_queue_count), K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time),
+               K_(release_time), K_(last_print_time), K_(row_size));
   int64_t insert_row_count_;
   int64_t update_row_count_;
   int64_t delete_row_count_;
@@ -61,6 +70,14 @@ struct ObMtStat
   int64_t release_time_;
   int64_t push_table_into_gc_queue_time_;
   int64_t last_print_time_;
+  int64_t row_size_;
+};
+
+struct ObMvccRowAndWriteResult
+{
+  ObMvccRow *mvcc_row_;
+  ObMvccWriteResult write_result_;
+  TO_STRING_KV(K_(write_result), KP_(mvcc_row));
 };
 
 class ObMTKVBuilder
@@ -166,6 +183,7 @@ class ObMemtable : public ObIMemtable, public storage::checkpoint::ObFreezeCheck
 {
 public:
   typedef common::ObGMemstoreAllocator::AllocHandle ObMemstoreAllocator;
+  using ObMvccRowAndWriteResults = common::ObSEArray<ObMvccRowAndWriteResult, 16>;
   ObMemtable();
   virtual ~ObMemtable();
 public:
@@ -198,12 +216,26 @@ public:
       const share::ObEncryptMeta *encrypt_meta);
   virtual int set(
       const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
+	    storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const ObIArray<int64_t> &update_idx,
       const storage::ObStoreRow &old_row,
       const storage::ObStoreRow &new_row,
       const share::ObEncryptMeta *encrypt_meta);
+  int multi_set(
+      const storage::ObTableIterParam &param,
+	    storage::ObTableAccessContext &context,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow *rows,
+      const int64_t row_count,
+      const bool check_exist,
+      const share::ObEncryptMeta *encrypt_meta,
+      storage::ObRowsInfo &rows_info);
+  int check_rows_locked(
+      const bool check_exist,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      ObRowsInfo &rows_info);
 
   // lock is used to lock the row(s)
   // ctx is the locker tx's context, we need the tx_id, version and scn to do the concurrent control(mvcc_write)
@@ -301,6 +333,7 @@ public:
   uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
   ObMtStat& get_mt_stat() { return mt_stat_; }
+  const ObMtStat& get_mt_stat() const { return mt_stat_; }
   int64_t get_size() const;
   int64_t get_occupied_size() const;
   int64_t get_physical_row_cnt() const { return query_engine_.btree_size(); }
@@ -344,8 +377,6 @@ public:
   virtual int64_t get_write_ref() const override { return ATOMIC_LOAD(&write_ref_cnt_); }
   inline void set_is_tablet_freeze() { is_tablet_freeze_ = true; }
   inline bool get_is_tablet_freeze() { return is_tablet_freeze_; }
-  inline void set_is_force_freeze() { is_force_freeze_ = true; }
-  inline bool get_is_force_freeze() { return is_force_freeze_; }
   inline void set_is_flushed() { is_flushed_ = true; }
   inline bool get_is_flushed() { return is_flushed_; }
   inline void unset_active_memtable_logging_blocked() { ATOMIC_STORE(&unset_active_memtable_logging_blocked_, true); }
@@ -402,6 +433,9 @@ public:
   }
   int resolve_right_boundary();
   void resolve_left_boundary(share::SCN end_scn);
+  void fill_compaction_param_(
+    const int64_t current_time,
+    compaction::ObTabletMergeDagParam &param);
   int resolve_snapshot_version_();
   int resolve_max_end_scn_();
   share::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
@@ -479,7 +513,7 @@ public:
                        K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
-                       K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
+                       K_(is_tablet_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
                        K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time),
                        K_(mt_stat_.create_flush_dag_time), K_(mt_stat_.release_time),
@@ -489,10 +523,12 @@ private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
   int mvcc_write_(
       const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
-	  const ObMemtableKey *key,
-	  const ObTxNodeArg &arg,
-	  bool &is_new_locked);
+	    storage::ObTableAccessContext &context,
+	    const ObMemtableKey *key,
+	    const ObTxNodeArg &arg,
+	    bool &is_new_locked,
+      ObMvccRowAndWriteResult *mvcc_row = nullptr,
+      bool check_exist = false);
 
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
@@ -500,10 +536,42 @@ private:
   int lock_row_on_frozen_stores_(
       const storage::ObTableIterParam &param,
       const ObTxNodeArg &arg,
-      storage::ObTableAccessContext &context,
       const ObMemtableKey *key,
+      const bool check_exist,
+      storage::ObTableAccessContext &context,
       ObMvccRow *value,
       ObMvccWriteResult &res);
+
+  int lock_row_on_frozen_stores_on_success(
+      const bool row_locked,
+      const blocksstable::ObDmlFlag writer_dml_flag,
+      const share::SCN &max_trans_version,
+      storage::ObTableAccessContext &context,
+      ObMvccRow *value,
+      ObMvccWriteResult &res);
+
+  void lock_row_on_frozen_stores_on_failure(
+      const blocksstable::ObDmlFlag writer_dml_flag,
+      const ObMemtableKey &key,
+      int &ret,
+      ObMvccRow *value,
+      storage::ObTableAccessContext &context,
+      ObMvccWriteResult &res);
+
+  int lock_rows_on_frozen_stores_(
+      const bool check_exist,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      ObMvccRowAndWriteResults &mvcc_rows,
+      ObRowsInfo &rows_info);
+
+  int internal_lock_rows_on_frozen_stores_(
+      const bool check_exist,
+      const ObIArray<ObITable *> &iter_tables,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      share::SCN &max_trans_version,
+      ObRowsInfo &rows_info);
 
   void get_begin(ObMvccAccessCtx &ctx);
   void get_end(ObMvccAccessCtx &ctx, int ret);
@@ -515,15 +583,23 @@ private:
   int check_standby_cluster_schema_condition_(storage::ObStoreCtx &ctx,
                                               const int64_t table_id,
                                               const int64_t table_version);
-
-
   int set_(
-	  const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
+      const storage::ObTableIterParam &param,
       const common::ObIArray<share::schema::ObColDesc> &columns,
       const storage::ObStoreRow &new_row,
       const storage::ObStoreRow *old_row,
-      const common::ObIArray<int64_t> *update_idx);
+      const common::ObIArray<int64_t> *update_idx,
+      storage::ObTableAccessContext &context,
+      ObMvccRowAndWriteResult *mvcc_row = nullptr,
+      bool check_exist = false);
+  int multi_set_(
+      const storage::ObTableIterParam &param,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow *rows,
+      const int64_t row_count,
+      const bool check_exist,
+      storage::ObTableAccessContext &context,
+      storage::ObRowsInfo &rows_info);
   int lock_(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -583,7 +659,6 @@ private:
   int64_t timestamp_;
   share::SCN migration_clog_checkpoint_scn_;
   bool is_tablet_freeze_;
-  bool is_force_freeze_;
   bool is_flushed_;
   bool read_barrier_ CACHE_ALIGNED;
   bool write_barrier_;

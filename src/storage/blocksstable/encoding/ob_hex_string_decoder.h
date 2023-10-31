@@ -39,7 +39,7 @@ public:
       const ObColumnHeader &column_header,
       const char *meta);
 
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
@@ -64,6 +64,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter_node,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 private:
   const ObHexStringHeader *header_;

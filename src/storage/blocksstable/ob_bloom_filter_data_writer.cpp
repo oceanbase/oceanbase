@@ -15,6 +15,7 @@
 #include "share/ob_task_define.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_macro_block_handle.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,7 @@ namespace blocksstable
 {
 ObBloomFilterMicroBlockWriter::ObBloomFilterMicroBlockWriter()
   : bf_micro_header_(NULL),
-    data_buffer_(ObModIds::OB_BF_DATA_WRITER),
+    data_buffer_(ObModIds::OB_BF_DATA_WRITER, 0),
     is_inited_(false)
 {
 }
@@ -123,7 +124,7 @@ int ObBloomFilterMicroBlockWriter::write(const ObBloomFilterCacheValue &bf_cache
 }
 
 ObBloomFilterMacroBlockWriter::ObBloomFilterMacroBlockWriter()
-  : data_buffer_(ObModIds::OB_BF_DATA_WRITER),
+  : data_buffer_(ObModIds::OB_BF_DATA_WRITER, 0),
     bf_macro_header_(NULL),
     common_header_(),
     compressor_(),
@@ -171,14 +172,14 @@ int ObBloomFilterMacroBlockWriter::init(const ObDataStoreDesc &desc)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init ObBloomFilterMacroBlockWriter", K(desc),
                 K(ret));
-  } else if (OB_UNLIKELY(is_major_merge_type(desc.merge_type_))) {
+  } else if (OB_UNLIKELY(is_major_merge_type(desc.get_merge_type()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Major freeze would not build bloomfilter macro data", K(ret));
-  } else if (OB_FAIL(data_buffer_.ensure_space(desc.macro_block_size_))) {
-    STORAGE_LOG(WARN, "Failed to ensure space", K(desc.macro_block_size_), K(ret));
-  } else if (OB_FAIL(compressor_.init(desc.macro_block_size_, desc.compressor_type_))) {
+  } else if (OB_FAIL(data_buffer_.ensure_space(desc.get_macro_block_size()))) {
+    STORAGE_LOG(WARN, "Failed to ensure space", K(desc.get_macro_block_size()), K(ret));
+  } else if (OB_FAIL(compressor_.init(desc.get_macro_block_size(), desc.get_compressor_type()))) {
     STORAGE_LOG(WARN, "Failed to init compressor", K(ret));
-  } else if (OB_FAIL(bf_micro_writer_.init(desc.macro_block_size_))) {
+  } else if (OB_FAIL(bf_micro_writer_.init(desc.get_macro_block_size()))) {
     STORAGE_LOG(WARN, "Failed to init bloomfilter micro writer", K(ret));
   } else {
     if (OB_FAIL(ret)) {
@@ -315,14 +316,14 @@ int ObBloomFilterMacroBlockWriter::init_headers(const int64_t row_count)
       bf_macro_header_->version_ = BF_MACRO_BLOCK_HEADER_VERSION;
       bf_macro_header_->magic_ = BF_MACRO_BLOCK_HEADER_MAGIC;
       bf_macro_header_->attr_ = ObMacroBlockCommonHeader::BloomFilterData;
-      bf_macro_header_->tablet_id_ = desc_->tablet_id_.id();
-      bf_macro_header_->snapshot_version_ = desc_->snapshot_version_;
-      bf_macro_header_->rowkey_column_count_ = static_cast<int32_t>(desc_->schema_rowkey_col_cnt_);
+      bf_macro_header_->tablet_id_ = desc_->get_tablet_id().id();
+      bf_macro_header_->snapshot_version_ = desc_->get_snapshot_version();
+      bf_macro_header_->rowkey_column_count_ = static_cast<int32_t>(desc_->get_schema_rowkey_col_cnt());
       bf_macro_header_->micro_block_count_ = 0;
       bf_macro_header_->micro_block_data_offset_ = static_cast<int32_t>(common_header_size +
                                                    bf_macro_header_size);
       bf_macro_header_->row_count_ = static_cast<int32_t>(row_count);
-      bf_macro_header_->compressor_type_ = desc_->compressor_type_;
+      bf_macro_header_->compressor_type_ = desc_->get_compressor_type();
       if (OB_FAIL(data_buffer_.advance(bf_macro_header_size))) {
         STORAGE_LOG(WARN, "Failed to advance data buffer for bloomfilter macro header",
                     K(bf_macro_header_size), K(ret));
@@ -399,16 +400,16 @@ int ObBloomFilterDataWriter::init(const ObDataStoreDesc &desc)
   } else if (OB_UNLIKELY(!desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init ObBloomFilterDataWriter", K(desc), K(ret));
-  } else if (OB_FAIL(bf_cache_value_.init(desc.schema_rowkey_col_cnt_, BLOOM_FILTER_MAX_ROW_COUNT))) {
+  } else if (OB_FAIL(bf_cache_value_.init(desc.get_schema_rowkey_col_cnt(), BLOOM_FILTER_MAX_ROW_COUNT))) {
     STORAGE_LOG(WARN, "Failed to init bloomfilter cache value", K(desc), K(ret));
-  } else if (bf_cache_value_.get_serialize_size() > desc.macro_block_size_) {
+  } else if (bf_cache_value_.get_serialize_size() > desc.get_macro_block_size()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected large bloomfilter rowcount or small macro block size", K(desc),
                 K_(bf_cache_value), K(ret));
   } else if (OB_FAIL(bf_macro_writer_.init(desc))) {
     STORAGE_LOG(WARN, "Failed to init bloomfilter macro block writer", K(desc), K(ret));
   } else {
-    rowkey_column_count_ = desc.schema_rowkey_col_cnt_;
+    rowkey_column_count_ = desc.get_schema_rowkey_col_cnt();
     is_inited_ = true;
   }
 

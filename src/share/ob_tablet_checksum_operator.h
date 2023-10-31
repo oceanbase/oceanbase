@@ -40,6 +40,7 @@ public:
   void reset();
   bool is_valid() const;
   bool is_same_tablet(const ObTabletChecksumItem &item) const;
+  int compare_tablet(const ObTabletReplicaChecksumItem &replica_item) const;
   int verify_tablet_column_checksum(const ObTabletReplicaChecksumItem &replica_item) const;
   int assign(const ObTabletReplicaChecksumItem &replica_item);
   int assign(const ObTabletChecksumItem &other);

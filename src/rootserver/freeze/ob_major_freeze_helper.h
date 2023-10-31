@@ -21,7 +21,7 @@ namespace oceanbase
 namespace share
 {
 class SCN;
-class ObSimpleFrozenStatus;
+class ObFreezeInfo;
 }
 namespace rootserver
 {
@@ -91,6 +91,25 @@ public:
   rpc::frame::ObReqTransport *transport_;
 };
 
+struct ObTabletMajorFreezeParam
+{
+public:
+  ObTabletMajorFreezeParam()
+    : tenant_id_(0),
+      tablet_id_(),
+      is_rebuild_column_group_(false)
+    {}
+  ~ObTabletMajorFreezeParam() = default;
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(is_rebuild_column_group));
+  uint64_t tenant_id_;
+  common::ObTabletID tablet_id_;
+  bool is_rebuild_column_group_;
+};
+
 class ObMajorFreezeHelper
 {
 public:
@@ -104,20 +123,22 @@ public:
 
   static int major_freeze(const ObMajorFreezeParam &param);
 
+  static int tablet_major_freeze(const ObTabletMajorFreezeParam &param);
+
   static int suspend_merge(const ObTenantAdminMergeParam &param);
 
   static int resume_merge(const ObTenantAdminMergeParam &param);
 
   static int clear_merge_error(const ObTenantAdminMergeParam &param);
 
-  static int get_frozen_status(const int64_t tenant_id, 
+  static int get_frozen_status(const int64_t tenant_id,
                                const share::SCN &frozen_scn,
-                               share::ObSimpleFrozenStatus &frozen_status);
+                               share::ObFreezeInfo &frozen_status);
   static int get_frozen_scn(const int64_t tenant_id, share::SCN &frozen_scn);
 
 private:
   static int get_freeze_info(
-      const ObMajorFreezeParam &param, 
+      const ObMajorFreezeParam &param,
       common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array);
   static int get_all_tenant_freeze_info(
       common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array);
@@ -127,20 +148,20 @@ private:
       bool freeze_all_meta,
       common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array);
   static int check_tenant_is_restore(const uint64_t tenant_id, bool &is_restore);
-  
+
   static int do_major_freeze(
-      const rpc::frame::ObReqTransport &transport, 
+      const rpc::frame::ObReqTransport &transport,
       const common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array,
       common::ObIArray<int> &merge_results);
   static int do_one_tenant_major_freeze(
-      const rpc::frame::ObReqTransport &transport, 
+      const rpc::frame::ObReqTransport &transport,
       const obrpc::ObSimpleFreezeInfo &freeze_info);
-  
+
   static int do_tenant_admin_merge(
-      const ObTenantAdminMergeParam &param, 
+      const ObTenantAdminMergeParam &param,
       const obrpc::ObTenantAdminMergeType &admin_type);
   static int do_one_tenant_admin_merge(
-      const rpc::frame::ObReqTransport &transport, 
+      const rpc::frame::ObReqTransport &transport,
       const uint64_t tenant_id,
       const obrpc::ObTenantAdminMergeType &admin_type);
   static int add_user_warning(

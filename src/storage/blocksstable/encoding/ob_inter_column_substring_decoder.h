@@ -38,7 +38,8 @@ public:
                   const ObMicroBlockHeader &micro_block_header,
                   const ObColumnHeader &column_header,
                   const char *meta);
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
   virtual int update_pointer(const char *old_block, const char *cur_block) override;

@@ -65,6 +65,7 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
           (lib::is_mysql_mode() && !is_single_value && !is_strict_mode(session->get_sql_mode()))) {
         ObObj zero_obj;
         ObDatum &row_datum = row.at(col_idx)->locate_datum_for_write(eval_ctx);
+        bool is_decimal_int = ob_is_decimal_int(row.at(col_idx)->datum_meta_.type_);
         if (is_oracle_mode()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dml with ignore not supported in oracle mode");
@@ -79,9 +80,16 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
             eval_ctx.exec_ctx_.get_allocator(),
             zero_obj))) {
           LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)), K(row.at(col_idx)->max_length_));
+        } else if (is_decimal_int) {
+          ObDecimalIntBuilder dec_val;
+          dec_val.set_zero(wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+            row.at(col_idx)->datum_meta_.precision_));
+          row_datum.set_decimal_int(dec_val.get_decimal_int(), dec_val.get_int_bytes());
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(zero_obj, eval_ctx.exec_ctx_.get_allocator()))) {
           LOG_WARN("convert lob types zero obj failed", K(ret), K(zero_obj));
-        } else if (OB_FAIL(row_datum.from_obj(zero_obj))) {
+        } else if (OB_FAIL(!is_decimal_int && row_datum.from_obj(zero_obj))) {
           LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
         } else if (is_lob_storage(zero_obj.get_type()) &&
                    OB_FAIL(ob_adjust_lob_datum(zero_obj, row.at(col_idx)->obj_meta_,

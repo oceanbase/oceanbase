@@ -1,14 +1,14 @@
 /**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
+* Copyright (c) 2021 OceanBase
+* OceanBase CE is licensed under Mulan PubL v2.
+* You can use this software according to the terms and conditions of the Mulan PubL v2.
+* You may obtain a copy of Mulan PubL v2 at:
+*          http://license.coscl.org.cn/MulanPubL-2.0
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+* See the Mulan PubL v2 for more details.
+*/
 
 #ifndef OCEANBASE_SCHEMA_COLUMN_SCHEMA_H_
 #define OCEANBASE_SCHEMA_COLUMN_SCHEMA_H_
@@ -46,24 +46,24 @@ const char *const STR_COLUMN_TYPE_UNKNOWN = "unknown";
 class ObTableSchema;
 class ObColumnSchemaV2 : public ObSchema
 {
-    OB_UNIS_VERSION_V(1);
+  OB_UNIS_VERSION_V(1);
 public:
-  static const char *convert_column_type_to_str(common::ColumnType type);
-  static common::ColumnType convert_str_to_column_type(const char *str);
-  //constructor and destructor
-  ObColumnSchemaV2();
-  explicit ObColumnSchemaV2(common::ObIAllocator *allocator);
-  ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema);
-  virtual ~ObColumnSchemaV2();
+static const char *convert_column_type_to_str(common::ColumnType type);
+static common::ColumnType convert_str_to_column_type(const char *str);
+//constructor and destructor
+ObColumnSchemaV2();
+explicit ObColumnSchemaV2(common::ObIAllocator *allocator);
+ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema);
+virtual ~ObColumnSchemaV2();
 
-  //operators
-  ObColumnSchemaV2 &operator=(const ObColumnSchemaV2 &src_schema);
-  bool operator==(const ObColumnSchemaV2 &r) const;
-  bool operator!=(const ObColumnSchemaV2 &r) const;
+//operators
+ObColumnSchemaV2 &operator=(const ObColumnSchemaV2 &src_schema);
+bool operator==(const ObColumnSchemaV2 &r) const;
+bool operator!=(const ObColumnSchemaV2 &r) const;
 
-  int assign(const ObColumnSchemaV2 &other);
+int assign(const ObColumnSchemaV2 &other);
 
-  //set methods
+//set methods
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
   inline void set_table_id(const uint64_t id) { table_id_ = id; }
   inline void set_column_id(const uint64_t id) { column_id_ = id; }
@@ -151,6 +151,7 @@ public:
   inline void set_srid(const uint32_t srid) { srs_info_.srid_ = srid; }
   inline void set_geo_type(const common::ObGeoType geo_type) { srs_info_.geo_type_ = static_cast<uint8_t>(geo_type); }
   int set_geo_type(const int32_t type_val);
+  inline void set_skip_index_attr(const uint64_t attr_val) { skip_index_attr_.set_column_attr(attr_val); }
   //get methods
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
@@ -176,6 +177,7 @@ public:
   inline uint64_t get_geo_col_id() const { return geo_col_id_; }
   inline uint32_t get_srid() const { return srs_info_.srid_; }
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
+  inline const ObSkipIndexColumnAttr &get_skip_index_attr() const { return skip_index_attr_; }
   // Be careful with this interface, is_nullable_ is set only in Mysql mode and
   // for primary key and identity column in Oracle mode.
 	// is_nullable() is usually used in Mysql mode, also used when schema interacts with inner table.
@@ -189,6 +191,7 @@ public:
   inline bool is_json() const { return meta_type_.is_json(); }
   inline bool is_geometry() const { return meta_type_.is_geometry(); }
   inline bool is_raw() const { return meta_type_.is_raw(); }
+  inline bool is_decimal_int() const { return meta_type_.is_decimal_int(); }
 
   inline bool is_xmltype() const {
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
@@ -369,6 +372,7 @@ private:
   };
   uint64_t udt_set_id_;
   uint64_t sub_type_;
+  ObSkipIndexColumnAttr skip_index_attr_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

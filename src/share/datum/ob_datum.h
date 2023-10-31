@@ -73,7 +73,7 @@ namespace common
 //   | ObNVarchar2Type     | char[]                        | 0          | type maximum length |
 //   | ObNCharType         | char[]                        | 0          | type maximum length |
 //   | ObURowIDType        | char[]                        | 0          | type maximum length |
-//
+//   | ObDecimalIntType    | char[]                        | 4          |  64                 |
 #define OB_DATUM_SIZE 12
 
 // ObObj to ObDatum memory layout mapping type, see ObDatum::get_obj_datum_map_type()
@@ -87,7 +87,8 @@ enum ObObjDatumMapType : uint8_t {
   OBJ_DATUM_4BYTE_LEN_DATA, // 4 bytes ObObj::val_len_ + 8 bytes ObObj::v_
   OBJ_DATUM_2BYTE_LEN_DATA, // 2 bytes ObObj::val_len_ + 8 bytes ObObj::v_
   OBJ_DATUM_FULL,  // full ObObj
-  OBJ_DATUM_MAPPING_MAX
+  OBJ_DATUM_DECIMALINT, // decimal int
+  OBJ_DATUM_MAPPING_MAX,
 };
 
 static_assert(sizeof(common::ObObj) == 16, "unexpected ObObj size");
@@ -101,6 +102,7 @@ enum DatumReserveSize {
   OBJ_DATUM_4BYTE_LEN_DATA_RES_SIZE = 12,
   OBJ_DATUM_FULL_DATA_RES_SIZE = 16,
   OBJ_DATUM_NUMBER_RES_SIZE = 40,
+  OBJ_DATUM_DECIMALINT_MAX_RES_SIZE = 64,
   OBJ_DATUM_STRING_RES_SIZE = 128,
   OBJ_DATUM_MAX_RES_SIZE = 128
 };
@@ -127,6 +129,7 @@ struct ObDatumPtr {
     const ObLobCommon *lob_data_;
     const ObLobLocator *lob_locator_;
     const ObObj *extend_obj_; // for extend type
+    const ObDecimalInt *decimal_int_;
   };
 
   ObDatumPtr() : ptr_(NULL) {}
@@ -189,7 +192,11 @@ public:
     return equal;
   }
   static ObObjDatumMapType get_obj_datum_map_type(const ObObjType type);
-  static uint32_t get_reserved_size(const ObObjDatumMapType type);
+  // Get reserved size for specified type.
+  // For some types, we can get a finer size through precision, so if you get precison,
+  // plz be sure to pass in the function instead of using the default value.
+  static uint32_t get_reserved_size(const ObObjDatumMapType type,
+                                    const int16_t prec = PRECISION_UNKNOWN_YET);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj, const ObObjDatumMapType map_type);
   inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy = false);
@@ -266,6 +273,15 @@ public:
   }
   inline const ObLobLocator &get_lob_locator() const { return *lob_locator_; }
   inline const ObLobCommon &get_lob_data() const { return *lob_data_; }
+
+  inline const ObDecimalInt *get_decimal_int() const { return decimal_int_; }
+  inline int32_t get_decimal_int32() const { return *decimal_int_->int32_v_; }
+  inline int64_t get_decimal_int64() const { return *decimal_int_->int64_v_; }
+  inline int128_t get_decimal_int128() const { return *decimal_int_->int128_v_; }
+  inline int256_t get_decimal_int256() const { return *decimal_int_->int256_v_; }
+  inline int512_t get_decimal_int512() const { return *decimal_int_->int512_v_; }
+
+  inline int32_t get_int_bytes() const { return len_; }
 
   // Setter functions for ObDatum.
   // CAUTION: The caller is responsible for ensuring %ptr_ has enough memory.
@@ -345,7 +361,14 @@ public:
   OB_INLINE void set_number(const number::ObCompactNumber &cnum);
   OB_INLINE void set_number_shallow(const number::ObCompactNumber &cnum);
   OB_INLINE void set_pack(const int64_t len);
-
+  OB_INLINE void set_decimal_int(const ObDecimalInt *decint, int32_t len);
+  OB_INLINE void set_decimal_int_shallow(const ObDecimalInt *decint, int32_t len);
+  template<typename T>
+  OB_INLINE void set_decimal_int(const T &decint)
+  {
+    memcpy(no_cv(ptr_), &decint, sizeof(T));
+    pack_ = sizeof(T);
+  }
   inline void set_string(const ObString &v) { ptr_ = v.ptr(); pack_ = v.length(); }
   inline void set_string(const char *ptr, const uint32_t len) { ptr_ = ptr; pack_ = len; }
   inline void set_enumset_inner(const ObString &v) { set_string(v); }
@@ -517,6 +540,18 @@ OB_INLINE void ObDatum::set_number_shallow(const number::ObCompactNumber &cnum)
 {
   pack_ = static_cast<uint32_t>(sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]));
   num_ = &cnum;
+}
+
+OB_INLINE void ObDatum::set_decimal_int(const ObDecimalInt *decint, int32_t len)
+{
+  memcpy(no_cv(ptr_), decint, len);
+  pack_ = len;
+}
+
+OB_INLINE void ObDatum::set_decimal_int_shallow(const ObDecimalInt *decint, int32_t len)
+{
+  pack_ = len;
+  decimal_int_ = decint;
 }
 
 
@@ -701,6 +736,27 @@ inline void ObDatum::datum2datum<OBJ_DATUM_FULL>(const ObDatum &datum)
   set_ext();
 }
 
+template <>
+inline void ObDatum::obj2datum<OBJ_DATUM_DECIMALINT>(const ObObj &obj)
+{
+  memcpy(no_cv(ptr_), obj.get_decimal_int(), obj.val_len_);
+  pack_ = obj.val_len_;
+}
+
+template <>
+inline void ObDatum::datum2obj<OBJ_DATUM_DECIMALINT>(ObObj &obj) const
+{
+  obj.v_.decimal_int_ = const_cast<ObDecimalInt *>(decimal_int_);
+  obj.val_len_ = len_;
+}
+
+template <>
+inline void ObDatum::datum2datum<OBJ_DATUM_DECIMALINT>(const ObDatum &datum)
+{
+  memcpy(no_cv(ptr_), datum.ptr_, datum.pack_);
+  pack_ = datum.pack_;
+}
+
 inline int ObDatum::from_obj(const ObObj &obj, const ObObjDatumMapType map_type)
 {
   int ret = common::OB_SUCCESS;
@@ -717,6 +773,7 @@ inline int ObDatum::from_obj(const ObObj &obj, const ObObjDatumMapType map_type)
       case OBJ_DATUM_4BYTE_LEN_DATA: { obj2datum<OBJ_DATUM_4BYTE_LEN_DATA>(obj); break; }
       case OBJ_DATUM_2BYTE_LEN_DATA: { obj2datum<OBJ_DATUM_2BYTE_LEN_DATA>(obj); break; }
       case OBJ_DATUM_FULL: { obj2datum<OBJ_DATUM_FULL>(obj); break; }
+      case OBJ_DATUM_DECIMALINT: { obj2datum<OBJ_DATUM_DECIMALINT>(obj); break; }
       case OBJ_DATUM_MAPPING_MAX: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj datum mapping", K(ret), K(obj), K(map_type));
@@ -749,6 +806,7 @@ inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMap
       case OBJ_DATUM_2BYTE_LEN_DATA:
         { datum2datum<OBJ_DATUM_NUMBER>(datum); break; }
       case OBJ_DATUM_FULL: { datum2datum<OBJ_DATUM_FULL>(datum); break; }
+      case OBJ_DATUM_DECIMALINT: { datum2datum<OBJ_DATUM_DECIMALINT>(datum); break; }
       case OBJ_DATUM_MAPPING_MAX: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid datum datum mapping", K(ret), K(datum), K(map_type));
@@ -851,6 +909,10 @@ inline int ObDatum::from_obj(const ObObj &obj)
         obj2datum<OBJ_DATUM_FULL>(obj);
         break;
       }
+      case ObDecimalIntType: {
+        obj2datum<OBJ_DATUM_DECIMALINT>(obj);
+        break;
+      }
       case ObMaxType: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj type", K(ret), K(obj), K(obj.get_type()));
@@ -869,24 +931,37 @@ inline int ObDatum::to_obj(
     obj.set_null();
   } else {
     obj.meta_ = meta;
-    switch (map_type) {
-      case OBJ_DATUM_NULL: { datum2obj<OBJ_DATUM_NULL>(obj); break; }
-      case OBJ_DATUM_STRING: { datum2obj<OBJ_DATUM_STRING>(obj); break; }
-      case OBJ_DATUM_NUMBER: { datum2obj<OBJ_DATUM_NUMBER>(obj); break; }
-      case OBJ_DATUM_8BYTE_DATA: { datum2obj<OBJ_DATUM_8BYTE_DATA>(obj); break; }
-      case OBJ_DATUM_4BYTE_DATA: { datum2obj<OBJ_DATUM_4BYTE_DATA>(obj); break; }
-      case OBJ_DATUM_1BYTE_DATA: { datum2obj<OBJ_DATUM_1BYTE_DATA>(obj); break; }
-      case OBJ_DATUM_4BYTE_LEN_DATA: { datum2obj<OBJ_DATUM_4BYTE_LEN_DATA>(obj); break; }
-      case OBJ_DATUM_2BYTE_LEN_DATA: { datum2obj<OBJ_DATUM_2BYTE_LEN_DATA>(obj); break; }
-      case OBJ_DATUM_FULL: { datum2obj<OBJ_DATUM_FULL>(obj); break; }
-      case OBJ_DATUM_MAPPING_MAX: {
-        ret = common::OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "invalid obj datum mapping", K(ret), K(map_type));
+    // defensive checking
+    // if datum is decimal int, must satisfy scale >= 0
+    if (OB_UNLIKELY(meta.is_decimal_int() && meta.get_scale() < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "invalid scale for decimal int", K(ret));
+    } else {
+      switch (map_type) {
+        case OBJ_DATUM_NULL: { datum2obj<OBJ_DATUM_NULL>(obj); break; }
+        case OBJ_DATUM_STRING: { datum2obj<OBJ_DATUM_STRING>(obj); break; }
+        case OBJ_DATUM_NUMBER: { datum2obj<OBJ_DATUM_NUMBER>(obj); break; }
+        case OBJ_DATUM_8BYTE_DATA: { datum2obj<OBJ_DATUM_8BYTE_DATA>(obj); break; }
+        case OBJ_DATUM_4BYTE_DATA: { datum2obj<OBJ_DATUM_4BYTE_DATA>(obj); break; }
+        case OBJ_DATUM_1BYTE_DATA: { datum2obj<OBJ_DATUM_1BYTE_DATA>(obj); break; }
+        case OBJ_DATUM_4BYTE_LEN_DATA: { datum2obj<OBJ_DATUM_4BYTE_LEN_DATA>(obj); break; }
+        case OBJ_DATUM_2BYTE_LEN_DATA: { datum2obj<OBJ_DATUM_2BYTE_LEN_DATA>(obj); break; }
+        case OBJ_DATUM_FULL: { datum2obj<OBJ_DATUM_FULL>(obj); break; }
+        case OBJ_DATUM_DECIMALINT: { datum2obj<OBJ_DATUM_DECIMALINT>(obj); break; }
+        case OBJ_DATUM_MAPPING_MAX: {
+          ret = common::OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "invalid obj datum mapping", K(ret), K(map_type));
+        }
       }
     }
   }
   return ret;
 }
+
+template <typename T> struct ObDecimalIntPayload
+{
+  static inline T get(const ObDatum &d) { return *reinterpret_cast<const T *>(d.ptr_); }
+};
 
 inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
 {
@@ -894,8 +969,14 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
   if (is_null()) {
     obj.set_null();
   } else {
-    obj.meta_ = meta;
-    switch (meta.get_type()) {
+    // defensive checking
+    // if datum is decimal int, must satisfy scale >= 0
+    if (OB_UNLIKELY(meta.is_decimal_int() && meta.get_scale() < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "invalid scale for decimal int", K(ret));
+    } else {
+      obj.meta_ = meta;
+      switch (meta.get_type()) {
       case ObNullType: {
         datum2obj<OBJ_DATUM_NULL>(obj);
         break;
@@ -973,9 +1054,14 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
         datum2obj<OBJ_DATUM_FULL>(obj);
         break;
       }
+      case ObDecimalIntType: {
+        datum2obj<OBJ_DATUM_DECIMALINT>(obj);
+        break;
+      }
       case ObMaxType: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj type", K(ret), K(meta.get_type()));
+      }
       }
     }
   }

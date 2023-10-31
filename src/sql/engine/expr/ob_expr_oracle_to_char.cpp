@@ -75,7 +75,8 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
       case ObTextTC:
       case ObIntTC:
       case ObUIntTC:
-      case ObNumberTC: {
+      case ObNumberTC:
+      case ObDecimalIntTC: {
         if (1 == params_count) {
           if (type_array[0].is_varchar_or_char()) {
             type.set_type_simple(type_array[0].get_type());
@@ -198,7 +199,8 @@ int ObExprOracleToNChar::calc_result_typeN(ObExprResType &type,
       case ObTextTC:
       case ObIntTC:
       case ObUIntTC:
-      case ObNumberTC: {
+      case ObNumberTC:
+      case ObDecimalIntTC: {
         if (1 == params_count) {
           const ObObj fmt_obj = type_array[1].get_param();
           if (type_array[0].is_nstring()) {
@@ -932,7 +934,8 @@ int ObExprToCharCommon::eval_oracle_to_char(const ObExpr &expr,
         case ObIntTC: // to support PLS_INTERGER type
         case ObFloatTC:
         case ObDoubleTC:
-        case ObNumberTC: {
+        case ObNumberTC:
+        case ObDecimalIntTC: {
           if (NULL != nlsparam_datum) {
             nlsparam = nlsparam_datum->get_string();
           }
@@ -1059,7 +1062,8 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
                 case ObIntTC: // to support PLS_INTERGER type
                 case ObFloatTC:
                 case ObDoubleTC:
-                case ObNumberTC: {
+                case ObNumberTC:
+                case ObDecimalIntTC: {
                   if (NULL != nlsparam_datum) {
                     nlsparam = nlsparam_datum->get_string();
                   }
@@ -1067,7 +1071,6 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
                     LOG_WARN("fail to check num format", K(ret));
                   } else if (OB_FAIL(number_to_char(
                                      expr, ctx, alloc, datum_array[j], fmt, nlsparam, res))) {
-                    // TODO:@xiaofeng.lby
                     // need to avoid calling ObNFMBase::parse_fmt in number_to_char more than once
                     LOG_WARN("number to char failed", K(ret));
                   }
@@ -1328,8 +1331,8 @@ int ObExprToCharCommon::number_to_char(const ObExpr &expr,
     }
     if (OB_SUCC(ret)) {
       ObNFMToChar nfm;
-      if (OB_FAIL(nfm.convert_num_to_fmt_str(obj_meta, input, alloc, fmt_str.ptr(),
-                  fmt_str.length(), ctx, res))) {
+      if (OB_FAIL(nfm.convert_num_to_fmt_str(obj_meta, expr.args_[0]->datum_meta_, input, alloc,
+                  fmt_str.ptr(), fmt_str.length(), ctx, res))) {
         LOG_WARN("fail to convert num to fmt str", K(ret), K(fmt_str));
       }
     }
@@ -1346,6 +1349,7 @@ int ObExprToCharCommon::process_number_sci_value(
   int64_t str_len = 0;
   const bool is_float = expr.args_[0]->obj_meta_.is_float();
   const bool is_double = expr.args_[0]->obj_meta_.is_double();
+  const bool is_decimal_int = expr.args_[0]->obj_meta_.is_decimal_int();
   const int64_t alloc_size = ((is_float || is_double)
                               ? MAX_NUMBER_BUFFER_SIZE
                               : MAX_TO_CHAR_BUFFER_SIZE);
@@ -1359,6 +1363,12 @@ int ObExprToCharCommon::process_number_sci_value(
     } else if (is_float) {
       str_len = ob_gcvt_opt(input.get_float(), OB_GCVT_ARG_FLOAT,
           static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
+    } else if (is_decimal_int) {
+      ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
+      if (OB_FAIL(wide::to_string(input.get_decimal_int(), input.get_int_bytes(),
+          static_cast<int16_t>(in_scale), buf, static_cast<int32_t>(alloc_size), str_len, true))) {
+        LOG_WARN("to_string failed", K(ret), K(input.get_int_bytes()), K(in_scale));
+      }
     } else {
       number::ObNumber number_value;
       if (expr.args_[0]->obj_meta_.is_integer_type()) {

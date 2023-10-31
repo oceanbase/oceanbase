@@ -56,7 +56,7 @@
 #include "share/ob_tenant_mgr.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/resource_manager/ob_resource_manager.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/sequence/ob_sequence_cache.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
@@ -84,7 +84,6 @@
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
-#include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx.h"
@@ -2137,9 +2136,6 @@ int ObServer::init_io()
 
         if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
           LOG_ERROR("log block mgr init failed", KR(ret));
-        } else if (OB_FAIL(ObServerUtils::check_slog_data_binding(storage_env_.sstable_dir_,
-            storage_env_.log_spec_.log_dir_))) {
-          LOG_ERROR("fail to check need reserved space", K(ret), K(storage_env_));
         } else if (OB_FAIL(ObServerUtils::cal_all_part_disk_size(config_.datafile_size,
                                                   config_.log_disk_size,
                                                   config_.datafile_disk_percentage,

@@ -78,7 +78,7 @@ public:
   int get_avg_cache_item_size(const uint64_t tenant_id, const int64_t cache_id,
                               int64_t &avg_cache_item_size);
 
-  int get_washable_size(const uint64_t tenant_id, int64_t &washable_size, const int64_t ratio = 0);
+  int get_washable_size(const uint64_t tenant_id, int64_t &washable_size);
   void flush_washable_mbs();
   int flush_washable_mbs(const uint64_t tenant_id, const bool force_flush = false);
   void flush_washable_mbs(const int64_t cache_id);
@@ -109,7 +109,6 @@ public:
       const enum ObKVCachePolicy policy, ObKVMemBlockHandle *mb_handle);
   int get_memblock_info(const uint64_t tenant_id, ObIArray<ObKVCacheStoreMemblockInfo> &memblock_infos);
   int print_tenant_memblock_info(ObDLink *link);
-  static const int64_t MAX_RATIO = 6;
 
 private:
   int try_flush_washable_mb(
@@ -135,6 +134,7 @@ private:
   static const int64_t MAX_GLOBAL_WASH_THRESHOLD = 64L;  // 64 * 2M = 128M
   static const int64_t MIN_GLOBAL_WASH_THRESHOLD = 8L;  // 8 * 2M = 16M
   static const int64_t FLUSH_PRESERVE_TENANT_NUM = 10; // number preversed for flush
+  static const int64_t DEFAULT_TENANT_BUCKET_NUM = 64;
   struct StoreMBHandleCmp
   {
     bool operator()(const ObKVMemBlockHandle *a, const ObKVMemBlockHandle *b) const;
@@ -248,6 +248,9 @@ private:
   ObFreeHeap<TenantWashInfo> wash_info_free_heap_;
   WashMap tenant_wash_map_;
   MBHandlePointerWashPool mb_ptr_pool_;
+  ObArenaAllocator washable_size_allocator_;
+  ObWashableSizeInfo washbale_size_info_;
+  ObWashableSizeInfo tmp_washbale_size_info_;
   double tenant_reserve_mem_ratio_;
   int64_t wash_itid_;
   const ObITenantMemLimitGetter *mem_limit_getter_;

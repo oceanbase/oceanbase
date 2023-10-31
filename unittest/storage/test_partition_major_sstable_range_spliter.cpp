@@ -18,6 +18,7 @@
 
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 
 namespace oceanbase
 {
@@ -228,7 +229,7 @@ private:
     major_sstable_.meta_->basic_meta_.occupy_size_ = occupy_size;
     major_sstable_.meta_->basic_meta_.row_count_ = row_count;
     major_sstable_.addr_.set_none_addr();
-    major_sstable_.data_macro_block_count_ = macro_block_count;
+    major_sstable_.meta_cache_.data_macro_block_count_ = macro_block_count;
     major_sstable_.meta_->is_inited_ = true;
   }
   int set_major_sstable_macro_blocks(const ObString &str);
@@ -266,7 +267,7 @@ void TestPartitionMajorSSTableRangeSliter::SetUp()
     major_sstable_.meta_->basic_meta_.row_count_ = 0;
     major_sstable_.valid_for_reading_ = true;
     major_sstable_.addr_.set_none_addr();
-    major_sstable_.data_macro_block_count_ = 0;
+    major_sstable_.meta_cache_.data_macro_block_count_ = 0;
     major_sstable_.meta_->is_inited_ = true;
 
     ObColDesc col_desc;

@@ -228,6 +228,56 @@ int ObDASDMLIterator::get_next_row()
   return OB_NOT_IMPLEMENT;
 }
 
+int ObDASDMLIterator::get_next_rows(ObNewRow *&rows, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  const bool is_spatial_index = das_ctdef_->table_param_.get_data_table().is_spatial_index();
+  row_count = 0;
+  if (is_spatial_index || 1 == batch_size_) {
+    if (OB_FAIL(get_next_row(rows))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("Failed to get next row", K(ret), K_(batch_size), K(is_spatial_index));
+      }
+    } else {
+      row_count = 1;
+    }
+  } else {
+    if (OB_ISNULL(cur_rows_)) {
+      if (OB_FAIL(ob_create_rows(allocator_, batch_size_, row_projector_->count(), cur_rows_))) {
+        LOG_WARN("Failed to create rows", K(ret), K_(row_projector));
+      } else if (OB_FAIL(write_buffer_.begin(write_iter_))) {
+        LOG_WARN("Failed to begin write iterator", K(ret));
+      }
+    }
+    while (OB_SUCC(ret) && row_count < batch_size_) {
+      const ObChunkDatumStore::StoredRow *sr = nullptr;
+      if (OB_FAIL(write_iter_.get_next_row(sr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("Failed to get next row from result iterator", K(ret));
+        }
+      } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
+                                                         *sr,
+                                                         *row_projector_,
+                                                         allocator_,
+                                                         cur_rows_[row_count]))) {
+        LOG_WARN("Failed to project storage row", K(ret));
+      } else {
+        ++row_count;
+        LOG_TRACE("Get next rows from dml das iterator", KPC(sr), K(cur_rows_[row_count - 1]), K_(das_ctdef));
+      }
+    }
+    if (OB_SUCC(ret) || OB_LIKELY(OB_ITER_END == ret)) {
+      if (0 == row_count) {
+        ret = OB_ITER_END;
+      } else {
+        rows = cur_rows_;
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDASWriteBuffer::DmlShadowRow::init(ObIAllocator &allocator,
                                          int64_t datum_cnt,
                                          bool strip_lob_locator)

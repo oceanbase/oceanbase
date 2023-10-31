@@ -17,6 +17,7 @@
 #include "ob_index_sstable_estimator.h"
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 
 namespace oceanbase
@@ -112,8 +113,8 @@ int ObTableEstimator::estimate_multi_scan_row_count(
       // Back off to get mode if range contains single row key.
       tmp_cost.logical_row_count_ = tmp_cost.physical_row_count_ = 1;
     } else if (current_table->is_sstable()) {
-      if (OB_FAIL(estimate_sstable_scan_row_count(
-          base_input, static_cast<ObSSTable *>(current_table), range, tmp_cost))) {
+      ObSSTable *sstable = static_cast<ObSSTable *>(current_table);
+      if (OB_FAIL(estimate_sstable_scan_row_count(base_input, sstable, range, tmp_cost))) {
         LOG_WARN("failed to estimate sstable row count", K(ret), K(*current_table));
       }
     } else if (current_table->is_data_memtable()) {
@@ -168,10 +169,10 @@ int ObTableEstimator::estimate_sstable_scan_row_count(
   part_est.reset();
   if (OB_UNLIKELY(!sstable->is_valid())) {
     ret = OB_NOT_INIT;
-    LOG_WARN("The ObSSStore has not been inited ", K(ret));
+    LOG_WARN("The sstable has not been inited", K(ret), KPC(sstable));
   } else if (OB_UNLIKELY(!is_valid_id(base_input.table_id_))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid get arguments.", K(ret), K(base_input.table_id_), K(key_range));
+    LOG_WARN("invalid get arguments", K(ret), K(base_input.table_id_), K(key_range));
   } else {
     const ObIndexSSTableEstimateContext context(
         *sstable, base_input.tablet_handle_, base_input.query_flag_, key_range);

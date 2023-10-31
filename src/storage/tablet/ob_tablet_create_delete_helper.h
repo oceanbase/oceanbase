@@ -40,6 +40,12 @@ namespace schema
 class ObTableSchema;
 }
 }
+
+namespace blocksstable
+{
+class ObSSTable;
+}
+
 namespace storage
 {
 class ObTabletMapKey;
@@ -129,24 +135,47 @@ public:
   static int check_need_create_empty_major_sstable(
       const share::schema::ObTableSchema &table_schema,
       bool &need_create_sstable);
-  static int build_create_sstable_param(
-      const share::schema::ObTableSchema &table_schema,
+  // Attention !!! only used when first creating tablet
+  static int create_empty_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
-      ObTabletCreateSSTableParam &param);
-  static int create_sstable_for_migrate( // TODO: @jinzhu remove me later.
-      const ObTabletCreateSSTableParam &param,
-      common::ObArenaAllocator &allocator,
       ObTableHandleV2 &table_handle);
+  static int create_empty_co_sstable(
+      common::ObArenaAllocator &allocator,
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTableHandleV2 &table_handle);
+
+  template <typename T = blocksstable::ObSSTable>
   static int create_sstable(
       const ObTabletCreateSSTableParam &param,
       common::ObArenaAllocator &allocator,
-      blocksstable::ObSSTable &sstable);
-  // ObTabletBindingHelper usage
+      ObTableHandleV2 &table_handle);
+  template<typename T = blocksstable::ObSSTable>
+  static int create_sstable(
+      const ObTabletCreateSSTableParam &param,
+      common::ObArenaAllocator &allocator,
+      T &sstable);
   static bool is_pure_data_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_mixed_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_aux_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_hidden_tablets(const obrpc::ObCreateTabletInfo &info);
+
+  static int build_create_sstable_param(
+      const ObStorageSchema &storage_schema,
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      ObTabletCreateSSTableParam &param);
+  static int build_create_cs_sstable_param(
+      const ObStorageSchema &storage_schema,
+      const ObTabletID &tablet_id,
+      const int64_t snapshot_version,
+      const int64_t column_group_idx,
+      const bool has_all_column_group,
+      ObTabletCreateSSTableParam &cs_param);
   template<typename Arg, typename Helper>
   static int process_for_old_mds(
              const char *buf,
@@ -211,6 +240,43 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
   }
   return ret;
 };
+
+template <typename T>
+int ObTabletCreateDeleteHelper::create_sstable(
+    const ObTabletCreateSSTableParam &param,
+    common::ObArenaAllocator &allocator,
+    ObTableHandleV2 &table_handle)
+{
+  int ret = common::OB_SUCCESS;
+  void *buf = allocator.alloc(sizeof(T));
+  T *sstable = nullptr;
+  if (OB_ISNULL(buf)) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to allocate sstable memory", K(ret));
+  } else if (FALSE_IT(sstable = new (buf) T())) {
+  } else if (OB_FAIL(create_sstable(param, allocator, *sstable))) {
+    STORAGE_LOG(WARN, "fail to create sstable", K(ret));
+  } else if (OB_FAIL(table_handle.set_sstable(sstable, &allocator))) {
+    STORAGE_LOG(WARN, "fail to set table handle", K(ret), KPC(sstable));
+  }
+  return ret;
+}
+
+template <typename T>
+int ObTabletCreateDeleteHelper::create_sstable(
+    const ObTabletCreateSSTableParam &param,
+    common::ObArenaAllocator &allocator,
+    T &sstable)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(!param.is_valid())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), K(param));
+  } else if (OB_FAIL(sstable.init(param, &allocator))) {
+    STORAGE_LOG(WARN, "fail to init sstable", K(ret), K(param));
+  }
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase
 

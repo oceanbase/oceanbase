@@ -232,14 +232,22 @@ private:
         produce_range_(false),
         is_equal_range_(false),
         is_empty_range_(false),
-        valid_offsets_(),
+        valid_offsets_(NULL),
         allocator_(allocator),
         range_set_(),
         is_phy_rowid_range_(false)
     {
     }
 
-    int init_search_state(int64_t column_count, bool init_as_full_range, uint64_t table_id);
+    ~ObSearchState()
+    {
+      if (valid_offsets_ != NULL) {
+        valid_offsets_->destroy();
+      }
+    }
+
+    int init_search_state(int64_t column_count, bool init_as_full_range, uint64_t table_id,
+                          bool container_in_expr);
     bool has_intersect(const common::ObObj &start,
                        bool include_start,
                        const common::ObObj &end,
@@ -284,7 +292,7 @@ private:
     bool produce_range_;
     bool is_equal_range_;
     bool is_empty_range_;
-    ObSqlBitSet<> valid_offsets_;
+    ObSqlBitSet<> *valid_offsets_;
     common::ObIAllocator &allocator_;
     common::hash::ObHashSet<ObRangeWrapper, common::hash::NoPthreadDefendMode> range_set_;
     bool is_phy_rowid_range_;
@@ -750,7 +758,7 @@ private:
   int definite_in_range_graph(ObExecContext &exec_ctx, ObKeyPart *&root, bool &has_scan_key,
                               const common::ObDataTypeCastParams &dtc_params);
 
-  int set_valid_offsets(const ObKeyPart *cur, ObSqlBitSet<> &offsets) const;
+  int set_valid_offsets(const ObKeyPart *cur, ObSqlBitSet<> *offsets) const;
   int remove_cur_offset(const ObKeyPart *cur, ObSqlBitSet<> &offsets) const;
   int remove_and_next_offset(ObKeyPart *cur, ObSqlBitSet<> &offsets) const;
   int64_t get_max_valid_offset(const ObSqlBitSet<> &offsets) const;

@@ -148,6 +148,8 @@ int ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t seed
     if (OB_FAIL(obj_trimmed.hash_murmur(res, seed))) {
       LOG_WARN("fail to do hash", K(ret));
     }
+  } else if (obj.is_decimal_int()) {
+    ret = wide::PartitionHash<ObMurmurHash, ObObj>::calculate(obj, seed, res);
   } else {
     if (OB_FAIL(obj.hash_murmur(res, seed))) {
       LOG_WARN("fail to do hash", K(ret));
@@ -204,7 +206,8 @@ bool ObExprFuncPartHash::is_oracle_supported_type(const common::ObObjType type)
     case ObNumberFloatType:
     case ObNCharType:
     case ObNVarchar2Type:
-    case ObURowIDType: {
+    case ObURowIDType:
+    case ObDecimalIntType: {
       supported = true;
       break;
     }
@@ -351,6 +354,8 @@ int ObExprFuncPartHash::eval_oracle_part_hash(
         if (OB_FAIL(arg.basic_funcs_->murmur_hash_(str, hash_val, hash_val))) {
           LOG_WARN("hash failed", K(ret));
         }
+      } else if (arg.datum_meta_.type_ == ObDecimalIntType) {
+        ret = wide::PartitionHash<ObMurmurHash, ObDatum>::calculate(*d, hash_val, hash_val);
       } else {
         if (OB_FAIL(arg.basic_funcs_->murmur_hash_(*d, hash_val, hash_val))) {
           LOG_WARN("hash failed", K(ret));
@@ -363,6 +368,5 @@ int ObExprFuncPartHash::eval_oracle_part_hash(
   }
   return ret;
 }
-
 }  // namespace sql
 }  // namespace oceanbase

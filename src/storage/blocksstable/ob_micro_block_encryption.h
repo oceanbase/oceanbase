@@ -13,6 +13,7 @@
 #ifndef OB_MICRO_BLOCK_ENCRYPTION_H_
 #define OB_MICRO_BLOCK_ENCRYPTION_H_
 #include "ob_data_buffer.h"
+#include "storage/compaction/ob_compaction_memory_pool.h"
 #include "share/ob_encryption_util.h"
 
 namespace oceanbase {
@@ -45,8 +46,8 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
-  ObSelfBufferWriter encrypt_buf_;
-  ObSelfBufferWriter decrypt_buf_;
+  storage::ObCompactionBufferWriter encrypt_buf_;
+  storage::ObCompactionBufferWriter decrypt_buf_;
   int64_t encrypt_id_;
   int64_t raw_key_len_;
   char raw_key_[common::OB_MAX_ENCRYPTION_KEY_NAME_LENGTH];      // 真正用于数据加解密的密钥

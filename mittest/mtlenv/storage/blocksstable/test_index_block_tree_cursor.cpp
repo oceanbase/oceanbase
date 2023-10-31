@@ -14,8 +14,8 @@
 #define private public
 #define protected public
 
-#include "storage/blocksstable/ob_index_block_tree_cursor.h"
-#include "storage/blocksstable/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
 #include "ob_index_block_data_prepare.h"
 
@@ -179,6 +179,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   ASSERT_TRUE(nullptr != root_block.get_extra_buf());
   ObIndexBlockMacroIterator macro_iter;
   MacroBlockId macro_block_id;
+  int64_t start_row_offset;
   int tmp_ret = OB_SUCCESS;
   int64_t cnt = 0;
   ObDatumRange iter_range;
@@ -188,7 +189,7 @@ TEST_F(TestIndexBlockTreeCursor, test_macro_iter)
   ASSERT_EQ(OB_SUCCESS, macro_iter.open(
       sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, true, true));
   while (OB_SUCCESS == tmp_ret) {
-    tmp_ret = macro_iter.get_next_macro_block(macro_block_id);
+    tmp_ret = macro_iter.get_next_macro_block(macro_block_id, start_row_offset);
     STORAGE_LOG(DEBUG, "Reverse get next macro block", K(tmp_ret), K(cnt),
         K(macro_block_id), K(macro_iter.micro_endkeys_.at(macro_iter.micro_endkeys_.count() - 1)));
     if (OB_SUCCESS == tmp_ret) {
@@ -300,7 +301,8 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
       true));
 
   MacroBlockId macro_block_id;
-  ASSERT_EQ(OB_SUCCESS, macro_iter.get_next_macro_block(macro_block_id));
+  int64_t start_row_offset;
+  ASSERT_EQ(OB_SUCCESS, macro_iter.get_next_macro_block(macro_block_id, start_row_offset));
 
   ObMacroBlockReadInfo read_info;
   ObMacroBlockHandle macro_handle;
@@ -308,8 +310,10 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
   read_info.offset_ = 0;
   read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  ASSERT_NE(nullptr, read_info.buf_ = reinterpret_cast<char*>(allocator_.alloc(read_info.size_)));
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::async_read_block(read_info, macro_handle));
-  ASSERT_EQ(OB_SUCCESS, macro_handle.wait(DEFAULT_IO_WAIT_TIME_MS));
+  ASSERT_EQ(OB_SUCCESS, macro_handle.wait());
 
   ObMicroBlockBareIterator micro_bare_iter;
   ObMicroBlockData micro_data;
@@ -322,13 +326,98 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
   ASSERT_EQ(tmp_ret, OB_ITER_END);
 }
 
+TEST_F(TestIndexBlockTreeCursor, test_get_cs_range)
+{
+  // TEST: ObSSTable::get_cs_range; ObIndexBlockMacroIterator::get_cs_range
+  const ObITableReadInfo &rowkey_read_info = tablet_handle_.get_obj()->get_rowkey_read_info();
+  ASSERT_TRUE(start_key_.is_valid());
+  ASSERT_TRUE(end_key_.is_valid());
+  ASSERT_TRUE(rowkey_read_info.is_valid());
+  ObDatumRange range;
+  ObDatumRange cs_range;
+  /* test whole range*/
+  range.set_whole_range();
+  OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+  ASSERT_TRUE(cs_range.is_whole_range());
+
+  /* test start key*/
+  range.reset();
+  range.set_start_key(start_key_);
+  range.set_end_key(start_key_);
+  range.set_left_closed();
+  range.set_right_closed();
+  OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+  ASSERT_EQ(cs_range.start_key_.datums_[0].get_int(), cs_range.end_key_.datums_[0].get_int());
+  ASSERT_EQ(0, cs_range.start_key_.datums_[0].get_int());
+
+  /*test end key*/
+  range.reset();
+  range.set_start_key(end_key_);
+  range.set_end_key(end_key_);
+  range.set_left_closed();
+  range.set_right_closed();
+  OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+  ASSERT_EQ(cs_range.start_key_.datums_[0].get_int(), cs_range.end_key_.datums_[0].get_int());
+  ASSERT_EQ(max_row_cnt_ - 1, cs_range.start_key_.datums_[0].get_int());
+
+  /* test each key in root block*/
+  ObDatumRow row;
+  ObMicroBlockReaderHelper reader_helper;
+  ObIMicroBlockReader *micro_reader;
+  ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(root_index_builder_->index_store_desc_.get_desc().get_row_store_type(), micro_reader));
+
+  OK(row.init(allocator_, root_index_builder_->index_store_desc_.get_desc().get_row_column_count()));
+  OK(micro_reader->init(root_block_data_buf_, nullptr));
+  ObIndexBlockRowParser idx_row_parser;
+  ObDatumRowkey end_key;
+  for (int64_t it = 0; it != micro_reader->row_count(); ++it) {
+    idx_row_parser.reset();
+    OK(micro_reader->get_row(it, row));
+    OK(idx_row_parser.init(root_index_builder_->index_store_desc_.get_desc().get_rowkey_column_count(), row));
+    int64_t expect_row_offset = idx_row_parser.get_row_offset();
+    end_key.datums_ = row.storage_datums_;
+    end_key.datum_cnt_ = root_index_builder_->index_store_desc_.get_desc().get_rowkey_column_count();
+
+    range.reset();
+    range.set_start_key(start_key_);
+    range.set_end_key(end_key);
+    range.set_left_closed();
+    range.set_right_open();
+    OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+    ASSERT_EQ(expect_row_offset - 1, cs_range.end_key_.datums_[0].get_int());
+
+    range.reset();
+    range.set_start_key(start_key_);
+    range.set_end_key(end_key);
+    range.set_left_closed();
+    range.set_right_closed();
+    OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+    ASSERT_EQ(expect_row_offset, cs_range.end_key_.datums_[0].get_int());
+
+    range.reset();
+    range.set_start_key(end_key);
+    range.set_end_key(end_key_);
+    range.set_right_closed();
+    if (it != micro_reader->row_count() - 1) {
+      range.set_left_open();
+      OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+      ASSERT_EQ(expect_row_offset + 1, cs_range.start_key_.datums_[0].get_int());
+    } else {
+      range.set_left_closed();
+      OK(sstable_.get_cs_range(range, rowkey_read_info, allocator_, cs_range));
+      ASSERT_EQ(expect_row_offset, cs_range.start_key_.datums_[0].get_int());
+    }
+  }
+}
+
 } // end blocksstable
 } // end oceanbase
 
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_tree_cursor.log*");
-  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log");
+  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

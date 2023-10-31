@@ -2438,7 +2438,7 @@ def					concat('','aaa')	253	12	3	Y	0	0	45
 +------------------+
 select 1.1/0.0;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					1.1/0.0	246	8	0	Y	32896	5	63
+def					1.1/0.0	246	9	0	Y	32896	5	63
 +---------+
 | 1.1/0.0 |
 +---------+
@@ -2446,12 +2446,12 @@ def					1.1/0.0	246	8	0	Y	32896	5	63
 +---------+
 select dump(1.1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					dump(1.1)	253	16	51	Y	0	0	45
-+-----------------------------------------------------+
-| dump(1.1)                                           |
-+-----------------------------------------------------+
-| "sign=1 exp=64 se=0xc0 len=2 digits=[1,100000000,]" |
-+-----------------------------------------------------+
+def					dump(1.1)	253	16	44	Y	0	0	45
++----------------------------------------------+
+| dump(1.1)                                    |
++----------------------------------------------+
+| "precision=2 scale=1 int_bytes=4 items=[11]" |
++----------------------------------------------+
 select dump(1);
 ERROR 0A000: The input type of the DUMP function not supported
 select round(1.1234, 3);

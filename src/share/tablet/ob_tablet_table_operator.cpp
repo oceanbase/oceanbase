@@ -120,29 +120,100 @@ int ObTabletTableOperator::get(
   return ret;
 }
 
-// this func used for tablet leader to check merge finish, will not fill empty tablet info when tablet not exist
-int ObTabletTableOperator::get_tablet_info(
+int ObTabletTableOperator::batch_get_tablet_info(
     common::ObISQLClient *sql_proxy,
     const uint64_t tenant_id,
-    const common::ObTabletID &tablet_id,
-    const ObLSID &ls_id,
-    ObTabletInfo &tablet_info)
+    const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
+    ObIArray<ObTabletInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObTabletLSPair, 1> tablet_ls_pairs;
-  ObSEArray<ObTabletInfo, 1> tablet_infos;
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(sql_proxy));
-  } else if (OB_FAIL(tablet_ls_pairs.push_back(ObTabletLSPair(tablet_id, ls_id)))) {
-    LOG_WARN("fail to push back tablet ls pair", KR(ret), K(tablet_id), K(ls_id));
-  } else if (OB_FAIL(inner_batch_get_by_sql_(*sql_proxy, tenant_id, tablet_ls_pairs, 0/*start_idx*/, 1/*end_idx*/, tablet_infos))) {
-    LOG_WARN("fail to get tablet info", KR(ret), K(tenant_id), K(tablet_ls_pairs));
-  } else if (1 != tablet_infos.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet_infos count should be one", KR(ret), "count", tablet_infos.count());
-  } else if (OB_FAIL(tablet_info.assign(tablet_infos.at(0)))) {
-    LOG_WARN("fail to assign tablet info", KR(ret), K(tablet_infos));
+  } else {
+    int64_t pairs_count = tablet_ls_infos.count();
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_BATCH_COUNT, pairs_count);
+    while (OB_SUCC(ret) && (start_idx < end_idx)) {
+      if (OB_FAIL(inner_batch_get_tablet_by_sql_(
+          *sql_proxy,
+          tenant_id,
+          tablet_ls_infos,
+          start_idx,
+          end_idx,
+          tablet_infos))) {
+        LOG_WARN("fail to inner batch get by sql",
+            KR(ret), K(tenant_id), K(tablet_ls_infos), K(start_idx), K(end_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_BATCH_COUNT, pairs_count);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && tablet_ls_infos.count() != tablet_infos.count()) {
+    LOG_WARN("tablet_infos count is not same as tablet_ls_pairs count ", KR(ret), K(tablet_infos.count()), K(tablet_ls_infos.count()));
+  }
+  return ret;
+}
+
+int ObTabletTableOperator::inner_batch_get_tablet_by_sql_(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    ObIArray<ObTabletInfo> &tablet_infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tablet_ls_infos.empty()
+      || OB_INVALID_TENANT_ID == tenant_id
+      || start_idx < 0
+      || start_idx >= end_idx
+      || end_idx > tablet_ls_infos.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablet_ls_infos), K(start_idx), K(end_idx));
+  } else {
+    const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
+    ObSqlString sql;
+    ObSqlString part_sql;
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      if (OB_FAIL(sql.append_fmt(
+          "SELECT * FROM %s WHERE tenant_id = %ld and (tablet_id,ls_id) IN (",
+          OB_ALL_TABLET_META_TABLE_TNAME, tenant_id))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else {
+        for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
+          const ObTabletID &tablet_id = tablet_ls_infos.at(idx).get_tablet_id();
+          const ObLSID &ls_id = tablet_ls_infos.at(idx).get_ls_id();
+          if (OB_UNLIKELY(!tablet_id.is_valid_with_tenant(tenant_id)
+              || !ls_id.is_valid_with_tenant(tenant_id))) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid tablet_id with tenant", KR(ret), K(tenant_id), K(tablet_id), K(ls_id));
+          } else if (OB_FAIL(sql.append_fmt(
+              "%s (%lu,%ld)",
+              start_idx == idx ? "" : ",",
+              tablet_id.id(),
+              ls_id.id()))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(tablet_id));
+          } else if (OB_FAIL(part_sql.append_fmt(
+              ",%lu",
+              tablet_id.id()))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(tablet_id));
+          }
+        }
+      }
+      if (FAILEDx(sql.append_fmt(") ORDER BY FIELD(tablet_id%s)", part_sql.string().ptr()))) {
+        LOG_WARN("assign sql string failed", KR(ret));
+      } else if (OB_FAIL(sql_client.read(result, sql_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret),
+            K(tenant_id), K(sql_tenant_id), "sql", sql.ptr());
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), "sql", sql.ptr());
+      } else if (OB_FAIL(construct_tablet_infos_(*result.get_result(), tablet_infos))) {
+        LOG_WARN("construct tablet info failed", KR(ret), K(tablet_infos));
+      }
+    }
   }
   return ret;
 }
@@ -260,6 +331,7 @@ int ObTabletTableOperator::inner_batch_get_by_sql_(
   } else {
     const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
     ObSqlString sql;
+    ObSqlString order_by_sql;
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (OB_FAIL(sql.append_fmt(
           "SELECT * FROM %s WHERE tenant_id = %ld and (tablet_id,ls_id) IN (",
@@ -279,10 +351,14 @@ int ObTabletTableOperator::inner_batch_get_by_sql_(
               tablet_id.id(),
               ls_id.id()))) {
             LOG_WARN("fail to assign sql", KR(ret), K(tablet_id));
+          } else  if (OB_FAIL(order_by_sql.append_fmt(
+              ",%ld",
+              tablet_id.id()))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(tablet_id));
           }
         }
       }
-      if (FAILEDx(sql.append_fmt(") ORDER BY tenant_id, tablet_id, ls_id, svr_ip, svr_port"))) {
+      if (FAILEDx(sql.append_fmt(") ORDER BY FIELD(tablet_id %s)", order_by_sql.string().ptr()))) {
         LOG_WARN("assign sql string failed", KR(ret));
       } else if (OB_FAIL(sql_client.read(result, sql_tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret),

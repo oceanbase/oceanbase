@@ -4,3 +4,5 @@ sql_unittest(test_rowkey)
 sql_unittest(test_base64_encode)
 # ob_unittest(test_urowid)
 sql_unittest(decode_urowid)
+
+add_subdirectory(wide_integer)

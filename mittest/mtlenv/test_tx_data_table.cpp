@@ -340,8 +340,7 @@ void TestTxDataTable::set_freezer_()
   ObLSWRSHandler ls_loop_worker;
   ObLSTxService ls_tx_svr(&ls_);
   ObLSTabletService *ls_tablet_svr = ls_.get_tablet_svr();
-  observer::ObIMetaReport *fake_reporter = (observer::ObIMetaReport *)0xff;
-  ASSERT_EQ(OB_SUCCESS, ls_tablet_svr->init(&ls_, fake_reporter));
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_svr->init(&ls_));
   ls_.data_checkpoint_.is_inited_ = true;
 
   tx_data_table_.freezer_.init(&ls_);

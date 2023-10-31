@@ -28,8 +28,9 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/meta_mem/ob_meta_pointer_map.h"
-#include "storage/meta_mem/ob_meta_pointer.h"
+#include "storage/meta_mem/ob_tablet_pointer_map.h"
+#include "storage/meta_mem/ob_tablet_pointer_handle.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
@@ -118,7 +119,6 @@ public:
 class ObTenantMetaMemMgr final
 {
 public:
-  typedef ObMetaPointerHandle<ObTabletMapKey, ObTablet> ObTabletPointerHandle;
   static const int64_t THE_SIZE_OF_HEADERS = sizeof(ObFIFOAllocator::NormalPageHeader) + sizeof(ObMetaObjBufferNode);
   static const int64_t NORMAL_TABLET_POOL_SIZE = (ABLOCK_SIZE - ABLOCK_HEADER_SIZE) / 2 - AOBJECT_META_SIZE - THE_SIZE_OF_HEADERS; // 3952B
   static const int64_t LARGE_TABLET_POOL_SIZE = 64 * 1024L - THE_SIZE_OF_HEADERS; // 65,480B
@@ -187,7 +187,7 @@ public:
   //  - only for tx data table to find min log ts.
   int get_min_end_scn_for_ls(
       const ObTabletMapKey &key,
-      const SCN &ls_checkpoint,
+      const share::SCN &ls_checkpoint,
       share::SCN &min_end_scn_from_latest,
       share::SCN &min_end_scn_from_old);
   int get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::SCN &scn);
@@ -288,11 +288,11 @@ private:
   void push_tablet_list_into_gc_queue(ObTablet *tablet);
   int get_min_end_scn_from_single_tablet(ObTablet *tablet,
                                          const bool is_old,
-                                         const SCN &ls_checkpoint,
+                                         const share::SCN &ls_checkpoint,
                                          share::SCN &min_end_scn);
 
 private:
-  typedef ObResourceValueStore<ObMetaPointer<ObTablet>> TabletValueStore;
+  typedef ObResourceValueStore<ObTabletPointer> TabletValueStore;
   typedef ObMetaObjBuffer<ObTablet, NORMAL_TABLET_POOL_SIZE> ObNormalTabletBuffer;
   typedef ObMetaObjBuffer<ObTablet, LARGE_TABLET_POOL_SIZE> ObLargeTabletBuffer;
   struct CandidateTabletInfo final
@@ -476,7 +476,7 @@ private:
   const uint64_t tenant_id_;
   ObBucketLock bucket_lock_;
   ObFullTabletCreator full_tablet_creator_;
-  ObMetaPointerMap<ObTabletMapKey, ObTablet> tablet_map_;
+  ObTabletPointerMap tablet_map_;
   int tg_id_;
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.
   TableGCTask table_gc_task_;
@@ -519,8 +519,6 @@ public:
 class ObITenantTabletPointerIterator
 {
 public:
-  typedef ObMetaPointerHandle<ObTabletMapKey, ObTablet> ObTabletPointerHandle;
-public:
   ObITenantTabletPointerIterator() = default;
   virtual ~ObITenantTabletPointerIterator() = default;
   virtual int get_next_tablet_pointer(
@@ -537,8 +535,8 @@ public:
   virtual ~ObT3mTabletMapIterator();
   void reset();
 protected:
-  typedef ObResourceValueStore<ObMetaPointer<ObTablet>> TabletValueStore;
-  typedef ObMetaPointerMap<ObTabletMapKey, ObTablet> TabletMap;
+  typedef ObResourceValueStore<ObTabletPointer> TabletValueStore;
+  typedef ObTabletPointerMap TabletMap;
   typedef common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *> TabletPair;
 
   int fetch_tablet_item();

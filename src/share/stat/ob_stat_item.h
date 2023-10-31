@@ -131,7 +131,7 @@ public:
     ObStatColItem(param, stat)
   {}
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
-  virtual int decode(ObObj &obj) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 };
 
 class ObStatMinValue : public ObStatColItem
@@ -144,7 +144,7 @@ public:
   {}
 
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
-  virtual int decode(ObObj &obj) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 };
 
 class ObStatNumNull : public ObStatColItem
@@ -306,10 +306,13 @@ class ObGlobalTableStat
 public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
-      macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0)
+      macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0),
+      cg_macro_cnt_arr_(), cg_micro_cnt_arr_()
   {}
 
   void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
+  int add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
+          ObIArray<int64_t> &cg_macro_arr, ObIArray<int64_t> &cg_micro_arr);
 
   int64_t get_row_count() const;
   int64_t get_avg_row_size() const;
@@ -317,6 +320,8 @@ public:
   int64_t get_macro_block_count() const;
   int64_t get_micro_block_count() const;
   int64_t get_last_analyzed() const { return last_analyzed_; }
+  const ObIArray<int64_t> &get_cg_macro_arr() const { return cg_macro_cnt_arr_; }
+  const ObIArray<int64_t> &get_cg_micro_arr() const { return cg_micro_cnt_arr_; }
   void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
 
 
@@ -326,7 +331,9 @@ public:
                K(macro_block_count_),
                K(micro_block_count_),
                K(part_cnt_),
-               K(last_analyzed_));
+               K(last_analyzed_),
+               K(cg_macro_cnt_arr_),
+               K(cg_micro_cnt_arr_));
 
 private:
   int64_t row_count_;
@@ -336,6 +343,8 @@ private:
   int64_t micro_block_count_;
   int64_t part_cnt_;
   int64_t last_analyzed_;
+  ObArray<int64_t> cg_macro_cnt_arr_;
+  ObArray<int64_t> cg_micro_cnt_arr_;
 };
 
 class ObGlobalNullEval
@@ -439,21 +448,40 @@ private:
 
 struct ObGlobalColumnStat
 {
-  ObGlobalColumnStat() : min_val_(), max_val_(), null_val_(0), avglen_val_(0), ndv_val_(0)
+  ObGlobalColumnStat() :
+    min_val_(),
+    max_val_(),
+    null_val_(0),
+    avglen_val_(0),
+    ndv_val_(0),
+    cg_macro_blk_cnt_(0),
+    cg_micro_blk_cnt_(0),
+    cg_skip_rate_(1.0)
   {
     min_val_.set_min_value();
     max_val_.set_max_value();
+  }
+  void add_cg_blk_cnt(int64_t cg_macro_blk_cnt, int64_t cg_micro_blk_cnt)
+  {
+    cg_macro_blk_cnt_ += cg_macro_blk_cnt;
+    cg_micro_blk_cnt_ += cg_micro_blk_cnt;
   }
   TO_STRING_KV(K(min_val_),
                K(max_val_),
                K(null_val_),
                K(avglen_val_),
-               K(ndv_val_));
+               K(ndv_val_),
+               K(cg_macro_blk_cnt_),
+               K(cg_micro_blk_cnt_),
+               K(cg_skip_rate_));
   ObObj min_val_;
   ObObj max_val_;
   int64_t null_val_;
   int64_t avglen_val_;
   int64_t ndv_val_;
+  int64_t cg_macro_blk_cnt_;
+  int64_t cg_micro_blk_cnt_;
+  double cg_skip_rate_;
 };
 
 template <class T>

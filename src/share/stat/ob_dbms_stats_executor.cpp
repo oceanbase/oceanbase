@@ -627,7 +627,7 @@ int ObDbmsStatsExecutor::init_opt_stat(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   PartInfo part_info;
-  BolckNumPair block_num_pair;
+  BlockNumStat *block_num_stat = NULL;
   ObOptTableStat *&tab_stat = stat.table_stat_;
   if (OB_FAIL(stat.column_stats_.prepare_allocate(param.column_params_.count())))  {
     LOG_WARN("failed to prepare allocate column stat", K(ret));
@@ -643,15 +643,18 @@ int ObDbmsStatsExecutor::init_opt_stat(ObIAllocator &allocator,
     tab_stat->set_partition_id(part_info.part_id_);
     tab_stat->set_object_type(extra.type_);
     tab_stat->set_stattype_locked(part_info.part_stattype_);
-    if (OB_FAIL(extra.partition_id_block_map_.get_refactored(part_info.part_id_, block_num_pair))) {
+    if (OB_FAIL(extra.partition_id_block_map_.get_refactored(part_info.part_id_, block_num_stat))) {
       if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get refactored", K(ret));
       }
+    } else if (OB_ISNULL(block_num_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(block_num_stat));
     } else {
-      tab_stat->set_macro_block_num(block_num_pair.first);
-      tab_stat->set_micro_block_num(block_num_pair.second);
+      tab_stat->set_macro_block_num(block_num_stat->tab_macro_cnt_);
+      tab_stat->set_micro_block_num(block_num_stat->tab_micro_cnt_);
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
@@ -665,6 +668,19 @@ int ObDbmsStatsExecutor::init_opt_stat(ObIAllocator &allocator,
       col_stat->set_stat_level(extra.type_);
       col_stat->set_column_id(param.column_params_.at(i).column_id_);
       col_stat->set_collation_type(param.column_params_.at(i).cs_type_);
+      if (block_num_stat != NULL) {
+        if (OB_LIKELY(param.column_group_params_.count() == block_num_stat->cg_macro_cnt_arr_.count() &&
+                      param.column_group_params_.count() == block_num_stat->cg_micro_cnt_arr_.count())) {
+          bool found_it = false;
+          for (int64_t j = 0; !found_it && j < param.column_group_params_.count(); ++j) {
+            if (param.column_group_params_.at(j).column_id_arr_.count() == 1 &&
+                param.column_group_params_.at(j).column_id_arr_.at(0) == param.column_params_.at(i).column_id_) {
+              col_stat->set_cg_macro_blk_cnt(block_num_stat->cg_macro_cnt_arr_.at(j));
+              col_stat->set_cg_micro_blk_cnt(block_num_stat->cg_micro_cnt_arr_.at(j));
+            }
+          }
+        }
+      }
     }
   }
   return ret;

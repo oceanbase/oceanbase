@@ -179,6 +179,7 @@ public:
       const common::ObTabletID &tablet_id,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
   int get_macro_block_id(
       const int64_t block_id_index,
@@ -195,7 +196,9 @@ private:
       const common::ObTabletID &tablet_id,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
+  int sort_block_id_array(common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
 private:
   bool is_inited_;
   ObITable::TableKey table_key_;

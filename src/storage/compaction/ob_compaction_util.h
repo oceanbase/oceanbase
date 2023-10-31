@@ -12,10 +12,10 @@
 
 #ifndef OB_STORAGE_COMPACTION_UTIL_H_
 #define OB_STORAGE_COMPACTION_UTIL_H_
-
+#include "stdint.h"
 namespace oceanbase
 {
-namespace storage // temp solution
+namespace compaction
 {
 enum ObMergeType
 {
@@ -33,7 +33,10 @@ enum ObMergeType
 };
 
 const char *merge_type_to_str(const ObMergeType &merge_type);
-
+inline bool is_valid_merge_type(const ObMergeType &merge_type)
+{
+  return merge_type > INVALID_MERGE_TYPE && merge_type < MERGE_TYPE_MAX;
+}
 inline bool is_major_merge(const ObMergeType &merge_type)
 {
   return MAJOR_MERGE == merge_type;
@@ -73,16 +76,31 @@ inline bool is_meta_major_merge(const ObMergeType &merge_type)
 {
   return META_MAJOR_MERGE == merge_type;
 }
-
+inline bool is_major_or_meta_merge_type(const ObMergeType &merge_type)
+{
+  return is_major_merge_type(merge_type) || is_meta_major_merge(merge_type);
+}
 inline bool is_backfill_tx_merge(const ObMergeType &merge_type)
 {
   return BACKFILL_TX_MERGE == merge_type;
 }
-
 inline bool is_mds_table_merge(const ObMergeType &merge_type)
 {
   return MDS_TABLE_MERGE == merge_type;
 }
+
+enum ObMergeLevel : uint8_t
+{
+  MACRO_BLOCK_MERGE_LEVEL = 0,
+  MICRO_BLOCK_MERGE_LEVEL = 1,
+  MERGE_LEVEL_MAX
+};
+
+inline bool is_valid_merge_level(const ObMergeLevel &merge_level)
+{
+  return merge_level >= MACRO_BLOCK_MERGE_LEVEL && merge_level < MERGE_LEVEL_MAX;
+}
+const char *merge_level_to_str(const ObMergeLevel &merge_level);
 
 } // namespace storage
 } // namespace oceanbase

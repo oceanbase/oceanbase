@@ -18,7 +18,9 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
+#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
 #include "storage/access/ob_index_sstable_estimator.h"
+#include "storage/column_store/ob_cg_bitmap.h"
 
 namespace oceanbase
 {
@@ -26,9 +28,9 @@ namespace storage
 {
 struct ObTableIterParam;
 struct ObTableAccessContext;
-struct PushdownFilterInfo;
 class ObBlockRowStore;
 class ObTableStoreStat;
+class ObCGAggCells;
 }
 namespace blocksstable
 {
@@ -54,24 +56,75 @@ public:
       const ObMicroBlockData &block_data,
       const bool is_left_border,
       const bool is_right_border);
+  int open_column_block(
+      const MacroBlockId &macro_id,
+      const ObMicroBlockData &block_data,
+      const ObCSRange &range);
   virtual int get_next_row(const ObDatumRow *&row);
   virtual int get_next_rows();
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
       storage::ObTableStoreStat &table_store_stat);
+  virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED;}
+  int end_of_block() const;
+  OB_INLINE int get_access_cnt() const { return reverse_scan_ ? (current_ - last_ + 1) : (last_ - current_ + 1);}
+  int filter_micro_block_in_blockscan(sql::PushdownFilterInfo &pd_filter_info);
+  int filter_micro_block_in_cg(
+      sql::ObPushdownFilterExecutor *parent,
+      sql::PushdownFilterInfo &pd_filter_info,
+      const ObCGBitmap *parent_bitmap,
+      const ObCSRowId micro_start_id,
+      int64_t &access_count);
   int filter_pushdown_filter(
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter,
-      storage::PushdownFilterInfo &filter_info,
+      sql::PushdownFilterInfo &filter_info,
+      const bool can_use_vectorize,
       common::ObBitmap &bitmap);
-
+  virtual int get_next_rows(
+      const common::ObIArray<int32_t> &cols_projector,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const int64_t *row_ids,
+      const char **cell_datas,
+      const int64_t row_cap,
+      common::ObIArray<ObSqlDatumInfo> &datums,
+      const int64_t datum_offset,
+      const ObTableIterParam &iter_param);
+  int get_aggregate_result(
+      const int32_t col_idx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObCGAggCells &cg_agg_cells);
+  int advance_to_border(
+      const ObDatumRowkey &rowkey,
+      int64_t &start_offset,
+      int64_t &end_offset);
+  int check_can_group_by(
+      const int32_t group_by_col,
+      int64_t &row_cnt,
+      int64_t &read_cnt,
+      int64_t &distinct_cnt,
+      bool &can_group_by) const;
+  int read_distinct(
+      const int32_t group_by_col,
+      const char **cell_datas,
+      storage::ObGroupByCell &group_by_cell) const;
+  int read_reference(
+      const int32_t group_by_col,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObGroupByCell &group_by_cell) const;
+  OB_INLINE void reserve_reader_memory(bool reserve)
+  { reader_->reserve_reader_memory(reserve); }
+  int64_t get_current_pos() const
+  { return current_; }
+  VIRTUAL_TO_STRING_KV(K_(can_ignore_multi_version));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row);
   int inner_get_row_header(const ObRowHeader *&row_header);
   int set_reader(const ObRowStoreType store_type);
   int set_base_scan_param(const bool is_left_bound_block,
                           const bool is_right_bound_block);
-  int end_of_block() const;
   int locate_range_pos(
       const bool is_left_bound_block,
       const bool is_right_bound_block,
@@ -87,6 +140,11 @@ protected:
   { return row.row_flag_.is_not_exist(); }
 private:
   int inner_get_next_row_blockscan(const ObDatumRow *&row);
+  int apply_black_filter_batch(
+      sql::ObPushdownFilterExecutor *parent,
+      sql::ObBlackFilterExecutor &filter,
+      sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap);
 
 protected:
   bool is_inited_;
@@ -94,6 +152,7 @@ protected:
   bool reverse_scan_;
   bool is_left_border_;
   bool is_right_border_;
+  bool has_lob_out_row_;
   int64_t current_;         // current cursor
   int64_t start_;           // start of scan, inclusive.
   int64_t last_;            // end of scan, inclusive.
@@ -105,7 +164,9 @@ protected:
   const blocksstable::ObSSTable *sstable_;
   ObIMicroBlockReader *reader_;
   ObMicroBlockReader *flat_reader_;
-  ObMicroBlockDecoder *decoder_;
+  ObIMicroBlockDecoder *decoder_;
+  ObMicroBlockDecoder *pax_decoder_;
+  ObMicroBlockCSDecoder *cs_decoder_;
   const storage::ObTableIterParam *param_;
   storage::ObTableAccessContext *context_;
   ObIAllocator &allocator_;
@@ -191,7 +252,8 @@ public:
         trans_version_col_idx_(-1),
         sql_sequence_col_idx_(-1),
         cell_cnt_(0),
-        read_row_direct_flag_(false)
+        read_row_direct_flag_(false),
+        ignore_shadow_row_(false)
   {}
   virtual ~ObMultiVersionMicroBlockRowScanner() {}
   void reuse() override;
@@ -208,6 +270,8 @@ public:
       const ObMicroBlockData &block_data,
       const bool is_left_border,
       const bool is_right_border) override final;
+  virtual int set_ignore_shadow_row() override final { ignore_shadow_row_ = true; return OB_SUCCESS; }
+  INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner", ObIMicroBlockRowScanner, K_(read_row_direct_flag), K_(ignore_shadow_row), K_(version_range));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override;
   virtual void inner_reset();
@@ -255,6 +319,7 @@ private:
   transaction::ObTransID trans_id_;
   common::ObVersionRange version_range_;
   bool read_row_direct_flag_;
+  bool ignore_shadow_row_;
 };
 
 // multi version sstable micro block scanner for minor merge

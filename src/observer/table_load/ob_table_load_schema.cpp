@@ -277,6 +277,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       LOG_WARN("fail to prepare column descs", KR(ret));
     } else if (OB_FAIL(table_schema->get_multi_version_column_descs(multi_version_column_descs_))) {
       LOG_WARN("fail to get multi version column descs", KR(ret));
+    } else if (OB_FAIL(update_decimal_int_precision(table_schema, multi_version_column_descs_))){
+      LOG_WARN("update decimal int precision failed", K(ret));
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
                                          lib::is_oracle_mode(), allocator_))) {
       LOG_WARN("fail to init datum utils", KR(ret));
@@ -315,27 +317,6 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
   return ret;
 }
 
-int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(table_schema));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
-      ObColDesc &col_desc = col_descs.at(i);
-      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
-      if (OB_ISNULL(column_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("invalid column schema", K(column_schema));
-      } else {
-        col_desc.col_type_.set_scale(column_schema->get_data_scale());
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadSchema::init_cmp_funcs(const ObIArray<ObColDesc> &col_descs,
                                       const bool is_oracle_mode)
 {
@@ -360,6 +341,49 @@ int ObTableLoadSchema::init_cmp_funcs(const ObIArray<ObColDesc> &col_descs,
         is_null_last ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
       if (OB_FAIL(cmp_funcs_.push_back(ObStorageDatumCmpFunc(cmp_func)))) {
         LOG_WARN("Failed to push back cmp func", KR(ret), K(i), K(col_desc));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::update_decimal_int_precision(
+  const share::schema::ObTableSchema *table_schema,
+  common::ObIArray<share::schema::ObColDesc> &cols_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table schema");
+  } else {
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    for (int i = 0; i < cols_desc.count(); i++) {
+      if (OB_ISNULL(col_schema = table_schema->get_column_schema(cols_desc.at(i).col_id_))) {
+        // do nothing
+      } else if (col_schema->is_decimal_int()) {
+        cols_desc.at(i).col_type_.set_stored_precision(col_schema->get_accuracy().get_precision());
+        cols_desc.at(i).col_type_.set_scale(col_schema->get_accuracy().get_scale());
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+      ObColDesc &col_desc = col_descs.at(i);
+      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid column schema", K(column_schema));
+      } else {
+        col_desc.col_type_.set_scale(column_schema->get_data_scale());
       }
     }
   }

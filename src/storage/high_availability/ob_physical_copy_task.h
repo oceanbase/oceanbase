@@ -17,7 +17,7 @@
 #include "lib/thread/ob_dynamic_thread_pool.h"
 #include "share/ob_common_rpc_proxy.h" // ObCommonRpcProxy
 #include "share/ob_srv_rpc_proxy.h" // ObPartitionServiceRpcProxy
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
@@ -27,7 +27,7 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "ob_storage_restore_struct.h"
 #include "ob_storage_ha_dag.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase
 {
@@ -66,6 +66,7 @@ struct ObPhysicalCopyCtx
   ObStorageHADag *ha_dag_;
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
+  bool need_sort_macro_meta_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyCtx);
@@ -94,6 +95,7 @@ struct ObPhysicalCopyTaskInitParam final
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
+  bool need_sort_macro_meta_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
@@ -107,7 +109,8 @@ public:
   virtual ~ObPhysicalCopyTask();
   int init(
       ObPhysicalCopyCtx *copy_ctx,
-      ObSSTableCopyFinishTask *finish_task);
+      ObSSTableCopyFinishTask *finish_task,
+      const int64_t task_idx);
   virtual int process() override;
   virtual int generate_next_task(ObITask *&next_task) override;
   VIRTUAL_TO_STRING_KV(K("ObPhysicalCopyFinishTask"), KP(this), KPC(copy_ctx_));
@@ -144,6 +147,8 @@ private:
   ObSSTableCopyFinishTask *finish_task_;
   ObITable::TableKey copy_table_key_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
+  int64_t task_idx_;
+
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTask);
 };
 
@@ -179,10 +184,10 @@ private:
       const common::ObTabletID &tablet_id,
       const ObMigrationSSTableParam *sstable_param,
       const int64_t cluster_version,
-      ObDataStoreDesc &desc);
+      ObWholeDataStoreDesc &desc);
   int get_merge_type_(
       const ObMigrationSSTableParam *sstable_param,
-      ObMergeType &merge_type);
+      compaction::ObMergeType &merge_type);
   int create_sstable_();
   int create_empty_sstable_();
   int build_create_sstable_param_(
@@ -237,6 +242,7 @@ public:
   int set_tablet_status(const ObCopyTabletStatus::STATUS &status);
   int get_tablet_status(ObCopyTabletStatus::STATUS &status);
 
+  const ObMigrationTabletParam *get_src_tablet_meta() const { return src_tablet_meta_; }
 private:
   int create_new_table_store_with_major_();
   int create_new_table_store_with_ddl_();

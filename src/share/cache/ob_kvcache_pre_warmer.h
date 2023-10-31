@@ -38,6 +38,12 @@ protected:
   void update_rest();
   void inner_update_rest();
   virtual void calculate_base_percentage(const int64_t free_memory);
+  virtual int do_reserve_kvpair(
+      const blocksstable::ObMicroBlockDesc &micro_block_desc,
+      int64_t &kvpair_size);
+  virtual int do_put_kvpair(
+      const blocksstable::ObMicroBlockDesc &micro_block_desc,
+      blocksstable::ObIMicroBlockCache::BaseBlockCache &kvcache);
 private:
   bool warm_block(const int64_t level);
 protected:
@@ -64,9 +70,19 @@ public:
   void init();
 protected:
   virtual void calculate_base_percentage(const int64_t free_memory) override;
+  virtual int do_reserve_kvpair(
+      const blocksstable::ObMicroBlockDesc &micro_block_desc,
+      int64_t &kvpair_size) override;
+  virtual int do_put_kvpair(
+      const blocksstable::ObMicroBlockDesc &micro_block_desc,
+      blocksstable::ObIMicroBlockCache::BaseBlockCache &kvcache) override;
 private:
   static const int64_t INDEX_BLOCK_CACHE_PERCENTAGE = 2;
   static const int64_t INDEX_BLOCK_BASE_PERCENTAGE = 30;
+  ObArenaAllocator allocator_;
+  blocksstable::ObIndexBlockDataTransformer idx_transformer_;
+  blocksstable::ObMicroBlockCacheKey key_;
+  blocksstable::ObMicroBlockCacheValue value_;
 };
 
 

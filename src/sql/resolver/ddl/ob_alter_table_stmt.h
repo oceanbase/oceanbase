@@ -32,6 +32,7 @@ public:
   ObAlterTableStmt();
   virtual ~ObAlterTableStmt();
   int add_column(const share::schema::AlterColumnSchema &column_schema);
+  int add_column_group(const ObColumnGroupSchema &column_group);
   int add_index_arg(obrpc::ObIndexArg *index_arg);
   int check_drop_fk_arg_exist(obrpc::ObDropForeignKeyArg *drop_fk_arg, bool &has_same_fk_arg);
   int check_drop_cst_exist(const ObConstraint &constraint, bool &has_same_cst);

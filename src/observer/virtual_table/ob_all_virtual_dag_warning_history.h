@@ -57,6 +57,7 @@ private:
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char task_id_buf_[common::OB_TRACE_STAT_BUFFER_SIZE];
+  char warning_info_buf_[common::OB_DAG_WARNING_INFO_LENGTH];
   share::ObDagWarningInfo dag_warning_info_;
   compaction::ObIDiagnoseInfoMgr::Iterator dag_warning_info_iter_;
   bool is_inited_;

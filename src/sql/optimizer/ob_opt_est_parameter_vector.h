@@ -18,27 +18,11 @@ namespace oceanbase
 {
 namespace sql
 {
-
 const static double VECTOR_CPU_TUPLE_COST = 0.00264692180695;
 const static double VECTOR_TABLE_SCAN_CPU_TUPLE_COST = 0.00816675438377;
 const static double VECTOR_MICRO_BLOCK_SEQ_COST = 1.19603792057955;
 const static double VECTOR_MICRO_BLOCK_RND_COST = 1.6742435644151;
-const static double VECTOR_PROJECT_COLUMN_SEQ_INT_COST = 0.02314121667000;
-const static double VECTOR_PROJECT_COLUMN_SEQ_NUMBER_COST = 0.01602888420961;
-const static double VECTOR_PROJECT_COLUMN_SEQ_CHAR_COST = 0.00028227202574;
-const static double VECTOR_PROJECT_COLUMN_RND_INT_COST = 0.08067736535000;
-const static double VECTOR_PROJECT_COLUMN_RND_NUMBER_COST = 0.08806720526487;
-const static double VECTOR_PROJECT_COLUMN_RND_CHAR_COST = 0.0025971659266159;
 const static double VECTOR_FETCH_ROW_RND_COST = 2.294445334;
-const static double VECTOR_CMP_INT_COST = 0.0084782994043;
-const static double VECTOR_CMP_NUMBER_COST = 0.0144099836801;
-const static double VECTOR_CMP_CHAR_COST = 0.03754351606603;
-const static double VECTOR_CMP_SPATIAL_COST = 19.311884382850465;  // gis vector is not supported
-const static double VECTOR_INVALID_CMP_COST = -1;
-const static double VECTOR_HASH_INT_COST = 0.00742821518373;
-const static double VECTOR_HASH_NUMBER_COST = 0.01494804432806;
-const static double VECTOR_HASH_CHAR_COST = 0.18684685876579;
-const static double VECTOR_INVALID_HASH_COST = -1;
 const static double VECTOR_MATERIALIZE_PER_BYTE_WRITE_COST = 0.0019941666625;
 const static double VECTOR_READ_MATERIALIZED_PER_ROW_COST = 0.00279052036722;
 const static double VECTOR_PER_AGGR_FUNC_COST = 0.01547711103333;
@@ -70,6 +54,37 @@ const static double VECTOR_DELETE_CHECK_PER_ROW_COST = 59.4583275;
 const static double VECTOR_SPATIAL_PER_ROW_COST = 3.2434868757557513;  // todo: fix later
 const static double VECTOR_RANGE_COST = 2.1;
 
+//project cost params
+//row store
+const static double VECTOR_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST = 0.02314121667000;
+const static double VECTOR_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST = 0.01602888420961;
+const static double VECTOR_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST = 0.00028227202574;
+
+const static double VECTOR_ROW_STORE_PROJECT_COLUMN_RND_INT_COST = 0.08067736535000;
+const static double VECTOR_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST = 0.08806720526487;
+const static double VECTOR_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST = 0.0025971659266159;
+//column store
+const static double VECTOR_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST = 0.002314121667000;
+const static double VECTOR_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST = 0.0041602888420961;
+const static double VECTOR_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST = 0.000128227202574;
+
+const static double VECTOR_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST = 0.08067736535000;
+const static double VECTOR_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST = 0.08806720526487;
+const static double VECTOR_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST = 0.0025971659266159;
+
+//compare cost params
+const static double VECTOR_CMP_INT_COST = 0.0084782994043;
+const static double VECTOR_CMP_NUMBER_COST = 0.0144099836801;
+const static double VECTOR_CMP_CHAR_COST = 0.03754351606603;
+const static double VECTOR_CMP_SPATIAL_COST = 19.311884382850465;  // gis vector is not supported
+const static double VECTOR_INVALID_CMP_COST = -1;
+
+//hash cost params
+const static double VECTOR_HASH_INT_COST = 0.00742821518373;
+const static double VECTOR_HASH_NUMBER_COST = 0.01494804432806;
+const static double VECTOR_HASH_CHAR_COST = 0.18684685876579;
+const static double VECTOR_INVALID_HASH_COST = -1;
+
 const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // null
   VECTOR_CMP_INT_COST,            // int8, int16, int24, int32, int64.
@@ -85,6 +100,18 @@ const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // extend
   VECTOR_INVALID_CMP_COST,        // unknown
   VECTOR_CMP_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  VECTOR_CMP_INT_COST,            // Bit
+  VECTOR_CMP_CHAR_COST,           // enum, set
+  VECTOR_CMP_INT_COST,            // ObEnumSetInnerTC
+  VECTOR_CMP_INT_COST,            // timestamp with time zone
+  VECTOR_CMP_CHAR_COST,           // raw
+  VECTOR_CMP_INT_COST,            // interval
+  VECTOR_CMP_INT_COST,            // rowid
+  VECTOR_CMP_CHAR_COST,           // lob
+  VECTOR_CMP_CHAR_COST,           // json
+  VECTOR_CMP_CHAR_COST,           // geometry
+  VECTOR_CMP_CHAR_COST,           // user defined type
+  VECTOR_CMP_NUMBER_COST,         // ObDecimalIntTC
 };
 
 const static double hash_params_vector[ObMaxTC+1] = {
@@ -102,6 +129,45 @@ const static double hash_params_vector[ObMaxTC+1] = {
   VECTOR_HASH_INT_COST,            // extend
   VECTOR_INVALID_HASH_COST,        // unknown
   VECTOR_HASH_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  VECTOR_HASH_INT_COST,            // Bit
+  VECTOR_HASH_CHAR_COST,           // enum, set
+  VECTOR_HASH_INT_COST,            // ObEnumSetInnerTC
+  VECTOR_HASH_INT_COST,            // timestamp with time zone
+  VECTOR_HASH_CHAR_COST,           // raw
+  VECTOR_HASH_INT_COST,            // interval
+  VECTOR_HASH_INT_COST,            // rowid
+  VECTOR_HASH_CHAR_COST,           // lob
+  VECTOR_HASH_CHAR_COST,           // json
+  VECTOR_HASH_CHAR_COST,           // geometry
+  VECTOR_HASH_CHAR_COST,           // user defined type
+  VECTOR_HASH_NUMBER_COST,         // ObDecimalIntTC
+};
+
+const static double project_params_vector[2][2][ObOptEstCostModel::MAX_PROJECT_TYPE] = {
+  {
+    {// row store sequence access
+      VECTOR_ROW_STORE_PROJECT_COLUMN_SEQ_INT_COST,     // int
+      VECTOR_ROW_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST,  // number or decimal
+      VECTOR_ROW_STORE_PROJECT_COLUMN_SEQ_CHAR_COST     // char
+    },
+    {// row store random access
+      VECTOR_ROW_STORE_PROJECT_COLUMN_RND_INT_COST,     // int
+      VECTOR_ROW_STORE_PROJECT_COLUMN_RND_NUMBER_COST,  // number or decimal
+      VECTOR_ROW_STORE_PROJECT_COLUMN_RND_CHAR_COST     // char
+    }
+  },
+  {
+    {// column store sequence access
+      VECTOR_COLUMN_STORE_PROJECT_COLUMN_SEQ_INT_COST,    // int
+      VECTOR_COLUMN_STORE_PROJECT_COLUMN_SEQ_NUMBER_COST, // number or decimal
+      VECTOR_COLUMN_STORE_PROJECT_COLUMN_SEQ_CHAR_COST    // char
+    },
+    {// column store random access
+      VECTOR_COLUMN_STORE_PROJECT_COLUMN_RND_INT_COST,    // int
+      VECTOR_COLUMN_STORE_PROJECT_COLUMN_RND_NUMBER_COST, // number or decimal
+      VECTOR_COLUMN_STORE_PROJECT_COLUMN_RND_CHAR_COST    // char
+    }
+  }
 };
 
 const static ObOptEstCostModel::ObCostParams cost_params_vector(
@@ -109,22 +175,8 @@ const static ObOptEstCostModel::ObCostParams cost_params_vector(
    VECTOR_TABLE_SCAN_CPU_TUPLE_COST,
    VECTOR_MICRO_BLOCK_SEQ_COST,
    VECTOR_MICRO_BLOCK_RND_COST,
-   VECTOR_PROJECT_COLUMN_SEQ_INT_COST,
-   VECTOR_PROJECT_COLUMN_SEQ_NUMBER_COST,
-   VECTOR_PROJECT_COLUMN_SEQ_CHAR_COST,
-   VECTOR_PROJECT_COLUMN_RND_INT_COST,
-   VECTOR_PROJECT_COLUMN_RND_NUMBER_COST,
-   VECTOR_PROJECT_COLUMN_RND_CHAR_COST,
    VECTOR_FETCH_ROW_RND_COST,
-   VECTOR_CMP_INT_COST,
-   VECTOR_CMP_NUMBER_COST,
-   VECTOR_CMP_CHAR_COST,
    VECTOR_CMP_SPATIAL_COST,
-   VECTOR_INVALID_CMP_COST,
-   VECTOR_HASH_INT_COST,
-   VECTOR_HASH_NUMBER_COST,
-   VECTOR_HASH_CHAR_COST,
-   VECTOR_INVALID_HASH_COST,
    VECTOR_MATERIALIZE_PER_BYTE_WRITE_COST,
    VECTOR_READ_MATERIALIZED_PER_ROW_COST,
    VECTOR_PER_AGGR_FUNC_COST,

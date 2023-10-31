@@ -2739,6 +2739,44 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
   return ret;
 }
 
+int ObDDLOperator::insert_column_groups(ObMySQLTransaction &trans, const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().add_column_groups(trans, new_table_schema, new_schema_version))) {
+    LOG_WARN("insert alter column group failed", K(ret), K(new_table_schema));
+  }
+  return ret;
+}
+
+int ObDDLOperator::insert_column_ids_into_column_group(ObMySQLTransaction &trans,
+                                                      const ObTableSchema &new_table_schema,
+                                                      const ObIArray<uint64_t> &column_ids,
+                                                      const ObColumnGroupSchema &column_group)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().insert_column_ids_into_column_group(trans, new_table_schema, new_schema_version, column_ids, column_group))) {
+    LOG_WARN("insert alter column group failed", K(ret), K(new_table_schema), K(column_group));
+  }
+  return ret;
+}
+
+
 int ObDDLOperator::insert_single_column(ObMySQLTransaction &trans,
                                         const ObTableSchema &new_table_schema,
                                         ObColumnSchemaV2 &new_column)
@@ -5871,7 +5909,7 @@ int ObDDLOperator::init_freeze_info(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   int64_t start = ObTimeUtility::current_time();
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
-  ObSimpleFrozenStatus frozen_status;
+  ObFreezeInfo frozen_status;
   frozen_status.set_initial_value(DATA_CURRENT_VERSION);
   // init freeze_info in __all_freeze_info
   if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, frozen_status))) {

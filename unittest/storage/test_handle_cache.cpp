@@ -49,6 +49,7 @@ public:
 class TestHandle
 {
 public:
+  int64_t get_handle_size() { return 0; }
   void reset() {}
   int v_;
 };

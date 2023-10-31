@@ -23,6 +23,7 @@
 #include "share/ob_encryption_util.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
+#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #include "storage/blocksstable/ob_log_file_spec.h"
 #include "storage/blocksstable/ob_macro_block_common_header.h"
 #include "storage/blocksstable/ob_sstable_macro_block_header.h"
@@ -70,88 +71,6 @@ struct ObPosition
   TO_STRING_KV(K_(offset), K_(length));
 };
 
-struct ObMacroDataSeq
-{
-  static const int64_t BIT_DATA_SEQ = 32;
-  static const int64_t BIT_PARALLEL_IDX = 11;
-  static const int64_t BIT_BLOCK_TYPE = 3;
-  static const int64_t BIT_MERGE_TYPE = 2;
-  static const int64_t BIT_SSTABLE_SEQ = 10;
-  static const int64_t BIT_RESERVED = 5;
-  static const int64_t BIT_SIGN = 1;
-  static const int64_t MAX_PARALLEL_IDX = (0x1UL << BIT_PARALLEL_IDX) - 1;
-  static const int64_t MAX_SSTABLE_SEQ = (0x1UL << BIT_SSTABLE_SEQ) - 1;
-  enum BlockType {
-    DATA_BLOCK = 0,
-    INDEX_BLOCK = 1,
-    META_BLOCK = 2,
-  };
-  enum MergeType {
-    MAJOR_MERGE = 0,
-    MINOR_MERGE = 1,
-  };
-
-  ObMacroDataSeq() : macro_data_seq_(0) {}
-  ObMacroDataSeq(const int64_t data_seq) : macro_data_seq_(data_seq) {}
-  virtual ~ObMacroDataSeq() = default;
-  ObMacroDataSeq &operator=(const ObMacroDataSeq &other)
-  {
-    if (this != &other) {
-      macro_data_seq_ = other.macro_data_seq_;
-    }
-    return *this;
-  }
-  bool operator ==(const ObMacroDataSeq &other) const { return macro_data_seq_ == other.macro_data_seq_; }
-  bool operator !=(const ObMacroDataSeq &other) const { return macro_data_seq_ != other.macro_data_seq_; }
-  OB_INLINE void reset() { macro_data_seq_ = 0; }
-  OB_INLINE int64_t get_data_seq() const { return macro_data_seq_; }
-  OB_INLINE bool is_valid() const { return macro_data_seq_ >= 0; }
-  OB_INLINE bool is_data_block() const { return block_type_ == DATA_BLOCK; }
-  OB_INLINE bool is_index_block() const { return block_type_ == INDEX_BLOCK; }
-  OB_INLINE bool is_meta_block() const { return block_type_ == META_BLOCK; }
-  OB_INLINE bool is_major_merge() const { return merge_type_ == MAJOR_MERGE; }
-  OB_INLINE int set_sstable_seq(const int16_t sstable_logic_seq)
-  {
-    int ret = common::OB_SUCCESS;
-    if (OB_UNLIKELY(sstable_logic_seq >= MAX_SSTABLE_SEQ || sstable_logic_seq < 0)) {
-      ret = common::OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "Invalid sstable seq", K(ret), K(sstable_logic_seq));
-    } else {
-      sstable_logic_seq_ = sstable_logic_seq;
-    }
-    return ret;
-  }
-  OB_INLINE int set_parallel_degree(const int64_t parallel_idx)
-  {
-    int ret = common::OB_SUCCESS;
-    if (OB_UNLIKELY(parallel_idx >= MAX_PARALLEL_IDX || parallel_idx < 0)) {
-      ret = common::OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "Invalid parallel idx", K(parallel_idx));
-    } else {
-      parallel_idx_ = parallel_idx;
-    }
-    return ret;
-  }
-  OB_INLINE void set_data_block() { block_type_ = DATA_BLOCK; }
-  OB_INLINE void set_index_block() { block_type_ = INDEX_BLOCK; }
-  OB_INLINE void set_macro_meta_block() { block_type_ = META_BLOCK; }
-  OB_INLINE void set_index_merge_block() { block_type_ = INDEX_BLOCK; parallel_idx_ = MAX_PARALLEL_IDX; }
-  TO_STRING_KV(K_(data_seq), K_(parallel_idx), K_(block_type), K_(merge_type), K_(reserved), K_(sign), K_(macro_data_seq));
-  union
-  {
-    int64_t macro_data_seq_;
-    struct
-    {
-      uint64_t data_seq_ : BIT_DATA_SEQ;
-      uint64_t parallel_idx_ : BIT_PARALLEL_IDX;
-      uint64_t block_type_ : BIT_BLOCK_TYPE;
-      uint64_t merge_type_ : BIT_MERGE_TYPE;
-      uint64_t sstable_logic_seq_ : BIT_SSTABLE_SEQ;
-      uint64_t reserved_ : BIT_RESERVED;
-      uint64_t sign_ : BIT_SIGN;
-    };
-  };
-};
 
 struct ObCommitLogSpec
 {
@@ -530,22 +449,28 @@ struct ObMicroBlockEncodingCtx
   int64_t column_cnt_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   ObMicroBlockEncoderOpt encoder_opt_;
+  ObCSEncodingOpt cs_encoding_opt_;
 
   mutable int64_t estimate_block_size_;
   mutable int64_t real_block_size_;
   mutable int64_t micro_block_cnt_; // build micro block count
   mutable common::ObArray<ObPreviousEncodingArray<MAX_PREV_ENCODING_COUNT> > previous_encodings_;
+  mutable ObPreviousCSEncoding previous_cs_encoding_;
 
   int64_t *column_encodings_;
   int64_t major_working_cluster_version_;
   common::ObRowStoreType row_store_type_;
   bool need_calc_column_chksum_;
+  ObCompressorType compressor_type_;
 
   ObMicroBlockEncodingCtx() : macro_block_size_(0), micro_block_size_(0),
     rowkey_column_cnt_(0), column_cnt_(0), col_descs_(nullptr),
-    encoder_opt_(), estimate_block_size_(0), real_block_size_(0), micro_block_cnt_(0),
+    encoder_opt_(), cs_encoding_opt_(), estimate_block_size_(0),
+    real_block_size_(0), micro_block_cnt_(0),
+    previous_encodings_(), previous_cs_encoding_(),
     column_encodings_(nullptr), major_working_cluster_version_(0),
-    row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false)
+    row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false),
+    compressor_type_(INVALID_COMPRESSOR)
   {
     previous_encodings_.set_attr(ObMemAttr(MTL_ID(), "MicroEncodeCtx"));
   }
@@ -553,7 +478,8 @@ struct ObMicroBlockEncodingCtx
   TO_STRING_KV(K_(macro_block_size), K_(micro_block_size), K_(rowkey_column_cnt),
       K_(column_cnt), KP_(col_descs), K_(estimate_block_size), K_(real_block_size),
       K_(micro_block_cnt), K_(encoder_opt), K_(previous_encodings), KP_(column_encodings),
-      K_(major_working_cluster_version), K_(row_store_type), K_(need_calc_column_chksum));
+      K_(major_working_cluster_version), K_(row_store_type), K_(need_calc_column_chksum),
+      K_(compressor_type));
 };
 
 template <typename T, int64_t MAX_COUNT, int64_t BLOCK_SIZE>
@@ -569,7 +495,7 @@ struct ObColumnEncodingCtx
   int64_t fix_data_size_;
   int64_t max_string_size_;
   int64_t extend_value_bit_;
-  const ObPodFix2dArray<ObDatum, 64 << 10, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> *col_datums_;
+  const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> *col_datums_;
   ObEncodingHashTable *ht_;
   ObMultiPrefixTree *prefix_tree_;
   const ObMicroBlockEncodingCtx *encoding_ctx_;
@@ -818,7 +744,7 @@ public:
 
   OB_INLINE bool is_valid() const
   {
-    return column_cnt_ > 0 && rowkey_cnt_ > 0;
+    return column_cnt_ > 0 && rowkey_cnt_ >= 0;
   }
 
   static const int64_t ROW_HEADER_VERSION_1 = 0;
@@ -1140,21 +1066,31 @@ struct ObMicroBlockDesMeta
 {
 public:
   ObMicroBlockDesMeta()
-    : compressor_type_(common::INVALID_COMPRESSOR), encrypt_id_(0),
+    : compressor_type_(common::INVALID_COMPRESSOR),
+      row_store_type_(common::ObRowStoreType::MAX_ROW_STORE),
+      encrypt_id_(0),
       master_key_id_(0), encrypt_key_(nullptr) {}
-  ObMicroBlockDesMeta(const common::ObCompressorType compressor_type, const int64_t encrypt_id,
-      const int64_t master_key_id, const char *encrypt_key)
-    : compressor_type_(compressor_type), encrypt_id_(encrypt_id),
-      master_key_id_(master_key_id), encrypt_key_(encrypt_key) {}
-  TO_STRING_KV(K_(compressor_type), K_(encrypt_id), K_(master_key_id),
+  ObMicroBlockDesMeta(const common::ObCompressorType compressor_type,
+                      const common::ObRowStoreType row_store_type,
+                      const int64_t encrypt_id,
+                      const int64_t master_key_id,
+                      const char *encrypt_key)
+    : compressor_type_(compressor_type),
+      row_store_type_(row_store_type),
+      encrypt_id_(encrypt_id),
+      master_key_id_(master_key_id),
+      encrypt_key_(encrypt_key) {}
+  TO_STRING_KV(K_(compressor_type), K_(row_store_type), K_(encrypt_id), K_(master_key_id),
       KPHEX_(encrypt_key, nullptr == encrypt_key_ ? 0 : share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH));
   OB_INLINE bool is_valid() const
   {
     return common::ObCompressorType::INVALID_COMPRESSOR < compressor_type_
+        && row_store_type_ < common::ObRowStoreType::MAX_ROW_STORE
         && compressor_type_ < common::ObCompressorType::MAX_COMPRESSOR;
   }
 public:
   common::ObCompressorType compressor_type_;
+  common::ObRowStoreType row_store_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
   const char *encrypt_key_;

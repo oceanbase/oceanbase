@@ -56,7 +56,6 @@ public:
     sstable.key_.scn_range_.start_scn_.convert_for_gts(start_log_ts);
     sstable.key_.scn_range_.end_scn_.convert_for_gts(end_log_ts);
     sstable.meta_ = &meta;
-
     sstable.valid_for_reading_ = true;
   }
 };

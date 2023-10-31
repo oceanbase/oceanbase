@@ -53,6 +53,16 @@ public:
                             ObEvalCtx &ctx,
                             const ObBitVector &skip,
                             const int64_t batch_size);
+
+  static int do_round_decimalint(
+      const int16_t in_prec, const int16_t in_scale,
+      const int16_t out_prec, const int16_t out_scale, const int64_t round_scale,
+      const ObDatum &in_datum, ObDecimalIntBuilder &res_val);
+
+  static int calc_round_decimalint(
+      const ObDatumMeta &in_meta, const ObDatumMeta &out_meta, const int64_t round_scale,
+      const ObDatum &in_datum, ObDatum &res_datum);
+
 private:
   // engine 3.0
   int se_deduce_type(ObExprResType &type,

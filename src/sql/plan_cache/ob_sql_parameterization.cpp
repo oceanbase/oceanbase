@@ -508,14 +508,16 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
         }
       }
     }
-
-    if (OB_SUCC(ret) && T_PROJECT_STRING == ctx.tree_->type_
+    bool enable_decimal_int = false;
+    if (OB_FAIL(ret)) {
+    } else if (T_PROJECT_STRING == ctx.tree_->type_
         && OB_FAIL(ctx.project_list_.push_back(ctx.tree_))) {
       LOG_WARN("failed to push back element", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session_info, enable_decimal_int))) {
+      LOG_WARN("fail to check enable decimal int", K(ret));
     } else {
       // do nothing
     }
-
     if (OB_SUCC(ret)) {
       ObObjParam value;
       ObAccuracy tmp_accuracy;
@@ -555,7 +557,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               literal_prefix,
                               ctx.default_length_semantics_,
                               static_cast<ObCollationType>(server_collation),
-                              NULL, session_info.get_sql_mode(), ctx.is_from_pl_))) {
+                              NULL, session_info.get_sql_mode(), enable_decimal_int,
+                              ctx.is_from_pl_))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
             //对于字符串值，其T_VARCHAR型的parse node有一个T_VARCHAR类型的子node，该子node描述字符串的charset等信息。
@@ -582,7 +585,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
               } else {
                 value.set_need_to_check_type(true); 
               }
-              if (ctx.ignore_scale_check_) {
+              // if value type is decimal int, it should not ignore scale check
+              if (ctx.ignore_scale_check_ && !value.is_decimal_int()) {
                 value.set_ignore_scale_check(true);
               }
             }

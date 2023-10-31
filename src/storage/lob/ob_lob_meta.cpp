@@ -17,6 +17,7 @@
 #include "ob_lob_meta.h"
 #include "ob_lob_seq.h"
 #include "ob_lob_manager.h"
+#include "storage/access/ob_table_scan_iterator.h"
 
 namespace oceanbase
 {
@@ -53,10 +54,10 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
   } else {
     bool has_found = false;
     bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+    ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(meta_iter_);
     while (OB_SUCC(ret) && !has_found) {
-      common::ObNewRow* new_row = NULL;
-      ret = meta_iter_->get_next_row(new_row);
-      if (OB_FAIL(ret)) {
+      blocksstable::ObDatumRow* datum_row = nullptr;
+      if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
         if (ret == OB_ITER_END) {
           row.byte_len_ = 0;
           row.char_len_ = 0;
@@ -64,11 +65,11 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
         } else {
           LOG_WARN("failed to get next row.", K(ret));
         }
-      } else if(OB_ISNULL(new_row)) {
+      } else if(OB_ISNULL(datum_row)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("row is null.", K(ret));
-      } else if (OB_FAIL(ObLobMetaUtil::transform(new_row, row))) {
-        LOG_WARN("get meta info from row failed.", K(ret), K(new_row));
+      } else if (OB_FAIL(ObLobMetaUtil::transform(datum_row, row))) {
+        LOG_WARN("get meta info from row failed.", K(ret), KPC(datum_row));
       } else {
         cur_info_ = row;
         if (is_range_over(row)) {
@@ -145,13 +146,11 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaScanResult &result)
   return ret;
 }
 
-int ObLobMetaUtil::transform_lob_id(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_lob_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
   int ret = OB_SUCCESS;
-  ObString buf;
-  if (OB_FAIL(row->cells_[ObLobMetaUtil::LOB_ID_COL_ID].get_varchar(buf))) {
-    LOG_WARN("fail to get string from obj", K(ret), K(row->cells_[ObLobMetaUtil::LOB_ID_COL_ID]));
-  } else if (buf.length() != sizeof(ObLobId)) {
+  ObString buf = row->storage_datums_[ObLobMetaUtil::LOB_ID_COL_ID].get_string();
+  if (buf.length() != sizeof(ObLobId)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to transform lob id.", K(ret), KPC(row));
   } else {
@@ -160,32 +159,37 @@ int ObLobMetaUtil::transform_lob_id(common::ObNewRow* row, ObLobMetaInfo &info)
   return ret;
 }
 
-int ObLobMetaUtil::transform_seq_id(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_seq_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  return row->cells_[ObLobMetaUtil::SEQ_ID_COL_ID].get_varchar(info.seq_id_);
+  info.seq_id_ = row->storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID].get_string();
+  return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_byte_len(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_byte_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  return row->cells_[ObLobMetaUtil::BYTE_LEN_COL_ID].get_uint32(info.byte_len_);
+  info.byte_len_ = row->storage_datums_[ObLobMetaUtil::BYTE_LEN_COL_ID].get_uint32();
+  return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_char_len(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_char_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  return row->cells_[ObLobMetaUtil::CHAR_LEN_COL_ID].get_uint32(info.char_len_);
+  info.char_len_ = row->storage_datums_[ObLobMetaUtil::CHAR_LEN_COL_ID].get_uint32();
+  return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_piece_id(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_piece_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  return row->cells_[ObLobMetaUtil::PIECE_ID_COL_ID].get_uint64(info.piece_id_);
+  info.piece_id_ = row->storage_datums_[ObLobMetaUtil::PIECE_ID_COL_ID].get_uint64();
+  return OB_SUCCESS;;
 }
 
-int ObLobMetaUtil::transform_lob_data(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_lob_data(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  return row->cells_[ObLobMetaUtil::LOB_DATA_COL_ID].get_varchar(info.lob_data_);
+  info.lob_data_ = row->storage_datums_[ObLobMetaUtil::LOB_DATA_COL_ID].get_string();
+  return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform(common::ObNewRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row)) {
@@ -194,7 +198,7 @@ int ObLobMetaUtil::transform(common::ObNewRow* row, ObLobMetaInfo &info)
   } else if (!row->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
-  } else if (row->get_count() != LOB_META_COLUMN_CNT) {
+  } else if (row->get_column_count() != LOB_META_COLUMN_CNT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
   } else if (OB_FAIL(transform_lob_id(row, info))) {

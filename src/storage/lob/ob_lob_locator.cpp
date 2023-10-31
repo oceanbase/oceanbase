@@ -257,6 +257,37 @@ int ObLobLocatorHelper::fill_lob_locator_v2(ObDatumRow &row,
   return ret;
 }
 
+int ObLobLocatorHelper::fill_lob_locator_v2(common::ObDatum &datum,
+                                            const ObColumnParam &col_param,
+                                            const ObTableIterParam &iter_param,
+                                            const ObTableAccessContext &access_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObLobLocatorHelper is not init", K(ret), K(*this));
+  } else {
+    const ObObjMeta &datum_meta = col_param.get_meta_type();
+    ObLobLocatorV2 locator;
+    rowkey_str_.reset();
+    if (!datum_meta.is_lob_storage() || datum.is_null()
+        || datum.get_lob_data().in_row_) {
+    } else if (OB_FAIL(build_lob_locatorv2(locator,
+                                           datum.get_string(),
+                                           col_param.get_column_id(),
+                                           rowkey_str_,
+                                           access_ctx,
+                                           datum_meta.get_collation_type(),
+                                           false,
+                                           is_sys_table(iter_param.table_id_)))) {
+      STORAGE_LOG(WARN, "Lob: Failed to build lob locator v2", K(ret), K(datum));
+    } else {
+      datum.set_string(locator.ptr_, locator.size_);
+    }
+  }
+  return ret;
+}
+
 int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, bool is_systable)
 {
   OB_ASSERT(enable_locator_v2_ == true);

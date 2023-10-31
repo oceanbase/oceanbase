@@ -532,8 +532,11 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   OZ(txs_.revert_store_ctx(read_store_ctx));
   if (OB_SUCC(ret)) {
     if (row.row_flag_.is_exist()) {
+      ObArenaAllocator allocator;
+      blocksstable::ObNewRowBuilder new_row_builder;
       storage::ObStoreRow store_row;
-      OZ(row.to_store_row(columns_, store_row));
+      OZ(new_row_builder.init(columns_, allocator));
+      OZ(new_row_builder.build_store_row(row, store_row));
       OX(value = store_row.row_val_.cells_[1].get_int());
     } else if (row.row_flag_.is_not_exist()) {
       ret = OB_ENTRY_NOT_EXIST;

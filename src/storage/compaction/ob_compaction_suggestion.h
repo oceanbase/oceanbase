@@ -13,6 +13,7 @@
 #ifndef SRC_STORAGE_COMPACTION_OB_COMPACTION_SUGGESTION_H_
 #define SRC_STORAGE_COMPACTION_OB_COMPACTION_SUGGESTION_H_
 
+#include "share/scheduler/ob_dag_scheduler_config.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_print_utils.h"
@@ -74,7 +75,7 @@ protected:
 struct ObCompactionSuggestion
 {
   ObCompactionSuggestion()
-    : merge_type_(storage::INVALID_MERGE_TYPE),
+    : merge_type_(compaction::INVALID_MERGE_TYPE),
       tenant_id_(OB_INVALID_TENANT_ID),
       ls_id_(0),
       tablet_id_(0),
@@ -82,16 +83,34 @@ struct ObCompactionSuggestion
       merge_finish_time_(0),
       suggestion_()
     {}
-  TO_STRING_KV(K_(merge_type), K_(tenant_id), K_(ls_id), K_(tablet_id), K_(merge_start_time),
+  TO_STRING_KV("merge_type", merge_type_to_str(merge_type_), K_(tenant_id), K_(ls_id), K_(tablet_id), K_(merge_start_time),
       K_(merge_finish_time), K_(suggestion));
 
-  storage::ObMergeType merge_type_;
+  compaction::ObMergeType merge_type_;
   uint64_t tenant_id_;
   int64_t ls_id_;
   int64_t tablet_id_;
   int64_t merge_start_time_;
   int64_t merge_finish_time_;
   char suggestion_[common::OB_DIAGNOSE_INFO_LENGTH];
+};
+
+struct ObDagSuggestionEvent {
+  ObDagSuggestionEvent()
+    : insufficient_threads_(0)
+  {}
+  int analyze_insufficient_thread(
+    const int64_t priority,
+    const share::ObDagType::ObDagTypeEnum dag_type,
+    char *buf,
+    const int64_t buf_len);
+
+  TO_STRING_KV(K_(insufficient_threads));
+
+  static const int16_t TOLERATE_INSUFFICIENT_THREADS_COUNT = 100;
+  static constexpr float TOLERATE_SCHEDULE_DAG_RATIO = 0.01;
+  int16_t insufficient_threads_;
+  // TODO(@jingshui)
 };
 
 /*
@@ -118,12 +137,36 @@ public:
   }
 
   int analyze_merge_info(ObTabletMergeInfo &merge_info, ObPartitionMergeProgress &progress);
+  int analyze_schedule_status(
+    ObTabletMergeInfo &tablet_merge_info,
+    const uint64_t tenant_id,
+    const share::ObDagType::ObDagTypeEnum dag_type,
+    const int64_t priority,
+    const int64_t schedule_wait_time);
+  int analyze_insufficient_thread(
+    const uint64_t tenant_id,
+    const share::ObDagType::ObDagTypeEnum dag_type,
+    const int64_t priority,
+    const int64_t thread_limit,
+    const int64_t added_dag_cnts,
+    const int64_t scheduled_dag_cnts);
+
+public:
+  static const char *ObAddWorkerThreadSuggestion[share::ObDagPrio::DAG_PRIO_MAX];
+  static const char* get_add_thread_suggestion(const int64_t priority);
+private:
+  int64_t calc_variance(
+      const int64_t count,
+      const int64_t max_value,
+      const int64_t min_value,
+      const int64_t avg_value);
 
 private:
   friend class ObCompactionSuggestionIterator;
 private:
   static const int64_t SUGGESTION_MAX_CNT = 200;
-  static const int64_t SCAN_AVERAGE_PARAM = 300;
+  static const int64_t SCHEDULE_WAIT_LONG_TIME = 1000L * 1000L * 60L * 10; // 10 mins
+  static const int64_t SCAN_AVERAGE_RAITO = 4; // 2 * 2
   static const int64_t INC_ROW_CNT_PARAM = 5 * 1000 * 1000; // 5 Million
   static const int64_t MERGE_COST_TIME_PARAM = 1000L * 1000L * 60L * 60L; // 1 hour
   static const int64_t SINGLE_PARTITION_MACRO_CNT_PARAM = 256 * 1024; // single partition size 500G
@@ -131,6 +174,7 @@ private:
   static constexpr float MACRO_MULTIPLEXED_PARAM = 0.3;
 
   ObArenaAllocator allocator_;
+  ObDagSuggestionEvent dag_event_[share::ObDagType::ObDagTypeEnum::DAG_TYPE_MAX];
   ObInfoRingArray<ObCompactionSuggestion> array_;
 };
 

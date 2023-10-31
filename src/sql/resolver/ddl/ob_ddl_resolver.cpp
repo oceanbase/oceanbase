@@ -203,6 +203,7 @@ int ObDDLResolver::get_primary_key_default_value(const ObObjType type, ObObj &de
     case ObNumberType: // set as string
     case ObUNumberType:
     case ObNumberFloatType:
+    case ObDecimalIntType:
       default_value.set_varchar("0");
       default_value.set_type(ObVarcharType);
       break;
@@ -504,53 +505,6 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         ret = update_datetime_default_value(default_value, *def_val, ObTimestampType, ObActionFlag::OP_DEFAULT_NOW_FLAG);
         break;
       }
-      case T_OP_POS:
-        ret = resolve_default_value(def_val->children_[0], default_value);
-        break;
-      case T_OP_NEG: {
-        ObObjParam old_obj;
-        ret = resolve_default_value(def_val->children_[0], old_obj);
-        if (OB_FAIL(ret)) {
-          SQL_RESV_LOG(WARN, "Resolve default const value failed", K(ret));
-        } else if (ObIntType == old_obj.get_type()) {
-          int64_t value = 0;
-          old_obj.get_int(value);
-          default_value.set_int(-value);
-          default_value.set_param_meta();
-        } else if (ObFloatType == old_obj.get_type()) {
-          float value = 0.0f;
-          old_obj.get_float(value);
-          default_value.set_float(-value);
-          default_value.set_param_meta();
-        } else if (ObDoubleType == old_obj.get_type()) {
-          double value = 0.0;
-          if (OB_FAIL(old_obj.get_double(value))) {
-            SQL_RESV_LOG(WARN, "failed to get double value", K(ret));
-          } else {
-            default_value.set_double(-value);
-            default_value.set_param_meta();
-          }
-        } else if (T_NUMBER == def_val->children_[0]->type_) {
-          ObString str;
-          char buffer[number::ObNumber::MAX_PRINTABLE_SIZE];
-          if (OB_FAIL(old_obj.get_varchar(str))) {
-            SQL_RESV_LOG(WARN, "failed to get varchar value", K(ret));
-          } else if (FALSE_IT(snprintf(buffer, sizeof(buffer), "-%.*s", str.length(), str.ptr()))) {
-          } else if ((OB_FAIL(ob_write_string(*name_pool,
-                                     ObString::make_string(buffer),
-                                     str)))) {
-            SQL_RESV_LOG(WARN, "Can not malloc space for default value",K(ret));
-            break;
-          }
-          default_value.set_varchar(str);
-          default_value.set_collation_type(ObCharset::get_system_collation());
-          default_value.set_param_meta();
-        } else {
-          ret = OB_ERR_PARSER_SYNTAX;
-          SQL_RESV_LOG(WARN, "Invalid flag '-' in default value",K(ret));
-        }
-        break;
-      }
       case T_INTERVAL_YM:
       case T_INTERVAL_DS:
       case T_NVARCHAR2:
@@ -558,6 +512,14 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         //oracle 模式default值直接把用户输入当做string存储，因此不会走到这个路径
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify default value for interval_ym/interval_ds/urowid");
+        break;
+      }
+      case T_OP_POS:
+      case T_OP_NEG: {
+        if (OB_FAIL(resolve_sign_in_default_value(
+                    name_pool, def_val, default_value, T_OP_NEG == def_val->type_))) {
+          SQL_RESV_LOG(WARN, "resolve_sign_in_default_value failed", K(ret), K(def_val->type_));
+        }
         break;
       }
       default:
@@ -572,6 +534,60 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
   }
   if (OB_SUCC(ret)) {
     _OB_LOG(DEBUG, "resolve default value: %s", to_cstring(default_value));
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_sign_in_default_value(
+    ObIAllocator *name_pool, ParseNode *def_val, ObObjParam &default_value, const bool is_neg)
+{
+  int ret = OB_SUCCESS;
+  if (is_neg) {
+    ObObjParam old_obj;
+    ret = resolve_default_value(def_val->children_[0], old_obj);
+    if (OB_FAIL(ret)) {
+      SQL_RESV_LOG(WARN, "Resolve default const value failed", K(ret));
+    } else if (ObIntType == old_obj.get_type()) {
+      int64_t value = 0;
+      old_obj.get_int(value);
+      default_value.set_int(-value);
+      default_value.set_param_meta();
+    } else if (ObFloatType == old_obj.get_type()) {
+      float value = 0.0f;
+      old_obj.get_float(value);
+      default_value.set_float(-value);
+      default_value.set_param_meta();
+    } else if (ObDoubleType == old_obj.get_type()) {
+      double value = 0.0;
+      if (OB_FAIL(old_obj.get_double(value))) {
+        SQL_RESV_LOG(WARN, "failed to get double value", K(ret));
+      } else {
+        default_value.set_double(-value);
+        default_value.set_param_meta();
+      }
+    } else if (T_NUMBER == def_val->children_[0]->type_) {
+      ObString str;
+      char buffer[number::ObNumber::MAX_PRINTABLE_SIZE];
+      if (OB_FAIL(old_obj.get_varchar(str))) {
+        SQL_RESV_LOG(WARN, "failed to get varchar value", K(ret));
+      } else if (FALSE_IT(snprintf(buffer, sizeof(buffer), "-%.*s", str.length(), str.ptr()))) {
+      } else if ((OB_FAIL(ob_write_string(*name_pool,
+                                          ObString::make_string(buffer),
+                                          str)))) {
+        SQL_RESV_LOG(WARN, "Can not malloc space for default value",K(ret));
+      } else {
+        default_value.set_varchar(str);
+        default_value.set_collation_type(ObCharset::get_system_collation());
+        default_value.set_param_meta();
+      }
+    } else {
+      ret = OB_ERR_PARSER_SYNTAX;
+      SQL_RESV_LOG(WARN, "Invalid flag '-' in default value",K(ret));
+    }
+  } else { // is_pos
+    if (OB_FAIL(resolve_default_value(def_val->children_[0], default_value))) {
+      SQL_RESV_LOG(WARN, "resolve_default_value failed",K(ret), K(def_val->children_[0]->type_));
+    }
   }
   return ret;
 }
@@ -1070,8 +1086,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             if (!ObStoreFormat::is_store_format_valid(store_format_, lib::is_oracle_mode())) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "Unexpected invalid store format value", K_(store_format), K(ret));
-            } else {
-              row_store_type_ = ObStoreFormat::get_row_store_type(store_format_);
+            } else if (OB_FAIL(ObDDLResolver::get_row_store_type(tenant_id, store_format_, row_store_type_))) {
+              SQL_RESV_LOG(WARN, "fail to get_row_store_type", K(tenant_id), K_(store_format), K(ret));
             }
             if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
               if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::STORE_FORMAT))) {
@@ -2664,13 +2680,17 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         TENANT_CONF(session_info_->get_effective_tenant_id()));
     bool convert_real_to_decimal =
         (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
-    if (OB_FAIL(ObResolverUtils::resolve_data_type(*type_node,
+    bool enable_decimalint_type = false;
+    if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info_, enable_decimalint_type))) {
+      LOG_WARN("fail to check enable decimal int", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_data_type(*type_node,
                                                    column.get_column_name_str(),
                                                    data_type,
                                                    (OB_NOT_NULL(session_info_) && is_oracle_mode()),
                                                    false,
                                                    session_info_->get_session_nls_params(),
                                                    session_info_->get_effective_tenant_id(),
+                                                   enable_decimalint_type,
                                                    convert_real_to_decimal))) {
       LOG_WARN("resolve data type failed", K(ret), K(column.get_column_name_str()));
     } else if (ObExtendType == data_type.get_obj_type()) {
@@ -2748,7 +2768,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         column.set_binary_collation(true);
         column.set_collation_type(CS_TYPE_INVALID);
       }
-      if (data_type.get_meta_type().is_integer_type() || data_type.get_meta_type().is_numeric_type()) {
+      if (data_type.get_meta_type().is_integer_type() || data_type.get_meta_type().is_numeric_type()
+          || ob_is_decimal_int(data_type.get_meta_type().get_type())) {
         column.set_zero_fill(data_type.is_zero_fill());
       }
       if (ob_is_nstring_type(column.get_meta_type().get_type())) {
@@ -3457,6 +3478,12 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         }
         break;
       }
+      case T_COL_SKIP_INDEX: {
+        if (OB_FAIL(resolve_column_skip_index(*attr_node, column))) {
+          SQL_RESV_LOG(WARN, "fail to resolve column skip index", K(ret));
+        }
+        break;
+      }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));
@@ -4114,6 +4141,9 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
     if (is_no_zero_date(sql_mode)) {
       cast_mode |= CM_NO_ZERO_DATE;
     }
+    if (column_schema.get_meta_type().is_decimal_int()) {
+      res_accuracy = column_schema.get_accuracy();
+    }
     ObCastCtx cast_ctx(&allocator, &dtc_params, CUR_TIME,
                        cast_mode,
                        column_schema.get_collation_type(), NULL, &res_accuracy);
@@ -4132,12 +4162,19 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
                        column_schema.get_column_name_str().ptr());
       }
     } else {
+      ObObjType obj_type = column_schema.get_data_type();
+      ObObjTypeClass obj_type_class = column_schema.get_data_type_class();
+      // for decimal int default value, we cast it to number first, then cast to decimal int
+      if (ObDecimalIntType == obj_type) {
+        obj_type = ObNumberType;
+        obj_type_class = ObNumberTC;
+      }
       //so cool. cast in place.
-      if(OB_FAIL(ObObjCaster::to_type(column_schema.get_data_type(), cast_ctx, default_value, default_value))) {
+      if(OB_FAIL(ObObjCaster::to_type(obj_type, cast_ctx, default_value, default_value))) {
         SQL_RESV_LOG(WARN, "cast default value failed", K(ret),
                      "src_type", default_value.get_type(), "dst_type",
                      column_schema.get_data_type(), K(ret));
-      } else if (ObNumberTC == column_schema.get_data_type_class()) {
+      } else if (ObNumberTC == obj_type_class) {
         number::ObNumber nmb;
         nmb = default_value.get_number();
         if (lib::is_oracle_mode()) {
@@ -4155,7 +4192,21 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
           }
         }
         if (OB_SUCC(ret)) {
-          default_value.set_number(column_schema.get_data_type(), nmb);
+          if (ObNumberTC == column_schema.get_data_type_class()) {
+            default_value.set_number(column_schema.get_data_type(), nmb);
+          } else {
+            ObDecimalInt *decint = nullptr;
+            int32_t int_bytes = 0;
+            const ObScale scale = column_schema.get_data_scale();
+            if (OB_ISNULL(cast_ctx.allocator_v2_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("allocator is null", K(ret));
+            } else if (wide::from_number(nmb, *cast_ctx.allocator_v2_, scale, decint, int_bytes)) {
+              LOG_WARN("fail to cast number to deciaml int", K(ret));
+            } else {
+              default_value.set_decimal_int(int_bytes, scale, decint);
+            }
+          }
         }
       } else if (lib::is_mysql_mode() &&
                    (ObFloatTC == column_schema.get_data_type_class() ||
@@ -5392,6 +5443,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
   SMART_VAR(ObSQLSessionInfo, empty_session) {
     if (OB_FAIL(init_empty_session(tz_info_wrap, nls_formats, allocator, table_schema, sql_mode, schema_checker, empty_session))) {
       LOG_WARN("failed to init empty session", K(ret));
+    } else if (FALSE_IT(empty_session.set_stmt_type(stmt::T_CREATE_TABLE))) { // set a fake ddl stmt type to specifiy ddl stmt type
     } else if (OB_FAIL(check_default_value(default_value, tz_info_wrap, nls_formats, allocator,
                                           table_schema, dummy_array,column, gen_col_expr_arr, sql_mode,
                                           &empty_session, allow_sequence, schema_checker))) {
@@ -5485,6 +5537,8 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     }
     const ObDataTypeCastParams dtc_params = session_info->get_dtc_params();
     ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
+    ObAccuracy res_acc = accuracy;
+    cast_ctx.res_accuracy_ = &res_acc;
     if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
     } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator,
@@ -5649,6 +5703,8 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
         ObObj dest_obj;
         const ObDataTypeCastParams dtc_params(tz_info_wrap.get_time_zone_info(), nls_formats, CS_TYPE_INVALID, CS_TYPE_INVALID, CS_TYPE_UTF8MB4_GENERAL_CI);
         ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
+        ObAccuracy res_acc = column.get_accuracy();
+        cast_ctx.res_accuracy_ = &res_acc;
         if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
           LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", data_type, K(default_value), K(ret));
         } else {
@@ -8812,6 +8868,31 @@ int ObDDLResolver::get_enable_split_partition(const int64_t tenant_id, bool &ena
   return ret;
 }
 
+int ObDDLResolver::get_row_store_type(const uint64_t tenant_id,
+                                      const ObStoreFormatType store_format,
+                                      ObRowStoreType &row_store_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  row_store_type = ObRowStoreType::MAX_ROW_STORE;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if ((ObStoreFormatType::OB_STORE_FORMAT_COMPRESSED_MYSQL == store_format) &&
+      (compat_version < DATA_VERSION_4_3_0_0)) {
+    row_store_type = ObRowStoreType::ENCODING_ROW_STORE;
+  } else if ((ObStoreFormatType::OB_STORE_FORMAT_ARCHIVE_HIGH_ORACLE == store_format) &&
+      (compat_version < DATA_VERSION_4_3_0_0)) {
+    // not support before DATA_VERSION_4_3_0_0
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ARCHIVE_HIGH_ORACL not supported before DATA_VERSION_4_3_0_0", K(ret), K(compat_version));
+  } else if (OB_UNLIKELY((row_store_type = ObStoreFormat::get_row_store_type(store_format))
+      >= ObRowStoreType::MAX_ROW_STORE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected row_store_type", K(ret), K(compat_version), K(store_format));
+  }
+  return ret;
+}
+
 int ObDDLResolver::resolve_partition_name(ParseNode *partition_name_node,
                                           ObString &partition_name,
                                           ObBasePartition &partition)
@@ -11133,6 +11214,135 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
     }
   }
 
+  return ret;
+}
+
+int ObDDLResolver::build_column_group(
+    const ObTableSchema &table_schema,
+    const ObColumnGroupType &cg_type,
+    const ObString &cg_name,
+    const ObIArray<uint64_t> &column_ids,
+    const uint64_t cg_id,
+    ObColumnGroupSchema &column_group)
+{
+  int ret = OB_SUCCESS;
+  if (cg_name.empty() || (cg_type >= ObColumnGroupType::MAX_COLUMN_GROUP)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(cg_name), K(cg_type), "column_id_cnt", column_ids.count());
+  } else {
+    column_group.set_column_group_id(cg_id);
+    column_group.set_column_group_type(cg_type);
+    column_group.set_block_size(table_schema.get_block_size());
+    column_group.set_compressor_type(table_schema.get_compressor_type());
+    const ObStoreFormatType store_format = table_schema.get_store_format();
+    int64_t storage_encoding_mode = 0;
+    omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info_->get_effective_tenant_id()));
+    if (OB_LIKELY(tcg.is_valid())) {
+      storage_encoding_mode = tcg->storage_encoding_mode;
+    }
+    bool is_flat = lib::is_oracle_mode() ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
+                                            || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
+                                            || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
+                                         : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
+                                            || (OB_STORE_FORMAT_COMPACT_MYSQL == store_format));
+    if (is_flat || (1 == storage_encoding_mode)) {
+      // all use encoding
+      column_group.set_row_store_type(table_schema.get_row_store_type());
+    } else if (2 == storage_encoding_mode) {
+      // all use cs_encoding
+      column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
+    } else {
+      // row_store uses encoding; column_store uses cs_encoding
+      if ((cg_type == ObColumnGroupType::DEFAULT_COLUMN_GROUP) || (cg_type == ObColumnGroupType::ALL_COLUMN_GROUP)) {
+        column_group.set_row_store_type(table_schema.get_row_store_type());
+      } else {
+        column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
+      }
+    }
+
+    if (OB_FAIL(column_group.set_column_group_name(cg_name))) {
+      LOG_WARN("fail to set column group name", KR(ret), K(cg_name));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
+      if (OB_FAIL(column_group.add_column_id(column_ids.at(i)))) {
+        LOG_WARN("fail to add column_id into column_group", KR(ret), K(i), "column_id", column_ids.at(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_column_skip_index(
+    const ParseNode &skip_index_node,
+    ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *type_list_node = nullptr;
+  ObSkipIndexColumnAttr skip_index_column_attr;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.2, skip index feature is not supported", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, skip index");
+  } else if (OB_UNLIKELY(1 != skip_index_node.num_child_ || T_COL_SKIP_INDEX != skip_index_node.type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid skip index node", K(ret), K(skip_index_node.num_child_), K(skip_index_node.type_));
+  } else {
+    if (OB_ISNULL(type_list_node = skip_index_node.children_[0])) {
+      // empty specified type list, e.g:
+      // alter table t1 modify column c1 skip_index()
+      skip_index_column_attr.reset();
+    } else if (OB_UNLIKELY(0 == type_list_node->num_child_ || T_COL_SKIP_INDEX_LIST != type_list_node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid type list node", K(ret),
+          K(type_list_node->num_child_), K(type_list_node->type_));
+    } else if (is_lob_storage(column_schema.get_data_type()) && !ob_is_large_text(column_schema.get_data_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("invalid column type", K(ret), K(column_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "build skip index on invalid type");
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < type_list_node->num_child_; ++i) {
+        const ParseNode *type_node = type_list_node->children_[i];
+        if (OB_ISNULL(type_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null skip index type node", K(ret), KP(type_node));
+        } else {
+          switch (type_node->type_) {
+          case T_COL_SKIP_INDEX_MIN_MAX: {
+            skip_index_column_attr.set_min_max();
+            break;
+          }
+          // TODO: open sum later
+          // case T_COL_SKIP_INDEX_SUM: {
+          //   skip_index_column_attr.set_sum();
+          //   break;
+          // }
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("invalid skip index type", K(ret), K(i), K(type_node->type_));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "skip index type");
+            break;
+          }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      column_schema.set_skip_index_attr(skip_index_column_attr.get_packed_value());
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::check_skip_index(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_schema.check_skip_index_valid())) {
+    LOG_WARN("failed to check if skip index schema is valid", K(ret));
+  }
   return ret;
 }
 

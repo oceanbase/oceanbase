@@ -10,12 +10,16 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_multiple_scan_merge.h"
 #include <math.h>
 #include "share/ob_get_compat_mode.h"
 #include "ob_block_row_store.h"
 #include "storage/ob_row_fuse.h"
 #include "ob_aggregated_store.h"
+#include "storage/blocksstable/ob_sstable.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
@@ -194,6 +198,83 @@ int ObMultipleScanMerge::construct_iters()
         STORAGE_LOG(TRACE, "add iter for consumer", KPC(table), KPC(access_param_));
       }
     }
+
+    if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan() &&
+        consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter() &&
+        OB_FAIL(locate_blockscan_border())) {
+      LOG_WARN("Fail to locate blockscan border", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMultipleScanMerge::locate_blockscan_border()
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObDatumRowkey border_key;
+  if (OB_ISNULL(block_row_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null block row store", K(ret));
+  } else if (1 == consumer_cnt_) {
+    border_key.set_max_rowkey();
+  } else {
+    ObScanMergeLoserTreeItem item;
+    // 1. push iters [1, consumer_cnt_] into loser tree
+    for (int64_t i = 1; OB_SUCC(ret) && i < consumer_cnt_; ++i) {
+      const int64_t iter_idx = consumers_[i];
+      ObStoreRowIterator *iter = iters_.at(iter_idx);
+      if (OB_ISNULL(iter)) {
+        ret = common::OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null iter", K(ret), K(iter));
+      } else if (OB_FAIL(iter->get_next_row_ext(item.row_, item.iter_flag_))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("Failed to get next row from iterator", K(ret), "index", iter_idx, "iterator", *iter);
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_ISNULL(item.row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Get next row return NULL row", K(ret), "iter_index", iter_idx);
+      } else {
+        item.iter_idx_ = iter_idx;
+        if (OB_FAIL(rows_merger_->push(item))) {
+          LOG_WARN("loser tree push error", K(ret));
+        }
+      }
+    }
+
+    // 2. get the next rowkey from incremental iterators
+    if (OB_SUCC(ret)) {
+      consumer_cnt_ = 1;
+      const ObScanMergeLoserTreeItem *top_item = nullptr;
+      if (rows_merger_->empty()) {
+        border_key.set_max_rowkey();
+      } else if (OB_FAIL(rows_merger_->rebuild())) {
+        LOG_WARN("loser tree rebuild fail", K(ret), K_(consumer_cnt));
+      } else if (OB_FAIL(rows_merger_->top(top_item))) {
+        LOG_WARN("get top item fail", K(ret));
+      } else if (nullptr == top_item || nullptr == top_item->row_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("item or row is null", K(ret), KP(top_item));
+      } else {
+        LOG_DEBUG("get top item", K(top_item->iter_idx_), KPC(top_item->row_), K(top_item->iter_flag_));
+        const int64_t rowkey_cnt = access_param_->iter_param_.get_schema_rowkey_count();
+        if (OB_FAIL(border_key.assign(top_item->row_->storage_datums_, rowkey_cnt))) {
+          LOG_WARN("Fail to assign border key", K(ret), K(rowkey_cnt));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObStoreRowIterator *iter = iters_.at(consumers_[0]);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null iter", K(ret), K(consumers_[0]));
+    } else if (OB_FAIL(iter->refresh_blockscan_checker(border_key))) {
+      LOG_WARN("Failed to check pushdown skip", K(ret), K(border_key));
+    } else {
+      block_row_store_->set_filter_applied(true);
+    }
   }
   return ret;
 }
@@ -241,14 +322,14 @@ int ObMultipleScanMerge::supply_consume()
     } else if (OB_FAIL(iter->get_next_row_ext(item.row_, item.iter_flag_))) {
       if (OB_ITER_END != ret) {
         if (OB_PUSHDOWN_STATUS_CHANGED != ret) {
-          STORAGE_LOG(WARN, "failed to get next row from iterator", "index", iter_idx, "iterator", *iter);
+          STORAGE_LOG(WARN, "failed to get next row from iterator", K(ret), "index", iter_idx, "iterator", *iter);
         }
       } else {
         ret = OB_SUCCESS;
       }
     } else if (OB_ISNULL(item.row_)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "get next row return NULL row", "iter_index", iter_idx, K(ret));
+      STORAGE_LOG(WARN, "get next row return NULL row", K(ret), "iter_index", iter_idx);
     } else {
       item.iter_idx_ = iter_idx;
       if (1 == consumer_cnt_) {
@@ -458,12 +539,7 @@ int ObMultipleScanMerge::can_batch_scan(bool &can_batch)
 {
   int ret = OB_SUCCESS;
   can_batch = false;
-  bool can_batched_agg = true;
-  if (access_param_->iter_param_.enable_pd_aggregate()) {
-    ObAggregatedStore *agg_row_store = reinterpret_cast<ObAggregatedStore *>(block_row_store_);
-    can_batched_agg = agg_row_store->can_batched_aggregate();
-  }
-  if (can_batched_agg && access_param_->iter_param_.enable_pd_filter() && 1 == consumer_cnt_) {
+  if (access_param_->iter_param_.enable_pd_filter() && 1 == consumer_cnt_) {
     ObStoreRowIterator *iter = nullptr;
     if (OB_UNLIKELY(consumers_[0] >= iters_.count())) {
       ret = OB_ERR_UNEXPECTED;

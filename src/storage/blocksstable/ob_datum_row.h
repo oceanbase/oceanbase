@@ -317,10 +317,12 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE int to_obj_enhance(common::ObObj &obj, const common::ObObjMeta &meta) const;
   OB_INLINE int deep_copy(const ObStorageDatum &src, common::ObIAllocator &allocator);
   OB_INLINE int deep_copy(const ObStorageDatum &src, char * buf, const int64_t buf_len, int64_t &pos);
+  OB_INLINE void shallow_copy_from_datum(const ObDatum &src);
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
   OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len) const;
   OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
+  OB_INLINE const char *to_cstring() const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -335,7 +337,7 @@ struct ObStorageDatumBuffer
 {
 public:
   ObStorageDatumBuffer(common::ObIAllocator *allocator = nullptr);
-  ~ObStorageDatumBuffer() { reset(); }
+  ~ObStorageDatumBuffer();
   void reset();
   int init(common::ObIAllocator &allocator);
   int reserve(const int64_t count, const bool keep_data = false);
@@ -364,18 +366,15 @@ public:
   void reuse();
   int reserve(const int64_t capacity, const bool keep_data = false);
   int deep_copy(const ObDatumRow &src, common::ObIAllocator &allocator);
-  //TODO need remove by @hanhui
-  int prepare_new_row(const common::ObIArray<share::schema::ObColDesc> &out_cols);
-  int to_store_row(const common::ObIArray<share::schema::ObColDesc> &out_cols, storage::ObStoreRow &store_row);
   int from_store_row(const storage::ObStoreRow &store_row);
   //only for unittest
   bool operator==(const ObDatumRow &other) const;
   bool operator==(const common::ObNewRow &other) const;
 
-  OB_INLINE ObNewRow &get_new_row() { return old_row_; }
-  OB_INLINE const ObNewRow &get_new_row() const { return old_row_; }
+  int is_datums_changed(const ObDatumRow &other, bool &is_changed) const;
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }
   OB_INLINE int64_t get_column_count() const { return count_; }
+  OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
   OB_INLINE bool is_valid() const { return nullptr != storage_datums_ && get_capacity() > 0; }
   /*
    *multi version row section
@@ -416,12 +415,42 @@ public:
   ObStorageDatum *storage_datums_;
   // do not need serialize
   ObStorageDatumBuffer datum_buffer_;
-  //TODO @hanhui only for compile
-  common::ObNewRow old_row_;
-  storage::ObObjBufArray obj_buf_;
   // add by @zimiao ObDatumRow does not care about the free of trans_info_ptr's memory
   // The caller must guarantee the life cycle and release of this memory
   char *trans_info_;
+};
+
+class ObNewRowBuilder
+{
+public:
+  ObNewRowBuilder()
+    : cols_descs_(nullptr),
+      new_row_(),
+      obj_buf_()
+  {}
+  ~ObNewRowBuilder() = default;
+  OB_INLINE int init(
+      const common::ObIArray<share::schema::ObColDesc> &cols_descs,
+      ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    cols_descs_ = &cols_descs;
+    if (OB_FAIL(obj_buf_.init(&allocator))) {
+      STORAGE_LOG(WARN, "Failed to init ObObjBufArray", K(ret));
+    }
+    return ret;
+  }
+  int build(
+      const blocksstable::ObDatumRow &datum_row,
+      common::ObNewRow *&new_row);
+  int build_store_row(
+      const blocksstable::ObDatumRow &datum_row,
+      storage::ObStoreRow &store_row);
+  TO_STRING_KV(KP_(cols_descs), K_(new_row));
+private:
+  const common::ObIArray<share::schema::ObColDesc> *cols_descs_;
+  common::ObNewRow new_row_;
+  storage::ObObjBufArray obj_buf_;
 };
 
 struct ObConstDatumRow
@@ -429,19 +458,21 @@ struct ObConstDatumRow
   OB_UNIS_VERSION(1);
 public:
   ObConstDatumRow() { MEMSET(this, 0, sizeof(ObConstDatumRow)); }
-  ObConstDatumRow(const ObDatum *datums, uint64_t count)
-    : datums_(datums), count_(count) {}
+  ObConstDatumRow(ObDatum *datums, uint64_t count, int64_t datum_row_offset)
+    : datums_(datums), count_(count), datum_row_offset_(datum_row_offset) {}
   ~ObConstDatumRow() {}
   OB_INLINE int64_t get_column_count() const { return count_; }
-  OB_INLINE bool is_valid() const { return nullptr != datums_ && count_ > 0; }
+  OB_INLINE bool is_valid() const { return nullptr != datums_ && count_ > 0 && datum_row_offset_ >= 0; }
   OB_INLINE const ObDatum &get_datum(const int64_t col_idx) const
   {
     OB_ASSERT(col_idx < count_ && col_idx >= 0);
     return datums_[col_idx];
   }
+  int set_datums_ptr(char *datums_ptr);
   TO_STRING_KV(K_(count), "datums_:", ObArrayWrap<ObDatum>(datums_, count_));
-  const ObDatum *datums_;
+  ObDatum *datums_; //The datums ptr may be changed, need to be recalculated by datum_row_offset
   uint64_t count_;
+  int64_t datum_row_offset_;
 };
 
 struct ObStorageDatumCmpFunc
@@ -456,7 +487,6 @@ public:
 private:
   common::ObCmpFunc cmp_func_;
 };
-
 typedef storage::ObFixedMetaObjArray<ObStorageDatumCmpFunc> ObStoreCmpFuncs;
 typedef storage::ObFixedMetaObjArray<common::ObHashFunc> ObStoreHashFuncs;
 struct ObStorageDatumUtils
@@ -468,13 +498,15 @@ public:
   int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const int64_t schema_rowkey_cnt,
            const bool is_oracle_mode,
-           common::ObIAllocator &allocator);
+           common::ObIAllocator &allocator,
+           const bool is_column_store = false);
   // init with array memory on fixed size memory buffer
   int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const int64_t schema_rowkey_cnt,
            const bool is_oracle_mode,
            const int64_t arr_buf_len,
            char *arr_buf);
+  int assign(const ObStorageDatumUtils &other_utils, common::ObIAllocator &allocator);
   void reset();
   OB_INLINE bool is_valid() const
   {
@@ -482,12 +514,11 @@ public:
   }
   OB_INLINE bool is_oracle_mode() const { return is_oracle_mode_; }
   OB_INLINE int64_t get_rowkey_count() const { return rowkey_cnt_; }
-  OB_INLINE int64_t get_column_count() const { return col_cnt_; }
   OB_INLINE const ObStoreCmpFuncs &get_cmp_funcs() const { return cmp_funcs_; }
   OB_INLINE const ObStoreHashFuncs &get_hash_funcs() const { return hash_funcs_; }
   OB_INLINE const common::ObHashFunc &get_ext_hash_funcs() const { return ext_hash_func_; }
   int64_t get_deep_copy_size() const;
-  TO_STRING_KV(K_(is_oracle_mode), K_(rowkey_cnt), K_(col_cnt), K_(is_inited), K_(is_oracle_mode));
+  TO_STRING_KV(K_(is_oracle_mode), K_(rowkey_cnt), K_(is_inited), K_(is_oracle_mode));
 private:
   //TODO to be removed by @hanhui
   int transform_multi_version_col_desc(const common::ObIArray<share::schema::ObColDesc> &col_descs,
@@ -499,7 +530,6 @@ private:
       const bool is_oracle_mode);
 private:
   int32_t rowkey_cnt_;  // multi version rowkey
-  int32_t col_cnt_;
   ObStoreCmpFuncs cmp_funcs_; // multi version rowkey cmp funcs
   ObStoreHashFuncs hash_funcs_;  // multi version rowkey cmp funcs
   common::ObHashFunc ext_hash_func_;
@@ -560,6 +590,19 @@ OB_INLINE int ObStorageDatum::deep_copy(const ObStorageDatum &src, char * buf, c
   }
 
   return ret;
+}
+
+OB_INLINE void ObStorageDatum::shallow_copy_from_datum(const ObDatum &src)
+{
+  if (this != &src) {
+    reuse();
+    pack_ = src.pack_;
+    if (is_null()) {
+    } else if (src.len_ == 0) {
+    } else {
+      ptr_ = src.ptr_;
+    }
+  }
 }
 
 OB_INLINE int64_t ObStorageDatum::get_deep_copy_size() const
@@ -694,6 +737,29 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len) 
   return pos;
 }
 
+OB_INLINE const char *ObStorageDatum::to_cstring() const
+{
+  char *buffer = NULL;
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  const int64_t buf_len = mgr.acquire(buffer);
+  if (OB_ISNULL(buffer)) {
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
+  } else {
+    str_len = storage_to_string(buffer, buf_len -1);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
+    } else {
+      buffer[0] = '\0';
+    }
+    mgr.update_position(str_len + 1);
+  }
+  mgr.try_clear_list();
+  mgr.dec_level();
+  return buffer;
+}
+
 OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const
 {
   return OBJ_DATUM_STRING == map_type && sizeof(uint64_t) == len_ && is_local_buf();
@@ -709,6 +775,21 @@ public:
       blocksstable::ObDatumRow &row);
   static int is_ghost_row(const blocksstable::ObMultiVersionRowFlag &flag, bool &is_ghost_row);
   static const int64_t GHOST_NUM = INT64_MAX;
+};
+
+struct ObSqlDatumInfo {
+public:
+  ObSqlDatumInfo() : datum_ptr_(nullptr), map_type_(OBJ_DATUM_MAPPING_MAX) {}
+  ObSqlDatumInfo(common::ObDatum* datum_ptr, const ObObjDatumMapType map_type)
+    : datum_ptr_(datum_ptr), map_type_(map_type)
+  {}
+  ~ObSqlDatumInfo() = default;
+  OB_INLINE void reset() { datum_ptr_ = nullptr; map_type_ = OBJ_DATUM_MAPPING_MAX; }
+  OB_INLINE bool is_valid() const { return datum_ptr_ != nullptr && map_type_ != OBJ_DATUM_MAPPING_MAX; }
+  TO_STRING_KV(KP_(datum_ptr), K_(map_type));
+
+  common::ObDatum *datum_ptr_;
+  ObObjDatumMapType map_type_;
 };
 
 } // namespace blocksstable

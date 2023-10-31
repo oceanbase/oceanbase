@@ -97,7 +97,7 @@ public:
   ObLSTabletService &operator=(const ObLSTabletService&) = delete;
   virtual ~ObLSTabletService();
 public:
-  int init(ObLS *ls, observer::ObIMetaReport *rs_reporter);
+  int init(ObLS *ls);
   int stop();
   void destroy();
   int offline();
@@ -218,7 +218,6 @@ public:
   int get_tx_ctx_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_lock_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_mds_table_mgr(mds::MdsTableMgrHandle &mgr_handle);
-  int get_bf_optimal_prefix(int64_t &prefix);
   int64_t get_tablet_count() const;
 
   // update tablet
@@ -238,6 +237,12 @@ public:
   int update_tablet_table_store( // only for small sstables defragmentation
       const ObTabletHandle &old_tablet_handle,
       const ObIArray<storage::ObITable *> &tables);
+  int update_tablet_report_status(
+      const common::ObTabletID &tablet_id,
+      const bool found_column_group_checksum_error = false);
+  int update_tablet_snapshot_version(
+      const common::ObTabletID &tablet_id,
+      const int64_t snapshot_version);
   int build_new_tablet_from_mds_table(
       const common::ObTabletID &tablet_id,
       const int64_t mds_construct_sequence,
@@ -245,7 +250,6 @@ public:
   int update_tablet_release_memtable_for_offline(
       const common::ObTabletID &tablet_id,
       const SCN scn);
-  int update_tablet_report_status(const common::ObTabletID &tablet_id);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
       const ObTabletRestoreStatus::STATUS &restore_status);
@@ -391,10 +395,12 @@ public:
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,
-      int64_t &memtable_row_count);
+      int64_t &memtable_row_count,
+      common::ObIArray<int64_t> &cg_macro_cnt_arr,
+      common::ObIArray<int64_t> &cg_micro_cnt_arr);
 
   // iterator
-  int build_tablet_iter(ObLSTabletIterator &iter);
+  int build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet = false);
   int build_tablet_iter(ObHALSTabletIDIterator &iter);
   int build_tablet_iter(ObHALSTabletIterator &iter);
 
@@ -539,10 +545,10 @@ private:
       int64_t &afct_num,
       int64_t &dup_num);
   static int insert_tablet_rows(
+      const int64_t row_count,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       ObStoreRow *rows,
-      const int64_t row_count,
       ObRowsInfo &rows_info);
   static int insert_lob_col(
       ObDMLRunningCtx &run_ctx,
@@ -742,7 +748,6 @@ private:
   mds::ObMdsTableMgr mds_table_mgr_;
   ObTabletIDSet tablet_id_set_;
   common::ObBucketLock bucket_lock_; // for tablet update, not for dml
-  observer::ObIMetaReport *rs_reporter_;
   AllowToReadMgr allow_to_read_mgr_;
   bool is_inited_;
   bool is_stopped_;

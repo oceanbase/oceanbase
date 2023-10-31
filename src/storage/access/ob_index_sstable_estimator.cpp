@@ -12,7 +12,7 @@
 
 #include "ob_index_sstable_estimator.h"
 #include "storage/blocksstable/ob_sstable.h"
-#include "storage/blocksstable/ob_index_block_row_scanner.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/tablet/ob_tablet.h"
@@ -53,7 +53,7 @@ int ObPartitionEst::deep_copy(const ObPartitionEst &src)
 }
 
 ObIndexBlockScanEstimator::ObIndexBlockScanEstimator(const ObIndexSSTableEstimateContext &context)
-  : level_(0), context_(context), allocator_("OB_STORAGE_EST")
+  : level_(0), context_(context), allocator_()
 {
   tenant_id_ = MTL_ID();
 }
@@ -74,11 +74,14 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
   int ret = OB_SUCCESS;
   ObEstimatedResult result;
 
+  lib::ObMemAttr mem_attr(MTL_ID(), "OB_STORAGE_EST");
   common::ObSEArray<int32_t, 1> agg_projector;
   common::ObSEArray<share::schema::ObColumnSchemaV2, 1> agg_column_schema;
   if (OB_UNLIKELY(!context_.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "estimate context is not valid", K(ret), K(context_));
+  } else if (OB_FAIL(allocator_.init(nullptr, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
+    STORAGE_LOG(WARN, "Fail to init allocator", K(ret));
   } else if (OB_FAIL(index_block_row_scanner_.init(
               agg_projector,
               agg_column_schema,
@@ -270,7 +273,7 @@ int ObIndexBlockScanEstimator::goto_next_level(
   } else {
     index_block_data_.reset();
     index_block_row_scanner_.reuse();
-    if (OB_FAIL(micro_handle.get_index_block_data(index_block_data_))) {
+    if (OB_FAIL(micro_handle.get_micro_block_data(nullptr, index_block_data_, false))) {
       STORAGE_LOG(WARN, "Failed to get index block data", K(ret), K(micro_handle));
     } else if (OB_FAIL(index_block_row_scanner_.open(
         micro_index_info.get_macro_id(), index_block_data_, range, 0, true, true))) {
@@ -293,6 +296,7 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
   const MacroBlockId &macro_id = micro_index_info.get_macro_id();
   const int64_t offset = micro_index_info.get_block_offset();
   const int64_t size = micro_index_info.get_block_size();
+  micro_handle.allocator_ = &allocator_;
   ObIMicroBlockCache *cache = nullptr;
   if (micro_index_info.is_data_block()) {
     cache = &blocksstable::ObStorageCacheSuite::get_instance().get_block_cache();
@@ -314,7 +318,8 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
     micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
   }
   if (OB_SUCC(ret) && !found) {
-    if (OB_FAIL(cache->prefetch(tenant_id_, macro_id, micro_index_info, context_.query_flag_, micro_handle.io_handle_))) {
+    if (OB_FAIL(cache->prefetch(tenant_id_, macro_id, micro_index_info,
+            context_.query_flag_.is_use_block_cache(), micro_handle.io_handle_, &allocator_))) {
       STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
     } else if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
       micro_handle.tenant_id_ = tenant_id_;
@@ -322,7 +327,7 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
       micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
       micro_handle.micro_info_.offset_ = micro_index_info.get_block_offset();
       micro_handle.micro_info_.size_ = micro_index_info.get_block_size();
-      micro_handle.allocator_ = &allocator_;
+      micro_handle.need_release_data_buf_ = true;
     }
   }
   return ret;
@@ -337,10 +342,10 @@ int ObIndexBlockScanEstimator::estimate_data_block_row_count(
   int ret = OB_SUCCESS;
   blocksstable::ObMicroBlockData block_data;
   blocksstable::ObMicroBlockRowScanner block_scanner(allocator_);
-  if (OB_FAIL(micro_handle.get_data_block_data(macro_reader_, block_data))) {
+  if (OB_FAIL(micro_handle.get_micro_block_data(&macro_reader_, block_data))) {
     STORAGE_LOG(WARN, "Failed to get block data", K(ret), K(micro_handle));
   } else if (OB_FAIL(block_scanner.estimate_row_count(
-		      context_.tablet_handle_.get_obj()->get_rowkey_read_info(),
+          context_.tablet_handle_.get_obj()->get_rowkey_read_info(),
               block_data,
               range,
               consider_multi_version,

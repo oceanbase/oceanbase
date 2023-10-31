@@ -116,6 +116,13 @@ int calc_sign_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         res_int = nmb.is_negative() ? -1 : (nmb.is_zero() ? 0 : 1);
         break;
       }
+      case ObDecimalIntTC: {
+        const ObDecimalInt *decint = arg_datum->get_decimal_int();
+        const int32_t int_bytes = arg_datum->get_int_bytes();
+        res_int = wide::str_helper::is_negative(decint, int_bytes)
+            ? -1 : (wide::str_helper::is_zero(decint, int_bytes) ? 0 : 1);
+        break;
+      }
       case ObFloatTC: {
         float v = arg_datum->get_float();
         if (is_mysql_mode() && 0 == v) {

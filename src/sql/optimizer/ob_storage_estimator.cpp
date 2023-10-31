@@ -159,6 +159,10 @@ int ObStorageEstimator::storage_estimate_block_count_and_row_count(
   int64_t micro_block_count = 0;
   int64_t sstable_row_count = 0;
   int64_t memtable_row_count = 0;
+  common::ObIArray<int64_t> &cg_macro_cnt_arr = res.cg_macro_cnt_arr_;
+  common::ObIArray<int64_t> &cg_micro_cnt_arr = res.cg_micro_cnt_arr_;
+  int64_t cg_count = arg.column_group_ids_.count();
+  LOG_TRACE("begin to storage estimate blockcount", K(arg));
 
   if (!arg.is_valid()) {
     res.macro_block_count_ = macro_block_count;
@@ -173,12 +177,20 @@ int ObStorageEstimator::storage_estimate_block_count_and_row_count(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(access_service));
       } else if (OB_FAIL(access_service->estimate_block_count_and_row_count(arg.ls_id_,
-                                                                            arg.tablet_id_,
-                                                                            macro_block_count,
-                                                                            micro_block_count,
-                                                                            sstable_row_count,
-                                                                            memtable_row_count))) {
-        LOG_WARN("OPT:[STORAGE EST BLOCK COUNT AND ROW COUNT FAILED]", "storage_ret", ret);
+                                                                           arg.tablet_id_,
+                                                                           macro_block_count,
+                                                                           micro_block_count,
+                                                                           sstable_row_count,
+                                                                           memtable_row_count,
+                                                                           cg_macro_cnt_arr,
+                                                                           cg_micro_cnt_arr))) {
+        LOG_WARN("OPT:[STORAGE EST BLOCK COUNT FAILED]", "storage_ret", ret);
+      } else if (OB_UNLIKELY(cg_count != 0 &&
+                             (cg_macro_cnt_arr.count() > cg_count
+                              || cg_micro_cnt_arr.count() > cg_count
+                              || cg_macro_cnt_arr.count() != cg_micro_cnt_arr.count()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected cg count", K(ret), K(cg_macro_cnt_arr.count()), K(cg_micro_cnt_arr.count()), K(arg.column_group_ids_.count()));
       } else {
         LOG_TRACE("storage estimate block count and row count result", K(macro_block_count),
                 K(micro_block_count), K(sstable_row_count), K(memtable_row_count), K(ret));
@@ -186,6 +198,13 @@ int ObStorageEstimator::storage_estimate_block_count_and_row_count(
         res.micro_block_count_ = micro_block_count;
         res.sstable_row_count_ = sstable_row_count;
         res.memtable_row_count_ = memtable_row_count;
+        for (int64_t i = cg_macro_cnt_arr.count(); OB_SUCC(ret) && i < cg_count; i++) {
+          if (OB_FAIL(cg_macro_cnt_arr.push_back(0))) {
+            LOG_WARN("fail to push macro count", K(ret));
+          } else if (OB_FAIL(cg_micro_cnt_arr.push_back(0))) {
+            LOG_WARN("fail to push micro count", K(ret));
+          }
+        }
       }
     }
   }

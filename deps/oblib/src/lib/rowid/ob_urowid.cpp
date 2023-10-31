@@ -70,8 +70,10 @@ int ObURowIDData::compare(const ObURowIDData &other) const
 
       ObObjType type1 = get_pk_type(this_pos);
       ObObjType type2 = other.get_pk_type(that_pos);
-
-      if (type1 != type2) {
+      // decimal int and number types are synonymous
+      bool all_decimals = (type1 == ObDecimalIntType && type2 == ObNumberType)
+                          || (type1 == ObNumberType && type2 == ObDecimalIntType);
+      if (type1 != type2 && !all_decimals) {
         compare_ret = type1 < type2 ? -1 : 1;
       } else {
         ObObj pk_val1;
@@ -136,6 +138,29 @@ int ObURowIDData::inner_get_pk_value<ObURowIDType>(const uint8_t *rowid_buf,
     const char *rowid_content = (const char *)rowid_buf + pos;
     pk_val.set_urowid(rowid_content, rowid_len);
     pos += rowid_len;
+  } else {
+    ret = OB_INVALID_ROWID;
+  }
+  return ret;
+}
+
+template <>
+int ObURowIDData::inner_get_pk_value<ObDecimalIntType>(const uint8_t *rowid_buf,
+                                                       const int64_t rowid_buf_len, int64_t &pos,
+                                                       ObObj &pk_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(pos + sizeof(ObScale) + sizeof(uint32_t) <= rowid_buf_len)) {
+    ObScale scale = *reinterpret_cast<const ObScale *>(rowid_buf + pos);
+    pos += sizeof(ObScale);
+    int32_t int_bytes = *reinterpret_cast<const int32_t *>(rowid_buf + pos);
+    pos += sizeof(int32_t);
+    if (OB_LIKELY(pos + int_bytes <= rowid_buf_len)) {
+      pk_val.set_decimal_int(int_bytes, scale, (ObDecimalInt *)(rowid_buf + pos));
+      pos += int_bytes;
+    } else {
+      ret = OB_INVALID_ROWID;
+    }
   } else {
     ret = OB_INVALID_ROWID;
   }
@@ -327,7 +352,12 @@ DEF_GET_OTIME_PK_VALUE(ObTimestampNanoType, timestamp_nano, uint16_t);
   ObNVarchar2Type,                   \
   ObNCharType,                       \
                                      \
-  ObURowIDType
+  ObURowIDType,                      \
+  ObLobType,                         \
+  ObJsonType,                        \
+  ObGeometryType,                    \
+  ObUserDefinedSQLType,              \
+  ObDecimalIntType
 
 #define DEF_GET_PK_FUNC(obj_type) ObURowIDData::inner_get_pk_value<obj_type>
 
@@ -654,6 +684,10 @@ int64_t ObURowIDData::get_obj_size(const ObObj &pk_val)
   case ObURowIDType:
     ret_size += sizeof(uint32_t) + pk_val.get_string_len();
     break;
+  case ObDecimalIntType:
+    ret_size += sizeof(ObScale); // scale
+    ret_size += sizeof(uint32_t) + pk_val.get_int_bytes(); // length & decimal int data
+    break;
   default:
     ret_size = 0;
     break;
@@ -840,6 +874,24 @@ DEF_SET_CHAR_PK_VALUE(ObRawType);
 DEF_SET_OTIME_PK_VALUE(ObTimestampTZType, 0);
 DEF_SET_OTIME_PK_VALUE(ObTimestampLTZType, 1);
 DEF_SET_OTIME_PK_VALUE(ObTimestampNanoType, 2);
+
+template<>
+int ObURowIDData::inner_set_pk_value<ObDecimalIntType>(const ObObj &pk_val, uint8_t *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t needed_size = 1 + sizeof(int32_t) + sizeof(ObScale) + pk_val.get_int_bytes();
+  OB_ASSERT(NULL != buf);
+  OB_ASSERT(pk_val.is_decimal_int());
+  OB_ASSERT(pos + needed_size <= buf_len && pos >= 0);
+  buf[pos++] = static_cast<uint8_t>(ObDecimalIntType);
+  *reinterpret_cast<ObScale *>(buf + pos) = pk_val.get_scale();
+  pos += sizeof(ObScale);
+  *reinterpret_cast<int32_t *>(buf + pos) = pk_val.get_int_bytes();
+  pos += sizeof(int32_t);
+  MEMCPY(buf + pos, pk_val.get_decimal_int(), pk_val.get_int_bytes());
+  pos += pk_val.get_int_bytes();
+  return ret;
+}
 
 #define DEF_SET_PK_FUNC(obj_type) ObURowIDData::inner_set_pk_value<obj_type>
 

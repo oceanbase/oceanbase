@@ -168,6 +168,7 @@ public:
 
   // ===================== ObMvccTransNode Setter/Getter =====================
   blocksstable::ObDmlFlag get_dml_flag() const;
+  int64_t get_data_size() const;
   int fill_trans_version(const share::SCN version);
   int fill_scn(const share::SCN scn);
   void get_trans_id_and_seq_no(transaction::ObTransID &trans_id, transaction::ObTxSEQ &seq_no);

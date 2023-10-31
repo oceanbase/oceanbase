@@ -17,6 +17,8 @@
 #include "storage/lob/ob_lob_locator.h"
 #include "storage/tx/ob_defensive_check_mgr.h"
 #include "share/scn.h"
+#include "storage/access/ob_micro_block_handle_mgr.h"
+#include "storage/column_store/ob_i_cg_iterator.h"
 
 namespace oceanbase
 {
@@ -30,8 +32,10 @@ class ObIOCallback;
 } // namespace common
 namespace storage
 {
+template<typename T>
 class ObStoreRowIterPool;
 class ObBlockRowStore;
+class ObCGIterParamPool;
 
 struct ObRowStat
 {
@@ -60,6 +64,7 @@ struct ObTableAccessContext
   virtual ~ObTableAccessContext();
   void reset();
   void reuse();
+  int rescan_reuse(ObTableScanParam &scan_param);
   inline bool is_valid() const {
     return is_inited_
       && NULL != store_ctx_
@@ -103,17 +108,21 @@ struct ObTableAccessContext
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,
            const common::ObVersionRange &trans_version_range);
-  // used for merge
+  // used for merge and exist
   int init(const common::ObQueryFlag &query_flag,
            ObStoreCtx &ctx,
            common::ObIAllocator &allocator,
            common::ObIAllocator &stmt_allocator,
-           const common::ObVersionRange &trans_version_range);
+           const common::ObVersionRange &trans_version_range,
+           const bool for_exist = false);
   // used for exist or simple scan
   int init(const common::ObQueryFlag &query_flag,
            ObStoreCtx &ctx,
            common::ObIAllocator &allocator,
            const common::ObVersionRange &trans_version_range);
+  int alloc_iter_pool(const bool use_column_store);
+  void inc_micro_access_cnt();
+  int init_scan_allocator(ObTableScanParam &scan_param);
   TO_STRING_KV(
     K_(is_inited),
     K_(timeout),
@@ -133,10 +142,12 @@ struct ObTableAccessContext
     K_(lob_allocator),
     K_(lob_locator_helper),
     KP_(iter_pool),
-    KP_(block_row_store),
-    KP_(io_callback))
+    KP_(cg_iter_pool),
+    KP_(cg_param_pool),
+    KP_(block_row_store));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
+  static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
   int build_lob_locator_helper(ObTableScanParam &scan_param,
                                const ObStoreCtx &ctx,
                                const common::ObVersionRange &trans_version_range);
@@ -154,6 +165,7 @@ public:
   common::ObTabletID tablet_id_;
   common::ObQueryFlag query_flag_;
   ObSQLMode sql_mode_;
+  ObMicroBlockHandleMgr micro_block_handle_mgr_;
   ObStoreCtx *store_ctx_;
   common::ObLimitParam *limit_param_;
   // sql statement level allocator, available before sql execute finish
@@ -171,9 +183,10 @@ public:
   share::SCN merge_scn_;
   common::ObArenaAllocator lob_allocator_;
   ObLobLocatorHelper *lob_locator_helper_;
-  ObStoreRowIterPool *iter_pool_;
+  ObStoreRowIterPool<ObStoreRowIterator> *iter_pool_;
+  ObStoreRowIterPool<ObICGIterator> *cg_iter_pool_;
+  ObCGIterParamPool *cg_param_pool_;
   ObBlockRowStore *block_row_store_;
-  common::ObIOCallback *io_callback_;
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckRecordExtend defensive_check_record_;

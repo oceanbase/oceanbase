@@ -18,6 +18,7 @@
 #include "share/schema/ob_column_schema.h"
 #include "storage/ob_storage_schema.h"
 #include "share/ob_encryption_util.h"
+#include "storage/test_schema_prepare.h"
 
 namespace oceanbase
 {
@@ -31,68 +32,9 @@ class TestStorageSchema : public ::testing::Test
 public:
   TestStorageSchema() : allocator_(ObModIds::TEST) {}
   virtual ~TestStorageSchema() {}
-
-  void prepare_schema(share::schema::ObTableSchema &table_schema);
   bool judge_storage_schema_equal(ObStorageSchema &schema1, ObStorageSchema &schema2);
-
-  static const int64_t TENANT_ID = 1;
-  static const int64_t TABLE_ID = 7777;
-  static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
-  static const int64_t TEST_COLUMN_CNT = 6;
-
   common::ObArenaAllocator allocator_;
 };
-
-void TestStorageSchema::prepare_schema(share::schema::ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  int64_t micro_block_size = 16 * 1024;
-  const uint64_t tenant_id = TENANT_ID;
-  const uint64_t table_id = TABLE_ID;
-  share::schema::ObColumnSchemaV2 column;
-
-  //generate data table schema
-  table_schema.reset();
-  ret = table_schema.set_table_name("test_merge_multi_version");
-  ASSERT_EQ(OB_SUCCESS, ret);
-  table_schema.set_tenant_id(tenant_id);
-  table_schema.set_tablegroup_id(1);
-  table_schema.set_database_id(1);
-  table_schema.set_table_id(table_id);
-  table_schema.set_rowkey_column_num(TEST_ROWKEY_COLUMN_CNT);
-  table_schema.set_max_used_column_id(TEST_COLUMN_CNT);
-  table_schema.set_block_size(micro_block_size);
-  table_schema.set_compress_func_name("none");
-  table_schema.set_row_store_type(FLAT_ROW_STORE);
-  //init column
-  char name[OB_MAX_FILE_NAME_LENGTH];
-  memset(name, 0, sizeof(name));
-  const int64_t column_ids[] = {16,17,20,21,22,23,24,29};
-  for(int64_t i = 0; i < TEST_COLUMN_CNT; ++i){
-    ObObjType obj_type = ObIntType;
-    const int64_t column_id = column_ids[i];
-
-    if (i == 1) {
-      obj_type = ObVarcharType;
-    }
-    column.reset();
-    column.set_table_id(table_id);
-    column.set_column_id(column_id);
-    sprintf(name, "test%020ld", i);
-    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
-    column.set_data_type(obj_type);
-    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-    column.set_data_length(10);
-    if (i < TEST_ROWKEY_COLUMN_CNT) {
-      column.set_rowkey_position(i + 1);
-    } else {
-      column.set_rowkey_position(0);
-    }
-    COMMON_LOG(INFO, "add column", K(i), K(column));
-    ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
-  }
-  COMMON_LOG(INFO, "dump stable schema", LITERAL_K(TEST_ROWKEY_COLUMN_CNT), K(table_schema));
-}
 
 bool TestStorageSchema::judge_storage_schema_equal(ObStorageSchema &schema1, ObStorageSchema &schema2)
 {
@@ -112,7 +54,8 @@ bool TestStorageSchema::judge_storage_schema_equal(ObStorageSchema &schema1, ObS
       && schema1.encryption_ == schema2.encryption_
       && schema1.encrypt_key_ == schema2.encrypt_key_
       && schema1.rowkey_array_.count() == schema2.rowkey_array_.count()
-      && schema1.column_array_.count() == schema2.column_array_.count();
+      && schema1.column_array_.count() == schema2.column_array_.count()
+      && schema1.skip_idx_attr_array_.count() == schema2.skip_idx_attr_array_.count();
 
   for (int64_t i = 0; equal && i < schema1.rowkey_array_.count(); ++i) {
     equal = schema1.rowkey_array_[i].meta_type_ == schema1.rowkey_array_[i].meta_type_;
@@ -122,6 +65,10 @@ bool TestStorageSchema::judge_storage_schema_equal(ObStorageSchema &schema1, ObS
     equal = schema1.column_array_[i].meta_type_ == schema2.column_array_[i].meta_type_
         && schema1.column_array_[i].is_column_stored_in_sstable_ == schema2.column_array_[i].is_column_stored_in_sstable_;
   }
+  for (int i = 0; equal && i < schema1.skip_idx_attr_array_.count(); ++i) {
+    equal = schema1.skip_idx_attr_array_[i].col_idx_ == schema2.skip_idx_attr_array_[i].col_idx_
+        && schema1.skip_idx_attr_array_[i].skip_idx_attr_ == schema2.skip_idx_attr_array_[i].skip_idx_attr_;
+  }
 
   return equal;
 }
@@ -130,7 +77,7 @@ TEST_F(TestStorageSchema, generate_schema)
 {
   share::schema::ObTableSchema table_schema;
   ObStorageSchema storage_schema;
-  prepare_schema(table_schema);
+  TestSchemaPrepare::prepare_schema(table_schema);
   ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
   COMMON_LOG(INFO, "generate success", K(storage_schema), K(table_schema));
 
@@ -145,7 +92,7 @@ TEST_F(TestStorageSchema, serialize_and_deserialize)
 {
   share::schema::ObTableSchema table_schema;
   ObStorageSchema storage_schema;
-  prepare_schema(table_schema);
+  TestSchemaPrepare::prepare_schema(table_schema);
   ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
 
   const int64_t buf_len = 1024 * 1024;
@@ -167,7 +114,7 @@ TEST_F(TestStorageSchema, serialize_and_deserialize2)
 {
   share::schema::ObTableSchema table_schema;
   ObStorageSchema storage_schema;
-  prepare_schema(table_schema);
+  TestSchemaPrepare::prepare_schema(table_schema);
   table_schema.set_compress_func_name("compress_func_1");
   table_schema.add_aux_vp_tid(8989789);
   ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
@@ -189,7 +136,7 @@ TEST_F(TestStorageSchema, serialize_and_deserialize_with_big_schema)
 {
   share::schema::ObTableSchema table_schema;
   ObStorageSchema storage_schema;
-  prepare_schema(table_schema);
+  TestSchemaPrepare::prepare_schema(table_schema);
   table_schema.set_compress_func_name("compress_func_1");
   table_schema.add_aux_vp_tid(8989789);
 
@@ -234,7 +181,7 @@ TEST_F(TestStorageSchema, deep_copy_str)
 {
   share::schema::ObTableSchema table_schema;
   ObStorageSchema storage_schema;
-  prepare_schema(table_schema);
+  TestSchemaPrepare::prepare_schema(table_schema);
   table_schema.set_compress_func_name("compress_func_1");
   table_schema.add_aux_vp_tid(8989789);
 

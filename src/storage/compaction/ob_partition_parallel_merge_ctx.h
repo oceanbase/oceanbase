@@ -24,7 +24,7 @@ namespace oceanbase
 
 namespace compaction
 {
-struct ObTabletMergeCtx;
+struct ObBasicTabletMergeCtx;
 struct ObMediumCompactionInfo;
 }
 namespace blocksstable
@@ -46,11 +46,11 @@ public:
     SERIALIZE_MERGE = 3,
     INVALID_PARALLEL_TYPE
   };
-  ObParallelMergeCtx();
+  ObParallelMergeCtx(common::ObIAllocator &allocator);
   virtual ~ObParallelMergeCtx();
   void reset();
   bool is_valid() const;
-  OB_NOINLINE int init(compaction::ObTabletMergeCtx &merge_ctx);// will be mocked in mittest
+  int init(compaction::ObBasicTabletMergeCtx &merge_ctx);
   int init(const compaction::ObMediumCompactionInfo &medium_info);
   OB_INLINE int64_t get_concurrent_cnt() const { return concurrent_cnt_; }
   int get_merge_range(const int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
@@ -58,30 +58,32 @@ public:
       const int64_t tablet_size,
       const int64_t macro_block_cnt,
       int64_t &concurrent_cnt);
-  TO_STRING_KV(K_(parallel_type), K_(range_array), K_(concurrent_cnt), K_(is_inited));
+  TO_STRING_KV(K_(parallel_type), "array_cnt", range_array_.count(), K_(range_array), K_(concurrent_cnt), K_(is_inited));
 private:
   static const int64_t MIN_PARALLEL_MINOR_MERGE_THREASHOLD = 2;
   static const int64_t MIN_PARALLEL_MERGE_BLOCKS = 32;
   static const int64_t PARALLEL_MERGE_TARGET_TASK_CNT = 20;
+
   //TODO @hanhui parallel in ai
   int init_serial_merge();
-  OB_NOINLINE int init_parallel_mini_merge(compaction::ObTabletMergeCtx &merge_ctx);// will be mocked in mittest
-  int init_parallel_mini_minor_merge(compaction::ObTabletMergeCtx &merge_ctx);
-  int init_parallel_major_merge(compaction::ObTabletMergeCtx &merge_ctx);
-  int calc_mini_minor_parallel_degree(const int64_t tablet_size,
-                                      const int64_t total_size,
-                                      const int64_t sstable_count,
-                                      int64_t &parallel_degree);
+  int init_parallel_mini_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
+  int init_parallel_mini_minor_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
+  int init_parallel_major_merge(compaction::ObBasicTabletMergeCtx &merge_ctx);
+  void calc_adaptive_parallel_degree(
+      const int64_t prio,
+      const int64_t mem_per_thread,
+      const int64_t origin_degree,
+      int64_t &parallel_degree);
 
   int get_major_parallel_ranges(
       const blocksstable::ObSSTable *first_major_sstable,
       const int64_t tablet_size,
       const ObITableReadInfo &rowkey_read_info);
 private:
+  common::ObIAllocator &allocator_;
+  common::ObSEArray<blocksstable::ObDatumRange, 16, common::ObIAllocator&> range_array_;
   ParallelMergeType parallel_type_;
-  common::ObSEArray<blocksstable::ObDatumRange, 16> range_array_;
   int64_t concurrent_cnt_;
-  common::ObArenaAllocator allocator_;
   bool is_inited_;
 };
 

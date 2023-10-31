@@ -227,6 +227,13 @@ int ObIntegerBaseDiffEncoder::traverse(bool &suitable)
   return ret;
 }
 
+int ObIntegerBaseDiffEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = sizeof(*header_) + type_store_size_;
+  return ret;
+}
+
 int ObIntegerBaseDiffEncoder::store_meta(ObBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;

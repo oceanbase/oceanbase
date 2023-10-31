@@ -114,7 +114,7 @@ struct ObDoArithBatchEval
       if (i + step_size < size && (0 == (skip_v | eval_v))) {
         if (ArithOp::is_raw_op_supported() && in_frame_notnull) {
           for (int64_t j = 0; j < step_size; i++, j++) {
-            ArithOp::raw_op(iter.raw(i), l_it.raw(i), r_it.raw(i));
+            ArithOp::raw_op(iter.raw(i), l_it.raw(i), r_it.raw(i), args...);
           }
           i -= step_size;
           for (int64_t j = 0; OB_SUCC(ret) && j < step_size; i++, j++) {
@@ -225,7 +225,8 @@ struct ObArithOpBase : public ObArithOpRawType<char, char, char>
 {
   constexpr static bool is_raw_op_supported() { return false; }
 
-  static void raw_op(RES_RAW_TYPE &, const L_RAW_TYPE &, const R_RAW_TYPE) {}
+  template <typename... Args>
+  static void raw_op(RES_RAW_TYPE &, const L_RAW_TYPE &, const R_RAW_TYPE, Args &...args) {}
   static int raw_check(const RES_RAW_TYPE &, const L_RAW_TYPE &, const R_RAW_TYPE &)
   {
     return common::OB_ERR_UNEXPECTED;
@@ -261,26 +262,29 @@ template <typename Base>
 struct ObArithOpWrap : public Base
 {
   constexpr static bool is_raw_op_supported() { return true; }
-  int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
+  template <typename... Args>
+  int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, Args &...args) const
   {
     Base::raw_op(
         *const_cast<typename Base::RES_RAW_TYPE *>(
             reinterpret_cast<const typename Base::RES_RAW_TYPE *>(res.ptr_)),
         *reinterpret_cast<const typename Base::L_RAW_TYPE *>(l.ptr_),
-        *reinterpret_cast<const typename Base::R_RAW_TYPE *>(r.ptr_));
+        *reinterpret_cast<const typename Base::R_RAW_TYPE *>(r.ptr_),
+        args...);
     res.pack_ = sizeof(typename Base::RES_RAW_TYPE);
     return Base::raw_check(*reinterpret_cast<const typename Base::RES_RAW_TYPE *>(res.ptr_),
                            *reinterpret_cast<const typename Base::L_RAW_TYPE *>(l.ptr_),
                            *reinterpret_cast<const typename Base::R_RAW_TYPE *>(r.ptr_));
   }
 
-  static int datum_op(ObDatum &res, const ObDatum &l, const ObDatum &r)
+  template <typename... Args>
+  static int datum_op(ObDatum &res, const ObDatum &l, const ObDatum &r, Args &...args)
   {
     int ret = OB_SUCCESS;
     if (l.is_null() || r.is_null()) {
       res.set_null();
     } else {
-      ret = ObArithOpWrap()(res, l, r);
+      ret = ObArithOpWrap()(res, l, r, args...);
     }
     return ret;
   }

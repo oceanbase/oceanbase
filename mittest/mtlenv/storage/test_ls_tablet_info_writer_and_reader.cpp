@@ -156,13 +156,11 @@ void TestLSTabletInfoWR::fill_tablet_meta()
   TestSchemaUtils::prepare_data_schema(table_schema);
 
   ObTabletID empty_tablet_id;
-  ObTabletTableStoreFlag store_flag;
-  store_flag.set_with_major_sstable();
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(arena_allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, nullptr/*empty sstable*/, ls_handle.get_ls()->get_freezer());
+      lib::Worker::CompatMode::MYSQL, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;

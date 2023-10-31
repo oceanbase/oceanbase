@@ -23,6 +23,7 @@
 #include "ob_transfer_lock_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/report/ob_tablet_table_updater.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "ob_rebuild_service.h"
@@ -1802,21 +1803,17 @@ int ObTransferHandler::report_to_meta_table_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  observer::ObIMetaReport *reporter = GCTX.ob_service_;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
   } else if (!task_info.is_valid()) {
     LOG_WARN("reoirt to meta table get invalid argument", K(ret), K(task_info));
-  } else if (OB_ISNULL(reporter)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta report shuold not be NULL", K(ret), KP(reporter));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
       const ObTransferTabletInfo &tablet_info = task_info.tablet_list_.at(i);
-      if (OB_SUCCESS != (tmp_ret = reporter->submit_tablet_update_task(
-          task_info.tenant_id_, task_info.dest_ls_id_, tablet_info.tablet_id_))) {
+      if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
+          task_info.dest_ls_id_, tablet_info.tablet_id_))) {
         LOG_WARN("failed to submit tablet update task", K(ret), K(tablet_info), K(task_info));
       }
     }
@@ -2159,7 +2156,7 @@ int ObTransferHandler::stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool
 int ObTransferHandler::clear_prohibit_medium_flag_(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_prohibit_medium_flag(ls_id, ObProhibitScheduleMediumMap::TRANSFER))) {
+  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_prohibit_medium_flag(ls_id, compaction::ObProhibitScheduleMediumMap::ProhibitFlag::TRANSFER))) {
     LOG_WARN("failed to clear prohibit schedule medium flag", K(ret), K(ls_id));
   }
   return ret;

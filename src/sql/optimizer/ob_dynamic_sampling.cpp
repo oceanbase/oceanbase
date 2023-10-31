@@ -851,6 +851,7 @@ int ObDynamicSampling::estimate_table_block_count_and_row_count(const ObDSTableP
   ObSEArray<ObTabletID, 4> tablet_ids;
   ObSEArray<ObObjectID, 4> partition_ids;
   ObSEArray<EstimateBlockRes, 4> estimate_result;
+  ObArray<uint64_t> column_group_ids;
   if (OB_ISNULL(ctx_->get_exec_ctx()) || OB_ISNULL(ctx_->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx_->get_exec_ctx()), K(ctx_->get_session_info()));
@@ -861,6 +862,7 @@ int ObDynamicSampling::estimate_table_block_count_and_row_count(const ObDSTableP
                                                                                   param.table_id_,
                                                                                   tablet_ids,
                                                                                   partition_ids,
+                                                                                  column_group_ids,
                                                                                   estimate_result))) {
     LOG_WARN("failed to do estimate block count and row count", K(ret));
   } else {

@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::gv_ob_tablet_compaction_progress_ora_schema(ObTableSchem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       COMPACTION_SCN,       TASK_ID,       STATUS,       DATA_SIZE,       UNFINISHED_DATA_SIZE,       PROGRESSIVE_COMPACTION_ROUND,       CREATE_TIME,       START_TIME,       ESTIMATED_FINISH_TIME     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_PROGRESS )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       COMPACTION_SCN,       TASK_ID,       STATUS,       DATA_SIZE,       UNFINISHED_DATA_SIZE,       PROGRESSIVE_COMPACTION_ROUND,       CREATE_TIME,       START_TIME,       ESTIMATED_FINISH_TIME,       START_CG_ID,       END_CG_ID     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_PROGRESS )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1460,7 +1460,7 @@ int ObInnerTableSchema::gv_ob_tablet_compaction_history_ora_schema(ObTableSchema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS,       START_CG_ID,       END_CG_ID     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1560,7 +1560,7 @@ int ObInnerTableSchema::gv_ob_compaction_diagnose_info_ora_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO     WHERE       STATUS != 'RS_UNCOMPACTED'     AND       STATUS != 'NOT_SCHEDULE' )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO     WHERE       STATUS != 'RS_UNCOMPACTED'     AND       STATUS != 'NOT_SCHEDULE'     AND       STATUS != 'SPECIAL' )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

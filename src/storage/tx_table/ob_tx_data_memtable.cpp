@@ -466,8 +466,7 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
 {
   int ret = OB_SUCCESS;
   ObLSTabletService *tablet_svr = get_tx_data_memtable_mgr()->get_ls_tablet_svr();
-  // Must copy iter param !
-  ObTableIterParam iter_param = get_tx_data_memtable_mgr()->get_tx_data_table()->get_read_schema().iter_param_;
+  const ObTableIterParam &iter_param = get_tx_data_memtable_mgr()->get_tx_data_table()->get_read_schema().iter_param_;
   ObTabletHandle tablet_handle;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
 
@@ -488,7 +487,7 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
       ObSSTable *tmp_sstable = nullptr;
       if (sstable->is_loaded()) {
         tmp_sstable = sstable;
-      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable_handle))) {
+      } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
         STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(sstable));
       } else if (OB_FAIL(sstable_handle.get_sstable(tmp_sstable))) {
         STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));
@@ -921,7 +920,7 @@ int ObTxDataMemtable::flush()
   compaction::ObTabletMergeDagParam param;
   param.ls_id_ = freezer_->get_ls_id();
   param.tablet_id_ = key_.tablet_id_;
-  param.merge_type_ = MINI_MERGE;
+  param.merge_type_ = compaction::MINI_MERGE;
   param.merge_version_ = ObVersionRange::MIN_VERSION;
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {

@@ -50,7 +50,9 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     macro_id_(),
     column_checksums_(sizeof(int64_t), ModulePageAllocator("MacroMetaChksum", MTL_ID())),
     has_string_out_row_(false),
-    all_lob_in_row_(false)
+    all_lob_in_row_(false),
+    agg_row_len_(0),
+    agg_row_buf_(nullptr)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -86,7 +88,9 @@ ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
     macro_id_(),
     column_checksums_(sizeof(int64_t), ModulePageAllocator(allocator, "MacroMetaChksum")),
     has_string_out_row_(false),
-    all_lob_in_row_(false)
+    all_lob_in_row_(false),
+    agg_row_len_(0),
+    agg_row_buf_(nullptr)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -128,12 +132,14 @@ void ObDataBlockMetaVal::reset()
   column_checksums_.reset();
   has_string_out_row_ = false;
   all_lob_in_row_ = false;
+  agg_row_len_ = 0;
+  agg_row_buf_ = nullptr;
 }
 
 bool ObDataBlockMetaVal::is_valid() const
 {
 return DATA_BLOCK_META_VAL_VERSION == version_
-    && rowkey_count_ > 0
+    && rowkey_count_ >= 0
     && column_count_ > 0
     && micro_block_count_ >= 0
     && occupy_size_ >= 0
@@ -148,7 +154,8 @@ return DATA_BLOCK_META_VAL_VERSION == version_
     && compressor_type_ > ObCompressorType::INVALID_COMPRESSOR
     && row_store_type_ < ObRowStoreType::MAX_ROW_STORE
     && logic_id_.is_valid()
-    && macro_id_.is_valid();
+    && macro_id_.is_valid()
+    && (0 == agg_row_len_ || nullptr != agg_row_buf_);
 }
 
 int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
@@ -192,6 +199,8 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     macro_id_ = val.macro_id_;
     has_string_out_row_ = val.has_string_out_row_;
     all_lob_in_row_ = val.all_lob_in_row_;
+    agg_row_len_ = val.agg_row_len_;
+    agg_row_buf_ = val.agg_row_buf_;
   }
   return ret;
 }
@@ -269,11 +278,15 @@ DEFINE_SERIALIZE(ObDataBlockMetaVal)
                   original_size_,
                   has_string_out_row_,
                   all_lob_in_row_,
-                  is_last_row_last_flag_);
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, serialize may have bug", K(ret), K(pos), K(start_pos), KPC(this));
+                  is_last_row_last_flag_,
+                  agg_row_len_);
+      if (OB_SUCC(ret)) {
+        MEMCPY(buf + pos, agg_row_buf_, agg_row_len_);
+        pos += agg_row_len_;
+        if (OB_UNLIKELY(length_ != pos - start_pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, serialize may have bug", K(ret), K(pos), K(start_pos), KPC(this));
+        }
       }
     }
   }
@@ -330,11 +343,17 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
                   original_size_,
                   has_string_out_row_,
                   all_lob_in_row_,
-                  is_last_row_last_flag_);
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
+                  is_last_row_last_flag_,
+                  agg_row_len_);
+      if (OB_SUCC(ret)) {
+        if (agg_row_len_ > 0) {
+          agg_row_buf_ = buf + pos;
+          pos += agg_row_len_;
+        }
+        if (OB_UNLIKELY(length_ != pos - start_pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
+        }
       }
     }
   }
@@ -343,9 +362,10 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
 int64_t ObDataBlockMetaVal::get_max_serialize_size() const
 {
   int64_t len = sizeof(*this);
-  len -= sizeof(column_checksums_);
+  len -= (sizeof(column_checksums_) + sizeof(agg_row_buf_));
   len += sizeof(int64_t); // serialize column count
   len += sizeof(int64_t) * column_count_; // serialize each checksum
+  len += agg_row_len_;
   return len;
 }
 DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
@@ -383,7 +403,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
               original_size_,
               has_string_out_row_,
               all_lob_in_row_,
-              is_last_row_last_flag_);
+              is_last_row_last_flag_,
+              agg_row_len_);
+  len += agg_row_len_;
   return len;
 }
 
@@ -429,6 +451,7 @@ int ObDataMacroBlockMeta::deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &al
 {
   int ret = OB_SUCCESS;
   const int64_t &rowkey_count = val_.rowkey_count_;
+  char *agg_row_buf = nullptr;
   char *buf = nullptr;
   const int64_t buf_len = sizeof(ObDataMacroBlockMeta) + sizeof(ObStorageDatum) * rowkey_count;
   if (OB_UNLIKELY(!is_valid())) {
@@ -437,6 +460,10 @@ int ObDataMacroBlockMeta::deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &al
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(buf_len));
+  } else if (0 != val_.agg_row_len_
+      && OB_ISNULL(agg_row_buf = static_cast<char *>(allocator.alloc(val_.agg_row_len_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory for agg row", K(ret), K_(val));
   } else {
     ObDataMacroBlockMeta *meta = new (buf) ObDataMacroBlockMeta(allocator);
     ObStorageDatum *endkey = new (buf + sizeof(ObDataMacroBlockMeta)) ObStorageDatum[rowkey_count];
@@ -451,13 +478,22 @@ int ObDataMacroBlockMeta::deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &al
       } else if (OB_FAIL(meta->end_key_.assign(endkey, rowkey_count))) {
         LOG_WARN("fail to assign rowkey", K(ret), KP(endkey), K(rowkey_count));
       } else {
+        if (val_.agg_row_len_ > 0) {
+          MEMCPY(agg_row_buf, val_.agg_row_buf_, val_.agg_row_len_);
+          meta->val_.agg_row_buf_ = agg_row_buf;
+        }
         dst = meta;
       }
     }
-    if (OB_FAIL(ret) && OB_NOT_NULL(meta)) {
-      meta->~ObDataMacroBlockMeta();
-      allocator.free(buf);
-      meta = nullptr;
+    if (OB_FAIL(ret)) {
+      if (nullptr != meta) {
+        meta->~ObDataMacroBlockMeta();
+        allocator.free(buf);
+        meta = nullptr;
+      }
+      if (nullptr != agg_row_buf) {
+        allocator.free(agg_row_buf);
+      }
     }
   }
   return ret;

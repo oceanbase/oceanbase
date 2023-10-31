@@ -32,8 +32,9 @@
 #include "storage/test_dml_common.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/ob_storage_schema.h"
 #include "share/scn.h"
-
+#include "storage/test_schema_prepare.h"
 
 namespace oceanbase
 {
@@ -75,7 +76,7 @@ namespace memtable
 namespace unittest
 {
 
-class TestCompactionPolicy: public ::testing::Test
+class TestCompactionPolicy : public ::testing::Test
 {
 public:
   static void generate_table_key(
@@ -125,10 +126,8 @@ public:
     ObTabletHandle &tablet_handle);
   static int prepare_freeze_info(
     const int64_t snapshot_gc_ts,
-    common::ObIArray<ObTenantFreezeInfoMgr::FreezeInfo> &freeze_infos,
-    common::ObIArray<share::ObSnapshotInfo> &snapshots);
+    common::ObIArray<share::ObFreezeInfo> &freeze_infos);
 
-  void prepare_schema(share::schema::ObTableSchema &table_schema);
   int construct_array(
       const char *snapshot_list,
       ObIArray<int64_t> &array);
@@ -179,7 +178,7 @@ void TestCompactionPolicy::SetUp()
   int ret = OB_SUCCESS;
 
   share::schema::ObTableSchema table_schema;
-  prepare_schema(table_schema);
+  TestSchemaPrepare::prepare_schema(table_schema);
 
   medium_info_.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
   medium_info_.medium_snapshot_ = 100;
@@ -201,11 +200,9 @@ void TestCompactionPolicy::TearDown()
 
   ObTenantFreezeInfoMgr *freeze_info_mgr = MTL(ObTenantFreezeInfoMgr *);
   ASSERT_TRUE(nullptr != freeze_info_mgr);
-  freeze_info_mgr->info_list_[0].reset();
-  freeze_info_mgr->info_list_[1].reset();
+  freeze_info_mgr->freeze_info_mgr_.freeze_info_.reset();
   freeze_info_mgr->snapshots_[0].reset();
   freeze_info_mgr->snapshots_[1].reset();
-  freeze_info_mgr->snapshot_gc_ts_ = 0;
 }
 
 void TestCompactionPolicy::SetUpTestCase()
@@ -279,7 +276,10 @@ int TestCompactionPolicy::mock_sstable(
   ObTabletID tablet_id;
   tablet_id = TEST_TABLET_ID;
   ObTabletCreateSSTableParam param;
-  if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param))) {
+  ObStorageSchema storage_schema;
+  if (OB_FAIL(storage_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL))) {
+    LOG_WARN("failed to init storage schema", K(ret));
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(storage_schema, tablet_id, 100, param))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(table_key));
   } else {
     param.table_key_ = table_key;
@@ -302,10 +302,10 @@ int TestCompactionPolicy::mock_sstable(
   } else {
     sstable->meta_->basic_meta_.max_merged_trans_version_ = max_merged_trans_version;
     sstable->meta_->basic_meta_.upper_trans_version_ = upper_trans_version;
-    sstable->max_merged_trans_version_ = max_merged_trans_version;
-    sstable->upper_trans_version_ = upper_trans_version;
-    sstable->nested_size_ = 0;
-    sstable->nested_offset_ = 0;
+    sstable->meta_cache_.max_merged_trans_version_ = max_merged_trans_version;
+    sstable->meta_cache_.upper_trans_version_ = upper_trans_version;
+    sstable->meta_cache_.nested_size_ = 0;
+    sstable->meta_cache_.nested_offset_ = 0;
   }
   return ret;
 }
@@ -375,7 +375,6 @@ int TestCompactionPolicy::mock_tablet(
   int ret = OB_SUCCESS;
   ObLSID ls_id = ObLSID(TEST_LS_ID);
   ObTabletID tablet_id = ObTabletID(TEST_TABLET_ID);
-  ObTabletID empty_tablet_id;
   ObTableSchema table_schema;
   TestSchemaUtils::prepare_data_schema(table_schema);
   const lib::Worker::CompatMode &compat_mode = lib::Worker::CompatMode::MYSQL;
@@ -384,11 +383,11 @@ int TestCompactionPolicy::mock_tablet(
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTablet *tablet = nullptr;
 
+  ObTableHandleV2 table_handle;
+  bool need_empty_major_table = false;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = nullptr;
 
-  ObTabletTableStoreFlag table_store_flag;
-  table_store_flag.set_without_major_sstable();
 
   if (OB_ISNULL(t3m)) {
     ret = OB_ERR_UNEXPECTED;
@@ -403,7 +402,7 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, tablet_id,
-      SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, nullptr, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, table_schema, compat_mode, need_empty_major_table, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {
@@ -621,23 +620,20 @@ int TestCompactionPolicy::prepare_tablet(
 
 int TestCompactionPolicy::prepare_freeze_info(
   const int64_t snapshot_gc_ts,
-  common::ObIArray<ObTenantFreezeInfoMgr::FreezeInfo> &freeze_infos,
-  common::ObIArray<share::ObSnapshotInfo> &snapshots)
+  common::ObIArray<share::ObFreezeInfo> &freeze_infos)
 {
   int ret = OB_SUCCESS;
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
-  bool changed = false;
-  int64_t min_major_snapshot = INT64_MAX;
 
   if (OB_ISNULL(mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mgr is unexpected null", K(ret));
-  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts,
-                                      freeze_infos,
-                                      snapshots,
-                                      min_major_snapshot,
-                                      changed))) {
-    LOG_WARN("failed to update info", K(ret));
+  } else {
+    share::ObFreezeInfoList &info_list = mgr->freeze_info_mgr_.freeze_info_;
+    info_list.reset();
+
+    info_list.frozen_statuses_.assign(freeze_infos);
+    info_list.latest_snapshot_gc_scn_.val_ = snapshot_gc_ts;
   }
   return ret;
 }
@@ -657,57 +653,6 @@ static const int64_t TENANT_ID = 1;
 static const int64_t TABLE_ID = 7777;
 static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
 static const int64_t TEST_COLUMN_CNT = 6;
-
-void TestCompactionPolicy::prepare_schema(share::schema::ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  int64_t micro_block_size = 16 * 1024;
-  const uint64_t tenant_id = TENANT_ID;
-  const uint64_t table_id = TABLE_ID;
-  share::schema::ObColumnSchemaV2 column;
-
-  //generate data table schema
-  table_schema.reset();
-  ret = table_schema.set_table_name("test_merge_multi_version");
-  ASSERT_EQ(OB_SUCCESS, ret);
-  table_schema.set_tenant_id(tenant_id);
-  table_schema.set_tablegroup_id(1);
-  table_schema.set_database_id(1);
-  table_schema.set_table_id(table_id);
-  table_schema.set_rowkey_column_num(TEST_ROWKEY_COLUMN_CNT);
-  table_schema.set_max_used_column_id(TEST_COLUMN_CNT);
-  table_schema.set_block_size(micro_block_size);
-  table_schema.set_compress_func_name("none");
-  table_schema.set_row_store_type(FLAT_ROW_STORE);
-  //init column
-  char name[OB_MAX_FILE_NAME_LENGTH];
-  memset(name, 0, sizeof(name));
-  const int64_t column_ids[] = {16,17,20,21,22,23,24,29};
-  for(int64_t i = 0; i < TEST_COLUMN_CNT; ++i){
-    ObObjType obj_type = ObIntType;
-    const int64_t column_id = column_ids[i];
-
-    if (i == 1) {
-      obj_type = ObVarcharType;
-    }
-    column.reset();
-    column.set_table_id(table_id);
-    column.set_column_id(column_id);
-    sprintf(name, "test%020ld", i);
-    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
-    column.set_data_type(obj_type);
-    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-    column.set_data_length(10);
-    if (i < TEST_ROWKEY_COLUMN_CNT) {
-      column.set_rowkey_position(i + 1);
-    } else {
-      column.set_rowkey_position(0);
-    }
-    COMMON_LOG(INFO, "add column", K(i), K(column));
-    ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
-  }
-  COMMON_LOG(INFO, "dump stable schema", LITERAL_K(TEST_ROWKEY_COLUMN_CNT), K(table_schema));
-}
 
 TEST_F(TestCompactionPolicy, basic_create_sstable)
 {
@@ -868,6 +813,14 @@ TEST_F(TestCompactionPolicy, basic_prepare_tablet)
 TEST_F(TestCompactionPolicy, check_mini_merge_basic)
 {
   int ret = OB_SUCCESS;
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
   const char *key_data =
       "table_type    start_scn    end_scn    max_ver    upper_ver\n"
       "10            0            1          1          1        \n"
@@ -897,11 +850,12 @@ TEST_F(TestCompactionPolicy, check_minor_merge_basic)
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   ASSERT_TRUE(nullptr != mgr);
 
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
 
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
@@ -931,13 +885,16 @@ TEST_F(TestCompactionPolicy, check_no_need_minor_merge)
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   ASSERT_TRUE(nullptr != mgr);
 
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(320, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(400, 1, 0)));
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 320;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 400;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
 
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
@@ -967,12 +924,14 @@ TEST_F(TestCompactionPolicy, check_major_merge_basic)
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   ASSERT_TRUE(nullptr != mgr);
 
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(340, 1, 0)));
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 340;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
 
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
@@ -1003,12 +962,14 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   ASSERT_TRUE(nullptr != mgr);
 
-  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
-  common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(340, 1, 0)));
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+  frozen_val.val_ = 340;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
 
-  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const char *key_data =
@@ -1079,6 +1040,39 @@ TEST_F(TestCompactionPolicy, test_medium_info_serialize)
   }
 }
 
+TEST_F(TestCompactionPolicy, test_minor_dag_intersect)
+{
+  ObTabletMergeExecuteDag dag1;
+  dag1.merge_type_ = MINOR_MERGE;
+  dag1.ls_id_ = ObLSID(1);
+  dag1.tablet_id_ = ObTabletID(1);
+
+  ObTabletMergeExecuteDag dag2;
+  dag2.merge_type_ = MINOR_MERGE;
+  dag2.ls_id_ = ObLSID(1);
+  dag2.tablet_id_ = ObTabletID(1);
+
+  dag1.result_.scn_range_.start_scn_.val_ = 10;
+  dag1.result_.scn_range_.end_scn_.val_ = 30;
+
+  dag2.result_.scn_range_.start_scn_.val_ = 25;
+  dag2.result_.scn_range_.end_scn_.val_ = 30;
+  // if scn_range cross, means dag equal
+  ASSERT_EQ(true, (dag1 == dag2));
+
+  dag2.result_.scn_range_.start_scn_.val_ = 5;
+  dag2.result_.scn_range_.end_scn_.val_ = 15;
+  ASSERT_EQ(true, (dag1 == dag2));
+
+  dag2.result_.scn_range_.start_scn_.val_ = 30;
+  dag2.result_.scn_range_.end_scn_.val_ = 35;
+  ASSERT_EQ(false, (dag1 == dag2));
+
+  dag2.result_.scn_range_.start_scn_.val_ = 5;
+  dag2.result_.scn_range_.end_scn_.val_ = 10;
+  ASSERT_EQ(false, (dag1 == dag2));
+}
+
 } //unittest
 } //oceanbase
 
@@ -1087,7 +1081,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_compaction_policy.log*");
   OB_LOGGER.set_file_name("test_compaction_policy.log");
-  OB_LOGGER.set_log_level("DEBUG");
+  OB_LOGGER.set_log_level("INFO");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

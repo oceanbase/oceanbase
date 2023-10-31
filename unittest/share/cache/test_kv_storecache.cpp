@@ -153,9 +153,7 @@ TEST(ObKVGlobalCache, normal)
   ASSERT_NE(OB_SUCCESS, ret);
   uint64_t tenant_id_ = 900;
   int64_t washable_size = -1;
-  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, -10);
-  ASSERT_NE(OB_SUCCESS, ret);
-  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, 110);
+  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size);
   ASSERT_NE(OB_SUCCESS, ret);
 
   //repeat init
@@ -249,30 +247,27 @@ TEST_F(TestKVCache, test_hazard_version)
   ObKVCacheInstKey inst_key(1, tenant_id_);
   ObKVCacheInstHandle inst_handle;
   ObKVGlobalCache::get_instance().insts_.get_cache_inst(inst_key, inst_handle);
-  GlobalHazardVersion &hazard_version = ObKVGlobalCache::get_instance().map_.global_hazard_version_;
+  ObKVCacheHazardStation &hazard_station = ObKVGlobalCache::get_instance().map_.global_hazard_station_;
 
   ret = cache.init("test");
   ASSERT_EQ(ret, OB_SUCCESS);
 
-  COMMON_LOG(INFO, "********** test get hazard thread store **********");
-  KVCacheHazardThreadStore *ts = nullptr;
-  int64_t thread_id = get_itid();
-  hazard_version.get_thread_store(ts);
-  COMMON_LOG(INFO, "thread store:", KP(ts), K(ts->thread_id_), K(ts->inited_));
-
   COMMON_LOG(INFO, "********** test hazard delete node **********");
   TestNode *node = nullptr;
   for (int64_t i = 0 ; i < 20 ; ++i) {
-    ret = hazard_version.acquire();
+    int64_t slot_id = -1;
+    ret = hazard_station.acquire(slot_id);
     ASSERT_EQ(OB_SUCCESS, ret);
-    ASSERT_LE(ts->acquired_version_, hazard_version.version_);
-    hazard_version.print_current_status();
+    ObKVCacheHazardSlot &slot = hazard_station.hazard_slots_[slot_id];
+    COMMON_LOG(INFO, "hazard slot:", K(slot));
+    ASSERT_LE(slot.acquired_version_, hazard_station.version_);
+    hazard_station.print_current_status();
     node = new TestNode();
     node->id_ = i;
-    hazard_version.delete_node(node);
-    hazard_version.release();
-    ASSERT_EQ(ts->acquired_version_, UINT64_MAX);
-    hazard_version.print_current_status();
+    hazard_station.delete_node(slot_id, node);
+    hazard_station.release(slot_id);
+    ASSERT_EQ(slot.acquired_version_, UINT64_MAX);
+    hazard_station.print_current_status();
     COMMON_LOG(INFO, "-----");
   }
 }
@@ -296,7 +291,7 @@ TEST_F(TestKVCache, test_func)
   ObKVCacheInstKey inst_key(0, tenant_id_);
   ObKVCacheInstHandle inst_handle;
   ObKVGlobalCache::get_instance().insts_.get_cache_inst(inst_key, inst_handle);
-  GlobalHazardVersion &hazard_version = ObKVGlobalCache::get_instance().map_.global_hazard_version_;
+  ObKVCacheHazardStation &hazard_station = ObKVGlobalCache::get_instance().map_.global_hazard_station_;
   ObKVCacheStore &store = ObKVGlobalCache::get_instance().store_;
 
   key.v_ = 900;
@@ -593,6 +588,7 @@ TEST_F(TestKVCache, test_washable_size)
   typedef TestKVCacheValue<V_SIZE> TestValue;
 
   int ret = OB_SUCCESS;
+  int64_t washable_size = -1;
   ObKVCache<TestKey, TestValue> cache;
   TestKey key;
   TestValue value;
@@ -610,23 +606,16 @@ TEST_F(TestKVCache, test_washable_size)
   ret = cache.init("test");
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // test calculate washable size before putting kv
-  int64_t washable_size = -1;
-  ret = ObKVGlobalCache::get_instance().get_washable_size(tenant_id_, washable_size);
-  COMMON_LOG(INFO, "washable size before put,", K(ret), K(tenant_id_), K(washable_size));
-  ASSERT_EQ(OB_SUCCESS, ret);
-
   //test put and wash
+  ObKVGlobalCache::get_instance().wash();
   for (int64_t i = 0; i < upper_mem_limit_ / V_SIZE * 10; ++i) {
     key.v_ = i;
     ret = cache.put(key, value);
     ASSERT_EQ(OB_SUCCESS, ret);
-    ret = ObKVGlobalCache::get_instance().get_washable_size(tenant_id_, washable_size);
-    COMMON_LOG(INFO, "washable size,",K(ret), K(tenant_id_), K(washable_size));
-    ASSERT_EQ(OB_SUCCESS, ret);
   }
 
   // test calculate wash size after putting kv
+  ObKVGlobalCache::get_instance().wash();
   ret = ObKVGlobalCache::get_instance().get_washable_size(tenant_id_, washable_size);
   COMMON_LOG(INFO, "washable size after push,", K(ret), K(tenant_id_), K(washable_size));
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -639,29 +628,6 @@ TEST_F(TestKVCache, test_washable_size)
     COMMON_LOG(INFO, "washable size,",K(ret), K(tenant_id_), K(washable_size));
     ASSERT_EQ(OB_SUCCESS, ret);
   }
-
-  COMMON_LOG(INFO, "start get washable size by 100% *********************************");
-  start_time = ObTimeUtility::current_time();
-  for (int i = 0 ; i < 3000 ; ++i) {
-    ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size);
-  }
-  cur_time = ObTimeUtility::current_time();
-  get_wash_time = cur_time - start_time;
-  COMMON_LOG(INFO, "get washable time,", K(washable_size), K(get_wash_time));
-
-  COMMON_LOG(INFO, "start get washable size by 1/8 *********************************");
-  start_time = ObTimeUtility::current_time();
-  for (int i = 0 ; i < 3000 ; ++i) {
-    ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, 3);
-  }
-  cur_time = ObTimeUtility::current_time();
-  get_wash_time = cur_time - start_time;
-  COMMON_LOG(INFO, "get washable time by percentage 10,", K(washable_size), K(get_wash_time));
-
-  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, 2);
-  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, 4);
-  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, 5);
-  ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, 6);
 
   sleep(1);
   // ASSERT_TRUE(cache.size(tenant_id_) < upper_mem_limit_);

@@ -112,6 +112,7 @@ private:
   inline int write_interval_ds(const ObObj &obj);
   inline int write_ext(const int64_t ext_value);
   inline int write_urowid(const ObObj &obj, ObObj *clone_obj);
+  inline int write_decimal_int(const ObObj &obj, ObObj *clone_obj);
   inline int get_int_byte(int64_t int_value);
   inline bool old_text_format () const { return old_text_format_; }
 private:

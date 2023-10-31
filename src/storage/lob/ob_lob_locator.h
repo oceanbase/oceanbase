@@ -45,6 +45,10 @@ public:
   int fill_lob_locator_v2(blocksstable::ObDatumRow &row,
                           const ObTableAccessContext &access_ctx,
                           const ObTableAccessParam &access_param);
+  int fill_lob_locator_v2(common::ObDatum &datum,
+                          const ObColumnParam &col_param,
+                          const ObTableIterParam &iter_param,
+                          const ObTableAccessContext &access_ctx);
   int fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, bool is_systable);
   void update_lob_locator_ctx(uint64_t table_id, uint64_t tablet_id, int64_t tx_id) {
     table_id_ = table_id;

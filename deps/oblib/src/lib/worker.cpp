@@ -38,9 +38,10 @@ void * __attribute__((weak)) alloc_worker()
   return (&worker);
 }
 
-void __attribute__((weak)) common_yield()
+int __attribute__((weak)) common_yield()
 {
   // do nothing;
+  return OB_SUCCESS;
 }
 
 }
@@ -76,8 +77,12 @@ Worker::~Worker()
 
 Worker::Status Worker::check_wait()
 {
-  common_yield();
-  return WS_NOWAIT;
+  Worker::Status ret_status = WS_NOWAIT;
+  int ret = common_yield();
+  if (OB_SUCCESS != ret && OB_CANCELED != ret) {
+    ret_status = WS_INVALID;
+  }
+  return ret_status;
 }
 
 

@@ -153,30 +153,6 @@ int ObServerUtils::cal_all_part_disk_size(const int64_t suggested_data_disk_size
   return ret;
 }
 
-int ObServerUtils::check_slog_data_binding(
-    const char *sstable_dir,
-    const char *slog_dir)
-{
-  int ret = OB_SUCCESS;
-  struct statvfs sstable_svfs;
-  struct statvfs slog_svfs;
-  if (OB_ISNULL(sstable_dir) || OB_ISNULL(slog_dir)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), KP(sstable_dir), KP(slog_dir));
-  } else if (OB_UNLIKELY(0 != statvfs(sstable_dir, &sstable_svfs))) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to get sstable directory vfs", K(ret), K(sstable_dir));
-  } else if (OB_UNLIKELY(0 != statvfs(slog_dir, &slog_svfs))) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to get slog directory vfs", K(ret), K(slog_dir));
-  } else if (sstable_svfs.f_fsid != slog_svfs.f_fsid) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("SLOG and datafile must be on the same disk", K(ret), K(sstable_svfs.f_fsid),
-        K(slog_svfs.f_fsid));
-  }
-  return ret;
-}
-
 const char *ObServerUtils::build_syslog_file_info(const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;

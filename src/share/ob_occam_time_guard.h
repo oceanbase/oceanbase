@@ -237,7 +237,7 @@ private:
 class ObOccamTimeGuard
 {
 public:
-  ObOccamTimeGuard(const uint32_t warn_threshold,
+  ObOccamTimeGuard(const uint64_t warn_threshold,
                    const char *file,
                    const char *func,
                    const char *mod)
@@ -268,6 +268,11 @@ public:
       }
       ::oceanbase::common::OB_PRINT(log_mod_, OB_LOG_LEVEL_DIRECT_NO_ERRCODE(WARN), OB_SUCCESS, strbuffer, LOG_KVS(K(*this)));
     }
+  }
+  void reuse()
+  {
+    idx_ = 0;
+    last_click_ts_ = common::ObTimeUtility::current_time();
   }
   bool is_timeout()
   {
@@ -348,7 +353,7 @@ protected:
 protected:
   static constexpr int64_t CAPACITY = 16;
 protected:
-  const uint32_t warn_threshold_;
+  const uint64_t warn_threshold_;
   uint32_t idx_;
   int64_t last_click_ts_;
   const char * const file_;

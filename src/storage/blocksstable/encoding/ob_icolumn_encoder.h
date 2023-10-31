@@ -91,6 +91,8 @@ public:
 
   virtual int get_row_checksum(int64_t &checksum) const;
   virtual int store_meta(ObBufferWriter &buf_writer) = 0;
+  //Only for encoding pre-allocated space
+  virtual int get_encoding_store_meta_need_space(int64_t &need_size) const = 0;
   // Store data to row.
   // %buf may be NULL for bit packing column.
   // copy data to %buf for fix/var length column.
@@ -130,6 +132,14 @@ public:
     bits_size += desc_.bit_packing_length_ * row_cnt;
     bits_size = (bits_size + CHAR_BIT - 1) / CHAR_BIT;
     fix_data_size = bits_size + desc_.fix_data_length_ * row_cnt;
+  }
+
+  //Only for encoding pre-allocated space
+  inline int64_t calc_encoding_fix_data_need_space()
+  {
+    int64_t bits_size = 0, fix_data_size = 0;
+    calc_fix_data_size(ctx_->col_datums_->count(), bits_size, fix_data_size);
+    return fix_data_size + sizeof(uint64_t) + 2 /* max extend_value_bit */ * ctx_->col_datums_->count();;
   }
 
   virtual int store_fix_data(ObBufferWriter &buf_writer) = 0;

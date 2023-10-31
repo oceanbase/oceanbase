@@ -521,7 +521,11 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           src_expr->locate_datum_for_write(eval_ctx_).set_int(group_idx);
         }
       }
-
+      bool need_adjust_decimal_int =
+        (src_meta.type_ == ObDecimalIntType && dst_expr->datum_meta_.type_ == ObDecimalIntType
+         && ObDatumCast::need_scale_decimalint(src_meta.scale_, src_meta.precision_,
+                                               dst_expr->datum_meta_.scale_,
+                                               dst_expr->datum_meta_.precision_));
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (src_expr == dst_expr) {
@@ -537,7 +541,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
         // 内存， 可能出现结果不对
       } else if (src_meta.type_ == dst_expr->datum_meta_.type_
                  && src_meta.cs_type_ == dst_expr->datum_meta_.cs_type_
-                 && src_obj_meta.has_lob_header() == dst_expr->obj_meta_.has_lob_header()) {
+                 && src_obj_meta.has_lob_header() == dst_expr->obj_meta_.has_lob_header()
+                 && !need_adjust_decimal_int) {
         // 将values中数据copy到output中
         if (OB_FAIL(src_expr->eval(eval_ctx_, datum))) {
           // catch err and print log later

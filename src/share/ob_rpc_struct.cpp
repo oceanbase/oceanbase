@@ -5041,6 +5041,12 @@ int ObRootMinorFreezeArg::assign(const ObRootMinorFreezeArg &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObTabletMajorFreezeArg,
+                    tenant_id_,
+                    ls_id_,
+                    tablet_id_,
+                    is_rebuild_column_group_);
+
 OB_SERIALIZE_MEMBER(ObSyncPGPartitionMTFinishArg, server_, version_);
 
 OB_SERIALIZE_MEMBER(ObCheckDanglingReplicaFinishArg, server_, version_, dangling_count_);
@@ -8875,10 +8881,10 @@ int ObEstBlockArgElement::assign(const ObEstBlockArgElement &other)
   tenant_id_ = other.tenant_id_;
   tablet_id_ = other.tablet_id_;
   ls_id_ = other.ls_id_;
-  return ret;
+  return column_group_ids_.assign(other.column_group_ids_);
 }
 
-OB_SERIALIZE_MEMBER(ObEstBlockArgElement, tenant_id_, tablet_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObEstBlockArgElement, tenant_id_, tablet_id_, ls_id_, column_group_ids_);
 
 
 int ObEstBlockArg::assign(const ObEstBlockArg &other)
@@ -8895,10 +8901,16 @@ int ObEstBlockResElement::assign(const ObEstBlockResElement &other)
   micro_block_count_ = other.micro_block_count_;
   sstable_row_count_ = other.sstable_row_count_;
   memtable_row_count_ = other.memtable_row_count_;
+  if (OB_FAIL(cg_macro_cnt_arr_.assign(other.cg_macro_cnt_arr_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(cg_micro_cnt_arr_.assign(other.cg_micro_cnt_arr_))) {
+    LOG_WARN("failed to assign");
+  }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObEstBlockResElement, macro_block_count_, micro_block_count_, sstable_row_count_, memtable_row_count_);
+OB_SERIALIZE_MEMBER(ObEstBlockResElement, macro_block_count_, micro_block_count_,
+    sstable_row_count_, memtable_row_count_, cg_macro_cnt_arr_, cg_micro_cnt_arr_);
 
 int ObEstBlockRes::assign(const ObEstBlockRes &other)
 {

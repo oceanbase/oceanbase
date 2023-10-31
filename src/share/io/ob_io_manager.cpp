@@ -154,25 +154,25 @@ bool ObIOManager::is_stopped() const
   return !is_working_;
 }
 
-int ObIOManager::read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms)
+int ObIOManager::read(const ObIOInfo &info, ObIOHandle &handle)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(aio_read(info, handle))) {
     LOG_WARN("aio read failed", K(ret), K(info));
-  } else if (OB_FAIL(handle.wait(timeout_ms))) {
-    LOG_WARN("io handle wait failed", K(ret), K(info), K(timeout_ms));
+  } else if (OB_FAIL(handle.wait())) {
+    LOG_WARN("io handle wait failed", K(ret), K(info), K(info.timeout_us_));
   }
   return ret;
 }
 
-int ObIOManager::write(const ObIOInfo &info, const uint64_t timeout_ms)
+int ObIOManager::write(const ObIOInfo &info)
 {
   int ret = OB_SUCCESS;
   ObIOHandle handle;
   if (OB_FAIL(aio_write(info, handle))) {
     LOG_WARN("aio write failed", K(ret), K(info));
-  } else if (OB_FAIL(handle.wait(timeout_ms))) {
-    LOG_WARN("io handle wait failed", K(ret), K(info), K(timeout_ms));
+  } else if (OB_FAIL(handle.wait())) {
+    LOG_WARN("io handle wait failed", K(ret), K(info), K(info.timeout_us_));
   }
   return ret;
 }
@@ -229,12 +229,13 @@ int ObIOManager::pread(ObIOInfo &info, int64_t &read_size)
   } else {
     info.flag_.set_read();
     info.flag_.set_sync();
+    info.timeout_us_ = MAX_IO_WAIT_TIME_MS;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
       LOG_WARN("do inner aio failed", K(ret), K(info));
     } else {
       while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
-        if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
+        if (OB_FAIL(handle.wait())) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync read failed", K(ret), K(info));
           }
@@ -267,12 +268,13 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
   } else {
     info.flag_.set_write();
     info.flag_.set_sync();
+    info.timeout_us_ = MAX_IO_WAIT_TIME_MS;
     ObIOHandle handle;
     if (OB_FAIL(tenant_aio(info, handle))) {
       LOG_WARN("do inner aio failed", K(ret), K(info));
     } else {
       while (OB_SUCC(ret) || OB_TIMEOUT == ret) { // wait to die
-        if (OB_FAIL(handle.wait(MAX_IO_WAIT_TIME_MS))) {
+        if (OB_FAIL(handle.wait())) {
           if (OB_DATA_OUT_OF_RANGE != ret) {
             LOG_WARN("sync write failed", K(ret), K(info));
           }
@@ -288,7 +290,7 @@ int ObIOManager::pwrite(ObIOInfo &info, int64_t &write_size)
   return ret;
 }
 
-int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms)
+int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObRefHolder<ObTenantIOManager> tenant_holder;
@@ -305,8 +307,8 @@ int ObIOManager::detect_read(const ObIOInfo &info, ObIOHandle &handle, const uin
     LOG_WARN("get tenant io manager failed", K(ret), K(info.tenant_id_));
   } else if (OB_FAIL(tenant_holder.get_ptr()->detect_aio(info, handle))) {
     LOG_WARN("tenant io manager do aio failed", K(ret), K(info), KPC(tenant_holder.get_ptr()));
-  } else if (OB_FAIL(handle.wait(timeout_ms))) {
-    LOG_WARN("io handle wait failed", K(ret), K(info), K(timeout_ms));
+  } else if (OB_FAIL(handle.wait())) {
+    LOG_WARN("io handle wait failed", K(ret), K(info));
   }
   return ret;
 }
@@ -549,10 +551,10 @@ int ObIOManager::refresh_tenant_io_config(const uint64_t tenant_id, const ObTena
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
                          tenant_io_config.memory_limit_ <= 0 ||
-                         tenant_io_config.callback_thread_count_ <= 0 ||
+                         tenant_io_config.callback_thread_count_ < 0 ||
                          !tenant_io_config.unit_config_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tenant_io_config));
   } else if (OB_FAIL(get_tenant_io_manager(tenant_id, tenant_holder))) {
     LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_config(tenant_io_config))) {
@@ -660,13 +662,19 @@ ObTenantIOManager::ObTenantIOManager()
   : is_inited_(false),
     is_working_(false),
     ref_cnt_(0),
+    io_memory_limit_(0),
+    request_count_(0),
+    result_count_(0),
     tenant_id_(0),
     io_config_(),
     io_clock_(nullptr),
     io_allocator_(),
     io_scheduler_(nullptr),
     callback_mgr_(),
-    io_config_lock_(ObLatchIds::TENANT_IO_CONFIG_LOCK)
+    io_config_lock_(ObLatchIds::TENANT_IO_CONFIG_LOCK),
+    group_id_index_map_(),
+    io_request_pool_(),
+    io_result_pool_()
 {
 
 }
@@ -689,8 +697,8 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
         || nullptr == io_scheduler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(io_config), KP(io_scheduler));
-  } else if (OB_FAIL(io_allocator_.init(tenant_id, io_config.memory_limit_))) {
-    LOG_WARN("init io allocator failed", K(ret), K(tenant_id), K(io_config.memory_limit_));
+  } else if (OB_FAIL(init_memory_pool(tenant_id, io_config.memory_limit_))) {
+    LOG_WARN("init tenant io memory pool failed", K(ret), K(io_config), K(io_memory_limit_), K(request_count_), K(request_count_));
   } else if (OB_FAIL(io_tracer_.init(tenant_id))) {
     LOG_WARN("init io tracer failed", K(ret));
   } else if (OB_FAIL(alloc_io_clock(io_allocator_, io_clock_))) {
@@ -731,6 +739,11 @@ void ObTenantIOManager::destroy()
   io_tracer_.destroy();
   io_scheduler_ = nullptr;
   tenant_id_ = 0;
+  io_memory_limit_ = 0;
+  request_count_ = 0;
+  result_count_ = 0;
+  io_request_pool_.destroy();
+  io_result_pool_.destroy();
   group_id_index_map_.destroy();
   io_allocator_.destroy();
   is_inited_ = false;
@@ -740,14 +753,14 @@ int ObTenantIOManager::start()
 {
   int ret = OB_SUCCESS;
   static const int64_t DEFAULT_QUEUE_DEPTH = 100000;
+  int64_t callback_thread_count = io_config_.get_callback_thread_count();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (is_working()) {
     // do nothing
-  } else if (OB_FAIL(callback_mgr_.init(tenant_id_, io_config_.callback_thread_count_,
-                                        DEFAULT_QUEUE_DEPTH, &io_allocator_))) {
-    LOG_WARN("init callback manager failed", K(ret), K(tenant_id_), K(io_config_.callback_thread_count_));
+  } else if (OB_FAIL(callback_mgr_.init(tenant_id_, callback_thread_count, DEFAULT_QUEUE_DEPTH, &io_allocator_))) {
+    LOG_WARN("init callback manager failed", K(ret), K(tenant_id_), K(callback_thread_count));
   } else {
     is_working_ = true;
   }
@@ -765,12 +778,150 @@ bool ObTenantIOManager::is_working() const
   return ATOMIC_LOAD(&is_working_);
 }
 
+int ObTenantIOManager::calc_io_memory(const int64_t memory)
+{
+  int ret = OB_SUCCESS;
+  int64_t memory_benchmark = memory / (1L * 1024L * 1024L * 1024L); //base ob 1G
+  //1w req占用1.52M
+  //1w result占用2.44M
+  if (memory_benchmark <= 1) {
+    //1G租户上限共256MB，预分配5w个request(7.6MB)和result(12.2MB)
+    request_count_ = 50000;
+    result_count_ = 50000;
+    io_memory_limit_ = 256L * 1024L * 1024L;
+  } else if (memory_benchmark <= 4) {
+    //4G租户上限共1G，预分配10w个request(15.2MB)和result(24.4MB)
+    request_count_ = 100000;
+    result_count_ = 100000;
+    io_memory_limit_ = 1024 * 1024L * 1024L;
+  } else if (memory_benchmark <= 8) {
+    //8G租户上限共2G，预分配20w个request和result
+    request_count_ = 200000;
+    result_count_ = 200000;
+    io_memory_limit_ = 2048L * 1024L * 1024L;
+  } else {
+    //unlimited，预分配30w个request和result
+    request_count_ = 300000;
+    result_count_ = 300000;
+    io_memory_limit_ = memory;
+  }
+  LOG_INFO("calc tenant io memory success", K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
+  return ret;
+}
+
+int ObTenantIOManager::init_memory_pool(const uint64_t tenant_id, const int64_t memory)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tenant_id <= 0 || memory <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid io argument", K(ret), K(tenant_id), K(memory));
+  } else if (OB_FAIL(calc_io_memory(memory))) {
+    LOG_WARN("calc tenant io memory failed", K(ret), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
+  } else if (OB_FAIL(io_allocator_.init(tenant_id, io_memory_limit_))) {
+    LOG_WARN("init io allocator failed", K(ret), K(tenant_id), K(io_memory_limit_));
+  } else if (OB_FAIL(io_request_pool_.init(request_count_, sizeof(ObIORequest), io_allocator_))) {
+    LOG_WARN("failed to init request memory pool", K(ret), K(request_count_), K(sizeof(ObIORequest)));
+  } else if (OB_FAIL(io_result_pool_.init(result_count_, sizeof(ObIOResult), io_allocator_))) {
+    LOG_WARN("failed to init result memory pool", K(ret), K(result_count_), K(sizeof(ObIOResult)));
+  } else {
+    LOG_INFO("init tenant io memory pool success", K(tenant_id), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
+  }
+  return ret;
+}
+
+int ObTenantIOManager::update_memory_pool(const int64_t memory)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(memory <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid io argument", K(ret), K(memory));
+  } else if (OB_FAIL(calc_io_memory(memory))) {
+    LOG_WARN("calc tenant io memory failed", K(ret), K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
+  } else if (OB_FAIL(io_allocator_.update_memory_limit(io_memory_limit_))) {
+    LOG_WARN("update io memory limit failed", K(ret), K(io_memory_limit_));
+  } else {
+    LOG_INFO("update tenant io memory pool success", K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
+  }
+  //todo qilu :update three pool
+  return ret;
+}
+
+//prepare request and result
+int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &handle, ObIORequest *&io_request)
+{
+  int ret = OB_SUCCESS;
+  ObIOResult *io_result = nullptr;
+  if (OB_FAIL(io_result_pool_.alloc(io_result))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("failed to alloc io result from fixed size pool", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(alloc_io_result(io_result))) {
+        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          LOG_WARN("alloc io result failed, retry until timeout", K(ret));
+          //blocking foreground thread
+          if (OB_FAIL(try_alloc_result_until_timeout(info.timeout_us_, io_result))) {
+            LOG_WARN("retry alloc io result failed", K(ret));
+          }
+        } else {
+          LOG_WARN("alloc io result failed", K(ret), KP(io_result));
+        }
+      } else if (OB_FAIL(io_result->basic_init())) {
+        LOG_WARN("basic init io result failed", K(ret));
+      }
+    }
+  } else {
+    io_result->tenant_io_mgr_.hold(this);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(io_result->io_callback_ = info.callback_)) {
+  } else if (OB_FAIL(io_result->init(info))) {
+    LOG_WARN("init io result failed", K(ret), KPC(io_result));
+  } else if (OB_FAIL(handle.set_result(*io_result))) {
+    LOG_WARN("fail to set result to handle", K(ret), KPC(io_result));
+  } else if (OB_FAIL(io_request_pool_.alloc(io_request))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("failed to alloc io io request from fixed size pool", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(alloc_io_request(io_request))) {
+        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          LOG_WARN("alloc io request failed, retry until timeout", K(ret));
+          //blocking foreground thread
+          if (OB_FAIL(try_alloc_req_until_timeout(info.timeout_us_, io_request))) {
+            LOG_WARN("retry alloc io request failed", K(ret));
+          }
+        } else {
+          LOG_WARN("alloc io request failed", K(ret), KP(io_request));
+        }
+      } else if (OB_FAIL(io_request->basic_init())) {
+        LOG_WARN("basic init io request failed", K(ret));
+      }
+    }
+  } else {
+    io_request->tenant_io_mgr_.hold(this);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(io_request->init(info, io_result))) {
+    LOG_WARN("init io request failed", K(ret), KP(io_request));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(io_request)) {
+    //free io_request manually
+    io_request->free();
+  }
+  return ret;
+}
+
 int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
 {
   int ret = OB_SUCCESS;
   handle.reset();
   ObIORequest *req = nullptr;
-  const int64_t callback_size = nullptr == info.callback_ ? 0 : info.callback_->size();
+  bool data_hang = false;
+  bool slog_hang = false;
   logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -781,14 +932,9 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
-    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk has fatal error");
-  } else if (OB_FAIL(alloc_io_request(io_allocator_, callback_size, req))) {
-    LOG_WARN("alloc io request failed", K(ret), KP(req));
-  } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {
-  } else if (OB_FAIL(handle.set_request(*req))) { // not safe, unless handle is only used after this function.
-    LOG_WARN("fail to set master to handle", K(ret), KP(req));
-  } else if (OB_FAIL(req->init(info))) {
-    LOG_WARN("init request failed", K(ret), K(info), KPC(req));
+    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk or slog disk has fatal error", K(slog_hang), K(data_hang));
+  } else if (OB_FAIL(alloc_req_and_result(info, handle, req))) {
+    LOG_WARN("pre set io args failed", K(ret), K(info));
   } else if (OB_FAIL(io_scheduler_->schedule_request(*req))) {
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
@@ -812,33 +958,33 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (OB_UNLIKELY(info.callback_ != nullptr)) {
+  } else if (OB_UNLIKELY(info.callback_ != nullptr || info.user_data_buf_ != nullptr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("callback should be nullptr", K(ret), K(info.callback_));
-  } else if (OB_FAIL(alloc_io_request(io_allocator_, 0 /*callback = null*/, req))) {
-    LOG_WARN("alloc io request failed", K(ret), KP(req));
-  } else if (FALSE_IT(req->tenant_io_mgr_.hold(this))) {
-  } else if (OB_FAIL(handle.set_request(*req))) { // not safe, unless handle is only used after this function.
-    LOG_WARN("fail to set master to handle", K(ret), KP(req));
-  } else if (OB_FAIL(req->init(info))) {
-    LOG_WARN("init request failed", K(ret), K(info), KPC(req));
+    LOG_WARN("callback and user_data_bug should be nullptr", K(ret), K(info.callback_));
+  } else if (OB_FAIL(alloc_req_and_result(info, handle, req))) {
+    LOG_WARN("pre set io args failed", K(ret), K(info));
   } else if (OB_FAIL(req->prepare())) {
     LOG_WARN("prepare io request failed", K(ret), K(req));
   } else if (FALSE_IT(time_guard.click("prepare_detect_req"))) {
-  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req->io_info_.fd_.device_handle_, device_channel))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req->fd_.device_handle_, device_channel))) {
     LOG_WARN("get device channel failed", K(ret), K(req));
   } else {
-    ObThreadCondGuard guard(req->cond_);
-    if (OB_FAIL(guard.get_ret())) {
-      LOG_ERROR("fail to guard master condition", K(ret));
-    } else if (req->is_canceled_) {
-      ret = OB_CANCELED;
-    } else if (OB_FAIL(device_channel->submit(*req))) {
-      if (OB_EAGAIN != ret) {
-        LOG_WARN("submit io request failed", K(ret), K(*req), KPC(device_channel));
-      }
+    if (OB_ISNULL(req->io_result_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("io result is null", K(ret));
     } else {
-      time_guard.click("device_submit_detect");
+      ObThreadCondGuard guard(req->io_result_->cond_);
+      if (OB_FAIL(guard.get_ret())) {
+        LOG_ERROR("fail to guard master condition", K(ret));
+      } else if (req->is_canceled()) {
+        ret = OB_CANCELED;
+      } else if (OB_FAIL(device_channel->submit(*req))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("submit io request failed", K(ret), K(*req), KPC(device_channel));
+        }
+      } else {
+        time_guard.click("device_submit_detect");
+      }
     }
   }
   if (time_guard.get_diff() > 100000) {// 100ms
@@ -863,7 +1009,7 @@ int ObTenantIOManager::enqueue_callback(ObIORequest &req)
   return ret;
 }
 
-int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
+int ObTenantIOManager::retry_io(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -872,28 +1018,63 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (io_config == io_config_) {
-    // basic config not change, do nothing
+  } else if (OB_FAIL(io_scheduler_->retry_request(req))) {
+    LOG_WARN("retry io request into sender failed", K(ret), K(req));
+  }
+  return ret;
+}
+
+int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
+{
+  int ret = OB_SUCCESS;
+  bool need_adjust_callback = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!is_working())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tenant not working", K(ret), K(tenant_id_));
   } else {
-    MTL_SWITCH(tenant_id_) {
-      if (OB_FAIL(io_allocator_.update_memory_limit(io_config.memory_limit_))) {
-        LOG_WARN("update memory limit failed", K(ret), K(io_config.memory_limit_));
-      } else if (OB_FAIL(callback_mgr_.update_thread_count(io_config.callback_thread_count_))) {
-        LOG_WARN("callback manager adjust thread failed", K(ret), K(io_config));
+    // update basic io config
+    if (io_config_.unit_config_.weight_ != io_config.unit_config_.weight_
+     || io_config_.unit_config_.max_iops_ != io_config.unit_config_.max_iops_
+     || io_config_.unit_config_.min_iops_ != io_config.unit_config_.min_iops_) {
+      LOG_INFO("update io unit config", K(tenant_id_), K(io_config.unit_config_), K(io_config_.unit_config_));
+      if (OB_FAIL(io_clock_->update_clock_unit_config(io_config))) {
+        LOG_WARN("update io clock unit config failed", K(ret), K(io_config), K(io_config_));
       } else {
-        // just update basic config
-        DRWLock::WRLockGuard guard(io_config_lock_);
-        io_config_.memory_limit_ = io_config.memory_limit_;
-        io_config_.callback_thread_count_ = io_config.callback_thread_count_;
         io_config_.unit_config_ = io_config.unit_config_;
-        ATOMIC_SET(&io_config_.enable_io_tracer_, io_config.enable_io_tracer_);
-        if (!io_config.enable_io_tracer_) {
-          io_tracer_.reuse();
-        }
-        if (OB_FAIL(io_clock_->update_io_clocks(io_config_))) {
-          LOG_WARN("refresh io clock failed", K(ret), K(io_config_));
-        } else {
-          LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_), K(io_config), K(io_clock_));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (io_config_.enable_io_tracer_ != io_config.enable_io_tracer_) {
+      LOG_INFO("update io tracer", K(tenant_id_), K(io_config.enable_io_tracer_), K(io_config_.enable_io_tracer_));
+      ATOMIC_SET(&io_config_.enable_io_tracer_, io_config.enable_io_tracer_);
+      if (!io_config.enable_io_tracer_) {
+        io_tracer_.reuse();
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (io_config_.memory_limit_ != io_config.memory_limit_) {
+      LOG_INFO("update io memory limit", K(tenant_id_), K(io_config.memory_limit_), K(io_config_.memory_limit_));
+      if (OB_FAIL(update_memory_pool(io_config.memory_limit_))) {
+        LOG_WARN("fail to update tenant io manager memory pool", K(ret), K(io_memory_limit_), K(io_config.memory_limit_));
+      } else {
+        io_config_.memory_limit_ = io_config.memory_limit_;
+        need_adjust_callback = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (io_config_.callback_thread_count_ != io_config.callback_thread_count_) {
+      LOG_INFO("update io callback thread count", K(tenant_id_), K(io_config.callback_thread_count_), K(io_config_.callback_thread_count_));
+      io_config_.callback_thread_count_ = io_config.callback_thread_count_;
+      need_adjust_callback = true;
+    }
+    if (OB_SUCC(ret) && need_adjust_callback) {
+      int64_t callback_thread_count = io_config_.get_callback_thread_count();
+      MTL_SWITCH(tenant_id_) {
+        if (OB_FAIL(callback_mgr_.update_thread_count(callback_thread_count))) {
+          LOG_WARN("callback manager adjust thread failed", K(ret), K(io_config));
         }
       }
     }
@@ -901,21 +1082,88 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
   return ret;
 }
 
-int ObTenantIOManager::alloc_io_request(ObIAllocator &allocator, const int64_t callback_size, ObIORequest *&req)
+int ObTenantIOManager::try_alloc_req_until_timeout(const int64_t timeout_ts, ObIORequest *&req)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_alloc_count = 0;
+  while (OB_SUCC(ret)) {
+    ++retry_alloc_count;
+    const int64_t current_ts = ObTimeUtility::current_time();
+    if (current_ts > timeout_ts) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("current time is larger than the timeout timestamp", K(ret), K(current_ts), K(timeout_ts), K(retry_alloc_count));
+    } else if (OB_FAIL(alloc_io_request(req))) {
+      if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        const int64_t remain_time = timeout_ts - current_ts;
+        const int64_t sleep_time = MIN(remain_time, 1000L);
+        if (TC_REACH_TIME_INTERVAL(1000L * 1000L)) {
+          LOG_INFO("execute failed, retry later", K(ret), K(remain_time), K(sleep_time), K(retry_alloc_count));
+        }
+        ob_usleep((useconds_t)sleep_time);
+        ret = OB_SUCCESS;
+      }
+    } else {
+      LOG_INFO("retry alloc io_request success", K(retry_alloc_count));
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTenantIOManager::try_alloc_result_until_timeout(const int64_t timeout_ts, ObIOResult *&result)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_alloc_count = 0;
+  while (OB_SUCC(ret)) {
+    ++retry_alloc_count;
+    const int64_t current_ts = ObTimeUtility::current_time();
+    if (current_ts > timeout_ts) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("current time is larger than the timeout timestamp", K(ret), K(current_ts), K(timeout_ts), K(retry_alloc_count));
+    } else if (OB_FAIL(alloc_io_result(result))) {
+      if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        const int64_t remain_time = timeout_ts - current_ts;
+        const int64_t sleep_time = MIN(remain_time, 1000L);
+        if (TC_REACH_TIME_INTERVAL(1000L * 1000L)) {
+          LOG_INFO("execute failed, retry later", K(ret), K(remain_time), K(sleep_time), K(retry_alloc_count));
+        }
+        ob_usleep((useconds_t)sleep_time);
+        ret = OB_SUCCESS;
+      }
+    } else {
+      LOG_INFO("retry alloc io_result success", K(retry_alloc_count));
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTenantIOManager::alloc_io_request(ObIORequest *&req)
 {
   int ret = OB_SUCCESS;
   req = nullptr;
   void *buf = nullptr;
-  const int64_t req_size = sizeof(ObIORequest) + callback_size;
-  if (OB_UNLIKELY(callback_size < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(callback_size));
-  } else if (OB_ISNULL(buf = allocator.alloc(req_size))) {
+  if (OB_ISNULL(buf = io_allocator_.alloc(sizeof(ObIORequest)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret), K(req_size), K(callback_size));
+    LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObIORequest)));
   } else {
     req = new (buf) ObIORequest;
-    req->callback_buf_size_ = callback_size;
+    req->tenant_io_mgr_.hold(this);
+  }
+  return ret;
+}
+
+int ObTenantIOManager::alloc_io_result(ObIOResult *&result)
+{
+  int ret = OB_SUCCESS;
+  result = nullptr;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = io_allocator_.alloc(sizeof(ObIOResult)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObIORequest)));
+  } else {
+    result = new (buf) ObIOResult;
+    result->tenant_io_mgr_.hold(this);
   }
   return ret;
 }
@@ -1383,7 +1631,8 @@ void ObTenantIOManager::print_io_status()
       }
       LOG_INFO("[IO STATUS]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "allocated_memory", io_allocator_.get_allocated_size(),
-          "pre_allocated_count", io_allocator_.get_pre_allocated_count(),
+          "free_request_count", io_request_pool_.get_free_cnt(),
+          "free_result_count", io_result_pool_.get_free_cnt(),
           "callback_queues", queue_count_array);
     }
     if (ATOMIC_LOAD(&io_config_.enable_io_tracer_)) {

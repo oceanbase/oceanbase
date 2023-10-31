@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX RS
+#define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "rootserver/freeze/ob_tenant_major_freeze.h"
@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace rootserver
 {
-using namespace oceanbase::share;
+using namespace share;
 
 int ObMajorFreezeService::init(const uint64_t tenant_id)
 {
@@ -122,9 +122,9 @@ int ObMajorFreezeService::alloc_tenant_major_freeze()
   } else if (nullptr == (buf = common::ob_malloc(len, ObMemAttr(tenant_id_, "tenant_mf_mgr")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret), K_(tenant_id), K(len));
-  } else if (FALSE_IT(tenant_major_freeze_ = new(buf) ObTenantMajorFreeze())) {
+  } else if (FALSE_IT(tenant_major_freeze_ = new(buf) ObTenantMajorFreeze(tenant_id_))) {
     // impossible
-  } else if (OB_FAIL(tenant_major_freeze_->init(tenant_id_, is_primary_service, *GCTX.sql_proxy_,
+  } else if (OB_FAIL(tenant_major_freeze_->init(is_primary_service, *GCTX.sql_proxy_,
              *GCTX.config_, *GCTX.schema_service_, ObAllServerTracer::get_instance()))) {
     LOG_WARN("fail to init tenant_major_freeze", K_(tenant_id), KR(ret), K(is_primary_service));
   } else if (OB_FAIL(tenant_major_freeze_->start())) {

@@ -144,12 +144,12 @@ public:
   ~ObIOUsage();
   int init(const int64_t group_num);
   int refresh_group_num (const int64_t group_num);
-  void accumulate(ObIORequest &req);
+  void accumulate(ObIOResult &result, ObIORequest &request);
   void calculate_io_usage();
   typedef ObSEArray<ObSEArray<double, GROUP_START_NUM>, 2> AvgItems;
   void get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us);
-  void record_request_start(ObIORequest &req);
-  void record_request_finish(ObIORequest &req);
+  void record_request_start(ObIOResult &result);
+  void record_request_finish(ObIOResult &result);
   bool is_request_doing(const int64_t index) const;
   int64_t get_io_usage_num() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
@@ -169,12 +169,10 @@ public:
   ObSysIOUsage();
   ~ObSysIOUsage();
   int init();
-  void accumulate(ObIORequest &req);
+  void accumulate(ObIOResult &result, ObIORequest &request);
   void calculate_io_usage();
   typedef ObSEArray<ObSEArray<double, SYS_RESOURCE_GROUP_CNT>, 2> SysAvgItems;
   void get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us);
-  void record_request_start(ObIORequest &req);
-  void record_request_finish(ObIORequest &req);
   TO_STRING_KV(K(io_stats_), K(io_estimators_), K(group_avg_iops_), K(group_avg_byte_), K(group_avg_rt_us_));
 private:
   ObSEArray<ObSEArray<ObIOStat, SYS_RESOURCE_GROUP_CNT>, 2> io_stats_;
@@ -209,6 +207,7 @@ public:
 
 private:
   void print_sender_status();
+  int try_release_thread();
   void print_io_status();
 private:
   bool is_inited_;
@@ -273,7 +272,7 @@ public:
                       int64_t &tenant_limitation_ts,
                       int64_t &proportion_ts);
   int get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info);
-  TO_STRING_KV(K(is_inited_), K(stop_submit_), KPC(io_queue_), K(tg_id_), K(sender_index_));
+  TO_STRING_KV(K(is_inited_), K(stop_submit_), K(is_retry_sender_), KPC(io_queue_), K(tg_id_), K(sender_index_));
 //private:
   void pop_and_submit();
   int64_t calc_wait_timeout(const int64_t queue_deadline);
@@ -283,6 +282,7 @@ public:
   int tg_id_; // thread group id
   bool is_inited_;
   bool stop_submit_;
+  bool is_retry_sender_;
   ObIAllocator &allocator_;
   ObMClockQueue *io_queue_;
   ObThreadCond queue_cond_;
@@ -301,6 +301,7 @@ public:
   void stop();
   void accumulate(const ObIORequest &req);
   int schedule_request(ObIORequest &req);
+  int retry_request(ObIORequest &req);
   int init_group_queues(const uint64_t tenant_id, const int64_t group_num, ObIOAllocator *io_allocator);
   int update_group_queues(const uint64_t tenant_id, const int64_t group_num);
   int remove_phyqueues(const uint64_t tenant_id);
@@ -313,7 +314,7 @@ private:
   bool is_inited_;
   const ObIOConfig &io_config_;
   ObIAllocator &allocator_;
-  ObSEArray<ObIOSender *, 1> senders_;
+  ObSEArray<ObIOSender *, 1> senders_; //the first sender is for retry_alloc_memory to avoid blocking current sender
   ObIOTuner io_tuner_;
   int64_t schedule_media_id_;
 };
@@ -364,7 +365,7 @@ public:
 
 private:
   void get_events();
-  int on_full_return(ObIORequest &req);
+  int on_full_return(ObIORequest &req, const int64_t complete_size);
   int on_partial_return(ObIORequest &req, const int64_t complete_size);
   int on_partial_retry(ObIORequest &req, const int64_t complete_size);
   int on_full_retry(ObIORequest &req);
@@ -442,6 +443,9 @@ public:
   void wait();
   void destroy();
   virtual void run1() override;
+  void stop_accept_req() { stop_accept_ = true; }
+  void reuse_runner() { stop_accept_ = false; }
+  bool is_stop_accept() { return stop_accept_; }
   int push(ObIORequest &req);
   int pop(ObIORequest *&req);
   int handle(ObIORequest *req);
@@ -450,6 +454,7 @@ public:
 private:
   static const int64_t CALLBACK_WAIT_PERIOD_US = 1000L * 1000L; // 1s
   bool is_inited_;
+  bool stop_accept_;
   int tg_id_;
   ObThreadCond cond_;
   ObFixedQueue<ObIORequest> queue_;
@@ -466,8 +471,10 @@ public:
   void destroy();
 
   int enqueue_callback(ObIORequest &req);
+  void try_release_thread();
+  void get_thread_and_runner_num(int64_t &thread_num, int64_t &runner_count);
   int update_thread_count(const int64_t thread_count);
-  int64_t get_thread_count() const;
+  int64_t get_thread_count();
   int64_t get_queue_depth() const;
   int get_queue_count(ObIArray<int64_t> &queue_count_array);
   TO_STRING_KV(K(is_inited_), K(config_thread_count_), K(queue_depth_), K(runners_), KPC(io_allocator_));
@@ -476,6 +483,7 @@ private:
   bool is_inited_;
   int32_t queue_depth_;
   int64_t config_thread_count_;
+  common::DRWLock lock_;
   ObArray<ObIORunner *> runners_;
   ObIOAllocator *io_allocator_;
 };
@@ -501,11 +509,12 @@ public:
   virtual void handle(void *task) override;
   int get_device_health_status(ObDeviceHealthStatus &dhs, int64_t &device_abnormal_time);
   void reset_device_health();
-  void record_failure(const ObIORequest &req);
+  void record_io_error(const ObIOResult &result, const ObIOInfo &info);
+  void record_io_timeout(const ObIOResult &result, ObIORequest *req);
   int record_timing_task(const int64_t first_id, const int64_t second_id);
 
 private:
-  int record_read_failure(const ObIORequest &req);
+  int record_read_failure(const ObIOInfo &info);
   int record_write_failure();
   void set_device_warning();
   void set_device_error();
@@ -605,13 +614,13 @@ inline bool is_io_aligned(const int64_t value)
 }
 
 inline void align_offset_size(
-    const int64_t offset,
+    const int32_t offset,
     const int64_t size,
-    int64_t &align_offset,
+    int32_t &align_offset,
     int64_t &align_size)
 {
-  align_offset = lower_align(offset, DIO_READ_ALIGN_SIZE);
-  align_size = upper_align(size + offset - align_offset, DIO_READ_ALIGN_SIZE);
+  align_offset = static_cast<int32_t>(lower_align(static_cast<int64_t>(offset), DIO_READ_ALIGN_SIZE));
+  align_size = upper_align(size + static_cast<int64_t>(offset) - align_offset, DIO_READ_ALIGN_SIZE);
 }
 
 typedef ObRefHolder<ObIORequest> RequestHolder;
@@ -633,7 +642,7 @@ private:
 };
 
 
-}// end namespace oceanbase
+}// end namespace common
 }// end namespace oceanbase
 
 #endif//OCEANBASE_LIB_STORAGE_OB_IO_STRUCT_H

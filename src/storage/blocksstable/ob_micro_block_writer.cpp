@@ -24,9 +24,10 @@ ObMicroBlockWriter::ObMicroBlockWriter()
   :micro_block_size_limit_(0),
    column_count_(0),
    rowkey_column_count_(0),
-   data_buffer_("MicrBlocWriter"),
-   index_buffer_("MicrBlocWriter"),
    col_desc_array_(nullptr),
+   row_count_(0),
+   data_buffer_(),
+   index_buffer_(DEFAULT_INDEX_BUFFER_SIZE),
    is_major_(false),
    is_inited_(false)
 {
@@ -41,6 +42,7 @@ int ObMicroBlockWriter::init(
     const int64_t rowkey_column_count,
     const int64_t column_count/* = 0*/,
     const common::ObIArray<share::schema::ObColDesc> *col_desc_array /* nullptr */,
+    const bool need_opt_row_chksum/* false */,
     const bool is_major/* = false*/)
 {
   int ret = OB_SUCCESS;
@@ -65,7 +67,14 @@ int ObMicroBlockWriter::init(
         need_check_lob_ = false;
       }
     }
-    is_inited_ = true;
+    if (OB_NOT_NULL(col_desc_array_ = col_desc_array)) {
+      if (FAILEDx(checksum_helper_.init(col_desc_array_, need_opt_row_chksum))) {
+        STORAGE_LOG(WARN, "fail to init checksum_helper", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -76,29 +85,35 @@ int ObMicroBlockWriter::inner_init()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
-  } else if (data_buffer_.is_dirty()) {
+  } else if (data_buffer_.length() > 0) {
     // has been inner_inited, do nothing
-  } else if (OB_FAIL(data_buffer_.ensure_space(DEFAULT_DATA_BUFFER_SIZE))) {
-    STORAGE_LOG(WARN, "data buffer fail to ensure space.", K(ret));
-  } else if (OB_FAIL(index_buffer_.ensure_space(DEFAULT_INDEX_BUFFER_SIZE))) {
-    STORAGE_LOG(WARN, "index buffer fail to ensure space.", K(ret));
-  } else if (OB_FAIL(reserve_header(column_count_, rowkey_column_count_, is_major_))) {
-    STORAGE_LOG(WARN, "micro block writer fail to reserve header.",
-        K(ret), K_(column_count));
-  } else if (OB_FAIL(index_buffer_.write(static_cast<int32_t>(0)))) {
-    STORAGE_LOG(WARN, "index buffer fail to write first offset.", K(ret));
-  } else if (OB_UNLIKELY(data_buffer_.length() != get_data_base_offset()
-        || index_buffer_.length() != get_index_base_offset())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "check length failed.", K(ret));
+  } else  {
+    if (!data_buffer_.is_inited()) {
+      if (OB_FAIL(data_buffer_.init(DEFAULT_DATA_BUFFER_SIZE))) {
+        STORAGE_LOG(WARN, "fail to init data buffer", K(ret), K(data_buffer_));
+         } else if (OB_FAIL(index_buffer_.init(DEFAULT_DATA_BUFFER_SIZE, DEFAULT_INDEX_BUFFER_SIZE))) {
+        STORAGE_LOG(WARN, "fail to init index buffer", K(ret), K(index_buffer_));
+      }
+    }
+
+    if (FAILEDx(reserve_header(column_count_, rowkey_column_count_, is_major_))) {
+      STORAGE_LOG(WARN, "micro block writer fail to reserve header",
+          K(ret), K_(column_count));
+    } else if (OB_FAIL(index_buffer_.write(static_cast<int32_t>(0)))) {
+      STORAGE_LOG(WARN, "index buffer fail to write first offset", K(ret));
+    } else if (OB_UNLIKELY(data_buffer_.length() != get_data_base_offset()
+          || index_buffer_.length() != get_index_base_offset())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "check length failed", K(ret));
+    }
   }
   return ret;
 }
 
-int ObMicroBlockWriter::try_to_append_row(const int64_t &row_length)
+int ObMicroBlockWriter::try_to_append_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(get_future_block_size(row_length) > block_size_upper_bound_)) {
+  if (OB_UNLIKELY(get_future_block_size() > block_size_upper_bound_)) {
     ret = OB_BUF_NOT_ENOUGH;
   }
   return ret;
@@ -154,33 +169,36 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
   } else if (OB_FAIL(process_out_row_columns(row))) {
     STORAGE_LOG(WARN, "Failed to process out row columns", K(ret), K(row));
   } else {
-    if (OB_UNLIKELY(row.get_column_count() != header_->column_count_)) {
+    if (OB_UNLIKELY(row.get_column_count() != get_header(data_buffer_)->column_count_)) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "append row column count is not consistent with init column count",
-          K(header_->column_count_), K(row.get_column_count()), K(ret));
-    } else if (OB_FAIL(row_writer_.write(rowkey_column_count_, row, data_buffer_.current(),
-            data_buffer_.remain(), pos))) {
+          K(get_header(data_buffer_)->column_count_), K(row.get_column_count()), K(ret));
+    } else if (OB_FAIL(data_buffer_.write(row, rowkey_column_count_, pos))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
-        STORAGE_LOG(WARN, "row writer fail to write row.", K(ret), K(rowkey_column_count_), K(row),
-            K(OB_P(data_buffer_.current())), K(OB_P(data_buffer_.remain())), K(pos));
+        STORAGE_LOG(WARN, "row writer fail to write row.", K(ret), K(rowkey_column_count_),
+            K(row), K(OB_P(data_buffer_.remain())), K(pos));
       }
-    } else if (is_exceed_limit(pos)) {
+    } else if (is_exceed_limit()) {
       STORAGE_LOG(DEBUG, "micro block exceed limit", K(pos),
-          K(header_->row_count_), K(get_block_size()), K(micro_block_size_limit_));
+          K(get_header(data_buffer_)->row_count_), K(get_block_size()), K(micro_block_size_limit_));
+      data_buffer_.pop_back(pos);
       ret = OB_BUF_NOT_ENOUGH;
-    } else if (OB_FAIL(try_to_append_row(pos))) {
+    } else if (OB_FAIL(try_to_append_row())) {
       if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
         STORAGE_LOG(DEBUG, "fail to try append row", K(ret));
+      } else {
+        data_buffer_.pop_back(pos);
       }
-    } else if (OB_FAIL(finish_row(pos))) {
+    } else if (OB_FAIL(finish_row())) {
       STORAGE_LOG(WARN, "micro block writer fail to finish row.", K(ret), K(pos));
-    } else if (header_->has_column_checksum_
-        && OB_FAIL(cal_column_checksum(row, header_->column_checksums_))) {
-      STORAGE_LOG(WARN, "fail to cal column chksum", K(ret), K(row), KPC_(header));
+    } else if (get_header(data_buffer_)->has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
+        row, get_header(data_buffer_)->column_checksums_))) {
+      STORAGE_LOG(WARN, "fail to cal column chksum", K(ret), K(row), KPC(get_header(data_buffer_)));
     } else {
       cal_row_stat(row);
-      if (need_cal_row_checksum()) {
-        micro_block_checksum_ = cal_row_checksum(row, micro_block_checksum_);
+      if (need_cal_row_checksum()
+          && OB_FAIL(checksum_helper_.cal_row_checksum(row.storage_datums_, row.get_column_count()))) {
+        STORAGE_LOG(WARN, "fail to cal row chksum", K(ret), K(row));
       }
     }
   }
@@ -193,20 +211,22 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
   if(!is_inited_){
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "should init writer before append row", K(ret));
-  } else if (OB_UNLIKELY(!data_buffer_.is_dirty())) {
+  } else if (OB_UNLIKELY(data_buffer_.length() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected empty block", K(ret));
   } else {
-    if (last_rows_count_ == header_->row_count_) {
-      header_->single_version_rows_ = 1;
+    ObMicroBlockHeader *header = get_header(data_buffer_);
+    if (last_rows_count_ == header->row_count_) {
+      header->single_version_rows_ = 1;
       STORAGE_LOG(DEBUG, "all rows are single version", K(last_rows_count_));
     }
-    header_->row_index_offset_ = static_cast<int32_t>(data_buffer_.length());
-    header_->contain_uncommitted_rows_ = contain_uncommitted_row_;
-    header_->max_merged_trans_version_ = max_merged_trans_version_;
-    header_->has_string_out_row_ = has_string_out_row_;
-    header_->all_lob_in_row_ = !has_lob_out_row_;
-    header_->is_last_row_last_flag_ = is_last_row_last_flag_;
+    header->row_index_offset_ = static_cast<int32_t>(data_buffer_.length());
+    header->contain_uncommitted_rows_ = contain_uncommitted_row_;
+    header->max_merged_trans_version_ = max_merged_trans_version_;
+    header->has_string_out_row_ = has_string_out_row_;
+    header->all_lob_in_row_ = !has_lob_out_row_;
+    header->is_last_row_last_flag_ = is_last_row_last_flag_;
+
     if (data_buffer_.remain() < get_index_size()) {
       ret = OB_SIZE_OVERFLOW;
       STORAGE_LOG(WARN, "row data buffer is overflow.",
@@ -216,6 +236,7 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
       STORAGE_LOG(WARN, "data buffer fail to write index.",
           K(ret), K(OB_P(index_buffer_.data())), K(get_index_size()));
     } else {
+      calc_column_checksums_ptr(data_buffer_);
       buf = data_buffer_.data();
       size = data_buffer_.length();
     }
@@ -226,17 +247,17 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
 int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
 {
   int ret = OB_SUCCESS;
-  header_->contains_hash_index_ = 0;
+  get_header(data_buffer_)->contains_hash_index_ = 0;
   if (hash_index_builder.is_valid()) {
     if (is_contain_uncommitted_row()) {
       ret = OB_NOT_SUPPORTED;
-    } else if (OB_FAIL(hash_index_builder.build_block(data_buffer_))) {
+    } else if (OB_FAIL(hash_index_builder.build_block(index_buffer_))) {
       if (ret != OB_NOT_SUPPORTED) {
         STORAGE_LOG(WARN, "data buffer fail to write hash index.", K(ret));
       }
     } else {
-      header_->contains_hash_index_ = 1;
-      header_->hash_index_offset_from_end_ = hash_index_builder.estimate_size();
+      get_header(data_buffer_)->contains_hash_index_ = 1;
+      get_header(data_buffer_)->hash_index_offset_from_end_ = hash_index_builder.estimate_size();
     }
   }
   return ret;
@@ -249,13 +270,12 @@ bool ObMicroBlockWriter::has_enough_space_for_hash_index(const int64_t hash_inde
 
 void ObMicroBlockWriter::reset()
 {
-  ObIMicroBlockWriter::reuse();
+  ObIMicroBlockWriter::reset();
   micro_block_size_limit_ = 0;
   column_count_ = 0;
   rowkey_column_count_ = 0;
+  row_count_ = 0;
   is_major_ = false;
-  row_writer_.reset();
-  header_ = nullptr;
   data_buffer_.reset();
   index_buffer_.reset();
   col_desc_array_ = nullptr;
@@ -265,10 +285,9 @@ void ObMicroBlockWriter::reset()
 void ObMicroBlockWriter::reuse()
 {
   ObIMicroBlockWriter::reuse();
-  row_writer_.reset();
   data_buffer_.reuse();
   index_buffer_.reuse();
-  header_ = nullptr;
+  row_count_ = 0;
 }
 
 int ObMicroBlockWriter::check_input_param(
@@ -280,7 +299,7 @@ int ObMicroBlockWriter::check_input_param(
   if (micro_block_size_limit <= 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro block writer input argument.", K(micro_block_size_limit), K(ret));
-  } else if (rowkey_column_count <= 0 ||
+  } else if (rowkey_column_count < 0 ||
       (column_count <= 0 || column_count < rowkey_column_count)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro block writer input argument.", K(ret), K(column_count),
@@ -289,23 +308,20 @@ int ObMicroBlockWriter::check_input_param(
   return ret;
 }
 
-int ObMicroBlockWriter::finish_row(const int64_t length)
+int ObMicroBlockWriter::finish_row()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "should init writer before finish row", K(ret));
-  } else if (length <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "length was invalid", K(length), K(ret));
-  } else if (OB_FAIL(data_buffer_.advance(length))) {
-    STORAGE_LOG(WARN, "data buffer fail to advance.", K(ret));
   } else {
-    int32_t row_offset = static_cast<int32_t>(data_buffer_.length() - header_->header_size_);
+    ObMicroBlockHeader *header = get_header(data_buffer_);
+    int32_t row_offset = static_cast<int32_t>(data_buffer_.length() - header->header_size_);
     if (OB_FAIL(index_buffer_.write(row_offset))) {
       STORAGE_LOG(WARN, "index buffer fail to write row offset.", K(row_offset), K(ret));
     } else {
-      ++ header_->row_count_;
+      header->row_count_++;
+      row_count_++;
     }
   }
   return ret;
@@ -323,24 +339,20 @@ int ObMicroBlockWriter::reserve_header(
     STORAGE_LOG(WARN, "column_count was invalid", K(column_count), K(ret));
   } else {
     const int32_t header_size = ObMicroBlockHeader::get_serialize_size(column_count, need_calc_column_chksum);
-    header_ = reinterpret_cast<ObMicroBlockHeader*>(data_buffer_.data());
-
-    if (OB_FAIL(data_buffer_.advance(header_size))) {
+    if (OB_FAIL(data_buffer_.write_nop(header_size, true))) {
       STORAGE_LOG(WARN, "data buffer fail to advance header size.", K(ret), K(header_size));
     } else {
-      MEMSET(header_, 0, header_size);
-      header_->magic_ = MICRO_BLOCK_HEADER_MAGIC;
-      header_->version_ = MICRO_BLOCK_HEADER_VERSION;
-      header_->header_size_ = header_size;
-      header_->column_count_ = static_cast<int32_t>(column_count);
-      header_->rowkey_column_count_ = static_cast<int32_t>(rowkey_column_count);
-      header_->row_store_type_ = FLAT_ROW_STORE;
-      header_->has_column_checksum_ = need_calc_column_chksum;
-      if (header_->has_column_checksum_) {
-        header_->column_checksums_ = reinterpret_cast<int64_t *>(
+      ObMicroBlockHeader *header = get_header(data_buffer_);
+      header->magic_ = MICRO_BLOCK_HEADER_MAGIC;
+      header->version_ = MICRO_BLOCK_HEADER_VERSION;
+      header->header_size_ = header_size;
+      header->column_count_ = static_cast<int32_t>(column_count);
+      header->rowkey_column_count_ = static_cast<int32_t>(rowkey_column_count);
+      header->row_store_type_ = FLAT_ROW_STORE;
+      header->has_column_checksum_ = need_calc_column_chksum;
+      if (need_calc_column_chksum) {
+        header->column_checksums_ = reinterpret_cast<int64_t *>(
             data_buffer_.data() + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
-      } else {
-        header_->column_checksums_ = nullptr;
       }
     }
   }
@@ -348,9 +360,10 @@ int ObMicroBlockWriter::reserve_header(
   return ret;
 }
 
-bool ObMicroBlockWriter::is_exceed_limit(const int64_t row_length)
+bool ObMicroBlockWriter::is_exceed_limit()
 {
-  return header_->row_count_ > 0 && get_future_block_size(row_length) > micro_block_size_limit_;
+  ObMicroBlockHeader *header = get_header(data_buffer_);
+  return header->row_count_ > 0 && get_future_block_size() > micro_block_size_limit_;
 }
 
 }//end namespace blocksstable

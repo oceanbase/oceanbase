@@ -34,14 +34,6 @@ public:
     UNUSEDx(tenant_id, ls_id);
     return OB_SUCCESS;
   }
-  int submit_tablet_update_task(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id)
-  {
-    UNUSEDx(tenant_id, ls_id, tablet_id);
-    return OB_SUCCESS;
-  }
   int submit_tablet_checksums_task(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

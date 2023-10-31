@@ -145,6 +145,24 @@ public:
 
   static int minus_datetime_datetime(EVAL_FUNC_ARG_DECL);
   static int minus_datetime_datetime_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint32(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint32_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint64(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint64_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint128(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint128_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint256(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint256_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint512(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint512_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint512_with_check(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint512_with_check_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint32_oracle(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint32_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint64_oracle(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint64_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint128_oracle(EVAL_FUNC_ARG_DECL);
+  static int minus_decimalint128_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
 public:
   OB_INLINE static bool is_int_int_out_of_range(int64_t val1, int64_t val2, int64_t res)

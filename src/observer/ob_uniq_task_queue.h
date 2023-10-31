@@ -24,6 +24,7 @@
 #include "share/ob_thread_pool.h"
 #include "share/ob_debug_sync.h"
 #include "share/ob_debug_sync_point.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,10 @@ public:
   virtual int assign_when_equal(const Task &other) = 0;
   // get_group_id() is used for classifying tasks and batch processing
   virtual uint64_t get_group_id() const = 0;
+  // for diagnose
+  virtual void set_start_timestamp() {}
+  virtual int64_t get_start_timestamp() const { return OB_INVALID_TIMESTAMP; }
+  virtual bool need_diagnose() const { return false; }
   // Basic interfaces.
   virtual void reset() = 0;
   virtual bool is_valid() const = 0;
@@ -102,14 +107,15 @@ public:
   virtual ~ObUniqTaskQueue() { }
 
   int init(Process *process, const int64_t thread_num, const int64_t queue_size,
-           const char *thread_name = nullptr);
+           const char *thread_name = nullptr, const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   // init() will trigger start(), we only want to init and start later in some cases
   int start() override;
   int init_only(
       Process *process,
       const int64_t thread_num,
       const int64_t queue_size,
-      const char* thread_name = nullptr);
+      const char* thread_name = nullptr,
+      const uint64_t tenant_id = OB_SERVER_TENANT_ID);
 
   // Add task to queue, never block
   // return value:
@@ -119,6 +125,7 @@ public:
   virtual int add(const Task &task);
 
   virtual int check_exist(const Task &task, bool &exist);
+  virtual int check_processing_exist(const Task &task, bool &exist);
 
   virtual void run1();
 
@@ -126,6 +133,18 @@ public:
   {
     return task_count_;
   }
+
+  int diagnose_waiting_task(ObIArray<Task> &tasks);
+  int diagnose_processing_task(ObIArray<Task> &tasks);
+
+private:
+  const int64_t MAX_DIAGNOSE_NUM = 3;
+#ifdef ERRSIM
+  const int64_t DIAGNOSE_PROCESSING_TIME = 30 * 1000 * 1000L; // 30s
+#else
+  const int64_t DIAGNOSE_PROCESSING_TIME = 20 * 60 * 1000 * 1000L; // 20 min
+#endif
+
 private:
   struct Group : public common::ObDLinkBase<Group>
   {
@@ -180,11 +199,13 @@ private:
 // TODO: init should not trigger start(), have to remove start() out of init()
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::init(Process *updater, const int64_t thread_num,
-                                         const int64_t queue_size, const char *thread_name)
+                                         const int64_t queue_size, const char *thread_name,
+                                         const uint64_t tenant_id/*OB_SERVER_TENANT_ID*/)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_FAIL(init_only(updater, thread_num, queue_size, thread_name))) {
+  if (OB_FAIL(init_only(updater, thread_num, queue_size, thread_name, tenant_id))) {
     SERVER_LOG(WARN, "fail to init only", K(ret), K(thread_num), K(queue_size));
+  } else if (OB_SERVER_TENANT_ID != tenant_id && FALSE_IT(share::ObThreadPool::set_run_wrapper(MTL_CTX()))) {
   } else if (OB_FAIL(start())) {
     inited_ = false;
     SERVER_LOG(WARN, "start thread failed", K(ret), K(thread_num));
@@ -196,10 +217,11 @@ int ObUniqTaskQueue<Task, Process>::init(Process *updater, const int64_t thread_
 
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t thread_num,
-                                              const int64_t queue_size, const char *thread_name)
+                                              const int64_t queue_size, const char *thread_name,
+                                              const uint64_t tenant_id/*OB_SERVER_TENANT_ID*/)
 {
   int ret = common::OB_SUCCESS;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, common::ObModIds::OB_PARTITION_TABLE_TASK);
+  ObMemAttr attr(tenant_id, common::ObModIds::OB_PARTITION_TABLE_TASK);
   SET_USE_500(attr);
   const int64_t group_count = 128;
   if (inited_) {
@@ -249,6 +271,7 @@ template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::check_exist(const Task &task, bool &exist)
 {
   int ret = common::OB_SUCCESS;
+  exist = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "task queue not inited", K(ret));
@@ -256,10 +279,32 @@ int ObUniqTaskQueue<Task, Process>::check_exist(const Task &task, bool &exist)
     ret = common::OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(ret), K(task));
   } else {
-    exist = false;
     common::ObThreadCondGuard guard(cond_);
     const Task *stored_task = nullptr;
     if (nullptr == (stored_task = task_set_.get(task))) {
+      exist = false;
+    } else {
+      exist = true;
+    }
+  }
+  return ret;
+}
+
+template <typename Task, typename Process>
+int ObUniqTaskQueue<Task, Process>::check_processing_exist(const Task &task, bool &exist)
+{
+  int ret = common::OB_SUCCESS;
+  exist = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = common::OB_NOT_INIT;
+    SERVER_LOG(WARN, "task queue not inited", K(ret));
+  } else if (!task.is_valid() || nullptr != task.get_next() || nullptr != task.get_prev()) {
+    ret = common::OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "invalid argument", K(ret), K(task));
+  } else {
+    common::ObThreadCondGuard guard(cond_);
+    const Task *stored_task = nullptr;
+    if (nullptr == (stored_task = processing_task_set_.get(task))) {
       exist = false;
     } else {
       exist = true;
@@ -480,6 +525,57 @@ void ObUniqTaskQueue<Task, Process>::run1()
 }
 
 template <typename Task, typename Process>
+int ObUniqTaskQueue<Task, Process>::diagnose_waiting_task(ObIArray<Task> &tasks)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_FAIL(tasks.reserve(MAX_DIAGNOSE_NUM))) {
+    SERVER_LOG(WARN, "failed to reserve array", K(ret));
+  } else {
+    int64_t add_cnt = 0;
+    common::ObThreadCondGuard guard(cond_);
+    FOREACH_X(iter, task_set_, add_cnt < MAX_DIAGNOSE_NUM) {
+      const Task &task = iter->first;
+      if (task.need_diagnose()
+           && DIAGNOSE_PROCESSING_TIME < ObTimeUtility::current_time() - task.get_add_timestamp()) {
+        if (OB_TMP_FAIL(tasks.push_back(task))) {
+          SERVER_LOG(WARN, "fail to push back array", K(tmp_ret));
+        } else {
+          ++add_cnt;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Task, typename Process>
+int ObUniqTaskQueue<Task, Process>::diagnose_processing_task(ObIArray<Task> &tasks)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_FAIL(tasks.reserve(MAX_DIAGNOSE_NUM))) {
+    SERVER_LOG(WARN, "failed to reserve array", K(ret));
+  } else {
+    int64_t add_cnt = 0;
+    common::ObThreadCondGuard guard(cond_);
+    FOREACH_X(iter, processing_task_set_, add_cnt < MAX_DIAGNOSE_NUM) {
+      const Task &task = iter->first;
+      if (task.need_diagnose()
+          && DIAGNOSE_PROCESSING_TIME < ObTimeUtility::current_time() - task.get_start_timestamp()) {
+        if (OB_TMP_FAIL(tasks.push_back(task))) {
+          SERVER_LOG(WARN, "fail to push back array", K(tmp_ret));
+        } else {
+          ++add_cnt;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::process_barrier(Task &task)
 {
   int ret = common::OB_SUCCESS;
@@ -550,6 +646,7 @@ int ObUniqTaskQueue<Task, Process>::try_lock(const Task &task)
   if (!task.is_valid()) {
     ret = common::OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "get invalid task", K(ret), K(task));
+  } else if (FALSE_IT(const_cast<Task&>(task).set_start_timestamp())) {
   } else if (OB_FAIL(processing_task_set_.set_refactored(task, 0))) {
     if (common::OB_HASH_EXIST == ret) {
       ret = common::OB_EAGAIN;

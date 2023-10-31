@@ -78,6 +78,7 @@ private:
   ObDumpMacroBlockContext dump_macro_context_;
   char *key_hex_str_;
   int64_t master_key_id_;
+  common::ObArenaAllocator io_allocator_;
 };
 
 } //namespace tools

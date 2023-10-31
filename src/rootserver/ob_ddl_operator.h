@@ -291,6 +291,11 @@ public:
   int get_part_array_from_table(const share::schema::ObTableSchema &orig_table_schema,
                                 const share::schema::ObTableSchema &inc_table_schema,
                                 common::ObIArray<share::schema::ObPartition*> &part_array);
+  int insert_column_groups(ObMySQLTransaction &trans, const ObTableSchema &new_table_schema);
+	int insert_column_ids_into_column_group(ObMySQLTransaction &trans,
+																				 const ObTableSchema &new_table_schema,
+																				 const ObIArray<uint64_t> &column_ids,
+																				 const ObColumnGroupSchema &column_group);
   int insert_single_column(common::ObMySQLTransaction &trans,
                            const share::schema::ObTableSchema &new_table_schema,
                            share::schema::ObColumnSchemaV2 &new_column);

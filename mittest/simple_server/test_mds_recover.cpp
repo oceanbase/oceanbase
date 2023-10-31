@@ -168,9 +168,8 @@ void do_flush_mds_table(share::ObLSID ls_id, ObTabletID tablet_id)
   storage::ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   // 3. 从tablet handle拿到tablet pointer
-  const ObTablet::ObTabletPointerHandle &pointer_handle = tablet_handle.get_obj()->get_pointer_handle();
-  ObMetaPointer<oceanbase::storage::ObTablet> *resource_ptr = pointer_handle.get_resource_ptr();
-  ObTabletPointer *tablet_pointer = dynamic_cast<ObTabletPointer *>(resource_ptr);
+  const ObTabletPointerHandle &pointer_handle = tablet_handle.get_obj()->get_pointer_handle();
+  ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
   // 4. 做flush动作
   mds::MdsTableHandle handle;
   ASSERT_EQ(OB_SUCCESS, tablet_pointer->get_mds_table(handle));

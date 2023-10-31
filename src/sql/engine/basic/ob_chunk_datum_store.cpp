@@ -1448,6 +1448,28 @@ int ObChunkDatumStore::inner_add_batch(const ObDatum **datums,
       case OBJ_DATUM_NUMBER:
         assign_datums<AssignNumberDatumValue>(datums, selector, size, stored_rows, col_idx);
         break;
+      case OBJ_DATUM_DECIMALINT:
+        switch (get_decimalint_type(exprs.at(col_idx)->datum_meta_.precision_)) {
+        case DECIMAL_INT_32:
+          assign_datums<AssignFixedLenDatumValue<4>>(datums, selector, size, stored_rows, col_idx);
+          break;
+        case DECIMAL_INT_64:
+          assign_datums<AssignFixedLenDatumValue<8>>(datums, selector, size, stored_rows, col_idx);
+          break;
+        case DECIMAL_INT_128:
+          assign_datums<AssignFixedLenDatumValue<16>>(datums, selector, size, stored_rows, col_idx);
+          break;
+        case DECIMAL_INT_256:
+          assign_datums<AssignFixedLenDatumValue<32>>(datums, selector, size, stored_rows, col_idx);
+          break;
+        case DECIMAL_INT_512:
+          assign_datums<AssignFixedLenDatumValue<64>>(datums, selector, size, stored_rows, col_idx);
+          break;
+        default:
+          assign_datums<AssignDefaultDatumValue>(datums, selector, size, stored_rows, col_idx);
+          break;
+        }
+        break;
       case OBJ_DATUM_8BYTE_DATA:
         assign_datums<AssignFixedLenDatumValue<8>>(datums, selector, size, stored_rows, col_idx);
         break;
@@ -1528,7 +1550,7 @@ int ObChunkDatumStore::finish_add_row(bool need_dump)
       uint64_t begin_io_dump_time = rdtsc();
       if (OB_FAIL(get_timeout(timeout_ms))) {
         LOG_WARN("get timeout failed", K(ret));
-      } else if (OB_FAIL(aio_write_handle_.wait(timeout_ms))) { // last buffer
+      } else if (OB_FAIL(aio_write_handle_.wait())) { // last buffer
         LOG_WARN("failed to wait write", K(ret));
       } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(io_.fd_, timeout_ms))) {
         LOG_WARN("sync file failed", K(ret), K_(io_.fd), K(timeout_ms));
@@ -2019,6 +2041,7 @@ int ObChunkDatumStore::write_file(void *buf, int64_t size)
         file_size_ = 0;
         io_.tenant_id_ = tenant_id_;
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
+        io_.io_timeout_ms_ = timeout_ms;
         LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id));
       }
     }
@@ -2026,7 +2049,7 @@ int ObChunkDatumStore::write_file(void *buf, int64_t size)
   }
   if (OB_SUCC(ret) && size > 0) {
     set_io(size, static_cast<char *>(buf));
-    if (aio_write_handle_.is_valid() && OB_FAIL(aio_write_handle_.wait(timeout_ms))) {
+    if (aio_write_handle_.is_valid() && OB_FAIL(aio_write_handle_.wait())) {
       LOG_WARN("failed to wait write", K(ret));
     } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_, aio_write_handle_))) {
       LOG_WARN("write to file failed", K(ret), K_(io), K(timeout_ms));
@@ -2061,7 +2084,7 @@ int ObChunkDatumStore::read_file(
   } else if (OB_FAIL(get_timeout(timeout_ms))) {
     LOG_WARN("get timeout failed", K(ret));
   } else if (!handle.is_valid()) {
-    if (OB_FAIL(aio_write_handle_.wait(timeout_ms))) {
+    if (OB_FAIL(aio_write_handle_.wait())) {
       LOG_WARN("failed to wait write", K(ret));
     }
   }
@@ -2074,11 +2097,12 @@ int ObChunkDatumStore::read_file(
     blocksstable::ObTmpFileIOInfo tmp_io = io_;
     set_io(size, static_cast<char *>(buf), tmp_io);
     tmp_io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    tmp_io.io_timeout_ms_ = timeout_ms;
 
     if (0 == read_size
         && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(tmp_io.fd_, tmp_file_size))) {
       LOG_WARN("failed to get tmp file size", K(ret));
-    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(tmp_io, offset, timeout_ms, handle))) {
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(tmp_io, offset, handle))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("read form file failed", K(ret), K(tmp_io), K(offset), K(timeout_ms));
       }
@@ -2108,7 +2132,9 @@ int ObChunkDatumStore::aio_read_file(
     blocksstable::ObTmpFileIOInfo tmp_io = io_;
     set_io(size, static_cast<char *>(buf), tmp_io);
     tmp_io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(tmp_io, offset, handle))) {
+    if (OB_FAIL(get_timeout(tmp_io.io_timeout_ms_))) {
+      LOG_WARN("get timeout failed", K(ret));
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(tmp_io, offset, handle))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("read form file failed", K(ret), K(tmp_io), K(offset));
       }
@@ -2434,9 +2460,6 @@ int ObChunkDatumStore::Iterator::load_next_block(RowIterator& it)
           }
         }
       }
-      if (OB_LIKELY(nullptr != store_->get_io_event_observer())) {
-        store_->get_io_event_observer()->on_read_io(rdtsc() - begin_io_read_time);
-      }
     } else {
       ret = OB_ITER_END;
     }
@@ -2638,7 +2661,7 @@ int ObChunkDatumStore::Iterator::aio_read(char *buf, const int64_t size)
     // first read, wait write finish
     int64_t timeout_ms = 0;
     OZ(store_->get_timeout(timeout_ms));
-    OZ(store_->aio_write_handle_.wait(timeout_ms));
+    OZ(store_->aio_write_handle_.wait());
   }
   if (OB_SUCC(ret)) {
     if (size <= 0 || cur_iter_pos_ >= file_size_) {
@@ -2662,7 +2685,7 @@ int ObChunkDatumStore::Iterator::aio_wait()
   int64_t timeout_ms = 0;
   OZ(store_->get_timeout(timeout_ms));
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(aio_read_handle_.wait(timeout_ms))) {
+    if (OB_FAIL(aio_read_handle_.wait())) {
       LOG_WARN("aio wait failed", K(ret), K(timeout_ms));
     }
   }

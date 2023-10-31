@@ -71,6 +71,13 @@ bool ObServerSchemaTask::is_valid() const
   return INVALID != type_;
 }
 
+void ObServerSchemaTask::reset()
+{
+  type_ = INVALID;
+  did_retry_ = false;
+  schema_info_.reset();
+}
+
 int64_t ObServerSchemaTask::hash() const
 {
   uint64_t hash_val = 0;

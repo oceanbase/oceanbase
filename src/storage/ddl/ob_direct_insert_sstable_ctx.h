@@ -160,7 +160,7 @@ private:
   const blocksstable::ObColDescIArray *col_descs_;
   int64_t snapshot_version_;
   ObDDLSSTableRedoWriter sstable_redo_writer_;
-  blocksstable::ObDataStoreDesc data_desc_;
+  blocksstable::ObWholeDataStoreDesc data_desc_;
   /**
    * ATTENTION!
    * The deconstruction order of the `redo_log_writer_callback_` should be in front of the `macro_block_writer_`
@@ -176,6 +176,7 @@ private:
   ObStoreRow store_row_;
   blocksstable::ObDatumRow datum_row_;
   bool is_inited_;
+  blocksstable::ObNewRowBuilder new_row_builder_;
 };
 
 class ObSSTableInsertTabletContext final

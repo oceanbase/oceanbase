@@ -101,6 +101,8 @@ int ObExprGetSysVar::calc_result_type2(ObExprResType &type,
                 OX(type.set_collation_type(conn_coll));
               }
             }
+          } else if (ob_is_int_tc(data_type)) {
+            type.set_accuracy(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][data_type]);
           }
         }
       } else {

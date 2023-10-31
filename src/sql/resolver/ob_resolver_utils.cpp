@@ -2224,15 +2224,15 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const ObCollationType server_collation,
                                    ObExprInfo *parents_expr_info,
                                    const ObSQLMode sql_mode,
-                                   bool is_from_pl)
+                                   bool enable_decimal_int_type,
+                                   bool is_from_pl /* false */)
 {
-  UNUSED(stmt_type);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ < T_INVALID) || OB_UNLIKELY(node->type_ >= T_MAX_CONST)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse node is invalid", K(node));
   } else {
-    LOG_DEBUG("resolve item", "item_type", get_type_name(static_cast<int>(node->type_)));
+    LOG_DEBUG("resolve item", "item_type", get_type_name(static_cast<int>(node->type_)), K(stmt_type));
     int16_t precision = PRECISION_UNKNOWN_YET;
     int16_t scale = SCALE_UNKNOWN_YET;
     // const value contains NOT_NULL flag
@@ -2538,9 +2538,32 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     }
     case T_NUMBER: {
       number::ObNumber nmb;
+      ObDecimalInt *decint = nullptr;
       int16_t len = 0;
       ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
-      if (NULL != tmp_string.find('e') || NULL != tmp_string.find('E')) {
+      bool use_decimalint_as_result = false;
+      if (enable_decimal_int_type && !is_from_pl && lib::is_mysql_mode()) {
+        // 如果开启decimal int类型，T_NUMBER解析成decimal int
+        int32_t val_len = 0;
+        ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
+                                val_len, decint);
+        len = static_cast<int16_t>(val_len);
+        // in oracle mode
+        // +.12e-3 will parse as decimal, with scale = 5, precision = 2
+        // in this case, ObNumber is used.
+        use_decimalint_as_result = (precision <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+                                    && scale <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+                                    && scale >= 0
+                                    && precision >= scale);
+        if (lib::is_oracle_mode()
+            && (ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type)
+                || precision > OB_MAX_NUMBER_PRECISION)) {
+          use_decimalint_as_result = false;
+        }
+      }
+      if (use_decimalint_as_result) {
+        // do nothing, result type is decimal int
+      } else if (NULL != tmp_string.find('e') || NULL != tmp_string.find('E')) {
         ret = nmb.from_sci(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
         len = static_cast<int16_t>(node->str_len_);
         if (lib::is_oracle_mode()) {
@@ -2559,15 +2582,24 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           LOG_WARN("unexpected error", K(ret));
         }
       } else {
-        if (lib::is_oracle_mode()) {
-          precision = PRECISION_UNKNOWN_YET;
-          scale = NUMBER_SCALE_UNKNOWN_YET;
+        if (use_decimalint_as_result) {
+          val.set_decimal_int(len, scale, decint);
+          val.set_precision(precision);
+          val.set_scale(scale);
+          val.set_length(len);
+          LOG_DEBUG("finish parse decimal int from str", K(literal_prefix), K(precision), K(scale));
+        } else {
+          if (lib::is_oracle_mode()) {
+            precision = PRECISION_UNKNOWN_YET;
+            scale = NUMBER_SCALE_UNKNOWN_YET;
+          }
+          val.set_number(nmb);
+          val.set_precision(precision);
+          val.set_scale(scale);
+          val.set_length(len);
+          LOG_DEBUG("finish parse number from str", K(literal_prefix), K(nmb), K(precision),
+                    K(scale));
         }
-        val.set_number(nmb);
-        val.set_precision(precision);
-        val.set_scale(scale);
-        val.set_length(len);
-        LOG_DEBUG("finish parse number from str", K(literal_prefix), K(nmb));
       }
       val.set_param_meta(val.get_meta());
       break;
@@ -3160,7 +3192,8 @@ bool ObResolverUtils::is_valid_oracle_partition_data_type(const ObObjType data_t
     case ObDateTimeType:
     case ObVarcharType:
     case ObCharType:
-    case ObTimestampNanoType: {
+    case ObTimestampNanoType:
+    case ObDecimalIntType: {
       bret = true;
       break;
     }
@@ -3363,9 +3396,10 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
         case ObFloatType:
         case ObDoubleType:
         case ObNumberFloatType:
-        case ObNumberType: {
+        case ObNumberType:
+        case ObDecimalIntType: {
           //oracle模式的分区列number, 值int也ok
-          is_allow = (ObStringTC == part_value_expr_tc
+          is_allow = (ObStringTC == part_value_expr_tc || ObDecimalIntTC == part_value_expr_tc
                       || (ObIntTC <= part_value_expr_tc && part_value_expr_tc <= ObNumberTC));
           break;
         }
@@ -3507,6 +3541,12 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
     case ObNumberFloatType: {
       if (is_oracle_mode) {
         expect_value_tc = ObNumberTC;
+        break;
+      }
+    }
+    case ObDecimalIntType: {
+      if (is_oracle_mode) {
+        expect_value_tc = ObDecimalIntTC;
         break;
       }
     }
@@ -5410,6 +5450,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        const bool is_for_pl_type,
                                        const ObSessionNLSParams &nls_session_param,
                                        uint64_t tenant_id,
+                                       const bool enable_decimal_int_type,
                                        const bool convert_real_type_to_decimal /*false*/)
 {
   int ret = OB_SUCCESS;
@@ -5554,6 +5595,18 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           data_type.set_precision(precision);
           data_type.set_scale(scale);
         }
+        // oracle 模式下，目前只有满足以下情况时才使用decimal int
+        // 1. precision >= 1 && precision <= 38
+        // 2. scale >= 0
+        // 3. precision >= scale
+        // 也就是和mysql一样，只有(P, S)都确定，且scale不会超过Precision时才使用ObDecimalIntType
+        // TODO: 支持任意合理的P, S使用DecimalIntType
+        if (enable_decimal_int_type && !convert_real_type_to_decimal
+            && (precision >= OB_MIN_NUMBER_PRECISION && scale >= 0 && precision >= scale)) {
+          data_type.set_obj_type(ObDecimalIntType);
+        }
+        LOG_DEBUG("set decimalint in oracle mode", K(enable_decimal_int_type),
+                  K(convert_real_type_to_decimal), K(precision), K(scale));
       } else {
         if (OB_UNLIKELY(precision > OB_MAX_DECIMAL_PRECISION)) {
           ret = OB_ERR_TOO_BIG_PRECISION;
@@ -5583,6 +5636,11 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           data_type.set_precision(precision);
           data_type.set_scale(scale);
           data_type.set_zero_fill(static_cast<bool>(type_node.int16_values_[2]));
+          if (enable_decimal_int_type && !convert_real_type_to_decimal
+              && !data_type.get_meta_type().is_unumber()) {
+            data_type.set_obj_type(ObDecimalIntType);
+            LOG_DEBUG("set decimalint in mysql mode", K(data_type), K(precision), K(scale));
+          }
         }
       }
       break;
@@ -7732,6 +7790,11 @@ bool ObResolverUtils::is_synonymous_type(ObObjType type1, ObObjType type2)
       ret = true;
     }
   }
+  if (ob_is_decimal_int_tc(type1) && ob_is_number_tc(type2)) {
+    ret = true;
+  } else if (ob_is_number_tc(type1) && ob_is_decimal_int_tc(type2)) {
+    ret = true;
+  }
   return ret;
 }
 
@@ -8190,7 +8253,8 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                                     const ObPCParam *pc_param,
                                     const int64_t param_idx,
                                     ObObjParam &obj_param,
-                                    bool &is_param)
+                                    bool &is_param,
+                                    const bool enable_decimal_int)
 {
   int ret = OB_SUCCESS;
   ParseNode *raw_param = NULL;
@@ -8231,7 +8295,8 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        obj_param, is_paramlize, literal_prefix,
                        session.get_actual_nls_length_semantics(),
                        static_cast<ObCollationType>(server_collation), NULL,
-                       session.get_sql_mode()))) {
+                       session.get_sql_mode(),
+                       enable_decimal_int))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {

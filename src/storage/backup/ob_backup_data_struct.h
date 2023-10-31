@@ -484,13 +484,15 @@ public:
   ObBackupMacroBlockIDMappingsMeta();
   ~ObBackupMacroBlockIDMappingsMeta();
   void reuse();
+  int prepare_id_mappings(const int64_t sstable_count);
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(sstable_count));
+  TO_STRING_KV(K_(sstable_count), K_(version));
 
 public:
+  common::ObArenaAllocator allocator_;
+  common::ObSEArray<ObBackupMacroBlockIDMapping *, 8, common::ObIAllocator&> id_map_list_;
   int64_t version_;
   int64_t sstable_count_;
-  ObBackupMacroBlockIDMapping id_map_list_[MAX_SSTABLE_CNT_IN_STORAGE];
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroBlockIDMappingsMeta);
 };
 

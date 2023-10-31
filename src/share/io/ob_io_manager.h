@@ -36,9 +36,9 @@ public:
   void stop();
   bool is_stopped() const;
 
-  int read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms = MAX_IO_WAIT_TIME_MS);
+  int read(const ObIOInfo &info, ObIOHandle &handle);
 
-  int write(const ObIOInfo &info, const uint64_t timeout_ms = MAX_IO_WAIT_TIME_MS);
+  int write(const ObIOInfo &info);
 
   int aio_read(const ObIOInfo &info, ObIOHandle &handle);
 
@@ -48,7 +48,7 @@ public:
 
   int pwrite(ObIOInfo &info, int64_t &write_size);
 
-  int detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms);
+  int detect_read(const ObIOInfo &info, ObIOHandle &handle);
 
   // config related, thread safe
   int set_io_config(const ObIOConfig &conf);
@@ -112,17 +112,26 @@ public:
   int start();
   void stop();
   bool is_working() const;
+  int alloc_req_and_result(const ObIOInfo &info, ObIOHandle &handle, ObIORequest *&io_request);
   int inner_aio(const ObIOInfo &info, ObIOHandle &handle);
   int detect_aio(const ObIOInfo &info, ObIOHandle &handle);
   int enqueue_callback(ObIORequest &req);
+  int retry_io(ObIORequest &req);
   ObTenantIOClock *get_io_clock() { return io_clock_; }
   ObIOUsage &get_io_usage() { return io_usage_; }
+  ObIOCallbackManager &get_callback_mgr() { return callback_mgr_; };
   ObSysIOUsage &get_backup_io_usage() { return io_backup_usage_; }
   int update_basic_io_config(const ObTenantIOConfig &io_config);
-  int alloc_io_request(ObIAllocator &allocator,const int64_t callback_size,  ObIORequest *&req);
+  int try_alloc_req_until_timeout(const int64_t timeout_ts, ObIORequest *&req);
+  int try_alloc_result_until_timeout(const int64_t timeout_ts, ObIOResult *&result);
+  int alloc_io_request(ObIORequest *&req);
+  int alloc_io_result(ObIOResult *&result);
   int alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *&io_clock);
   int init_group_index_map(const int64_t tenant_id, const ObTenantIOConfig &io_config);
   int get_group_index(const int64_t group_id, uint64_t &index);
+  int calc_io_memory(const int64_t memory);
+  int init_memory_pool(const uint64_t tenant_id, const int64_t memory);
+  int update_memory_pool(const int64_t memory);
   int modify_group_io_config(const uint64_t index,
                              const int64_t min_percent,
                              const int64_t max_percent,
@@ -157,13 +166,18 @@ public:
   void print_io_status();
   void inc_ref();
   void dec_ref();
-  TO_STRING_KV(K(is_inited_), K(ref_cnt_), K(tenant_id_), K(io_config_), K(io_clock_),
-       K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_));
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),
+       K(io_config_), K(io_clock_), K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_memory_limit_),
+       K(request_count_), K(result_count_), K(io_request_pool_), K(io_result_pool_));
 private:
   friend class ObIORequest;
+  friend class ObIOResult;
   bool is_inited_;
   bool is_working_;
   int64_t ref_cnt_;
+  int64_t io_memory_limit_;
+  int64_t request_count_;
+  int64_t result_count_;
   uint64_t tenant_id_;
   ObTenantIOConfig io_config_;
   ObTenantIOClock *io_clock_;
@@ -175,6 +189,8 @@ private:
   ObIOTracer io_tracer_;
   DRWLock io_config_lock_; //for map and config
   hash::ObHashMap<uint64_t, uint64_t> group_id_index_map_; //key:group_id, value:index
+  ObIOObjectPool<ObIORequest> io_request_pool_;
+  ObIOObjectPool<ObIOResult> io_result_pool_;
 };
 
 #define OB_IO_MANAGER (oceanbase::common::ObIOManager::get_instance())

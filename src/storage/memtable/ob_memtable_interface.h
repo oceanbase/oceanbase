@@ -158,7 +158,6 @@ public:
   { UNUSED(version); return common::OB_SUCCESS; }
   virtual int minor_freeze(const common::ObVersion &version)
   { UNUSED(version); return common::OB_SUCCESS; }
-
   virtual void inc_pending_lob_count() {}
   virtual void dec_pending_lob_count() {}
   virtual int on_memtable_flushed() { return common::OB_SUCCESS; }
@@ -212,10 +211,6 @@ public:
     return ret;
   }
   virtual bool is_empty() const override
-  {
-    return false;
-  }
-  virtual bool get_is_force_freeze()
   {
     return false;
   }

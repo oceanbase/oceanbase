@@ -24,7 +24,7 @@
 #include "storage/ob_storage_rpc.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "ob_storage_restore_struct.h"
-#include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/backup/ob_backup_data_store.h"
 
@@ -199,6 +199,8 @@ private:
   ObDatumRange datum_range_;
   common::ObArenaAllocator allocator_;
   ObSSTableSecMetaIterator second_meta_iterator_;
+  common::ObArenaAllocator io_allocator_;
+  char *io_buf_[MAX_PREFETCH_MACRO_BLOCK_NUM];
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockObProducer);
 };
 
@@ -504,7 +506,8 @@ public:
   int init(
       const obrpc::ObCopySSTableMacroRangeInfoArg &rpc_arg,
       const ObRestoreBaseInfo &restore_base_info,
-       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
 
   virtual int get_next_sstable_range_info(
       ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
@@ -529,6 +532,7 @@ private:
   bool is_inited_;
   obrpc::ObCopySSTableMacroRangeInfoArg rpc_arg_;
   const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   backup::ObBackupMacroBlockIDMappingsMeta macro_block_id_map_;
   int64_t sstable_index_;

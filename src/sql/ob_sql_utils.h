@@ -156,6 +156,8 @@ public:
 
   static bool is_trans_commit_need_disconnect_err(int err);
 
+  static int check_enable_decimalint(const sql::ObSQLSessionInfo *session, bool &enable_decimalint);
+
   static void check_if_need_disconnect_after_end_trans(const int end_trans_err,
                                                        const bool is_rollback,
                                                        const bool is_explicit,
@@ -245,7 +247,7 @@ public:
     FOREACH_CNT(e, exprs) {
       if (OB_ISNULL((*e)->eval_func_) &&
           OB_ISNULL((*e)->eval_batch_func_) && ((*e)->arg_cnt_ == 0) &&
-          !((*e)->is_variable_res_buf())) {
+          !((*e)->is_variable_res_buf() || ob_is_decimal_int((*e)->datum_meta_.type_))) {
         // exclude generated column, string type column
         auto datum = (*e)->locate_batch_datums(eval_ctx);
         if ((*e)->is_batch_result()) {

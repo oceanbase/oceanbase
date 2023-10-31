@@ -1038,6 +1038,10 @@ bool ObObj::is_zero() const
         ret = (0 == v_.nmonth_);
         break;
       }
+      case ObDecimalIntType: {
+        ret = is_zero_decimalint();
+        break;
+      }
       default:
         BACKTRACE(ERROR, true, "unexpected numeric type=%u", meta_.get_type());
         right_to_die_or_duty_to_live();
@@ -1185,6 +1189,10 @@ int ObObj::build_not_strict_default_value()
       set_urowid(urowid_data);
       break;
     }
+    case ObDecimalIntType: {
+      set_decimal_int(0, 0, nullptr);
+      break;
+    }
     default:
       ret = OB_INVALID_ARGUMENT;
       _OB_LOG(WARN, "unexpected data type=%u", data_type);
@@ -1259,6 +1267,16 @@ int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &p
       this->set_udt_value(buf + pos, src_str.length());
       pos += src_str.length();
     }
+  } else if (ob_is_decimal_int_tc(src.get_type())) {
+    if (OB_UNLIKELY(size < (pos + src.get_val_len()))) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      MEMCPY(buf + pos, src.get_decimal_int(), src.get_val_len());
+      *this = src;
+      this->set_decimal_int(src.get_val_len(), src.get_scale(),
+                            reinterpret_cast<ObDecimalInt *>(buf + pos));
+      pos += src.get_val_len();
+    }
   } else {
     *this = src;
   }
@@ -1285,6 +1303,8 @@ void* ObObj::get_deep_copy_obj_ptr()
     ptr = (void *)v_.string_;
   } else if (ob_is_lob_locator(this->get_type())) {
     ptr = (void *)&v_.lob_locator_;
+  } else if (ob_is_decimal_int_tc(this->get_type()) && 0 != val_len_ && NULL != v_.decimal_int_) {
+    ptr =  (void *)v_.decimal_int_;
   } else {
     // do nothing
   }
@@ -1695,6 +1715,7 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObJsonType),          // 47, json
   DEF_FUNC_ENTRY(ObGeometryType),      // 48, geometry TODO!!!!!
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
+  DEF_FUNC_ENTRY(ObDecimalIntType)     // 50, decimal int
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)

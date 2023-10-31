@@ -37,9 +37,10 @@ public:
   void reset();
   ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
 
-  static int pread_block(const ObMetaDiskAddr &addr, blocksstable::ObMacroBlockHandle &handler);
-  static int read_block_by_id(
-    const blocksstable::MacroBlockId &block_id, blocksstable::ObMacroBlockHandle &handler);
+  static int pread_block(const ObMetaDiskAddr &addr,
+      blocksstable::ObMacroBlockHandle &handler, char *item_buf);
+  static int read_block_by_id(const blocksstable::MacroBlockId &block_id,
+      blocksstable::ObMacroBlockHandle &handler, char *io_buf);
 
 private:
   int get_meta_blocks(const blocksstable::MacroBlockId &entry_block);
@@ -56,6 +57,8 @@ private:
   blocksstable::ObMacroBlocksHandle macros_handle_;
   int64_t prefetch_macro_block_idx_;
   int64_t read_macro_block_cnt_;
+  common::ObArenaAllocator allocator_;
+  char *io_buf_[2];
 };
 
 class ObLinkedMacroBlockItemReader final

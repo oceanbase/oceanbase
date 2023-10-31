@@ -42,6 +42,7 @@ int ObExprUtcTimestamp::calc_result_type0(ObExprResType &type, ObExprTypeCtx &ty
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   return OB_SUCCESS;
 }
 
@@ -88,6 +89,7 @@ int ObExprUtcTime::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ct
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   return OB_SUCCESS;
 }
 
@@ -136,6 +138,7 @@ int ObExprUtcDate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ct
   UNUSED(type_ctx);
   type.set_date();
   type.set_result_flag(NOT_NULL_FLAG);
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   type.set_scale(0);
   return OB_SUCCESS;
 }
@@ -191,6 +194,7 @@ int ObExprCurTimestamp::calc_result_type0(ObExprResType &type, ObExprTypeCtx &ty
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   return OB_SUCCESS;
 }
 
@@ -267,6 +271,7 @@ int ObExprSysdate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ct
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   return OB_SUCCESS;
 }
 
@@ -361,6 +366,7 @@ int ObExprCurDate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ct
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   return OB_SUCCESS;
 }
 
@@ -432,6 +438,7 @@ int ObExprCurTime::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ct
   if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
     type.set_scale(MIN_SCALE_FOR_TEMPORAL);
   }
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][type.get_type()].get_precision());
   return OB_SUCCESS;
 }
 

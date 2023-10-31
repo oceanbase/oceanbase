@@ -13,6 +13,7 @@
 #include "ob_sstable_printer.h"
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_table/ob_tx_table_iterator.h"
+#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 
 namespace oceanbase
 {
@@ -95,7 +96,7 @@ static const char * OB_OBJ_TYPE_NAMES[ObMaxType] = {
     "ObTimestampTZType", "ObTimestampLTZType", "ObTimestampNanoType",
     "ObRawType", "ObIntervalYMType", "ObIntervalDSType", "ObNumberFloatType",
     "ObNVarchar2Type", "ObNCharType", "ObURowIDType", "ObLobType",
-    "ObJsonType", "ObGeometryType", "ObUserDefinedSQLType"
+    "ObJsonType", "ObGeometryType", "ObUserDefinedSQLType","ObDecimalIntType"
 };
 
 void ObSSTablePrinter::print_title(const char *title, const int64_t level)
@@ -289,6 +290,7 @@ void ObSSTablePrinter::print_macro_block_header(const ObSSTableMacroBlockHeader 
   print_line("data_checksum", sstable_header->fixed_header_.data_checksum_);
   print_line("compressor_type", sstable_header->fixed_header_.compressor_type_);
   print_line("master_key_id", sstable_header->fixed_header_.master_key_id_);
+  print_line("is_normal_cg", sstable_header->is_normal_cg_);
   print_end_line();
 }
 
@@ -364,9 +366,39 @@ void ObSSTablePrinter::print_index_minor_meta(const ObIndexBlockRowMinorMetaInfo
   }
 }
 
+void ObSSTablePrinter::print_pre_agg_row(const int64_t column_cnt, ObAggRowReader &agg_row_reader)
+{
+  int ret = OB_SUCCESS;
+  P_BAR();
+  P_NAME("Pre-agg row");
+  P_BAR();
+  ObStorageDatum agg_datum;
+  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < column_cnt; ++col_idx) {
+    P_NAME("col_idx=");
+    P_VALUE_BINT(col_idx);
+    P_COLON();
+    for (int64_t meta_type = 0; OB_SUCC(ret) && meta_type < ObSkipIndexColType::SK_IDX_MAX_COL_TYPE; ++meta_type) {
+      ObSkipIndexColMeta skp_idx_meta(col_idx, static_cast<ObSkipIndexColType>(meta_type));
+      if (OB_FAIL(agg_row_reader.read(skp_idx_meta, agg_datum))) {
+        STORAGE_LOG(WARN, "Failed to read agg datum", K(ret), K(skp_idx_meta), K(agg_datum));
+        P_VALUE_STR_B("error: read agg datum failed");
+      } else if (!agg_datum.is_null()) {
+        P_NAME("skp_idx_type=");
+        P_VALUE_BINT(meta_type);
+        P_COLON();
+        P_NAME("value=");
+        print_cell(agg_datum);
+      }
+    }
+    P_BAR();
+  }
+  P_END();
+
+}
+
 void ObSSTablePrinter::print_macro_meta(const ObDataMacroBlockMeta *macro_meta)
 {
-  print_title("Data Macro Block Meta");
+  print_title("Macro Block Meta");
   print_line("version", macro_meta->val_.version_);
   print_line("length", macro_meta->val_.length_);
   print_line("data_checksum", macro_meta->val_.data_checksum_);
@@ -393,7 +425,7 @@ void ObSSTablePrinter::print_macro_meta(const ObDataMacroBlockMeta *macro_meta)
   print_line("row_store_type", macro_meta->val_.row_store_type_);
   print_line("schema_version", macro_meta->val_.schema_version_);
   print_line("snapshot_version", macro_meta->val_.snapshot_version_);
-  print_line("logic_id: data_seq", macro_meta->val_.logic_id_.data_seq_);
+  print_line("logic_id: data_seq", macro_meta->val_.logic_id_.data_seq_.macro_data_seq_);
   print_line("logic_id: logic_version", macro_meta->val_.logic_id_.logic_version_);
   print_line("logic_id: tablet_id", macro_meta->val_.logic_id_.tablet_id_);
   print_line("has_string_out_row", macro_meta->val_.has_string_out_row_);
@@ -416,6 +448,7 @@ void ObSSTablePrinter::print_micro_header(const ObMicroBlockHeader *micro_block_
   print_line("data_length", micro_block_header->data_length_);
   print_line("data_zlength", micro_block_header->data_zlength_);
   print_line("data_checksum", micro_block_header->data_checksum_);
+  print_line("max_merged_trans_version", micro_block_header->max_merged_trans_version_);
   if (micro_block_header->has_column_checksum_) {
     for (int64_t i = 0; i < micro_block_header->column_count_; ++i) {
       if (isatty(fileno(stderr)) > 0) {
@@ -590,6 +623,106 @@ void ObSSTablePrinter::print_encoding_column_header(const ObColumnHeader *col_he
   print_end_line();
 }
 
+void ObSSTablePrinter::print_cs_encoding_column_header(const ObCSColumnHeader &col_header, const int64_t col_id)
+{
+  print_title("CS Encoding Column Header", col_id, 1);
+  print_line("col_header.version", col_header.version_);
+  print_line("col_header.type", col_header.type_);
+  print_line("col_header.attrs", col_header.attrs_);
+  print_line("col_header.obj_type", col_header.obj_type_);
+  print_end_line();
+}
+
+void ObSSTablePrinter::print_cs_encoding_all_column_header(const ObAllColumnHeader &all_header)
+{
+  print_title("CS Encoding All Column Header");
+  print_line("version", all_header.version_);
+  print_line("attrs", all_header.attrs_);
+  print_line("all_string_data_length", all_header.all_string_data_length_);
+  print_line("stream_offsets_length", all_header.stream_offsets_length_);
+  print_line("stream_count", all_header.stream_count_);
+  print_end_line();
+}
+
+void ObSSTablePrinter::print_cs_encoding_column_meta(
+    const char *start,
+    const int64_t len,
+    const ObCSColumnHeader::Type type,
+    const int64_t col_id,
+    char *hex_print_buf,
+    const int64_t hex_buf_size)
+{
+  print_title("CS Encoding Column Meta", col_id, 1);
+  print_line("col_id", col_id);
+  print_line("col_meta_len", len);
+  if (ObCSColumnHeader::Type::INT_DICT == type || ObCSColumnHeader::Type::STR_DICT == type ) {
+    const ObDictEncodingMeta *dict_meta = reinterpret_cast<const ObDictEncodingMeta *>(start);
+    print_line("dict_meta.version", dict_meta->version_);
+    print_line("dict_meta.attrs", dict_meta->attrs_);
+    print_line("dict_meta.distinct_val_cnt", dict_meta->distinct_val_cnt_);
+    print_line("dict_meta.ref_row_cnt", dict_meta->ref_row_cnt_);
+  } else {
+    print_line("has_nullbitmap", (0 != len));
+  }
+  P_LBRACE();
+  if (hex_print_buf != nullptr) {
+    to_hex_cstr(start, len, hex_print_buf, hex_buf_size);
+    P_VALUE_STR_B(hex_print_buf);
+  }
+  P_RBRACE();
+  P_END();
+  print_end_line();
+}
+
+void ObSSTablePrinter::print_integer_stream_decoder_ctx(
+    const uint32_t stream_idx, const ObIntegerStreamDecoderCtx &ctx,
+    char *hex_print_buf, const int64_t hex_buf_size)
+{
+  print_title("Integer Stream Ctx", stream_idx, 2);
+  print_line("int_count", ctx.count_, 2);
+  print_line("int_meta.version", ctx.meta_.version_, 2);
+  print_line("int_meta.attr", ctx.meta_.attr_, 2);
+  print_line("int_meta.width", ctx.meta_.width_, 2);
+  print_line("int_meta.type", ctx.meta_.type_, 2);
+  print_line("int_meta.base_value", ctx.meta_.base_value_, 2);
+  print_line("int_meta.null_replaced_value", ctx.meta_.null_replaced_value_, 2);
+  print_line("int_meta.decimal_precision_width", ctx.meta_.decimal_precision_width_, 2);
+}
+
+void ObSSTablePrinter::print_string_stream_decoder_ctx(
+    const uint32_t stream_idx, const ObStringStreamDecoderCtx &ctx,
+    char *hex_print_buf, const int64_t hex_buf_size)
+{
+  print_title("String Stream Ctx", stream_idx, 2);
+  print_line("str_meta.version", ctx.meta_.version_, 2);
+  print_line("str_meta.attr", ctx.meta_.attr_, 2);
+  print_line("str_meta.fixed_str_len", ctx.meta_.fixed_str_len_, 2);
+  print_line("str.meta.uncompressed_len", ctx.meta_.uncompressed_len_, 2);
+}
+
+void ObSSTablePrinter::print_cs_encoding_orig_stream_data(
+    const uint32_t stream_cnt, const ObMicroBlockTransformDesc &desc, const char *payload,
+    const uint32_t all_string_data_offset, const uint32_t all_string_data_length)
+{
+  print_title("CS Encoding Column Original Stream Data");
+  print_line("all_string_data_offset", all_string_data_offset);
+  print_line("all_string_data_length", all_string_data_length);
+  print_line("all_string_data_crc", all_string_data_length == 0 ? 0 : ob_crc64_sse42(payload + all_string_data_offset, all_string_data_length));
+  P_END();
+
+  for (int64_t i = 0; i < stream_cnt; i++) {
+    print_line("stream_idx", i);
+    print_line("stream_data_offset", desc.stream_data_pos_arr_[i].offset_);
+    print_line("stream_data_len", desc.stream_data_pos_arr_[i].len_);
+    print_line("is_integer", desc.is_integer_stream(i));
+    if (desc.is_integer_stream(i)) {
+      print_line("integer_stream_crc", ob_crc64_sse42(payload + desc.stream_data_pos_arr_[i].offset_, desc.stream_data_pos_arr_[i].len_));
+    }
+    P_END();
+  }
+  print_end_line();
+}
+
 void ObSSTablePrinter::print_hex_micro_block_header(const ObMicroBlockData &block_data)
 {
   print_title("micro_block_hex_data");
@@ -600,7 +733,6 @@ void ObSSTablePrinter::print_hex_micro_block_header(const ObMicroBlockData &bloc
   P_NAME("extra_block_size");
   P_COLON();
   P_VALUE_BINT(block_data.get_extra_size());
-
 }
 
 void ObSSTablePrinter::print_hex_micro_block(const ObMicroBlockData &block_data, char *hex_print_buf, const int64_t buf_size)

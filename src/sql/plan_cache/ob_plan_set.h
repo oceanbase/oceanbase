@@ -48,8 +48,9 @@ class ObPlanCacheObject;
 class ObPhysicalPlan;
 class ObExecContext;
 struct ObSqlCtx;
+struct ObPCUserVarMeta;
 
-typedef ObFixedArray<common::ObObjMeta, common::ObIAllocator> UserSessionVarMetaArray;
+typedef ObFixedArray<ObPCUserVarMeta, common::ObIAllocator> UserSessionVarMetaArray;
 typedef ObFixedArray<ObPCConstParamInfo, common::ObIAllocator> ConstParamConstraint;
 typedef ObFixedArray<ObPCParamEqualInfo, common::ObIAllocator> EqualParamConstraint;
 typedef ObDList<ObPreCalcExprConstraint> PreCalcExprConstraint;
@@ -96,6 +97,46 @@ struct HashKey
 };
 
 typedef common::hash::ObHashSet<HashKey, common::hash::NoPthreadDefendMode> UniqueHashSet;
+
+struct ObPCUserVarMeta
+{
+public:
+  ObPCUserVarMeta(): precision_(-1), obj_meta_() {}
+  ObPCUserVarMeta(const ObSessionVariable &sess_var)
+  {
+    obj_meta_ = sess_var.meta_;
+    if (sess_var.meta_.is_decimal_int()) {
+      precision_ = wide::ObDecimalIntConstValue::get_max_precision_by_int_bytes(
+        sess_var.value_.get_int_bytes());
+    } else {
+      precision_ = PRECISION_UNKNOWN_YET;
+    }
+  }
+  ObPCUserVarMeta(const ObPCUserVarMeta &other)
+  {
+    obj_meta_ = other.obj_meta_;
+    precision_ = other.precision_;
+  }
+  inline bool operator==(const ObPCUserVarMeta &other) const
+  {
+    bool ret = (obj_meta_ == other.obj_meta_);
+    if (ret && obj_meta_.is_decimal_int()) {
+      ret = (obj_meta_.get_scale() == other.obj_meta_.get_scale()
+            && wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision_)
+                 == wide::ObDecimalIntConstValue::get_int_bytes_by_precision(other.precision_));
+    }
+    return ret;
+  }
+  inline bool operator!=(const ObPCUserVarMeta &other) const
+  {
+    return !this->operator==(other);
+  }
+  TO_STRING_KV(K_(precision), K_(obj_meta));
+
+private:
+  ObPrecision precision_;
+  ObObjMeta obj_meta_;
+};
 
 //ObPlanSet is a set of ObPhysicalPlans with same PlanMetaInfo
 class ObPlanSet : public common::ObDLinkBase<ObPlanSet>
@@ -224,6 +265,8 @@ private:
   static int check_vector_param_same_bool(const ObObjParam &param_obj,
                                          bool &first_val,
                                          bool &is_same);
+
+  bool match_decint_precision(const ObParamInfo &param_info, ObPrecision other_prec) const;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanSet);
   friend class ::test::TestPlanSet_basic_Test;

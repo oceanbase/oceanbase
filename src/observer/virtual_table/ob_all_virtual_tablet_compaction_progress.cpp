@@ -132,6 +132,12 @@ int ObAllVirtualTabletCompactionProgress::fill_cells()
     case ESTIMATED_FINISH_TIME:
       cells[i].set_timestamp(progress_.estimated_finish_time_);
       break;
+    case START_CG_ID:
+      cells[i].set_int(progress_.start_cg_idx_);
+      break;
+    case END_CG_ID:
+      cells[i].set_int(progress_.end_cg_idx_);
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

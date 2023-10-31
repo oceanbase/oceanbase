@@ -27,7 +27,7 @@
 #include "sql/ob_sql_utils.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/access/ob_multiple_scan_merge.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
@@ -165,7 +165,7 @@ int ObComplementDataParam::split_task_ranges(
     const int64_t hint_parallelism)
 {
   int ret = OB_SUCCESS;
-  ObSimpleFrozenStatus frozen_status;
+  ObFreezeInfo frozen_status;
   const bool allow_not_ready = false;
   ObLSHandle ls_handle;
   ObTabletTableIterator iterator;
@@ -475,7 +475,7 @@ bool ObComplementDataDag::ignore_warning()
 int ObComplementDataDag::prepare_context()
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc data_desc;
+  ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *hidden_table_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -493,14 +493,14 @@ int ObComplementDataDag::prepare_context()
   } else if (OB_ISNULL(hidden_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("hidden table schema not exist", K(ret), K(param_));
-  } else if (OB_FAIL(data_desc.init_as_index(*hidden_table_schema,
+  } else if (OB_FAIL(data_desc.init(*hidden_table_schema,
                                     param_.dest_ls_id_,
                                     param_.dest_tablet_id_,
                                     MAJOR_MERGE,
                                     param_.snapshot_version_,
                                     param_.data_format_version_))) {
     LOG_WARN("fail to init data desc", K(ret));
-  } else if (OB_FAIL(context_.init(param_, data_desc))) {
+  } else if (OB_FAIL(context_.init(param_, data_desc.get_desc()))) {
     LOG_WARN("fail to init context", K(ret), K(param_), K(data_desc));
   }
   LOG_INFO("finish to prepare complement context", K(ret), K(param_), K(context_));
@@ -601,6 +601,9 @@ int ObComplementDataDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementDataDag has not been initialized", K(ret));
+  } else if (OB_UNLIKELY(!param_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param", K(ret), K(param_));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 param_.orig_ls_id_.id(),
                                 static_cast<int64_t>(param_.orig_tablet_id_.id()),
@@ -1091,7 +1094,7 @@ int ObComplementWriteTask::add_extra_rowkey(const int64_t rowkey_cnt,
 int ObComplementWriteTask::append_row(ObScan *scan)
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc data_desc;
+  ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
   HEAP_VARS_3((ObMacroBlockWriter, writer),
               (ObSchemaGetterGuard, schema_guard),
               (ObRelativeTable, relative_table)) {
@@ -1117,6 +1120,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     int64_t rowkey_column_cnt = 0;
     const int64_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     bool ddl_committed = false;
+    blocksstable::ObNewRowBuilder new_row_builder;
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObComplementWriteTask is not inited", K(ret));
@@ -1143,8 +1147,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
                                         param_->snapshot_version_,
                                         param_->data_format_version_))) {
         LOG_WARN("fail to init data store desc", K(ret), K(*param_), K(param_->dest_tablet_id_));
-      } else if (FALSE_IT(data_desc.sstable_index_builder_ = context_->index_builder_)) {
-      } else if (FALSE_IT(data_desc.is_ddl_ = true)) {
+      } else if (FALSE_IT(data_desc.get_desc().sstable_index_builder_ = context_->index_builder_)) {
       } else if (OB_FAIL(param_->get_hidden_table_key(hidden_table_key))) {
         LOG_WARN("fail to get hidden table key", K(ret), K(*param_));
       } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
@@ -1159,7 +1162,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
           static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn()))) {
       } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE, hidden_table_key, param_->task_id_, &sstable_redo_writer, context_->ddl_kv_mgr_handle_))) {
         LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
-      } else if (OB_FAIL(writer.open(data_desc, macro_start_seq, &callback))) {
+      } else if (OB_FAIL(writer.open(data_desc.get_desc(), macro_start_seq, &callback))) {
         LOG_WARN("fail to open macro block writer", K(ret), K(data_desc));
       } else {
         rowkey_column_cnt = hidden_table_schema->get_rowkey_column_num();
@@ -1182,20 +1185,29 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_FAIL(relative_table.init(&schema_param, param_->dest_tablet_id_))) {
         LOG_WARN("fail to init relative_table", K(ret), K(schema_param), K(param_->dest_tablet_id_));
       } else if (OB_FAIL(ObRowReshapeUtil::malloc_rows_reshape_if_need(
-                    allocator, data_desc.get_full_stored_col_descs(), 1, relative_table, sql_mode_for_ddl_reshape, reshape_ptr))) {
+                    allocator, data_desc.get_desc().get_full_stored_col_descs(), 1, relative_table, sql_mode_for_ddl_reshape, reshape_ptr))) {
         LOG_WARN("failed to malloc row reshape", K(ret));
-      } else if (OB_FAIL(datum_row.init(allocator, data_desc.get_full_stored_col_descs().count()))) {
-        LOG_WARN("failed to init datum row", K(ret), K(data_desc.get_full_stored_col_descs()));
+      } else if (OB_FAIL(datum_row.init(allocator, data_desc.get_desc().get_full_stored_col_descs().count()))) {
+        LOG_WARN("failed to init datum row", K(ret), K(data_desc.get_desc().get_full_stored_col_descs()));
+      } else if (OB_FAIL(new_row_builder.init(data_desc.get_desc().get_full_stored_col_descs(), allocator))) {
+        LOG_WARN("Failed to init ObNewRowBuilder", K(ret), K(data_desc.get_desc().get_full_stored_col_descs()));
       }
     }
     while (OB_SUCC(ret)) {      //get each row from row_iter
+      const common::ObIArray<share::schema::ObColDesc> &cols_desc = data_desc.get_desc().get_full_stored_col_descs();
       const ObDatumRow *tmp_row = nullptr;
       const ObDatumRow *reshape_row_only_for_remote_scan = nullptr;
-      ObStoreRow tmp_store_row;
+      common::ObNewRow *tmp_store_row;
       ObColumnChecksumCalculator *checksum_calculator = nullptr;
       t1 = ObTimeUtility::current_time();
-      dag_yield();
-      if (OB_FAIL(scan->get_next_row(tmp_row, reshape_row_only_for_remote_scan))) {
+      if (OB_FAIL(dag_yield())) {
+        if (OB_CANCELED == ret) {
+          LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
+          break;
+        } else {
+          LOG_WARN("Invalid return value for dag_yield", K(ret));
+        }
+      } else if (OB_FAIL(scan->get_next_row(tmp_row, reshape_row_only_for_remote_scan))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next row", K(ret));
         }
@@ -1221,9 +1233,9 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         // do nothing
       } else if (OB_FAIL(add_extra_rowkey(rowkey_column_cnt, extra_rowkey_cnt, *tmp_row))) {
         LOG_WARN("fail to add extra rowkey", K(ret));
-      } else if (OB_FAIL(write_row_.to_store_row(data_desc.get_full_stored_col_descs(), tmp_store_row))) {
+      } else if (OB_FAIL(new_row_builder.build(write_row_, tmp_store_row))) {
       } else if (OB_FAIL(ObRowReshapeUtil::reshape_table_rows(
-          &tmp_store_row.row_val_, reshape_ptr, data_desc.get_full_stored_col_descs().count(), &reshaped_row, 1, sql_mode_for_ddl_reshape))) {
+          tmp_store_row, reshape_ptr, cols_desc.count(), &reshaped_row, 1, sql_mode_for_ddl_reshape))) {
         LOG_WARN("failed to malloc and reshape row", K(ret));
       } else if (OB_FAIL(datum_row.from_store_row(reshaped_row))) {
         STORAGE_LOG(WARN, "Failed to transfer store row ", K(ret), K(reshaped_row));
@@ -1243,7 +1255,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("checksum calculator is nullptr", K(ret), KP(checksum_calculator));
         } else if (param_->orig_tenant_id_ == param_->dest_tenant_id_) {
-          if (OB_FAIL(checksum_calculator->calc_column_checksum(data_desc.get_full_stored_col_descs(), &write_row_, nullptr, nullptr))) {
+          if (OB_FAIL(checksum_calculator->calc_column_checksum(cols_desc, &write_row_, nullptr, nullptr))) {
             LOG_WARN("fail to calc column checksum", K(ret), K(write_row_));
           }
         } else if (param_->orig_tenant_id_ != param_->dest_tenant_id_) {
@@ -1366,38 +1378,24 @@ int ObComplementMergeTask::process()
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     const ObSSTable *first_major_sstable = nullptr;
     ObSSTableMetaHandle sst_meta_hdl;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-      LOG_WARN("failed to get log stream", K(ret), K(*param_));
-    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
-                                                 param_->dest_tablet_id_,
-                                                 tablet_handle,
-                                                 ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(*param_));
-    } else if (OB_ISNULL(tablet_handle.get_obj())) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("tablet handle is null", K(ret), K(*param_));
-    } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-      LOG_WARN("fail to fetch table store", K(ret));
-    } else {
-      const ObSSTable *first_major_sstable = static_cast<const ObSSTable *>(
-        table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/));
-      ObSSTableMetaHandle sst_meta_hdl;
-      if (OB_ISNULL(first_major_sstable)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
-      } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
-        LOG_WARN("fail to get sstable meta handle", K(ret));
-      } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->dest_ls_id_,
-                                                              param_->dest_tablet_id_,
-                                                              param_->dest_table_id_,
-                                                              1 /* execution_id */,
-                                                              param_->task_id_,
-                                                              sst_meta_hdl.get_sstable_meta().get_col_checksum(),
-                                                              sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
-        LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
-      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->dest_tenant_id_, param_->dest_ls_id_, param_->dest_tablet_id_))) {
-        LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
-      }
+    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(
+        param_->dest_ls_id_, param_->dest_tablet_id_, first_major_sstable, table_store_wrapper))) {
+      LOG_WARN("check if major sstable exist failed", K(ret), K(*param_));
+    } else if (OB_ISNULL(first_major_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
+    } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
+      LOG_WARN("fail to get sstable meta handle", K(ret));
+    } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->dest_ls_id_,
+                                                            param_->dest_tablet_id_,
+                                                            param_->dest_table_id_,
+                                                            1 /* execution_id */,
+                                                            param_->task_id_,
+                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum(),
+                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
+      LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
+    } else if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(param_->dest_ls_id_, param_->dest_tablet_id_))) {
+      LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
     }
   } else if (param_->use_new_checksum() && OB_FAIL(context_->get_column_checksum(report_col_checksums, report_col_ids))) {
     LOG_WARN("get column checksum failed", K(ret));
@@ -1572,7 +1570,7 @@ int ObLocalScan::get_exist_column_mapping(
 
   if (OB_FAIL(get_output_columns(hidden_table_schema, tmp_col_ids))) {
     LOG_WARN("get output columns failed", K(ret), K(hidden_table_schema));
-  } else if (exist_column_mapping_.is_inited() && OB_FAIL(exist_column_mapping_.expand_size(tmp_col_ids.count()))) {
+  } else if (exist_column_mapping_.is_inited() && OB_FAIL(exist_column_mapping_.reserve(tmp_col_ids.count()))) {
     LOG_WARN("fail to expand size of bitmap", K(ret));
   } else if (!exist_column_mapping_.is_inited() && OB_FAIL(exist_column_mapping_.init(tmp_col_ids.count(), false))) {
     LOG_WARN("fail to init exist column mapping", K(ret));

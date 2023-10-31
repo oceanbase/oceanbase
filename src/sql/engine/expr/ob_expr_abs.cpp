@@ -197,6 +197,49 @@ DEF_EVAL_ABS_FUNC(ObUInt64Type)
   return ret;
 }
 
+#define MAKE_DECIMAL_INT_OPPOSITE(TYPE)            \
+  case sizeof(TYPE##_t): {                         \
+    res_val.from(-(*(decint->TYPE##_v_)));         \
+    break;                                         \
+  }
+
+DEF_EVAL_ABS_FUNC(ObDecimalIntType)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *param_datum = NULL;
+  bool found_null = false;
+  if (OB_FAIL(check_expr_and_eval(expr, ctx, param_datum, found_null))) {
+    LOG_WARN("failed to check expr and eval", K(ret));
+  } else if (found_null) {
+    expr_datum.set_null();
+  } else {
+    const ObDecimalInt *decint = param_datum->get_decimal_int();
+    const int32_t int_bytes = param_datum->get_int_bytes();
+    bool is_neg = wide::is_negative(decint, int_bytes);
+    if (is_neg) {
+      ObDecimalIntBuilder res_val;
+      switch (int_bytes) {
+        MAKE_DECIMAL_INT_OPPOSITE(int32)
+        MAKE_DECIMAL_INT_OPPOSITE(int64)
+        MAKE_DECIMAL_INT_OPPOSITE(int128)
+        MAKE_DECIMAL_INT_OPPOSITE(int256)
+        MAKE_DECIMAL_INT_OPPOSITE(int512)
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("int_bytes is unexpected", K(ret), K(int_bytes));
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        expr_datum.set_decimal_int(res_val.get_decimal_int(), int_bytes);
+      }
+    } else {
+      expr_datum.set_decimal_int(decint, int_bytes);
+    }
+  }
+  return ret;
+}
+
 ObExpr::EvalFunc abs_funcs[ObMaxType];
 
 template<int IDX>
@@ -218,28 +261,6 @@ REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_ABS_EVAL, abs_funcs, ARRAYSIZEOF(abs_funcs));
 ObExprAbs::ObExprAbs(ObIAllocator &alloc)
     : ObExprOperator(alloc, T_OP_ABS, N_ABS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
       func_(NULL) {}
-
-int ObExprAbs::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  func_ = NULL;
-  ret = ObExprOperator::deserialize(buf, data_len, pos);
-  if (OB_SUCC(ret)) {
-    if (input_types_.count() != 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected error. invalid input types",
-                K(ret),
-                K(input_types_.count()));
-    } else {
-      ObObjType param_type = input_types_.at(0).get_calc_type();
-      if (OB_FAIL(set_func(param_type))) {
-        LOG_WARN("set func failed", K(ret), K(param_type));
-        func_ = NULL;//defensive code
-      }
-    }
-  }
-  return ret;
-}
 
 int ObExprAbs::assign(const ObExprOperator &other)
 {
@@ -312,164 +333,6 @@ int ObExprAbs::calc_result_type1(ObExprResType &type, ObExprResType &type1,
     }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
-  }
-  return ret;
-}
-
-int ObExprAbs::set_func(ObObjType param_type)
-{
-  int ret = OB_SUCCESS;
-  if (ObMaxType == param_type) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("param_type is invalid", K(ret), K(param_type));
-  } else {
-    if (lib::is_oracle_mode()) {
-      if (OB_FAIL(set_func_oracle(param_type))) {
-        LOG_WARN("set_func_oracle failed", K(ret));
-      }
-    } else {
-      if (OB_FAIL(set_func_mysql(param_type))) {
-        LOG_WARN("set_func_mysql failed", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-int ObExprAbs::set_func_oracle(ObObjType param_type)
-{
-  int ret = OB_SUCCESS;
-  func_ = NULL;
-  switch (param_type) {
-    case ObNullType:
-      func_ = abs_null;
-      break;
-    case ObFloatType:
-      func_ = abs_float;
-      break;
-    case ObDoubleType:
-      func_ = abs_double;
-      break;
-    case ObNumberFloatType:
-    case ObNumberType:
-      func_ = abs_number;
-      break;
-    case ObTimestampTZType:
-    case ObTimestampLTZType:
-    case ObTimestampNanoType:
-    case ObTinyIntType:
-    case ObSmallIntType:
-    case ObInt32Type:
-    case ObIntType:
-    case ObCharType:
-    case ObVarcharType:
-    case ObIntervalDSType:
-    case ObIntervalYMType:
-    case ObNVarchar2Type:
-    case ObNCharType:
-    case ObURowIDType:
-      func_ = abs_others_number;
-      break;
-    default:
-      LOG_ERROR("unexpected param type", K(param_type));
-      ret = OB_ERR_UNEXPECTED;
-      break;
-  }
-  return ret;
-}
-int ObExprAbs::set_func_mysql(ObObjType param_type)
-{
-  int ret = OB_SUCCESS;
-  func_ = NULL;
-  switch (param_type) {
-    case ObTinyIntType:
-      func_ = abs_int;
-      break;
-    case ObSmallIntType:
-      func_ = abs_int;
-      break;
-    case ObMediumIntType:
-      func_ = abs_int;
-      break;
-    case ObInt32Type:
-      func_ = abs_int;
-      break;
-    case ObIntType:
-      func_ = abs_int64;
-      break;
-    case ObUTinyIntType:
-      func_ = abs_uint;
-      break;
-    case ObUSmallIntType:
-      func_ = abs_uint;
-      break;
-    case ObUMediumIntType:
-      func_ = abs_uint;
-      break;
-    case ObUInt32Type:
-      func_ = abs_uint32_uint64;
-      break;
-    //in mysql, abs(uint32/uint64/year) returns uint64
-    case ObUInt64Type:
-      func_ = abs_uint32_uint64;
-      break;
-    case ObFloatType:
-      func_ = abs_float_double;
-      break;
-    case ObDoubleType:
-      func_ = abs_double;
-      break;
-    case ObUFloatType:
-      func_ = abs_float_double;
-      break;
-    case ObUDoubleType:
-      func_ = abs_udouble;
-      break;
-    case ObNumberFloatType:
-    case ObNumberType:
-      func_ = abs_number;
-      break;
-    case ObUNumberType:
-      func_ = abs_unumber;
-      break;
-    case ObNullType:
-      func_ = abs_null;
-      break;
-    case ObYearType:
-      func_ = abs_year;
-      break;
-    case ObDateTimeType:
-    case ObTimestampType:
-    case ObDateType:
-    case ObTimeType:
-    case ObVarcharType:
-    case ObCharType:
-    // case ObExtendType:
-    case ObUnknownType:
-    // TODO@hanhui text share with varchar temporarily
-    case ObTinyTextType:
-    case ObTextType:
-    case ObMediumTextType:
-    case ObLongTextType:
-      func_ = abs_others_double;
-      break;
-    case ObHexStringType:
-      func_ = abs_hexstring;
-      break;
-    case ObBitType:
-      func_ = abs_bit;
-      break;
-    case ObEnumType:
-    case ObSetType:
-      func_ = abs_enum_set;
-      break;
-    case ObJsonType:
-      func_ = abs_double;
-      break;
-    default: {
-      LOG_ERROR("unexpected param type", K(param_type));
-      ret = OB_ERR_UNEXPECTED;
-      break;
-    }
   }
   return ret;
 }
@@ -755,7 +618,8 @@ ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type,
      case ObIntervalYMType:
      case ObNVarchar2Type:
      case ObNCharType:
-     case ObURowIDType: {
+     case ObURowIDType:
+     case ObDecimalIntType: {
        calc_type = ObNumberType;
        break;
      }
@@ -832,6 +696,10 @@ ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type,
     case ObSetType:
     case ObJsonType: {
       calc_type = ObDoubleType;
+      break;
+    }
+    case ObDecimalIntType: {
+      calc_type = ObDecimalIntType;
       break;
     }
     default: {

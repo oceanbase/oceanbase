@@ -15,12 +15,10 @@
 
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_raw_se_array.h"
-#include "ob_column_checksum_calculator.h"
 #include "ob_partition_merge_iter.h"
 #include "ob_tablet_merge_task.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
-#include "storage/memtable/ob_nop_bitmap.h"
 #include "storage/ob_row_fuse.h"
 #include "storage/blocksstable/ob_datum_row.h"
 
@@ -32,74 +30,131 @@ struct ObTempExpr;
 }
 namespace compaction
 {
-class ObIPartitionMergeFuser
+template <typename T, typename... Args> T *alloc_helper(common::ObIAllocator &allocator, Args&... args)
+{
+  static_assert(std::is_constructible<T, Args&...>::value, "invalid construct arguments");
+  void *buf = nullptr;
+  T *rows_merger = nullptr;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
+  } else {
+    rows_merger = new (buf) T(args...);
+  }
+
+  return rows_merger;
+}
+
+class ObMergeFuser
 {
 public:
-  ObIPartitionMergeFuser()
-    : schema_rowkey_column_cnt_(0),
+  ObMergeFuser(common::ObIAllocator &allocator)
+    : is_inited_(false),
+      allocator_(allocator),
       column_cnt_(0),
       result_row_(),
-      nop_pos_(),
-      allocator_("MergeFuser"),
-      multi_version_column_ids_(common::OB_MAX_COLUMN_NUMBER, allocator_),
-      is_inited_(false)
+      nop_pos_()
   {}
-  virtual ~ObIPartitionMergeFuser();
-  virtual int init(const ObMergeParameter &merge_param);
-  virtual void reset();
+  virtual ~ObMergeFuser() {}
+  virtual int init(const int64_t column_count) { return OB_NOT_SUPPORTED; }
+  virtual int init(const ObMergeParameter &merge_param, const bool is_fuse_row_flag = false) { return OB_NOT_SUPPORTED; }
   virtual bool is_valid() const;
-  virtual int fuse_row(MERGE_ITER_ARRAY &macro_row_iters) = 0;
-  virtual int calc_column_checksum(const bool rewrite);
-  virtual inline const blocksstable::ObDatumRow *get_result_row() const { return &result_row_; }
-  inline const common::ObIArray<share::schema::ObColDesc> &get_multi_version_column_ids() const
-  {
-    return multi_version_column_ids_;
-  }
-  virtual const char *get_fuser_name() const = 0;
-  virtual int set_multi_version_flag(const blocksstable::ObMultiVersionRowFlag &row_flag);
-  VIRTUAL_TO_STRING_KV(K_(schema_rowkey_column_cnt), K_(column_cnt),
-      K_(result_row), K_(multi_version_column_ids), K_(is_inited));
+  inline bool is_inited() { return is_inited_; }
+  int set_multi_version_flag(const blocksstable::ObMultiVersionRowFlag &row_flag);
+  template<typename T, typename... Args>
+  int fuse_rows(const T& row, const Args&... args);
+  int fuse_row(MERGE_ITER_ARRAY &macro_row_iters);
+  inline const blocksstable::ObDatumRow &get_result_row() const { return result_row_; }
+  VIRTUAL_TO_STRING_KV(K_(column_cnt), K_(result_row), K_(is_inited));
 protected:
-  int check_merge_param(const ObMergeParameter &merge_param);
-  int base_init(const ObMergeParameter &merge_param);
-  virtual int inner_check_merge_param(const ObMergeParameter &merge_param) = 0;
-  virtual int inner_init(const ObMergeParameter &merge_param) = 0;
-
-  void reset_store_row(blocksstable::ObDatumRow &store_row);
-  virtual int fuse_delete_row(ObPartitionMergeIter *row_iter, blocksstable::ObDatumRow &row,
-                      const int64_t rowkey_column_cnt) = 0;
-private:
+  int base_init(const bool is_fuse_row_flag = false);
+  void clean_nop_pos_and_result_row();
+  inline void set_trans_id(const transaction::ObTransID& trans_id) { result_row_.trans_id_ = trans_id; }
+  int add_fuse_row(const blocksstable::ObDatumRow &row, bool &final_result);
+  int add_fuse_rows() { return OB_SUCCESS; }
+  template<typename T, typename... Args>
+  int add_fuse_rows(const T& row, const Args&... args);
+  int fuse_delete_row(const blocksstable::ObDatumRow &del_row, const int64_t rowkey_column_cnt);
+  virtual int preprocess_fuse_row(const blocksstable::ObDatumRow &row, bool &is_need_fuse);
+  virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row);
 protected:
-  int64_t schema_rowkey_column_cnt_;
+  bool is_inited_;
+  common::ObIAllocator &allocator_;
   int64_t column_cnt_;
+  bool is_fuse_row_flag_;
   blocksstable::ObDatumRow result_row_;
   storage::ObNopPos nop_pos_;
-  common::ObArenaAllocator allocator_;
-  // for major: store all columns' description
-  // for mini & minor: store multi_version rowkey column description
-  common::ObArray<share::schema::ObColDesc, common::ObIAllocator &> multi_version_column_ids_;
-  bool is_inited_;
+};
+
+template<typename T, typename... Args>
+int ObMergeFuser::add_fuse_rows(const T& row, const Args&... args)
+{
+  static_assert(std::is_same<blocksstable::ObDatumRow, T>::value, "typename T not ObDatumRow");
+  int ret = OB_SUCCESS;
+  bool final_result = false;
+  if (OB_FAIL(add_fuse_row(row, final_result))) {
+    STORAGE_LOG(WARN, "Failed to fuse row", K(ret));
+  } else if (final_result) {
+  } else if (OB_FAIL(add_fuse_rows(args...))) {
+    STORAGE_LOG(WARN, "failed to push fuse row", K(ret));
+  }
+
+  return ret;
+}
+
+template<typename T, typename... Args>
+int ObMergeFuser::fuse_rows(const T& row, const Args&... args)
+{
+  static_assert(std::is_same<blocksstable::ObDatumRow, T>::value, "typename T not ObDatumRow");
+  int ret = OB_SUCCESS;
+  bool is_need_fuse = true;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret =OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMergeFuser not init", K(ret));
+  } else if (OB_FAIL(preprocess_fuse_row(row, is_need_fuse))) {
+    STORAGE_LOG(WARN, "failed to preprocess_fuse_row", K(ret));
+  } else if (!is_need_fuse) {
+  } else if (OB_FAIL(add_fuse_rows(row, args...))) {
+    STORAGE_LOG(WARN, "Failed to fuse default row", K(ret));
+  } else if (OB_FAIL(end_fuse_row(nop_pos_, result_row_))) {
+    STORAGE_LOG(WARN, "failed to end_fuse_row", K(ret));
+  }
+  return ret;
+}
+
+class ObDefaultMergeFuser : public ObMergeFuser
+{
+public:
+  ObDefaultMergeFuser(common::ObIAllocator &allocator) : ObMergeFuser(allocator) {}
+  virtual ~ObDefaultMergeFuser() {}
+  virtual int init(const int64_t column_count) override final;
+  INHERIT_TO_STRING_KV("ObMergeFuser", ObMergeFuser, "cur_fuser", "ObDefaultMergeFuser");
+};
+
+class ObIPartitionMergeFuser : public ObMergeFuser
+{
+public:
+  ObIPartitionMergeFuser(common::ObIAllocator &allocator) : ObMergeFuser(allocator)
+  {}
+  virtual ~ObIPartitionMergeFuser() {}
+  virtual int init(const ObMergeParameter &merge_param, const bool is_fuse_row_flag = false) override final;
+  virtual bool is_valid() const override;
+  INHERIT_TO_STRING_KV("ObMergeFuser", ObMergeFuser, "cur_fuser", "ObIPartitionMergeFuser");
+protected:
+  virtual int inner_init(const ObMergeParameter &merge_param) = 0;
 };
 
 class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser
 {
 public:
-  ObMajorPartitionMergeFuser()
-      : ObIPartitionMergeFuser(),
+  ObMajorPartitionMergeFuser(common::ObIAllocator &allocator)
+    : ObIPartitionMergeFuser(allocator),
       default_row_(),
       generated_cols_(allocator_)
   {}
   virtual ~ObMajorPartitionMergeFuser();
-  virtual void reset() override;
-  virtual bool is_valid() const override;
-  virtual int fuse_row(MERGE_ITER_ARRAY &macro_row_iters) override;
-  virtual const char *get_fuser_name() const override { return "ObMajorPartitionMergeFuser"; }
+  virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override;
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser, K_(default_row));
 protected:
-  virtual int inner_check_merge_param(const ObMergeParameter &merge_param);
   virtual int inner_init(const ObMergeParameter &merge_param) override;
-  virtual int fuse_delete_row(ObPartitionMergeIter *row_iter, blocksstable::ObDatumRow &row,
-                              const int64_t rowkey_column_cnt) override;
 protected:
   blocksstable::ObDatumRow default_row_;
   ObFixedArray<int32_t, ObIAllocator> generated_cols_;
@@ -110,13 +165,10 @@ private:
 class ObMetaPartitionMergeFuser : public ObMajorPartitionMergeFuser
 {
 public:
-  ObMetaPartitionMergeFuser() {}
+  ObMetaPartitionMergeFuser(common::ObIAllocator &allocator) : ObMajorPartitionMergeFuser(allocator) {}
   virtual ~ObMetaPartitionMergeFuser() {}
-  virtual const char *get_fuser_name() const override { return "ObMetaPartitionMergeFuser"; }
   INHERIT_TO_STRING_KV("ObMajorPartitionMergeFuser", ObMajorPartitionMergeFuser,
       "cur_fuser", "ObMetaPartitionMergeFuser");
-protected:
-  virtual int inner_check_merge_param(const ObMergeParameter &merge_param) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMetaPartitionMergeFuser);
 };
@@ -125,41 +177,29 @@ private:
 class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser
 {
 public:
-  ObMinorPartitionMergeFuser()
-    : ObIPartitionMergeFuser(),
+  ObMinorPartitionMergeFuser(common::ObIAllocator &allocator)
+    : ObIPartitionMergeFuser(allocator),
       multi_version_rowkey_column_cnt_(0)
   {}
-  virtual ~ObMinorPartitionMergeFuser();
-  virtual void reset() override;
+  virtual ~ObMinorPartitionMergeFuser() {}
   virtual bool is_valid() const override;
-  virtual int fuse_row(MERGE_ITER_ARRAY &macro_row_iters) = 0;
-  virtual const char *get_fuser_name() const override { return "ObMinorPartitionMergeFuser"; }
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser,
       K_(multi_version_rowkey_column_cnt));
 protected:
-  virtual int inner_check_merge_param(const ObMergeParameter &merge_param) override;
   virtual int inner_init(const ObMergeParameter &merge_param) override;
-
-  virtual int fuse_delete_row(ObPartitionMergeIter *row_iter, blocksstable::ObDatumRow &row,
-                      const int64_t rowkey_column_cnt) = 0;
+  virtual int preprocess_fuse_row(const blocksstable::ObDatumRow &row, bool &is_need_fuse) override;
+  virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override;
 protected:
   int64_t multi_version_rowkey_column_cnt_;
   DISALLOW_COPY_AND_ASSIGN(ObMinorPartitionMergeFuser);
 };
 
-class ObFlatMinorPartitionMergeFuser : public ObMinorPartitionMergeFuser
-{
+class ObMergeFuserBuilder {
 public:
-  ObFlatMinorPartitionMergeFuser(){}
-  virtual ~ObFlatMinorPartitionMergeFuser(){}
-  virtual int fuse_delete_row(ObPartitionMergeIter *row_iter, blocksstable::ObDatumRow &row,
-                      const int64_t rowkey_column_cnt) override;
-  virtual int fuse_row(MERGE_ITER_ARRAY &macro_row_iters) override;
-  virtual const char *get_fuser_name() const override { return "ObFlatMinorPartitionMergeFuser"; }
-  INHERIT_TO_STRING_KV("ObFlatMinorPartitionMergeFuser", ObIPartitionMergeFuser,
-      K_(multi_version_rowkey_column_cnt));
+  static int build(const ObMergeParameter &merge_param,
+                   ObIAllocator &allocator,
+                   ObIPartitionMergeFuser *&partition_fuser);
 };
-
 } //compaction
 } //oceanbase
 

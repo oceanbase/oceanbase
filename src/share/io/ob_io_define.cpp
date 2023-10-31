@@ -274,11 +274,20 @@ int ObIOCallback::process(const char *data_buffer, const int64_t size)
   return inner_process(data_buffer, size);
 }
 
-int ObIOCallback::deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const
+int ObIOCallback::alloc_and_copy_data(const char *io_data_buffer, const int64_t data_size, common::ObIAllocator *allocator, char *&data_buffer)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(inner_deep_copy(buf, buf_len, copied_callback))) {
-    copied_callback->compat_mode_ = compat_mode_;
+  if (OB_ISNULL(allocator) || nullptr == io_data_buffer) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid data, the allocator is nullptr", K(ret), K(io_data_buffer), K(allocator));
+  } else if (OB_UNLIKELY(data_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid data buffer size", K(ret), K(data_size));
+  } else if (OB_UNLIKELY(NULL == (data_buffer = (char*) (allocator->alloc(data_size))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("fail to allocate memory", K(ret), K(data_size));
+  } else {
+    MEMCPY(data_buffer, io_data_buffer, data_size);
   }
   return ret;
 }
@@ -289,9 +298,11 @@ ObIOInfo::ObIOInfo()
     fd_(),
     offset_(0),
     size_(0),
+    timeout_us_(DEFAULT_IO_WAIT_TIME_US),
     flag_(),
+    callback_(nullptr),
     buf_(nullptr),
-    callback_(nullptr)
+    user_data_buf_(nullptr)
 {
 
 }
@@ -307,9 +318,11 @@ void ObIOInfo::reset()
   fd_.reset();
   offset_ = 0;
   size_ = 0;
+  timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   flag_.reset();
-  buf_ = nullptr;
   callback_ = nullptr;
+  buf_ = nullptr;
+  user_data_buf_ = nullptr;
 }
 
 bool ObIOInfo::is_valid() const
@@ -318,6 +331,7 @@ bool ObIOInfo::is_valid() const
     && fd_.is_valid()
     && offset_ >= 0
     && size_ > 0
+    && timeout_us_ >= 0 //todo qilu: reopen after column_store steady
     && flag_.is_valid()
     && (flag_.is_read() || nullptr != buf_);
 }
@@ -325,15 +339,11 @@ bool ObIOInfo::is_valid() const
 /******************             IOTimeLog              **********************/
 
 ObIOTimeLog::ObIOTimeLog()
-  : begin_ts_(0),
-    enqueue_ts_(0),
+  : enqueue_ts_(0),
     dequeue_ts_(0),
     submit_ts_(0),
     return_ts_(0),
-    callback_enqueue_ts_(0),
-    callback_dequeue_ts_(0),
-    callback_finish_ts_(0),
-    end_ts_(0)
+    callback_enqueue_ts_(0)
 {
 }
 
@@ -344,15 +354,11 @@ ObIOTimeLog::~ObIOTimeLog()
 
 void ObIOTimeLog::reset()
 {
-  begin_ts_ = 0;
   enqueue_ts_ = 0;
   dequeue_ts_ = 0;
   submit_ts_ = 0;
   return_ts_ = 0;
   callback_enqueue_ts_ = 0;
-  callback_dequeue_ts_ = 0;
-  callback_finish_ts_ = 0;
-  end_ts_ = 0;
 }
 
 int64_t oceanbase::common::get_io_interval(const int64_t &end_time, const int64_t &begin_time)
@@ -391,75 +397,77 @@ void ObIORetCode::reset()
   fs_errno_ = 0;
 }
 
-/******************             IORequest              **********************/
-
-ObIORequest::ObIORequest()
+/******************             ObIOResult              **********************/
+ObIOResult::ObIOResult()
   : is_inited_(false),
     is_finished_(false),
     is_canceled_(false),
     has_estimated_(false),
-    io_info_(),
-    deadline_ts_(0),
-    sender_index_(0),
-    control_block_(nullptr),
-    raw_buf_(nullptr),
-    io_buf_(nullptr),
-    io_offset_(0),
-    io_size_(0),
-    complete_size_(0),
-    time_log_(),
-    channel_(nullptr),
-    sender_(nullptr),
-    ref_cnt_(0),
+    result_ref_cnt_(0),
     out_ref_cnt_(0),
-    cond_(),
-    trace_id_(),
-    ret_code_(),
-    retry_count_(0),
+    complete_size_(0),
+    offset_(0),
+    size_(0),
+    timeout_us_(DEFAULT_IO_WAIT_TIME_US),
+    begin_ts_(0),
+    end_ts_(0),
     tenant_io_mgr_(),
-    copied_callback_(nullptr),
-    callback_buf_size_(0),    
-    callback_buf_()
+    buf_(nullptr),
+    user_data_buf_(nullptr),
+    io_callback_(nullptr),
+    flag_(),
+    ret_code_(),
+    cond_()
 {
 
 }
 
-ObIORequest::~ObIORequest()
+ObIOResult::~ObIOResult()
 {
   destroy();
 }
 
-int ObIORequest::init(const ObIOInfo &info)
+bool ObIOResult::is_valid() const
+{
+  return offset_ >= 0
+    && size_ > 0
+    && timeout_us_ >= 0 //todo qilu: reopen after column_store steady
+    && flag_.is_valid()
+    && (flag_.is_read() ? (nullptr != io_callback_ || nullptr != user_data_buf_ || flag_.is_detect()) : nullptr != buf_);
+}
+
+int ObIOResult::basic_init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
+    LOG_WARN("init result condition failed", K(ret));
+  }
+  return ret;
+}
+
+int ObIOResult::init(const ObIOInfo &info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("io request init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(info));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
-    LOG_WARN("init request condition failed", K(ret));
+    LOG_WARN("io result init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!cond_.is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("thread_cond not init yet", K(ret));
   } else {
-    time_log_.begin_ts_ = ObTimeUtility::fast_current_time();
-    io_info_ = info;
-    if (nullptr == io_info_.fd_.device_handle_) {
-      io_info_.fd_.device_handle_ = THE_IO_DEVICE; // for test
-    }
-    trace_id_ = *ObCurTraceId::get_trace_id();
-    if (nullptr != info.callback_ && OB_FAIL(info.callback_->deep_copy(
-            callback_buf_, callback_buf_size_, copied_callback_))) {
-      LOG_WARN("deep copy io callback failed", K(ret), K(*info.callback_));
-    } else if (io_info_.flag_.is_write() && OB_FAIL(alloc_io_buf())) {
-      // alloc buffer for write request when ObIORequest init
-      LOG_WARN("alloc io buffer for write failed", K(ret));
-    } else {
-      // read buf allocation is delayed to before_submit
-      // but aligned offset and size need calculate here for calculating deadline_ts
-      align_offset_size(info.offset_, info.size_, io_offset_, io_size_);
+    //init info and check valid
+    offset_ = static_cast<int32_t>(info.offset_);
+    size_ = info.size_;
+    flag_ = info.flag_;
+    timeout_us_ = info.timeout_us_;
+    buf_ = info.buf_;
+    user_data_buf_ = info.user_data_buf_;
+    begin_ts_ = ObTimeUtility::fast_current_time();
+    if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(*this));
     }
   }
-
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(tenant_io_mgr_.get_ptr())) {
       tenant_io_mgr_.get_ptr()->io_usage_.record_request_start(*this);
@@ -469,57 +477,379 @@ int ObIORequest::init(const ObIOInfo &info)
   return ret;
 }
 
-void ObIORequest::destroy()
+void ObIOResult::reset()
 {
-  is_inited_ = false;
   is_finished_ = false;
   is_canceled_ = false;
   has_estimated_ = false;
-  deadline_ts_ = 0;
-  sender_index_ = 0;
-  if (nullptr != control_block_ && nullptr != io_info_.fd_.device_handle_) {
-    io_info_.fd_.device_handle_->free_iocb(control_block_);
-    control_block_ = nullptr;
-  }
-  io_info_.reset();
-  free_io_buffer();
-  io_buf_ = nullptr;
-  io_offset_ = 0;
-  io_size_ = 0;
   complete_size_ = 0;
-  time_log_.reset();
-  channel_ = nullptr;
-  sender_ = nullptr;
-  ref_cnt_ = 0;
+  offset_ = 0;
+  size_ = 0;
+  result_ref_cnt_ = 0;
   out_ref_cnt_ = 0;
-  cond_.destroy();
-  trace_id_.reset();
+  timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
+  begin_ts_ = 0;
+  end_ts_ = 0;
+  buf_ = nullptr;
+  user_data_buf_ = nullptr;
+  io_callback_ = nullptr;
+  flag_.reset();
   ret_code_.reset();
-  retry_count_ = 0;
-  if (nullptr != copied_callback_) {
-    copied_callback_->~ObIOCallback();
-    copied_callback_ = nullptr;
-  }
-  callback_buf_size_ = 0;
   tenant_io_mgr_.reset();
-  // callback_buf_ needn't reset
+  //do not destroy thread_cond
+  is_inited_ = false;
 }
 
-int64_t ObIORequest::get_data_size() const
+void ObIOResult::destroy()
+{
+  is_finished_ = false;
+  is_canceled_ = false;
+  has_estimated_ = false;
+  complete_size_ = 0;
+  offset_ = 0;
+  size_ = 0;
+  result_ref_cnt_ = 0;
+  out_ref_cnt_ = 0;
+  timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
+  begin_ts_ = 0;
+  end_ts_ = 0;
+  buf_ = nullptr;
+  user_data_buf_ = nullptr;
+  io_callback_ = nullptr;
+  flag_.reset();
+  ret_code_.reset();
+  cond_.destroy();
+  tenant_io_mgr_.reset();
+  is_inited_ = false;
+}
+
+int64_t ObIOResult::get_data_size() const
 {
   int64_t data_size = 0;
-  if (io_info_.flag_.is_sync()) {
-    data_size = complete_size_;
+  if (flag_.is_sync()) {
+    data_size = static_cast<int64_t>(complete_size_);
   } else {
-    const int64_t aligned_offset = lower_align(io_info_.offset_, DIO_READ_ALIGN_SIZE);
-    data_size = min(io_info_.size_, max(0, complete_size_ - (io_info_.offset_ - aligned_offset)));
+    const int64_t aligned_offset = lower_align(static_cast<int64_t>(offset_), DIO_READ_ALIGN_SIZE);
+    data_size = min(size_, max(0, static_cast<int64_t>(complete_size_) - (static_cast<int64_t>(offset_) - aligned_offset)));
   }
   return data_size;
 }
 
+ObIOMode ObIOResult::get_mode() const
+{
+  return flag_.get_mode();
+}
+
+void ObIOResult::calc_io_offset_and_size(int64_t &size, int32_t &offset)
+{
+  if (!flag_.is_sync()) {
+    align_offset_size(offset_, size_, offset, size);
+  } else {
+    offset = offset_;
+    size = size_;
+  }
+}
+
+int64_t ObIOResult::get_group_id() const
+{
+  return flag_.get_group_id();
+}
+
+uint64_t ObIOResult::get_io_usage_index()
+{
+  uint64_t index = 0;
+  if (!is_user_group(get_group_id())) {
+    //other group , do nothing
+  } else {
+    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
+  }
+  return index;
+}
+
+void ObIOResult::cancel()
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_ && !is_finished_) {
+    { // must check finished and set cancel in guard
+      ObThreadCondGuard guard(cond_);
+      if (OB_FAIL(guard.get_ret())) {
+        LOG_WARN("fail to guard condition", K(ret));
+      } else if (is_finished_) {
+        // do nothing
+      } else {
+        is_canceled_ = true;
+        //note: not support channel cancel now
+      }
+    }
+    finish(OB_CANCELED);
+  }
+}
+
+void ObIOResult::inc_ref(const char *msg)
+{
+  (void)ATOMIC_FAA(&result_ref_cnt_, 1);
+}
+
+void ObIOResult::dec_ref(const char *msg)
+{
+  int ret = OB_SUCCESS;
+  ObRefHolder<ObTenantIOManager> tenant_holder(tenant_io_mgr_.get_ptr());
+  int64_t tmp_ref = ATOMIC_SAF(&result_ref_cnt_, 1);
+  if (tmp_ref < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("bug: result_ref_cnt < 0", K(ret), K(tmp_ref), KCSTRING(lbt()));
+    abort();
+  } else if (0 == tmp_ref) {
+    if (OB_ISNULL(tenant_holder.get_ptr())) {
+      ret = OB_ERR_SYS;
+      LOG_ERROR("tenant io manager is null, memory leak", K(ret));
+    } else {
+      if (tenant_holder.get_ptr()->io_result_pool_.contain(this)) {
+        reset();
+        tenant_holder.get_ptr()->io_result_pool_.recycle(this);
+      } else {
+        // destroy will be called when free
+        tenant_holder.get_ptr()->io_allocator_.free(this);
+      }
+    }
+  }
+}
+
+void ObIOResult::finish(const ObIORetCode &ret_code, ObIORequest *req)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else {
+    ObThreadCondGuard guard(cond_);
+    if (OB_LIKELY(!is_finished_)) {
+      ret_code_ = ret_code;
+      is_finished_ = true;
+      if (OB_NOT_NULL(tenant_io_mgr_.get_ptr()) && OB_NOT_NULL(req)) {
+        tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this, *req);
+        tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
+        end_ts_ = ObTimeUtility::fast_current_time();
+        // record io error
+        if (OB_UNLIKELY(OB_IO_ERROR == ret_code_.io_ret_)) {
+          ObIOInfo detect_info;
+          detect_info.tenant_id_ = req->tenant_id_;
+          detect_info.fd_ = req->fd_;
+          detect_info.timeout_us_ = timeout_us_;
+          detect_info.buf_ = buf_;
+          detect_info.flag_ = flag_;
+          detect_info.size_ = size_;
+          detect_info.offset_ = static_cast<int64_t>(offset_);
+          OB_IO_MANAGER.get_device_health_detector().record_io_error(*this, detect_info);
+        }
+        // record timeout
+        if (OB_UNLIKELY(ObTimeUtility::current_time() > req->timeout_ts())) {
+          OB_IO_MANAGER.get_device_health_detector().record_io_timeout(*this, req);
+        }
+      }
+      if (OB_FAIL(guard.get_ret())) {
+        LOG_ERROR("lock io result condition failed", K(ret), K(*this));
+      } else if (OB_FAIL(cond_.signal())) {
+        LOG_ERROR("signal io result condition failed", K(ret), K(*this));
+      }
+    }
+  }
+}
+
+void ObIOResult::inc_out_ref()
+{
+  ATOMIC_INC(&out_ref_cnt_);
+}
+
+void ObIOResult::dec_out_ref()
+{
+  int ret =OB_SUCCESS;
+  if (0 == ATOMIC_SAF(&out_ref_cnt_, 1)) {
+    cancel();
+
+    if (OB_NOT_NULL(io_callback_) && OB_NOT_NULL(io_callback_->get_allocator())) {
+      ObIAllocator *tmp_allocator = io_callback_->get_allocator();
+      io_callback_->~ObIOCallback(); //allocator will set null
+      tmp_allocator->free(io_callback_);
+      io_callback_ = nullptr;
+    }
+  }
+}
+
+void ObIOResult::finish_without_accumulate(const ObIORetCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else {
+    ObThreadCondGuard guard(cond_);
+    if (OB_LIKELY(!is_finished_)) {
+      ret_code_ = ret_code;
+      is_finished_ = true;
+      if (OB_NOT_NULL(tenant_io_mgr_.get_ptr())) {
+        tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
+      }
+      end_ts_ = ObTimeUtility::fast_current_time();
+      if (OB_FAIL(guard.get_ret())) {
+        LOG_ERROR("lock io result condition failed", K(ret), K(*this));
+      } else if (OB_FAIL(cond_.signal())) {
+        LOG_ERROR("signal io result condition failed", K(ret), K(*this));
+      }
+    }
+  }
+}
+
+/******************             IORequest              **********************/
+
+ObIORequest::ObIORequest()
+  : io_result_(nullptr),
+    is_inited_(false),
+    retry_count_(0),
+    ref_cnt_(0),
+    raw_buf_(nullptr),
+    control_block_(nullptr),
+    tenant_id_(OB_INVALID_TENANT_ID),
+    tenant_io_mgr_(),
+    fd_(),
+    time_log_(),
+    trace_id_()
+{
+
+}
+
+ObIORequest::~ObIORequest()
+{
+  destroy();
+}
+
+bool ObIORequest::is_valid() const
+{
+  return nullptr != io_result_
+      && io_result_->is_valid()
+      && tenant_id_ > 0
+      && fd_.is_valid();
+}
+
+int ObIORequest::basic_init()
+{
+  return OB_SUCCESS;
+}
+
+int ObIORequest::init(const ObIOInfo &info, ObIOResult *result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("io request init twice", K(ret), K(is_inited_));
+  } else if (OB_ISNULL(result)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("io result is null", K(ret));
+  } else {
+    io_result_ = result;
+    io_result_->inc_ref("request");
+    trace_id_ = *ObCurTraceId::get_trace_id();
+    //init info and check valid
+    tenant_id_ = info.tenant_id_;
+    fd_ = info.fd_;
+    if (nullptr == fd_.device_handle_) {
+      fd_.device_handle_ = THE_IO_DEVICE; // for test
+    }
+    char *io_buf = nullptr;
+    if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(*this));
+    } else if (info.flag_.is_write() && OB_FAIL(alloc_io_buf(io_buf))) {
+      // alloc buffer for write request when ObIORequest init
+      LOG_WARN("alloc io buffer for write failed", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObIORequest::set_result(ObIOResult &io_result)
+{
+  io_result.inc_ref("request");
+  io_result_ = &io_result;
+}
+
+void ObIORequest::free()
+{
+  int ret = OB_SUCCESS;
+  ObRefHolder<ObTenantIOManager> tenant_holder(tenant_io_mgr_.get_ptr());
+  if (OB_ISNULL(tenant_holder.get_ptr())) {
+    //not set yet, do nothing
+  } else {
+    if (tenant_holder.get_ptr()->io_request_pool_.contain(this)) {
+      destroy();
+      tenant_holder.get_ptr()->io_request_pool_.recycle(this);
+    } else {
+      // destroy will be called when free
+      tenant_holder.get_ptr()->io_allocator_.free(this);
+    }
+  }
+}
+
+void ObIORequest::reset() //only for test, not dec resut_ref
+{
+  retry_count_ = 0;
+  if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
+    fd_.device_handle_->free_iocb(control_block_);
+    control_block_ = nullptr;
+  }
+  tenant_id_ = 0;
+  free_io_buffer();
+  ref_cnt_ = 0;
+  trace_id_.reset();
+  time_log_.reset();
+  io_result_ = nullptr;
+  fd_.reset();
+  tenant_io_mgr_.reset();
+  is_inited_ = false;
+}
+
+void ObIORequest::destroy()
+{
+  retry_count_ = 0;
+  if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
+    fd_.device_handle_->free_iocb(control_block_);
+    control_block_ = nullptr;
+  }
+  fd_.reset();
+  tenant_id_ = 0;
+  free_io_buffer();
+  ref_cnt_ = 0;
+  trace_id_.reset();
+  time_log_.reset();
+  if (nullptr != io_result_) {
+    io_result_->dec_ref("request");
+    io_result_ = nullptr;
+  }
+  tenant_io_mgr_.reset();
+  is_inited_ = false;
+}
+
+bool ObIORequest::is_canceled()
+{
+  //result = null should not happen, no need to continue request
+  return nullptr == io_result_ ? true : io_result_->is_canceled_;
+}
+
+int64_t ObIORequest::get_data_size() const
+{
+  return nullptr == io_result_ ? 0 : io_result_->get_data_size();
+}
+
 int64_t ObIORequest::get_group_id() const
 {
-  return io_info_.flag_.get_group_id();
+  return nullptr == io_result_ ? 0 : io_result_->flag_.get_group_id();
+}
+
+int64_t ObIORequest::timeout_ts() const
+{
+  return nullptr == io_result_ ? 0 : io_result_->begin_ts_ > 0 ? io_result_->begin_ts_ + io_result_->timeout_us_ : 0;
 }
 
 uint64_t ObIORequest::get_io_usage_index()
@@ -533,20 +863,31 @@ uint64_t ObIORequest::get_io_usage_index()
   return index;
 }
 
-const char *ObIORequest::get_data()
+char *ObIORequest::calc_io_buf()
 {
-  const char *buf = nullptr;
-  if (nullptr != copied_callback_) {
-    buf = copied_callback_->get_data();
-  } else if (io_info_.flag_.is_sync()) {
-    buf = io_buf_;
-  } else {
-    // re-calculate with const parameters, in case of partial return change aligned_buf and so on.
-
-    //todo QILU: buf = get_user_data_buf()，完成no_callback memcpy改造后替换
-    buf = get_io_data_buf();
+  char *ret_buf = nullptr;
+  if (OB_NOT_NULL(io_result_)) {
+    if (io_result_->flag_.is_sync()) {
+      ret_buf = const_cast<char *>(io_result_->buf_);
+    } else if (OB_NOT_NULL(raw_buf_)){
+      ret_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
+    }
   }
-  return buf;
+  return ret_buf;
+}
+
+void ObIORequest::calc_io_offset_and_size(int64_t &size, int64_t &offset)
+{
+  if (OB_NOT_NULL(io_result_)) {
+    if (!io_result_->flag_.is_sync()) {
+      int32_t ret_offset = 0;
+      align_offset_size(io_result_->offset_, io_result_->size_, ret_offset, size);
+      offset = static_cast<int64_t>(ret_offset);
+    } else {
+      offset = static_cast<int64_t>(io_result_->offset_);
+      size = io_result_->size_;
+    }
+  }
 }
 
 const char *ObIORequest::get_io_data_buf()
@@ -554,115 +895,136 @@ const char *ObIORequest::get_io_data_buf()
   char *buf = nullptr;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == raw_buf_)) {
-    LOG_ERROR("raw buf is null, maybe has been recycle");
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("raw buf is null, maybe has been recycle", K(ret));
   } else {
-    const int64_t aligned_offset = lower_align(io_info_.offset_, DIO_READ_ALIGN_SIZE);
+    // re-calculate with const parameters, in case of partial return change aligned_buf and so on.
+    const int64_t aligned_offset = lower_align(static_cast<int64_t>(io_result_->offset_), DIO_READ_ALIGN_SIZE);
     char *aligned_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
-    buf = aligned_buf + io_info_.offset_ - aligned_offset;
+    buf = aligned_buf + static_cast<int64_t>(io_result_->offset_) - aligned_offset;
   }
   return buf;
 }
 
 const ObIOFlag &ObIORequest::get_flag() const
 {
-  return io_info_.flag_;
+  return io_result_->flag_;
 }
 
 ObIOMode ObIORequest::get_mode() const
 {
-  return io_info_.flag_.get_mode();
+  return io_result_->flag_.get_mode();
 }
 
-int ObIORequest::alloc_io_buf()
+ObIOCallback *ObIORequest::get_callback() const
+{
+  return io_result_->io_callback_;
+}
+
+int ObIORequest::alloc_io_buf(char *&io_buf)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!io_info_.is_valid())) {
+  if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid io info", K(ret), K(io_info_));
-  } else if (io_info_.flag_.is_sync()) { // for pread and pwrite, reuse user buf
-    io_offset_ = io_info_.offset_;
-    io_size_ = io_info_.size_;
-    io_buf_ = const_cast<char *>(io_info_.buf_);
+    LOG_WARN("invalid io info", K(ret), K(*this));
+  } else if (nullptr != io_result_ && !io_result_->flag_.is_sync()) {
+    ret = alloc_aligned_io_buf(io_buf);
   } else {
-    ret = alloc_aligned_io_buf();
+     //ignore, for sync pread and pwrite, reuse user buf
   }
   return ret;
 }
 
-int ObIORequest::alloc_aligned_io_buf()
+int ObIORequest::alloc_aligned_io_buf(char *&io_buf)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!io_info_.is_valid()
-      || (!io_info_.flag_.is_read() && !io_info_.flag_.is_write()))) { // only for read and write
+  int32_t io_offset = 0;
+  int64_t io_size = 0;
+  if (OB_ISNULL(io_result_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid io info", K(ret), K(io_info_));
-  } else if (io_info_.flag_.is_write() // write io must aligned
-      && OB_UNLIKELY(!is_io_aligned(io_info_.offset_) || !is_io_aligned(io_info_.size_))) {
+    LOG_WARN("io result is null", K(ret));
+  } else if (OB_UNLIKELY(!io_result_->flag_.is_read() && !io_result_->flag_.is_write())) { // only for read and write
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("write io info not aligned", K(ret), K(io_info_));
+    LOG_WARN("invalid io info, io mode is wrong", K(ret), K(*this));
+  } else if (io_result_->flag_.is_write() // write io must aligned
+      && OB_UNLIKELY(!is_io_aligned(static_cast<int64_t>(io_result_->offset_)) || !is_io_aligned(io_result_->size_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("write io info not aligned", K(ret), K(*this));
   } else {
-    align_offset_size(io_info_.offset_, io_info_.size_, io_offset_, io_size_);
-    const int64_t io_buffer_size = io_size_ + DIO_READ_ALIGN_SIZE;
+    align_offset_size(io_result_->offset_, io_result_->size_, io_offset, io_size);
+    const int64_t io_buffer_size = io_size + DIO_READ_ALIGN_SIZE;
     if (OB_ISNULL(tenant_io_mgr_.get_ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant io manager is null", K(ret));
     } else if (OB_ISNULL(raw_buf_ = tenant_io_mgr_.get_ptr()->io_allocator_.alloc(io_buffer_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), K(io_size_));
+      LOG_WARN("allocate memory failed", K(ret), K(io_size));
     } else {
-      io_buf_ = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
+      io_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), DIO_READ_ALIGN_SIZE));
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(io_buf_)) {
+    if (OB_ISNULL(raw_buf_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("buf is null", K(ret));
-    } else if (!is_io_aligned((int64_t)io_buf_)
-        || !is_io_aligned(io_size_)
-        || !is_io_aligned(io_offset_)) {
+      LOG_WARN("io raw buf is null", K(ret));
+    } else if (!is_io_aligned((int64_t)io_buf)
+        || !is_io_aligned(io_size)
+        || !is_io_aligned(static_cast<int64_t>(io_offset))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("The io buffer is not aligned", K(ret), K(io_info_), KP(copied_callback_),
-          KP(io_buf_), K(io_offset_), K(io_offset_));
-    } else if (io_info_.flag_.is_write()) {
-      MEMCPY(io_buf_, io_info_.buf_, io_info_.size_);
+      LOG_WARN("The io buffer is not aligned", K(ret), K(*this), KP(io_buf), K(io_offset), K(io_size));
+    } else if (io_result_->flag_.is_write()) {
+      MEMCPY(io_buf, io_result_->buf_, io_result_->size_);
     }
   }
   return ret;
 }
 
-int ObIORequest::prepare()
+int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offset)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard tg("prepare", 100000); //100ms
-  if (OB_ISNULL(io_info_.fd_.device_handle_)) {
+  int64_t io_offset = 0;
+  int64_t io_size = 0;
+  if (next_size != 0 || next_offset != 0) {
+    io_offset = next_offset;
+    io_size = next_size;
+  } else {
+    calc_io_offset_and_size(io_size, io_offset);
+  }
+  char *io_buf = next_buffer != nullptr ? next_buffer : calc_io_buf();
+
+  if (OB_ISNULL(fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device handle is null", K(ret), K(*this));
-  } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb())) {
+  } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = fd_.device_handle_->alloc_iocb())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc io control block failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_iocb"))) {
-  } else if (OB_ISNULL(io_buf_) && OB_FAIL(alloc_io_buf())) {
+  } else if (OB_ISNULL(io_buf) && OB_FAIL(alloc_io_buf(io_buf))) {
     // delayed alloc buffer for read request here to reduce memory usage when io request enqueue
     LOG_WARN("alloc io buffer for read failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_buf"))) {
+  } else if (OB_ISNULL(io_result_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("io result is null", K(ret));
   } else {
-    if (io_info_.flag_.is_read()) {
-      if (OB_FAIL(io_info_.fd_.device_handle_->io_prepare_pread(
-              io_info_.fd_,
-              io_buf_,
-              io_size_,
-              io_offset_,
+    if (io_result_->flag_.is_read()) {
+      if (OB_FAIL(fd_.device_handle_->io_prepare_pread(
+              fd_,
+              io_buf,
+              io_size,
+              io_offset,
               control_block_,
               this/*data*/))) {
         LOG_WARN("prepare io read failed", K(ret), K(*this));
       }
       tg.click("prepare_read");
-    } else if (io_info_.flag_.is_write()) {
-      if (OB_FAIL(io_info_.fd_.device_handle_->io_prepare_pwrite(
-              io_info_.fd_,
-              io_buf_,
-              io_size_,
-              io_offset_,
+    } else if (io_result_->flag_.is_write()) {
+      if (OB_FAIL(fd_.device_handle_->io_prepare_pwrite(
+              fd_,
+              io_buf,
+              io_size,
+              io_offset,
               control_block_,
               this/*data*/))) {
         LOG_WARN("prepare io write failed", K(ret), K(*this));
@@ -673,12 +1035,124 @@ int ObIORequest::prepare()
       LOG_WARN("not supported io mode", K(ret), K(*this));
     }
   }
+  if (OB_UNLIKELY(tg.get_diff() > 100000)) {// 100ms
+    //print req
+    LOG_INFO("prepare_request cost too much time", K(ret), K(tg), K(*this));
+  }
+  return ret;
+}
+
+int ObIORequest::recycle_buffer()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(io_result_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("io result is null", K(ret));
+  } else {
+    ObThreadCondGuard guard(io_result_->cond_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("fail to guard IOresult condition", K(ret));
+    } else if (io_result_->flag_.is_detect()) {
+      free_io_buffer();
+    } else {
+      if (nullptr == io_result_->user_data_buf_) {
+        // do nothing，无需memcpy，也不能free io buffer
+      } else if (!is_canceled() && nullptr != get_io_data_buf()) {
+        MEMCPY(io_result_->user_data_buf_, get_io_data_buf(), get_data_size());
+        free_io_buffer();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIORequest::re_prepare()
+{
+  int ret = OB_SUCCESS;
+  ObTimeGuard tg("re_prepare", 100000); //100ms
+  int64_t io_offset = 0;
+  int64_t io_size = 0;
+  calc_io_offset_and_size(io_size, io_offset);
+  char *io_buf = calc_io_buf();
+  if (OB_ISNULL(control_block_)
+      && (OB_ISNULL(fd_.device_handle_) || OB_ISNULL(control_block_ = fd_.device_handle_->alloc_iocb()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc io control block failed", K(ret), K(*this));
+  } else if (FALSE_IT(tg.click("alloc_iocb"))) {
+  } else if (OB_ISNULL(io_buf) && OB_FAIL(try_alloc_buf_until_timeout(io_buf))) {
+    // delayed alloc buffer for read request here to reduce memory usage when io request enqueue
+    LOG_WARN("alloc io buffer for read failed", K(ret), K(*this));
+  } else if (FALSE_IT(tg.click("try_alloc_buf"))) {
+  } else if (OB_ISNULL(io_result_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("io result is null", K(ret));
+  } else {
+    if (io_result_->flag_.is_read()) {
+      if (OB_FAIL(fd_.device_handle_->io_prepare_pread(
+              fd_,
+              io_buf,
+              io_size,
+              io_offset,
+              control_block_,
+              this/*data*/))) {
+        LOG_WARN("prepare io read failed", K(ret), K(*this));
+      }
+      tg.click("prepare_read");
+    } else if (io_result_->flag_.is_write()) {
+      if (OB_FAIL(fd_.device_handle_->io_prepare_pwrite(
+              fd_,
+              io_buf,
+              io_size,
+              io_offset,
+              control_block_,
+              this/*data*/))) {
+        LOG_WARN("prepare io write failed", K(ret), K(*this));
+      }
+      tg.click("prepare_write");
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported io mode", K(ret), K(*this));
+    }
+  }
+  if (OB_UNLIKELY(tg.get_diff() > 100000)) {// 100ms
+    //print req
+    LOG_INFO("prepare_request cost too much time", K(ret), K(tg), K(*this));
+  }
+  return ret;
+}
+
+int ObIORequest::try_alloc_buf_until_timeout(char *&io_buf)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_alloc_count = 0;
+  while (OB_SUCC(ret)) {
+    const int64_t current_ts = ObTimeUtility::current_time();
+    ++retry_alloc_count;
+    if (current_ts > timeout_ts()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("current time is larger than the timeout timestamp", K(ret), K(current_ts), K(timeout_ts()), K(retry_alloc_count));
+    } else if (OB_FAIL(alloc_io_buf(io_buf))) {
+      if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        const int64_t remain_time = timeout_ts() - current_ts;
+        const int64_t sleep_time = min(remain_time, 1000L);
+        if (TC_REACH_TIME_INTERVAL(1000L * 1000L)) {
+          LOG_INFO("alloc memory failed, retry later", K(ret), K(remain_time), K(sleep_time), K(retry_alloc_count));
+        }
+        ob_usleep((useconds_t)sleep_time);
+        ret = OB_SUCCESS;
+      }
+    } else {
+      LOG_INFO("retry alloc io_buf success", K(retry_alloc_count));
+      break;
+    }
+  }
   return ret;
 }
 
 bool ObIORequest::can_callback() const
 {
-  return nullptr != copied_callback_ && nullptr != io_buf_;
+  // sync_io cannot callback
+  return nullptr != io_result_ && nullptr != get_callback() && nullptr != raw_buf_;
 }
 
 void ObIORequest::free_io_buffer()
@@ -689,59 +1163,6 @@ void ObIORequest::free_io_buffer()
   }
 }
 
-void ObIORequest::cancel()
-{
-  int ret = OB_SUCCESS;
-  if (is_inited_ && !is_finished_) {
-    { // must check finished and set cancel in guard
-      ObThreadCondGuard guard(cond_);
-      if (OB_FAIL(guard.get_ret())) {
-        LOG_WARN("fail to guard condition", K(ret));
-      } else if (is_finished_){
-        // do nothing
-      } else {
-        is_canceled_ = true;
-        if (time_log_.submit_ts_ > 0 && 0 == time_log_.return_ts_) {
-          channel_->cancel(*this);
-        }
-      }
-    }
-    finish(OB_CANCELED);
-  }
-}
-
-void ObIORequest::finish(const ObIORetCode &ret_code)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), K(is_inited_));
-  } else {
-    ObThreadCondGuard guard(cond_);
-    if (OB_LIKELY(!is_finished_)) {
-      ret_code_ = ret_code;
-      is_finished_ = true;
-      if (OB_NOT_NULL(tenant_io_mgr_.get_ptr())) {
-        if (get_group_id() > USER_RESOURCE_GROUP_END_ID) {
-          tenant_io_mgr_.get_ptr()->io_backup_usage_.accumulate(*this);
-        } else {
-          tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this);
-        }
-        tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
-      }
-      if (OB_UNLIKELY(OB_SUCCESS != ret_code_.io_ret_)) {
-        OB_IO_MANAGER.get_device_health_detector().record_failure(*this);
-      }
-      time_log_.end_ts_ = ObTimeUtility::fast_current_time();
-      if (OB_FAIL(guard.get_ret())) {
-        LOG_ERROR("lock io request condition failed", K(ret), K(*this));
-      } else if (OB_FAIL(cond_.signal())) {
-        LOG_ERROR("signal io request condition failed", K(ret), K(*this));
-      }
-    }
-  }
-}
-
 void ObIORequest::inc_ref(const char *msg)
 {
   int64_t old_ref_cnt = ATOMIC_FAA(&ref_cnt_, 1);
@@ -749,7 +1170,7 @@ void ObIORequest::inc_ref(const char *msg)
     int tmp_ret = OB_SUCCESS;
     ObIOTracer::TraceType trace_type = 0 == old_ref_cnt ? ObIOTracer::TraceType::IS_FIRST : ObIOTracer::TraceType::OTHER;
     if (OB_TMP_FAIL(tenant_io_mgr_.get_ptr()->trace_request_if_need(this, msg, trace_type))) {
-      LOG_WARN_RET(tmp_ret, "add trace for io request failed", K(tmp_ret), KP(this), K(trace_type));
+      LOG_WARN_RET(tmp_ret, "add trace for io request failed", K(tmp_ret), KPC(this), K(trace_type));
     }
   }
 }
@@ -761,35 +1182,28 @@ void ObIORequest::dec_ref(const char *msg)
   int64_t tmp_ref = ATOMIC_SAF(&ref_cnt_, 1);
   if (tmp_ref < 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("bug: ref_cnt < 0", K(ret), K(tmp_ref), KCSTRING(lbt()));
+    LOG_ERROR("bug: ref_cnt < 0", K(ret), K(tmp_ref), KCSTRING(lbt()), K(*this));
     abort();
   } else if (nullptr != msg && OB_NOT_NULL(tenant_holder.get_ptr())) {
     int tmp_ret = OB_SUCCESS;
     ObIOTracer::TraceType trace_type = 0 == tmp_ref ? ObIOTracer::TraceType::IS_LAST : ObIOTracer::TraceType::OTHER;
     if (OB_TMP_FAIL(tenant_holder.get_ptr()->trace_request_if_need(this, msg, trace_type))) {
-      LOG_WARN("remove trace for io request failed", K(tmp_ret), KP(this), K(trace_type));
+      LOG_WARN("remove trace for io request failed", K(tmp_ret), KPC(this), K(trace_type));
     }
   }
   if (0 == tmp_ref) {
-    // destroy will be called when free
     if (OB_ISNULL(tenant_holder.get_ptr())) {
       ret = OB_ERR_SYS;
-      LOG_ERROR("tenant io manager is null, memory leak", K(ret));
+      LOG_ERROR("tenant io manager is null, memory leak", K(ret), KCSTRING(lbt()), K(*this));
     } else {
-      tenant_holder.get_ptr()->io_allocator_.free(this);
+      if (tenant_holder.get_ptr()->io_request_pool_.contain(this)) {
+        destroy();
+        tenant_holder.get_ptr()->io_request_pool_.recycle(this);
+      } else {
+        // destroy will be called when free
+        tenant_holder.get_ptr()->io_allocator_.free(this);
+      }
     }
-  }
-}
-
-void ObIORequest::inc_out_ref()
-{
-  ATOMIC_INC(&out_ref_cnt_);
-}
-
-void ObIORequest::dec_out_ref()
-{
-  if (0 == ATOMIC_SAF(&out_ref_cnt_, 1)) {
-    cancel();
   }
 }
 
@@ -802,6 +1216,7 @@ ObPhyQueue::ObPhyQueue()
     group_limitation_ts_(INT_MAX64),
     tenant_limitation_ts_(INT_MAX64),
     proportion_ts_(INT_MAX64),
+    last_empty_ts_(INT_MAX64),
     is_group_ready_(false),
     is_tenant_ready_(false),
     queue_index_(-1),
@@ -830,6 +1245,7 @@ int ObPhyQueue::init(const int64_t index)
     LOG_WARN("index out of boundary", K(ret), K(index));
   } else {
     queue_index_ = index;
+    last_empty_ts_ = ObTimeUtility::fast_current_time();
     is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {
@@ -846,6 +1262,7 @@ void ObPhyQueue::destroy()
   group_limitation_ts_ = INT_MAX64;
   tenant_limitation_ts_ = INT_MAX64;
   proportion_ts_ = INT_MAX64;
+  last_empty_ts_ = INT_MAX64;
   is_group_ready_ = false;
   is_tenant_ready_ = false;
   reservation_pos_ = -1;
@@ -873,9 +1290,15 @@ void ObPhyQueue::reset_queue_info()
   proportion_pos_ = -1;
 }
 
+bool ObPhyQueue::reach_adjust_interval()
+{
+  int64_t cur_ts = ObTimeUtility::fast_current_time();
+  return cur_ts - last_empty_ts_ > CLOCK_IDLE_THRESHOLD_US;
+}
+
 /******************             IOHandle              **********************/
 ObIOHandle::ObIOHandle()
-  : req_(nullptr)
+  : result_(nullptr)
 {
 }
 
@@ -885,7 +1308,7 @@ ObIOHandle::~ObIOHandle()
 }
 
 ObIOHandle::ObIOHandle(const ObIOHandle &other)
-  : req_(nullptr)
+  : result_(nullptr)
 {
   *this = other;
 }
@@ -894,8 +1317,8 @@ ObIOHandle& ObIOHandle::operator=(const ObIOHandle &other)
 {
   if (&other != this) {
   	int ret = OB_SUCCESS;
-    if (OB_NOT_NULL(other.req_)) {
-    	if (OB_FAIL(set_request(*other.req_))) {
+    if (OB_NOT_NULL(other.result_)) {
+	if (OB_FAIL(set_result(*other.result_))) {
     		LOG_ERROR("set io request failed", K(ret));
     	}
     }
@@ -903,75 +1326,76 @@ ObIOHandle& ObIOHandle::operator=(const ObIOHandle &other)
   return *this;
 }
 
-int ObIOHandle::set_request(ObIORequest &req)
+int ObIOHandle::set_result(ObIOResult &result)
 {
   int ret = OB_SUCCESS;
   reset();
-  req.inc_ref("handle_inc"); // ref for handle
-  req.inc_out_ref();
-  req_ = &req;
+  result.inc_ref("handle_inc"); // ref for handle
+  result.inc_out_ref();
+  result_ = &result;
+#ifdef ENABLE_DEBUG_LOG
+  storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::IO_HANDLE);
+#endif
   return ret;
 }
 
 bool ObIOHandle::is_empty() const
 {
-  return nullptr == req_;
+  return nullptr == result_;
 }
 
 bool ObIOHandle::is_valid() const
 {
-  return nullptr != req_;
+  return nullptr != result_;
 }
 
-int ObIOHandle::wait(const int64_t timeout_ms)
+int ObIOHandle::wait()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(req_)) {
+  if (OB_ISNULL(result_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("The IOHandle has not been inited, ", K(ret));
-  } else if (timeout_ms < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument, ", K(timeout_ms), K(ret));
-  } else if (!req_->is_finished_) {
-    ObWaitEventGuard wait_guard(req_->io_info_.flag_.get_wait_event(),
+  } else if (!result_->is_finished_) {
+    const int64_t timeout_ms = ((result_->begin_ts_ > 0 ? result_->begin_ts_ + result_->timeout_us_ : 0)
+                                - ObTimeUtility::current_time()) / 1000L;
+    ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(),
                                 timeout_ms,
-                                req_->io_info_.size_);
+                                result_->size_);
     const int64_t real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
 
     if (real_wait_timeout > 0) {
-      ObThreadCondGuard guard(req_->cond_);
+      ObThreadCondGuard guard(result_->cond_);
       if (OB_FAIL(guard.get_ret())) {
-        LOG_ERROR("fail to guard request condition", K(ret));
+        LOG_ERROR("fail to guard result condition", K(ret));
       } else {
         int64_t wait_ms = real_wait_timeout;
-        int64_t begin_ms = ObTimeUtility::fast_current_time();
-        while (OB_SUCC(ret) && !req_->is_finished_ && wait_ms > 0) {
-          if (OB_FAIL(req_->cond_.wait(wait_ms))) {
-            LOG_WARN("fail to wait request condition", K(ret), K(wait_ms), K(*req_));
-          } else if (!req_->is_finished_) {
-            int64_t duration_ms = ObTimeUtility::fast_current_time() - begin_ms;
+        int64_t begin_ms = ObTimeUtility::current_time();
+        while (OB_SUCC(ret) && !result_->is_finished_ && wait_ms > 0) {
+          if (OB_FAIL(result_->cond_.wait(wait_ms))) {
+            LOG_WARN("fail to wait result condition", K(ret), K(wait_ms), K(*result_));
+          } else if (!result_->is_finished_) {
+            int64_t duration_ms = ObTimeUtility::current_time() - begin_ms;
             wait_ms = real_wait_timeout - duration_ms;
           }
         }
         if (OB_UNLIKELY(wait_ms <= 0)) { // rarely happen
           ret = OB_TIMEOUT;
-          LOG_WARN("fail to wait request condition due to spurious wakeup", 
-              K(ret), K(wait_ms), K(*req_));
-        }
-        if (OB_TIMEOUT == ret) {
-          OB_IO_MANAGER.get_device_health_detector().record_failure(*req_);
+          LOG_WARN("fail to wait result condition due to spurious wakeup",
+              K(ret), K(wait_ms), K(*result_));
         }
       }
+    } else if (result_->is_finished_) {
+      // do nothing
     } else {
       ret = OB_TIMEOUT;
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(req_->ret_code_.io_ret_)) {
-      LOG_WARN("IO error, ", K(ret), K(*req_));
+    if (OB_FAIL(result_->ret_code_.io_ret_)) {
+      LOG_WARN("IO error, ", K(ret), K(*result_));
     }
   } else if (OB_TIMEOUT == ret) {
-    LOG_WARN("IO wait timeout", K(timeout_ms), K(ret), K(*req_));
+    LOG_WARN("IO wait timeout, ", K(ret), K(*result_));
   }
   estimate();
 
@@ -980,42 +1404,20 @@ int ObIOHandle::wait(const int64_t timeout_ms)
 
 void ObIOHandle::estimate()
 {
-  if (OB_NOT_NULL(req_) && req_->is_finished_ && !ATOMIC_CAS(&req_->has_estimated_, false, true)) {
-    ObIOTimeLog &time_log = req_->time_log_;
-    const int64_t prepare_delay = get_io_interval(time_log.enqueue_ts_, time_log.begin_ts_);
-    const int64_t schedule_queue_delay = get_io_interval(time_log.dequeue_ts_, time_log.enqueue_ts_);
-    const int64_t submit_delay = get_io_interval(time_log.submit_ts_, time_log.dequeue_ts_);
-    const int64_t device_delay = get_io_interval(time_log.return_ts_, time_log.submit_ts_);
-    const int64_t start_callback_delay = get_io_interval(time_log.callback_enqueue_ts_, time_log.return_ts_);
-    const int64_t callback_queue_delay = get_io_interval(time_log.callback_dequeue_ts_, time_log.callback_enqueue_ts_);
-    const int64_t callback_process_delay = get_io_interval(time_log.callback_finish_ts_, time_log.callback_dequeue_ts_);
-    const int64_t finish_notify_delay = get_io_interval(time_log.end_ts_, max(time_log.callback_finish_ts_, time_log.return_ts_));
-    const int64_t request_delay = get_io_interval(time_log.end_ts_, time_log.begin_ts_);
-    if (req_->io_info_.flag_.is_read()) {
+  if (OB_NOT_NULL(result_) && result_->is_finished_ && !ATOMIC_CAS(&result_->has_estimated_, false, true)) {
+    const int64_t result_delay = get_io_interval(result_->end_ts_, result_->begin_ts_);
+    if (result_->flag_.is_read()) {
       EVENT_INC(ObStatEventIds::IO_READ_COUNT);
-      EVENT_ADD(ObStatEventIds::IO_READ_BYTES, req_->io_info_.size_);
-      EVENT_ADD(ObStatEventIds::IO_READ_DELAY, request_delay);
-      EVENT_ADD(ObStatEventIds::IO_READ_QUEUE_DELAY, schedule_queue_delay);
-      EVENT_ADD(ObStatEventIds::IO_READ_CB_QUEUE_DELAY, callback_queue_delay);
-      EVENT_ADD(ObStatEventIds::IO_READ_CB_PROCESS_DELAY, callback_process_delay);
+      EVENT_ADD(ObStatEventIds::IO_READ_BYTES, result_->size_);
+      EVENT_ADD(ObStatEventIds::IO_READ_DELAY, result_delay);
     } else {
       EVENT_INC(ObStatEventIds::IO_WRITE_COUNT);
-      EVENT_ADD(ObStatEventIds::IO_WRITE_BYTES, req_->io_info_.size_);
-      EVENT_ADD(ObStatEventIds::IO_WRITE_DELAY, request_delay);
-      EVENT_ADD(ObStatEventIds::IO_WRITE_QUEUE_DELAY, schedule_queue_delay);
+      EVENT_ADD(ObStatEventIds::IO_WRITE_BYTES, result_->size_);
+      EVENT_ADD(ObStatEventIds::IO_WRITE_DELAY, result_delay);
     }
     static const int64_t LONG_IO_PRINT_TRIGGER_US = 1000L * 1000L * 3L; // 3s
-    if (request_delay > LONG_IO_PRINT_TRIGGER_US) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "io request wait too long", KPC(req_),
-          K(prepare_delay),
-          K(schedule_queue_delay),
-          K(submit_delay),
-          K(device_delay),
-          K(start_callback_delay),
-          K(callback_queue_delay),
-          K(callback_process_delay),
-          K(finish_notify_delay),
-          K(request_delay));
+    if (result_delay > LONG_IO_PRINT_TRIGGER_US) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "io result wait too long", KPC(result_), K(result_delay));
     }
   }
 }
@@ -1023,11 +1425,11 @@ void ObIOHandle::estimate()
 int ObIOHandle::get_fs_errno(int &io_errno) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(req_)) {
+  if (OB_ISNULL(result_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("empty io handle", K(ret), KP(req_));
+    LOG_WARN("empty io handle", K(ret), KP(result_));
   } else {
-    io_errno = req_->ret_code_.fs_errno_;
+    io_errno = result_->ret_code_.fs_errno_;
   }
   return ret;
 }
@@ -1035,44 +1437,44 @@ int ObIOHandle::get_fs_errno(int &io_errno) const
 const char *ObIOHandle::get_buffer()
 {
   const char *buf = nullptr;
-  if (OB_NOT_NULL(req_) && req_->is_finished_) {
-    buf = req_->get_data();
-  }
-  return buf;
-}
-
-const char *ObIOHandle::get_physical_buffer()
-{
-  const char *buf = nullptr;
-  if (OB_NOT_NULL(req_)) {
-    buf = req_->io_buf_;
+  if (OB_NOT_NULL(result_) && result_->is_finished_) {
+    if (nullptr != result_->io_callback_) {
+      buf = result_->io_callback_->get_data();
+    } else if (result_->flag_.is_sync()) {
+      buf = result_->buf_;
+    } else {
+      buf = result_->user_data_buf_;
+    }
   }
   return buf;
 }
 
 int64_t ObIOHandle::get_data_size() const
 {
-  return OB_NOT_NULL(req_) ? req_->get_data_size() : 0;
+  return OB_NOT_NULL(result_) ? result_->get_data_size() : 0;
 }
 
 int64_t ObIOHandle::get_rt() const
 {
-  return OB_NOT_NULL(req_) ? get_io_interval(req_->time_log_.end_ts_, req_->time_log_.begin_ts_) : -1;
+  return OB_NOT_NULL(result_) ? get_io_interval(result_->end_ts_, result_->begin_ts_) : -1;
 }
 
 void ObIOHandle::reset()
 {
-  if (OB_NOT_NULL(req_)) {
-    req_->dec_out_ref();
-    req_->dec_ref("handle_dec"); // ref for handle
-    req_ = nullptr;
+  if (OB_NOT_NULL(result_)) {
+#ifdef ENABLE_DEBUG_LOG
+    storage::ObStorageLeakChecker::get_instance().handle_reset(this, storage::ObStorageCheckID::IO_HANDLE);
+#endif
+    result_->dec_out_ref();
+    result_->dec_ref("handle_dec"); // ref for handle
+    result_ = nullptr;
   }
 }
 
 void ObIOHandle::cancel()
 {
-  if (OB_NOT_NULL(req_)) {
-    req_->cancel();
+  if (OB_NOT_NULL(result_)) {
+    result_->cancel();
   }
 }
 
@@ -1129,7 +1531,7 @@ const ObTenantIOConfig &ObTenantIOConfig::default_instance()
 {
   static ObTenantIOConfig instance;
   instance.memory_limit_ = 512L * 1024L * 1024L; // min_tenant_memory: 512M
-  instance.callback_thread_count_ = 8;
+  instance.callback_thread_count_ = 0;
   instance.group_num_ = 0;
   instance.unit_config_.min_iops_ = 10000;
   instance.unit_config_.max_iops_ = 50000;
@@ -1144,7 +1546,7 @@ const ObTenantIOConfig &ObTenantIOConfig::default_instance()
 
 bool ObTenantIOConfig::is_valid() const
 {
-  bool bret = memory_limit_ > 0 && callback_thread_count_ > 0 && unit_config_.is_valid();
+  bool bret = memory_limit_ > 0 && callback_thread_count_ >= 0 && unit_config_.is_valid();
   if (bret) {
     int64_t sum_min_percent = 0;
     int64_t sum_weight_percent = 0;
@@ -1341,6 +1743,15 @@ int64_t ObTenantIOConfig::get_all_group_num() const
   return all_group_num;
 }
 
+int64_t ObTenantIOConfig::get_callback_thread_count() const
+{
+  int64_t memory_benchmark = 4L * 1024L * 1024L * 1024L; //4G memory
+  //Based on 4G memory, one thread will be added for each additional 4G of memory, and the maximum number of callback_thread_count is 8
+  int64_t callback_thread_num = 0 == callback_thread_count_? min(8, (memory_limit_ / memory_benchmark) + 1) : callback_thread_count_;
+  LOG_INFO("get callback thread by memory success", K(memory_limit_), K(callback_thread_num));
+  return callback_thread_num;
+}
+
 int64_t ObTenantIOConfig::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -1510,9 +1921,10 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("request is null", K(ret), KP(req));
         } else {
-          req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          req->io_result_ == nullptr ? : req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
+            tmp_phy_queue->last_empty_ts_ = ObTimeUtility::fast_current_time();
           } else if (OB_NOT_NULL(req->tenant_io_mgr_.get_ptr())) {
             ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req->tenant_io_mgr_.get_ptr()->get_io_clock());       
             ObIORequest *next_req = tmp_phy_queue->req_list_.get_first();
@@ -1636,10 +2048,11 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("req is null", K(ret), KP(req));
         } else {
-          req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
+          req->io_result_ == nullptr ? : req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
           LOG_DEBUG("req pop from phy queue succcess(P schedule)", KP(req), K(iter_count), "time_cost", ObTimeUtility::fast_current_time() - current_ts, K(ready_heap_.count()), K(current_ts));
           if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
+            tmp_phy_queue->last_empty_ts_ = ObTimeUtility::fast_current_time();
           } else if (OB_NOT_NULL(req->tenant_io_mgr_.get_ptr())) {
             ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req->tenant_io_mgr_.get_ptr()->get_io_clock());
             ObIORequest *next_req = tmp_phy_queue->req_list_.get_first();

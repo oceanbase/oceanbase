@@ -972,7 +972,7 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
       }
       break;
     }
-
+    case ObDecimalIntType:
     case ObUNumberType:
     case ObNumberFloatType:
     case ObNumberType: {
@@ -982,8 +982,16 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("buf allocate failed", K(ret), K(type));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (ob_is_decimal_int(type)) {
+        if (OB_FAIL(wide::to_number(datum.get_decimal_int(), datum.get_int_bytes(), scale, *allocator, num))) {
+          LOG_WARN("cast decimal int to number failed", K(ret));
+        }
       } else if (OB_FAIL(num.deep_copy_v3(datum.get_number(), *allocator))) {
         LOG_WARN("num deep copy failed", K(ret), K(type));
+      }
+      if (OB_FAIL(ret)) {
       } else {
         // shadow copy
         json_node = (ObJsonDecimal *)new(buf)ObJsonDecimal(num, -1, scale);
@@ -1728,8 +1736,9 @@ int ObJsonExprHelper::pre_default_value_check(ObObjType dst_type, ObString time_
       }
       break;
     }
-    case ObNumberType: {
-      if (val_type == ObNumberType) {
+    case ObNumberType:
+    case ObDecimalIntType: {
+      if (val_type == ObNumberType || val_type == ObDecimalIntType) {
       } else {
         len = time_str.length();
         for(size_t i = 0; i < len; i++) {

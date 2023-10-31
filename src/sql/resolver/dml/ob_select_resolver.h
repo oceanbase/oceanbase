@@ -344,6 +344,7 @@ private:
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
+  int adjust_recursive_cte_table_columns(const ObSelectStmt* parent_stmt, ObSelectStmt *right_stmt);
 protected:
   // data members
   /*these member is only for with clause*/

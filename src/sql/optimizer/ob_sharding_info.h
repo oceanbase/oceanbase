@@ -336,7 +336,8 @@ private:
                         common::ObIArray<ObRawExpr*> &partition_keys);
 
   // check whether all partition keys are of the same type
-  static int is_compatible_partition_key(const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
+  static int is_compatible_partition_key(const ObShardingInfo *first_sharding,
+                                         const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
                                          const ObIArray<ObSEArray<ObRawExpr*, 8>> &second_part_keys_list,
                                          bool &is_compatible);
   static int is_compatible_partition_key(const ObShardingInfo &first_sharding,
@@ -352,13 +353,21 @@ private:
                                              bool &is_cover);
 
   static int is_expr_equivalent(const EqualSets &equal_sets,
+                                const sql::ObShardingInfo &first_sharding,
                                 const common::ObIArray<ObRawExpr*> &first_part_exprs,
                                 const common::ObIArray<ObRawExpr*> &second_part_exprs,
                                 ObRawExpr *first_key,
                                 ObRawExpr *second_key,
                                 bool &is_equal);
 
+  static int is_lossless_column_cast(const ObRawExpr *expr,
+                                     const sql::ObShardingInfo &sharding_info, bool &is_lossless);
+
+  static bool is_part_func_scale_sensitive(const sql::ObShardingInfo &sharding_info,
+                                           const common::ObObjType obj_type);
+
   static inline bool is_shuffled_addr(ObAddr addr) { return UINT32_MAX == addr.get_port(); }
+
 private:
   // 分区级别
   share::schema::ObPartitionLevel part_level_;

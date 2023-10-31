@@ -22,8 +22,7 @@ namespace oceanbase
 namespace blocksstable
 {
 ObMacroBlocksWriteCtx::ObMacroBlocksWriteCtx()
-  : allocator_(ObModIds::OB_MACRO_BLOCK_WRITE_CTX, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    macro_block_list_(),
+  : macro_block_list_(),
     use_old_macro_block_count_(0)
 {
 }
@@ -46,7 +45,6 @@ void ObMacroBlocksWriteCtx::clear()
   }
 
   macro_block_list_.reset();
-  allocator_.reset();
   use_old_macro_block_count_ = 0;
 }
 
@@ -107,6 +105,7 @@ int ObMacroBlocksWriteCtx::deep_copy(ObMacroBlocksWriteCtx *&dst, ObIAllocator &
 int ObMacroBlocksWriteCtx::get_macro_id_array(ObIArray<MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
+  const int64_t start = block_ids.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < macro_block_list_.count(); ++i) {
     MacroBlockId &block_id= macro_block_list_.at(i);
     if (OB_FAIL(block_ids.push_back(block_id))) {
@@ -118,7 +117,7 @@ int ObMacroBlocksWriteCtx::get_macro_id_array(ObIArray<MacroBlockId> &block_ids)
   }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    for (int64_t i = 0; i < block_ids.count(); ++i) {
+    for (int64_t i = start; i < block_ids.count(); ++i) {
       const MacroBlockId &block_id = block_ids.at(i);
       if (OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(block_id))) {
         STORAGE_LOG(ERROR, "fail to dec macro block ref cnt", K(tmp_ret), K(block_id), K(i));

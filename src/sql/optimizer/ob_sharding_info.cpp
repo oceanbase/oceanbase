@@ -166,7 +166,8 @@ int ObShardingInfo::set_partition_key(
   return ret;
 }
 
-int ObShardingInfo::is_compatible_partition_key(const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
+int ObShardingInfo::is_compatible_partition_key(const ObShardingInfo *first_sharding,
+                                                const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
                                                 const ObIArray<ObSEArray<ObRawExpr*, 8>> &second_part_keys_list,
                                                 bool &is_compatible)
 {
@@ -184,6 +185,21 @@ int ObShardingInfo::is_compatible_partition_key(const ObIArray<ObSEArray<ObRawEx
           || OB_ISNULL(r_part_key = second_part_keys_list.at(i).at(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(l_part_key), K(r_part_key), K(ret));
+      } else if (l_part_key->get_data_type() == ObDecimalIntType
+                 && r_part_key->get_data_type() == ObDecimalIntType
+                 && first_sharding != NULL) {
+        LOG_DEBUG("compatible partition key",
+                  K(l_part_key->get_result_type()),
+                  K(r_part_key->get_result_type()),
+                  K(l_part_key->get_result_type().get_accuracy()),
+                  K(r_part_key->get_result_type().get_accuracy()));
+        if (is_part_func_scale_sensitive(*first_sharding,
+                                         l_part_key->get_data_type())) {
+          is_compatible =
+            (l_part_key->get_scale() == r_part_key->get_scale());
+        } else {
+          is_compatible = true;
+        }
       } else if (l_part_key->get_data_type() != r_part_key->get_data_type() ||
                   l_part_key->get_collation_type() != r_part_key->get_collation_type()) {
         is_compatible = false;
@@ -234,6 +250,7 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   ObSEArray<ObSEArray<ObRawExpr*, 8>, 8> second_part_keys;
   is_cover = false;
   bool is_compatible = false;
+  ObShardingInfo *first_left_sharding = NULL;
   if (OB_UNLIKELY(first_keys.count() != second_keys.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected array count", K(first_keys.count()), K(second_keys.count()), K(ret));
@@ -243,7 +260,11 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   } else if (OB_FAIL(extract_partition_key(second_shardings,
                                            second_part_keys))) {
     LOG_WARN("failed to extract partition keys", K(ret));
-  } else if (OB_FAIL(is_compatible_partition_key(first_part_keys,
+  } else if (!first_shardings.empty() && OB_ISNULL(first_left_sharding = first_shardings.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(first_shardings), K(ret));
+  } else if (OB_FAIL(is_compatible_partition_key(first_left_sharding,
+                                                 first_part_keys,
                                                  second_part_keys,
                                                  is_compatible))) {
     LOG_WARN("failed to check if is comptiable keys", K(ret));
@@ -255,6 +276,7 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
       bool is_equal = false;
       for(int64_t j = 0; OB_SUCC(ret) && !is_equal && j < first_keys.count(); j++) {
         if (OB_FAIL(is_expr_equivalent(equal_sets,
+                                       *first_left_sharding,
                                        first_part_keys.at(i),
                                        second_part_keys.at(i),
                                        first_keys.at(j),
@@ -271,7 +293,28 @@ int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
   return ret;
 }
 
+int ObShardingInfo::is_lossless_column_cast(const ObRawExpr *expr,
+                                            const ObShardingInfo &sharding_info, bool &is_lossless)
+{
+  int ret = OB_SUCCESS;
+  is_lossless = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null raw expr", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
+    LOG_WARN("check lossless column cast failed", K(ret));
+  } else if (is_lossless) {
+    if (expr->get_result_type().is_decimal_int()
+        && expr->get_param_expr(0)->get_result_type().is_decimal_int()
+        && is_part_func_scale_sensitive(sharding_info, ObDecimalIntType)) {
+      is_lossless = (expr->get_scale() == expr->get_param_expr(0)->get_scale());
+    }
+  }
+  LOG_DEBUG("sharding info, is_lossless column_cast", K(*expr), K(is_lossless), K(sharding_info));
+  return ret;
+}
 int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
+                                       const ObShardingInfo &first_sharding,
                                        const ObIArray<ObRawExpr*> &first_part_keys,
                                        const ObIArray<ObRawExpr*> &second_part_keys,
                                        ObRawExpr *first_key,
@@ -280,9 +323,24 @@ int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   is_equal = false;
+  bool first_key_lossless = false, second_key_lossless = false;
   if (OB_ISNULL(first_key) || OB_ISNULL(second_key)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(first_key), K(second_key), K(ret));
+  } else if (OB_FAIL(is_lossless_column_cast(first_key, first_sharding, first_key_lossless))) {
+    LOG_WARN("check lossless cast failed", K(ret));
+  } else if (OB_FAIL(is_lossless_column_cast(second_key, first_sharding, second_key_lossless))) {
+    LOG_WARN("check lossless cast failed", K(ret));
+  } else {
+    if (first_key_lossless) {
+      first_key = first_key->get_param_expr(0);
+    }
+    if (second_key_lossless) {
+      second_key = second_key->get_param_expr(0);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else {
     bool left_is_equal = false;
     bool right_is_equal = false;
@@ -305,6 +363,34 @@ int ObShardingInfo::is_expr_equivalent(const EqualSets &equal_sets,
     if (OB_SUCC(ret)) {
       is_equal = left_is_equal && right_is_equal;
     }
+  }
+  return ret;
+}
+
+bool ObShardingInfo::is_part_func_scale_sensitive(
+  const sql::ObShardingInfo &sharding_info, const common::ObObjType obj_type)
+{
+  bool ret = false;
+  ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_MAX;
+  if (sharding_info.get_part_level() == PARTITION_LEVEL_ONE) {
+    part_func_type = sharding_info.get_part_func_type();
+  } else if (sharding_info.get_part_level() == PARTITION_LEVEL_TWO) {
+    part_func_type = sharding_info.get_sub_part_func_type();
+  }
+  // PARTITION_FUNC_TYPE_MAX need to be scale sensitive. Consider PWJ:
+  //
+  //  Hash Join(equal_conds([cast(c.deptno, DECIMAL_INT(5, 2)) = p.c1]))
+  //    EXCHANGE HASH(#key = deptno)
+  //      SUB_PLAN0
+  //    EXCHANGE HASH(#key = c1)
+  //      SUB_PLAN1
+  //
+  // It's a extended partition wise join, part_func_type is PARTITION_FUNC_TYPE_MAX.
+  // Partitions hashed by `deptno` must be same with partitions hashed by `cast(c.deptno, DECIMAL_INT(5, 2))`
+  if (PARTITION_FUNC_TYPE_HASH == part_func_type || PARTITION_FUNC_TYPE_KEY == part_func_type
+      || PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type
+      || PARTITION_FUNC_TYPE_MAX == part_func_type) {
+    ret = ob_is_decimal_int(obj_type);
   }
   return ret;
 }
@@ -621,7 +707,7 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
     }
   }
   LOG_TRACE("succeed check if match partition wise",
-      K(left_sharding), K(right_sharding), K(is_partition_wise));
+      K(left_sharding), K(right_sharding), K(is_partition_wise), K(is_key_covered));
   return ret;
 }
 

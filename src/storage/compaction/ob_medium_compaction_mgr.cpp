@@ -234,7 +234,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
 {
   UNUSED(update_version);
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator;
+  ObArenaAllocator tmp_allocator("MediumReplay", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObMediumCompactionInfo replay_medium_info;
   if (OB_FAIL(replay_medium_info.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("failed to deserialize medium compaction info", K(ret));

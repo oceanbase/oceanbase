@@ -85,9 +85,8 @@ public:
       ctx_mt_mgr_(nullptr),
       tenant_base_(tenant_id_)
   {
-    observer::ObIMetaReport *fake_reporter = (observer::ObIMetaReport *)0xff;
     ObLSTabletService *tablet_svr = ls_.get_tablet_svr();
-    tablet_svr->init(&ls_, fake_reporter);
+    tablet_svr->init(&ls_);
   }
 
 public:

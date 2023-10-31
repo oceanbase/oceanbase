@@ -19,6 +19,9 @@
 #include "lib/oblog/ob_log.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#define private public
+#include "observer/ob_server.h"
+#undef private
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -74,6 +77,7 @@ TEST_F(TestRawExprToStr, basic)
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
   ctx.session_info_ = &session;
+  OBSERVER.init_version();
 
   const int64_t buf_len = 1024;
   int64_t pos = 0;

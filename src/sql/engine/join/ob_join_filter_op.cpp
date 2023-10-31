@@ -169,6 +169,7 @@ int ObJoinFilterOpInput::init_shared_msgs(
     LOG_WARN("fail to allocate memory", K(ret));
   } else {
     array_ptr = new(ptr) ObArray<ObP2PDatahubMsgBase *>();
+    array_ptr->set_attr(ObMemAttr(tenant_id, "JFArray"));
     ObP2PDatahubMsgBase *msg_ptr = nullptr;
     for (int i = 0; i < spec.rf_infos_.count() && OB_SUCC(ret); ++i) {
       msg_ptr = nullptr;

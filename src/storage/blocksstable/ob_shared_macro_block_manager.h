@@ -30,9 +30,9 @@ namespace blocksstable
 struct ObMacroBlocksWriteCtx;
 class ObSSTableIndexBuilder;
 class ObIndexBlockRebuilder;
-class ObSSTableSecMetaIterator;
 class ObSSTableMergeRes;
 struct ObSSTableBasicMeta;
+struct ObWholeDataStoreDesc;
 struct ObBlockInfo
 {
 public:
@@ -148,24 +148,26 @@ private:
   int prepare_data_desc(
       const ObTablet &tablet,
       const ObSSTableBasicMeta &basic_meta,
-      const ObMergeType &merge_type,
+      const compaction::ObMergeType &merge_type,
       const int64_t snapshot_version,
       const int64_t cluster_version,
-      ObDataStoreDesc &data_desc) const;
+      const share::SCN &end_scn,
+      ObWholeDataStoreDesc &data_desc) const;
   int alloc_for_tools(
       common::ObIAllocator &allocator,
       ObSSTableIndexBuilder *&sstable_index_builder,
       ObIndexBlockRebuilder *&index_block_rebuilder);
   int read_sstable_block(
       const ObSSTable &sstable,
-      ObMacroBlockHandle &block_handle);
+      ObMacroBlockHandle &block_handle,
+      common::ObIAllocator &allocator);
   int create_new_sstable(
       common::ObArenaAllocator &allocator,
       const ObSSTableMergeRes &res,
       const ObSSTable &old_table,
       const ObBlockInfo &block_info,
       ObSSTable &new_sstable) const;
-  int parse_merge_type(const ObSSTable &sstable, ObMergeType &merge_type) const;
+  int parse_merge_type(const ObSSTable &sstable, compaction::ObMergeType &merge_type) const;
   int try_switch_macro_block();
   int check_write_complete(const MacroBlockId &macro_id, const int64_t macro_size);
   int do_write_block(const ObMacroBlockWriteInfo &write_info, ObBlockInfo &block_info);
@@ -187,6 +189,7 @@ private:
   lib::ObMutex blocks_mutex_; // protect block_used_size_
   ObLinearHashMap<MacroBlockId, int32_t> block_used_size_;
   ObBlockDefragmentationTask defragmentation_task_;
+  common::ObArenaAllocator io_allocator_;
   int tg_id_;
   bool is_inited_;
 };

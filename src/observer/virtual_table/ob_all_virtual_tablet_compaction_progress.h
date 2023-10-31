@@ -40,6 +40,8 @@ public:
     CREATE_TIME,
     START_TIME,
     ESTIMATED_FINISH_TIME,
+    START_CG_ID,
+    END_CG_ID
   };
   ObAllVirtualTabletCompactionProgress();
   virtual ~ObAllVirtualTabletCompactionProgress();

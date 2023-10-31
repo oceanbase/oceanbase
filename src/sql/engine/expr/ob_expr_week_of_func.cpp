@@ -72,7 +72,9 @@ int ObExprWeekOfYear::calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     expr_datum.set_null();
   } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
-                 *param_datum, expr.args_[0]->datum_meta_.type_, get_timezone_info(session),
+                 *param_datum, expr.args_[0]->datum_meta_.type_,
+                 expr.args_[0]->datum_meta_.scale_,
+                 get_timezone_info(session),
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
@@ -143,7 +145,9 @@ int ObExprWeekDay::calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
     expr_datum.set_null();
   } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
-                 *param_datum, expr.args_[0]->datum_meta_.type_, get_timezone_info(session),
+                 *param_datum, expr.args_[0]->datum_meta_.type_,
+                 expr.args_[0]->datum_meta_.scale_,
+                 get_timezone_info(session),
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
@@ -309,7 +313,9 @@ int ObExprYearWeek::calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     expr_datum.set_null();
   } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
-                     *param_datum, expr.args_[0]->datum_meta_.type_, get_timezone_info(session),
+                     *param_datum, expr.args_[0]->datum_meta_.type_,
+                     expr.args_[0]->datum_meta_.scale_,
+                     get_timezone_info(session),
                      ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false,
                      date_sql_mode, expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
@@ -425,7 +431,9 @@ int ObExprWeek::calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
     expr_datum.set_null();
   } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
-                 *param_datum, expr.args_[0]->datum_meta_.type_, get_timezone_info(session),
+                 *param_datum, expr.args_[0]->datum_meta_.type_,
+                 expr.args_[0]->datum_meta_.scale_,
+                 get_timezone_info(session),
                  ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));

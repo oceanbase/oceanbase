@@ -345,6 +345,11 @@ int ObTextStringIter::get_inrow_or_outrow_prefix_data(ObString &data_str, uint32
     ObLobLocatorV2 loc(datum_str_, has_lob_header_);
     if (OB_FAIL(loc.get_inrow_data(data_str))) {
       COMMON_LOG(WARN, "Lob: get lob inrow data failed", K(ret));
+    } else {
+      uint32_t max_len = ObCharset::strlen_char(cs_type_, data_str.ptr(), data_str.length());
+      uint32_t byte_len = (prefix_char_len > max_len) ? max_len : prefix_char_len;
+      byte_len = ObCharset::charpos(cs_type_, data_str.ptr(), data_str.length(), byte_len);
+      data_str.assign_ptr(data_str.ptr(), byte_len);
     }
   } else {
     // outrow lob, read full data into a inrow local tmp lob currently

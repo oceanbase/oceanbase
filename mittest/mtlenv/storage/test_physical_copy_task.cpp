@@ -32,6 +32,11 @@ using namespace common;
 using namespace share;
 using namespace storage;
 using namespace blocksstable;
+
+void ObCompactionBufferWriter::reset()
+{
+}
+
 namespace unittest
 {
 static ObSimpleMemLimitGetter getter;
@@ -152,9 +157,11 @@ void TestRootBlockInfo::prepare_block_root()
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
   write_info.buffer_ = io_buf;
   write_info.size_ = buf_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::write_block(write_info, handle));
   block_addr_.second_id_ = handle.get_macro_id().second_id();
-  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, block_addr_, block_data_));
+  ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, block_addr_,
+      block_data_, static_cast<ObRowStoreType>(header->row_store_type_)));
   ASSERT_TRUE(root_info_.is_valid());
 }
 

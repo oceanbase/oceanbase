@@ -2723,6 +2723,83 @@ TEST_F(TestTabletCreateDeleteHelper, abort_remove_tablets_for_switch_leader)
   }
 }
 
+TEST_F(TestTabletCreateDeleteHelper, abort_remove_tablet_duplicated_replay)
+{
+  int ret = OB_SUCCESS;
+
+  ObMulSourceDataNotifyArg trans_flags;
+  trans_flags.for_replay_ = true;
+  trans_flags.tx_id_ = 1;
+  trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 888);
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLS *ls = ls_handle.get_ls();
+  ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
+
+  // create tablet
+  {
+    ObSArray<ObTabletID> tablet_id_array;
+    tablet_id_array.push_back(ObTabletID(123));
+
+    ObBatchCreateTabletArg arg;
+    ret = TestTabletCreateDeleteHelper::build_create_pure_data_tablet_arg(
+        ls_id_, tablet_id_array, arg);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = ls_tablet_service.on_prepare_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100);
+    ret = ls_tablet_service.on_redo_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 99);
+    ret = ls_tablet_service.on_commit_create_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+
+  {
+    ObSArray<ObTabletID> tablet_id_array;
+    tablet_id_array.push_back(ObTabletID(123));
+
+    ObBatchRemoveTabletArg arg;
+    ret = TestTabletCreateDeleteHelper::build_remove_tablet_arg(
+        ls_id_, tablet_id_array, arg);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // mock migration, tablet status on target ls is DELETING
+    trans_flags.tx_id_ = 200;
+    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 50);
+    trans_flags.for_replay_ = true;
+    ret = ls_tablet_service.on_prepare_remove_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // mock replay an older clog, which aborts remove tablet
+    trans_flags.tx_id_ = 100;
+    trans_flags.redo_synced_ = true;
+    trans_flags.redo_submitted_ = false;
+    trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 80);
+    trans_flags.for_replay_ = true;
+    ret = ls_tablet_service.on_abort_remove_tablets(arg, trans_flags);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // check
+    ObTabletHandle tablet_handle;
+    ObTabletTxMultiSourceDataUnit tx_data;
+    ObTabletMapKey key;
+    key.ls_id_ = ls_id_;
+
+    key.tablet_id_ = 123;
+    ret = ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = tablet_handle.get_obj()->get_tx_data(tx_data);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(ObTabletStatus::DELETING, tx_data.tablet_status_);
+    ASSERT_EQ(share::SCN::minus(share::SCN::max_scn(), 50).get_val_for_logservice(), tx_data.tx_scn_.get_val_for_logservice());
+  }
+}
+
 TEST_F(TestTabletCreateDeleteHelper, get_tablet_with_timeout)
 {
   int ret = OB_SUCCESS;

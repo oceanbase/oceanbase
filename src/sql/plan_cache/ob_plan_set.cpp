@@ -125,7 +125,8 @@ int ObPlanSet::match_params_info(const ParamStore *params,
           if (OB_FAIL(session_info->get_user_variable(related_user_var_names_.at(i), sess_var))) {
             LOG_WARN("failed to get user variable", K(ret), K(related_user_var_names_.at(i)), K(i));
           } else {
-            is_same = (related_user_sess_var_metas_.at(i) == sess_var.meta_);
+            ObPCUserVarMeta tmp_meta(sess_var);
+            is_same = (related_user_sess_var_metas_.at(i) == tmp_meta);
           }
         }
       }
@@ -277,10 +278,11 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
       is_same = false;
     } else {
       // number params in point and st_point can ignore scale check to share plancache
-      // please refer to ObSqlParameterization::is_ignore_scale_check
+      // please refrer to ObSqlParameterization::is_ignore_scale_check
       is_same = param_info.flag_.ignore_scale_check_
                 ? true
                 : (param.get_scale() == param_info.scale_);
+      is_same = is_same && match_decint_precision(param_info, param.get_precision());
     }
   }
   return ret;
@@ -500,11 +502,12 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
       if (true == is_same
           && (params_info_.at(i).flag_.need_to_check_type_ || need_match_all_params_)) {
         if (infos.at(i).type_ != params_info_.at(i).type_
-           || infos.at(i).scale_ != params_info_.at(i).scale_
-           || infos.at(i).col_type_ != params_info_.at(i).col_type_
-           || (params_info_.at(i).flag_.need_to_check_extend_type_
-               && infos.at(i).ext_real_type_ != params_info_.at(i).ext_real_type_)
-           || (params_info_.at(i).flag_.is_boolean_ != infos.at(i).flag_.is_boolean_)) {
+            || infos.at(i).scale_ != params_info_.at(i).scale_
+            || infos.at(i).col_type_ != params_info_.at(i).col_type_
+            || (params_info_.at(i).flag_.need_to_check_extend_type_
+                && infos.at(i).ext_real_type_ != params_info_.at(i).ext_real_type_)
+            || (params_info_.at(i).flag_.is_boolean_ != infos.at(i).flag_.is_boolean_)
+            || !match_decint_precision(params_info_.at(i), infos.at(i).precision_)) {
           is_same = false;
         }
       }
@@ -528,7 +531,8 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
                                                              sess_var))) {
             LOG_WARN("failed to get user variable", K(ret), K(sess_var));
           } else {
-            is_same = (sess_var.meta_ == related_user_sess_var_metas_.at(i));
+            ObPCUserVarMeta tmp_meta(sess_var);
+            is_same = (tmp_meta == related_user_sess_var_metas_.at(i));
           }
         }
       }
@@ -725,7 +729,7 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
             ret,
             related_user_var_names_.at(i),
             i );
-        OC( (related_user_sess_var_metas_.push_back)(sess_var.meta_) );
+        OC( (related_user_sess_var_metas_.push_back)(ObPCUserVarMeta(sess_var)) );
       }
 
       if (OB_FAIL(ret)) {
@@ -2397,4 +2401,17 @@ int ObSqlPlanSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
 #endif
 
 }
+
+bool ObPlanSet::match_decint_precision(const ObParamInfo &param_info, ObPrecision other_prec) const
+{
+  bool ret = false;
+  if (ob_is_decimal_int(param_info.type_)) {
+    ret = (param_info.precision_ == other_prec);
+  } else {
+    // not decimal_int, return true
+    ret = true;
+  }
+  return ret;
+}
+
 }

@@ -78,8 +78,7 @@ int ObDataBlockCachePreWarmer::reserve_kvpair(const blocksstable::ObMicroBlockDe
     if (level < TOP_LEVEL && (rest_size_ <= 0 || !warm_block(level))) {
       ret = OB_BUF_NOT_ENOUGH;
     } else if (FALSE_IT(reuse())) {
-    } else if (OB_FAIL(cache_->reserve_kvpair(micro_block_desc, inst_handle_,
-                                              cache_handle_, kvpair_, kvpair_size))) {
+    } else if (OB_FAIL(do_reserve_kvpair(micro_block_desc, kvpair_size))) {
       COMMON_LOG(WARN, "Fail to reserve block cache value", K(ret), K(micro_block_desc));
     } else {
       rest_size_ = MAX(0, rest_size_ - kvpair_size);
@@ -100,18 +99,9 @@ int ObDataBlockCachePreWarmer::update_and_put_kvpair(const blocksstable::ObMicro
   if (OB_ISNULL(cache_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The block cache pre warmer is not inited", K(ret), KP(cache_));
-  } else if (OB_UNLIKELY(!micro_block_desc.is_valid() || !inst_handle_.is_valid()
-                         || !cache_handle_.is_valid() || nullptr == kvpair_)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K(inst_handle_), K(cache_handle_), K(kvpair_));
-  } else if (cache_->get_cache(kvcache)) {
+  } else if (OB_FAIL(cache_->get_cache(kvcache))) {
     COMMON_LOG(WARN, "Fail to get block kvcache", K(ret));
-  } else if (FALSE_IT(static_cast<blocksstable::ObMicroBlockCacheKey *>(kvpair_->key_)->set(
-                      MTL_ID(),
-                      micro_block_desc.macro_id_,
-                      micro_block_desc.block_offset_,
-                      micro_block_desc.buf_size_ + micro_block_desc.header_->header_size_))) {
-  } else if (OB_FAIL(kvcache->put_kvpair(inst_handle_, kvpair_, cache_handle_))) {
+  } else if (OB_FAIL(do_put_kvpair(micro_block_desc, *kvcache))) {
     COMMON_LOG(WARN, "Fail to put kvpair into kvcache", K(ret));
   }
   COMMON_LOG(DEBUG, "pre warmer build cache key and put details", K(ret), K(MTL_ID()), K(rest_size_), K(update_step_),
@@ -174,12 +164,45 @@ bool ObDataBlockCachePreWarmer::warm_block(const int64_t level)
   return bret;
 }
 
+int ObDataBlockCachePreWarmer::do_reserve_kvpair(
+    const blocksstable::ObMicroBlockDesc &micro_block_desc,
+    int64_t &kvpair_size)
+{
+  return cache_->reserve_kvpair(micro_block_desc, inst_handle_,cache_handle_, kvpair_, kvpair_size);
+}
+
+int ObDataBlockCachePreWarmer::do_put_kvpair(
+    const blocksstable::ObMicroBlockDesc &micro_block_desc,
+    blocksstable::ObIMicroBlockCache::BaseBlockCache &kvcache)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!micro_block_desc.is_valid() || !inst_handle_.is_valid()
+                         || !cache_handle_.is_valid() || nullptr == kvpair_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K(inst_handle_), K(cache_handle_), K(kvpair_));
+  } else {
+    static_cast<blocksstable::ObMicroBlockCacheKey *>(kvpair_->key_)->set(
+      MTL_ID(),
+      micro_block_desc.macro_id_,
+      micro_block_desc.block_offset_,
+      micro_block_desc.buf_size_ + micro_block_desc.header_->header_size_);
+    if (OB_FAIL(kvcache.put_kvpair(inst_handle_, kvpair_, cache_handle_))) {
+      COMMON_LOG(WARN, "failed to put kvpair to block cache", K(ret));
+    }
+  }
+  return ret;
+}
+
 /*
  * -------------------------------------------- ObIndexBlockCachePreWarmer --------------------------------------------
  */
 
 ObIndexBlockCachePreWarmer::ObIndexBlockCachePreWarmer()
-  : ObDataBlockCachePreWarmer()
+  : ObDataBlockCachePreWarmer(),
+    allocator_("IdxBlkPreWarmer", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID()),
+    idx_transformer_(),
+    key_(),
+    value_()
 {
 }
 
@@ -201,6 +224,42 @@ void ObIndexBlockCachePreWarmer::calculate_base_percentage(const int64_t free_me
   base_percentage_ += INDEX_BLOCK_BASE_PERCENTAGE;
 }
 
+int ObIndexBlockCachePreWarmer::do_reserve_kvpair(
+    const blocksstable::ObMicroBlockDesc &micro_block_desc,
+    int64_t &kvpair_size)
+{
+  int ret = OB_SUCCESS;
+  allocator_.reuse();
+  blocksstable::ObMicroBlockData micro_data(micro_block_desc.get_block_buf(), micro_block_desc.get_block_size());
+  char *allocated_buf = nullptr;
+  if (OB_FAIL(idx_transformer_.transform(micro_data, value_.get_block_data(), allocator_, allocated_buf))) {
+    COMMON_LOG(WARN, "Fail to transform index block to memory format", K(ret));
+  } else {
+    kvpair_size = sizeof(blocksstable::ObMicroBlockCacheKey) + value_.size();
+  }
+  return ret;
+}
+
+int ObIndexBlockCachePreWarmer::do_put_kvpair(
+    const blocksstable::ObMicroBlockDesc &micro_block_desc,
+    blocksstable::ObIMicroBlockCache::BaseBlockCache &kvcache)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!micro_block_desc.is_valid() || !value_.get_block_data().is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K_(value));
+  } else {
+    key_.set(
+        MTL_ID(),
+        micro_block_desc.macro_id_,
+        micro_block_desc.block_offset_,
+        micro_block_desc.buf_size_ + micro_block_desc.header_->header_size_);
+    if (OB_FAIL(kvcache.put(key_, value_))) {
+      COMMON_LOG(WARN, "failed to put index block to cache", K(ret), K_(key), K_(value));
+    }
+  }
+  return ret;
+}
 
 };  // common
 };  // oceanbase

@@ -645,7 +645,7 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
       int64_t str_len = 0;
 
       //for save memory allocate in parser, we need try find the single stmt length in advance
-      
+
       //calc the end position of a single sql.
       get_single_sql(stmt, offset, remain, str_len);
 
@@ -901,7 +901,7 @@ void ObParser::get_single_sql(const common::ObString &stmt, int64_t offset, int6
       }
     }
     ++ str_len;
-    
+
     // update states.
     in_comment = comment_flag || c_comment_flag;
     in_string = sq_flag || bt_flag || dq_flag;
@@ -1115,7 +1115,7 @@ int ObParser::parse(const ObString &query,
     //  即使这里parser失败，后面还有pl parser的兜底逻辑
     bool is_contain_select = (stmt.length() > 6 && 0 == STRNCASECMP(stmt.ptr(), "select", 6));
 
-    // check wether the stmt start with "/*!", if so, stmt should first go through pl parser.  
+    // check wether the stmt start with "/*!", if so, stmt should first go through pl parser.
     bool is_mysql_comment = false;
     if (lib::is_mysql_mode()) {
       uint64_t pos = 0;
@@ -1124,7 +1124,7 @@ int ObParser::parse(const ObString &query,
               stmt[pos] == '\f' || stmt[pos] == '\n')) {
         pos++;
       }
-      if ((pos + 2 < len) && stmt[pos] == '/' && stmt[pos + 1] == '*' && stmt[pos + 2] == '!') { 
+      if ((pos + 2 < len) && stmt[pos] == '/' && stmt[pos + 1] == '*' && stmt[pos + 2] == '!') {
         is_mysql_comment = true;
       }
     }

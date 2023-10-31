@@ -41,6 +41,7 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
+#include "mtlenv/storage/test_merge_basic.h"
 
 namespace oceanbase
 {
@@ -98,7 +99,7 @@ int clear_tx_data(ObTxDataTable *tx_data_table)
   return ret;
 };
 
-class TestMultiVersionMergeRecycle : public ObMultiVersionSSTableTest
+class TestMultiVersionMergeRecycle : public TestMergeBasic
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -137,11 +138,10 @@ void TestMultiVersionMergeRecycle::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
   // create tablet
-  ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
   uint64_t table_id = 12345;
   share::schema::ObTableSchema table_schema;
   ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
 }
 
 void TestMultiVersionMergeRecycle::TearDownTestCase()
@@ -152,7 +152,7 @@ void TestMultiVersionMergeRecycle::TearDownTestCase()
 }
 
 TestMultiVersionMergeRecycle::TestMultiVersionMergeRecycle()
-  : ObMultiVersionSSTableTest("test_multi_version_merge_recycle")
+  : TestMergeBasic("test_multi_version_merge_recycle")
 {}
 
 void TestMultiVersionMergeRecycle::SetUp()
@@ -207,40 +207,11 @@ void TestMultiVersionMergeRecycle::prepare_merge_context(const ObMergeType &merg
                                                   const ObVersionRange &trans_version_range,
                                                   ObTabletMergeCtx &merge_context)
 {
-  bool has_lob = false;
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  merge_context.ls_handle_ = ls_handle;
-
-  ObTabletHandle tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
-  merge_context.tablet_handle_ = tablet_handle;
-
-  table_merge_schema_.reset();
-  OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  merge_context.schema_ctx_.base_schema_version_ = table_schema_.get_schema_version();
-  merge_context.schema_ctx_.schema_version_ = table_schema_.get_schema_version();
-  merge_context.schema_ctx_.storage_schema_ = &table_merge_schema_;
-  merge_context.schema_ctx_.merge_schema_ = &table_merge_schema_;
-
-  merge_context.is_full_merge_ = is_full_merge;
-  merge_context.merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-  merge_context.param_.merge_type_ = merge_type;
-  merge_context.param_.merge_version_ = 0;
-  merge_context.param_.ls_id_ = ls_id_;
-  merge_context.param_.tablet_id_ = tablet_id_;
-  merge_context.sstable_version_range_ = trans_version_range;
-  merge_context.param_.report_ = &rs_reporter_;
-  merge_context.progressive_merge_num_ = 0;
-  const common::ObIArray<ObITable *> &tables = merge_context.tables_handle_.get_tables();
-  merge_context.log_ts_range_.start_log_ts_ = tables.at(0)->get_start_log_ts();
-  merge_context.log_ts_range_.end_log_ts_ = tables.at(tables.count() - 1)->get_end_log_ts();
-
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_merge_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder(index_desc_));
+  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  ASSERT_EQ(OB_SUCCESS, merge_context.prepare_parallel_info());
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_->data_store_desc_.assign(index_desc_));
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
 }
 
 void TestMultiVersionMergeRecycle::build_sstable(
@@ -253,9 +224,9 @@ void TestMultiVersionMergeRecycle::build_sstable(
 TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -344,9 +315,9 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
 TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -442,9 +413,9 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
 TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
@@ -538,9 +509,9 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
 TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -638,9 +609,9 @@ TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
 TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[5];
@@ -747,9 +718,9 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
 TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_macro)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[5];
@@ -867,9 +838,9 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_macro)
 TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
@@ -964,9 +935,9 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
 TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
 {
   int ret = OB_SUCCESS;
-  ObPartitionMinorMerger merger;
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[4];

@@ -13,7 +13,7 @@
 #ifndef OCEABASE_STORAGE_HA_DAG
 #define OCEABASE_STORAGE_HA_DAG
 
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 #include "ob_storage_ha_struct.h"
 #include "ob_storage_restore_struct.h"

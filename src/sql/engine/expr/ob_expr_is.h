@@ -43,7 +43,7 @@ public:
                         common::ObExprTypeCtx &type_ctx) const;
 
   template <typename T>
-  static int is_zero(T number);
+  static int is_zero(T number, const uint32_t len);
   static int is_infinite_nan(const common::ObObjType, common::ObDatum *, bool &, Ieee754);
   private:
   // types and constants
@@ -82,6 +82,8 @@ class ObExprIs: public ObExprIsBase
   static int calc_is_nan(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
   static int calc_collection_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int decimal_int_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int decimal_int_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // types and constants
 private:
@@ -117,6 +119,8 @@ public:
 
   static int calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
                                     const ObBitVector &skip, const int64_t batch_size);
+  static int decimal_int_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int decimal_int_is_not_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // types and constants
 private:

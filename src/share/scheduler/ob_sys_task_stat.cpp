@@ -105,6 +105,19 @@ int ObSysTaskStatMgr::get_iter(ObSysStatMgrIter &iter)
   return ret;
 }
 
+int ObSysTaskStatMgr::generate_task_id(ObTaskId &task_id)
+{
+  int ret = OB_SUCCESS;
+  if (!self_addr_.is_valid()) {
+    ret = OB_INVALID_ERROR;
+    SERVER_LOG(ERROR, "self_addr_ is invalid", K(ret), K(self_addr_));
+  } else {
+    task_id.reset();
+    task_id.init(self_addr_);
+  }
+  return ret;
+}
+
 int ObSysTaskStatMgr::add_task(ObSysTaskStat &task)
 {
   int ret = OB_SUCCESS;
@@ -276,7 +289,7 @@ int ObSysTaskStatMgr::is_task_cancel(const ObTaskId &task_id, bool &is_cancel)
 
   if (task_id.is_invalid()) {
     ret = OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid task id", K(ret));
+    SERVER_LOG(WARN, "invalid task id", K(ret), K(task_id));
   } else {
     SpinRLockGuard guard(lock_);
     bool found_task = false;

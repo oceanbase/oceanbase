@@ -123,6 +123,8 @@ private:
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
 
+  int set_index_table_column_store_if_need(share::schema::ObTableSchema &table_schema);
+
 private:
   ObDDLService &ddl_service_;
 private:

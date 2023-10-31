@@ -44,7 +44,7 @@ public:
   {
     return (capacity_ > 0 && count_ >= 0 && count_ <= capacity_);
   }
-  int get_nop_pos(const int64_t idx, int64_t &pos);
+  int get_nop_pos(const int64_t idx, int64_t &pos) const;
   int64_t count() const { return count_; }
   int64_t capacity() const { return capacity_; }
   int set_count(const int64_t count);

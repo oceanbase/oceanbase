@@ -136,17 +136,18 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_merge_scheduler.cpp
   freeze/ob_major_merge_progress_checker.cpp
   freeze/ob_freeze_info_detector.cpp
-  freeze/ob_freeze_info_manager.cpp
   freeze/ob_freeze_reentrant_thread.cpp
   freeze/ob_tenant_all_zone_merge_strategy.cpp
   freeze/ob_tenant_major_merge_strategy.cpp
   freeze/ob_zone_merge_manager.cpp
+  freeze/ob_major_merge_info_manager.cpp
   freeze/ob_daily_major_freeze_launcher.cpp
   freeze/ob_checksum_validator.cpp
   freeze/ob_major_freeze_service.cpp
   freeze/ob_major_freeze_rpc_define.cpp
   freeze/ob_major_freeze_helper.cpp
   freeze/ob_major_freeze_util.cpp
+  freeze/ob_major_merge_progress_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver restore

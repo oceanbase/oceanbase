@@ -164,13 +164,22 @@ public:
     num_null_(0),
     avg_len_(0),
     hist_scale_(-1),
-    min_max_inited_(false)
+    min_max_inited_(false),
+    cg_macro_blk_cnt_(0),
+    cg_micro_blk_cnt_(0),
+    cg_skip_rate_(1.0)
   {
     min_val_.set_min_value();
     max_val_.set_max_value();
   }
   int assign(const OptColumnMeta &other);
-  void init(const uint64_t column_id, const double ndv, const double num_null, const double avg_len);
+  void init(const uint64_t column_id,
+            const double ndv,
+            const double num_null,
+            const double avg_len,
+            const int64_t cg_macro_blk_cnt = 0,
+            const int64_t cg_micro_blk_cnt = 0,
+            const double cg_skip_rat = 1.0);
 
   uint64_t get_column_id() const { return column_id_; }
   void set_column_id(const uint64_t column_id) { column_id_ = column_id; }
@@ -190,9 +199,18 @@ public:
   void set_max_value(const ObObj& max_val) { max_val_ = max_val; }
   bool get_min_max_inited() const { return min_max_inited_; }
   void set_min_max_inited(const bool inited) { min_max_inited_ = inited; }
+  int64_t get_cg_macro_blk_cnt() const { return cg_macro_blk_cnt_; }
+  void set_cg_macro_blk_cnt(const int64_t cnt) { cg_macro_blk_cnt_ = cnt; }
+  int64_t get_cg_micro_blk_cnt() const { return cg_micro_blk_cnt_; }
+  void set_cg_micro_blk_cnt(const int64_t cnt) { cg_micro_blk_cnt_ = cnt; }
+  double get_cg_skip_rate() const { return cg_skip_rate_; }
+  void set_cg_skip_rate(const double skip_rate) { cg_skip_rate_ = skip_rate; }
+
+
 
   TO_STRING_KV(K_(column_id), K_(ndv), K_(num_null), K_(avg_len), K_(hist_scale),
-               K_(min_val), K_(max_val) , K_(min_max_inited));
+               K_(min_val), K_(max_val) , K_(min_max_inited), K_(cg_macro_blk_cnt),
+               K_(cg_micro_blk_cnt), K_(cg_skip_rate));
 private:
   uint64_t column_id_;
   double ndv_;
@@ -200,10 +218,13 @@ private:
   double avg_len_;
   // the percentage of the histogram sample size that is available. For example, hist_scale = 0.5
   // means that current sample size of histogram is 50% of origin sample size.
-  double hist_scale_; 
+  double hist_scale_;
   ObObj min_val_;
   ObObj max_val_;
   bool min_max_inited_;
+  int64_t cg_macro_blk_cnt_;
+  int64_t cg_micro_blk_cnt_;
+  double cg_skip_rate_;
 };
 
 enum OptTableStatType {
@@ -238,6 +259,7 @@ public:
            const share::schema::ObTableType table_type,
            const int64_t rows,
            const OptTableStatType stat_type,
+           const int64_t micro_block_count,
            ObSqlSchemaGuard &schema_guard,
            common::ObIArray<int64_t> &all_used_part_id,
            common::ObIArray<ObTabletID> &all_used_tablets,
@@ -264,6 +286,7 @@ public:
   void set_rows(const double rows) { rows_ = rows; }
   int64_t get_version() const { return last_analyzed_; }
   void set_version(const int64_t version) { last_analyzed_ = version; }
+  int64_t get_micro_block_count() const { return micro_block_count_; }
   const common::ObIArray<int64_t>& get_all_used_parts() const { return all_used_parts_; }
   common::ObIArray<int64_t> &get_all_used_parts() { return all_used_parts_; }
   const common::ObIArray<ObTabletID>& get_all_used_tablets() const { return all_used_tablets_; }
@@ -297,6 +320,8 @@ private:
   OptTableStatType stat_type_;
   int64_t last_analyzed_;
 
+  int64_t micro_block_count_;
+
   ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_parts_;
   ObSEArray<ObTabletID, 64, common::ModulePageAllocator, true> all_used_tablets_;
   ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> pk_ids_;
@@ -328,6 +353,7 @@ public:
                                const uint64_t ref_table_id,
                                const share::schema::ObTableType table_type,
                                const int64_t rows,
+                               const int64_t micro_block_count,
                                common::ObIArray<int64_t> &all_used_part_id,
                                common::ObIArray<ObTabletID> &all_used_tablets,
                                common::ObIArray<uint64_t> &column_ids,

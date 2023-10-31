@@ -56,7 +56,7 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
     } else if (OB_UNLIKELY(!mds_param->flush_scn_.is_valid())) {
       ret = OB_ERR_SYS;
       LOG_WARN("flush scn is invalid", K(ret), KPC(mds_param));
-    } else if (OB_FAIL(ObBasicTabletMergeDag::inner_init(*mds_param))) {
+    } else if (OB_FAIL(ObTabletMergeDag::inner_init(mds_param))) {
       LOG_WARN("failed to init ObTabletMergeDag", K(ret), KPC(mds_param));
     } else {
       flush_scn_ = mds_param->flush_scn_;
@@ -71,7 +71,12 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
 
 int ObMdsTableMergeDag::create_first_task()
 {
-  return ObTabletMergeDag::create_first_task<ObMdsTableMergeTask>();
+  int ret = OB_SUCCESS;
+  ObMdsTableMergeTask *task = nullptr;
+  if (OB_FAIL(create_task(nullptr/*parent*/, task))) {
+    STORAGE_LOG(WARN, "fail to alloc mds merge task", K(ret));
+  }
+  return ret;
 }
 
 int ObMdsTableMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const

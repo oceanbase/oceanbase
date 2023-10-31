@@ -287,16 +287,23 @@ private:
 
 struct ObNFMObj
 {
-  ObNFMObj() : obj_type_(common::ObNullType), num_(), float_(0), double_(0) {}
+  ObNFMObj() : obj_type_(common::ObNullType), num_(), float_(0), double_(0),
+               decimal_int_(NULL), int_bytes_(0) {}
   ObNFMObj(const common::ObObjType &obj_type)
-    : obj_type_(obj_type), num_(), float_(0), double_(0) {}
-
+    : obj_type_(obj_type), num_(), float_(0), double_(0), decimal_int_(NULL), int_bytes_(0) {}
   const common::number::ObNumber& get_number() const {return num_;}
   float get_float() const {return float_;}
   double get_double() const {return double_;}
+  const ObDecimalInt *get_decimal_int() const { return decimal_int_; }
+  int32_t get_int_bytes() const { return int_bytes_; }
+
   void set_number(const common::number::ObNumber &num) {num_ = num;}
   void set_float(const float f) {float_ = f;}
   void set_double(const double d) {double_ = d;}
+  void set_decimal_int(const ObDecimalInt *decimal_int, const int32_t int_bytes) {
+    decimal_int_ = const_cast<ObDecimalInt *>(decimal_int);
+    int_bytes_ = int_bytes;
+  }
   common::ObObjType get_obj_type() const {return obj_type_;}
   void set_obj_type(const common::ObObjType obj_type) {obj_type_ = obj_type;}
 
@@ -304,6 +311,8 @@ struct ObNFMObj
   common::number::ObNumber num_;
   float float_;
   double double_;
+  ObDecimalInt *decimal_int_;
+  int32_t int_bytes_; // for decimal int
 };
 
 class ObNFMBase
@@ -343,8 +352,10 @@ public:
                           common::ObIAllocator &alloc);
   // the conversion range of roman numerals is 1~3999, so if it is not a valid int64, negative
   // number returns INT64_MIN, positive number returns INT64_MAX, will not affect the final result.
-  int cast_obj_to_int(const ObNFMObj &nfm_obj, int64_t &res_val);
-  int cast_obj_to_num_str(const ObNFMObj &nfm_obj, const int64_t scale, common::ObString &num_str);
+  int cast_obj_to_int(const ObDatumMeta &in_meta, const ObNFMObj &nfm_obj, int64_t &res_val);
+  int cast_obj_to_num_str(
+      const ObNFMObj &nfm_obj, const int64_t in_scale, const int64_t out_scale,
+      common::ObString &num_str);
   bool is_digit(const char c) const;
   bool is_zero(const common::ObString &num_str) const;
 
@@ -373,6 +384,7 @@ public:
                              common::ObExprCtx &expr_ctx,
                              common::ObString &res_str);
   int convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
+                             const ObDatumMeta &in_meta,
                              const common::ObDatum &obj,
                              common::ObIAllocator &alloc,
                              const char *fmt_str, const int32_t fmt_len,
@@ -382,17 +394,19 @@ public:
 private:
   int process_fmt_conv(const ObSQLSessionInfo &session,
                        const char *fmt_str, const int32_t fmt_len,
+                       const ObDatumMeta &in_meta,
                        const ObNFMObj &nfm_obj, char *buf,
                        const int64_t buf_len, int64_t &pos);
-  int process_roman_format(const ObNFMObj &nfm_obj, char *buf,
+  int process_roman_format(const ObDatumMeta &in_meta, const ObNFMObj &nfm_obj, char *buf,
                            const int64_t buf_len, int64_t &pos);
-  int process_hex_format(const ObNFMObj &nfm_obj, char *buf,
+  int process_hex_format(const ObNFMObj &nfm_obj, const int64_t in_scale, char *buf,
                          const int64_t buf_len, int64_t &pos);
-  int process_tm_format(const ObNFMObj &nfm_obj, char *buf,
+  int process_tm_format(const ObNFMObj &nfm_obj, const int64_t in_scale, char *buf,
                         const int64_t buf_len, int64_t &pos);
-  int process_tme_format(const ObNFMObj &nfm_obj, char *buf,
+  int process_tme_format(const ObNFMObj &nfm_obj, const int64_t in_scale, char *buf,
                          const int64_t buf_len, int64_t &pos);
-  int process_mul_format(const ObNFMObj &nfm_obj, common::ObString &num_str);
+  int process_mul_format(
+      const ObNFMObj &nfm_obj, const ObDatumMeta &in_meta, common::ObString &num_str);
   int process_sci_format(const common::ObString &origin_str, const int32_t scale,
                          common::ObString &num_str);
   int process_output_fmt(const common::ObString &num_str, const int32_t integer_part_len,

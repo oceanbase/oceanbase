@@ -16,6 +16,7 @@
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_tablet_slog_helper.h"
 
@@ -42,6 +43,7 @@ ObTabletTransformArg::ObTabletTransformArg()
     auto_inc_seq_addr_(),
     tablet_status_cache_(),
     aux_tablet_info_cache_(),
+    is_row_store_(true),
     ddl_kvs_(nullptr),
     ddl_kv_count_(0),
     memtable_count_(0)
@@ -70,6 +72,7 @@ void ObTabletTransformArg::reset()
   auto_inc_seq_addr_.reset();
   tablet_status_cache_.reset();
   aux_tablet_info_cache_.reset();
+  is_row_store_ = true;
   ddl_kvs_ = nullptr;
   ddl_kv_count_ = 0;
   for (int64_t i = 0; i < MAX_MEMSTORE_CNT; ++i) {
@@ -93,15 +96,55 @@ bool ObTabletTransformArg::is_valid() const
       && medium_info_list_addr_.is_valid();
 }
 
+
+bool ObSSTablePersistWrapper::is_valid() const
+{
+  return nullptr != sstable_
+      && sstable_->is_sstable()
+      && sstable_->is_valid();
+}
+
+int ObSSTablePersistWrapper::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("wrapper is unexpected not valid", K(ret));
+  } else if (OB_FAIL(sstable_->serialize_full_table(buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize full sstable", K(ret), KPC(sstable_));
+  }
+  return ret;
+}
+
+int64_t ObSSTablePersistWrapper::get_serialize_size() const
+{
+  int64_t len = 0;
+  if (OB_UNLIKELY(!is_valid())) {
+    // do nothing
+  } else {
+    len = sstable_->get_full_serialize_size();
+  }
+  return len;
+}
+
+
 int ObTabletPersister::persist_and_transform_tablet(
     const ObTablet &old_tablet,
     ObTabletHandle &new_handle)
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "PATF"));
+  const int64_t ctx_id = share::is_reserve_mode()
+                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                       : ObCtxIds::DEFAULT_CTX_ID;
+
+  // TODO(@DanLing) use LocalArena later
+  common::ObArenaAllocator allocator("PerstTbl", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ctx_id);
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
+  tablet_meta_write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "TblMetaWriCtx", ctx_id));
+  sstable_meta_write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "SstMetaWriCtx", ctx_id));
 
   if (OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -215,6 +258,7 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     arg.aux_tablet_info_committed_kv_addr_ = tablet.mds_data_.aux_tablet_info_.committed_kv_.addr_;
     arg.extra_medium_info_ = tablet.mds_data_.extra_medium_info_;
     arg.medium_info_list_addr_ = tablet.mds_data_.medium_info_list_.addr_;
+    arg.is_row_store_ = tablet.is_row_store();
     arg.ddl_kvs_ = tablet.ddl_kvs_;
     arg.ddl_kv_count_ = tablet.ddl_kv_count_;
     MEMCPY(arg.memtables_, tablet.memtables_, sizeof(memtable::ObIMemtable*) * MAX_MEMSTORE_CNT);
@@ -236,6 +280,10 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   arg.reset();
 
   common::ObSEArray<ObSharedBlockWriteInfo, 8> write_infos;
+  const int64_t ctx_id = share::is_reserve_mode()
+                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                       : ObCtxIds::DEFAULT_CTX_ID;
+  write_infos.set_attr(lib::ObMemAttr(MTL_ID(), "WriteInfos", ctx_id));
   // fetch member wrapper
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
@@ -283,6 +331,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
     if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       type = ObTabletPoolType::TP_LARGE;
     }
+    arg.is_row_store_ = tablet.is_row_store();
   }
 
   return ret;
@@ -418,6 +467,11 @@ int ObTabletPersister::persist_4k_tablet(common::ObArenaAllocator &allocator, Ob
   ObTablet *new_tablet = new_handle.get_obj();
   ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
   common::ObSEArray<ObSharedBlockWriteInfo, 1> write_infos;
+  const int64_t ctx_id = share::is_reserve_mode()
+                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                       : ObCtxIds::DEFAULT_CTX_ID;
+  write_infos.set_attr(lib::ObMemAttr(MTL_ID(), "WriteInfos", ctx_id));
+
   ObSharedBlockWriteHandle handle;
   ObSharedBlocksWriteCtx write_ctx;
   if (CLICK_FAIL(fill_write_info(allocator, new_tablet, write_infos))) {
@@ -592,7 +646,91 @@ int ObTabletPersister::transform(
       }
     }
     if (OB_SUCC(ret)) {
-      tiny_tablet->is_inited_ = true;
+      if (OB_FAIL(tiny_tablet->table_store_cache_.init(table_store->get_major_sstables(),
+                                                       table_store->get_minor_sstables(),
+                                                       arg.is_row_store_))) {
+        LOG_WARN("failed to init table store cache", K(ret), KPC(table_store), K(arg));
+      } else {
+        tiny_tablet->is_inited_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletPersister::batch_write_sstable_info(
+    common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
+    common::ObIArray<ObSharedBlocksWriteCtx> &write_ctxs,
+    common::ObIArray<ObMetaDiskAddr> &addrs,
+    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs)
+{
+  int ret = OB_SUCCESS;
+  ObSharedBlockBatchHandle handle;
+  ObTenantCheckpointSlogHandler *ckpt_slog_hanlder = MTL(ObTenantCheckpointSlogHandler*);
+  if (OB_ISNULL(ckpt_slog_hanlder)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, ckpt slog handler is nullptr", K(ret), KP(ckpt_slog_hanlder));
+  } else if (OB_FAIL(ckpt_slog_hanlder->get_shared_block_reader_writer().async_batch_write(write_infos, handle))) {
+    LOG_WARN("fail to batch async write", K(ret), K(write_infos));
+  } else if (OB_FAIL(handle.batch_get_write_ctx(write_ctxs))) {
+    LOG_WARN("fail to batch get addr", K(ret), K(handle));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < write_ctxs.count(); ++i) {
+      if (OB_UNLIKELY(!write_ctxs.at(i).is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid addr", K(ret), K(i), K(write_ctxs.at(i)));
+      } else if (OB_FAIL(addrs.push_back(write_ctxs.at(i).addr_))) {
+        LOG_WARN("fail to push sstable addr to array", K(ret), K(i), K(write_ctxs.at(i)));
+      } else if (OB_FAIL(meta_write_ctxs.push_back(write_ctxs.at(i)))) {
+        LOG_WARN("fail to push write ctxs to array", K(ret), K(i), K(write_ctxs.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletPersister::fetch_and_persist_co_sstable(
+    common::ObArenaAllocator &allocator,
+    ObCOSSTableV2 *co_sstable,
+    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+    common::ObIArray<ObMetaDiskAddr> &cg_addrs)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> cg_write_ctxs;
+  common::ObSEArray<ObSharedBlockWriteInfo, 16> cg_write_infos;
+  const int64_t ctx_id = share::is_reserve_mode()
+                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                       : ObCtxIds::DEFAULT_CTX_ID;
+  cg_write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "CGWriteCtxs", ctx_id));
+  cg_write_infos.set_attr(lib::ObMemAttr(MTL_ID(), "CGWriteInfos", ctx_id));
+  int64_t total_size = 0;
+  cg_addrs.reset();
+
+  if (OB_ISNULL(co_sstable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), KPC(co_sstable));
+  } else if (FALSE_IT(total_size = co_sstable->get_serialize_size())) {
+  } else if (total_size < SSTABLE_MAX_SERIALIZE_SIZE) {
+    // do noting
+  } else {
+    ObSSTableArray &cg_sstables = co_sstable->get_cg_sstables();
+    ObSSTable *cg_sstable = nullptr;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
+      cg_sstable = cg_sstables[idx];
+      ObSSTablePersistWrapper wrapper(cg_sstable);
+      if (OB_FAIL(fill_write_info(allocator, &wrapper, cg_write_infos))) {
+        LOG_WARN("failed to fill sstable write info", K(ret));
+      }
+    }
+
+    ObCOSSTableV2 *tmp_co_sstable = nullptr;
+    if (OB_FAIL(ret)) {
+    } else if (0 < cg_write_infos.count() &&
+        OB_FAIL(batch_write_sstable_info(cg_write_infos, cg_write_ctxs, cg_addrs, meta_write_ctxs))) {
+      LOG_WARN("failed to batch write sstable", K(ret));
+    } else if (OB_UNLIKELY(cg_addrs.count() != cg_sstables.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected cg addrs count", K(ret), K(cg_addrs.count()), K(cg_sstables.count()));
     }
   }
   return ret;
@@ -605,62 +743,66 @@ int ObTabletPersister::fetch_and_persist_sstable(
     common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<ObITable *, 16> tables;
-  common::ObSEArray<ObMetaDiskAddr, 16> addrs;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> write_ctxs;
-  common::ObSEArray<ObSharedBlockWriteInfo, 16> write_infos;
-  ObSharedBlockBatchHandle handle;
+  common::ObSEArray<ObITable *, 8> tables;
+  common::ObSEArray<ObMetaDiskAddr, 8> addrs;
+  common::ObSEArray<ObMetaDiskAddr, 8> cg_addrs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 8> write_ctxs;
+  common::ObSEArray<ObSharedBlockWriteInfo, 8> write_infos;
+  const int64_t ctx_id = share::is_reserve_mode()
+                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                       : ObCtxIds::DEFAULT_CTX_ID;
+  tables.set_attr(lib::ObMemAttr(MTL_ID(), "PerstTables", ctx_id));
+  addrs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstAddrs", ctx_id));
+  cg_addrs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstCGAddrs", ctx_id));
+  write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstWriteCtxs", ctx_id));
+  write_infos.set_attr(lib::ObMemAttr(MTL_ID(), "PerstWriteInfos", ctx_id));
+
+  ObArenaAllocator tmp_allocator("PersistSSTable", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ctx_id);
   ObITable *table = nullptr;
   while (OB_SUCC(ret) && OB_SUCC(table_iter.get_next(table))) {
     if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
+    } else if (table->is_co_sstable() && table->get_serialize_size() > SSTABLE_MAX_SERIALIZE_SIZE) {
+      // serialize full co sstable and shell cg sstables when the serialize size of CO reached the limit.
+      FLOG_INFO("cannot full serialize CO within 2MB buffer, should serialize CO with Shell CG", K(ret), KPC(table));
+      ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
+      cg_addrs.reset();
+      tmp_allocator.reuse();
+      ObCOSSTableV2 *tmp_co_sstable = nullptr;
+
+      if (OB_FAIL(fetch_and_persist_co_sstable(allocator, co_sstable, meta_write_ctxs, cg_addrs))) {
+        LOG_WARN("fail to persist co sstable", K(ret));
+      } else if (co_sstable->deep_copy(tmp_allocator, cg_addrs, tmp_co_sstable)) {
+        LOG_WARN("failed to deep copy co sstable", K(ret), KPC(co_sstable));
+      } else {
+        ObSSTablePersistWrapper wrapper(tmp_co_sstable);
+        if (OB_FAIL(fill_write_info(allocator, &wrapper, write_infos))) {
+          LOG_WARN("failed to fill sstable write info", K(ret));
+        } else if (OB_FAIL(tables.push_back(tmp_co_sstable))) {
+          LOG_WARN("failed to add table", K(ret));
+        }
+      }
     } else {
-      ObMetaDiskAddr addr;
-      ObSSTable *sstable = nullptr;
-      ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "PersistSSTable"));
-      // The sstable by cache in table store, the address is also valid. But, here we hope that all
-      // members of the sstable are serialized. So, we deep copy the sstable and set mem address.
-      addr.set_mem_addr(0, sizeof(ObSSTable));
-      if (OB_FAIL(static_cast<ObSSTable *>(table)->deep_copy(tmp_allocator, sstable))) {
-        LOG_WARN("fail to deep copy sstable", K(ret), KPC(table));
-      } else if (OB_FAIL(sstable->set_addr(addr))) {
-        LOG_WARN("fail to set sstable address", K(ret), K(addr));
-      } else if (OB_FAIL(fill_write_info(allocator, sstable, write_infos))) {
-        LOG_WARN("fail to fill sstable write info", K(ret), KPC(table));
+      ObSSTablePersistWrapper wrapper(static_cast<ObSSTable *>(table));
+      if (OB_FAIL(fill_write_info(allocator, &wrapper, write_infos))) {
+        LOG_WARN("failed to fill sstable write info", K(ret));
       } else if (OB_FAIL(tables.push_back(table))) {
-        LOG_WARN("fail to push back sstable address", K(ret), K(tables));
+        LOG_WARN("failed to add table", K(ret));
       }
     }
   }
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
-  if (OB_SUCC(ret) && write_infos.count() > 0) {
-    ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
-    if (OB_ISNULL(ckpt_slog_handler)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, ckpt slog handler is nullptr", K(ret), KP(ckpt_slog_handler));
-    } else if (OB_FAIL(ckpt_slog_handler->get_shared_block_reader_writer().async_batch_write(write_infos, handle))) {
-      LOG_WARN("fail to batch async write", K(ret), K(write_infos));
-    } else if (OB_FAIL(handle.batch_get_write_ctx(write_ctxs))) {
-      LOG_WARN("fail to batch get addr", K(ret), K(handle));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < write_ctxs.count(); ++i) {
-        if (OB_UNLIKELY(!write_ctxs.at(i).is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected invalid addr", K(ret), K(i), K(write_ctxs.at(i)));
-        } else if (OB_FAIL(addrs.push_back(write_ctxs.at(i).addr_))) {
-          LOG_WARN("fail to push sstable addr to array", K(ret), K(i), K(write_ctxs.at(i)));
-        } else if (OB_FAIL(meta_write_ctxs.push_back(write_ctxs.at(i)))) {
-          LOG_WARN("fail to push write ctxs to array", K(ret), K(i), K(write_ctxs.at(i)));
-        }
-      }
-    }
-  }
   if (OB_FAIL(ret)) {
+  } else if (write_infos.count() > 0 &&
+      OB_FAIL(batch_write_sstable_info(write_infos, write_ctxs, addrs, meta_write_ctxs))) {
+    LOG_WARN("failed to batch write sstable", K(ret));
   } else if (OB_FAIL(new_table_store.init(allocator, tables, addrs))) {
     LOG_WARN("fail to init new table store", K(ret), K(tables), K(addrs));
+  } else {
+    FLOG_INFO("success to init new table store", K(ret), K(new_table_store)); // tmp debug log, remove later
   }
   return ret;
 }
@@ -691,7 +833,12 @@ int ObTabletPersister::write_and_fill_args(
     }
   }
 
-  common::ObSEArray<ObSharedBlocksWriteCtx, total_addr_cnt> write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, sizeof(addr)/sizeof(addr[0])> write_ctxs;
+  const int64_t ctx_id = share::is_reserve_mode()
+                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                       : ObCtxIds::DEFAULT_CTX_ID;
+  write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "WriteCtxs", ctx_id));
+
   if (OB_UNLIKELY(total_addr_cnt != write_infos.count() + none_addr_cnt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(total_addr_cnt), "write_info_count", write_infos.count(), K(none_addr_cnt));
@@ -874,7 +1021,7 @@ int ObTabletPersister::load_table_store(
     int64_t buf_len = -1;
     int64_t io_pos = 0;
     ObSharedBlockReadInfo read_info;
-    ObSharedBlockReadHandle io_handle;
+    ObSharedBlockReadHandle io_handle(io_allocator);
     read_info.addr_ = addr;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);

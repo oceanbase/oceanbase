@@ -3776,6 +3776,7 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
                                      int64_t &prefix_pos)
 {
   int ret = OB_SUCCESS;
+
   int64_t left_count = input_ordering.count();
   int64_t right_count = expected_order_exprs.count();
   int64_t l_idx = 0;
@@ -3799,10 +3800,37 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
     }
     //r_idx < right_count、l_idx == left_count 时仍可对 expected_order_exprs 进行检查
     while (OB_SUCC(ret) && is_match && !find_unique && r_idx < right_count) {
-      if (l_idx < left_count && (NULL == expected_order_directions
-          || input_ordering.at(l_idx).order_type_ == expected_order_directions->at(r_idx))
-          && is_expr_equivalent(expected_order_exprs.at(r_idx), input_ordering.at(l_idx).expr_,
-                                equal_sets)) {
+      // if expected_order_expr = cast(col as dst_type), input_order_expr = col
+      // and cast is lossless, no need to add sort for `cast(col as dst_type)`
+      ObRawExpr *expected_order_expr = expected_order_exprs.at(r_idx);
+      bool is_lossless_cast = false;
+      if (OB_ISNULL(expected_order_expr)) {
+        // do nothing
+      } else if (OB_FAIL(is_lossless_column_cast(expected_order_expr, is_lossless_cast))) {
+        LOG_WARN("check lossless column cast failed", K(ret));
+      } else if (is_lossless_cast) {
+        expected_order_expr = expected_order_expr->get_param_expr(0);
+      }
+
+      if (OB_SUCC(ret) && (l_idx < left_count)) {
+        is_lossless_cast = false;
+        if (OB_ISNULL(input_ordering.at(l_idx).expr_)) {
+          // do nothing
+        } else if (OB_FAIL(is_lossless_column_cast(input_ordering.at(l_idx).expr_, is_lossless_cast))) {
+          LOG_WARN("check lossless column cast failed", K(ret), KPC(input_ordering.at(l_idx).expr_));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (l_idx < left_count
+                 && (NULL == expected_order_directions
+                     || input_ordering.at(l_idx).order_type_ == expected_order_directions->at(r_idx))
+                 && is_expr_equivalent(
+                     expected_order_expr,
+                     is_lossless_cast ?
+                         input_ordering.at(l_idx).expr_->get_param_expr(0) :
+                         input_ordering.at(l_idx).expr_,
+                     equal_sets)) {
         ret = extend_exprs.push_back(expected_order_exprs.at(r_idx));
         ++l_idx;
         ++r_idx;
@@ -5750,40 +5778,40 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
     //do nothing
   } else if (!is_oracle_mode()) {
     // mysql模式允许的无损类型转换可以参考
-    if (ObIntTC == child_tc || ObUIntTC == child_tc || ObNumberTC == child_tc) {
-      if (child_type.get_type() == dst_type.get_type() && ObNumberTC != child_tc) {
-        is_lossless = true;
-      } else if (ObNumberTC == dst_tc) {
+    if (ObIntTC == child_tc || ObUIntTC == child_tc) {
+      if (ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
         ObAccuracy lossless_acc = child_type.get_accuracy();
-        if ((dst_acc.get_scale() >= 0 &&
-              dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
-            (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
-           is_lossless = true;
-         }
+        if ((dst_acc.get_scale() >= 0
+             && dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision())
+            || (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
+          is_lossless = true;
+        }
+      } else if (child_type.get_type() == dst_type.get_type()) {
+        is_lossless = true;
       }
     } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
       if (child_tc == dst_tc || ObDoubleTC == dst_tc) {
         ObAccuracy lossless_acc = child_type.get_accuracy();
         if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
           is_lossless = true;
-        } else if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
-                  dst_acc.get_scale() >= lossless_acc.get_scale()) {
+        } else if (dst_acc.get_precision() >= lossless_acc.get_precision()
+                   && dst_acc.get_scale() >= lossless_acc.get_scale()) {
           is_lossless = true;
-         }
+        }
       }
-    } else if (ObTimestampType == child_type.get_type() || ObDateTimeType == child_type.get_type()) {
+    } else if (ObTimestampType == child_type.get_type()
+               || ObDateTimeType == child_type.get_type()) {
       if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
-        if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
-            child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
+        if (child_type.get_accuracy().get_precision() == dst_acc.get_precision()
+            && child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
           is_lossless = true;
-         }
+        }
       }
     } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
-      if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
-        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-           is_lossless = true;
-         }
-       }
+      if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type()
+          || ObTimestampType == dst_type.get_type()) {
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) { is_lossless = true; }
+      }
     } else if (ObYearTC == child_tc) {
       if (ObNumberTC == dst_tc) {
         ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
@@ -5797,6 +5825,26 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
       } else if (child_tc == dst_tc) {
         is_lossless = true;
       }
+    } else if (ObDecimalIntType == child_type.get_type()) {
+      if (ObNumberTC == dst_tc) {
+        is_lossless = ((PRECISION_UNKNOWN_YET == dst_type.get_precision()
+                        && NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale())
+                       || (dst_type.get_scale() >= child_type.get_scale()
+                           && dst_type.get_precision() >= child_type.get_precision()));
+      } else if (ObDecimalIntTC == dst_tc) {
+        is_lossless = (child_type.get_scale() <= dst_type.get_scale()
+                       && child_type.get_precision() <= dst_type.get_precision());
+      }
+    } else if (ObNumberTC == child_tc) {
+      if (ObDecimalIntTC == dst_tc) {
+        if (child_type.get_scale() == NUMBER_SCALE_UNKNOWN_YET
+            || child_type.get_precision() == PRECISION_UNKNOWN_YET) {
+          is_lossless = false;
+        } else if (dst_tc == ObNumberTC) {
+          is_lossless = (dst_type.get_scale() >= child_type.get_scale()
+                         && dst_type.get_precision() >= child_type.get_precision());
+        }
+      }
       // varchar, varbinnary
     } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type()) {
       //in mysql c1 varchar(x) as (func(y)) can not insert data makes length(fun(y)) > x
@@ -5808,23 +5856,45 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
   } else {
     if (ObIntTC == child_tc || ObUIntTC == child_tc) {
       //TODO: need to be supplemented for the conversion from number to number
-      if (child_tc == dst_tc || ObNumberTC == dst_tc) {
+      if (child_tc == dst_tc || ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
         ObAccuracy lossless_acc = child_type.get_accuracy();
-        if ((dst_acc.get_scale() >= 0 &&
-              dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
-            (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) ||
-            (-1 == dst_acc.get_precision() && -85 == dst_acc.get_scale())) {
+        if ((dst_acc.get_scale() >= 0
+             && dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision())
+            || (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
           is_lossless = true;
         }
       }
-    } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type() || ObNCharType == child_type.get_type() || ObNVarchar2Type == child_type.get_type()) {
-      //in oracle creating table ... c1 varchar(x) as (func(y)) will ensure that x>=length(y);
-      if (child_type.get_type() == dst_type.get_type() &&
-            dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+    } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type()
+               || ObNCharType == child_type.get_type()
+               || ObNVarchar2Type == child_type.get_type()) {
+      // in oracle creating table ... c1 varchar(x) as (func(y)) will ensure that x>=length(y);
+      if (child_type.get_type() == dst_type.get_type()
+          && dst_type.get_obj_meta().get_collation_type()
+               == child_type.get_obj_meta().get_collation_type()) {
         is_lossless = true;
-       }
-     }
-   }
+      }
+    } else if (ObDecimalIntType == child_type.get_type()) {
+      if (ObNumberTC == dst_tc) {
+        is_lossless = ((NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                        && PRECISION_UNKNOWN_YET == dst_type.get_precision())
+                       || (dst_type.get_scale() >= child_type.get_scale()
+                           && dst_type.get_precision() >= child_type.get_precision()));
+      } else if (ObDecimalIntTC == dst_tc) {
+        is_lossless = (child_type.get_scale() <= dst_type.get_scale()
+                       && child_type.get_precision() <= dst_type.get_precision());
+      }
+    } else if (ObNumberTC == child_tc) {
+      if (ObDecimalIntTC == dst_tc) {
+        if (child_type.get_scale() == NUMBER_SCALE_UNKNOWN_YET
+            || child_type.get_precision() == PRECISION_UNKNOWN_YET) {
+          is_lossless = false;
+        } else {
+          is_lossless = (dst_type.get_scale() >= child_type.get_scale()
+                         && dst_type.get_precision() >= child_type.get_precision());
+        }
+      }
+    }
+  }
   return is_lossless;
 }
 
@@ -5838,6 +5908,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
     LOG_WARN("get unexpected null", K(ret));
   } else if (T_FUN_SYS_CAST != expr->get_expr_type()) {
     // do nothing
+  } else if (expr->is_const_expr() && CM_IS_CONST_TO_DECIMAL_INT(expr->get_extra())) {
+    // do nothing
   } else if (OB_ISNULL(child_expr = expr->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -5850,7 +5922,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
     if (!is_oracle_mode()) {
       // mysql模式允许的无损类型转换可以参考
       if (ObIntTC == child_tc || ObUIntTC == child_tc) {
-        if (ObNumberTC == dst_tc) {
+        if (ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
           // ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if ((dst_acc.get_scale() >= 0 &&
@@ -5862,7 +5934,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           is_lossless = true;
         }
       } else if (ObBitTC == child_tc) {
-        if (ObNumberTC == dst_tc) {
+        if (ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
           const double log10_2 = 0.30103;
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if (dst_acc.get_scale() >= 0
@@ -5896,7 +5968,7 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           }
         }
       } else if (ObYearTC == child_tc) {
-        if (ObNumberTC == dst_tc) {
+        if (ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
           ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
           if (dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision() - lossless_acc.get_scale()) {
             is_lossless = true;
@@ -5915,11 +5987,31 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = true;
           }
         }
+      } else if (ObDecimalIntType == child_type.get_type()) {
+        if (ObNumberTC == dst_tc) {
+          is_lossless = ((PRECISION_UNKNOWN_YET == dst_type.get_precision()
+                         && NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale())
+                        || (dst_type.get_scale() >= child_type.get_scale()
+                            && dst_type.get_precision() >= child_type.get_precision()));
+        } else if (ObDecimalIntTC == dst_tc) {
+          is_lossless = (child_type.get_scale() <= dst_type.get_scale()
+                         && child_type.get_precision() <= dst_type.get_precision());
+        }
+      } else if (ObNumberTC == child_tc) {
+        if (ObDecimalIntTC == dst_tc) {
+          if (child_type.get_scale() == NUMBER_SCALE_UNKNOWN_YET
+              || child_type.get_precision() == PRECISION_UNKNOWN_YET) {
+            is_lossless = false;
+          } else {
+            is_lossless = (dst_type.get_scale() >= child_type.get_scale()
+                           && dst_type.get_precision() >= child_type.get_precision());
+          }
+        }
       }
     } else {
       if (ObIntTC == child_tc || ObUIntTC == child_tc) {
         //TODO: need to be supplemented for the conversion from number to number
-        if (child_tc == dst_tc || ObNumberTC == dst_tc) {
+        if (child_tc == dst_tc || ObNumberTC == dst_tc || ObDecimalIntTC == dst_tc) {
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if ((dst_acc.get_scale() >= 0 &&
                dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
@@ -5927,8 +6019,30 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = true;
           }
         }
+      } else if (ObDecimalIntType == child_type.get_type()) {
+        if (ObNumberTC == dst_tc) {
+          is_lossless = ((NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                         && PRECISION_UNKNOWN_YET == dst_type.get_precision())
+                        || (dst_type.get_scale() >= child_type.get_scale()
+                            && dst_type.get_precision() >= child_type.get_precision()));
+        } else if (ObDecimalIntTC == dst_tc) {
+          is_lossless = (child_type.get_scale() <= dst_type.get_scale()
+                         && child_type.get_precision() <= dst_type.get_precision());
+        }
+      } else if (ObNumberTC == child_tc) {
+        if (ObDecimalIntTC == dst_tc) {
+          if (child_type.get_scale() == NUMBER_SCALE_UNKNOWN_YET
+              || child_type.get_precision() == PRECISION_UNKNOWN_YET) {
+            is_lossless = false;
+          } else {
+            is_lossless = (dst_type.get_scale() >= child_type.get_scale()
+                           && dst_type.get_precision() >= child_type.get_precision());
+          }
+        }
       }
     }
+    LOG_DEBUG("lossless column cast", K(child_type), K(child_tc), K(dst_type), K(dst_tc),
+              K(is_lossless));
   }
   return ret;
 }
@@ -6164,11 +6278,17 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
           is_all_not_null = false;
         }
       }
+      bool all_types_is_decint = true;
+      for (int64_t i = 0; OB_SUCC(ret) && all_types_is_decint && i < types.count(); ++i) {
+        if (!types.at(i).is_decimal_int()) {
+          all_types_is_decint = false;
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(types.empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected empty", K(ret), K(types.empty()));
-      } else if (1 == types.count()) {
+      } else if (1 == types.count() || all_types_is_decint) {
         ret = res_types.push_back(types.at(0));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0),
                                                     types.count(), coll_type, is_oracle_mode(),
@@ -8328,6 +8448,8 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
     if (OB_SUCCESS != tmp_ret) {
       can_sort_opt = old_can_opt;
     }
+    LOG_TRACE("check encode sortkey", K(can_sort_opt), K(order_keys), K(card), K(avg_len),
+              K(old_can_opt));
   }
   return ret;
 }

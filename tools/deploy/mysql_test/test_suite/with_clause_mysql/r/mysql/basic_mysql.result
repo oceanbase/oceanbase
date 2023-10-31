@@ -280,7 +280,8 @@ Outputs & filters:
   1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
 
 with cte as (select count(*) from t1) select * from cte;
 +----------+
@@ -1067,7 +1068,8 @@ Outputs & filters:
   5 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
 with cte as (select * from t1) select (select count(*) from cte) from t2;
 +----------------------------+
 | (select count(*) from cte) |
@@ -2301,7 +2303,8 @@ Outputs & filters:
   1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
 with cte as (select count(*) as k from t1) select * from cte where k = 1;
 +------+
 | k    |
@@ -2452,7 +2455,8 @@ Outputs & filters:
   6 - output([T_FUN_COUNT(*)]), filter([t2.c21 = 1]), rowset=16
       access([t2.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
 update t1 set c1=(with cte as (select count(*)+99 from t2 where c21=1) select * from cte) where c2 = 2;
 select * from t1;
 +------+------+------+
@@ -2583,7 +2587,8 @@ Outputs & filters:
   4 - output([T_FUN_MAX(t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_MAX(t1.c1)])
   5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2615,7 +2620,8 @@ Outputs & filters:
   4 - output([T_FUN_MAX(t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_MAX(t1.c1)])
   5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 

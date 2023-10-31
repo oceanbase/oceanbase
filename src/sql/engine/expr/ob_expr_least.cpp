@@ -76,7 +76,8 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
      */
     if (ObIntTC == first_type_class
         || ObUIntTC == first_type_class
-        || ObNumberTC == first_type_class) {
+        || ObNumberTC == first_type_class
+        || ObDecimalIntTC == first_type_class) {
       type.set_type(ObNumberType);
       type.set_calc_type(ObNumberType);
       // scale和precision信息设置为unknown，兼容oracle的number行为
@@ -138,6 +139,7 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
             break;
           }
           case ObNumberTC:
+          case ObDecimalIntTC:
           case ObIntTC:
           case ObUIntTC: {
             // 处理number长度的问题，oracle最大设置成40即可，OB因为没有科学计数法，
@@ -235,8 +237,14 @@ int ObExprLeastGreatest::calc_result_typeN_mysql(ObExprResType &type,
     }
     const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
                       ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
-    if (OB_FAIL(calc_result_meta_for_comparison(type, types, param_num, type_ctx.get_coll_type(),
-                                                default_length_semantics))) {
+    bool enable_decimalint = false;
+    if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimalint))) {
+      LOG_WARN("fail to check_enable_decimalint", K(ret), K(session->get_effective_tenant_id()));
+    } else if (OB_FAIL(calc_result_meta_for_comparison(
+                         type, types, param_num,
+                         type_ctx.get_coll_type(),
+                         default_length_semantics,
+                         enable_decimalint))) {
       LOG_WARN("calc result meta for comparison failed");
     }
     // can't cast origin parameters.
@@ -245,6 +253,10 @@ int ObExprLeastGreatest::calc_result_typeN_mysql(ObExprResType &type,
     }
     if (all_integer && type.is_integer_type()) {
       type.set_calc_type(ObNullType);
+    } else if (all_integer && ob_is_number_or_decimal_int_tc(type.get_type())) {
+      // the args type is integer and result type is number/decimal, there are unsigned bigint in
+      // args, set expr meta here.
+      type.set_accuracy(common::ObAccuracy::DDL_DEFAULT_ACCURACY2[0/*is_oracle*/][ObUInt64Type]);
     } else {
       for (int64_t i = 0; i < param_num; i++) {
         if (ob_is_enum_or_set_type(types[i].get_type())) {
@@ -252,6 +264,7 @@ int ObExprLeastGreatest::calc_result_typeN_mysql(ObExprResType &type,
         }
       }
     }
+    LOG_DEBUG("least calc_result_typeN", K(type), K(type.get_calc_accuracy()));
   }
   return ret;
 }
@@ -317,6 +330,7 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
           info->cmp_meta_.type_ = cmp_meta.get_type();
           info->cmp_meta_.cs_type_ = cmp_meta.get_collation_type();
           info->cmp_meta_.scale_ = cmp_meta.get_scale();
+          info->cmp_meta_.precision_ = PRECISION_UNKNOWN_YET;
           info->cm_ = cm;
           rt_expr.extra_info_ = info;
 
@@ -359,8 +373,10 @@ int ObExprLeastGreatest::cast_param(const ObExpr &src_expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const bool string_type = ob_is_string_type(dst_meta.type_);
+  const bool decimal_int_type = ob_is_decimal_int(dst_meta.type_);
   if (src_expr.datum_meta_.type_ == dst_meta.type_
-      && (!string_type || src_expr.datum_meta_.cs_type_ == dst_meta.cs_type_)) {
+      && (!string_type || src_expr.datum_meta_.cs_type_ == dst_meta.cs_type_)
+      && (!decimal_int_type || src_expr.datum_meta_.scale_ == dst_meta.scale_)) {
     res_datum = src_expr.locate_expr_datum(ctx);
   } else if (OB_ISNULL(ctx.datum_caster_) && OB_FAIL(ctx.init_datum_caster())) {
     LOG_WARN("init datum caster failed", K(ret));
@@ -384,8 +400,12 @@ int ObExprLeastGreatest::cast_result(const ObExpr &src_expr, const ObExpr &dst_e
 {
   int ret = OB_SUCCESS;
   const bool string_type = ob_is_string_type(src_expr.datum_meta_.type_);
+  const bool decimal_int_type = ob_is_decimal_int(src_expr.datum_meta_.type_);
   if (src_expr.datum_meta_.type_ == dst_expr.datum_meta_.type_
-      && (!string_type || src_expr.datum_meta_.cs_type_ == dst_expr.datum_meta_.cs_type_)) {
+      && (!string_type || src_expr.datum_meta_.cs_type_ == dst_expr.datum_meta_.cs_type_)
+      && (!decimal_int_type
+          || (src_expr.datum_meta_.scale_ == dst_expr.datum_meta_.scale_
+              && src_expr.datum_meta_.precision_ == dst_expr.datum_meta_.precision_))) {
     ObDatum *res_datum = nullptr;
     if (OB_FAIL(src_expr.eval(ctx, res_datum))) {
       LOG_WARN("eval param value failed", K(ret));

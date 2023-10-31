@@ -22,6 +22,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+  class ObDatum;
+}
 namespace sql
 {
 class ObEvalCtx;
@@ -56,16 +60,16 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       int64_t &begin_index,
       const int64_t end_index,
-      const common::ObBitmap *bitmap = nullptr) = 0;
+      const ObFilterResult &res) = 0;
+  virtual int fill_rows(const int64_t group_idx, const int64_t row_count) = 0;
   virtual int reuse_capacity(const int64_t capacity);
-  virtual int filter_micro_block_batch(
-      blocksstable::ObMicroBlockDecoder &block_reader,
-      sql::ObPushdownFilterExecutor *parent,
-      sql::ObBlackFilterExecutor &filter,
-      common::ObBitmap &result_bitmap) override final;
 
   virtual bool is_end() const override final
   { return iter_end_flag_ != IterEndState::PROCESSING; }
+  virtual void set_end() { iter_end_flag_ = ITER_END; }
+  virtual void set_limit_end() { iter_end_flag_ = LIMIT_ITER_END; }
+  OB_INLINE int64_t get_batch_size() { return batch_size_; }
+  OB_INLINE int64_t get_row_capacity() const { return row_capacity_; }
   TO_STRING_KV(K_(iter_end_flag), K_(batch_size), K_(row_capacity));
 protected:
   int get_row_ids(
@@ -74,13 +78,7 @@ protected:
       const int64_t end_index,
       int64_t &row_count,
       const bool can_limit,
-      const common::ObBitmap *bitmap = nullptr);
-  int copy_filter_rows(
-      blocksstable::ObMicroBlockDecoder *reader,
-      int64_t &begin_index,
-      const common::ObIArray<int32_t> &cols,
-      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      common::ObIArray<common::ObDatum *> &datums);
+      const ObFilterResult &res);
   IterEndState iter_end_flag_;
   int64_t batch_size_;
   int64_t row_capacity_;

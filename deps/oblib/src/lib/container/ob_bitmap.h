@@ -36,482 +36,186 @@ OB_INLINE int64_t popcount64(uint64_t v)
   return cnt;
 }
 
+OB_INLINE uint64_t blsr64(uint64_t mask)
+{
+#ifdef __BMI__
+    return _blsr_u64(mask);
+#else
+    return mask & (mask-1);
+#endif
+}
+
+// Returns the index of the least significant 1-bit of mask.
+// mask cannot be zero.
+OB_INLINE uint64_t countr_zero64(uint64_t mask)
+{
+  return __builtin_ffsll(mask) - 1;
+}
+
+// Count Leading Zeros from highest bit, mask cannot be zero.
+OB_INLINE uint64_t countl_zero64(uint64_t mask)
+{
+  return __builtin_clzll(mask);
+}
+
 class ObBitmap
 {
 public:
   typedef uint64_t size_type;
-
-  static const size_type BYTES_PER_BLOCK = sizeof(size_type);
-  static const size_type BITS_PER_BLOCK = BYTES_PER_BLOCK * 8;
-  static const size_type BLOCKS_PER_MEM_BLOCK = 64;
-  static const size_type MEM_BLOCK_BYTES = BLOCKS_PER_MEM_BLOCK * BYTES_PER_BLOCK;
-  static const size_type MEM_BLOCK_BITS = BLOCKS_PER_MEM_BLOCK * BITS_PER_BLOCK;
-  static const size_type BLOCK_MOD_MASK = BITS_PER_BLOCK - 1;
-  static const size_type BLOCK_MOD_BITS = 6;
-
+  static const size_type DEFAULT_BLOCK_SIZE = 1024;
 public:
   ObBitmap(ObIAllocator &allocator);
   virtual ~ObBitmap();
+  DISALLOW_COPY_AND_ASSIGN(ObBitmap);
 
-  /**
-   * check if bitmap is empty; not contains any data.
-   */
   OB_INLINE bool empty() const;
-
-  /**
-   * free all hold memory in bitmap.
-   * empty will return true;
-   */
   OB_INLINE void destroy();
-
-  /**
-   * set bit at %pos if value true
-   * or wipe out bit at %pos if value false, same as clear(pos)
-   */
   OB_INLINE int set(const size_type pos, const bool value = true);
-
-  /**
-   * same as set(pos, false);
-   */
   OB_INLINE int wipe(const size_type pos);
-
-  /**
-   * reset all bits in bitmap;
-   */
-  OB_INLINE void reuse(const bool is_all_true = false);
-
-  /**
-   * xor with origin bit.
-   */
   OB_INLINE int flip(const size_type pos);
-
-  /**
-   * check bit at %pos if set
-   */
   OB_INLINE bool test(const size_type pos) const;
-
-  /**
-   * same as test(pos);
-   */
-  OB_INLINE bool operator[](const size_type pos) const
-  {
-    return test(pos);
-  }
-
-  /**
-   * Expand @valid_bits_ to @valid_bits,
-   * reserve more memblocks if needed.
-   */
-  OB_INLINE int expand_size(const size_type valid_bits);
-
-  OB_INLINE size_type get_block(const size_type pos) const;
-
-  /**
-   * Reserve more memory if @size is larger than the capacity now
-   */
-  OB_INLINE int reserve(const size_type capacity);
-
-  /**
-   * Bitwise AND operation with another bitmap with equal @valid_bits_
-   * Current bitmap is the left value, where the result of operation is stored.
-   */
+  OB_INLINE bool operator[](const size_type pos) const;
+  OB_INLINE bool is_all_false() const;
+  OB_INLINE bool is_all_true() const;
   int bit_and(const ObBitmap &right);
-
-  /**
-   * Bitwise OR operation with another bitmap with equal @valid_bits_
-   * Current bitmap is the left value, where the result of operation is stored.
-   */
   int bit_or(const ObBitmap &right);
-
-  /**
-   * Bitwise NOT operation on the bitmap. Only the bits in range @valid_bits_ will be flipped
-   */
   int bit_not();
+  int load_blocks_from_array(size_type *block_data, size_type num_bytes);
+  int append_bitmap(
+      const ObBitmap &bitmap,
+      const uint32_t offset,
+      const bool is_reverse);
+  uint64_t popcnt() const;
+  // [start, end]
+  bool is_all_false(const int64_t start, const int64_t end) const;
+  bool is_all_true(const int64_t start, const int64_t end) const;
+  // Next true offset in the bitmap, return -1 if not found.
+  int64_t next_valid_idx(const int64_t start, const int64_t count, const bool is_reverse, int64_t &offset) const;
 
-  /**
-   * Update blocks of Bitmap from array @*block_data
-   */
-  int load_blocks_from_array(size_type *block_data, size_type num_bits);
+  int init(const size_type valid_bytes, const bool is_all_true = false);
+  int reserve(size_type capacity);
+  int copy_from(const ObBitmap &bitmap, const int64_t start, const int64_t count);
+  void reuse(const bool is_all_true = false);
+  int get_row_ids(
+      int64_t *row_ids,
+      int64_t &row_count,
+      int64_t &from,
+      const int64_t to,
+      const int64_t limit,
+      const int64_t id_offset = 0) const;
 
-  OB_INLINE bool get_bit_set(const int64_t start, const int64_t size, void *&ptr) const;
-
-public:
   OB_INLINE size_type capacity() const
   {
-    return num_bits_;
+    return capacity_;
   }
   OB_INLINE size_type size() const
   {
-    return valid_bits_;
+    return valid_bytes_;
   }
-
-  OB_INLINE uint64_t popcnt() const;
-
-  OB_INLINE bool is_all_false() const;
-
-  OB_INLINE bool is_all_true() const;
-
   OB_INLINE bool is_inited() const
   {
     return is_inited_;
   }
-  OB_INLINE int init(const size_type valid_bits, const bool is_all_true = false);
+  OB_INLINE uint8_t *get_data() const
+  {
+    return data_;
+  }
+  int set_bitmap_batch(const int64_t offset, const int64_t count, const bool value);
+  int from_bits_mask(
+      const int64_t from,
+      const int64_t to,
+      uint8_t* bits);
+  int to_bits_mask(
+      const int64_t from,
+      const int64_t to,
+      const bool need_flip,
+      uint8_t* bits) const;
+
+  TO_STRING_KV(K_(is_inited), K_(valid_bytes), K_(capacity), KP_(data));
 
 private:
-  struct MemBlock
+  OB_INLINE void set_(const size_type pos, const bool value = true);
+  OB_INLINE int is_valid(const size_type pos)
   {
-    MemBlock *next_;
-    size_type bits_[BLOCKS_PER_MEM_BLOCK];
-    OB_INLINE void clear_block_bits(const bool is_all_true)
-    {
-      if (is_all_true) {
-        MEMSET(static_cast<void *>(bits_), 255, MEM_BLOCK_BYTES);
-      } else {
-        MEMSET(static_cast<void *>(bits_), 0, MEM_BLOCK_BYTES);
-      }
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(pos > valid_bytes_)) {
+      ret = OB_ERROR_OUT_OF_RANGE;
+      LIB_LOG(WARN, "Pos out of valid bytes", K(ret), K(pos), K_(valid_bytes));
     }
-    OB_INLINE uint64_t popcnt(const int64_t valid_bit) const
-    {
-      uint64_t bit_cnt = 0;
-      const int64_t cnt = valid_bit / BITS_PER_BLOCK;
-      const int64_t remain = valid_bit % BITS_PER_BLOCK;
-      for (int64_t i = 0; i < cnt; i++) {
-        uint64_t v = bits_[i];
-        bit_cnt += popcount64(v);
-      }
-      if (remain > 0) {
-        bit_cnt += popcount64(bits_[cnt] & ((1LU << remain) - 1));
-      }
-      return bit_cnt;
-    }
-    OB_INLINE bool is_all_true(const int64_t valid_bits) const
-    {
-      bool is_all_true = true;
-      const int64_t cnt = valid_bits / BITS_PER_BLOCK;
-      const int64_t remain = valid_bits % BITS_PER_BLOCK;
-      for (int64_t i = 0; is_all_true && i < cnt; i++) {
-        uint64_t v = bits_[i];
-        is_all_true = (uint64_t(-1) == v);
-      }
-      if (is_all_true && remain > 0) {
-        uint64_t mask = ((1LU << remain) - 1);
-        is_all_true = ((bits_[cnt] & mask) == mask);
-      }
-      return is_all_true;
-    }
-    OB_INLINE bool is_all_false(const int64_t valid_bits) const
-    {
-      bool is_all_false = true;
-      const int64_t cnt = valid_bits / BITS_PER_BLOCK;
-      const int64_t remain = valid_bits % BITS_PER_BLOCK;
-      for (int64_t i = 0; is_all_false && i < cnt; i++) {
-        uint64_t v = bits_[i];
-        is_all_false = (0 == v);
-      }
-      if (is_all_false && remain > 0) {
-        uint64_t mask = ((1LU << remain) - 1);
-        is_all_false = ((bits_[cnt] & mask) == 0);
-      }
-      return is_all_false;
-    }
-  };
+    return ret;
+  }
 
 private:
-  OB_INLINE static size_type block_index(size_type pos)
-  {
-    return pos >> BLOCK_MOD_BITS;
-  }
-  OB_INLINE static size_type bit_index(size_type pos)
-  {
-    return pos & BLOCK_MOD_MASK;
-  }
-  OB_INLINE static size_type bit_mask(size_type pos)
-  {
-    return 1ULL << bit_index(pos);
-  }
-  OB_INLINE static size_type round_up(size_type n, size_type align)
-  {
-    return (n + align - 1) & ~(align - 1);
-  }
-
-  int allocate_blocks(const size_type num_blocks, MemBlock* &head, MemBlock* &tail, const bool value = false);
-  OB_INLINE MemBlock *find_block(const size_type pos, size_type &inner_pos) const;
-  int expand_block(const size_type pos, size_type &inner_pos, MemBlock* &mem_block);
-
-  DISALLOW_COPY_AND_ASSIGN(ObBitmap);
-
-private:
-  size_type valid_bits_;
-  size_type num_bits_;
-  MemBlock *header_;
-  MemBlock *tailer_;
-  ObIAllocator &allocator_;
   bool is_inited_;
+  int64_t valid_bytes_;
+  int64_t capacity_;
+  // Make sure that data_[i] can only be equal to 0x00 or 0x01 when i is from 0 to (valid_bytes_ - 1).
+  uint8_t *data_;
+  ObIAllocator &allocator_;
 };
-
-
-OB_INLINE uint64_t ObBitmap::popcnt() const
-{
-  uint64_t popcnt = 0;
-  int64_t inner_bits = valid_bits_;
-  MemBlock *cur_mem_block = header_;
-  while (inner_bits > 0) {
-    int64_t cur_bits = min(inner_bits, static_cast<int64_t>(MEM_BLOCK_BITS));
-    popcnt += cur_mem_block->popcnt(cur_bits);
-    inner_bits -= MEM_BLOCK_BITS;
-    cur_mem_block = cur_mem_block->next_;
-  }
-  return popcnt;
-}
 
 OB_INLINE bool ObBitmap::is_all_true() const
 {
-  bool is_all_true = true;
-  int64_t inner_bits = valid_bits_;
-  MemBlock *cur_mem_block = header_;
-  while (inner_bits > 0 && is_all_true) {
-    int64_t cur_bits = min(inner_bits, static_cast<int64_t>(MEM_BLOCK_BITS));
-    is_all_true = cur_mem_block->is_all_true(cur_bits);
-    inner_bits -= MEM_BLOCK_BITS;
-    cur_mem_block = cur_mem_block->next_;
-  }
-  return is_all_true;
+  return is_all_true(0, valid_bytes_ - 1);
 }
 
 OB_INLINE bool ObBitmap::is_all_false() const
 {
-  bool is_all_false = true;
-  int64_t inner_bits = valid_bits_;
-  MemBlock *cur_mem_block = header_;
-  while (inner_bits > 0 && is_all_false) {
-    int64_t cur_bits = min(inner_bits, static_cast<int64_t>(MEM_BLOCK_BITS));
-    is_all_false = cur_mem_block->is_all_false(cur_bits);
-    inner_bits -= MEM_BLOCK_BITS;
-    cur_mem_block = cur_mem_block->next_;
-  }
-  return is_all_false;
-}
-
-OB_INLINE int ObBitmap::reserve(const size_type capacity)
-{
-  int ret = OB_SUCCESS;
-  size_type inner_pos = 0;
-  if (capacity > num_bits_) {
-    MemBlock *new_block = NULL;
-    if (OB_FAIL(expand_block(capacity - 1, inner_pos, new_block))) {
-      LIB_LOG(WARN, "Failed to expand blocks", K(ret));
-    } else if (OB_ISNULL(new_block)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LIB_LOG(WARN, "Failed to expand MemBlock when reserve space for ObBitmap", K(capacity));
-    }
-  }
-  return ret;
-}
-
-OB_INLINE int ObBitmap::init(const size_type valid_bits, const bool is_all_true)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LIB_LOG(WARN, "ObBitmap init twice", K(ret));
-  } else {
-    num_bits_ = valid_bits;
-    if (num_bits_ < MEM_BLOCK_BITS) {
-      num_bits_ = MEM_BLOCK_BITS;
-    }
-    num_bits_ = round_up(num_bits_, BITS_PER_BLOCK);
-    size_type num_blocks = num_bits_ >> BLOCK_MOD_BITS;
-    if (OB_FAIL(allocate_blocks(num_blocks, header_, tailer_, is_all_true))) {
-      LIB_LOG(WARN, "Allocate blocks failed", K(ret), K(num_blocks));
-    } else if (OB_ISNULL(header_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LIB_LOG(WARN, "Init ObBitmap failed: no mem block allocated", K(valid_bits));
-    } else {
-      valid_bits_ = valid_bits;
-      is_inited_ = true;
-    }
-  }
-  if (IS_NOT_INIT) {
-    destroy();
-  }
-  return ret;
+  return is_all_false(0, valid_bytes_ - 1);
 }
 
 OB_INLINE void ObBitmap::destroy()
 {
-  if (OB_NOT_NULL(header_)) {
-    MemBlock *walk = header_;
-    MemBlock *next;
-    while (NULL != walk) {
-      next = walk->next_;
-      // deallocate block
-      walk->next_ = NULL;
-      allocator_.free(walk);
-      walk = next;
-    }
+  if (nullptr != data_) {
+    allocator_.free(data_);
   }
 }
 
 OB_INLINE bool ObBitmap::empty() const
 {
-  return (NULL == header_ || 0 == num_bits_);
+  return 0 == valid_bytes_;
 }
 
 OB_INLINE int ObBitmap::set(const size_type pos, const bool value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(pos >= valid_bits_)) {
-    ret = OB_ERROR_OUT_OF_RANGE;
-    LIB_LOG(WARN, "Pos out of valid bits", K(ret), K(pos), K(valid_bits_));
-  } else if (OB_LIKELY(MEM_BLOCK_BITS > pos)) {
-    if (value) {
-      header_->bits_[pos >> BLOCK_MOD_BITS] |= (1ULL << (pos & BLOCK_MOD_MASK));
-    } else {
-      header_->bits_[pos >> BLOCK_MOD_BITS] &= (~(1ULL << (pos & BLOCK_MOD_MASK)));
-    }
+  if (OB_FAIL(is_valid(pos))) {
+    LIB_LOG(WARN, "Faild to check valid", K(ret), K(pos), K_(valid_bytes));
   } else {
-    size_type inner_pos = pos;
-    MemBlock *cur_mem_block = header_;
-    while (MEM_BLOCK_BITS <= inner_pos) {
-      cur_mem_block = cur_mem_block->next_;
-      inner_pos -= MEM_BLOCK_BITS;
-    }
-    if (value) {
-      cur_mem_block->bits_[inner_pos >> BLOCK_MOD_BITS] |= (1ULL << (inner_pos & BLOCK_MOD_MASK));
-    } else {
-      cur_mem_block->bits_[inner_pos >> BLOCK_MOD_BITS] &= (~(1ULL << (inner_pos & BLOCK_MOD_MASK)));
-    }
+    data_[pos] = value;
   }
   return ret;
+}
+
+OB_INLINE void ObBitmap::set_(const size_type pos, const bool value)
+{
+  data_[pos] = value;
 }
 
 OB_INLINE int ObBitmap::wipe(const size_type pos)
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LIB_LOG(WARN, "Not inited", K(ret));
-  } else {
-    size_type inner_pos = pos;
-    MemBlock *mem_block = find_block(pos, inner_pos);
-    if (OB_NOT_NULL(mem_block)) {
-      mem_block->bits_[block_index(inner_pos)] &= ~bit_mask(inner_pos);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LIB_LOG(WARN, "Failed to find Bitmap's memblock", K(ret), K(pos));
-    }
-  }
-  return ret;
-}
-
-OB_INLINE void ObBitmap::reuse(const bool is_all_true)
-{
-  if (OB_NOT_NULL(header_)) {
-    MemBlock *walk = header_;
-    while(NULL != walk) {
-      walk->clear_block_bits(is_all_true);
-      walk = walk->next_;
-    }
-  }
-}
-
-OB_INLINE int ObBitmap::expand_size(const size_type valid_bits)
-{
-  int ret = OB_SUCCESS;
-  valid_bits_ = valid_bits;
-  if (OB_FAIL(reserve(valid_bits))) {
-    LIB_LOG(WARN, "Failed to reserve bitmap with num_bits", K(ret), K(valid_bits));
-  }
-  return ret;
+  return set(pos, false);
 }
 
 OB_INLINE int ObBitmap::flip(const size_type pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LIB_LOG(WARN, "Not inited", K(ret));
+  if (OB_FAIL(is_valid(pos))) {
+    LIB_LOG(WARN, "Faild to check valid", K(ret), K(pos), K_(valid_bytes));
   } else {
-    size_type inner_pos = pos;
-    MemBlock *mem_block = find_block(pos, inner_pos);
-    if (OB_NOT_NULL(mem_block)) {
-      mem_block->bits_[block_index(inner_pos)] ^= bit_mask(inner_pos);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LIB_LOG(WARN, "Failed to find Bitmap's memblock", K(ret), K(pos));
-    }
+    data_[pos] = (data_[pos] == 0);
   }
   return ret;
 }
 
 OB_INLINE bool ObBitmap::test(const size_type pos) const
 {
-  bool result = false;
-  if (OB_LIKELY(MEM_BLOCK_BITS > pos)) {
-    result = (header_->bits_[pos >> BLOCK_MOD_BITS] & (1ULL << (pos & BLOCK_MOD_MASK)));
-  } else {
-    size_type inner_pos = pos;
-    MemBlock *cur_mem_block = header_;
-    while (MEM_BLOCK_BITS <= inner_pos) {
-      cur_mem_block = cur_mem_block->next_;
-      inner_pos -= MEM_BLOCK_BITS;
-    }
-    result = (cur_mem_block->bits_[inner_pos >> BLOCK_MOD_BITS] & (1ULL << (inner_pos & BLOCK_MOD_MASK)));
-  }
-  return result;
+  return data_[pos];
 }
 
-OB_INLINE typename ObBitmap::size_type
-ObBitmap::get_block(const size_type pos) const
+OB_INLINE bool ObBitmap::operator[](const size_type pos) const
 {
-  ObBitmap::size_type result = 0;
-  if (OB_UNLIKELY(valid_bits_ < pos)) {
-    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "Index out of range when getting block from bitmap", K_(valid_bits), K(pos));
-  } else {
-    size_type inner_pos = pos;
-    MemBlock *mem_block = find_block(pos, inner_pos);
-    if (OB_ISNULL(mem_block)) {
-      LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "Null pointer error when finding memblock", K(pos));
-    } else {
-      result = mem_block->bits_[block_index(inner_pos)];
-    }
-  }
-  return result;
-}
-
-OB_INLINE typename ObBitmap::MemBlock *
-ObBitmap::find_block(const size_type pos, size_type &inner_pos) const
-{
-  inner_pos = pos;
-  MemBlock *cur_mem_block = header_;
-  if (OB_LIKELY(MEM_BLOCK_BITS > inner_pos)) {
-  } else {
-    while (MEM_BLOCK_BITS <= inner_pos) {
-      if (OB_ISNULL(cur_mem_block)) {
-        cur_mem_block = NULL;
-        break;
-      }
-      cur_mem_block = cur_mem_block->next_;
-      inner_pos -= MEM_BLOCK_BITS;
-    }
-  }
-
-  return cur_mem_block;
-}
-
-OB_INLINE bool ObBitmap::get_bit_set(const int64_t start, const int64_t size, void *&ptr) const
-{
-  ptr = nullptr;
-  bool success = false;
-  if (OB_UNLIKELY(nullptr == header_ ||
-                  0 != start % BITS_PER_BLOCK ||
-                  start + size > valid_bits_ ||
-                  start + size > MEM_BLOCK_BITS)) {
-  } else {
-    success = true;
-    ptr = static_cast<void *>(header_->bits_ + (start / BITS_PER_BLOCK));
-  }
-  return success;
+  return test(pos);
 }
 
 } // namespace common

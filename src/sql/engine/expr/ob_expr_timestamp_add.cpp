@@ -218,7 +218,9 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
     int64_t buf_len = OB_CAST_TO_VARCHAR_MAX_LENGTH;
     int64_t out_len = 0;
     if (OB_FAIL(ob_datum_to_ob_time_with_date(*timestamp_datum,
-                expr.args_[2]->datum_meta_.type_,cvrt_ctx.tz_info_, ot,
+                expr.args_[2]->datum_meta_.type_,
+                expr.args_[2]->datum_meta_.scale_,
+                cvrt_ctx.tz_info_, ot,
                 get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0,
                 expr.args_[2]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(*timestamp_datum));

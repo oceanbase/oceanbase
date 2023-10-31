@@ -102,7 +102,7 @@ int ObRowWriter::append_row_header(
   const int64_t row_header_size = ObRowHeader::get_serialized_size();
   if (OB_UNLIKELY(pos_ + row_header_size > buf_size_)) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("buf is not enough", K(ret), K(pos_), K(buf_size_));
+    //LOG_WARN("buf is not enough", K(ret), K(pos_), K(buf_size_), K(row_header_size));
   } else {
     row_header_ = reinterpret_cast<ObRowHeader*>(buf_ + pos_);
     row_header_->set_version(ObRowHeader::ROW_HEADER_VERSION_1);
@@ -134,12 +134,16 @@ int ObRowWriter::write(
       row.trans_id_.get_id(),
       row.count_,
       rowkey_column_count))) {
-    LOG_WARN("row writer fail to append row header", K(ret), K(row));
+    if (OB_BUF_NOT_ENOUGH != ret) {
+      LOG_WARN("row writer fail to append row header", K(ret), K(row), K(buf_size_), K(pos_));
+    }
   } else {
     update_idx_array_ = nullptr;
     rowkey_column_cnt_ = rowkey_column_count;
     if (OB_FAIL(inner_write_cells(row.storage_datums_, row.count_))) {
-      LOG_WARN("failed to write datums", K(ret), K(row));
+      if (OB_BUF_NOT_ENOUGH != ret) {
+        LOG_WARN("failed to write datums", K(ret), K(row));
+      }
     } else {
       LOG_DEBUG("write row", K(ret), K(pos_), K(row));
       pos = pos_;

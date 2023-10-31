@@ -278,11 +278,13 @@ struct LogTableHint
   LogTableHint() :  table_(NULL),
                     parallel_hint_(NULL),
                     use_das_hint_(NULL),
+                    use_column_store_hint_(NULL),
                     dynamic_sampling_hint_(NULL),
                     is_ds_hint_conflict_(false) {}
   LogTableHint(const TableItem *table) :  table_(table),
                                           parallel_hint_(NULL),
                                           use_das_hint_(NULL),
+                                          use_column_store_hint_(NULL),
                                           dynamic_sampling_hint_(NULL),
                                           is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
@@ -291,7 +293,8 @@ struct LogTableHint
                                           && index_hints_.at(0)->is_use_index_hint(); }
   bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
                                 || NULL != use_das_hint_ || !join_filter_hints_.empty()
-                                || dynamic_sampling_hint_ != NULL; }
+                                || dynamic_sampling_hint_ != NULL
+                                || NULL != use_column_store_hint_; }
   int get_join_filter_hint(const ObRelIds &left_tables,
                            bool part_join_filter,
                            const ObJoinFilterHint *&hint) const;
@@ -313,6 +316,7 @@ struct LogTableHint
   common::ObSEArray<const ObIndexHint*, 4, common::ModulePageAllocator, true> index_hints_;
   const ObTableParallelHint *parallel_hint_;
   const ObIndexHint *use_das_hint_;
+  const ObIndexHint *use_column_store_hint_;
   ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
@@ -434,6 +438,7 @@ struct ObLogPlanHint
                                      bool config_disable,
                                      JoinFilterPushdownHintInfo& info) const;
   int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
+  int check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const;
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,
                           bool &force_skip_scan,
                           bool &force_no_skip_scan) const;

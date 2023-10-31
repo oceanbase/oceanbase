@@ -979,6 +979,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>MONITOR  { return MONITOR; }
 <hint>AUTO { return AUTO; }
 <hint>FORCE { return FORCE; }
+<hint>USE_COLUMN_TABLE { return USE_COLUMN_STORE_HINT; }
+<hint>NO_USE_COLUMN_TABLE { return NO_USE_COLUMN_STORE_HINT; }
 <hint>[(),.@]  {
   ParseResult *p = (ParseResult *)yyextra;
   if (!p->is_ignore_token_) {

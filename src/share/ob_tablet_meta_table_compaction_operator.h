@@ -88,9 +88,9 @@ public:
 class ObTabletMetaTableCompactionOperator
 {
 public:
-  static int set_info_status(
-      const ObTabletCompactionScnInfo &input_info,
-      ObTabletCompactionScnInfo &ret_info,
+  static int batch_set_info_status(
+      const uint64_t tenant_id,
+      const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
       int64_t &affected_rows);
   static int get_status(
       const ObTabletCompactionScnInfo &input_info,
@@ -126,6 +126,12 @@ public:
       const uint64_t tenant_id,
       SCN &min_compaction_scn);
 private:
+  static int inner_batch_set_info_status_(
+      const uint64_t tenant_id,
+      const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      int64_t &affected_rows);
   // is_update_finish_scn = TRUE: update finish_scn
   // is_update_finish_scn = FALSE: delete rows
   static int inner_batch_update_with_trans(
@@ -143,7 +149,6 @@ private:
       const int64_t meta_tenant_id,
       const ObSqlString &sql,
       ObTabletCompactionScnInfo &ret_info);
-  static void handle_trans_stat(common::ObMySQLTransaction &trans, int &ret);
   // construct compaction_scn_info based on part of the fileds defined in the schema
   static int construct_compaction_related_info(
       sqlclient::ObMySQLResult &result,
@@ -185,7 +190,7 @@ private:
       const int64_t batch_update_cnt,
       common::ObIArray<uint64_t> &tablet_ids);
 private:
-  const static int64_t MAX_BATCH_COUNT = 150;
+  const static int64_t MAX_BATCH_COUNT = 500;
 };
 
 } // end namespace share

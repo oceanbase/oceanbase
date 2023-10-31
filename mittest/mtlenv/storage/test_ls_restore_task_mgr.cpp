@@ -504,9 +504,10 @@ TEST_F(TestLSRestoreHandler, restore_sys)
 namespace storage
 {
 
-int ObLSTabletService::build_tablet_iter(ObLSTabletIterator &iterator)
+int ObLSTabletService::build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet)
 {
-  UNUSED(iterator);
+  UNUSED(iter);
+  UNUSED(except_ls_inner_tablet);
   return OB_SUCCESS;
 }
 

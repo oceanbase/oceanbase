@@ -19,7 +19,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/ob_errno.h"
 #include "lib/hash/ob_hashmap.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 
 namespace oceanbase
@@ -44,7 +44,7 @@ public:
   ~ObDagWarningInfo();
   OB_INLINE void reset();
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(dag_type), K_(dag_ret), K_(dag_status),
-      K_(gmt_create), K_(gmt_modified), K_(retry_cnt));
+      K_(gmt_create), K_(gmt_modified), K_(retry_cnt), K_(hash), K_(location));
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
   virtual void update(ObIDiagnoseInfo *other) override;
   virtual int64_t get_hash() const override;
@@ -57,6 +57,7 @@ public:
   int64_t gmt_modified_;
   int64_t retry_cnt_;
   int64_t hash_;
+  share::ObDiagnoseLocation location_;
 };
 
 OB_INLINE void ObDagWarningInfo::reset()
@@ -71,6 +72,7 @@ OB_INLINE void ObDagWarningInfo::reset()
   gmt_modified_ = 0;
   retry_cnt_ = 0;
   hash_ = 0;
+  location_.reset();
 }
 
 /*
@@ -87,11 +89,12 @@ public:
   {}
   ~ObDagWarningHistoryManager() { destroy(); }
 
+  int add_dag_warning_info(share::ObIDag *dag);
+  int add_dag_warning_info(ObDagWarningInfo &input_info);
   void destroy() {
     ObIDiagnoseInfoMgr::destroy();
     COMMON_LOG(INFO, "ObDagWarningHistoryManager destroy finish");
   }
-  int add_dag_warning_info(share::ObIDag *dag);
 
 public:
   static const int64_t MEMORY_PERCENTAGE = 1;   // max size = tenant memory size * MEMORY_PERCENTAGE / 100
@@ -100,8 +103,6 @@ public:
 private:
   char buf_[compaction::ObIBasicInfoParam::MAX_INFO_PARAM_SIZE];
 };
-
-#define INFO_PARAM_STR_LENGTH(n) (n * compaction::OB_DIAGNOSE_INFO_PARAM_STR_LENGTH)
 
 #define DEFINE_DAG_WARN_INFO_PARAM_ADD(n_int)                                                    \
   template<typename T = int64_t>                                                                 \

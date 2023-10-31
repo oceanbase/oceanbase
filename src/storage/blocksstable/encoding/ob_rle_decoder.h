@@ -43,7 +43,7 @@ public:
       const ObColumnHeader &column_header,
       const char *block_data);
 
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
   virtual int batch_decode(
@@ -75,6 +75,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 
 private:
@@ -82,51 +83,72 @@ private:
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int eq_ne_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int comparison_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int bt_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int in_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int cmp_ref_and_set_res(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const int64_t dict_ref,
-      const ObFPIntCmpOpType cmp_op,
+      const sql::ObWhiteFilterOperatorType cmp_op,
       bool flag,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int set_res_with_bitset(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const sql::ObBitVector *ref_bitset,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int extract_ref_and_null_count(
       const int64_t *row_ids,
       const int64_t row_cap,
       common::ObDatum *datums,
-      int64_t &null_count) const;
+      int64_t &null_count,
+      uint32_t *ref_buf = nullptr) const;
+
+  virtual int get_distinct_count(int64_t &distinct_count) const override;
+
+  virtual int read_distinct(
+      const ObColumnDecoderCtx &ctx,
+      const char **cell_datas,
+      storage::ObGroupByCell &group_by_cell) const override;
+
+  virtual int read_reference(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObGroupByCell &group_by_cell) const override;
 
 private:
   const ObRLEMetaHeader *meta_header_;

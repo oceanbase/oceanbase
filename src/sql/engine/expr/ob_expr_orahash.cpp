@@ -50,6 +50,13 @@ int ObExprOrahash::calc_result_typeN(ObExprResType &type,
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("inconsistent type", K(ret));
   } else {
+
+    if (types[0].is_decimal_int()) {
+      // if param types are decimal_int and ob_number but represent the same thing
+      // need to get the same results
+      types[0].set_calc_type(ObNumberType);
+    }
+
     type.set_number();
     type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
     type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);

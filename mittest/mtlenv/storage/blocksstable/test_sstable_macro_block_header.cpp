@@ -17,6 +17,7 @@
 
 #include "storage/blocksstable/ob_sstable_macro_block_header.h"
 #include "storage/blocksstable/ob_macro_block.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 
 using namespace oceanbase::blocksstable;
 
@@ -49,28 +50,35 @@ TestSSTableMacroBlockHeader::TestSSTableMacroBlockHeader()
 void TestSSTableMacroBlockHeader::SetUp()
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc desc;
+  ObWholeDataStoreDesc desc;
+  ObDataStoreDesc &data_desc = desc.get_desc();
+  ObStaticDataStoreDesc &static_desc = desc.get_static_desc();
+  ObColDataStoreDesc &col_desc = desc.get_col_desc();
+  data_desc.static_desc_ = &static_desc;
+  data_desc.col_desc_ = &col_desc;
+
   ObTabletID tablet_id(1);
-  desc.ls_id_.id_ = 1;
-  desc.tablet_id_ = tablet_id;
-  desc.micro_block_size_ = 8 * 1024;
-  desc.micro_block_size_limit_ = 8 * 1024;
-  desc.row_column_count_ = COLUMN_COUNT;
-  desc.rowkey_column_count_ = ROWKEY_COLUMN_COUNT;
-  desc.schema_version_ = 0;
-  desc.schema_rowkey_col_cnt_ = ROWKEY_COLUMN_COUNT;
-  desc.snapshot_version_ = 1;
-  desc.end_scn_.set_base();
-  desc.merge_type_ = MAJOR_MERGE;
-  desc.col_desc_array_.init(desc.row_column_count_);
-  desc.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  col_desc.allocator_.set_tenant_id(500);
+  static_desc.ls_id_.id_ = 1;
+  static_desc.tablet_id_ = tablet_id;
+  data_desc.micro_block_size_ = 8 * 1024;
+  static_desc.micro_block_size_limit_ = 8 * 1024;
+  col_desc.row_column_count_ = COLUMN_COUNT;
+  col_desc.rowkey_column_count_ = ROWKEY_COLUMN_COUNT;
+  static_desc.schema_version_ = 0;
+  col_desc.schema_rowkey_col_cnt_ = ROWKEY_COLUMN_COUNT;
+  static_desc.snapshot_version_ = 1;
+  static_desc.end_scn_.set_base();
+  static_desc.merge_type_ = compaction::MAJOR_MERGE;
+  col_desc.col_desc_array_.init(col_desc.row_column_count_);
+  static_desc.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   for (int64_t i = 0; i < COLUMN_COUNT; i++) {
-    share::schema::ObColDesc col_desc;
-    col_desc.col_type_.set_int32();
-    EXPECT_EQ(OB_SUCCESS, desc.col_desc_array_.push_back(col_desc));
+    share::schema::ObColDesc col;
+    col.col_type_.set_int32();
+    EXPECT_EQ(OB_SUCCESS, col_desc.col_desc_array_.push_back(col));
   }
-  desc.rowkey_column_count_ = ROWKEY_COLUMN_COUNT;
-  ret = macro_header_.init(desc, column_types_, column_orders_, column_checksum_);
+  col_desc.rowkey_column_count_ = ROWKEY_COLUMN_COUNT;
+  ret = macro_header_.init(data_desc, column_types_, column_orders_, column_checksum_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -101,6 +109,64 @@ TEST_F(TestSSTableMacroBlockHeader, serialize_and_deserialize)
   pos = 0;
   ret = macro_header_.deserialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestSSTableMacroBlockHeader, serialize_and_deserialize_compat)
+{
+  int ret = OB_SUCCESS;
+  char buf[1024];
+  const int64_t buf_len = 1024;
+  int64_t pos = 0;
+  ret = macro_header_.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+
+  macro_header_.fixed_header_.row_count_ = 100;
+  macro_header_.fixed_header_.occupy_size_ = 400;
+  macro_header_.fixed_header_.micro_block_count_ = 1;
+  macro_header_.fixed_header_.micro_block_data_offset_ = 400;
+  macro_header_.fixed_header_.micro_block_data_size_ = 400;
+  ret = macro_header_.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+
+  const int64_t old_size = macro_header_.get_serialize_size() - sizeof(bool);
+  const int64_t new_size = macro_header_.get_serialize_size();
+  // fake old version header
+  pos = 0;
+  macro_header_.is_normal_cg_ = true;
+  ret = macro_header_.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(new_size, pos);
+  ObSSTableMacroBlockHeader::FixedHeader *fixed_header
+      = reinterpret_cast<ObSSTableMacroBlockHeader::FixedHeader *>(buf);
+  fixed_header->header_size_ = old_size;
+
+  pos = 0;
+  macro_header_.reset();
+  ret = macro_header_.deserialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(old_size, pos);
+  ASSERT_FALSE(macro_header_.is_normal_cg_);
+  ASSERT_EQ(macro_header_.fixed_header_.header_size_, new_size);
+
+  pos = 0;
+  macro_header_.is_normal_cg_ = true;
+  ret = macro_header_.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(new_size, pos);
+
+  pos = 0;
+  macro_header_.reset();
+  ret = macro_header_.deserialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(new_size, pos);
+  ASSERT_TRUE(macro_header_.is_normal_cg_);
+
+  // fake invalid header
+  pos = 0;
+  macro_header_.fixed_header_.header_size_ = old_size;
+  ret = macro_header_.serialize(buf, buf_len, pos);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 }
 
 } // end namespace unittest

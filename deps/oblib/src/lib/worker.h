@@ -155,7 +155,7 @@ private:
 }; // end of class Worker
 
 extern void *alloc_worker();
-extern void common_yield();
+extern int common_yield();
 
 inline void Worker::set_worker_to_thread_local(Worker *worker)
 {

@@ -24,7 +24,6 @@ using namespace common;
 using namespace storage;
 namespace storage {
 struct PushdownFilterInfo;
-class ObAggCell;
 }
 namespace blocksstable
 {
@@ -50,7 +49,7 @@ protected:
   const char *data_end_;
   const int32_t *index_data_;
   // TODO: remove allocator
-  common::ObArenaAllocator allocator_;
+  ObBlockReaderAllocator allocator_;
   ObRowReader flat_row_reader_;
 };
 
@@ -82,25 +81,25 @@ public:
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
       const ObRowHeader *&row_header,
-      int64_t &version,
+      int64_t &trans_version,
       int64_t &sql_sequence);
   // Filter interface for filter pushdown
   int filter_pushdown_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
-      const storage::PushdownFilterInfo &pd_filter_info,
+      const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
   int get_rows(
-    const common::ObIArray<int32_t> &cols_projector,
-    const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const common::ObIArray<ObObjDatumMapType> &map_types, // TODO remove this, use datums directly
-    const blocksstable::ObDatumRow &default_row,
-    const int64_t *row_ids,
-    const int64_t row_cap,
-    ObDatumRow &row_buf,
-    common::ObIArray<ObDatum *> &datums,
-    sql::ExprFixedArray &exprs,
-    sql::ObEvalCtx &eval_ctx);
+      const common::ObIArray<int32_t> &cols_projector,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const blocksstable::ObDatumRow *default_row,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObDatumRow &row_buf,
+      common::ObIArray<ObSqlDatumInfo> &datum_infos,
+      const int64_t datum_offset,
+      sql::ObExprPtrIArray &exprs,
+      sql::ObEvalCtx &eval_ctx);
   virtual int get_row_count(
       int32_t col,
       const int64_t *row_ids,
@@ -112,26 +111,50 @@ public:
     OB_ASSERT(nullptr != header_);
     return header_->column_count_;
   }
-  int get_min_or_max(
-      int32_t col,
+  virtual int get_aggregate_result(
+      const int32_t col_offset,
       const share::schema::ObColumnParam *col_param,
       const int64_t *row_ids,
       const int64_t row_cap,
-      ObMicroBlockAggInfo<ObStorageDatum> &agg_info);
+      storage::ObAggDatumBuf &agg_datum_buf,
+      storage::ObAggCell &agg_cell) override;
   int get_aggregate_result(
       const int64_t *row_ids,
       const int64_t row_cap,
       ObDatumRow &row_buf,
       common::ObIArray<storage::ObAggCell*> &agg_cells);
-  OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
-
-protected:
+  virtual int get_column_datum(
+      const int32_t col_offset,
+      const int64_t row_index,
+      ObStorageDatum &datum) override;
+  virtual int compare_rowkey(
+      const ObDatumRowkey &rowkey,
+      const int64_t index,
+      int32_t &compare_result) override;
   virtual int find_bound(
       const ObDatumRowkey &key,
       const bool lower_bound,
       const int64_t begin_idx,
       int64_t &row_idx,
       bool &equal) override;
+  virtual int find_bound_through_linear_search(
+      const ObDatumRowkey &rowkey,
+      const int64_t begin_idx,
+      int64_t &row_idx) override;
+  OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
+
+  // For column store
+  virtual int find_bound(
+      const ObDatumRowkey &key,
+      const bool lower_bound,
+      const int64_t begin_idx,
+      const int64_t end_idx,
+      int64_t &row_idx,
+      bool &equal) override;
+  virtual void reserve_reader_memory(bool reserve) override
+  { allocator_.set_reserve_memory(reserve); }
+
+protected:
   virtual int find_bound(
       const ObDatumRange &range,
       const int64_t begin_idx,
@@ -162,6 +185,16 @@ public:
       bool &exist,
       bool &found) final;
   int locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx);
+  virtual int get_row(
+      const ObMicroBlockData &block_data,
+      const ObITableReadInfo &read_info,
+      const uint32_t row_idx,
+      ObDatumRow &row) final;
+  int get_row_id(
+      const ObMicroBlockData &block_data,
+      const ObDatumRowkey &rowkey,
+      const ObITableReadInfo &read_info,
+      int64_t &row_id) final;
 protected:
   int inner_init(const ObMicroBlockData &block_data,
                  const ObITableReadInfo &read_info,

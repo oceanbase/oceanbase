@@ -15,6 +15,7 @@
 #include "share/schema/ob_table_param.h"
 #include "share/ob_force_print_log.h"
 #include "storage/ob_i_store.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 
 namespace oceanbase
 {
@@ -116,6 +117,13 @@ ObStorageDatumBuffer::ObStorageDatumBuffer(common::ObIAllocator *allocator)
       is_inited_(nullptr != allocator)
 {}
 
+ObStorageDatumBuffer::~ObStorageDatumBuffer()
+{
+  if (datums_ != local_datums_ && nullptr != allocator_) {
+    allocator_->free(datums_);
+  }
+}
+
 void ObStorageDatumBuffer::reset()
 {
   if (datums_ != local_datums_ && nullptr != allocator_) {
@@ -179,11 +187,32 @@ int ObStorageDatumBuffer::reserve(const int64_t count, const bool keep_data)
 }
 
 /*
+ *ObConstDatumRow
+ */
+int ObConstDatumRow::set_datums_ptr(char *datums_ptr)
+{
+  int ret = OB_SUCCESS;
+  if (datums_ != reinterpret_cast<ObDatum *>(datums_ptr + datum_row_offset_)) {
+    char *ptr = reinterpret_cast<char *>(datums_);
+    datums_ = reinterpret_cast<ObDatum *>(datums_ptr + datum_row_offset_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
+      if (OB_UNLIKELY(datums_[i].ptr_ <= ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected datum ptr", K(ret), K(ptr), K(i), K(datums_[i]));
+      } else {
+        datums_[i].ptr_ = datums_[i].ptr_ - ptr + reinterpret_cast<char *>(datums_);
+      }
+    }
+  }
+  return ret;
+}
+
+/*
  *ObDatumRow
  */
 
 ObDatumRow::ObDatumRow()
-  : local_allocator_("ObDatumRow"),
+  : local_allocator_("ObDatumRow", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID),
     count_(0),
     fast_filter_skipped_(false),
     have_uncommited_row_(false),
@@ -195,14 +224,15 @@ ObDatumRow::ObDatumRow()
     snapshot_version_(0),
     storage_datums_(nullptr),
     datum_buffer_(),
-    old_row_(),
-    obj_buf_(),
     trans_info_(nullptr)
-{}
+{
+  if (share::is_reserve_mode()) {
+    local_allocator_.set_ctx_id(ObCtxIds::MERGE_RESERVE_CTX_ID);
+  }
+}
 
 ObDatumRow::~ObDatumRow()
 {
-  reset();
 }
 
 int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity, char *trans_info_ptr)
@@ -211,8 +241,6 @@ int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity, char *tran
   if (OB_UNLIKELY(is_valid())) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDatumRow init twice", K(ret), K(*this));
-  } else if (OB_FAIL(obj_buf_.init(&allocator))) {
-    STORAGE_LOG(WARN, "Failed to init obj_buf array", K(ret));
   } else if (OB_FAIL(datum_buffer_.init(allocator))) {
     STORAGE_LOG(WARN, "Failed to init datum buffer", K(ret));
   } else if (OB_FAIL(datum_buffer_.reserve(capacity))) {
@@ -278,11 +306,8 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
     // skip
   } else if (OB_FAIL(datum_buffer_.reserve(capacity, keep_data))) {
     STORAGE_LOG(WARN, "Failed to reserve datum buffer", K(ret), K(capacity));
-  } else if (OB_FAIL(obj_buf_.reserve(capacity))) {
-    STORAGE_LOG(WARN, "Failed to reserve obj buf", K(ret), K(capacity));
   } else {
     storage_datums_ = datum_buffer_.get_datums();
-    old_row_.reset();
   }
   if (OB_SUCC(ret)) {
     mvcc_row_flag_.reset();
@@ -300,8 +325,6 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
 
 void ObDatumRow::reset()
 {
-  old_row_.reset();
-  obj_buf_.reset();
   fast_filter_skipped_ = false;
   datum_buffer_.reset();
   storage_datums_ = nullptr;
@@ -365,58 +388,6 @@ int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)
   return ret;
 }
 
-int ObDatumRow::prepare_new_row(const ObIArray<share::schema::ObColDesc> &out_cols)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
-  } else if (OB_UNLIKELY(out_cols.count() < count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to prepare new row", K(ret), K(count_), K(out_cols));
-  } else if (OB_FAIL(obj_buf_.reserve(count_))) {
-    STORAGE_LOG(WARN, "Failed to reserve buf for obj buf", K(ret), K(count_));
-  } else {
-    old_row_.cells_ = obj_buf_.get_data();
-    old_row_.count_ = count_;
-    old_row_.projector_ = nullptr;
-    old_row_.projector_size_ = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < out_cols.count(); i++) {
-      if (OB_FAIL(storage_datums_[i].to_obj_enhance(old_row_.cells_[i], out_cols.at(i).col_type_))) {
-        STORAGE_LOG(WARN, "Failed to transform datum to obj", K(ret), K(i), K(storage_datums_[i]));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObDatumRow::to_store_row(const ObIArray<share::schema::ObColDesc> &out_cols,
-                                   storage::ObStoreRow &store_row)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_valid())) {
-    STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
-  } else if (OB_FAIL(prepare_new_row(out_cols))) {
-    STORAGE_LOG(WARN, "Failed to prepare new row", K(ret));
-  } else {
-    store_row.reset();
-    store_row.row_val_ = old_row_;
-    store_row.capacity_ = count_;
-    store_row.flag_ = row_flag_;
-    store_row.row_type_flag_ = mvcc_row_flag_;
-    store_row.trans_id_ = trans_id_;
-    store_row.scan_index_ = scan_index_;
-    store_row.group_idx_ = group_idx_;
-    store_row.snapshot_version_ = snapshot_version_;
-    store_row.fast_filter_skipped_ = fast_filter_skipped_;
-  }
-
-  return ret;
-}
-
 int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
 {
   int ret = OB_SUCCESS;
@@ -442,6 +413,28 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
     }
   }
 
+  return ret;
+}
+
+int ObDatumRow::is_datums_changed(const ObDatumRow &other, bool &is_changed) const
+{
+  int ret = OB_SUCCESS;
+  is_changed = false;
+  if (OB_UNLIKELY(count_ == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected count", K(ret));
+  } else if (count_ != other.count_) {
+    is_changed = true;
+  } else {
+    int cmp_ret = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+      if (storage_datums_[i].is_nop() || storage_datums_[i] == other.storage_datums_[i]) {
+      } else {
+        is_changed = true;
+        break;
+      }
+    }
+  }
   return ret;
 }
 
@@ -557,12 +550,62 @@ bool ObDatumRow::operator==(const ObNewRow &other) const
   return is_equal;
 }
 
+//////////////////////////////////////// ObNewRowBuilder //////////////////////////////////////////////
+
+int ObNewRowBuilder::build(
+    const blocksstable::ObDatumRow &datum_row,
+    common::ObNewRow *&new_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t col_cnt = datum_row.get_column_count();
+  if (OB_UNLIKELY(nullptr == cols_descs_ || cols_descs_->count() < col_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to build new row", K(ret), K(datum_row), KP_(cols_descs));
+  } else if (OB_FAIL(obj_buf_.reserve(col_cnt))) {
+    STORAGE_LOG(WARN, "Failed to reserve objs", K(ret), K(col_cnt));
+  } else {
+    new_row_.cells_ = obj_buf_.get_data();
+    new_row_.count_ = col_cnt;
+    new_row_.projector_ = nullptr;
+    new_row_.projector_size_ = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; i++) {
+      if (OB_FAIL(datum_row.storage_datums_[i].to_obj_enhance(new_row_.cells_[i], cols_descs_->at(i).col_type_))) {
+        STORAGE_LOG(WARN, "Failed to transform datum to obj", K(ret), K(i), K(datum_row.storage_datums_[i]));
+      }
+    }
+    new_row = &new_row_;
+  }
+  return ret;
+}
+
+int ObNewRowBuilder::build_store_row(
+    const blocksstable::ObDatumRow &datum_row,
+    storage::ObStoreRow &store_row)
+{
+  int ret = OB_SUCCESS;
+  common::ObNewRow *new_row = nullptr;
+  if (OB_FAIL(build(datum_row, new_row))) {
+    STORAGE_LOG(WARN, "Failed to build new row", K(ret), K(datum_row));
+  } else {
+    store_row.reset();
+    store_row.row_val_ = *new_row;
+    store_row.capacity_ = datum_row.count_;
+    store_row.flag_ = datum_row.row_flag_;
+    store_row.row_type_flag_ = datum_row.mvcc_row_flag_;
+    store_row.trans_id_ = datum_row.trans_id_;
+    store_row.scan_index_ = datum_row.scan_index_;
+    store_row.group_idx_ = datum_row.group_idx_;
+    store_row.snapshot_version_ = datum_row.snapshot_version_;
+    store_row.fast_filter_skipped_ = datum_row.fast_filter_skipped_;
+  }
+  return ret;
+}
+
 /*
  *ObStorageDatumUtils
  */
 ObStorageDatumUtils::ObStorageDatumUtils()
   : rowkey_cnt_(0),
-    col_cnt_(0),
     cmp_funcs_(),
     hash_funcs_(),
     ext_hash_func_(),
@@ -610,12 +653,13 @@ int ObStorageDatumUtils::transform_multi_version_col_desc(const ObIArray<share::
 int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_descs,
                               const int64_t schema_rowkey_cnt,
                               const bool is_oracle_mode,
-                              ObIAllocator &allocator)
+                              ObIAllocator &allocator,
+                              const bool is_column_store)
 {
   int ret = OB_SUCCESS;
   ObSEArray<share::schema::ObColDesc, 32> mv_col_descs;
   int64_t mv_rowkey_cnt = 0;
-
+  int64_t mv_column_cnt = 0;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObStorageDatumUtils init twice", K(ret), K(*this));
@@ -625,7 +669,8 @@ int ObStorageDatumUtils::init(const ObIArray<share::schema::ObColDesc> &col_desc
     STORAGE_LOG(WARN, "Invalid argument to init storage datum utils", K(ret), K(col_descs), K(schema_rowkey_cnt));
   } else if (OB_FAIL(transform_multi_version_col_desc(col_descs, schema_rowkey_cnt, mv_col_descs))) {
     STORAGE_LOG(WARN, "Failed to transform multi version col descs", K(ret));
-  } else if (FALSE_IT(mv_rowkey_cnt = schema_rowkey_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+  } else if (FALSE_IT(mv_column_cnt = is_column_store ? 0 : storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt())) {
+  } else if (FALSE_IT(mv_rowkey_cnt = schema_rowkey_cnt + mv_column_cnt)) {
   } else if (OB_FAIL(cmp_funcs_.init(mv_rowkey_cnt, allocator))) {
     STORAGE_LOG(WARN, "Failed to reserve cmp func array", K(ret));
   } else if (OB_FAIL(hash_funcs_.init(mv_rowkey_cnt, allocator))) {
@@ -686,11 +731,17 @@ int ObStorageDatumUtils::inner_init(
     //TODO @hanhui support desc rowkey
     bool is_ascending = true || col_desc.col_order_ == ObOrderType::ASC;
     bool has_lob_header = is_lob_storage(col_desc.col_type_.get_type());
+    ObPrecision precision = PRECISION_UNKNOWN_YET;
+    if (col_desc.col_type_.is_decimal_int()) {
+      precision = col_desc.col_type_.get_stored_precision();
+      OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
+    }
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_desc.col_type_.get_type(),
                                                                       col_desc.col_type_.get_collation_type(),
                                                                       col_desc.col_type_.get_scale(),
                                                                       is_oracle_mode,
-                                                                      has_lob_header);
+                                                                      has_lob_header,
+                                                                      precision);
     if (OB_UNLIKELY(nullptr == basic_funcs
                     || nullptr == basic_funcs->null_last_cmp_
                     || nullptr == basic_funcs->murmur_hash_)) {
@@ -719,7 +770,29 @@ int ObStorageDatumUtils::inner_init(
     } else {
       ext_hash_func_.hash_func_ = basic_funcs->murmur_hash_;
       rowkey_cnt_ = mv_rowkey_col_cnt;
-      col_cnt_ = mv_col_descs.count();
+      is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObStorageDatumUtils::assign(const ObStorageDatumUtils &other_utils, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!other_utils.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to assign datum utils", K(ret), K(other_utils));
+  } else {
+    rowkey_cnt_ = other_utils.get_rowkey_count();
+    is_oracle_mode_ = other_utils.is_oracle_mode();
+    ext_hash_func_ = other_utils.get_ext_hash_funcs();
+    if (OB_FAIL(cmp_funcs_.init_and_assign(other_utils.get_cmp_funcs(), allocator))) {
+      STORAGE_LOG(WARN, "Failed to assign cmp func array", K(ret));
+    } else if (OB_FAIL(hash_funcs_.init_and_assign(other_utils.get_hash_funcs(), allocator))) {
+      STORAGE_LOG(WARN, "Failed to assign hash func array", K(ret));
+    } else {
       is_inited_ = true;
     }
   }
@@ -730,7 +803,6 @@ int ObStorageDatumUtils::inner_init(
 void ObStorageDatumUtils::reset()
 {
   rowkey_cnt_ = 0;
-  col_cnt_ = 0;
   cmp_funcs_.reset();
   hash_funcs_.reset();
   ext_hash_func_.hash_func_ = nullptr;

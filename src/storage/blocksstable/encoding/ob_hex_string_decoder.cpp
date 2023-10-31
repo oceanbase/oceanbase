@@ -33,10 +33,9 @@ ObHexStringDecoder::~ObHexStringDecoder()
 {
 }
 
-int ObHexStringDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
+int ObHexStringDecoder::decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
     const ObBitStream &bs, const char *data, const int64_t len) const
 {
-  UNUSED(row_id);
   int ret = OB_SUCCESS;
   uint64_t val = STORED_NOT_EXT;
   const char *col_data = reinterpret_cast<const char *>(header_) + ctx.col_header_->length_;
@@ -72,11 +71,8 @@ int ObHexStringDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, con
 
   if (OB_FAIL(ret)) {
   } else if (STORED_NOT_EXT != val) {
-    set_stored_ext_value(cell, static_cast<ObStoredExtValue>(val));
+    set_stored_ext_value(datum, static_cast<ObStoredExtValue>(val));
   } else {
-    if (cell.get_meta() != ctx.obj_meta_) {
-      cell.set_meta_type(ctx.obj_meta_);
-    }
     const char *cell_data = NULL;
     int64_t cell_len = 0;
     if (ctx.is_fix_length()) {
@@ -112,8 +108,8 @@ int ObHexStringDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, con
       ObHexStringUnpacker unpacker(header_->hex_char_array_,
           reinterpret_cast<const unsigned char *>(cell_data));
       unpacker.unpack(reinterpret_cast<unsigned char *>(buf), str_len);
-      cell.val_len_ = static_cast<int32_t>(str_len);
-      cell.v_.string_ = buf;
+      datum.pack_ = static_cast<int32_t>(str_len);
+      datum.ptr_ = buf;
     }
   }
   return ret;
@@ -248,6 +244,7 @@ int ObHexStringDecoder::pushdown_operator(
     const sql::ObWhiteFilterExecutor &filter,
     const char* meta_data,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   // No enough meta data to improve comparison operation, so only implement is null, not null operator here
@@ -263,11 +260,11 @@ int ObHexStringDecoder::pushdown_operator(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid op type for pushed dow white filter", K(ret), K(op_type));
   } else if (col_ctx.is_fix_length() || col_ctx.is_bit_packing()) {
-    if (OB_FAIL(get_is_null_bitmap_from_fixed_column(col_ctx, col_u_data, result_bitmap))) {
+    if (OB_FAIL(get_is_null_bitmap_from_fixed_column(col_ctx, col_u_data, pd_filter_info, result_bitmap))) {
       LOG_WARN("Failed to get isnull bitmap from fixed column", K(ret));
     }
   } else {
-    if (OB_FAIL(get_is_null_bitmap_from_var_column(col_ctx, row_index, result_bitmap))) {
+    if (OB_FAIL(get_is_null_bitmap_from_var_column(col_ctx, row_index, pd_filter_info, result_bitmap))) {
       LOG_WARN("Failed to get isnull bitmap from variable column", K(ret));
     }
   }

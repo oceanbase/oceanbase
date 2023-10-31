@@ -47,7 +47,8 @@ public:
     calc_type_(),
     res_flags_(0),
     inner_alloc_("ExprResType"),
-    row_calc_cmp_types_(&inner_alloc_, 0)
+    row_calc_cmp_types_(&inner_alloc_, 0),
+    cast_mode_(0)
   {
   }
 
@@ -58,7 +59,8 @@ public:
     param_(),
     calc_type_(),
     res_flags_(0),
-    row_calc_cmp_types_(&alloc)
+    row_calc_cmp_types_(&alloc),
+    cast_mode_(0)
   {
     // nop
   }
@@ -75,6 +77,7 @@ public:
         this->param_ = other.param_;
         this->calc_type_ = other.calc_type_;
         this->res_flags_ = other.res_flags_;
+        this->cast_mode_ = other.cast_mode_;
       }
     }
     return ret;
@@ -99,6 +102,7 @@ public:
     calc_type_.reset();
     row_calc_cmp_types_.reset();
     res_flags_ = 0;
+    cast_mode_ = 0;
   }
   OB_INLINE void set_accuracy(int64_t accuracy) { accuracy_.set_accuracy(accuracy); }
   // accuracy.
@@ -236,6 +240,7 @@ public:
   {
     calc_accuracy_.set_accuracy(accuracy);
   }
+  OB_INLINE void set_calc_precision(ObPrecision precision) { calc_accuracy_.set_precision(precision); }
   OB_INLINE void set_calc_scale(common::ObScale scale) { calc_accuracy_.set_scale(scale); }
   OB_INLINE void set_extend_size(int32_t size) { calc_accuracy_.set_length(size); }
   OB_INLINE void set_calc_length_semantics(const common::ObLengthSemantics value)
@@ -324,6 +329,13 @@ public:
                                                     && -1 == get_accuracy().get_precision()
                                                     && 0 == get_accuracy().get_scale(); }
   int init_row_dimension(int64_t count) { return row_calc_cmp_types_.init(count); }
+
+  void add_cast_mode(uint64_t cm)
+  {
+    cast_mode_ = cast_mode_ | cm;
+  }
+
+  uint64_t get_cast_mode() const { return cast_mode_; }
   uint64_t hash(uint64_t seed) const
   {
     seed = common::do_hash(type_, seed);
@@ -359,6 +371,7 @@ private:
   //common::ObSEArray<ObExprCalcType,4> row_calc_cmp_types_; // for row compare only
   common::ModulePageAllocator inner_alloc_;
   common::ObFixedArray<ObExprCalcType, common::ObIAllocator> row_calc_cmp_types_; // for row compare only
+  uint64_t cast_mode_; // store cast mode if calc_type != param_.type_
 };
 
 typedef common::ObSEArray<ObExprResType, 5, common::ModulePageAllocator, true> ObExprResTypes;

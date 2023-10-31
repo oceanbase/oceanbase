@@ -20,6 +20,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/ob_define.h"
 #include "storage/access/ob_table_read_info.h"
+#include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
 {
@@ -92,6 +93,33 @@ public:
   uint32_t col_id_;
   common::ObObjMeta col_type_;
   common::ObOrderType col_order_;
+};
+
+struct ObColExtend final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObColExtend(): skip_index_attr_() {};
+  ~ObColExtend() = default;
+  int64_t to_string(char *buffer, const int64_t length) const
+  {
+    int64_t pos = 0;
+    pos += skip_index_attr_.to_string(buffer + pos, length - pos);
+    return pos;
+  }
+  int assign(const ObColExtend &other)
+  {
+    int ret = common::OB_SUCCESS;
+    if (this != &other) {
+      skip_index_attr_ = other.skip_index_attr_;
+    }
+    return ret;
+  }
+  void reset();
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObColExtend);
+public:
+  ObSkipIndexColumnAttr skip_index_attr_;
 };
 
 /*
@@ -257,13 +285,18 @@ private:
 public:
   int convert(const ObTableSchema &table_schema,
               const common::ObIArray<uint64_t> &output_column_ids,
+              const sql::ObStoragePushdownFlag &pd_pushdown_flag,
               const common::ObIArray<uint64_t> *tsc_out_cols = NULL,
               const bool force_mysql_mode = false);
 
   // convert aggregate column projector from 'aggregate_column_ids' and 'output_projector_'
+  // convert group by column projector from 'group_by_column_ids' and 'output_projector_'
   // must be called after 'output_projector_' has been generated.
-  int convert_agg(const common::ObIArray<uint64_t> &output_column_ids,
-                  const common::ObIArray<uint64_t> &aggregate_column_ids);
+  int convert_group_by(const ObTableSchema &table_schema,
+                  const common::ObIArray<uint64_t> &output_column_ids,
+                  const common::ObIArray<uint64_t> &aggregate_column_ids,
+                  const common::ObIArray<uint64_t> &group_by_column_ids,
+                  const sql::ObStoragePushdownFlag &pd_pushdown_flag);
   // convert right table scan parameter of join MV scan.
   // (right table index back not supported)
   inline uint64_t get_table_id() const { return table_id_; }
@@ -277,6 +310,7 @@ public:
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }
+  inline const common::ObIArray<int32_t> &get_group_by_projector() const { return group_by_projector_; }
   inline const common::ObIArray<bool> &get_output_sel_mask() const { return output_sel_mask_; }
   inline const common::ObIArray<int32_t> &get_pad_col_projector() const { return pad_col_projector_; }
   inline void disable_padding() { pad_col_projector_.reset(); }
@@ -296,7 +330,8 @@ private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,
                                       const common::ObIArray<uint64_t> *tsc_out_cols,
-                                      const bool force_mysql_mode);
+                                      const bool force_mysql_mode,
+                                      const sql::ObStoragePushdownFlag &pd_pushdown_flag);
 
   int filter_common_columns(const common::ObIArray<const ObColumnSchemaV2 *> &columns,
                             common::ObIArray<const ObColumnSchemaV2 *> &new_columns);
@@ -320,6 +355,7 @@ private:
                                   int64_t &rowid_version,
                                   Projector &rowid_projector,
                                   bool is_use_lob_locator_v2);
+
 private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;
   common::ObIAllocator &allocator_;
@@ -328,6 +364,7 @@ private:
   // projector from output columns to access main columns
   Projector output_projector_;
   Projector aggregate_projector_;
+  Projector group_by_projector_;
   // Table access column exprs include columns in filters.
   // While in white box filters computing, these columns don't need to be in output projector.
   // output_sel_mask_ records whether each column is in table scan output(true)

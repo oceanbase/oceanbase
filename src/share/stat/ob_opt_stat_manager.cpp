@@ -636,6 +636,8 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
         ndv_eval.add(opt_col_stat->get_num_distinct(), opt_col_stat->get_llc_bitmap());
         null_eval.add(opt_col_stat->get_num_null());
         avglen_eval.add(opt_col_stat->get_avg_len());
+        stat.add_cg_blk_cnt(opt_col_stat->get_cg_macro_blk_cnt() * scale_ratio,
+                            opt_col_stat->get_cg_micro_blk_cnt() * scale_ratio);
         // a partition has min/max values only when it contains a valid value in the other word, ndv is not zero
         if (alloc != NULL && opt_col_stat->get_num_distinct() != 0) {
           min_eval.add(opt_col_stat->get_min_value());

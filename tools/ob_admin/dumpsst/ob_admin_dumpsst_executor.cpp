@@ -41,7 +41,8 @@ ObAdminDumpsstExecutor::ObAdminDumpsstExecutor()
      hex_print_(false),
      dump_macro_context_(),
      key_hex_str_(NULL),
-     master_key_id_(0)
+     master_key_id_(0),
+     io_allocator_("Admin_IOUB")
 {
 }
 
@@ -79,6 +80,8 @@ int ObAdminDumpsstExecutor::execute(int argc, char *argv[])
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(prepare_io())) {
       STORAGE_LOG(WARN, "fail to prepare_io", K(ret));
+    } else if (OB_FAIL(prepare_decoder())) {
+      STORAGE_LOG(WARN, "fail to prepare_decoder", K(ret));
     } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.init(data_dir_,
         config_mgr_.get_config().cluster.str(),
         config_mgr_.get_config().cluster_id.get_value(),
@@ -303,11 +306,13 @@ int ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &macr
   ObMacroBlockCommonHeader common_header;
   int64_t pos = 0;
 
+  io_allocator_.reuse();
   ObMacroBlockReadInfo read_info;
   read_info.macro_block_id_.set_block_index(macro_block_context.second_id_);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.offset_ = 0;
   read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
+  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
 
   STORAGE_LOG(INFO, "begin dump macro block", K(macro_block_context));
   if (OB_UNLIKELY(!macro_block_context.is_valid())) {
@@ -318,19 +323,24 @@ int ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &macr
     STORAGE_LOG(ERROR, "failed to init master key getter", K(ret));
     STORAGE_LOG(ERROR, "failed to init macro reader", K(ret));
 #endif
-  } else if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
-    STORAGE_LOG(ERROR, "Fail to read macro block, ", K(ret), K(read_info));
-  } else if (OB_FAIL(common_header.deserialize(macro_handle.get_buffer(), macro_handle.get_data_size(), pos))) {
-    STORAGE_LOG(ERROR, "deserialize common header fail", K(ret), K(pos));
-  } else if (OB_FAIL(common_header.check_integrity())) {
-    STORAGE_LOG(ERROR, "invalid common header", K(ret), K(common_header));
-  } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
-    if (OB_FAIL(dump_shared_macro_block(macro_handle.get_buffer(), macro_handle.get_data_size()))) {
-      STORAGE_LOG(ERROR, "dump shared block fail", K(ret));
-    }
+  } else if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(io_allocator_.alloc(read_info.size_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
   } else {
-    if (OB_FAIL(dump_single_macro_block(macro_handle.get_buffer(), macro_handle.get_data_size()))) {
-      STORAGE_LOG(ERROR, "dump single block fail", K(ret));
+    if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
+      STORAGE_LOG(ERROR, "Fail to read macro block, ", K(ret), K(read_info));
+    } else if (OB_FAIL(common_header.deserialize(read_info.buf_, macro_handle.get_data_size(), pos))) {
+      STORAGE_LOG(ERROR, "deserialize common header fail", K(ret), K(pos));
+    } else if (OB_FAIL(common_header.check_integrity())) {
+      STORAGE_LOG(ERROR, "invalid common header", K(ret), K(common_header));
+    } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
+      if (OB_FAIL(dump_shared_macro_block(read_info.buf_, macro_handle.get_data_size()))) {
+        STORAGE_LOG(ERROR, "dump shared block fail", K(ret));
+      }
+    } else {
+      if (OB_FAIL(dump_single_macro_block(read_info.buf_, macro_handle.get_data_size()))) {
+        STORAGE_LOG(ERROR, "dump single block fail", K(ret));
+      }
     }
   }
 
@@ -373,7 +383,7 @@ void ObAdminDumpsstExecutor::print_usage()
   printf(HELP_FMT, "-h,--help", "display this message.");
 
   printf("options:\n");
-  printf(HELP_FMT, "-f,--data-file-name", "data file path or the ofs address");
+  printf(HELP_FMT, "-f,--data-file-name", "data file path");
   printf(HELP_FMT, "-a,--macro-id", "macro block id");
   printf(HELP_FMT, "-i,--micro-id", "micro block id, -1 means all micro blocks");
   printf(HELP_FMT, "-n,--macro-size", "macro block size, in bytes");

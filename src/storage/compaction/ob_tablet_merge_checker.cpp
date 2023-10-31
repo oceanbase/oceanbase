@@ -59,5 +59,26 @@ int ObTabletMergeChecker::check_need_merge(const ObMergeType merge_type, const O
 
   return ret;
 }
+
+int ObTabletMergeChecker::check_could_merge_for_medium(
+  const ObTablet &tablet,
+  bool &could_schedule_merge)
+{
+  int ret = OB_SUCCESS;
+  ObTabletCreateDeleteMdsUserData user_data;
+  bool committed_flag = false;
+  could_schedule_merge = true;
+  if (OB_FAIL(tablet.ObITabletMdsInterface::get_latest_tablet_status(user_data, committed_flag))) {
+    LOG_WARN("failed to get tablet status", K(ret), K(tablet), K(user_data));
+  } else if (ObTabletStatus::TRANSFER_OUT == user_data.tablet_status_
+    || ObTabletStatus::TRANSFER_OUT_DELETED == user_data.tablet_status_) {
+    could_schedule_merge = false;
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("tablet status is TRANSFER_OUT or TRANSFER_OUT_DELETED, merging is not allowed", K(user_data), K(tablet));
+    }
+  }
+  return ret;
+}
+
 } // namespace compaction
 } // namespace oceanbase

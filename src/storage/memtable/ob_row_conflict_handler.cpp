@@ -102,6 +102,7 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
+      ObRowState row_state;
       share::SCN snapshot_version = ctx->mvcc_acc_ctx_.get_snapshot_version();
       stores = &iter_tables;
       for (int64_t i = stores->count() - 1; OB_SUCC(ret) && i >= 0; i--) {
@@ -113,23 +114,24 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
           ObMemtable *memtable = static_cast<ObMemtable *>(stores->at(i));
           if (OB_FAIL(memtable->get_mvcc_engine().check_row_locked(ctx->mvcc_acc_ctx_, &mtk, lock_state))) {
             TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(mtk));
-          }
-        } else if (stores->at(i)->is_sstable()) {
-          blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable *>(stores->at(i));
-          if (OB_FAIL(sstable->check_row_locked(param, context, rowkey, lock_state))) {
-            TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(rowkey));
-          }
-          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(*sstable));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "unknown store type", K(ret));
-        }
-        if (OB_SUCC(ret)) {
-          if (lock_state.is_locked_) {
+          } else if (lock_state.is_locked_) {
             break;
           } else if (max_trans_version < lock_state.trans_version_) {
             max_trans_version = lock_state.trans_version_;
           }
+        } else if (stores->at(i)->is_sstable()) {
+          blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable *>(stores->at(i));
+          if (OB_FAIL(sstable->check_row_locked(param, rowkey, context, lock_state, row_state))) {
+            TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(rowkey));
+          } else if (lock_state.is_locked_) {
+            break;
+          } else if (max_trans_version < row_state.max_trans_version_) {
+            max_trans_version = row_state.max_trans_version_;
+          }
+          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(row_state), K(*sstable));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "unknown store type", K(ret));
         }
       }
     }

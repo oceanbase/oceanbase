@@ -2399,6 +2399,7 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
         cast_dst_type.set_length(temporal_max_len);
         cast_dst_type.set_calc_meta(ObObjMeta());
         cast_dst_type.set_result_flag(expr->get_result_type().get_result_flag());
+        cast_dst_type.add_cast_mode(expr->get_result_type().get_cast_mode());
         if (OB_FAIL(params_.session_info_->get_collation_connection(coll_type))) {
           LOG_WARN("get collation connection failed", K(ret));
         } else if (FALSE_IT(cast_dst_type.set_collation_type(coll_type))) {
@@ -13190,7 +13191,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_NO_USE_DAS_HINT:
     case T_INDEX_SS_HINT:
     case T_INDEX_SS_ASC_HINT:
-    case T_INDEX_SS_DESC_HINT:  {
+    case T_INDEX_SS_DESC_HINT:
+    case T_USE_COLUMN_STORE_HINT:
+    case T_NO_USE_COLUMN_STORE_HINT:  {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }
@@ -13346,7 +13349,8 @@ int ObDMLResolver::resolve_index_hint(const ParseNode &index_node,
   } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, index_hint->get_table()))) {
     LOG_WARN("Resolve table relation fail", K(ret));
   } else if (T_FULL_HINT == index_hint->get_hint_type() ||
-             T_USE_DAS_HINT == index_hint->get_hint_type()) {
+             T_USE_DAS_HINT == index_hint->get_hint_type() ||
+             T_USE_COLUMN_STORE_HINT == index_hint->get_hint_type()) {
     index_hint->set_qb_name(qb_name);
     opt_hint = index_hint;
   } else if (OB_UNLIKELY(3 != index_node.num_child_) ||
@@ -14733,8 +14737,30 @@ int ObDMLResolver::add_fake_schema(ObSelectStmt *left_stmt)
             new_col->set_tenant_id(tbl_schema->get_tenant_id());
             new_col->set_table_id(magic_table_id);
             new_col->set_column_id(magic_col_id+i);
-            new_col->set_meta_type(expr->get_result_type());
-            new_col->set_accuracy(expr->get_accuracy());
+            // consider following case:
+            // WITH fibonacci (n, fib_n, next_fib_n) AS
+            // (
+            //   SELECT 1, 0, 1 from dual
+            //   UNION ALL
+            //   SELECT n + 1, next_fib_n, fib_n + next_fib_n
+            //   FROM fibonacci WHERE n < 10
+            // )
+            // SELECT * FROM fibonacci;
+            // 1, 0, 1 are parsed as ObDecimalIntType, (P, S) = (1, 0)
+            // column `fib_n` will deduced as decimal int with (P, S) = (1, 0), which is incorrect.
+            //
+            // column type deduced by numeric constant should use ObNumberType, not ObDecimalIntType.
+            if (lib::is_oracle_mode() && expr->get_result_type().is_decimal_int()
+                && expr->is_const_expr()) {
+              ObObjMeta num_meta;
+              num_meta.set_number();
+              new_col->set_meta_type(num_meta);
+              new_col->set_accuracy(
+                ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][ObNumberType]);
+            } else {
+              new_col->set_meta_type(expr->get_result_type());
+              new_col->set_accuracy(expr->get_accuracy());
+            }
             new_col->set_collation_type(expr->get_collation_type());
             new_col->set_extended_type_info(expr->get_enum_set_values());
             new_col->add_column_flag(CTE_GENERATED_COLUMN_FLAG);

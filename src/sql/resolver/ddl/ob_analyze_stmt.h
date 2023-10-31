@@ -74,6 +74,9 @@ public:
   ObIArray<ObColumnStatParam> &get_column_params() { return column_params_; }
   const ObIArray<ObColumnStatParam> &get_column_params() const { return column_params_; }
 
+   ObIArray<ObColumnGroupStatParam> &get_column_group_params() { return column_group_params_; }
+  const ObIArray<ObColumnGroupStatParam> &get_column_group_params() const { return column_group_params_; }
+
   void set_part_level(share::schema::ObPartitionLevel part_level)
   {
     part_level_ = part_level;
@@ -115,7 +118,9 @@ public:
                K_(part_ids),
                K_(subpart_ids),
                K_(ref_table_type),
-               K_(gather_subpart_hist));
+               K_(gather_subpart_hist),
+               K_(column_params),
+               K_(column_group_params));
 
 private:
   uint64_t tenant_id_;
@@ -133,6 +138,7 @@ private:
   common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> subpartition_infos_;
 
   common::ObSEArray<common::ObColumnStatParam, 4, common::ModulePageAllocator, true> column_params_;
+  common::ObSEArray<common::ObColumnGroupStatParam, 4, common::ModulePageAllocator, true> column_group_params_;
   StatisticType statistic_type_;
   ObAnalyzeSampleInfo sample_info_;
 

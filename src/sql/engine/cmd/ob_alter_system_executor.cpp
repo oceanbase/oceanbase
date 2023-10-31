@@ -168,6 +168,19 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
           LOG_WARN("minor freeze rpc failed", K(arg), K(ret), K(timeout), "dst", common_rpc_proxy->get_server());
         }
       }
+    } else if (stmt.get_tablet_id().is_valid()) {
+      if (OB_UNLIKELY(1 != stmt.get_tenant_ids().count())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support schedule tablet major freeze for several tenant", K(ret), K(stmt));
+      } else {
+        rootserver::ObTabletMajorFreezeParam param;
+        param.tenant_id_ = stmt.get_tenant_ids().at(0);
+        param.tablet_id_ = stmt.get_tablet_id();
+        param.is_rebuild_column_group_ = stmt.is_rebuild_column_group();
+        if (OB_FAIL(rootserver::ObMajorFreezeHelper::tablet_major_freeze(param))) {
+          LOG_WARN("failed to schedule tablet major freeze", K(ret), K(param));
+        }
+      }
     } else {
       rootserver::ObMajorFreezeParam param;
       param.freeze_all_ = stmt.is_freeze_all();

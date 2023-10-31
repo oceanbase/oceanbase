@@ -85,6 +85,7 @@ public:
   constexpr static int QUERY_MIN_BATCH_CNT = 200;
   // do stash query all
   int do_stash_query(int min_batch_cnt = 1);
+  int handle_trans_in_the_end(const int err_no);
 protected:
   int start_transaction(const uint64_t &tenant_id, bool with_snap_shot);
   int end_transaction(const bool commit);

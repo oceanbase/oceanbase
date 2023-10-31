@@ -686,7 +686,7 @@ int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id,
 int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data, share::SCN &recycled_scn)
 {
   int ret = OB_SUCCESS;
-  ObTableIterParam iter_param = read_schema_.iter_param_;
+  const ObTableIterParam &iter_param = read_schema_.iter_param_;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObTabletHandle tablet_handle;
 
@@ -881,7 +881,7 @@ int ObTxDataTable::DEBUG_calc_with_all_sstables_(ObTableAccessContext &access_co
 {
   int ret = OB_SUCCESS;
 
-  ObTableIterParam iter_param = read_schema_.iter_param_;
+  const ObTableIterParam &iter_param = read_schema_.iter_param_;
   ObTabletHandle tablet_handle;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObStoreRowIterator *row_iter = nullptr;
@@ -1143,7 +1143,7 @@ int ObTxDataTable::update_calc_upper_trans_version_cache_(ObITable *table)
 {
   int ret = OB_SUCCESS;
   STORAGE_LOG(DEBUG, "update calc upper trans version cache once.");
-  ObTableIterParam iter_param = read_schema_.iter_param_;
+  const ObTableIterParam &iter_param = read_schema_.iter_param_;
   ObTabletHandle tablet_handle;
 
   if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id_, tablet_handle))) {
@@ -1155,7 +1155,7 @@ int ObTxDataTable::update_calc_upper_trans_version_cache_(ObITable *table)
     ObStorageMetaHandle sstable_handle;
     ObSSTable *sstable = static_cast<ObSSTable *>(table);
     if (sstable->is_loaded()) {
-    } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable_handle))) {
+    } else if (OB_FAIL(ObTabletTableStore::load_sstable(sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
       STORAGE_LOG(WARN, "fail to load sstable", K(ret), KPC(sstable));
     } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
       STORAGE_LOG(WARN, "fail to get sstable", K(ret), K(sstable_handle));

@@ -156,7 +156,6 @@ public:
     return medium_snapshot_ != rhs.medium_snapshot_;
   }
   int64_t get_medium_snapshot() const { return medium_snapshot_; }
-  void set_medium_snapshot(const int64_t medium_snapshot) { medium_snapshot_ = medium_snapshot; }
 
   TO_STRING_KV(K_(medium_snapshot));
 private:
@@ -207,7 +206,6 @@ public:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 public:

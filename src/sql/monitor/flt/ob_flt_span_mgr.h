@@ -21,8 +21,8 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "sql/ob_sql_define.h"
 #include "observer/mysql/ob_ra_queue.h"
+#include "lib/allocator/ob_concurrent_fifo_allocator.h"
 
-using namespace oceanbase::common;
 namespace oceanbase
 {
 namespace sql

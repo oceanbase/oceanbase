@@ -566,13 +566,13 @@ int ObOptimizerTraceImpl::append(const Path *path)
     if (path->is_access_path()) {
       const AccessPath& ap = static_cast<const AccessPath&>(*path);
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
-      append("index id:", ap.index_id_, ",global index:", ap.is_global_index_);
+      append("index id:", ap.index_id_, ",global index:", ap.is_global_index_, ", use column store:", ap.use_column_store_);
       new_line();
       append("use das:", ap.use_das_, ",unique index:", index_info.is_unique_index_, ",index back:", index_info.is_index_back_);
       new_line();
-      append("table rows:", ap.table_row_count_, ",phy_query_range_row_count:", ap.phy_query_range_row_count_);
+      append("table rows:", ap.get_table_row_count(), ",phy_query_range_row_count:", ap.get_phy_query_range_row_count());
       new_line();
-      append("query_range_row_count:", ap.query_range_row_count_, ",index_back_row_count:", ap.index_back_row_count_);
+      append("query_range_row_count:", ap.get_logical_query_range_row_count(), ",index_back_row_count:", ap.get_index_back_row_count());
       new_line();
       append("partition count:", index_info.index_part_count_, ",micro block count:", index_info.get_micro_block_numbers());
       new_line();
@@ -926,6 +926,10 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
         } else if (OB_FAIL(new_line())) {
           LOG_WARN("failed to append msg", K(ret));
         } else if (OB_FAIL(append("Max:", col_meta->get_max_value()))) {
+          LOG_WARN("failed to append msg", K(ret));
+        } else if (OB_FAIL(new_line())) {
+          LOG_WARN("failed to append msg", K(ret));
+        } else if (OB_FAIL(append("column group micro block count:", col_meta->get_cg_micro_blk_cnt()))) {
           LOG_WARN("failed to append msg", K(ret));
         } else if (OB_FAIL(new_line())) {
           LOG_WARN("failed to append msg", K(ret));

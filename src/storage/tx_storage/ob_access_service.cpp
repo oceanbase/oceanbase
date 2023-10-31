@@ -279,7 +279,9 @@ int ObAccessService::table_scan(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
   } else if (OB_FAIL(tablet_service->table_scan(iter->get_ctx_guard().get_tablet_handle(), *iter, param))) {
-    LOG_WARN("Fail to scan table, ", K(ret), K(ls_id), K(param));
+    if (OB_TABLET_NOT_EXIST != ret) {
+      LOG_WARN("Fail to scan table, ", K(ret), K(ls_id), K(param));
+    }
   } else {
     NG_TRACE(storage_table_scan_end);
   }
@@ -337,7 +339,9 @@ int ObAccessService::table_rescan(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
     } else if (OB_FAIL(tablet_service->table_rescan(iter->get_ctx_guard().get_tablet_handle(), param, result))) {
-      LOG_WARN("Fail to scan table, ", K(ret), K(result), K(ls_id), K(param));
+      if (OB_TABLET_NOT_EXIST != ret) {
+        LOG_WARN("Fail to scan table, ", K(ret), K(result), K(ls_id), K(param));
+      }
     } else {
       NG_TRACE(storage_table_scan_end);
     }
@@ -1051,7 +1055,9 @@ int ObAccessService::estimate_row_count(
   } else if (OB_FAIL(ls->get_tablet_svr()->estimate_row_count(
               param, scan_range, est_records,
               logical_row_count, physical_row_count))) {
-    LOG_WARN("failed to estimate row count", K(ret), K(param));
+    if (OB_TABLET_NOT_EXIST != ret) {
+      LOG_WARN("failed to estimate row count", K(ret), K(param));
+    }
   }
   return ret;
 }
@@ -1062,7 +1068,9 @@ int ObAccessService::estimate_block_count_and_row_count(
     int64_t &macro_block_count,
     int64_t &micro_block_count,
     int64_t &sstable_row_count,
-    int64_t &memtable_row_count) const
+    int64_t &memtable_row_count,
+    common::ObIArray<int64_t> &cg_macro_cnt_arr,
+    common::ObIArray<int64_t> &cg_micro_cnt_arr) const
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1079,7 +1087,8 @@ int ObAccessService::estimate_block_count_and_row_count(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is unexpected null", K(ret));
   } else if (OB_FAIL(ls->get_tablet_svr()->estimate_block_count_and_row_count(
-              tablet_id, macro_block_count, micro_block_count, sstable_row_count, memtable_row_count))) {
+              tablet_id, macro_block_count, micro_block_count, sstable_row_count,
+              memtable_row_count, cg_macro_cnt_arr, cg_micro_cnt_arr))) {
     LOG_WARN("failed to estimate block count and row count", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;

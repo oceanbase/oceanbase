@@ -62,6 +62,7 @@ class ObSchemaGetterGuard;
 class ObColDesc;
 class ObConstraint;
 class ObColumnSchemaV2;
+class ObColumnParam;
 struct ObColumnIdKey
 {
   uint64_t column_id_;
@@ -86,6 +87,25 @@ struct ObColumnIdKey
   }
 };
 
+struct ObColumnGroupIdKey
+{
+  uint64_t column_group_id_;
+
+  explicit ObColumnGroupIdKey() : column_group_id_(common::OB_INVALID_ID) {}
+  explicit ObColumnGroupIdKey(const uint64_t column_group_id)
+    : column_group_id_(column_group_id) {}
+
+  ObColumnGroupIdKey &operator=(const uint64_t column_group_id)
+  {
+    column_group_id_ = column_group_id;
+    return *this;
+  }
+
+  inline operator uint64_t() const { return column_group_id_; }
+
+  inline uint64_t hash() const { return ((column_group_id_ * 29 + 7) & 0xFFFF); }
+};
+
 template<class K, class V>
 struct ObGetColumnKey
 {
@@ -108,10 +128,26 @@ struct ObGetColumnKey<ObColumnSchemaHashWrapper, ObColumnSchemaV2 *>
   ObColumnSchemaHashWrapper operator()(const ObColumnSchemaV2 *column_schema) const;
 };
 
+template<>
+struct ObGetColumnKey<ObColumnGroupIdKey, ObColumnGroupSchema *>
+{
+  ObColumnGroupIdKey operator()(const ObColumnGroupSchema *column_group_schema) const;
+};
+
+template<>
+struct ObGetColumnKey<ObColumnGroupSchemaHashWrapper, ObColumnGroupSchema *>
+{
+  ObColumnGroupSchemaHashWrapper operator()(const ObColumnGroupSchema *column_group_schema) const;
+};
+
 typedef common::hash::ObPointerHashArray<ObColumnIdKey, ObColumnSchemaV2 *, ObGetColumnKey>
 IdHashArray;
 typedef common::hash::ObPointerHashArray<ObColumnSchemaHashWrapper, ObColumnSchemaV2 *, ObGetColumnKey>
 NameHashArray;
+typedef common::hash::ObPointerHashArray<ObColumnGroupIdKey, ObColumnGroupSchema *, ObGetColumnKey>
+CgIdHashArray;
+typedef common::hash::ObPointerHashArray<ObColumnGroupSchemaHashWrapper, ObColumnGroupSchema *, ObGetColumnKey>
+CgNameHashArray;
 typedef const common::ObObj& (ObColumnSchemaV2::*get_default_value)() const;
 
 extern const uint64_t HIDDEN_PK_COLUMN_IDS[3];
@@ -437,6 +473,11 @@ public:
     return common::OB_NOT_SUPPORTED;
   }
   int get_mulit_version_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const;
+  virtual int set_precision_to_column_desc(common::ObIArray<share::schema::ObColDesc> &column_ids) const
+  {
+    UNUSED(column_ids);
+    return common::OB_SUCCESS;
+  }
   virtual int get_column_encodings(common::ObIArray<int64_t> &col_encodings) const
   {
     UNUSED(col_encodings);
@@ -451,6 +492,11 @@ public:
   virtual int get_multi_version_column_descs(common::ObIArray<share::schema::ObColDesc> &column_descs) const
   {
     UNUSED(column_descs);
+    return common::OB_NOT_SUPPORTED;
+  }
+  virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
+  {
+    UNUSED(skip_idx_attrs);
     return common::OB_NOT_SUPPORTED;
   }
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -756,7 +802,8 @@ public:
   { return ObTenantTableId(tenant_id_, table_id_); }
   inline ObTenantTableId get_tenant_data_table_id() const
   { return ObTenantTableId(tenant_id_, data_table_id_); }
-
+  inline bool should_not_validate_data_index_ckm() const;
+  inline bool should_check_major_merge_progress() const;
   inline bool is_spatial_index() const;
   inline static bool is_spatial_index(ObIndexType index_type);
   inline bool is_normal_index() const;
@@ -886,6 +933,7 @@ public:
 
   static const int64_t MIN_COLUMN_COUNT_WITH_PK_TABLE = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_HEAP_TABLE = 2;
+  static const int64_t DEFAULT_COLUMN_GROUP_ARRAY_CAPACITY = 8;
   bool cmp_table_id(const ObTableSchema *a, const ObTableSchema *b)
   {
     return a->get_tenant_id() < b->get_tenant_id() ||
@@ -920,6 +968,7 @@ public:
   typedef ObColumnSchemaV2* const *const_column_iterator;
   typedef ObConstraint * const *const_constraint_iterator;
   typedef ObConstraint **constraint_iterator;
+  typedef ObColumnGroupSchema* const *const_column_group_iterator;
   ObTableSchema();
   explicit ObTableSchema(common::ObIAllocator *allocator);
   ObTableSchema(const ObTableSchema &src_schema) = delete;
@@ -1165,6 +1214,10 @@ public:
   void reset_column_info();
   inline int64_t get_column_count() const { return column_cnt_; }
   inline void reset_column_count() { column_cnt_ = 0; }
+  void reset_column_group_info();
+  inline int64_t get_column_group_count() const { return column_group_cnt_; }
+  inline bool is_row_store() const { return column_group_cnt_ <= 1; }
+  inline void reset_column_group_count() { column_group_cnt_ = 0; }
   inline int64_t get_constraint_count() const { return cst_cnt_; }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }
@@ -1173,6 +1226,8 @@ public:
   inline const_constraint_iterator constraint_end() const { return NULL == cst_array_ ? NULL : &(cst_array_[cst_cnt_]); }
   inline constraint_iterator constraint_begin_for_non_const_iter() const { return cst_array_; }
   inline constraint_iterator constraint_end_for_non_const_iter() const { return NULL == cst_array_ ? NULL : &(cst_array_[cst_cnt_]); }
+  inline const_column_group_iterator column_group_begin() const { return column_group_arr_; }
+  inline const_column_group_iterator column_group_end() const { return NULL == column_group_arr_ ? NULL : &(column_group_arr_[column_group_cnt_]); }
   int fill_column_collation_info();
   int has_column(const uint64_t column_id, bool &has) const;
   int has_column(const ObString col_name, bool &has) const;
@@ -1181,6 +1236,7 @@ public:
   int get_index_and_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   virtual int get_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool no_virtual = false) const override;
   virtual int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
+  virtual int set_precision_to_column_desc(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
   int get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_rowkey_partkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_column_ids_without_rowkey(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool no_virtual = false) const;
@@ -1242,6 +1298,7 @@ public:
   // whether table should check merge progress
   int is_need_check_merge_progress(bool &need_check) const;
   int get_multi_version_column_descs(common::ObIArray<ObColDesc> &column_descs) const;
+  virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const override;
   template <typename Allocator>
   static int build_index_table_name(Allocator &allocator,
                                     const uint64_t data_table_id,
@@ -1264,6 +1321,25 @@ public:
   bool is_invisible_before() const;
   void set_invisible_before(const uint64_t invisible_before);
 
+  //
+  // column group related
+  //
+  bool is_column_store_supported() const { return is_column_store_supported_; }
+  void set_column_store(const bool support_column_store) { is_column_store_supported_ = support_column_store; }
+  bool is_normal_column_store_table() const { return column_group_cnt_ > 1; }
+  uint64_t get_max_used_column_group_id() const { return max_used_column_group_id_; }
+  void set_max_used_column_group_id(const uint64_t id) { max_used_column_group_id_ = id; }
+  int add_column_group(const ObColumnGroupSchema &other);
+  // This function is only used when add default cg for sys_schema in 'hard-code' python script
+  // or when we need to mock default column group for compatibility
+  int add_default_column_group();
+
+  int get_store_column_group_count(int64_t &column_group_cnt,
+                                   const bool filter_empty_cg = true) const;
+  int get_store_column_groups(ObIArray<const ObColumnGroupSchema *> &column_groups,
+                              const bool filter_empty_cg = true) const;
+  int has_all_column_group(bool &has_all_column_group) const;
+
   //other methods
   int64_t get_convert_size() const;
   void reset();
@@ -1274,6 +1350,9 @@ public:
   virtual int deserialize_columns(const char *buf, const int64_t data_len, int64_t &pos);
   int serialize_constraints(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_constraints(const char *buf, const int64_t data_len, int64_t &pos);
+  int serialize_column_groups(char *buf, const int64_t data_len, int64_t &pos) const;
+  int deserialize_column_groups(const char *buf, const int64_t data_len, int64_t &pos);
+
   /**
    * FIXME: move to ObPartitionSchema
    * this function won't reset tablet_ids/partition_ids first, should be careful!!!
@@ -1302,6 +1381,7 @@ public:
   int check_rowkey_cover_partition_keys(const common::ObPartitionKeyInfo &part_key);
   int check_index_table_cover_partition_keys(const common::ObPartitionKeyInfo &part_key) const;
   int check_create_index_on_hidden_primary_key(const ObTableSchema &index_table) const;
+  int check_skip_index_valid() const;
 
   int get_subpart_ids(const int64_t part_id, common::ObIArray<int64_t> &subpart_ids) const;
 
@@ -1367,9 +1447,11 @@ public:
   int set_column_encodings(const common::ObIArray<int64_t> &col_encodings);
   virtual int get_column_encodings(common::ObIArray<int64_t> &col_encodings) const override;
 
-  const IdHashArray *get_id_hash_array() const {return id_hash_array_;}
-
+  int get_column_group_by_id(const uint64_t column_group_id, ObColumnGroupSchema *&column_group);
+  int get_column_group_by_name(const ObString &cg_name, ObColumnGroupSchema *&column_group);
+  int get_all_cg_type_column_group(const ObColumnGroupSchema *&column_group) const;
   int is_partition_key_match_rowkey_prefix(bool &is_prefix) const;
+  int get_column_group_index(const share::schema::ObColumnParam &param, int32_t &cg_idx) const;
 
   int generate_partition_key_from_rowkey(const common::ObRowkey &rowkey,
                                          common::ObRowkey &hign_bound_value) const;
@@ -1484,7 +1566,15 @@ protected:
   int remove_col_from_column_array(const ObColumnSchemaV2 *column);
   int add_column_update_prev_id(ObColumnSchemaV2 *local_column);
   int delete_column_update_prev_id(ObColumnSchemaV2 *column);
-  int64_t column_cnt_;
+
+  int assign_column_group(const ObTableSchema &other);
+  int do_add_column_group(const ObColumnGroupSchema &other);
+  int add_column_group_to_array(ObColumnGroupSchema *column_group);
+  template <typename KeyType, typename ArrayType>
+  int add_column_group_to_hash_array(ObColumnGroupSchema *column_group,
+                                     const KeyType &key,
+                                     ArrayType *&array);
+  int is_column_group_exist(const common::ObString &cg_name, bool &exist);
 
 protected:
   // constraint related
@@ -1494,6 +1584,9 @@ protected:
   int remove_column_id_from_label_se_array(const uint64_t column_id);
 
 private:
+  const IdHashArray *get_id_hash_array() const {return id_hash_array_;}
+  const CgIdHashArray *get_cg_id_hash_array() const { return cg_id_hash_arr_; }
+
   int insert_col_to_column_array(ObColumnSchemaV2 *column);
   int get_default_row(
       get_default_value func,
@@ -1501,6 +1594,8 @@ private:
       common::ObNewRow &default_row) const;
   inline int64_t get_id_hash_array_mem_size(const int64_t column_cnt) const;
   inline int64_t get_name_hash_array_mem_size(const int64_t column_cnt) const;
+  template <typename ArrayType>
+  int64_t get_hash_array_mem_size(const int64_t element_cnt) const;
   int delete_column_internal(ObColumnSchemaV2 *column_schema, const bool for_view);
   ObColumnSchemaV2 *get_column_schema_by_id_internal(const uint64_t column_id) const;
   ObColumnSchemaV2 *get_column_schema_by_name_internal(const common::ObString &column_name) const;
@@ -1534,6 +1629,7 @@ private:
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map,
       ObRowkeyInfo &rowkey_info);
   int alter_view_column_internal(ObColumnSchemaV2 &column_schema);
+  int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
 
 protected:
   int add_mv_tid(const uint64_t mv_tid);
@@ -1595,6 +1691,7 @@ protected:
   common::ObSArray<uint64_t> aux_vp_tid_array_;
 
   // Should encapsulate an Array structure, push calls T (allocator) construction
+  int64_t column_cnt_;
   ObColumnSchemaV2 **column_array_;
 
   int64_t column_array_capacity_;
@@ -1644,11 +1741,19 @@ protected:
 
   // table ttl
   common::ObString ttl_definition_;
-
   // kv attributes
   common::ObString kv_attributes_;
 
   ObNameGeneratedType name_generated_type_;
+
+  // column group
+  bool is_column_store_supported_;
+  uint64_t max_used_column_group_id_;
+  int64_t column_group_cnt_;
+  ObColumnGroupSchema **column_group_arr_;
+  int64_t column_group_arr_capacity_;
+  CgIdHashArray *cg_id_hash_arr_;
+  CgNameHashArray *cg_name_hash_arr_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
@@ -1757,6 +1862,20 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(ObIndexType index_type)
   return INDEX_TYPE_DOMAIN_CTXCAT == index_type;
 }
 
+inline bool ObSimpleTableSchemaV2::should_not_validate_data_index_ckm() const
+{
+  // spatial index column is different from data table column, should not validate data & index column checksum
+  return is_spatial_index();
+}
+
+inline bool ObSimpleTableSchemaV2::should_check_major_merge_progress() const
+{
+  // only include primary table
+  return is_sys_table()
+          || is_user_table()
+          || is_tmp_table();
+}
+
 inline int64_t ObTableSchema::get_id_hash_array_mem_size(const int64_t column_cnt) const
 {
   return common::max(IdHashArray::MIN_HASH_ARRAY_ITEM_COUNT,
@@ -1767,6 +1886,13 @@ inline int64_t ObTableSchema::get_name_hash_array_mem_size(const int64_t column_
 {
   return common::max(NameHashArray::MIN_HASH_ARRAY_ITEM_COUNT,
     column_cnt * 2) * sizeof(void *) + sizeof(NameHashArray);
+}
+
+template <typename ArrayType>
+int64_t ObTableSchema::get_hash_array_mem_size(const int64_t element_cnt) const
+{
+  return common::max(NameHashArray::MIN_HASH_ARRAY_ITEM_COUNT,
+    element_cnt * 2) * sizeof(void *) + sizeof(ArrayType);
 }
 
 template <typename Allocator>
@@ -2005,6 +2131,77 @@ int ObTableSchema::add_column(const ColumnType &column)
       set_max_used_column_id(column.get_column_id());
     }
   }
+  return ret;
+}
+
+template <typename KeyType, typename ArrayType>
+int ObTableSchema::add_column_group_to_hash_array(
+    ObColumnGroupSchema *column_group,
+    const KeyType &key,
+    ArrayType *&array)
+{
+  int ret = common::OB_SUCCESS;
+  char *buf = NULL;
+  int hash_ret = 0;
+  int64_t arr_mem_size = 0;
+  if (OB_ISNULL(column_group)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    SHARE_SCHEMA_LOG(WARN, "invalid argument", KR(ret));
+  } else if (!column_group->is_valid()) {
+    ret = common::OB_INVALID_ARGUMENT;
+    SHARE_SCHEMA_LOG(WARN, "column_group is invalid", KR(ret), KPC(column_group));
+  } else {
+    if (OB_ISNULL(array)) {
+      arr_mem_size = get_hash_array_mem_size<ArrayType>(get_column_group_count());
+      if (OB_ISNULL(buf = static_cast<char*>(alloc(arr_mem_size)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        SHARE_SCHEMA_LOG(ERROR, "fail to allocate memory for hash array", KR(ret), K(arr_mem_size));
+      } else if (OB_ISNULL(array = new (buf) ArrayType(arr_mem_size))){
+        ret = common::OB_ERR_UNEXPECTED;
+        SHARE_SCHEMA_LOG(WARN, "fail to new hash array", KR(ret));
+      } else {
+        if (common::OB_SUCCESS != (hash_ret = array->set_refactored(key, column_group))) {
+          ret = hash_ret;
+          SHARE_SCHEMA_LOG(WARN, "fail to set column_group to hash array", KR(ret), KPC(column_group));
+        }
+      }
+    } else if (common::OB_SUCCESS != (hash_ret = array->set_refactored(key, column_group))) {
+      if (common::OB_HASH_FULL == hash_ret) {
+        arr_mem_size = get_hash_array_mem_size<ArrayType>(array->count() * 2);
+        // if reserved size is not enough, alloc two times more memory
+        if (OB_ISNULL(buf = static_cast<char*>(alloc(arr_mem_size)))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          SHARE_SCHEMA_LOG(ERROR, "fail to alloc memory", KR(ret), K(arr_mem_size));
+        } else {
+          ArrayType *new_array = new (buf) ArrayType(arr_mem_size);
+          if (OB_ISNULL(new_array)) {
+            ret = common::OB_ERR_UNEXPECTED;
+            SHARE_SCHEMA_LOG(WARN, "fail to new hash array", KR(ret));
+          }
+          typename ArrayType::Iterator iter;
+          for (iter = array->begin(); OB_SUCC(ret) && iter != array->end(); ++iter) {
+            if (OB_FAIL(new_array->set_refactored(array->get_key(iter), *iter))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to set refactored", KR(ret), K(*iter));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (common::OB_SUCCESS != (hash_ret = new_array->set_refactored(key, column_group))) {
+              ret = hash_ret;
+              SHARE_SCHEMA_LOG(WARN, "fail to add column_group into hash array", KR(hash_ret), KPC(column_group));
+            } else {
+              // free old hash array
+              free(array);
+              array = new_array;
+            }
+          }
+        }
+      } else {
+        ret = hash_ret;
+        SHARE_SCHEMA_LOG(WARN, "fail to add column_group into hash array", KR(ret), KPC(column_group));
+      }
+    }
+  }
+
   return ret;
 }
 

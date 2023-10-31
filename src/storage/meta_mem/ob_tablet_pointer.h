@@ -14,11 +14,9 @@
 #define OCEANBASE_STORAGE_OB_TABLET_POINTER
 
 #include "lib/lock/ob_mutex.h"
-#include "storage/meta_mem/ob_meta_pointer.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
-#include "storage/tablet/ob_tablet_meta.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/multi_data_source/mds_table_handler.h"
 
@@ -30,7 +28,7 @@ class ObTablet;
 class ObTabletDDLKvMgr;
 typedef ObMetaObjGuard<ObTabletDDLKvMgr> ObDDLKvMgrHandle;
 
-class ObTabletPointer : public ObMetaPointer<ObTablet>
+class ObTabletPointer final
 {
   friend class ObTablet;
   friend class ObLSTabletService;
@@ -40,20 +38,43 @@ public:
   ObTabletPointer(
       const ObLSHandle &ls_handle,
       const ObMemtableMgrHandle &memtable_mgr_handle);
-  virtual ~ObTabletPointer();
-  virtual void reset() override;
+  ~ObTabletPointer();
+  int get_in_memory_obj(ObMetaObjGuard<ObTablet> &guard);
+  void get_obj(ObMetaObjGuard<ObTablet> &guard);
 
-  virtual int set_attr_for_obj(ObTablet *tablet) override;
-  virtual int dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_obj) override;
+  void set_obj_pool(ObITenantMetaObjPool &obj_pool);
+  void set_obj(const ObMetaObjGuard<ObTablet> &guard);
+  void set_addr_without_reset_obj(const ObMetaDiskAddr &addr);
+  void set_addr_with_reset_obj(const ObMetaDiskAddr &addr);
+  OB_INLINE const ObMetaDiskAddr &get_addr() const { return phy_addr_; }
 
-  virtual int deep_copy(char *buf, const int64_t buf_len, ObMetaPointer<ObTablet> *&value) const override;
-  virtual int64_t get_deep_copy_size() const override;
+  int get_attr_for_obj(ObTablet *t);
 
-  virtual int acquire_obj(ObTablet *&t) override;
-  virtual int release_obj(ObTablet *&t) override;
+  int deep_copy(char *buf, const int64_t buf_len, ObTabletPointer *&value) const;
+  int64_t get_deep_copy_size() const;
+  bool is_in_memory() const;
+
+  void reset_obj();
+  void reset();
+
+  // load and dump interface
+  int acquire_obj(ObTablet *&t);
+  int read_from_disk(common::ObArenaAllocator &allocator, char *&r_buf, int64_t &r_len, ObMetaDiskAddr &addr);
+  int deserialize(
+      common::ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t buf_len,
+      ObTablet *t);
+  int deserialize(
+      const char *buf,
+      const int64_t buf_len,
+      ObTablet *t);
+  int hook_obj(ObTablet *&t, ObMetaObjGuard<ObTablet> &guard);
+  int release_obj(ObTablet *&t);
+  int dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_obj);
 
   // do not KPC memtable_mgr, may dead lock
-  INHERIT_TO_STRING_KV("ObMetaPointer", ObMetaPointer, K_(ls_handle), K_(ddl_kv_mgr_handle),
+  TO_STRING_KV(K_(phy_addr), K_(obj), K_(ls_handle), K_(ddl_kv_mgr_handle),
       KP(memtable_mgr_handle_.get_memtable_mgr()), K_(ddl_info), K_(initial_state), KP_(old_version_chain));
 public:
   bool get_initial_state() const;
@@ -77,6 +98,8 @@ private:
   int add_tablet_to_old_version_chain(ObTablet *tablet);
   int remove_tablet_from_old_version_chain(ObTablet *tablet);
 private:
+  ObMetaDiskAddr phy_addr_; // 40B
+  ObMetaObj<ObTablet> obj_; // 40B
   ObLSHandle ls_handle_; // 24B
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // 48B
   ObMemtableMgrHandle memtable_mgr_handle_; // 16B

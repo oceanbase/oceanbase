@@ -230,9 +230,12 @@ int ObExprRegexpSubstr::eval_regexp_substr(
                        (occurrence != NULL && occurrence->is_null()) ||
                        (subexpr != NULL && subexpr->is_null()) ||
                        (lib::is_mysql_mode() && match_type != NULL && match_type->is_null());
-    if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos))
-        || OB_FAIL(ObExprUtil::get_int_param_val(occurrence, occur))
-        || OB_FAIL(ObExprUtil::get_int_param_val(subexpr, subexpr_val))) {
+    if (OB_FAIL(ObExprUtil::get_int_param_val(
+          position, (expr.arg_cnt_ > 2 && expr.args_[2]->obj_meta_.is_decimal_int()), pos))
+        || OB_FAIL(ObExprUtil::get_int_param_val(
+          occurrence, (expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int()), occur))
+        || OB_FAIL(ObExprUtil::get_int_param_val(
+          subexpr, expr.arg_cnt_ > 5 && expr.args_[5]->obj_meta_.is_decimal_int(), subexpr_val))) {
       LOG_WARN("get integer parameter value failed", K(ret));
     } else if (!null_result && (pos <= 0 || occur <= 0 || subexpr_val < 0)) {
       ret = OB_INVALID_ARGUMENT;

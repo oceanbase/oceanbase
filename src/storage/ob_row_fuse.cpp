@@ -56,7 +56,7 @@ void ObNopPos::destroy()
   allocator_ = NULL;
 }
 
-int ObNopPos::get_nop_pos(const int64_t idx, int64_t &pos)
+int ObNopPos::get_nop_pos(const int64_t idx, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (idx < 0 || idx >= count_) {

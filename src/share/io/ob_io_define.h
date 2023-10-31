@@ -28,10 +28,12 @@ namespace oceanbase
 {
 namespace common
 {
-
+//the timestamp adjustment will not adjust until the queue is idle for more than this time
+static constexpr int64_t CLOCK_IDLE_THRESHOLD_US = 3L * 1000L * 1000L; // 3s
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L; // 5min
 static constexpr int64_t GROUP_START_NUM = 8L;
+static constexpr int64_t DEFAULT_IO_WAIT_TIME_US = 5000L * 1000L; // 5s
 static constexpr int64_t MAX_DETECT_READ_TIMES = 10L;
 enum class ObIOMode : uint8_t
 {
@@ -129,6 +131,31 @@ private:
   };
 };
 
+template <typename T>
+class ObIOObjectPool final
+{
+public:
+  ObIOObjectPool();
+  ~ObIOObjectPool();
+  int init(const int64_t count, const int64_t size, ObIAllocator &allocator);
+  void destroy();
+  int alloc(T *&ptr);
+  int recycle(T *ptr);
+  bool contain(T *ptr);
+  int64_t get_block_size() const { return obj_size_; }
+  int64_t get_capacity() const { return capacity_; }
+  int64_t get_free_cnt() const { return free_count_; }
+  TO_STRING_KV(K(is_inited_), K(obj_size_), K(capacity_), K(free_count_), KP(allocator_), KP(start_ptr_));
+private:
+  bool is_inited_;
+  int64_t obj_size_;
+  int64_t capacity_;
+  int64_t free_count_;
+  ObIAllocator *allocator_;
+  ObFixedQueue<T> pool_;
+  char *start_ptr_;
+};
+
 class ObIOCallback
 {
 public:
@@ -137,14 +164,17 @@ public:
   virtual ~ObIOCallback();
 
   int process(const char *data_buffer, const int64_t size);
-  int deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const;
+  virtual ObIAllocator *get_allocator() = 0;
   virtual const char *get_data() = 0;
   virtual int64_t size() const = 0;
+  virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) = 0;
   virtual int inner_process(const char *data_buffer, const int64_t size) = 0;
-  virtual int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 
+protected:
+  static int alloc_and_copy_data(const char *io_data_buffer, const int64_t data_size, common::ObIAllocator *allocator, char *&data_buffer);
 private:
+  friend class ObIOResult;
   lib::Worker::CompatMode compat_mode_;
 };
 
@@ -155,25 +185,27 @@ public:
   ~ObIOInfo();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K(tenant_id_), K(fd_), K(offset_), K(size_), K(flag_), KP(buf_), KP(callback_));
+  TO_STRING_KV(K(tenant_id_), K(fd_), K(offset_), K(size_), K(timeout_us_), K(flag_), KP(callback_), KP(buf_), KP(user_data_buf_));
 
 public:
   uint64_t tenant_id_;
   ObIOFd fd_;
   int64_t offset_;
   int64_t size_;
+  int64_t timeout_us_;
   ObIOFlag flag_;
-  const char *buf_;
   ObIOCallback *callback_;
+  const char *buf_;
+  char *user_data_buf_; //actual data buf without cb, allocated by the calling layer
 };
 
 template <typename T>
-class ObRefHolder
+class ObRefHolder final
 {
 public:
   explicit ObRefHolder(): ptr_(nullptr) {}
   explicit ObRefHolder(T *ptr): ptr_(nullptr) { hold(ptr); }
-  virtual ~ObRefHolder() { reset(); }
+  ~ObRefHolder() { reset(); }
   T *get_ptr() { return ptr_; }
   void hold(T *ptr) {
     if (nullptr != ptr && ptr != ptr_) {
@@ -199,18 +231,13 @@ public:
   ObIOTimeLog();
   ~ObIOTimeLog();
   void reset();
-  TO_STRING_KV(K(begin_ts_), K(enqueue_ts_), K(dequeue_ts_), K(submit_ts_), K(return_ts_),
-      K(callback_enqueue_ts_), K(callback_dequeue_ts_), K(callback_finish_ts_), K(end_ts_));
+  TO_STRING_KV(K(enqueue_ts_), K(dequeue_ts_), K(submit_ts_), K(return_ts_), K(callback_enqueue_ts_));
 public:
-  int64_t begin_ts_;
   int64_t enqueue_ts_;
   int64_t dequeue_ts_;
   int64_t submit_ts_;
   int64_t return_ts_;
   int64_t callback_enqueue_ts_;
-  int64_t callback_dequeue_ts_;
-  int64_t callback_finish_ts_;
-  int64_t end_ts_;
 };
 
 int64_t get_io_interval(const int64_t &end_time, const int64_t &begin_time);
@@ -232,66 +259,129 @@ class ObTenantIOManager;
 class ObIOChannel;
 class ObIOSender;
 class ObIOUsage;
+class ObIORequest;
+
+class ObIOResult final
+{
+public:
+  ObIOResult();
+  ~ObIOResult();
+  bool is_valid() const;
+  int basic_init(); //for pool
+  int init(const ObIOInfo &info);
+  void reset();
+  void destroy();
+  void cancel();
+  void finish(const ObIORetCode &ret_code, ObIORequest *req = nullptr);
+  void calc_io_offset_and_size(int64_t &size, int32_t &offset);
+  ObIOMode get_mode() const;
+  int64_t get_group_id() const;
+  int64_t get_data_size() const;
+  uint64_t get_io_usage_index();
+  void inc_ref(const char *msg = nullptr);
+  void dec_ref(const char *msg = nullptr);
+  void inc_out_ref();
+  void dec_out_ref();
+  void finish_without_accumulate(const ObIORetCode &ret_code);
+  ObThreadCond &get_cond() { return cond_; }
+
+  TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(complete_size_), K(offset_), K(size_),
+               K(timeout_us_), K(result_ref_cnt_), K(out_ref_cnt_), K(flag_), K(ret_code_), K(tenant_io_mgr_),
+               KP(user_data_buf_), KP(buf_), KP(io_callback_), K(begin_ts_), K(end_ts_));
+  DISALLOW_COPY_AND_ASSIGN(ObIOResult);
+
+private:
+  friend class ObIORequest;
+  friend class ObIOHandle;
+  friend class ObIOFaultDetector;
+  friend class ObTenantIOManager;
+  friend class ObAsyncIOChannel;
+  friend class ObSyncIOChannel;
+  friend class ObIORunner;
+  bool is_inited_;
+  bool is_finished_;
+  bool is_canceled_;
+  bool has_estimated_;
+  volatile int32_t result_ref_cnt_; //for io_result and io_handle
+  volatile int32_t out_ref_cnt_; //for io_handle
+  int32_t complete_size_;
+  int32_t offset_;
+  int64_t size_;
+  int64_t timeout_us_;
+  int64_t begin_ts_;
+  int64_t end_ts_;
+  ObRefHolder<ObTenantIOManager> tenant_io_mgr_;
+  const char *buf_;
+  char *user_data_buf_; //actual data buf without cb, allocated by thpe calling layer
+  ObIOCallback *io_callback_;
+  ObIOFlag flag_;
+  ObIORetCode ret_code_;
+  ObThreadCond cond_;
+};
 
 class ObIORequest : public common::ObDLinkBase<ObIORequest>
 {
 public:
   ObIORequest();
-  virtual ~ObIORequest();
-  int init(const ObIOInfo &info);
-  virtual void destroy();
+  ~ObIORequest();
+  bool is_valid() const;
+  int init(const ObIOInfo &info, ObIOResult *result);
+  int basic_init(); //for pool
+  void destroy();
+  void reset();
+  void free();
+  void set_result(ObIOResult &io_result);
+  void calc_io_offset_and_size(int64_t &size, int64_t &offset);
+  bool is_canceled();
+  int64_t timeout_ts() const;
   int64_t get_data_size() const;
   int64_t get_group_id() const;
   uint64_t get_io_usage_index();
-  const char *get_data(); //get data buf after io_buf recycle
+  char *calc_io_buf(); //calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const;
-  void cancel();
-  int alloc_io_buf();
-  int prepare();
+  ObIOCallback *get_callback() const;
+  int alloc_io_buf(char *&io_buf);
+  int prepare(char *next_buffer = nullptr, int64_t next_size = 0, int64_t next_offset = 0);
+  int recycle_buffer();
+  int re_prepare();
+  int try_alloc_buf_until_timeout(char *&io_buf);
   bool can_callback() const;
   void free_io_buffer();
-  void finish(const ObIORetCode &ret_code);
   void inc_ref(const char *msg = nullptr);
   void dec_ref(const char *msg = nullptr);
-  void inc_out_ref();
-  void dec_out_ref();
-  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(io_info_), K(deadline_ts_),
-      K(sender_index_), KP(control_block_), KP(raw_buf_), KP(io_buf_), K(io_offset_), K(io_size_), K(complete_size_),
-      K(time_log_), KP(channel_), K(ref_cnt_), K(out_ref_cnt_),
-      K(trace_id_), K(ret_code_), K(retry_count_), K(callback_buf_size_), KP(copied_callback_), K(tenant_io_mgr_));
+
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
+               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K(time_log_), KPC(io_result_));
 private:
+  friend class ObIOResult;
+  friend class ObIOSender;
   friend class ObIORunner;
+  friend class ObMClockQueue;
+  friend class ObAsyncIOChannel;
+  friend class ObSyncIOChannel;
+  friend class ObIOFaultDetector;
+  friend class ObTenantIOManager;
+  friend class ObIOUsage;
+  friend class ObSysIOUsage;
+  friend class ObIOScheduler;
   const char *get_io_data_buf(); //get data buf for MEMCPY before io_buf recycle
-  int alloc_aligned_io_buf();
+  int alloc_aligned_io_buf(char *&io_buf);
+
 public:
+  ObIOResult *io_result_;
+private:
   bool is_inited_;
-  bool is_finished_;
-  bool is_canceled_;
-  bool has_estimated_;
-  ObIOInfo io_info_;
-  int64_t deadline_ts_;
-  int64_t sender_index_;
+  int8_t retry_count_;
+  volatile int32_t ref_cnt_;
+  void *raw_buf_;//actual allocated io buf
   ObIOCB *control_block_;
-  void *raw_buf_;//actual allocated buf
-  char *io_buf_;//the aligned one of raw_buf_, interact with the operating system
-  int64_t io_offset_;
-  int64_t io_size_;
-  int64_t complete_size_;
-  ObIOTimeLog time_log_;
-  ObIOChannel *channel_;
-  ObIOSender *sender_;
-  volatile int64_t ref_cnt_;
-  volatile int64_t out_ref_cnt_; // only for ObIOHandle, when handle reset, cancel IORequest.
-  ObThreadCond cond_;
-  ObCurTraceId::TraceId trace_id_;
-  ObIORetCode ret_code_;
-  int32_t retry_count_;
+  uint64_t tenant_id_;
   ObRefHolder<ObTenantIOManager> tenant_io_mgr_;
-  ObIOCallback *copied_callback_;
-  int64_t callback_buf_size_;
-  char callback_buf_[];
-  };
+  ObIOFd fd_;
+  ObIOTimeLog time_log_;
+  ObCurTraceId::TraceId trace_id_;
+};
 
 class ObPhyQueue final
 {
@@ -304,15 +394,18 @@ public:
   void reset_time_info();
   void reset_queue_info();
   void set_stop_accept() { stop_accept_ = true; }
+  bool reach_adjust_interval();
 public:
   typedef common::ObDList<ObIORequest> IOReqList;
-  TO_STRING_KV(K_(reservation_ts), K_(group_limitation_ts), K_(tenant_limitation_ts), K_(stop_accept));
+  TO_STRING_KV(K_(reservation_ts), K_(group_limitation_ts), K_(tenant_limitation_ts),
+               K_(stop_accept), K_(last_empty_ts));
   bool is_inited_;
   bool stop_accept_;
   int64_t reservation_ts_;
   int64_t group_limitation_ts_;
   int64_t tenant_limitation_ts_;
   int64_t proportion_ts_;
+  int64_t last_empty_ts_;
   bool is_group_ready_;
   bool is_tenant_ready_;
   int64_t queue_index_; //index in array, INT64_MAX means other
@@ -330,24 +423,24 @@ public:
   ~ObIOHandle();
   ObIOHandle(const ObIOHandle &other);
   ObIOHandle &operator=(const ObIOHandle &other);
-  int set_request(ObIORequest &req);
+  int set_result(ObIOResult &result);
   bool is_empty() const;
   bool is_valid() const;
+  OB_INLINE bool is_finished() const { return nullptr != result_ && result_->is_finished_; }
 
-  int wait(const int64_t timeout_ms);
+  int wait();
   const char *get_buffer();
-  const char *get_physical_buffer();
   int64_t get_data_size() const;
   int64_t get_rt() const;
   int get_fs_errno(int &io_errno) const;
   void reset();
   void cancel();
-  TO_STRING_KV("io_request", to_cstring(req_));
+  TO_STRING_KV("io_result", to_cstring(result_));
 private:
   void estimate();
 
 private:
-  ObIORequest *req_;
+  ObIOResult *result_;
 };
 
 
@@ -391,6 +484,7 @@ public:
   int add_single_group_config(const uint64_t tenant_id, const int64_t group_id, int64_t min_percent, int64_t max_percent, int64_t weight_percent);
   int get_group_config(const uint64_t index, int64_t &min_iops, int64_t &max_iops, int64_t &iops_weight) const;
   int64_t get_all_group_num() const;
+  int64_t get_callback_thread_count() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
   int64_t memory_limit_;
@@ -463,6 +557,131 @@ private:
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_>, &ObPhyQueue::proportion_pos_> ready_heap_;
 };
 
+template <typename T>
+ObIOObjectPool<T>::ObIOObjectPool()
+  : is_inited_(false), obj_size_(0), capacity_(0), free_count_(0), allocator_(nullptr), start_ptr_(nullptr)
+{
+
+}
+
+template <typename T>
+ObIOObjectPool<T>::~ObIOObjectPool()
+{
+  destroy();
+}
+
+template <typename T>
+int ObIOObjectPool<T>::init(const int64_t count, const int64_t size, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    COMMON_LOG(WARN, "init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(count), K(size));
+  } else {
+    obj_size_ = size;
+    allocator_ = &allocator;
+    capacity_ = count;
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(pool_.init(capacity_, allocator_))) {
+    COMMON_LOG(WARN, "fail to init memory pool", K(ret));
+  } else if (OB_ISNULL(start_ptr_ = reinterpret_cast<char *>(allocator_->alloc(capacity_ * size)))){
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "fail to allocate IOobj memory", K(ret), K(capacity_), K(size));
+  } else {
+    void *buf = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < capacity_; ++i) {
+      buf = start_ptr_ + i * size;
+      T *t = nullptr;
+      t = new (reinterpret_cast<T *>(buf)) T;
+      if (OB_FAIL(t->basic_init())) {
+        COMMON_LOG(WARN, "basic init failed", K(ret), K(i));
+      } else if (OB_FAIL(pool_.push(t))) {
+        COMMON_LOG(WARN, "fail to push IOobj block to pool", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    free_count_ = capacity_;
+    is_inited_ = true;
+  } else {
+    destroy();
+  }
+  return ret;
+}
+
+template <typename T>
+void ObIOObjectPool<T>::destroy()
+{
+  is_inited_ = false;
+  free_count_ = 0;
+  pool_.destroy();
+
+  if (nullptr != allocator_) {
+    if (nullptr != start_ptr_) {
+      allocator_->free(start_ptr_);
+      start_ptr_ = nullptr;
+    }
+  }
+  allocator_ = nullptr;
+}
+
+template <typename T>
+int ObIOObjectPool<T>::alloc(T *&ptr)
+{
+  int ret = OB_SUCCESS;
+  ptr = nullptr;
+  T *ret_ptr = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "not init", K(ret));
+  } else if (OB_FAIL(pool_.pop(ret_ptr))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      COMMON_LOG(WARN, "fail to pop IOobj", K(ret), K(capacity_), K(obj_size_));
+    }
+  } else {
+    ATOMIC_DEC(&free_count_);
+    ptr = ret_ptr;
+  }
+  return ret;
+}
+
+template <typename T>
+int ObIOObjectPool<T>::recycle(T *ptr)
+{
+  int ret = OB_SUCCESS;
+  const int64_t idx = ((char*) ptr - start_ptr_) / obj_size_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "not init", K(ret));
+  } else if (nullptr == ptr || idx < 0 || idx >= capacity_) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(idx), KP(ptr));
+  } else {
+    if (OB_FAIL(pool_.push(ptr))) {
+      COMMON_LOG(WARN, "fail to push IOobj", K(ret), K(capacity_), K(obj_size_));
+    } else {
+      ATOMIC_INC(&free_count_);
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+bool ObIOObjectPool<T>::contain(T *ptr)
+{
+  bool bret = (uint64_t) ptr > 0
+      && ((char *)ptr >= start_ptr_)
+      && ((char *)ptr <  start_ptr_ + (capacity_ * obj_size_))
+      && (((char *)ptr - start_ptr_) % obj_size_ == 0);
+  return bret;
+}
 
 } // namespace common
 } // namespace oceanbase

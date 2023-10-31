@@ -72,11 +72,17 @@ int ObExprInterval::calc_result_typeN(ObExprResType &type,
     //set calc type
     common::ObObjType calc_type = types[0].get_type();
 
-    if (calc_type != ObNumberType && calc_type != ObUNumberType)
+    if (calc_type != ObNumberType && calc_type != ObUNumberType && calc_type !=  ObDecimalIntType) {
       calc_type = ObDoubleType;
-
+    }
+    if (calc_type == ObDecimalIntType) {
+      calc_type = ObNumberType;
+    }
     for (int64_t i = 0; i < param_num; ++i) {
       types[i].set_calc_type(calc_type);
+      if (ObDecimalIntType == calc_type) {
+        types[i].set_calc_accuracy(types[0].get_accuracy());
+      }
     }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -160,8 +166,10 @@ int ObExprInterval::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
     // make sure all arg type is same
     for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.arg_cnt_; ++i) {
       const ObObjType &arg_type = rt_expr.args_[i]->datum_meta_.type_;
-      if (!(ObNumberType == arg_type || ObUNumberType == arg_type ||
-            ObDoubleType == arg_type)) {
+      if (!(ObNumberType == arg_type
+            || ObUNumberType == arg_type
+            || ObDecimalIntType == arg_type
+            || ObDoubleType == arg_type)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("all type must be number type or double type", K(ret), K(arg_type), K(i));
       }
@@ -199,7 +207,9 @@ int ObExprInterval::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
       rt_expr.inner_functions_[0] = reinterpret_cast<void*>(
           ObDatumFuncs::get_nullsafe_cmp_func(arg_type, arg_type, default_null_pos(),
                                               CS_TYPE_BINARY, rt_expr.args_[0]->datum_meta_.scale_, false,
-                                              rt_expr.args_[0]->obj_meta_.has_lob_header()));
+                                              rt_expr.args_[0]->obj_meta_.has_lob_header(),
+                                              rt_expr.args_[0]->datum_meta_.precision_,
+                                              rt_expr.args_[0]->datum_meta_.precision_));
       if (OB_ISNULL(rt_expr.inner_functions_[0])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cmp_func is NULL", K(ret), K(arg_type));

@@ -23,7 +23,7 @@
 
 namespace oceanbase
 {
-namespace rootserver 
+namespace rootserver
 {
 class ObPrimaryMajorFreezeService;
 class ObRestoreMajorFreezeService;
@@ -68,7 +68,7 @@ public:
   ObMajorFreezeRequest(const ObSimpleFreezeInfo &info) : info_(info) {}
 
   bool is_valid() const { return info_.is_valid(); }
-  
+
   uint64_t tenant_id() const { return info_.tenant_id_; }
 
   TO_STRING_KV(K_(info));
@@ -97,13 +97,13 @@ struct ObTenantAdminMergeRequest
 public:
   uint64_t tenant_id_;
   ObTenantAdminMergeType type_;
-  ObTenantAdminMergeRequest() 
+  ObTenantAdminMergeRequest()
     : tenant_id_(OB_INVALID_TENANT_ID), type_(ObTenantAdminMergeType::INVALID_TYPE) {}
   ObTenantAdminMergeRequest(const uint64_t tenant_id, const ObTenantAdminMergeType &admin_type)
     : tenant_id_(tenant_id), type_(admin_type) {}
-  
+
   bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; }
-  
+
   uint64_t tenant_id() const { return tenant_id_; }
   ObTenantAdminMergeType get_type() const { return type_; }
 
@@ -171,6 +171,39 @@ private:
   rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service_;
   rootserver::ObRestoreMajorFreezeService *restore_major_freeze_service_;
 };
+
+
+struct ObTabletMajorFreezeRequest
+{
+public:
+  ObTabletMajorFreezeRequest()
+    : tenant_id_(0),
+      ls_id_(),
+      tablet_id_(),
+      is_rebuild_column_group_()
+    {}
+  ~ObTabletMajorFreezeRequest() = default;
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && ls_id_.is_valid() && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  bool is_rebuild_column_group_;
+  OB_UNIS_VERSION(1);
+};
+
+class ObTabletMajorFreezeRpcProxy : public obrpc::ObRpcProxy
+{
+public:
+  DEFINE_TO(ObTabletMajorFreezeRpcProxy);
+
+  RPC_S(PR1 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE,
+        (ObTabletMajorFreezeRequest), ObMajorFreezeResponse);
+};
+
 
 } // namespace obrpc
 } // namespace oceanbase

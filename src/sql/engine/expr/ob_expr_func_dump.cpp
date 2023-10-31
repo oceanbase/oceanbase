@@ -453,6 +453,81 @@ int ObExprFuncDump::calc_interval(const common::ObObj &input,
   return ret;
 }
 
+static int databuff_print_decimalint(
+    const ObDatumMeta datum_meta, const ObDatum &datum,
+    char *buffer, int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+
+  if (ObDecimalIntType != datum_meta.type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not decimal int", K(ret), K(datum_meta));
+  } else {
+    const int16_t precision = datum_meta.precision_;
+    const int16_t scale = datum_meta.scale_;
+    const int32_t int_bytes = datum.get_int_bytes();
+    const ObDecimalInt *decint = datum.get_decimal_int();
+    if (OB_FAIL(databuff_printf(buffer, length, pos,
+                "\"precision=%hd scale=%hd int_bytes=%d items=[",
+                precision, scale, int_bytes))) {
+      LOG_WARN("failed to databuff_printf", K(ret), K(precision), K(scale), K(int_bytes));
+    } else {
+      switch (int_bytes) {
+        case sizeof(int32_t): {
+          if (OB_FAIL(databuff_printf(buffer, length, pos, "%d", *(decint->int32_v_)))) {
+            LOG_WARN("failed to databuff_printf", K(ret), K(*(decint->int32_v_)));
+          }
+          break;
+        }
+        case sizeof(int64_t): {
+          if (OB_FAIL(databuff_printf(buffer, length, pos, "%ld", *(decint->int64_v_)))) {
+            LOG_WARN("failed to databuff_printf", K(ret), K(*(decint->int64_v_)));
+          }
+          break;
+        }
+        case sizeof(int128_t): {
+          for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
+            if (OB_FAIL(databuff_printf(
+                buffer, length, pos, "%lu,", decint->int128_v_->items_[i]))) {
+              LOG_WARN("failed to databuff_printf", K(ret), K(i), K(decint->int128_v_->items_[i]));
+            }
+          }
+          break;
+        }
+        case sizeof(int256_t): {
+          for (int i = 0; OB_SUCC(ret) && i < 4; ++i) {
+            if (OB_FAIL(databuff_printf(
+                buffer, length, pos, "%lu,", decint->int256_v_->items_[i]))) {
+              LOG_WARN("failed to databuff_printf", K(ret), K(i), K(decint->int128_v_->items_[i]));
+            }
+          }
+          break;
+        }
+        case sizeof(int512_t): {
+          for (int i = 0; OB_SUCC(ret) && i < 8; ++i) {
+            if (OB_FAIL(databuff_printf(
+                buffer, length, pos, "%lu,", decint->int512_v_->items_[i]))) {
+              LOG_WARN("failed to databuff_printf", K(ret), K(i), K(decint->int128_v_->items_[i]));
+            }
+          }
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid integer width", K(ret), K(int_bytes));
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(databuff_printf(buffer, length, pos, "]\""))) {
+          LOG_WARN("failed to databuff_printf", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 static int dump_ob_spec(char *buf, int64_t buf_len, int64_t &buf_pos, bool &dumped,
                         const ObExpr &expr, const ObDatum &datum)
 {
@@ -490,6 +565,12 @@ static int dump_ob_spec(char *buf, int64_t buf_len, int64_t &buf_pos, bool &dump
       OZ(databuff_print_obj(buf, buf_len, buf_pos, datum.get_interval_ds()));
       break;
     }
+    case ObDecimalIntType: {
+      if (OB_FAIL(databuff_print_decimalint(expr.datum_meta_, datum, buf, buf_len, buf_pos))) {
+        LOG_WARN("failed to databuff_print_decimalint", K(ret));
+      }
+      break;
+    }
     default: {
       dumped = false;
     }
@@ -522,9 +603,12 @@ int ObExprFuncDump::eval_dump(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       int64_t pos_val = 1;
       int64_t len_val = input->len_;
 
-      if (OB_FAIL(ObExprUtil::get_int_param_val(fmt, fmt_val))
-          || OB_FAIL(ObExprUtil::get_int_param_val(pos, pos_val))
-          || OB_FAIL(ObExprUtil::get_int_param_val(len, len_val))) {
+      if (OB_FAIL(ObExprUtil::get_int_param_val(
+            fmt, expr.arg_cnt_ > 1 && expr.args_[1]->obj_meta_.is_decimal_int(), fmt_val))
+          || OB_FAIL(ObExprUtil::get_int_param_val(
+            pos, expr.arg_cnt_ > 2 && expr.args_[2]->obj_meta_.is_decimal_int(), pos_val))
+          || OB_FAIL(ObExprUtil::get_int_param_val(
+            len, expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int(), len_val))) {
         LOG_WARN("get int parameter value failed", K(ret));
       } else {
         // parameter process same with ObExprFuncDump::calc_params
@@ -587,6 +671,18 @@ int ObExprFuncDump::eval_dump(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
           ObString src_str(0, (int32_t)strlen(nmb_str), const_cast<char *>(nmb_str));
           if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
                       expr, ctx, expr_datum, src_str))) {
+            LOG_WARN("set ASCII result failed", K(ret));
+          }
+          break;
+        }
+        case ObDecimalIntType: {
+          char buf[MAX_DUMP_BUFFER_SIZE] = {0};
+          int64_t buf_pos = 0;
+          if (OB_FAIL(databuff_print_decimalint(
+              expr.args_[0]->datum_meta_, *input, buf, sizeof(buf), buf_pos))) {
+            LOG_WARN("failed to databuff_print_decimalint", K(ret));
+          } else if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
+                             expr, ctx, expr_datum, ObString(buf_pos, buf)))) {
             LOG_WARN("set ASCII result failed", K(ret));
           }
           break;

@@ -6898,7 +6898,8 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
           } else if (param_store.at(param_idx).is_xml_sql_type() ||
                      param_store.at(param_idx).is_extend_xml_type()){
             // do nothing
-          } else if (ob_is_number_tc(param_store.at(param_idx).get_type())) {
+          } else if (ob_is_decimal_int_tc(param_store.at(param_idx).get_type()) ||
+                        ob_is_number_tc(param_store.at(param_idx).get_type())) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("old_expr_type invalid ObLongTextType type", K(ret), K(param_store.at(param_idx).get_type()));
           } else {

@@ -79,6 +79,8 @@ inline int init_sql_expr_static_var()
     SQL_LOG(ERROR, "fail to init ObCharsetUtils", K(ret));
   } else if (OB_FAIL(ObCharset::init_charset())) {
     SQL_LOG(ERROR, "fail to init charset", K(ret));
+  } else if (OB_FAIL(wide::ObDecimalIntConstValue::init_const_values(*allocator, attr))) {
+    SQL_LOG(ERROR, "failed to init ObDecimalIntConstValue", K(ret));
   }
   return ret;
 }

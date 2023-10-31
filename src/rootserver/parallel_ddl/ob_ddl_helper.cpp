@@ -24,6 +24,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::rootserver;
+using namespace oceanbase::transaction::tablelock;
 
 ObDDLHelper::ObLockObjPair::ObLockObjPair()
   : obj_id_(0),

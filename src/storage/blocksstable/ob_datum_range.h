@@ -51,7 +51,6 @@ public:
   OB_INLINE void set_whole_range();
   OB_INLINE bool is_whole_range() const { return start_key_.is_min_rowkey() && end_key_.is_max_rowkey(); }
   OB_INLINE int is_single_rowkey(const ObStorageDatumUtils &datum_utils, bool &is_single) const;
-  OB_INLINE int include_rowkey(const ObDatumRowkey &rowkey, const ObStorageDatumUtils &datum_utils, bool &include);
   OB_INLINE void change_boundary(const ObDatumRowkey &rowkey, bool is_reverse);
   OB_INLINE int from_range(const common::ObStoreRange &range, ObIAllocator &allocator);
   OB_INLINE int from_range(const common::ObNewRange &range, ObIAllocator &allocator);
@@ -81,12 +80,20 @@ struct ObDatumComparor
       const ObStorageDatumUtils &datum_utils,
       int &ret,
       bool reverse = false,
-      bool lower_bound = true)
-    : datum_utils_(datum_utils), ret_(ret), reverse_(reverse), lower_bound_(lower_bound)
+      bool lower_bound = true,
+      bool compare_datum_cnt = true)
+    : datum_utils_(datum_utils), ret_(ret), reverse_(reverse), lower_bound_(lower_bound),
+      compare_datum_cnt_(compare_datum_cnt)
   {}
   ObDatumComparor() = delete;
   ~ObDatumComparor() = default;
   OB_INLINE bool operator()(const T &left, const T &right)
+  {
+    return compare<T>(left, right);
+  }
+private:
+  template <typename DataType>
+  OB_INLINE bool compare(const DataType &left, const DataType &right)
   {
     int &ret = ret_;
     bool bret = false;
@@ -105,14 +112,34 @@ struct ObDatumComparor
     }
     return bret;
   }
+
+  template <>
+  OB_INLINE bool compare<ObDatumRowkey>(const ObDatumRowkey &left, const ObDatumRowkey &right)
+  {
+    int &ret = ret_;
+    bool bret = false;
+    int cmp_ret = 0;
+    if (OB_FAIL(ret)) {
+    } else if (lower_bound_ || reverse_) {
+      if (OB_FAIL(left.compare(right, datum_utils_, cmp_ret, compare_datum_cnt_))) {
+        STORAGE_LOG(WARN, "Failed to compare datum rowkey or range", K(ret), K(left), K(right));
+      } else {
+        bret = reverse_ ? cmp_ret > 0 : cmp_ret < 0;
+      }
+    } else if (OB_FAIL(right.compare(left, datum_utils_, cmp_ret, compare_datum_cnt_))) {
+      STORAGE_LOG(WARN, "Failed to compare datum rowkey or range", K(ret), K(left), K(right));
+    } else {
+      bret = cmp_ret > 0;
+    }
+    return bret;
+  }
 private:
   const ObStorageDatumUtils &datum_utils_;
   int &ret_;
   bool reverse_;
   bool lower_bound_;
+  bool compare_datum_cnt_;
 };
-
-
 
 OB_INLINE void ObDatumRange::reset()
 {
@@ -150,32 +177,6 @@ OB_INLINE int ObDatumRange::is_single_rowkey(const ObStorageDatumUtils &datum_ut
   } else if (start_key_.is_ext_rowkey()) {
   } else if (OB_FAIL(start_key_.equal(end_key_, datum_utils, is_single))) {
     STORAGE_LOG(WARN, "Failed to check datum rowkey equal", K(ret), K(*this));
-  }
-
-  return ret;
-}
-
-OB_INLINE int ObDatumRange::include_rowkey(const ObDatumRowkey &rowkey,
-                                           const ObStorageDatumUtils &datum_utils,
-                                           bool &include)
-{
-  int ret = OB_SUCCESS;
-  include = false;
-
-  if (OB_UNLIKELY(!rowkey.is_valid() || !datum_utils.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to check include rowkey", K(ret), K(rowkey), K(datum_utils));
-  } else {
-    int cmp_ret = 0;
-    if (OB_FAIL(start_key_.compare(rowkey, datum_utils, cmp_ret))) {
-      STORAGE_LOG(WARN, "Failed to do start key compare", K(ret), K(rowkey), K(*this));
-    } else if (cmp_ret > 0 || (cmp_ret == 0 && !border_flag_.inclusive_start())) {
-    } else if (OB_FAIL(end_key_.compare(rowkey, datum_utils, cmp_ret))) {
-      STORAGE_LOG(WARN, "Failed to do start key compare", K(ret), K(rowkey), K(*this));
-    } else if (cmp_ret < 0 || (cmp_ret == 0 && border_flag_.inclusive_end())) {
-      include = true;
-    }
-
   }
 
   return ret;

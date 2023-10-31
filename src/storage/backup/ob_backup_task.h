@@ -20,7 +20,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/backup/ob_archive_struct.h"
 #include "share/ob_ls_id.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/backup/ob_backup_ctx.h"
 #include "storage/backup/ob_backup_index_merger.h"
 #include "storage/backup/ob_backup_index_store.h"
@@ -101,7 +101,6 @@ class ObBackupDagNet : public share::ObIDagNet
 public:
   explicit ObBackupDagNet(const ObBackupDagNetSubType &sub_type);
   virtual ~ObBackupDagNet();
-  bool is_ha_dag_net() const override { return true; }
   ObBackupDagNetSubType get_sub_type() const { return sub_type_; };
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(sub_type));
 protected:
@@ -204,7 +203,6 @@ private:
   share::SCN compl_end_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDagNet);
 };
-
 
 class ObLSBackupMetaDag : public share::ObIDag {
 public:
@@ -562,6 +560,10 @@ private:
   int backup_secondary_metas_(ObBackupTabletStat *tablet_stat);
   int may_fill_reused_backup_items_(
       const common::ObTabletID &tablet_id, ObBackupTabletStat *tablet_stat);
+  int check_and_mark_item_reused_(
+      storage::ObITable *table_ptr,
+      storage::ObTabletHandle &tablet_handle,
+      ObBackupTabletStat *tablet_stat);
   int check_macro_block_need_reuse_when_recover_(const blocksstable::ObLogicMacroBlockId &logic_id,
       const common::ObArray<blocksstable::ObLogicMacroBlockId> &logic_id_list, bool &need_reuse);
   int release_tablet_handles_(ObBackupTabletStat *tablet_stat);

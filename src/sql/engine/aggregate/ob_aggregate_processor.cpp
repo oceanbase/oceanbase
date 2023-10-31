@@ -27,6 +27,7 @@
 #include "sql/engine/sort/ob_sort_op_impl.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/aggregate/ob_aggregate_util.h"
 #include "sql/engine/basic/ob_material_op_impl.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
@@ -254,30 +255,66 @@ int ObAggregateProcessor::AggrCell::collect_result(
         K(aggr_info.is_implicit_first_aggr_), K(tiny_num_int_));
     }
   } else if (is_tiny_num_used_ && (ObIntTC == tc || ObUIntTC == tc)) {
-    ObNumStackAllocator<2> tmp_alloc;
-    ObNumber result_nmb;
-    const bool strict_mode = false; //this is tmp allocator, so we can ues non-strinct mode
-    ObNumber right_nmb;
-    if (ObIntTC == tc) {
-      if (OB_FAIL(right_nmb.from(tiny_num_int_, tmp_alloc))) {
-        LOG_WARN("create number from int failed", K(ret), K(right_nmb), K(tc));
+    if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+      const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+      if (iter_result_.is_null()) {
+        if (ObIntTC == tc && OB_FAIL(DecIntAggFuncCtx::int_to_decimalint(tiny_num_int_,
+                                                                         precision, result))) {
+          LOG_WARN("int64 to decimal int failed", K(ret), K(tiny_num_int_), K(precision));
+        } else if (ObUIntTC == tc && OB_FAIL(DecIntAggFuncCtx::int_to_decimalint(tiny_num_uint_,
+                                                                                 precision,
+                                                                                 result))) {
+          LOG_WARN("int64 to decimal int failed", K(ret), K(tiny_num_uint_), K(precision));
+        }
+      } else {
+        // need add iter_result_
+        if (ObIntTC == tc
+              && OB_FAIL(DecIntAggFuncCtx::add_int(iter_result_, precision, tiny_num_int_))) {
+          LOG_WARN("int64 to decimal int failed", K(ret), K(tiny_num_int_), K(precision));
+        } else if (ObUIntTC == tc
+                && OB_FAIL(DecIntAggFuncCtx::add_int(iter_result_, precision, tiny_num_uint_))) {
+          LOG_WARN("int64 to decimal int failed", K(ret), K(tiny_num_uint_), K(precision));
+        } else {
+          result.set_decimal_int(iter_result_.get_decimal_int(), iter_result_.len_);
+          tiny_num_uint_ = 0;
+        }
       }
     } else {
-      if (OB_FAIL(right_nmb.from(tiny_num_uint_, tmp_alloc))) {
-        LOG_WARN("create number from int failed", K(ret), K(right_nmb), K(tc));
+      ObNumStackAllocator<2> tmp_alloc;
+      ObNumber result_nmb;
+      const bool strict_mode = false; //this is tmp allocator, so we can ues non-strinct mode
+      ObNumber right_nmb;
+      if (ObIntTC == tc) {
+        if (OB_FAIL(right_nmb.from(tiny_num_int_, tmp_alloc))) {
+          LOG_WARN("create number from int failed", K(ret), K(right_nmb), K(tc));
+        }
+      } else {
+        if (OB_FAIL(right_nmb.from(tiny_num_uint_, tmp_alloc))) {
+          LOG_WARN("create number from int failed", K(ret), K(right_nmb), K(tc));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (iter_result_.is_null()) {
+          result.set_number(right_nmb);
+        } else {
+          ObNumber left_nmb(iter_result_.get_number());
+          if (OB_FAIL(left_nmb.add_v3(right_nmb, result_nmb, tmp_alloc, strict_mode))) {
+            LOG_WARN("number add failed", K(ret), K(left_nmb), K(right_nmb));
+          } else {
+            result.set_number(result_nmb);
+          }
+        }
       }
     }
-
-    if (OB_SUCC(ret)) {
-      if (iter_result_.is_null()) {
-        result.set_number(right_nmb);
-      } else {
-        ObNumber left_nmb(iter_result_.get_number());
-        if (OB_FAIL(left_nmb.add_v3(right_nmb, result_nmb, tmp_alloc, strict_mode))) {
-          LOG_WARN("number add failed", K(ret), K(left_nmb), K(right_nmb));
-        } else {
-          result.set_number(result_nmb);
-        }
+  } else if (ObDecimalIntTC == tc && lib::is_mysql_mode()) {
+    if (OB_UNLIKELY(iter_result_.is_null())) {
+      result.set_null();
+    } else {
+      result.set_decimal_int(iter_result_.get_decimal_int(), iter_result_.len_);
+      if (OB_UNLIKELY(aggr_info.expr_->datum_meta_.precision_ >=
+            OB_MAX_DECIMAL_POSSIBLE_PRECISION)) {
+        check_mysql_decimal_int_overflow(result); // no ret
       }
     }
   } else {
@@ -854,7 +891,6 @@ int ObAggregateProcessor::init()
         has_extra_ |= aggr_info.has_distinct_;
         has_extra_ |= need_extra_info(aggr_info.get_expr_type());
       }
-
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
         // ObAggregateProcessor::init would be invoked many times under groupby rescan
@@ -883,6 +919,34 @@ int ObAggregateProcessor::init()
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else {
+            aggr_func_ctxs_.at(i) = ctx;
+          }
+        }
+      } else if (T_FUN_SUM == aggr_info.get_expr_type() && !aggr_info.is_implicit_first_aggr()
+                   && OB_ISNULL(aggr_func_ctxs_.at(i))) {
+        const bool is_decint_type_arg = ob_is_decimal_int_tc(aggr_info.get_first_child_type());
+        const bool is_decint_type_res = ob_is_int_uint_tc(aggr_info.get_first_child_type())
+                     && ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_);
+        if (is_decint_type_arg || is_decint_type_res) {
+          DecIntAggFuncCtx *ctx = OB_NEWx(DecIntAggFuncCtx, (&eval_ctx_.exec_ctx_.get_allocator()));
+          if (NULL == ctx) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (is_decint_type_arg) {
+            ret = ctx->init(aggr_info, eval_ctx_.max_batch_size_);
+          } else { // the args type is int/uint, and result type is decimal int
+            const int64_t res_prec = aggr_info.expr_->datum_meta_.precision_;
+            const int res_type = static_cast<int>(get_decimalint_type(res_prec));
+            if (OB_UNLIKELY(res_prec <= MAX_PRECISION_DECIMAL_INT_64
+                              || res_prec > MAX_PRECISION_DECIMAL_INT_256)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected result precision", K(ret), K(res_prec));
+            } else if (OB_ISNULL(ctx->merge_func = DEC_INT_MERGE_FUNCS[res_type][0])) {// for rollup
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("func is null", K(ret), K(res_type));
+            }
+          }
+          if (OB_SUCC(ret)) {
             aggr_func_ctxs_.at(i) = ctx;
           }
         }
@@ -2566,6 +2630,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         LOG_WARN("failed to init topk fre histogram", K(ret));
       } else if (extra->topk_fre_hist_.is_need_merge_topk_hist()) {
         ObObj obj;
+        ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
@@ -3024,6 +3089,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         LOG_WARN("get unexpected error", K(ret), K(stored_row.cnt_), K(aggr_info));
       } else if (extra->topk_fre_hist_.is_need_merge_topk_hist()) {
         ObObj obj;
+        ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
@@ -4303,6 +4369,23 @@ int ObAggregateProcessor::prepare_add_calc(
       ret = clone_aggr_cell(aggr_cell, first_value, true);
       break;
     }
+    case ObDecimalIntTC: {
+      DecIntAggFuncCtx *ctx = nullptr;
+      if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ctx is null", K(ret));
+      } else {
+        const int64_t need_size = sizeof(int64_t) * 2 + sizeof(int512_t);
+        const int16_t scale = aggr_info.get_first_child_datum_scale();
+        if (OB_FAIL(clone_cell(aggr_cell, need_size, nullptr))) {
+          LOG_WARN("fail to clone cell", K(ret));
+        } else if (OB_FAIL(ctx->store_func(aggr_cell.get_iter_result(),
+                                           first_value.get_decimal_int(), scale))) {
+          LOG_WARN("fail to store decimal int", K(ret));
+        }
+      }
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("bot support now", K(column_tc));
@@ -4327,21 +4410,26 @@ int ObAggregateProcessor::add_calc(
       int64_t sum_int = left_int + right_int;
       if (ObExprAdd::is_int_int_out_of_range(left_int, right_int, sum_int)) {
         LOG_DEBUG("int64_t add overflow, will use number", K(left_int), K(right_int));
-        char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-        ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-        ObNumber result_nmb;
-        if (!result_datum.is_null()) {
-          ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
-                                  result_datum.get_number());
-          result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+        if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+          ret = calc_overflow_res_to_decimal_int<int64_t>(result_datum, aggr_cell, precision,
+                                                          left_int, right_int);
+        } else { // number
+          char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+          ObNumber result_nmb;
+          if (!result_datum.is_null()) {
+            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
+                                    result_datum.get_number());
+            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          }
+          if (OB_FAIL(result_nmb.add(left_int, right_int, result_nmb, allocator))) {
+            LOG_WARN("number add failed", K(ret));
+          } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
+            LOG_WARN("clone_number_cell failed", K(ret));
+          }
         }
-        if (OB_FAIL(result_nmb.add(left_int, right_int, result_nmb, allocator))) {
-          LOG_WARN("number add failed", K(ret));
-        } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
-          LOG_WARN("clone_number_cell failed", K(ret));
-        } else {
-          aggr_cell.set_tiny_num_int(0);
-        }
+        aggr_cell.set_tiny_num_int(0);
       } else {
         LOG_DEBUG("int64_t add does not overflow", K(left_int), K(right_int), K(sum_int));
         aggr_cell.set_tiny_num_int(sum_int);
@@ -4355,21 +4443,26 @@ int ObAggregateProcessor::add_calc(
       uint64_t sum_uint = left_uint + right_uint;
       if (ObExprAdd::is_uint_uint_out_of_range(left_uint, right_uint, sum_uint)) {
         LOG_DEBUG("uint64_t add overflow, will use number", K(left_uint), K(right_uint));
-        char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-        ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-        ObNumber result_nmb;
-        if (!result_datum.is_null()) {
-          ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
-                                          result_datum.get_number());
-          result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+        if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+          ret = calc_overflow_res_to_decimal_int<uint64_t>(result_datum, aggr_cell, precision,
+                                                           left_uint, right_uint);
+        } else { // number
+          char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+          ObNumber result_nmb;
+          if (!result_datum.is_null()) {
+            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
+                                            result_datum.get_number());
+            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          }
+          if (OB_FAIL(result_nmb.add(left_uint, right_uint, result_nmb, allocator))) {
+            LOG_WARN("number add failed", K(ret));
+          } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
+            LOG_WARN("clone_number_cell failed", K(ret));
+          }
         }
-        if (OB_FAIL(result_nmb.add(left_uint, right_uint, result_nmb, allocator))) {
-          LOG_WARN("number add failed", K(ret));
-        } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
-          LOG_WARN("clone_number_cell failed", K(ret));
-        } else {
-          aggr_cell.set_tiny_num_uint(0);
-        }
+        aggr_cell.set_tiny_num_uint(0);
       } else {
         LOG_DEBUG("uint64_t add does not overflow", K(left_uint), K(right_uint), K(sum_uint));
         aggr_cell.set_tiny_num_uint(sum_uint);
@@ -4430,9 +4523,55 @@ int ObAggregateProcessor::add_calc(
       }
       break;
     }
+    case ObDecimalIntTC: {
+      DecIntAggFuncCtx *ctx = nullptr;
+      const int16_t scale = aggr_info.get_first_child_datum_scale();
+      if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ctx is null", K(ret));
+      } else if (OB_UNLIKELY(result_datum.is_null())) {
+        const int64_t need_size = sizeof(int64_t) * 2 + sizeof(int512_t);
+        if (OB_FAIL(clone_cell(aggr_cell, need_size, nullptr))) {
+          LOG_WARN("fail to clone cell", K(ret));
+        } else if (OB_FAIL(ctx->store_func(result_datum, iter_value.get_decimal_int(), scale))) {
+          LOG_WARN("fail to store decimal int", K(ret));
+        }
+      } else if (OB_FAIL(ctx->add_func(result_datum, iter_value.get_decimal_int(), scale))) {
+        LOG_WARN("fail to add decimal int", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(column_tc), K(ret));
+    }
+  }
+  return ret;
+}
+
+template<typename T, bool IS_ADD>
+int ObAggregateProcessor::calc_overflow_res_to_decimal_int(ObDatum &result_datum,
+                                                           AggrCell &aggr_cell,
+                                                           const int16_t precision,
+                                                           const T val1,
+                                                           const T val2)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(result_datum.is_null())) {
+    // init first datum for agg cell
+    const int64_t need_size = sizeof(int64_t) * 2 + sizeof(int256_t);
+    if (OB_FAIL(clone_cell(aggr_cell, need_size, nullptr))) {
+      LOG_WARN("fail to clone cell", K(ret));
+    } else {
+      const char *buf = aggr_cell.get_buf() + 2 * sizeof(int64_t);
+      MEMSET(const_cast<char *> (buf), 0, sizeof(int256_t)); // set to zero
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (IS_ADD) {
+      ret = DecIntAggFuncCtx::add_int(result_datum, precision, val1, val2);
+    } else {
+      ret = DecIntAggFuncCtx::sub_int(result_datum, precision, val1);
     }
   }
   return ret;
@@ -4455,25 +4594,31 @@ int ObAggregateProcessor::sub_calc(
       int64_t dif_int = left_int - right_int;
       if (ObExprMinus::is_int_int_out_of_range(left_int, right_int, dif_int)) {
         LOG_DEBUG("int64_t sub overflow, will use number", K(left_int), K(right_int));
-        char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-        char int_buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-        ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-        ObDataBuffer int_allocator(int_buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-        ObNumber result_nmb;
-        ObNumber right_num;
-        if (!result_datum.is_null()) {
-          ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
-                                  result_datum.get_number());
-          result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
-        }
-        if (OB_FAIL(right_num.from(right_int, int_allocator))) {
-          LOG_WARN("number convert failed", K(ret));
-        } else if (OB_FAIL(result_nmb.sub_v3(right_num, result_nmb, allocator))) {
-          LOG_WARN("number sub failed", K(ret));
-        } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
-          LOG_WARN("clone_number_cell failed", K(ret));
-        } else {
-          // maintain tiny num int
+        if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+          ret = calc_overflow_res_to_decimal_int<int64_t, false>(result_datum, aggr_cell, precision,
+                                                                 right_int);
+        } else { // number
+          char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+          char int_buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+          ObDataBuffer int_allocator(int_buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+          ObNumber result_nmb;
+          ObNumber right_num;
+          if (!result_datum.is_null()) {
+            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
+                                    result_datum.get_number());
+            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          }
+          if (OB_FAIL(right_num.from(right_int, int_allocator))) {
+            LOG_WARN("number convert failed", K(ret));
+          } else if (OB_FAIL(result_nmb.sub_v3(right_num, result_nmb, allocator))) {
+            LOG_WARN("number sub failed", K(ret));
+          } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
+            LOG_WARN("clone_number_cell failed", K(ret));
+          } else {
+            // maintain tiny num int
+          }
         }
       } else {
         LOG_DEBUG("int64_t sub does not overflow", K(left_int), K(right_int), K(dif_int));
@@ -4491,31 +4636,37 @@ int ObAggregateProcessor::sub_calc(
       uint64_t dif_uint = left_uint - right_uint;
       if (ObExprMinus::is_uint_uint_out_of_range(left_uint, right_uint, dif_uint)) {
         LOG_DEBUG("uint64_t sub overflow, will use number", K(left_uint), K(right_uint));
-        char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-        char uint_buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-        ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-        ObDataBuffer uint_allocator(uint_buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-        const bool strict_mode = false;
-        ObNumber result_nmb;
-        ObNumber uint_max_nmb;
-        if (OB_UNLIKELY(result_datum.is_null())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("uint out of range", K(ret));
-        } else {
-          ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
-                                          result_datum.get_number());
-          result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+        if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+          const uint64_t uint_max = (uint64_t)ULONG_MAX;
+          ret = calc_overflow_res_to_decimal_int<uint64_t, false>(result_datum, aggr_cell,
+                                                                  precision, uint_max);
+        } else { // number
+          char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+          char uint_buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+          ObDataBuffer uint_allocator(uint_buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+          const bool strict_mode = false;
+          ObNumber result_nmb;
+          ObNumber uint_max_nmb;
+          if (OB_UNLIKELY(result_datum.is_null())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("uint out of range", K(ret));
+          } else {
+            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
+                                            result_datum.get_number());
+            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(uint_max_nmb.from((uint64_t)ULONG_MAX, uint_allocator))) {
+            LOG_WARN("number convert failed", K(ret));
+          } else if (OB_FAIL(result_nmb.sub_v3(uint_max_nmb, result_nmb, allocator, strict_mode))) {
+            LOG_WARN("number sub failed", K(ret));
+          } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
+            LOG_WARN("clone_number_cell failed", K(ret));
+          }
         }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(uint_max_nmb.from((uint64_t)ULONG_MAX, uint_allocator))) {
-          LOG_WARN("number convert failed", K(ret));
-        } else if (OB_FAIL(result_nmb.sub_v3(uint_max_nmb, result_nmb, allocator, strict_mode))) {
-          LOG_WARN("number sub failed", K(ret));
-        } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
-          LOG_WARN("clone_number_cell failed", K(ret));
-        } else {
-          aggr_cell.set_tiny_num_uint((uint64_t)ULONG_MAX - right_uint + left_uint);
-        }
+        aggr_cell.set_tiny_num_uint((uint64_t)ULONG_MAX - right_uint + left_uint);
       } else {
         LOG_DEBUG("uint64_t sub does not overflow", K(left_uint), K(right_uint), K(dif_uint));
         aggr_cell.set_tiny_num_uint(dif_uint);
@@ -4543,204 +4694,22 @@ int ObAggregateProcessor::sub_calc(
       }
       break;
     }
+    case ObDecimalIntTC: {
+      DecIntAggFuncCtx *ctx = nullptr;
+      const int16_t scale = aggr_info.get_first_child_datum_scale();
+      if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ctx is null", K(ret));
+      } else if (OB_FAIL(ctx->sub_func(result_datum, iter_value.get_decimal_int(), scale))) {
+        LOG_WARN("fail to add decimal int", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(column_tc), K(ret));
     }
   }
-  return ret;
-}
-
-template <typename T>
-int ObAggregateProcessor::number_accumulator(
-    const ObDatumVector &src,
-    ObDataBuffer &allocator1,
-    ObDataBuffer &allocator2,
-    ObNumber &result,
-    uint32_t *sum_digits,
-    bool &all_skip,
-    const T &selector)
-{
-  int ret = OB_SUCCESS;
-  ObNumber res;
-  ObNumber sum;
-  uint32_t normal_sum_path_counter = 0;
-  uint32_t fast_sum_path_counter = 0;
-  int64_t sum_frag_val = 0;
-  int64_t sum_int_val = 0;
-  // TODO zuojiao.hzj: add new number accumulator to avoid memory allocate
-  char buf_ori_result[ObNumber::MAX_CALC_BYTE_LEN];
-  ObDataBuffer allocator_ori_result(buf_ori_result, ObNumber::MAX_CALC_BYTE_LEN);
-  ObNumber ori_result;
-  bool may_overflow = false;
-  bool ori_result_copied = false;
-  uint16_t i = 0; // row num in a batch
-  for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
-    i = selector.get_batch_index(it);
-    if (src.at(i)->is_null()) {
-      continue;
-    }
-    all_skip = false;
-    ObNumber src_num(src.at(i)->get_number());
-    if (OB_UNLIKELY(src_num.is_zero())) {
-      // do nothing
-    } else if (src_num.d_.is_2d_positive_decimal()) {
-      sum_frag_val += src_num.get_digits()[1];
-      sum_int_val += src_num.get_digits()[0];
-      ++fast_sum_path_counter;
-    } else if (src_num.d_.is_1d_positive_fragment()) {
-      sum_frag_val += src_num.get_digits()[0];
-      ++fast_sum_path_counter;
-    } else if (src_num.d_.is_1d_positive_integer()) {
-      sum_int_val += src_num.get_digits()[0];
-      ++fast_sum_path_counter;
-    } else if (src_num.d_.is_2d_negative_decimal()) {
-      sum_frag_val -= src_num.get_digits()[1];
-      sum_int_val -= src_num.get_digits()[0];
-      ++fast_sum_path_counter;
-    } else if (src_num.d_.is_1d_negative_fragment()) {
-      sum_frag_val -= src_num.get_digits()[0];
-      ++fast_sum_path_counter;
-    } else if (src_num.d_.is_1d_negative_integer()) {
-      sum_int_val -= src_num.get_digits()[0];
-      ++fast_sum_path_counter;
-    } else {
-      if (OB_UNLIKELY(!ori_result_copied)) {
-        // copy result to ori_result to fall back
-        MEMSET(buf_ori_result, 0, sizeof(char) * ObNumber::MAX_CALC_BYTE_LEN);
-        if (OB_FAIL(ori_result.deep_copy_v3(result, allocator_ori_result))) {
-          LOG_WARN("deep copy number failed", K(ret));
-        } else {
-          ori_result_copied = true;
-        }
-      }
-      if (OB_UNLIKELY(src_num.fast_sum_agg_may_overflow() && fast_sum_path_counter > 0)) {
-        may_overflow = true;
-        LOG_DEBUG("number accumulator may overflow, fall back to normal path",
-                  K(src_num), K(sum_int_val), K(sum_frag_val));
-        break;
-      } else { // normal path
-        ObDataBuffer &allocator = (normal_sum_path_counter % 2 == 0) ? allocator1 : allocator2;
-        allocator.free();
-        ret = result.add_v3(src_num, res, allocator, true, true);
-        result = res;
-        ++normal_sum_path_counter;
-      }
-    }
-  }
-  if (OB_UNLIKELY(may_overflow)) {
-    fast_sum_path_counter = 0;
-    normal_sum_path_counter = 0;
-    result = ori_result;
-    for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
-      i = selector.get_batch_index(it);
-      if (src.at(i)->is_null()) {
-        continue;
-      }
-      ObNumber src_num(src.at(i)->get_number());
-      if (OB_UNLIKELY(src_num.is_zero())) {
-        // do nothing
-      } else {
-        ObDataBuffer &allocator = (normal_sum_path_counter % 2 == 0) ? allocator1 : allocator2;
-        allocator.free();
-        ret = result.add_v3(src_num, res, allocator, true, true);
-        result = res;
-        normal_sum_path_counter++;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      result.assign(res.d_.desc_, res.get_digits());
-    }
-  } else if (OB_SUCC(ret) && !all_skip) {
-    // construct sum result into number format
-    const int64_t base = ObNumber::BASE;
-    int64_t carry = 0;
-    if (abs(sum_frag_val) >= base) {
-      sum_int_val += sum_frag_val / base; // eg : (-21) / 10 = -2
-      sum_frag_val = sum_frag_val % base; // eg : (-21) % 10 = -1
-    }
-    if (sum_int_val > 0 && sum_frag_val < 0) {
-      sum_int_val -= 1;
-      sum_frag_val += base;
-    } else if (sum_int_val < 0 && sum_frag_val > 0) {
-      sum_int_val += 1;
-      sum_frag_val -= base;
-    }
-    if (abs(sum_int_val) >= base) {
-      carry = sum_int_val / base; // eg : (-21) / 10 = -2
-      sum_int_val = sum_int_val % base; // eg : (-21) % 10 = -1
-    }
-    if (0 == carry && 0 == sum_int_val && 0 == sum_frag_val) { // sum is zero
-      sum.set_zero();
-    } else if (carry >= 0 && sum_int_val >= 0 && sum_frag_val >= 0) { // sum is positive
-      sum.d_.desc_ = NUM_DESC_2DIGITS_POSITIVE_DECIMAL;
-      sum.d_.len_ -= (0 == sum_frag_val);
-      if (carry > 0) {
-        ++sum.d_.exp_;
-        ++sum.d_.len_;
-        sum.d_.len_ -= (sum_int_val == 0 && sum_frag_val == 0);
-        // performance critical: set the tailing digits even they are 0, no overflow risk
-        sum_digits[0] = static_cast<uint32_t>(carry);
-        sum_digits[1] = static_cast<uint32_t>(sum_int_val);
-        sum_digits[2] = static_cast<uint32_t>(sum_frag_val);
-      } else { // 0 == carry
-        if (0 == sum_int_val) {
-          --sum.d_.exp_;
-          --sum.d_.len_;
-          sum_digits[0] = static_cast<uint32_t>(sum_frag_val);
-        } else {
-          sum_digits[0] = static_cast<uint32_t>(sum_int_val);
-          sum_digits[1] = static_cast<uint32_t>(sum_frag_val);
-        }
-      }
-    } else { // sum is negative
-      sum.d_.desc_ = NUM_DESC_2DIGITS_NEGATIVE_DECIMAL;
-      sum.d_.len_ -= (0 == sum_frag_val);
-      // get abs of carry/sum_int_val/sum_frag_val
-      carry = -carry;
-      sum_int_val = -sum_int_val;
-      sum_frag_val = -sum_frag_val;
-      if (carry > 0) {
-        --sum.d_.exp_; // notice here : different from postive
-        ++sum.d_.len_;
-        sum.d_.len_ -= (sum_int_val == 0 && sum_frag_val == 0);
-        // performance critical: set the tailing digits even they are 0, no overflow risk
-        sum_digits[0] = static_cast<uint32_t>(carry);
-        sum_digits[1] = static_cast<uint32_t>(sum_int_val);
-        sum_digits[2] = static_cast<uint32_t>(sum_frag_val);
-      } else { // 0 == carry
-        if (0 == sum_int_val) {
-          ++sum.d_.exp_; // notice here : different from postive
-          --sum.d_.len_;
-          sum_digits[0] = static_cast<uint32_t>(sum_frag_val);
-        } else {
-          sum_digits[0] = static_cast<uint32_t>(sum_int_val);
-          sum_digits[1] = static_cast<uint32_t>(sum_frag_val);
-        }
-      }
-    }
-    sum.assign(sum.d_.desc_, sum_digits);
-    if (normal_sum_path_counter == 0 && result.is_zero()) {
-      // all aggr result is filled in sum, just return sum
-      if (sum.d_.len_ == 0) {
-        result.set_zero();
-      } else {
-        result.assign(sum.d_.desc_, sum_digits);
-      }
-    } else if (sum.d_.len_ == 0) { // do nothing
-    } else { // merge sum into aggr result
-      ObDataBuffer &allocator = (normal_sum_path_counter % 2 == 0) ? allocator1 : allocator2;
-      allocator.free();
-      if (OB_FAIL(result.add_v3(sum, res, allocator, true, true))) {
-        LOG_WARN("number_accumulator sum error", K(ret), K(sum), K(result));
-      } else {
-        result.assign(res.d_.desc_, res.get_digits());
-      }
-    }
-  }
-
-  LOG_DEBUG("number_accumulator done", K(ret), K(result),
-            K(normal_sum_path_counter), K(fast_sum_path_counter));
   return ret;
 }
 
@@ -5053,19 +5022,25 @@ int ObAggregateProcessor::add_calc_batch(
         ObNumber result_nmb;
         if (ObExprAdd::is_int_int_out_of_range(left_int, right_int, sum_int)) {
           LOG_DEBUG("int64_t add overflow, will use number", K(left_int), K(right_int));
-          if (!result_datum.is_null()) {
-            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
-                                    result_datum.get_number());
-            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+            const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+            ret = calc_overflow_res_to_decimal_int<int64_t>(result_datum, aggr_cell, precision,
+                                                            left_int, right_int);
+          } else { // number
+            if (!result_datum.is_null()) {
+              ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
+                                      result_datum.get_number());
+              result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+            }
+            if (OB_FAIL(result_nmb.add(left_int, right_int, result_nmb, allocator))) {
+              LOG_WARN("number add failed", K(ret));
+            } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
+              LOG_WARN("clone_number_cell failed", K(ret));
+            } else {
+              allocator.free();
+            }
           }
-          if (OB_FAIL(result_nmb.add(left_int, right_int, result_nmb, allocator))) {
-            LOG_WARN("number add failed", K(ret));
-          } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
-            LOG_WARN("clone_number_cell failed", K(ret));
-          } else {
-            aggr_cell.set_tiny_num_int(0);
-            allocator.free();
-          }
+          aggr_cell.set_tiny_num_int(0);
         } else {
           LOG_DEBUG("int64_t add does not overflow", K(left_int), K(right_int), K(sum_int), K(i));
           aggr_cell.set_tiny_num_int(sum_int);
@@ -5092,19 +5067,25 @@ int ObAggregateProcessor::add_calc_batch(
         sum_uint   = left_uint + right_uint;
         if (ObExprAdd::is_uint_uint_out_of_range(left_uint, right_uint, sum_uint)) {
           LOG_DEBUG("uint64_t add overflow, will use number", K(left_uint), K(right_uint));
-          if (!result_datum.is_null()) {
-            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
-                                            result_datum.get_number());
-            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+            const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+            ret = calc_overflow_res_to_decimal_int<uint64_t>(result_datum, aggr_cell, precision,
+                                                             left_uint, right_uint);
+          } else { // number
+            if (!result_datum.is_null()) {
+              ObCompactNumber &cnum = const_cast<ObCompactNumber &>(
+                                              result_datum.get_number());
+              result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+            }
+            if (OB_FAIL(result_nmb.add(left_uint, right_uint, result_nmb, allocator))) {
+              LOG_WARN("number add failed", K(ret));
+            } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
+              LOG_WARN("clone_number_cell failed", K(ret));
+            } else {
+              allocator.free();
+            }
           }
-          if (OB_FAIL(result_nmb.add(left_uint, right_uint, result_nmb, allocator))) {
-            LOG_WARN("number add failed", K(ret));
-          } else if (OB_FAIL(clone_number_cell(result_nmb, aggr_cell))) {
-            LOG_WARN("clone_number_cell failed", K(ret));
-          } else {
-            aggr_cell.set_tiny_num_uint(0);
-            allocator.free();
-          }
+          aggr_cell.set_tiny_num_uint(0);
         } else {
           LOG_DEBUG("uint64_t add does not overflow", K(left_uint), K(right_uint), K(sum_uint));
           aggr_cell.set_tiny_num_uint(sum_uint);
@@ -5186,6 +5167,18 @@ int ObAggregateProcessor::add_calc_batch(
       LOG_DEBUG("number result", K(result_nmb));
       break;
     }
+    case ObDecimalIntTC: {
+      DecIntAggFuncCtx *ctx = nullptr;
+      const int16_t scale = aggr_info.get_first_child_datum_scale();
+      if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ctx is null", K(ret));
+      } else if (OB_FAIL(ctx->add_batch_func[T::DECIMAL_INT_BATCH_FUNC_IDX](
+          result_datum, this, aggr_cell, src, &selector, scale))) {
+        LOG_WARN("fail to add batch decimal int", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(column_tc), K(ret));
@@ -5255,7 +5248,7 @@ int ObAggregateProcessor::bitwise_calc_batch(
   return ret;
 }
 
-int ObAggregateProcessor::rollup_add_number_calc(ObDatum &aggr_result, AggrCell &aggr_cell)
+int ObAggregateProcessor::rollup_add_number_calc(const ObDatum &aggr_result, AggrCell &aggr_cell)
 {
   int ret = OB_SUCCESS;
   ObDatum &rollup_result = aggr_cell.get_iter_result();
@@ -5281,12 +5274,34 @@ int ObAggregateProcessor::rollup_add_number_calc(ObDatum &aggr_result, AggrCell 
   return ret;
 }
 
+int ObAggregateProcessor::rollup_add_decimalint_calc(const ObDatum &aggr_result,
+                                                     AggrCell &rollup_cell,
+                                                     const ObAggrInfo &aggr_info)
+{
+  int ret = OB_SUCCESS;
+  ObDatum &rollup_result = rollup_cell.get_iter_result();
+  DecIntAggFuncCtx *ctx = nullptr;
+  if (aggr_result.is_null()) {
+    // do nothing
+  } else if (rollup_result.is_null()) {
+    if (OB_FAIL(clone_aggr_cell(rollup_cell, aggr_result, false))) {
+      LOG_WARN("clone_cell failed", K(ret), K(aggr_result));
+    }
+  } else if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret));
+  } else if (OB_FAIL(ctx->merge_func(rollup_result, aggr_result.get_decimal_int(), 0 /*unused*/))) {
+    LOG_WARN("fail to merge result", K(ret));
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::rollup_add_calc(
-  AggrCell &aggr_cell, AggrCell &rollup_cell, const ObAggrInfo &aggr_info)
+  const AggrCell &aggr_cell, AggrCell &rollup_cell, const ObAggrInfo &aggr_info)
 {
   int ret = OB_SUCCESS;
   const ObObjTypeClass column_tc = ob_obj_type_class(aggr_info.get_first_child_type());
-  ObDatum &aggr_result = aggr_cell.get_iter_result();
+  const ObDatum &aggr_result = aggr_cell.get_iter_result();
   ObDatum &rollup_result = rollup_cell.get_iter_result();
   switch (column_tc) {
     case ObIntTC: {
@@ -5296,20 +5311,25 @@ int ObAggregateProcessor::rollup_add_calc(
         int64_t sum_int = left_int + right_int;
         if (ObExprAdd::is_int_int_out_of_range(left_int, right_int, sum_int)) {
           LOG_DEBUG("int64_t add overflow, will use number", K(left_int), K(right_int));
-          char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-          ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-          ObNumber result_nmb;
-          if (!rollup_result.is_null()) {
-            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(rollup_result.get_number());
-            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+            const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+            ret = calc_overflow_res_to_decimal_int<int64_t>(rollup_result, rollup_cell, precision,
+                                                            left_int, right_int);
+          } else { // number
+            char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+            ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+            ObNumber result_nmb;
+            if (!rollup_result.is_null()) {
+              ObCompactNumber &cnum = const_cast<ObCompactNumber &>(rollup_result.get_number());
+              result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+            }
+            if (OB_FAIL(result_nmb.add(left_int, right_int, result_nmb, allocator))) {
+              LOG_WARN("number add failed", K(ret));
+            } else if (OB_FAIL(clone_number_cell(result_nmb, rollup_cell))) {
+              LOG_WARN("clone_number_cell failed", K(ret));
+            }
           }
-          if (OB_FAIL(result_nmb.add(left_int, right_int, result_nmb, allocator))) {
-            LOG_WARN("number add failed", K(ret));
-          } else if (OB_FAIL(clone_number_cell(result_nmb, rollup_cell))) {
-            LOG_WARN("clone_number_cell failed", K(ret));
-          } else {
-            rollup_cell.set_tiny_num_int(0);
-          }
+          rollup_cell.set_tiny_num_int(0);
         } else {
           LOG_DEBUG("int64_t add does not overflow", K(left_int), K(right_int), K(sum_int));
           rollup_cell.set_tiny_num_int(sum_int);
@@ -5317,7 +5337,11 @@ int ObAggregateProcessor::rollup_add_calc(
         }
       }
       if (OB_SUCC(ret)) {
-        ret = rollup_add_number_calc(aggr_result, rollup_cell);
+        if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          ret = rollup_add_decimalint_calc(aggr_result, rollup_cell, aggr_info);
+        } else {
+          ret = rollup_add_number_calc(aggr_result, rollup_cell);
+        }
       }
       break;
     }
@@ -5328,20 +5352,25 @@ int ObAggregateProcessor::rollup_add_calc(
         uint64_t sum_uint = left_uint + right_uint;
         if (ObExprAdd::is_uint_uint_out_of_range(left_uint, right_uint, sum_uint)) {
           LOG_DEBUG("uint64_t add overflow, will use number", K(left_uint), K(right_uint));
-          char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
-          ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
-          ObNumber result_nmb;
-          if (!rollup_result.is_null()) {
-            ObCompactNumber &cnum = const_cast<ObCompactNumber &>(rollup_result.get_number());
-            result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+          if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+            const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+            ret = calc_overflow_res_to_decimal_int<uint64_t>(rollup_result, rollup_cell, precision,
+                                                             left_uint, right_uint);
+          } else { // number
+            char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
+            ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);
+            ObNumber result_nmb;
+            if (!rollup_result.is_null()) {
+              ObCompactNumber &cnum = const_cast<ObCompactNumber &>(rollup_result.get_number());
+              result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+            }
+            if (OB_FAIL(result_nmb.add(left_uint, right_uint, result_nmb, allocator))) {
+              LOG_WARN("number add failed", K(ret));
+            } else if (OB_FAIL(clone_number_cell(result_nmb, rollup_cell))) {
+              LOG_WARN("clone_number_cell failed", K(ret));
+            }
           }
-          if (OB_FAIL(result_nmb.add(left_uint, right_uint, result_nmb, allocator))) {
-            LOG_WARN("number add failed", K(ret));
-          } else if (OB_FAIL(clone_number_cell(result_nmb, rollup_cell))) {
-            LOG_WARN("clone_number_cell failed", K(ret));
-          } else {
-            rollup_cell.set_tiny_num_uint(0);
-          }
+          rollup_cell.set_tiny_num_uint(0);
         } else {
           LOG_DEBUG("uint64_t add does not overflow", K(left_uint), K(right_uint), K(sum_uint));
           rollup_cell.set_tiny_num_uint(sum_uint);
@@ -5349,12 +5378,24 @@ int ObAggregateProcessor::rollup_add_calc(
         }
       }
       if (OB_SUCC(ret)) {
-        ret = rollup_add_number_calc(aggr_result, rollup_cell);
+        if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          ret = rollup_add_decimalint_calc(aggr_result, rollup_cell, aggr_info);
+        } else {
+          ret = rollup_add_number_calc(aggr_result, rollup_cell);
+        }
       }
       break;
     }
     case ObNumberTC: {
       ret = rollup_add_number_calc(aggr_result, rollup_cell);
+      break;
+    }
+    case ObDecimalIntTC: {
+      if (lib::is_oracle_mode()) {
+        ret = rollup_add_number_calc(aggr_result, rollup_cell);
+      } else {
+        ret = rollup_add_decimalint_calc(aggr_result, rollup_cell, aggr_info);
+      }
       break;
     }
     case ObFloatTC: {
@@ -5581,7 +5622,8 @@ int ObAggregateProcessor::check_rows_equal(const ObChunkDatumStore::LastStoredRo
 }
 
 int ObAggregateCalcFunc::add_calc(const ObDatum &left_value, const ObDatum &right_value,
-    ObDatum &result_datum, const ObObjTypeClass type, ObIAllocator &out_allocator)
+    ObDatum &result_datum, const ObObjTypeClass type, const ObPrecision precision,
+    ObIAllocator &out_allocator)
 {
   int ret = OB_SUCCESS;
   if (left_value.is_null() && right_value.is_null()) {
@@ -5726,6 +5768,10 @@ int ObAggregateCalcFunc::add_calc(const ObDatum &left_value, const ObDatum &righ
         }
         break;
       }
+      case ObDecimalIntTC: {
+        ret = add_decimalint_with_same_precision(left_value, right_value, precision, result_datum);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected type", K(type), K(ret));
@@ -5750,6 +5796,35 @@ int ObAggregateCalcFunc::clone_number_cell(const ObNumber &src_number,
     target_cell.ptr_ = buff_ptr;
     target_cell.set_number(src_number);
     LOG_DEBUG("succ to clone cell", K(src_number), K(target_cell));
+  }
+  return ret;
+}
+
+int ObAggregateCalcFunc::add_decimalint_with_same_precision(const ObDatum &left_value,
+                                                            const ObDatum &right_value,
+                                                            const ObPrecision precision,
+                                                            ObDatum &result_datum)
+{
+  int ret = OB_SUCCESS;
+  if (left_value.is_null()) {
+    result_datum.set_decimal_int(right_value.get_decimal_int(), right_value.len_);
+  } else if (right_value.is_null()) {
+    result_datum.set_decimal_int(left_value.get_decimal_int(), left_value.len_);
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_32) {
+    const int32_t result = left_value.get_decimal_int32() + right_value.get_decimal_int32();
+    result_datum.set_decimal_int(result);
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_64) {
+    const int64_t result = left_value.get_decimal_int64() + right_value.get_decimal_int64();
+    result_datum.set_decimal_int(result);
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_128) {
+    const int128_t result = left_value.get_decimal_int128() + right_value.get_decimal_int128();
+    result_datum.set_decimal_int(result);
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_256) {
+    const int256_t result = left_value.get_decimal_int256() + right_value.get_decimal_int256();
+    result_datum.set_decimal_int(result);
+  } else {
+    const int512_t result = left_value.get_decimal_int512() + right_value.get_decimal_int512();
+    result_datum.set_decimal_int(result);
   }
   return ret;
 }
@@ -5913,8 +5988,12 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
     } else if (OB_ISNULL(window_size_result) || OB_ISNULL(item_size_result)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(window_size_result), K(item_size_result));
-    } else if (OB_FAIL(ObExprUtil::get_int_param_val(window_size_result, window_size)) ||
-               OB_FAIL(ObExprUtil::get_int_param_val(item_size_result, item_size))) {
+    } else if (OB_FAIL(ObExprUtil::get_int_param_val(
+                 window_size_result, aggr_info.window_size_param_expr_->obj_meta_.is_decimal_int(),
+                 window_size))
+               || OB_FAIL(ObExprUtil::get_int_param_val(
+                 item_size_result, aggr_info.item_size_param_expr_->obj_meta_.is_decimal_int(),
+                 item_size))) {
       LOG_WARN("failed to get int param val", K(*window_size_result), K(window_size),
                                               K(*item_size_result), K(item_size), K(ret));
     } else {
@@ -6131,12 +6210,14 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
   } else if (OB_ISNULL(bucket_num_result)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(bucket_num_result));
-  } else if (OB_FAIL(ObExprUtil::get_int_param_val(bucket_num_result, bucket_num))) {
+  } else if (OB_FAIL(ObExprUtil::get_int_param_val(
+               bucket_num_result, aggr_info.bucket_num_param_expr_->obj_meta_.is_decimal_int(),
+               bucket_num))) {
     LOG_WARN("failed to get int param val", K(*bucket_num_result), K(bucket_num), K(ret));
   } else if (bucket_num <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(bucket_num));
-  } else if ( OB_FAIL(extra->finish_add_sort_row())) {
+  } else if (OB_FAIL(extra->finish_add_sort_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else {
     ObChunkDatumStore::LastStoredRow prev_row(aggr_alloc_);
@@ -7142,18 +7223,44 @@ int ObAggregateProcessor::fast_single_row_agg(
         case T_FUN_SUM: {
           const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
           if ((ObIntTC == tc || ObUIntTC == tc) && !aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).is_null()) {
-            ObNumStackAllocator<2> tmp_alloc;
-            ObNumber result_nmb;
-            if (ObIntTC == tc) {
-              if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_int(), tmp_alloc))) {
+            if (ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+              const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+              if (ObIntTC == tc) {
+                const int64_t val = aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_int();
+                if (OB_FAIL(DecIntAggFuncCtx::int_to_decimalint(val, precision, result))) {
+                  LOG_WARN("create number from int failed", K(ret), K(val), K(tc));
+                }
+              } else {
+                const uint64_t val = aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_uint();
+                if (OB_FAIL(DecIntAggFuncCtx::int_to_decimalint(val, precision, result))) {
+                  LOG_WARN("create number from int failed", K(ret), K(val), K(tc));
+                }
+              }
+            } else {
+              ObNumStackAllocator<2> tmp_alloc;
+              ObNumber result_nmb;
+              if (ObIntTC == tc) {
+                if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_int(), tmp_alloc))) {
                   LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
                 }
-            } else {
-              if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_uint(), tmp_alloc))) {
-                LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+              } else {
+                if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_uint(), tmp_alloc))) {
+                  LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+                }
               }
+              OX (result.set_number(result_nmb));
             }
-            OX (result.set_number(result_nmb));
+          } else if (ObDecimalIntTC == tc && !aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).is_null()) {
+            DecIntAggFuncCtx *ctx = nullptr;
+            const int16_t scale = aggr_info.get_first_child_datum_scale();
+            const ObDecimalInt *arg =
+              aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_decimal_int();
+            if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("ctx is null", K(ret));
+            } else if (OB_FAIL(ctx->store_func(result, arg, scale))) {
+              LOG_WARN("fail to store result", K(ret));
+            }
           } else {
             result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
           }
@@ -7235,7 +7342,22 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
         const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
         ObDatum *result = aggr_info.expr_->locate_datums_for_update(eval_ctx, batch_size);
         ObDatumVector param_vec = aggr_info.param_exprs_.at(0)->locate_expr_datumvector(eval_ctx);
-        if (ObIntTC == tc) {
+        if (ObIntTC == tc && ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+          for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            if (param_vec.at(batch_idx)->is_null()) {
+              result[batch_idx].set_null();
+            } else if (OB_FAIL(DecIntAggFuncCtx::int_to_decimalint(
+                                  param_vec.at(batch_idx)->get_int(),
+                                  precision,
+                                  result[batch_idx]))) {
+              LOG_WARN("create number from int failed", K(ret), K(tc), K(precision));
+            }
+          }
+        } else if (ObIntTC == tc) { // number
           for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
             if (skip->at(batch_idx)) {
               continue;
@@ -7250,7 +7372,22 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
               result[batch_idx].set_number(result_nmb);
             }
           }
-        } else if (ObUIntTC == tc) {
+        } else if (ObUIntTC == tc && ob_is_decimal_int(aggr_info.expr_->datum_meta_.type_)) {
+          const int64_t precision = aggr_info.expr_->datum_meta_.precision_;
+          for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            if (param_vec.at(batch_idx)->is_null()) {
+              result[batch_idx].set_null();
+            } else if (OB_FAIL(DecIntAggFuncCtx::int_to_decimalint(
+                                  param_vec.at(batch_idx)->get_uint64(),
+                                  precision,
+                                  result[batch_idx]))) {
+              LOG_WARN("create number from int failed", K(ret), K(tc), K(precision));
+            }
+          }
+        } else if (ObUIntTC == tc) { // number
           for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
             if (skip->at(batch_idx)) {
               continue;
@@ -7263,6 +7400,26 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
               LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
             } else {
               result[batch_idx].set_number(result_nmb);
+            }
+          }
+        } else if (ObDecimalIntTC == tc) {
+          DecIntAggFuncCtx *ctx = nullptr;
+          const int16_t scale = aggr_info.get_first_child_datum_scale();
+          if (OB_ISNULL(ctx = get_decint_aggr_func_ctx(aggr_info))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ctx is null", K(ret));
+          } else {
+            for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+              if (skip->at(batch_idx)) {
+                continue;
+              }
+              if (param_vec.at(batch_idx)->is_null()) {
+                result[batch_idx].set_null();
+              } else if (OB_FAIL(ctx->store_func(result[batch_idx],
+                                                 param_vec.at(batch_idx)->get_decimal_int(),
+                                                 scale))) {
+                LOG_WARN("fail to store decimal int", K(ret));
+              }
             }
           }
         } else {
@@ -7295,6 +7452,401 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
   }
   return ret;
 }
+
+ObAggregateProcessor::ObDecIntAggOpFunc ObAggregateProcessor::DEC_INT_OP_FUNCS[DECIMAL_INT_MAX][3][3];
+ObAggregateProcessor::ObDecIntAggOpFunc ObAggregateProcessor::DEC_INT_MERGE_FUNCS[DECIMAL_INT_MAX][3];
+ObAggregateProcessor::ObDecIntAggOpBatchFunc ObAggregateProcessor::DEC_INT_ADD_BATCH_FUNCS[DECIMAL_INT_MAX][3][2][2];
+ObAggregateProcessor::ObDecIntAggOpBatchFunc ObAggregateProcessor::DEC_INT_MERGE_BATCH_FUNCS[DECIMAL_INT_MAX][2];
+int ObAggregateProcessor::DecIntAggFuncCtx::init(const ObAggrInfo &aggr_info,
+                                                 const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  const int16_t arg_prec = aggr_info.get_first_child_datum_precision();
+  const int16_t res_prec = aggr_info.expr_->datum_meta_.precision_;
+  const int arg_type = static_cast<int>(get_decimalint_type(arg_prec));
+  const int16_t buffer_prec = get_max_decimalint_precision(arg_prec) - arg_prec;
+  const bool need_cast = (buffer_prec < MAX_PRECISION_DECIMAL_INT_64) &&
+                           get_scale_factor<int64_t>(buffer_prec) < batch_size;
+  if (OB_UNLIKELY(arg_prec < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected precision", K(ret), K(arg_prec));
+  } else if (is_oracle_mode) { // oracle mode, result is number
+    add_func = DEC_INT_OP_FUNCS[arg_type][2][0];
+    sub_func = DEC_INT_OP_FUNCS[arg_type][2][1];
+    store_func = DEC_INT_OP_FUNCS[arg_type][2][2];
+    add_batch_func = DEC_INT_ADD_BATCH_FUNCS[arg_type][2][need_cast];
+  } else if (res_prec == arg_prec) { // mysql mode, merge result for decimal int
+    add_func = DEC_INT_MERGE_FUNCS[arg_type][0];
+    sub_func = DEC_INT_MERGE_FUNCS[arg_type][1];
+    store_func = DEC_INT_MERGE_FUNCS[arg_type][2];
+    merge_func = DEC_INT_MERGE_FUNCS[arg_type][0];
+    add_batch_func = DEC_INT_MERGE_BATCH_FUNCS[arg_type];
+  } else { // mysql mode
+    const int res_type = static_cast<int>(get_decimalint_type(res_prec));
+    int res_func_idx = 0;
+    if (OB_UNLIKELY(res_prec < arg_prec || res_prec - arg_prec > OB_DECIMAL_LONGLONG_DIGITS)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected precision", K(ret), K(arg_prec), K(res_prec));
+    } else {
+      switch (arg_type) {
+        case DECIMAL_INT_32:
+        case DECIMAL_INT_128:
+        case DECIMAL_INT_512:
+          res_func_idx = 0;
+          break;
+        case DECIMAL_INT_64:
+          res_func_idx = res_type == DECIMAL_INT_128 ? 0 : 1;
+          break;
+        case DECIMAL_INT_256:
+          res_func_idx = res_type == DECIMAL_INT_256 ? 0 : 1;
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+      }
+      if (OB_SUCC(ret)) {
+        add_func = DEC_INT_OP_FUNCS[arg_type][res_func_idx][0];
+        sub_func = DEC_INT_OP_FUNCS[arg_type][res_func_idx][1];
+        store_func = DEC_INT_OP_FUNCS[arg_type][res_func_idx][2];
+        merge_func = DEC_INT_MERGE_FUNCS[res_type][0];
+        add_batch_func = DEC_INT_ADD_BATCH_FUNCS[arg_type][res_func_idx][need_cast];
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(add_func) || OB_ISNULL(sub_func) || OB_ISNULL(store_func) ||
+          (!is_oracle_mode && OB_ISNULL(merge_func)) || OB_ISNULL(add_batch_func)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("function does not init", K(ret));
+    }
+  }
+  return ret;
+}
+
+template<typename T>
+int ObAggregateProcessor::DecIntAggFuncCtx::int_to_decimalint(const T int_val,
+                                                              const int16_t to_precision,
+                                                              ObDatum &result)
+{
+  int ret = OB_SUCCESS;
+  if (to_precision <= MAX_PRECISION_DECIMAL_INT_128) {
+    *const_cast<int128_t *>(result.get_decimal_int()->int128_v_) = int_val;
+    result.pack_ = sizeof(int128_t);
+  } else {
+    *const_cast<int256_t *>(result.get_decimal_int()->int256_v_) = int_val;
+    result.pack_ = sizeof(int256_t);
+  }
+  return ret;
+}
+
+template<typename T>
+int ObAggregateProcessor::DecIntAggFuncCtx::add_int(ObDatum &result, const int16_t precison,
+                                                    const T val1, const T val2)
+{
+  int ret = OB_SUCCESS;
+  if (precison <= MAX_PRECISION_DECIMAL_INT_128) {
+    *const_cast<int128_t *>(result.get_decimal_int()->int128_v_) =
+      *result.get_decimal_int()->int128_v_ + val1 + val2;
+    result.pack_ = sizeof(int128_t);
+  } else {
+    *const_cast<int256_t *>(result.get_decimal_int()->int256_v_) =
+      *result.get_decimal_int()->int256_v_ + val1 + val2;
+    result.pack_ = sizeof(int256_t);
+  }
+  return ret;
+}
+
+template<typename T>
+int ObAggregateProcessor::DecIntAggFuncCtx::sub_int(ObDatum &result, const int16_t precison,
+                                                    const T val1)
+{
+  int ret = OB_SUCCESS;
+  if (precison <= MAX_PRECISION_DECIMAL_INT_128) {
+    *const_cast<int128_t *>(result.get_decimal_int()->int128_v_) =
+      *result.get_decimal_int()->int128_v_ - val1;
+    result.pack_ = sizeof(int128_t);
+  } else {
+   *const_cast<int256_t *>(result.get_decimal_int()->int256_v_) =
+      *result.get_decimal_int()->int256_v_ - val1;
+    result.pack_ = sizeof(int256_t);
+  }
+  return ret;
+}
+
+void ObAggregateProcessor::check_mysql_decimal_int_overflow(ObDatum &datum)
+{
+  const int512_t val = datum.get_decimal_int512();
+  if (OB_UNLIKELY(val <= wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MIN
+        || val >= wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MAX)) {
+    int ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+    ObString decimal_type_str("DECIMAL");
+    char buf[MAX_PRECISION_DECIMAL_INT_512];
+    int64_t pos = 0;
+    wide::to_string(wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MAX_AVAILABLE, buf,
+                    MAX_PRECISION_DECIMAL_INT_512, pos);
+    LOG_USER_WARN(OB_ERR_TRUNCATED_WRONG_VALUE, decimal_type_str.length(), decimal_type_str.ptr(),
+                static_cast<int32_t>(pos), buf);
+    LOG_WARN("decimal int out of range", K(ret));
+    // overflow, set datum to max available decimal int
+    const ObDecimalInt *max_available_val =
+      reinterpret_cast<const ObDecimalInt*>(&(wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MAX_AVAILABLE));
+    datum.set_decimal_int(max_available_val, sizeof(int512_t));
+    ret = OB_SUCCESS; // reset ret to SUCCESS, just log user warnings
+  }
+}
+
+template<typename RES_T, typename ARG_T>
+struct ObDecIntSumOpFunc
+{
+  static int add(ObDatum &result, const ObDecimalInt *arg, const int16_t scale)
+  {
+    UNUSED(scale);
+    *const_cast<RES_T *>(reinterpret_cast<const RES_T *>(result.decimal_int_)) +=
+      *reinterpret_cast<const ARG_T *>(arg);
+    return OB_SUCCESS;
+  }
+
+  static int sub(ObDatum &result, const ObDecimalInt *arg, const int16_t scale)
+  {
+    UNUSED(scale);
+    *const_cast<RES_T *>(reinterpret_cast<const RES_T *>(result.decimal_int_)) -=
+      *reinterpret_cast<const ARG_T *>(arg);
+    return OB_SUCCESS;
+  }
+
+  static int store(ObDatum &result, const ObDecimalInt *arg, const int16_t scale)
+  {
+    UNUSED(scale);
+    *const_cast<RES_T *>(reinterpret_cast<const RES_T *>(result.decimal_int_)) =
+      *reinterpret_cast<const ARG_T *>(arg);
+    result.pack_ = sizeof(RES_T);
+    return OB_SUCCESS;
+  }
+};
+
+template<typename ARG_T>
+struct ObDecIntSumOpFunc<ObNumber, ARG_T>
+{
+  static int add(ObDatum &result, const ObDecimalInt *arg, const int16_t scale)
+  {
+    int ret = OB_SUCCESS;
+    ObNumStackAllocator<2> tmp_alloc;
+    number::ObNumber right_nmb;
+    if (OB_FAIL(wide::to_number(arg, sizeof(ARG_T), scale, tmp_alloc, right_nmb))) {
+      LOG_WARN("fail to cast decimal int to number", K(ret));
+    } else {
+      ObNumber left_nmb(result.get_number());
+      ObNumber result_nmb;
+      ObDatum res_datum;
+      if (OB_FAIL(left_nmb.add_v3(right_nmb, result_nmb, tmp_alloc, false))) {
+        LOG_WARN("number add failed", K(ret), K(left_nmb), K(right_nmb));
+      } else {
+        result.set_number(result_nmb);
+      }
+    }
+    return ret;
+  }
+
+  static int sub(ObDatum &result, const ObDecimalInt *arg, const int16_t scale)
+  {
+    int ret = OB_SUCCESS;
+    ObNumStackAllocator<2> tmp_alloc;
+    number::ObNumber right_nmb;
+    if (OB_FAIL(wide::to_number(arg, sizeof(ARG_T), scale, tmp_alloc, right_nmb))) {
+      LOG_WARN("fail to cast decimal int to number", K(ret));
+    } else {
+      ObNumber left_nmb(result.get_number());
+      ObNumber result_nmb;
+      ObDatum res_datum;
+      if (OB_FAIL(left_nmb.sub_v3(right_nmb, result_nmb, tmp_alloc, false))) {
+        LOG_WARN("number add failed", K(ret), K(left_nmb), K(right_nmb));
+      } else {
+        result.set_number(result_nmb);
+      }
+    }
+    return ret;
+  }
+
+  static int store(ObDatum &result, const ObDecimalInt *arg, const int16_t scale)
+  {
+    int ret = OB_SUCCESS;
+    ObNumStackAllocator<1> tmp_alloc;
+    number::ObNumber right_nmb;
+    if (OB_FAIL(wide::to_number(arg, sizeof(ARG_T), scale, tmp_alloc, right_nmb))) {
+      LOG_WARN("fail to cast decimal int to number", K(ret));
+    } else {
+      result.set_number(right_nmb);
+    }
+    return ret;
+  }
+};
+
+
+#define DECIMAL_INT_BATCH_ACCUM                                               \
+  uint16_t i = 0;                                                             \
+  bool accumulated = false;                                                   \
+  CALC_T accum = 0;                                                           \
+  const SELECTOR &selector = *static_cast<const SELECTOR *>(sel);             \
+  for (auto it = selector.begin(); it < selector.end(); selector.next(it)) {  \
+    i = selector.get_batch_index(it);                                         \
+    if (src.at(i)->is_null()) {                                               \
+      continue;                                                               \
+    }                                                                         \
+    accum += *reinterpret_cast<const ARG_T *>(src.at(i)->get_decimal_int());  \
+    accumulated = true;                                                       \
+  }
+
+template<typename RES_T, typename CALC_T, typename ARG_T, typename SELECTOR>
+struct ObDecIntSumBatchOpFunc
+{
+  static int add_batch(ObDatum &result, ObAggregateProcessor *processor,
+                       ObAggregateProcessor::AggrCell &aggr_cell, const ObDatumVector &src,
+                       const void *sel, const int16_t scale)
+  {
+    UNUSED(scale);
+    int ret = OB_SUCCESS;
+    DECIMAL_INT_BATCH_ACCUM;
+    if (OB_LIKELY(accumulated)) {
+      if (result.is_null()) {
+        int64_t need_size = sizeof(int64_t) * 2 + sizeof(RES_T);
+        if (OB_FAIL(processor->clone_cell(aggr_cell, need_size, nullptr))) {
+          LOG_WARN("fail to clone cell", K(ret));
+        } else {
+          *const_cast<RES_T *>(reinterpret_cast<const RES_T *>(result.decimal_int_)) = accum;
+          result.pack_ = sizeof(RES_T);
+        }
+      } else {
+        *const_cast<RES_T *>(reinterpret_cast<const RES_T *>(result.decimal_int_)) += accum;
+      }
+    }
+    return ret;
+  }
+};
+
+template<typename CALC_T, typename ARG_T, typename SELECTOR>
+struct ObDecIntSumBatchOpFunc<ObNumber, CALC_T, ARG_T, SELECTOR>
+{
+  static int add_batch(ObDatum &result, ObAggregateProcessor *processor,
+                       ObAggregateProcessor::AggrCell &aggr_cell, const ObDatumVector &src,
+                       const void *sel, const int16_t scale)
+  {
+    int ret = OB_SUCCESS;
+    DECIMAL_INT_BATCH_ACCUM;
+    if (OB_LIKELY(accumulated)) {
+      if (result.is_null()) {
+        ObNumStackAllocator<2> tmp_alloc;
+        number::ObNumber right_nmb;
+        if (OB_FAIL(wide::to_number(accum, scale, tmp_alloc, right_nmb))) {
+          LOG_WARN("fail to cast decimal int to number", K(ret));
+        } else if (processor->clone_number_cell(right_nmb, aggr_cell)) {
+          LOG_WARN("fail to clone number", K(ret));
+        }
+      } else {
+        ObNumStackAllocator<2> tmp_alloc;
+        number::ObNumber right_nmb;
+        if (OB_FAIL(wide::to_number(accum, scale, tmp_alloc, right_nmb))) {
+          LOG_WARN("fail to cast decimal int to number", K(ret));
+        } else {
+          ObNumber left_nmb(result.get_number());
+          ObNumber result_nmb;
+          ObDatum res_datum;
+          if (OB_FAIL(left_nmb.add_v3(right_nmb, result_nmb, tmp_alloc, false))) {
+            LOG_WARN("number add failed", K(ret), K(left_nmb), K(right_nmb));
+          } else {
+            result.set_number(result_nmb);
+          }
+        }
+      }
+    }
+    return ret;
+  }
+};
+
+#undef DECIMAL_INT_BATCH_ACCUM
+
+struct InitDecIntAggFunc
+{
+  static int init()
+  {
+    auto &op_funcs = ObAggregateProcessor::DEC_INT_OP_FUNCS; // (from_type, to_type, add/sub/store)
+    auto &merge_funcs = ObAggregateProcessor::DEC_INT_MERGE_FUNCS; // (merge_result_type, add or sub)
+
+#define INIT_OP_FUNCS(idx, type) \
+    op_funcs[DECIMAL_INT_32][0][idx] = ObDecIntSumOpFunc<int128_t, int32_t>::type; \
+    op_funcs[DECIMAL_INT_32][1][idx] = NULL; \
+    op_funcs[DECIMAL_INT_32][2][idx] = ObDecIntSumOpFunc<ObNumber, int32_t>::type; \
+    op_funcs[DECIMAL_INT_64][0][idx] = ObDecIntSumOpFunc<int128_t, int64_t>::type; \
+    op_funcs[DECIMAL_INT_64][1][idx] = ObDecIntSumOpFunc<int256_t, int64_t>::type; \
+    op_funcs[DECIMAL_INT_64][2][idx] = ObDecIntSumOpFunc<ObNumber, int64_t>::type; \
+    op_funcs[DECIMAL_INT_128][0][idx] = ObDecIntSumOpFunc<int256_t, int128_t>::type; \
+    op_funcs[DECIMAL_INT_128][1][idx] = NULL; \
+    op_funcs[DECIMAL_INT_128][2][idx] = ObDecIntSumOpFunc<ObNumber, int128_t>::type; \
+    op_funcs[DECIMAL_INT_256][0][idx] = ObDecIntSumOpFunc<int256_t, int256_t>::type; \
+    op_funcs[DECIMAL_INT_256][1][idx] = ObDecIntSumOpFunc<int512_t, int256_t>::type; \
+    op_funcs[DECIMAL_INT_256][2][idx] = ObDecIntSumOpFunc<ObNumber, int256_t>::type; \
+    op_funcs[DECIMAL_INT_512][0][idx] = ObDecIntSumOpFunc<int512_t, int512_t>::type; \
+    op_funcs[DECIMAL_INT_512][1][idx] = NULL; \
+    op_funcs[DECIMAL_INT_512][2][idx] = ObDecIntSumOpFunc<ObNumber, int512_t>::type; \
+    merge_funcs[DECIMAL_INT_32][idx] = ObDecIntSumOpFunc<int32_t, int32_t>::type; \
+    merge_funcs[DECIMAL_INT_64][idx] = ObDecIntSumOpFunc<int64_t, int64_t>::type; \
+    merge_funcs[DECIMAL_INT_128][idx] = ObDecIntSumOpFunc<int128_t, int128_t>::type; \
+    merge_funcs[DECIMAL_INT_256][idx] = ObDecIntSumOpFunc<int256_t, int256_t>::type; \
+    merge_funcs[DECIMAL_INT_512][idx] = ObDecIntSumOpFunc<int512_t, int512_t>::type;
+
+    INIT_OP_FUNCS(0, add);
+    INIT_OP_FUNCS(1, sub);
+    INIT_OP_FUNCS(2, store);
+#undef INIT_OP_FUNCS
+
+    // (from_type, to_type, need_cast, selector)
+    auto &add_batch_funcs = ObAggregateProcessor::DEC_INT_ADD_BATCH_FUNCS;
+    auto &merge_batch_funcs = ObAggregateProcessor::DEC_INT_MERGE_BATCH_FUNCS; // (merge_type, selector)
+
+#define INIT_BATCH_OP_FUNCS(idx, selector) \
+    add_batch_funcs[DECIMAL_INT_32][0][0][idx] = ObDecIntSumBatchOpFunc<int128_t, int32_t, int32_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_32][1][0][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_32][2][0][idx] = ObDecIntSumBatchOpFunc<ObNumber, int32_t, int32_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_64][0][0][idx] = ObDecIntSumBatchOpFunc<int128_t, int64_t, int64_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_64][1][0][idx] = ObDecIntSumBatchOpFunc<int256_t, int64_t, int64_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_64][2][0][idx] = ObDecIntSumBatchOpFunc<ObNumber, int64_t, int64_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_128][0][0][idx] = ObDecIntSumBatchOpFunc<int256_t, int128_t, int128_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_128][1][0][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_128][2][0][idx] = ObDecIntSumBatchOpFunc<ObNumber, int128_t, int128_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_256][0][0][idx] = ObDecIntSumBatchOpFunc<int256_t, int256_t, int256_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_256][1][0][idx] = ObDecIntSumBatchOpFunc<int512_t, int256_t, int256_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_256][2][0][idx] = ObDecIntSumBatchOpFunc<ObNumber, int256_t, int256_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_512][0][0][idx] = ObDecIntSumBatchOpFunc<int512_t, int512_t, int512_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_512][1][0][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_512][2][0][idx] = ObDecIntSumBatchOpFunc<ObNumber, int512_t, int512_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_32][0][1][idx] = ObDecIntSumBatchOpFunc<int128_t, int64_t, int32_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_32][1][1][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_32][2][1][idx] = ObDecIntSumBatchOpFunc<ObNumber, int64_t, int32_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_64][0][1][idx] = ObDecIntSumBatchOpFunc<int128_t, int128_t, int64_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_64][1][1][idx] = ObDecIntSumBatchOpFunc<int256_t, int128_t, int64_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_64][2][1][idx] = ObDecIntSumBatchOpFunc<ObNumber, int128_t, int64_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_128][0][1][idx] = ObDecIntSumBatchOpFunc<int256_t, int256_t, int128_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_128][1][1][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_128][2][1][idx] = ObDecIntSumBatchOpFunc<ObNumber, int256_t, int128_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_256][0][1][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_256][1][1][idx] = ObDecIntSumBatchOpFunc<int512_t, int512_t, int256_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_256][2][1][idx] = ObDecIntSumBatchOpFunc<ObNumber, int512_t, int256_t, selector>::add_batch; \
+    add_batch_funcs[DECIMAL_INT_512][0][1][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_512][1][1][idx] = NULL; \
+    add_batch_funcs[DECIMAL_INT_512][2][1][idx] = NULL; \
+    merge_batch_funcs[DECIMAL_INT_32][idx] = ObDecIntSumBatchOpFunc<int32_t, int32_t, int32_t, selector>::add_batch; \
+    merge_batch_funcs[DECIMAL_INT_64][idx] = ObDecIntSumBatchOpFunc<int64_t, int64_t, int64_t, selector>::add_batch; \
+    merge_batch_funcs[DECIMAL_INT_128][idx] = ObDecIntSumBatchOpFunc<int128_t, int128_t, int128_t, selector>::add_batch; \
+    merge_batch_funcs[DECIMAL_INT_256][idx] = ObDecIntSumBatchOpFunc<int256_t, int256_t, int256_t, selector>::add_batch; \
+    merge_batch_funcs[DECIMAL_INT_512][idx] = ObDecIntSumBatchOpFunc<int512_t, int512_t, int512_t, selector>::add_batch;
+
+  INIT_BATCH_OP_FUNCS(0, ObAggregateProcessor::ObSelector);
+  INIT_BATCH_OP_FUNCS(1, ObAggregateProcessor::ObBatchRowsSlice);
+#undef INIT_BATCH_OP_FUNCS
+    return OB_SUCCESS;
+  }
+};
+
+static int init_agg_func_ret = InitDecIntAggFunc::init();
 
 } //namespace sql
 } //namespace oceanbase

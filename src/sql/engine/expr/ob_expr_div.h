@@ -56,6 +56,36 @@ public:
   static int div_intervalds_number(EVAL_FUNC_ARG_DECL);
   static int div_intervalds_number_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
+#define DECINC_DIV_EVAL_FUNC_BASIC(L, R)                              \
+  static int div_decimalint_##L##_##R(EVAL_FUNC_ARG_DECL);            \
+  static int div_decimalint_##L##_##R##_batch(BATCH_EVAL_FUNC_ARG_DECL);
+
+#define DECINC_DIV_EVAL_FUNC(TYPE)                \
+  DECINC_DIV_EVAL_FUNC_BASIC(TYPE, 32)            \
+  DECINC_DIV_EVAL_FUNC_BASIC(TYPE, 64)            \
+  DECINC_DIV_EVAL_FUNC_BASIC(TYPE, 128)           \
+  DECINC_DIV_EVAL_FUNC_BASIC(TYPE, 256)           \
+  DECINC_DIV_EVAL_FUNC_BASIC(TYPE, 512)
+
+#define DECINC_DIV_EVAL_FUNC_WITH_CHECK(TYPE)    \
+  static int div_decimalint_512_##TYPE##_with_check(EVAL_FUNC_ARG_DECL); \
+  static int div_decimalint_512_##TYPE##_with_check_batch(BATCH_EVAL_FUNC_ARG_DECL);
+
+  DECINC_DIV_EVAL_FUNC(32)
+  DECINC_DIV_EVAL_FUNC(64)
+  DECINC_DIV_EVAL_FUNC(128)
+  DECINC_DIV_EVAL_FUNC(256)
+  DECINC_DIV_EVAL_FUNC(512)
+  DECINC_DIV_EVAL_FUNC_WITH_CHECK(32)
+  DECINC_DIV_EVAL_FUNC_WITH_CHECK(64)
+  DECINC_DIV_EVAL_FUNC_WITH_CHECK(128)
+  DECINC_DIV_EVAL_FUNC_WITH_CHECK(256)
+  DECINC_DIV_EVAL_FUNC_WITH_CHECK(512)
+
+#undef DECINC_DIV_EVAL_FUNC_WITH_CHECK
+#undef DECINC_DIV_EVAL_FUNC
+#undef DECINC_DIV_EVAL_FUNC_BASIC
+
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

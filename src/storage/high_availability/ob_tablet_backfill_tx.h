@@ -13,7 +13,7 @@
 #ifndef OCEABASE_STORAGE_TABLET_BACKFILL_TX
 #define OCEABASE_STORAGE_TABLET_BACKFILL_TX
 
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 #include "ob_storage_ha_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -160,6 +160,7 @@ private:
   compaction::ObTabletMergeDagParam param_;
   common::ObArenaAllocator allocator_;
   compaction::ObTabletMergeCtx tablet_merge_ctx_;
+  compaction::ObLocalArena merger_arena_;
   compaction::ObPartitionMerger *merger_;
   int64_t transfer_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableBackfillTXTask);

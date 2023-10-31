@@ -25,9 +25,6 @@ int ObMicroBlockRowExister::init(
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObIMicroBlockRowFetcher::init(param, context, sstable))) {
     LOG_WARN("fail to init", K(ret));
-  } else if (OB_ISNULL(read_info_ = param.get_read_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null columns info", K(ret), K(param));
   }
   return ret;
 }

@@ -46,6 +46,8 @@ private:
   ObMacroBlockCommonHeader common_header_;
   const ObBloomFilterMacroBlockHeader *bf_macro_header_;
   bool is_sys_read_;
+  common::ObArenaAllocator io_allocator_;
+  char *io_buf_;
 };
 
 class ObBloomFilterDataReader

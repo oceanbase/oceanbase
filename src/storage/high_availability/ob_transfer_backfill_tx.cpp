@@ -17,7 +17,7 @@
 #include "logservice/ob_log_service.h"
 #include "share/rc/ob_tenant_base.h"
 #include "ob_tablet_backfill_tx.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "ob_transfer_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
@@ -712,7 +712,7 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
   }
 
   if (OB_NOT_NULL(replace_logical_dag) && OB_NOT_NULL(scheduler)) {
-    scheduler->free_dag(*replace_logical_dag, backfill_tx_dag);
+    scheduler->free_dag(*replace_logical_dag);
     replace_logical_dag = nullptr;
   }
 
@@ -1139,12 +1139,12 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(finish_backfill_tx_dag)) {
-        scheduler->free_dag(*finish_backfill_tx_dag, tablet_backfill_tx_dag);
+        scheduler->free_dag(*finish_backfill_tx_dag);
         finish_backfill_tx_dag = nullptr;
       }
 
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
-        scheduler->free_dag(*tablet_backfill_tx_dag, backfill_tx_dag);
+        scheduler->free_dag(*tablet_backfill_tx_dag);
         tablet_backfill_tx_dag = nullptr;
       }
     }

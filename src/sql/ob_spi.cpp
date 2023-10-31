@@ -485,21 +485,25 @@ int ObSPIService::calc_obj_access_expr(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->params_));
+  CK (OB_NOT_NULL(ctx->allocator_));
   if (OB_SUCC(ret)) {
     const ObExprObjAccess *obj_access = NULL;
     if (1 == expr.get_expr_items().count()) { // 没有入参, 直接计算
       CK (OB_NOT_NULL(obj_access =
           static_cast<const ObExprObjAccess *>(get_first_expr_item(expr).get_expr_operator())));
-      OZ (obj_access->calc_result(result, NULL, 0, *(ctx->params_)));
+      OZ(
+        obj_access->calc_result(result, *ctx->allocator_, NULL, 0, *(ctx->params_)));
     } else if (2 == expr.get_expr_items().count()
                && T_OBJ_ACCESS_REF == expr.get_expr_items().at(1).get_item_type()) { // 有一个入参, 且入参是ObjAccessExpr
       ObObj first_result;
       CK (OB_NOT_NULL(obj_access =
           static_cast<const ObExprObjAccess *>(expr.get_expr_items().at(1).get_expr_operator())));
-      OZ (obj_access->calc_result(first_result, NULL, 0, *(ctx->params_)));
+      OZ(obj_access->calc_result(first_result, *ctx->allocator_, NULL, 0,
+                                 *(ctx->params_)));
       CK (OB_NOT_NULL(obj_access =
           static_cast<const ObExprObjAccess *>(get_first_expr_item(expr).get_expr_operator())));
-      OZ (obj_access->calc_result(result, &first_result, 1, *(ctx->params_)));
+      OZ(obj_access->calc_result(result, *ctx->allocator_, &first_result, 1,
+                                 *(ctx->params_)));
     } else {  // 其他情况
       LOG_DEBUG("calc_obj_access_expr without row", K(expr));
       OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, expr, result));
@@ -816,6 +820,8 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       }
       OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, *expr, *result, ctx->allocator_),
         KPC(expr), K(result_idx));
+      OX(result->set_param_meta());
+
       if ((OB_DATA_OUT_OF_RANGE == ret || OB_ERR_DATA_TOO_LONG == ret
           || OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) && lib::is_oracle_mode()) {
         LOG_WARN("change error code to value error", K(ret));
@@ -899,8 +905,10 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       bool is_ref_cursor = param.is_ref_cursor_type();
       if (!result->is_ext()) {
         bool has_lob_header = result->ObObj::has_lob_header();
-        result->ObObj::set_scale(param.get_meta().get_scale());
-        result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
+        if (param.get_meta().get_scale() != SCALE_UNKNOWN_YET) {
+          result->ObObj::set_scale(param.get_meta().get_scale());
+          result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
+        }
         if (has_lob_header) {
           result->ObObj::set_has_lob_header();
         }
@@ -6191,6 +6199,7 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
             OZ (deep_copy_obj(param_allocator, result, new_param));
           }
         }
+        OX (new_param.set_accuracy(result.get_accuracy()));
         OX (new_param.set_need_to_check_type(true));
         OZ (exec_params.push_back(new_param));
       }
@@ -8015,7 +8024,11 @@ int ObSPIService::get_result_type(ObPLExecCtx &ctx, const ObSqlExpression &expr,
       if (is_question_mark_expression(expr)) {
         ObObjParam &obj_param = ctx.params_->at(get_const_value(expr).get_int());
         type.set_meta(obj_param.get_meta());
-        type.set_accuracy(obj_param.get_accuracy());
+        if (obj_param.is_decimal_int()) {
+          type.set_accuracy(get_first_expr_item(expr).get_accuracy());
+        } else {
+          type.set_accuracy(obj_param.get_accuracy());
+        }
       } else {
         ObObjType obj_type = static_cast<ObObjType>(get_expression_type(expr));
         type.set_type(obj_type);

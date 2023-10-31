@@ -256,26 +256,23 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       io_info.flag_.set_group_id(ObIOModule::SLOG_IO);
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       io_info.buf_ = nullptr;
+      io_info.user_data_buf_ = reinterpret_cast<char*>(buf) + read_sz;
       io_info.callback_ = nullptr;
+      io_info.timeout_us_ = GCONF._data_storage_io_timeout;
 
       ObIOHandle io_handle;
       io_handle.reset();
-      const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
-      ret = ObIOManager::get_instance().read(io_info, io_handle, io_timeout_ms);
+      ret = ObIOManager::get_instance().read(io_info, io_handle);
       if (OB_DATA_OUT_OF_RANGE == ret && io_handle.get_data_size() < io_info.size_) { // partial read
-        char *buffer = reinterpret_cast<char*>(buf) + read_sz;
-        MEMCPY(buffer, io_handle.get_buffer(), io_handle.get_data_size());
         read_sz += io_handle.get_data_size();
         break;
       } else if (OB_SUCCESS != ret) {
-        LOG_WARN("fail to aio_read", K(ret), K(io_info), K(io_timeout_ms));
+        LOG_WARN("fail to aio_read", K(ret), K(io_info));
       } else if (io_handle.get_data_size() > io_info.size_) {
         ret = OB_IO_ERROR;
         LOG_WARN("invalid io handle data size", K(ret),
             "data size", io_handle.get_data_size(), "left buffer size", io_info.size_);
       } else {
-        char *buffer = reinterpret_cast<char*>(buf) + read_sz;
-        MEMCPY(buffer, io_handle.get_buffer(), io_handle.get_data_size());
         read_sz += io_handle.get_data_size();
       }
     }
@@ -290,8 +287,9 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
   } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
     LOG_WARN("underlying io memory not enough", K(ret), K(buf), K(read_sz), K(size), K(offset));
   } else {
+    int tmp_ret = ret;
     ret = OB_IO_ERROR;
-    LOG_ERROR("fail to read", K(ret), K(buf), K(read_sz), K(size), K(offset), K(errno));
+    LOG_ERROR("fail to read", K(ret), K(tmp_ret), K(buf), K(read_sz), K(size), K(offset), K(errno));
   }
   return ret;
 }
@@ -345,12 +343,12 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       io_info.buf_ = reinterpret_cast<const char *>(buf);
       io_info.callback_ = nullptr;
+      io_info.timeout_us_ = GCONF._data_storage_io_timeout;
       ObIOHandle io_handle;
-      const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
       if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle))) {
-        LOG_WARN("fail to aio_write", K(ret), K(io_info), K(io_timeout_ms));
-      } else if(OB_FAIL(io_handle.wait(io_timeout_ms))) {
-        LOG_WARN("failed to wait for aio_write", K(ret), K(io_timeout_ms));
+        LOG_WARN("fail to aio_write", K(ret), K(io_info));
+      } else if(OB_FAIL(io_handle.wait())) {
+        LOG_WARN("failed to wait for aio_write", K(ret));
       }
 
       if (OB_FAIL(ret)) {

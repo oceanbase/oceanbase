@@ -35,10 +35,11 @@ public:
   ~ObTmpFileIOInfo();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(fd), K_(dir_id), K_(size), K_(tenant_id), KP_(buf), K_(io_desc));
+  TO_STRING_KV(K_(fd), K_(dir_id), K_(size), K_(io_timeout_ms), K_(tenant_id), KP_(buf), K_(io_desc));
   int64_t fd_;
   int64_t dir_id_;
   int64_t size_;
+  int64_t io_timeout_ms_;
   uint64_t tenant_id_;
   char *buf_;
   common::ObIOFlag io_desc_;
@@ -117,7 +118,7 @@ public:
   {
     last_read_offset_ = last_read_offset;
   }
-  int wait(const int64_t timeout_ms);
+  int wait();
   void reset();
   bool is_valid() const;
   common::ObIArray<ObTmpFileIOHandle::ObIOReadHandle> &get_io_handles()
@@ -256,11 +257,10 @@ public:
   int init(const int64_t fd, const int64_t dir_id, common::ObIAllocator &allocator);
   int aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
   int aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &handle);
-  int read(const ObTmpFileIOInfo &io_info, const int64_t timeout_ms, ObTmpFileIOHandle &handle);
-  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, const int64_t timeout_ms,
-      ObTmpFileIOHandle &handle);
+  int read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
+  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &handle);
   int aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
-  int write(const ObTmpFileIOInfo &io_info, const int64_t timeout_ms);
+  int write(const ObTmpFileIOInfo &io_info);
   int seek(const int64_t offset, const int whence);
   int clear();
   int64_t get_dir_id() const;
@@ -339,15 +339,14 @@ public:
   int aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &handle);
   // NOTE:
   //   default order read, if want to read random, should be seek first.
-  int read(const ObTmpFileIOInfo &io_info, const int64_t timeout_ms, ObTmpFileIOHandle &handle);
-  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, const int64_t timeout_ms,
-      ObTmpFileIOHandle &handle);
+  int read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
+  int pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &handle);
   // NOTE:
   //   only support order write.
   int aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
   // NOTE:
   //   only support order write.
-  int write(const ObTmpFileIOInfo &io_info, const int64_t timeout_ms);
+  int write(const ObTmpFileIOInfo &io_info);
   // only for read:
   // 1. whence == SET_SEEK, inner offset = offset;
   // 2. whence == CUR_SEEK, inner offset -= offset;

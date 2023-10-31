@@ -100,6 +100,32 @@ struct ObEncodingByteLenMap
   typedef typename ObEncodingTypeInference<IS_SIGNED, ObEncodingValueLenTagMap<TYPE_BYTE>::tag_>::Type Type;
 };
 
+typedef bool (*ObGetFilterCmpRetFunc)(const int cmp_ret);
+
+template<int32_t CMP_TYPE>
+OB_INLINE constexpr bool cmp_by_ret(const int cmp_ret) { return false; }
+
+template <> constexpr bool cmp_by_ret<sql::WHITE_OP_EQ>(const int cmp_ret) { return cmp_ret == 0; }
+template <> constexpr bool cmp_by_ret<sql::WHITE_OP_LE>(const int cmp_ret) { return cmp_ret <= 0; }
+template <> constexpr bool cmp_by_ret<sql::WHITE_OP_LT>(const int cmp_ret) { return cmp_ret < 0; }
+template <> constexpr bool cmp_by_ret<sql::WHITE_OP_GE>(const int cmp_ret) { return cmp_ret >= 0; }
+template <> constexpr bool cmp_by_ret<sql::WHITE_OP_GT>(const int cmp_ret) { return cmp_ret > 0; }
+template <> constexpr bool cmp_by_ret<sql::WHITE_OP_NE>(const int cmp_ret) { return cmp_ret != 0; }
+
+
+OB_INLINE ObGetFilterCmpRetFunc get_filter_cmp_ret_func(const sql::ObWhiteFilterOperatorType cmp_type)
+{
+  static ObGetFilterCmpRetFunc filter_cmp_ret_funcs[] = {
+    &cmp_by_ret<sql::WHITE_OP_EQ>,
+    &cmp_by_ret<sql::WHITE_OP_LE>,
+    &cmp_by_ret<sql::WHITE_OP_LT>,
+    &cmp_by_ret<sql::WHITE_OP_GE>,
+    &cmp_by_ret<sql::WHITE_OP_GT>,
+    &cmp_by_ret<sql::WHITE_OP_NE>
+  };
+  return filter_cmp_ret_funcs[cmp_type];
+}
+
 template <typename T, int32_t CMP_TYPE>
 OB_INLINE bool value_cmp_t(T l, T r)
 {
@@ -147,11 +173,16 @@ OB_INLINE int32_t *get_value_len_tag_map()
 
 OB_INLINE int32_t *get_store_class_tag_map()
 {
+  // class tag map for fast batch decode / filter
+  // 0: var-length-enabled data, need deep copy
+  // 1: var-length-enabled data, don't need deep copy
+  // 2: Int / Uint stored type, fixed and packed under 8 bytes
   static int32_t store_class_tag_map[] = {
     -1, // ObExtendSC = 0
     2, // ObIntSC
     2, // ObUIntSC
     0, // ObNumberSC
+    0, // ObWideIntSC
     1, // ObStringSC
     -1, // ObTextSC
     -1, // ObOTimestampSC

@@ -51,7 +51,7 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "rootserver/ob_server_zone_op_service.h"
 #include "observer/ob_server_struct.h"
-#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "share/ob_freeze_info_manager.h"
 #include "rootserver/ob_table_creator.h"
 #include "share/scn.h"
 #include "rootserver/ob_heartbeat_service.h"
@@ -1023,7 +1023,7 @@ int ObBootstrap::batch_create_schema(ObDDLService &ddl_service,
         bool need_sync_schema_version = !(ObSysTableChecker::is_sys_table_index_tid(table.get_table_id()) ||
                                           is_sys_lob_table(table.get_table_id()));
         int64_t start_time = ObTimeUtility::current_time();
-        if (OB_FAIL(ddl_operator.create_table(table, trans, ddl_stmt,
+        if (FAILEDx(ddl_operator.create_table(table, trans, ddl_stmt,
                                               need_sync_schema_version,
                                               is_truncate_table))) {
           LOG_WARN("add table schema failed", K(ret),

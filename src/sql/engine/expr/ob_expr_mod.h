@@ -42,6 +42,8 @@ public:
   static int mod_float(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int mod_double(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int mod_number(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_decimalint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
   // temporary used, remove after all expr converted
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,

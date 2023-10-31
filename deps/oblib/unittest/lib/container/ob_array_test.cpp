@@ -39,6 +39,34 @@ TEST(ObArrayTest, array_of_array)
   }
 }
 
+TEST(ObArrayTest, test_array_push_back)
+{
+  const int64_t loop_times = 3;
+  const int64_t array_size = 32;
+  ObArray<int > array;
+  {
+    ObArray<int> ai;
+    for (int j = 0; j < loop_times; ++j)
+    {
+      ai.reset();
+      for (int i = 0; i < array_size; ++i)
+      {
+        ASSERT_EQ(OB_SUCCESS, ai.push_back(i*j));
+      }
+      ASSERT_EQ(OB_SUCCESS, array.push_back(ai));
+    } // end for
+  }
+  ASSERT_EQ(array.count(), loop_times * array_size);
+  int64_t idx = 0;
+  for (int j = 0; j < loop_times; ++j)
+  {
+    for (int i = 0; i < array_size; ++i)
+    {
+      ASSERT_EQ(i*j, array.at(idx++));
+    }
+  }
+}
+
 TEST(ObArrayTest, array_remove)
 {
   ObArray<int> ai;

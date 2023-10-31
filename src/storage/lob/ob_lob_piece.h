@@ -30,11 +30,11 @@ public:
   static const uint64_t LEN_COL_ID = 1;
   static const uint64_t MACRO_ID_COL_ID = 2;
 public:
-  static int transform(common::ObNewRow* row, ObLobPieceInfo &info);
+  static int transform(blocksstable::ObDatumRow* row, ObLobPieceInfo &info);
 private:
-  static int transform_piece_id(common::ObNewRow* row, ObLobPieceInfo &info);
-  static int transform_len(common::ObNewRow* row, ObLobPieceInfo &info);
-  static int transform_macro_id(common::ObNewRow* row, ObLobPieceInfo &info);
+  static int transform_piece_id(blocksstable::ObDatumRow* row, ObLobPieceInfo &info);
+  static int transform_len(blocksstable::ObDatumRow* row, ObLobPieceInfo &info);
+  static int transform_macro_id(blocksstable::ObDatumRow* row, ObLobPieceInfo &info);
 };
 
 class ObLobPieceManager

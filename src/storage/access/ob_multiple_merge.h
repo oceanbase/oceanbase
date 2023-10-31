@@ -62,7 +62,7 @@ public:
   void disable_output_row_with_nop() { need_output_row_with_nop_ = false; }
   OB_INLINE bool is_inited() { return inited_; }
   OB_INLINE bool is_read_memtable_only() const { return read_memtable_only_; }
-  virtual const common::ObIArray<share::schema::ObColDesc> *get_out_project_cells() override { return &out_project_cols_; }
+  OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_out_project_cells() { return out_project_cols_; }
 
 protected:
   int open();
@@ -106,7 +106,6 @@ private:
   int reset_tables();
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
   int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param);
-  int alloc_iter_pool(common::ObIAllocator &allocator);
   int process_fuse_row(const bool not_using_static_engine,
                        blocksstable::ObDatumRow &in_row,
                        blocksstable::ObDatumRow *&out_row);
@@ -123,7 +122,6 @@ private:
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
-  ObStoreRowIterPool *iter_pool_;
   const ObTableAccessParam *access_param_;
   ObTableAccessContext *access_ctx_;
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
@@ -175,25 +173,25 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
 OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
 {
   int ret = OB_SUCCESS;
-  if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
-    EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
-    access_ctx_->table_store_stat_.access_row_cnt_ += row_stat_.filt_del_count_;
-    if (NULL != access_ctx_->table_scan_stat_) {
-      access_ctx_->table_scan_stat_->access_row_cnt_ += row_stat_.filt_del_count_;
-      access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
-      access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
-      access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
-      access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.get_empty_read_cnt();
-      access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
-      access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
-      access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
-      access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
-      access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
-      access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
-    }
-    if (lib::is_diagnose_info_enabled()) {
-      collect_merge_stat(access_ctx_->table_store_stat_);
-    }
+  EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
+  access_ctx_->table_store_stat_.access_row_cnt_ += row_stat_.filt_del_count_;
+  if (NULL != access_ctx_->table_scan_stat_) {
+    access_ctx_->table_scan_stat_->access_row_cnt_ += row_stat_.filt_del_count_;
+    access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
+    access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
+    access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
+    access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.get_empty_read_cnt();
+    access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
+    access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
+    access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
+    access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
+    access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
+    access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
+  }
+  if (lib::is_diagnose_info_enabled()) {
+    collect_merge_stat(access_ctx_->table_store_stat_);
+  }
+  if (MTL(compaction::ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
     report_tablet_stat();
   }
   return ret;

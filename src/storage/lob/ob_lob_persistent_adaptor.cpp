@@ -53,7 +53,7 @@ int ObPersistentLobApator::prepare_table_param(
         LOG_WARN("Fail to allocate memory", K(ret));
       } else {
         table_param = new (buf) ObTableParam(*param.allocator_);
-        if (OB_FAIL(table_param->convert(table_schema, scan_param.column_ids_))) {
+        if (OB_FAIL(table_param->convert(table_schema, scan_param.column_ids_, scan_param.pd_storage_flag_))) {
           LOG_WARN("Fail to convert table param", K(ret));
         } else {
           scan_param.table_param_ = table_param;
@@ -194,12 +194,14 @@ int ObPersistentLobApator::get_lob_data(
             } else if (OB_FAIL(oas->table_scan(scan_param, iter))) {
               LOG_WARN("do table scan falied.", K(ret), K(scan_param));
             } else {
-              oceanbase::common::ObNewRow *row = nullptr;
-              ret = iter->get_next_row(row);
-              if (OB_FAIL(ret)) {
-                LOG_WARN("get next row failed.", K(ret));
-              } else if (OB_FAIL(ObLobPieceUtil::transform(row, info))) {
-                LOG_WARN("failed to transform row.", K(ret));
+              ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(iter);
+              if (OB_SUCC(ret)) {
+                blocksstable::ObDatumRow *datum_row = nullptr;
+                if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
+                  LOG_WARN("Failed to get next row", K(ret));
+                } else if (OB_FAIL(ObLobPieceUtil::transform(datum_row, info))) {
+                  LOG_WARN("failed to transform row.", K(ret));
+                }
               }
             }
             if (OB_NOT_NULL(iter)) {

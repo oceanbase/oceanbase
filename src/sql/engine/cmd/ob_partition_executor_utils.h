@@ -127,7 +127,7 @@ public:
   static int expr_cal_and_cast(const sql::stmt::StmtType &stmt_type,
                                bool is_list_part,
                                ObExecContext &ctx,
-                               const common::ObObjType fun_expr_type,
+                               const sql::ObExprResType &dst_res_type,
                                const common::ObCollationType fun_collation_type,
                                ObRawExpr *expr,
                                common::ObObj &value_obj);

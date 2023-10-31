@@ -74,6 +74,7 @@ private:
                               const common::ObObjType to,
                               const common::ObCollationType to_cs_type,
                               ObExprOperatorType expr_type);
+  int push_back_types(const ObRawExpr *param_expr, ObExprResTypes &types);
   int calc_result_type(ObNonTerminalRawExpr &expr, ObIExprResTypes &types,
                        common::ObCastMode &cast_mode, int32_t row_dimension);
   int calc_result_type_with_const_arg(
@@ -102,6 +103,9 @@ private:
 
   int set_agg_json_array_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
+  int set_agg_min_max_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type,
+                                  bool &need_add_cast);
+  int set_agg_regr_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
   int set_xmlagg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
 
   int set_agg_xmlagg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
@@ -133,6 +137,8 @@ private:
                                           const bool keep_type);
   int add_group_aggr_implicit_cast(ObAggFunRawExpr &expr, const ObCastMode& cast_mode);
   int adjust_cast_as_signed_unsigned(ObSysFunRawExpr &expr);
+
+  bool ignore_scale_adjust_for_decimal_int(const ObItemType expr_type);
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;

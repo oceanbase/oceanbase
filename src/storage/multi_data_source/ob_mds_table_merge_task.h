@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_MDS_TABLE_MERGE_TASK
 #define OCEANBASE_STORAGE_OB_MDS_TABLE_MERGE_TASK
 
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 
 namespace oceanbase
 {

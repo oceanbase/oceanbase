@@ -374,7 +374,6 @@ public:
                                 ObRawExpr *from,
                                 ObRawExpr *to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
-
   static int replace_ref_column(common::ObIArray<ObRawExpr *> &exprs,
                                 ObIArray<ObRawExpr *> &from,
                                 ObIArray<ObRawExpr *> &to,
@@ -939,7 +938,7 @@ public:
   static int check_need_cast_expr(const ObExprResType &src_res_type,
                                   const ObExprResType &dst_res_type,
                                   bool &need_cast,
-                                  bool &is_scale_adjust_cast);
+                                  bool &ignore_dup_cast_error);
   static int build_add_expr(ObRawExprFactory &expr_factory,
                             ObRawExpr *param_expr1,
                             ObRawExpr *param_expr2,
@@ -1133,7 +1132,11 @@ public:
                                   const ObSQLSessionInfo &session_info,
                                   const share::schema::ObTableSchema &index_schema,
                                   ObColumnRefRawExpr *&spk_expr);
+  static bool decimal_int_need_cast(const common::ObAccuracy &src_acc,
+                                    const common::ObAccuracy &dst_acc);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
+  static bool decimal_int_need_cast(const common::ObPrecision src_p, const common::ObScale src_s,
+                                    const common::ObPrecision dst_p, const common::ObScale dst_s);
   static int transform_udt_column_value_expr(ObRawExprFactory &expr_factory, ObRawExpr *old_expr, ObRawExpr *&new_expr);
 
   static int create_type_expr(ObRawExprFactory &expr_factory,

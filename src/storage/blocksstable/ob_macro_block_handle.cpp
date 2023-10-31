@@ -126,7 +126,7 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(read_info));
+    LOG_WARN("invalid io argument", K(ret), K(read_info), KCSTRING(lbt()));
   } else {
     reuse();
     ObIOInfo io_info;
@@ -137,8 +137,10 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
     io_info.callback_ = read_info.io_callback_;
     io_info.fd_.first_id_ = read_info.macro_block_id_.first_id();
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
-    // resource manager level is higher than default
     io_info.flag_.set_group_id(read_info.io_desc_.get_io_module());
+    const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
+    io_info.timeout_us_ = real_timeout_ms * 1000L;
+    io_info.user_data_buf_ = read_info.buf_;
 
     io_info.flag_.set_read();
     if (OB_FAIL(ObIOManager::get_instance().aio_read(io_info, io_handle_))) {
@@ -166,6 +168,8 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     io_info.fd_.first_id_ = macro_id_.first_id();
     io_info.fd_.second_id_ = macro_id_.second_id();
     io_info.flag_.set_group_id(write_info.io_desc_.get_io_module());
+    const int64_t real_timeout_ms = min(write_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
+    io_info.timeout_us_ = real_timeout_ms * 1000L;
 
     io_info.flag_.set_write();
     if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle_))) {
@@ -184,13 +188,13 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
   return ret;
 }
 
-int ObMacroBlockHandle::wait(const int64_t timeout_ms)
+int ObMacroBlockHandle::wait()
 {
   int ret = OB_SUCCESS;
   if (io_handle_.is_empty()) {
     // do nothing
-  } else if (OB_FAIL(io_handle_.wait(timeout_ms))) {
-    LOG_WARN("fail to wait block io, may be retry", K(macro_id_), K(ret), K(timeout_ms));
+  } else if (OB_FAIL(io_handle_.wait())) {
+    LOG_WARN("fail to wait block io, may be retry", K(macro_id_), K(ret));
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = report_bad_block())) {
       LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));

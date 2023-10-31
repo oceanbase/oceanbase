@@ -65,7 +65,8 @@ private:
 
   static int fill_column_stat_history(ObIAllocator &allocator,
                                       common::sqlclient::ObMySQLResult &result,
-                                      ObOptColumnStat *&col_stat);
+                                      ObOptColumnStat *&col_stat,
+                                      bool need_cg_info);
 
   static int fetch_histogram_stat_histroy(ObExecContext &ctx,
                                           ObIAllocator &allocator,

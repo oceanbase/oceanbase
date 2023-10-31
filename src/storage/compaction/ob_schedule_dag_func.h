@@ -27,6 +27,7 @@ struct ObDDLTableMergeDagParam;
 namespace compaction
 {
 struct ObTabletMergeDagParam;
+struct ObCOMergeDagParam;
 
 class ObScheduleDagFunc
 {
@@ -40,6 +41,8 @@ public:
   static int schedule_ddl_table_merge_dag(
       storage::ObDDLTableMergeDagParam &param,
       const bool is_emergency = false);
+  static int schedule_tablet_co_merge_dag_net(
+      ObCOMergeDagParam &param);
   static int schedule_mds_table_merge_dag(
       storage::mds::ObMdsTableMergeDagParam &param,
       const bool is_emergency = false);

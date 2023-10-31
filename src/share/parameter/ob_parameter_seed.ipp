@@ -342,6 +342,9 @@ DEF_STR_WITH_CHECKER(_ctx_memory_limit, OB_TENANT_PARAMETER, "",
 DEF_BOOL(_enable_convert_real_to_decimal, OB_TENANT_PARAMETER, "False",
          "specifies whether convert column type float(M,D), double(M,D) to decimal(M,D) in DDL",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_decimal_int_type, OB_TENANT_PARAMETER, "True",
+         "specifies wether use decimal_int type as backend for decimal values",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_enable_dynamic_worker, OB_TENANT_PARAMETER, "True",
          "specifies whether worker count increases when all workers were in blocking.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -418,9 +421,9 @@ DEF_INT(_enable_hash_join_processor, OB_TENANT_PARAMETER, "7", "[1, 7]",
          "which path to process for hash join, default 7 to auto choose "
          "1: nest loop, 2: recursive, 4: in-memory",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_pushdown_storage_level, OB_TENANT_PARAMETER, "3", "[0, 3]",
-        "the level of storage pushdown. Range: [0, 3] "
-        "0: disabled, 1:blockscan, 2: blockscan & filter, 3: blockscan & filter & aggregate",
+DEF_INT(_pushdown_storage_level, OB_TENANT_PARAMETER, "4", "[0, 4]",
+        "the level of storage pushdown. Range: [0, 4] "
+        "0: disabled, 1:blockscan, 2: blockscan & filter, 3: blockscan & filter & aggregate, 4: blockscan & filter & aggregate & group by",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_WORK_AREA_POLICY(workarea_size_policy, OB_TENANT_PARAMETER, "AUTO", "policy used to size SQL working areas (MANUAL/AUTO)",
               ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -846,8 +849,8 @@ DEF_INT_WITH_CHECKER(disk_io_thread_count, OB_CLUSTER_PARAMETER, "8",
                      "[2,32]",
                      "The number of io threads on each disk. The default value is 8. Range: [2,32] in even integer",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_io_callback_thread_count, OB_TENANT_PARAMETER, "8", "[1,64]",
-        "The number of io callback threads. The default value is 8. Range: [1,64] in integer",
+DEF_INT(_io_callback_thread_count, OB_TENANT_PARAMETER, "0", "[0,64]",
+        "The number of io callback threads. The default value is 0. Range: [0,64] in integer. If not specified, The number of threads is dynamically configured according to the memory size",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "True",
@@ -917,6 +920,10 @@ DEF_INT(_ob_elr_fast_freeze_threshold, OB_CLUSTER_PARAMETER, "500000", "[10000,)
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_enable_fast_freeze, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's fast freeze is enabled"
+         "Value: True:turned on;  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_adaptive_merge_schedule, OB_TENANT_PARAMETER, "False",
+         "specifies whether the tenant's adaptive merge scheduling is enabled"
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -1634,6 +1641,35 @@ DEF_BOOL(_optimizer_skip_scan_enabled, OB_TENANT_PARAMETER, "False",
 DEF_TIME(_ls_migration_wait_completing_timeout, OB_TENANT_PARAMETER, "30m", "[60s,)",
         "the wait timeout in ls complete migration phase",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// column store section
+DEF_BOOL(_enable_column_store, OB_TENANT_PARAMETER, "True",
+        "enable the column store format in storage engine",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_skip_index, OB_TENANT_PARAMETER, "True",
+        "enable the skip index in storage engine",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_BOOL(v4.3, enable_cs_encoding_filter, OB_CLUSTER_PARAMETER, "True",
+              "enables using column_store encoding filter logic. The default value is True.",
+              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_INT(v4.3, storage_encoding_mode, OB_TENANT_PARAMETER, "0", "[0, 2]",
+             "0: row_store uses encoding, column_store used cs_encoding; 1: all use encoding; 2: all use cs_encoding. Range: [0, 2] in integer",
+             ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_BOOL(v4.3, enable_table_with_cg, OB_TENANT_PARAMETER, "False",
+              "enables creating table with all column_group and each column_group. The default value is True.",
+              ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_INT(v4.3, encoding_test_seed, OB_CLUSTER_PARAMETER, "0", "[0,)"
+            "The seed is used to test encoding algorithm. The default is 0, indicating that it is not test, the production environment must keep the default value",
+              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_BOOL(v4.3, enable_table_without_all_cg, OB_TENANT_PARAMETER, "False",
+              "enables creating table without all column_group. The default value is False.",
+              ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
+         "enable limiting memory in prefetch for single query",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(_storage_leak_check_mod, OB_CLUSTER_PARAMETER, "", "set leak check mod in storage",
+     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(_ha_tablet_info_batch_count, OB_TENANT_PARAMETER, "0", "[0,]",
         "the number of tablet replica info sent by on rpc for ha. Range: [0, +∞) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

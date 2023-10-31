@@ -92,8 +92,9 @@ inline int ObRawExprUtils::resolve_op_expr_add_implicit_cast(ObRawExprFactory &e
       }
     }
   } else {
-    OZ(ObRawExprUtils::create_cast_expr(expr_factory, src_expr,
-        dst_type, func_expr, session_info));
+    OZ(ObRawExprUtils::create_cast_expr(expr_factory, src_expr, dst_type, func_expr, session_info,
+                                        dst_type.get_cast_mode() == CM_NONE,
+                                        dst_type.get_cast_mode()));
     CK(OB_NOT_NULL(func_expr));
   }
 
@@ -172,6 +173,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
         ObObjType middle_type = ObMaxType;
         ObObjTypeClass tc1 = OBJ_O_TYPE_TO_CLASS[type1];
         ObObjTypeClass tc2 = OBJ_O_TYPE_TO_CLASS[type2];
+        bool is_arith_op = false;
         switch (op_type) {
         case T_OP_CNN: {
           // the accuracy deduced in this function is conflict with ObExprConcat::calc_result_typeN,
@@ -214,6 +216,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           break;
           }
         case T_OP_ADD: {
+          is_arith_op = true;
           if (ob_is_oracle_datetime_tc(r_type1)) {
             if (ob_is_numeric_type(r_type2)) {
               dir = ImplicitCastDirection::IC_NO_CAST;
@@ -243,6 +246,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           }
           }
         case T_OP_MINUS: {
+          is_arith_op = true;
           if (ob_is_oracle_datetime_tc(r_type1)) {
             if (ob_is_numeric_type(r_type2)) {
               dir = ImplicitCastDirection::IC_NO_CAST;
@@ -272,6 +276,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
         case T_OP_MUL:
         case T_OP_DIV:
         case T_OP_MOD: {
+          is_arith_op = true;
           if (ob_is_raw_tc(r_type1)) {
             if (ob_is_string_tc(r_type2)) {
               dir = ImplicitCastDirection::IC_NO_CAST;
@@ -313,7 +318,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           dir = ImplicitCastDirection::IC_NO_CAST;
         }
         LOG_DEBUG("Molly ORACLE IMPLICIT CAST DIR",
-            K(dir), K(type1), K(type2), K(r_type3), K(*sub_expr1), K(*sub_expr2));
+            K(dir), K(type1), K(type2), K(r_type3), K(*sub_expr1), K(*sub_expr2), K(op_type));
         ObExprResType dest_type;
         switch (dir) {
         case ImplicitCastDirection::IC_NO_CAST: {
@@ -352,10 +357,39 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           break;
         }
         case ImplicitCastDirection::IC_A_TO_B: {
-          ObAccuracy acc = (ObNumberType == r_type2 ? ObAccuracy::DDL_DEFAULT_ACCURACY2[1][r_type2] : ObAccuracy::MAX_ACCURACY2[1][r_type2]);
+          ObAccuracy acc;
+          ObObjType dst_type = r_type2;
+          if (is_arith_op && ob_is_string_tc(r_type1) && ObDecimalIntType == r_type2) {
+            dst_type = ObNumberType;
+          }
+          // oracle mode
+          // create table t (a float);
+          // column 'a' type is ObNumberFloatType
+          //
+          // select 1 - a from t;
+          // '1' parsed as ObDecimalIntType, cast direction is 'IC_B_TO_A', got:
+          // select 1 - cast(a as decimal_int(1, 0)) from t;
+          // which is wrong, for that 'a' may equal to 1.235.
+          // here, we change calc type back to ObNumberType.
+          if (ob_is_decimal_int_tc(dst_type)
+              && r_type1 == ObNumberFloatType) {
+            dst_type = ObNumberType;
+          }
+          ObCastMode cast_mode = CM_NONE;
+          if (ObDecimalIntType == dst_type) {
+            // 如果是decimal int类型，accuracy和decimal int一致即可
+            acc = sub_expr2->get_result_type().get_accuracy();
+            if (!ob_is_decimal_int(r_type1) && IS_STRICT_OP(op_type)) {
+              cast_mode |= ObRelationalExprOperator::get_const_cast_mode(op_type, false);
+            }
+          } else {
+            acc = (ObNumberType == dst_type ? ObAccuracy::DDL_DEFAULT_ACCURACY2[1][dst_type] :
+                                             ObAccuracy::MAX_ACCURACY2[1][dst_type]);
+          }
           dest_type.set_precision(acc.get_precision());
           dest_type.set_scale(acc.get_scale());
-          dest_type.set_type(r_type2);
+          dest_type.set_type(dst_type);
+          dest_type.add_cast_mode(cast_mode);
           if (ob_is_nstring_type(dest_type.get_type())) {
             dest_type.set_collation_type(OB_NOT_NULL(session_info)
                                 ? session_info->get_nls_collation_nation() : CS_TYPE_UTF16_BIN);
@@ -372,16 +406,41 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
             LOG_WARN("failed to add flag", K(ret));
           } else {
+            if (sub_expr1->is_const_expr() && !sub_expr2->is_const_expr()
+                && ObDecimalIntType == dst_type) {
+              ObCastMode extra_cm = ObRelationalExprOperator::get_const_cast_mode(op_type, false);
+              new_expr->set_extra(new_expr->get_extra() | extra_cm);
+            }
             sub_expr1 = new_expr;
           }
           break;
         }
         case ImplicitCastDirection::IC_B_TO_A: {
-          ObAccuracy acc = (ObNumberType == r_type1 ? ObAccuracy::DDL_DEFAULT_ACCURACY2[1][r_type1] : ObAccuracy::MAX_ACCURACY2[1][r_type1]);
+          ObAccuracy acc;
+          ObCastMode cast_mode = CM_NONE;
+          ObObjType dst_type = r_type1;
+          if (is_arith_op && ob_is_string_tc(r_type2) && ObDecimalIntType == r_type1) {
+            dst_type = ObNumberType;
+          }
+          if (ob_is_decimal_int_tc(dst_type)
+              && r_type2 == ObNumberFloatType) {
+            dst_type = ObNumberType;
+          }
+          if (ObDecimalIntType == dst_type) {
+            // 如果是decimal int类型，accuracy和decimal int一致即可
+            acc = sub_expr1->get_result_type().get_accuracy();
+            if (!ob_is_decimal_int(r_type2) && IS_STRICT_OP(op_type)) {
+              cast_mode |= ObRelationalExprOperator::get_const_cast_mode(op_type, true);
+            }
+          } else {
+            acc = (ObNumberType == dst_type ? ObAccuracy::DDL_DEFAULT_ACCURACY2[1][dst_type] :
+                                             ObAccuracy::MAX_ACCURACY2[1][dst_type]);
+          }
           dest_type.set_precision(acc.get_precision());
           dest_type.set_scale(acc.get_scale());
           //dest_type.set_collation_level(CS_LEVEL_NUMERIC);
-          dest_type.set_type(r_type1);
+          dest_type.set_type(dst_type);
+          dest_type.add_cast_mode(cast_mode);
           if (ob_is_nstring_type(dest_type.get_type())) {
             dest_type.set_collation_type(OB_NOT_NULL(session_info)
                                 ? session_info->get_nls_collation_nation() : CS_TYPE_UTF16_BIN);
@@ -396,6 +455,10 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpect null expr", K(ret));
           } else {
+            if (sub_expr2->is_const_expr() && !sub_expr1->is_const_expr() && ObDecimalIntType == dst_type) {
+              ObCastMode extra_cm = ObRelationalExprOperator::get_const_cast_mode(op_type, true);
+              new_expr->set_extra(new_expr->get_extra() | extra_cm);
+            }
             sub_expr2 = new_expr;
           }
           break;
@@ -3785,16 +3848,16 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
   int ret = OB_SUCCESS;
   new_expr = &expr;
   bool need_cast = false;
-  bool is_scale_adjust_cast = false;
+  bool ignore_dup_cast_error = false;
   const ObExprResType &src_type = expr.get_result_type();
   CK(OB_NOT_NULL(session) && OB_NOT_NULL(expr_factory));
-  OZ(ObRawExprUtils::check_need_cast_expr(src_type, dst_type, need_cast, is_scale_adjust_cast));
+  OZ(ObRawExprUtils::check_need_cast_expr(src_type, dst_type, need_cast, ignore_dup_cast_error));
   if (OB_SUCC(ret) && need_cast) {
     if (T_FUN_SYS_CAST == expr.get_expr_type()
         && expr.has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
-        && !(is_scale_adjust_cast
-             || (src_type.is_user_defined_sql_type()
-                  && (dst_type.is_character_type() || dst_type.is_null())))) {
+        && !ignore_dup_cast_error
+        && !(src_type.is_user_defined_sql_type()
+                  && (dst_type.is_character_type() || dst_type.is_null()))) {
       // cases like: select xmltype(var)||xmltype(var) as "res1" from t1 t;
       // xmltype is a lp constructor, an implicit cast is added to cast PL xmltype to SQL xmltype
       // when deduce concat, another cast is needed to cast SQL xmltype to string
@@ -3806,7 +3869,7 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                 K(session->get_current_query_string()));
 #else
       LOG_WARN("try to add implicit cast again, check if type deduction is correct",
-                K(ret), K(expr), K(dst_type),
+                K(ret), K(expr), K(dst_type), K(src_type), K(ignore_dup_cast_error),
                 K(session->get_current_query_string()));
 #endif
     } else {
@@ -3819,9 +3882,17 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
       }
       // setup zerofill cm
       // eg: select concat(cast(c_zf as char(10)), cast(col_no_zf as char(10))) from t1;
-      if (expr.get_result_type().has_result_flag(ZEROFILL_FLAG)) {
+      if (expr.get_result_type().has_result_flag(ZEROFILL_FLAG) && !dst_type.is_decimal_int()) {
+        // decimal int type do not need zerofill
+        // create t (a decimal(10, 2) zerofill),
+        // column a is DECIMAL UNSIGNED, the corresponding backend is ObUNumberType
         cm_zf |= CM_ZERO_FILL;
       }
+      if (dst_type.get_cast_mode() != 0) {
+        cm_zf |= dst_type.get_cast_mode();
+      }
+      ObExprResType final_dst_type = dst_type;
+
       ObSysFunRawExpr *cast_expr = NULL;
       OZ(ObRawExprUtils::create_cast_expr(*expr_factory, &expr, dst_type, cast_expr,
                                           session, false, cm_zf));
@@ -4047,6 +4118,12 @@ int ObRawExprUtils::erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out)
     } else {
       for (int64_t i = 0; i < src->get_param_count() && OB_SUCC(ret); i++) {
         OZ(erase_operand_implicit_cast(src->get_param_expr(i), src->get_param_expr(i)));
+      }
+      // reset DECIMAL_INT_ADJUST_FLAG anyway, otherwise the result precision maybe affected
+      // after removing implicit cast.
+      ObOpRawExpr *op_expr = dynamic_cast<ObOpRawExpr *>(src);
+      if (op_expr != NULL && op_expr->get_op() != NULL) {
+        op_expr->get_op()->get_result_type().unset_result_flag(DECIMAL_INT_ADJUST_FLAG);
       }
       if (OB_SUCC(ret)) {
         out = src;
@@ -4650,7 +4727,7 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
   if (OB_SUCC(ret) && is_in_pl) {
     ObObjTypeClass ori_tc = ob_obj_type_class(expr->get_data_type());
     ObObjTypeClass expect_tc = ob_obj_type_class(dest_type);
-    if (ObNumberTC == ori_tc
+    if ((ObNumberTC == ori_tc || ObDecimalIntTC == ori_tc)
         && (ObTextTC == expect_tc || ObLobTC == expect_tc)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("cast to lob type not allowed", K(ret), K(expect_tc), K(ori_tc));
@@ -6274,6 +6351,11 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
 
   if (OB_SUCC(ret)) {
     column_expr.set_accuracy(accuracy);
+    if (column_schema.is_decimal_int()) {
+      ObObjMeta data_meta = column_schema.get_meta_type();
+      data_meta.set_scale(column_schema.get_accuracy().get_scale());
+      column_expr.set_meta_type(data_meta);
+    }
     if (OB_FAIL(column_expr.extract_info())) {
       LOG_WARN("extract column expr info failed", K(ret));
     }
@@ -6432,6 +6514,7 @@ int ObRawExprUtils::need_wrap_to_string(ObObjType param_type, ObObjType calc_typ
       case ObNumberFloatType :
       case ObBitType :
       case ObYearType :
+      case ObDecimalIntType:
         {
           need_wrap = false;
           break;
@@ -7332,18 +7415,19 @@ bool ObRawExprUtils::is_sharable_expr(const ObRawExpr &expr)
 int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
                                          const ObExprResType &dst_type,
                                          bool &need_cast,
-                                         bool &is_scale_adjust_cast)
+                                         bool &ignore_dup_cast_error)
 {
   int ret = OB_SUCCESS;
   need_cast = false;
-  is_scale_adjust_cast = false;
+  ignore_dup_cast_error = false;
   ObObjType in_type  = src_type.get_type();
   ObObjType out_type = dst_type.get_type();
+  ObScale in_scale = src_type.get_scale();
+  ObScale out_scale = dst_type.get_scale();
   ObCollationType in_cs_type  = src_type.get_collation_type();
   ObCollationType out_cs_type = dst_type.get_collation_type();
   const bool is_same_need = true;
   bool need_wrap = false;
-
   if (!ob_is_valid_obj_type(in_type) || !ob_is_valid_obj_type(out_type) ||
       (ob_is_string_or_lob_type(in_type) && !ObCharset::is_valid_collation(in_cs_type)) ||
       (ob_is_string_or_lob_type(out_type) && !ObCharset::is_valid_collation(out_cs_type))) {
@@ -7362,9 +7446,13 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
       // case 2: dst_scale is greater than src_scale, need to be aligned
       need_cast = (SCALE_UNKNOWN_YET == dst_type.get_scale()) ||
                      (src_type.get_scale() < dst_type.get_scale());
-      if (need_cast) {
-        is_scale_adjust_cast = true;
-      }
+    } else if (ob_is_decimal_int(in_type) && decimal_int_need_cast(src_type.get_accuracy(),
+                                                                   dst_type.get_accuracy())) {
+      need_cast = true;
+    }
+    // mark as scale adjust cast to avoid repeat cast error
+    if (need_cast) {
+      ignore_dup_cast_error = true; // scale adjust cast need ignore duplicate cast error.
     }
   } else if (ob_is_enumset_tc(out_type)) {
     //no need add cast, will add column_conv later
@@ -7390,6 +7478,10 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
     need_cast = true;
   } else {
     need_cast = true;
+    if (src_type.is_decimal_int() && dst_type.is_number()) {
+      // ignore duplicate cast error caused by decimal int fallback to number
+      ignore_dup_cast_error = true;
+    }
   }
   LOG_DEBUG("check_need_cast_expr", K(ret), K(need_cast), K(src_type), K(dst_type));
   return ret;
@@ -7424,7 +7516,7 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory &expr_factory,
         LOG_WARN("add dest type expr failed", K(ret));
       }
       LOG_DEBUG("create_cast_expr debug", K(ret), K(*src_expr), K(dst_type),
-                                          K(*func_expr), K(lbt()));
+                                          K(*func_expr), K(lbt()), K(func_expr));
     }
   }
   return ret;
@@ -7491,6 +7583,15 @@ int ObRawExprUtils::create_type_expr(ObRawExprFactory &expr_factory,
             ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode]
                                              [dst_type.get_type()]
                                                  .get_scale();
+    } else if (dst_type.is_decimal_int()) {
+      // precision of decimal int value may be larger than 81, e.g. int(255) + decimal(10, 2)
+      // truncate precision here.
+      ObPrecision prec = dst_type.get_precision();
+      if (prec > OB_MAX_DECIMAL_POSSIBLE_PRECISION) {
+        prec = OB_MAX_DECIMAL_POSSIBLE_PRECISION;
+      }
+      parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = prec;
+      parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = dst_type.get_scale();
     } else {
       parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = dst_type.get_precision();
       parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = dst_type.get_scale();
@@ -8581,6 +8682,27 @@ int ObRawExprUtils::check_contain_case_when_exprs(const ObRawExpr *raw_expr, boo
     }
   }
   return ret;
+}
+
+bool ObRawExprUtils::decimal_int_need_cast(const ObAccuracy &src_acc, const ObAccuracy &dst_acc)
+{
+  return decimal_int_need_cast(src_acc.get_precision(), src_acc.get_scale(),
+                               dst_acc.get_precision(), dst_acc.get_scale());
+}
+
+bool ObRawExprUtils::decimal_int_need_cast(const ObPrecision src_p, const ObScale src_s,
+                                           const ObPrecision dst_p, const ObScale dst_s)
+{
+  bool bret = false;
+  // if the scale or the integer width of precision is different, cast is required.
+  if (src_s < 0 || dst_p < 0) {
+    // do nothing
+  } else if (src_s != dst_s) {
+    bret = true;
+  } else if (get_decimalint_type(src_p) != get_decimalint_type(dst_p)) {
+    bret = true;
+  }
+  return bret;
 }
 
 int ObRawExprUtils::transform_udt_column_value_expr(ObRawExprFactory &expr_factory, ObRawExpr *old_expr, ObRawExpr *&new_expr)

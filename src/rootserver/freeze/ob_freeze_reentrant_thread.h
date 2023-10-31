@@ -28,7 +28,7 @@ namespace rootserver
 class ObFreezeReentrantThread : public ObRsReentrantThread
 {
 public:
-  ObFreezeReentrantThread();
+  ObFreezeReentrantThread(const uint64_t tenant_id);
   virtual ~ObFreezeReentrantThread() {}
 
   virtual void pause();

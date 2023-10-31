@@ -33,6 +33,7 @@ public:
     COMPACTION_SCN,
     EVENT_TIMESTAMP,
     EVENT,
+    ROLE,
   };
   ObAllVirtualServerCompactionEventHistory();
   virtual ~ObAllVirtualServerCompactionEventHistory();
@@ -45,7 +46,6 @@ private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char event_buf_[common::OB_COMPACTION_EVENT_STR_LENGTH];
   compaction::ObServerCompactionEvent event_;
-  compaction::ObServerCompactionEvent last_event_;
   compaction::ObServerCompactionEventIterator event_iter_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualServerCompactionEventHistory);

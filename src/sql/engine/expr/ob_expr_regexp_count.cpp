@@ -157,7 +157,8 @@ int ObExprRegexpCount::eval_regexp_count(
     int64_t pos = 1;
     if (position != NULL && position->is_null()) {
       expr_datum.set_null();
-    } else if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos))) {
+    } else if (OB_FAIL(ObExprUtil::get_int_param_val(
+                 position, expr.arg_cnt_ > 2 && expr.args_[2]->obj_meta_.is_decimal_int(), pos))) {
       LOG_WARN("truncate number to int64 failed", K(ret));
     } else if (pos <= 0) {
       ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;

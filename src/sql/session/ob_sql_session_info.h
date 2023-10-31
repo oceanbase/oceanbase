@@ -651,6 +651,8 @@ public:
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
+                                 enable_column_store_(false),
+                                 enable_decimal_int_type_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
@@ -671,6 +673,8 @@ public:
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
     int64_t get_range_optimizer_max_mem_size() const { return range_optimizer_max_mem_size_; }
+    bool get_enable_column_store() const { return enable_column_store_; }
+    bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -686,6 +690,8 @@ public:
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     int64_t range_optimizer_max_mem_size_;
+    bool enable_column_store_;
+    bool enable_decimal_int_type_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -1243,6 +1249,16 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_print_sample_ppm();
+  }
+  bool is_enable_column_store()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_column_store();
+  }
+  bool is_enable_decimal_int_type()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_decimal_int_type();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

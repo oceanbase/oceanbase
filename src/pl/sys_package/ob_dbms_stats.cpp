@@ -88,7 +88,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                       params.at(0),
                                       params.at(1),
                                       params.at(2),
-                                      stat_param))) {
+                                      stat_param,
+                                      true))) {
       LOG_WARN("failed to parse owner", K(ret));
     } else if (OB_FAIL(parse_gather_stat_options(ctx,
                                                 params.at(3),
@@ -197,7 +198,7 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
       ObOptStatGatherStat gather_stat(task_info);
       ObOptStatGatherStatList::instance().push(gather_stat);
       ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, stat_param.allocator_->used(), gather_stat);
-      if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+      if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param, true))) {
         LOG_WARN("failed to parse table part info", K(ret));
       } else if (OB_FAIL(parse_gather_stat_options(ctx,
                                                   params.at(1),
@@ -3046,7 +3047,8 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                        const ObObjParam &owner,
                                        const ObObjParam &tab_name,
                                        const ObObjParam &part_name,
-                                       ObTableStatParam &param)
+                                       ObTableStatParam &param,
+                                       bool need_parse_col_group /*default false*/)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *table_schema = NULL;
@@ -3091,6 +3093,9 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                         *table_schema,
                                         param.column_params_))) {
       LOG_WARN("failed to init column stat params", K(ret));
+    } else if (need_parse_col_group &&
+               OB_FAIL(init_column_group_stat_param(*table_schema, param.column_group_params_))) {
+      LOG_WARN("failed to init column group stat param", K(ret));
     }
   }
   return ret;
@@ -3098,7 +3103,8 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
 
 int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                        const StatTable stat_table,
-                                       ObTableStatParam &param)
+                                       ObTableStatParam &param,
+                                       bool need_parse_col_group /*default false*/)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *table_schema = NULL;
@@ -3124,6 +3130,9 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
                                              *table_schema,
                                              param.column_params_))) {
     LOG_WARN("failed to init column stat params", K(ret));
+  } else if (need_parse_col_group &&
+             OB_FAIL(init_column_group_stat_param(*table_schema, param.column_group_params_))) {
+    LOG_WARN("failed to init column group stat param", K(ret));
   } else {
     param.table_id_ = table_schema->get_table_id();
     param.ref_table_type_ = table_schema->get_table_type();
@@ -5612,7 +5621,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
                                                         duration_time,
                                                         stat_param.duration_time_))) {
     LOG_WARN("failed to get valid duration time", K(ret));
-  } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+  } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param, true))) {
     LOG_WARN("failed to parse owner", K(ret));
   } else if (OB_FAIL(use_default_gather_stat_options(ctx, stat_table, stat_param))) {
     LOG_WARN("failed to use default gather stat optitions", K(ret));
@@ -6186,6 +6195,46 @@ int ObDbmsStats::init_gather_task_info(ObExecContext &ctx,
       LOG_TRACE("Succeed to init gather task info", K(task_info));
     }
   }
+  return ret;
+}
+
+int ObDbmsStats::init_column_group_stat_param(const share::schema::ObTableSchema &table_schema,
+                                              ObIArray<ObColumnGroupStatParam> &column_group_params)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObColumnGroupSchema *, 8> column_group_metas;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_0_0) {
+    //do nothing
+  } else if (OB_FAIL(table_schema.get_store_column_groups(column_group_metas))) { // get cg metas without empty default cg
+    LOG_WARN("failed to get column group metas", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_group_metas.count(); ++i) {
+      if (OB_ISNULL(column_group_metas.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(column_group_metas.at(i)));
+      } else {
+        ObColumnGroupStatParam col_group_param;
+        col_group_param.column_group_id_ = column_group_metas.at(i)->get_column_group_id();
+        for (int64_t j = 0; OB_SUCC(ret) && j < column_group_metas.at(i)->get_column_id_count(); ++j) {
+          uint64_t column_id = 0;
+          if (OB_FAIL(column_group_metas.at(i)->get_column_id(j, column_id))) {
+            LOG_WARN("failed to get column id", K(ret));
+          } else if (OB_FAIL(col_group_param.column_id_arr_.push_back(column_id))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(column_group_params.push_back(col_group_param))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+      }
+    }
+  }
+  LOG_TRACE("init column group stat param", K(column_group_params));
   return ret;
 }
 

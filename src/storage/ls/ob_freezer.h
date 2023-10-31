@@ -166,8 +166,8 @@ public:
   int get_diagnose_info(ObStringHolder &diagnose_info);
   void set_tablet_id(const ObTabletID &tablet_id);
   ObTabletID get_tablet_id();
-  void set_is_force(bool is_force);
-  bool get_is_force();
+  void set_need_rewrite_meta(bool need_rewrite_meta);
+  bool need_rewrite_meta();
   void set_state(int state);
   int get_state();
   void set_freeze_clock(const int64_t freeze_clock);
@@ -186,14 +186,14 @@ public:
                             const int state,
                             const share::SCN &freeze_snapshot_version,
                             const ObTabletID &tablet_id,
-                            const bool is_force);
+                            const bool need_rewrite_meta);
   int end_set_freeze_stat(const int state,
                           const int64_t end_time,
                           const int ret_code);
 
 private:
   ObTabletID tablet_id_;
-  bool is_force_;
+  bool need_rewrite_meta_;
   int state_;
   int64_t freeze_clock_;
   int64_t start_time_;
@@ -225,7 +225,7 @@ public:
   /* freeze */
   int logstream_freeze(ObFuture<int> *result = nullptr);
   int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
-  int force_tablet_freeze(const ObTabletID &tablet_id);
+  int tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id);
   int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
   int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
   int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result = nullptr);

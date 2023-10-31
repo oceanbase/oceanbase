@@ -273,8 +273,10 @@ int ObExprRegexpReplace::eval_regexp_replace(
     bool null_result = (position != NULL && position->is_null()) ||
                        (occurrence != NULL && occurrence->is_null()) ||
                        (lib::is_mysql_mode() && match_type != NULL && match_type->is_null());
-    if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos))
-        || OB_FAIL(ObExprUtil::get_int_param_val(occurrence, occur))) {
+    if (OB_FAIL(ObExprUtil::get_int_param_val(
+          position, expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int(), pos))
+        || OB_FAIL(ObExprUtil::get_int_param_val(
+          occurrence, expr.arg_cnt_ > 4 && expr.args_[4]->obj_meta_.is_decimal_int(), occur))) {
       LOG_WARN("get integer parameter value failed", K(ret));
     } else if (!null_result && (pos <= 0 || occur < 0)) {
       ret = OB_INVALID_ARGUMENT;

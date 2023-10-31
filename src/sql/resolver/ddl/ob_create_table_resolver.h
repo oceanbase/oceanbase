@@ -136,9 +136,17 @@ private:
       VPColumnIdHashSet &vp_column_id_set,
       const bool is_auxiliary_part);
 
+  // check this type of table_schema should build column_group or not
+  bool need_column_group(const share::schema::ObTableSchema &table_schema);
+  uint64_t gen_column_group_id();
+  int resolve_column_group(const ParseNode *cg_node);
+  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
+  int check_column_store_config();
+
 private:
   // data members
   uint64_t cur_column_id_;
+  uint64_t cur_column_group_id_;
   common::ObSEArray<uint64_t, 16> primary_keys_;
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> column_name_set_;
   bool if_not_exist_;

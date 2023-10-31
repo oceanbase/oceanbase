@@ -15,6 +15,7 @@
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -153,7 +154,7 @@ int ObAllVirtualTableMgr::get_next_table(ObITable *&table)
         } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K_(tablet_handle));
-        } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_tables(table_store_iter_))) {
+        } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_tables(table_store_iter_, true/*unpack_cg_table*/))) {
           SERVER_LOG(WARN, "fail to get all tables", K(ret), K_(tablet_handle), K_(table_store_iter));
         } else if (0 != table_store_iter_.count()) {
           break;
@@ -234,17 +235,24 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case TABLE_TYPE:
           cur_row_.cells_[i].set_int(table_key.table_type_);
           break;
+        case DATA_CHECKSUM: {
+          int64_t data_checksum = 0;
+          if (table->is_memtable()) {
+            // memtable has no data checksum, do nothing
+          } else if (table->is_co_sstable()) {
+            data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
+          } else if (table->is_sstable()) {
+            data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
+          }
+          cur_row_.cells_[i].set_int(data_checksum);
+          break;
+        }
         case SIZE: {
           int64_t size = 0;
           if (table->is_memtable()) {
             size = static_cast<memtable::ObIMemtable *>(table)->get_occupied_size();
           } else if (table->is_sstable()) {
-            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-            } else {
-              size = sst_meta_hdl.get_sstable_meta().get_occupy_size();
-            }
+            size = static_cast<blocksstable::ObSSTable *>(table)->get_occupy_size();
           }
           cur_row_.cells_[i].set_int(size);
           break;
@@ -258,12 +266,8 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case INDEX_BLOCK_CNT: {
           int64_t blk_cnt = 0;
           if (table->is_sstable()) {
-            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
-            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
-            } else {
-              blk_cnt = sst_meta_hdl.get_sstable_meta().get_index_macro_block_count();
-            }
+            blocksstable::ObSSTable * sstable = static_cast<blocksstable::ObSSTable *>(table);
+            blk_cnt = sstable->get_total_macro_block_count() - sstable->get_data_macro_block_count();
           }
           cur_row_.cells_[i].set_int(blk_cnt);
           break;
@@ -309,6 +313,9 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           break;
         case NESTED_SIZE:
           cur_row_.cells_[i].set_int(nested_size);
+          break;
+        case CG_IDX:
+          cur_row_.cells_[i].set_int(table_key.get_column_group_id());
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

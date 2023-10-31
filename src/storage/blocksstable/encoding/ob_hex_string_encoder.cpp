@@ -141,6 +141,13 @@ int ObHexStringEncoder::traverse(bool &suitable)
   return ret;
 }
 
+int ObHexStringEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = sizeof(*header_) + hex_string_map_.size_;
+  return  ret;
+}
+
 int ObHexStringEncoder::store_meta(ObBufferWriter &buf_writer)
 {
   int ret = OB_SUCCESS;

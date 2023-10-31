@@ -28,9 +28,9 @@ namespace common
 {
 class ObOptTableStat;
 class ObOptColumnStat;
+struct BlockNumStat;
 
-typedef std::pair<int64_t, int64_t> BolckNumPair;
-typedef hash::ObHashMap<int64_t, BolckNumPair, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
+typedef hash::ObHashMap<int64_t, BlockNumStat *, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
 typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *, common::hash::NoPthreadDefendMode> OSGColStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
@@ -126,6 +126,27 @@ enum ObGranularityType
   GRANULARITY_AUTO,
   GRANULARITY_GLOBAL_AND_PARTITION,
   GRANULARITY_APPROX_GLOBAL_AND_PARTITION
+};
+
+struct BlockNumStat
+{
+  BlockNumStat() :
+    tab_macro_cnt_(0),
+    tab_micro_cnt_(0),
+    cg_macro_cnt_arr_(),
+    cg_micro_cnt_arr_()
+  {
+    cg_macro_cnt_arr_.set_attr(ObMemAttr(MTL_ID(), "BlockNumStat"));
+    cg_micro_cnt_arr_.set_attr(ObMemAttr(MTL_ID(), "BlockNumStat"));
+  }
+  int64_t tab_macro_cnt_;
+  int64_t tab_micro_cnt_;
+  ObSEArray<int64_t, 1, common::ModulePageAllocator, true> cg_macro_cnt_arr_;
+  ObSEArray<int64_t, 1, common::ModulePageAllocator, true> cg_micro_cnt_arr_;
+  TO_STRING_KV(K(tab_macro_cnt_),
+               K(tab_micro_cnt_),
+               K(cg_macro_cnt_arr_),
+               K(cg_micro_cnt_arr_))
 };
 
 struct ObExtraParam
@@ -381,6 +402,13 @@ struct ObColumnStatParam {
                K_(gather_flag));
 };
 
+struct ObColumnGroupStatParam {
+  ObColumnGroupStatParam() : column_group_id_(0), column_id_arr_() {}
+  uint64_t column_group_id_;
+  ObArray<uint64_t> column_id_arr_;
+  TO_STRING_KV(K(column_group_id_), K(column_id_arr_));
+};
+
 struct ObTableStatParam {
   static const int64_t INVALID_GLOBAL_PART_ID = -2;
   static const int64_t DEFAULT_DATA_PART_ID = -1;
@@ -431,7 +459,8 @@ struct ObTableStatParam {
     need_estimate_block_(true),
     is_temp_table_(false),
     allocator_(NULL),
-    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE)
+    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
+    column_group_params_()
   {}
 
   int assign(const ObTableStatParam &other);
@@ -504,6 +533,7 @@ struct ObTableStatParam {
   bool is_temp_table_;
   common::ObIAllocator *allocator_;
   share::schema::ObTableType ref_table_type_;
+  ObArray<ObColumnGroupStatParam> column_group_params_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -548,7 +578,8 @@ struct ObTableStatParam {
                K(data_table_id_),
                K(need_estimate_block_),
                K(is_temp_table_),
-               K(ref_table_type_));
+               K(ref_table_type_),
+               K(column_group_params_));
 };
 
 struct ObOptStat

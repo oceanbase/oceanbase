@@ -19,7 +19,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/memtable/mvcc/ob_keybtree.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
@@ -63,6 +63,9 @@ public:
                    const bool is_right_border,
                    int64_t &begin_idx,
                    int64_t &end_idx);
+  int skip_to_next_valid_position(const blocksstable::ObDatumRowkey &rowkey,
+                                  const blocksstable::ObStorageDatumUtils &datum_utils,
+                                  int64_t &current_pos);
   int get_index_block_row_header(const int64_t idx,
                                  const blocksstable::ObIndexBlockRowHeader *&header,
                                  const blocksstable::ObDatumRowkey *&endkey);
@@ -73,7 +76,10 @@ public:
   int build_sorted_rowkeys();
   int get_sorted_meta_array(ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array) const;
   int exist(const blocksstable::ObDatumRowkey *rowkey, bool &is_exist);
-  const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_; }
+  const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_.get_desc(); }
+  const blocksstable::ObDatumRowkey *get_rowkey(const int64_t idx) const { return sorted_rowkeys_[idx].rowkey_; }
+  int64_t get_rowkey_count() const { return sorted_rowkeys_.count(); }
+
   TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(arena_.total()), K(data_desc_), K(sorted_rowkeys_.count()));
 private:
   struct IndexItem final
@@ -90,10 +96,13 @@ private:
   };
   struct CompareFunctor
   {
-    CompareFunctor(const blocksstable::ObStorageDatumUtils &datum_utils) : datum_utils_(datum_utils) {}
+    CompareFunctor(const blocksstable::ObStorageDatumUtils &datum_utils,
+                   const bool need_compare_datum_cnt = true)
+      : datum_utils_(datum_utils), need_compare_datum_cnt_(need_compare_datum_cnt) {}
     bool operator ()(const IndexItem &item, const blocksstable::ObDatumRowkey &rowkey);
     bool operator ()(const blocksstable::ObDatumRowkey &rowkey, const IndexItem &item);
     const blocksstable::ObStorageDatumUtils &datum_utils_;
+    const bool need_compare_datum_cnt_;
   };
 
 private:
@@ -102,7 +111,7 @@ private:
   ObArenaAllocator arena_;
   BtreeNodeAllocator tree_allocator_;
   KeyBtree block_tree_;
-  blocksstable::ObDataStoreDesc data_desc_;
+  blocksstable::ObWholeDataStoreDesc data_desc_;
   ObArray<IndexItem> sorted_rowkeys_;
 };
 

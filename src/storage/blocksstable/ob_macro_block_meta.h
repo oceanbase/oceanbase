@@ -49,13 +49,14 @@ public:
   int64_t get_serialize_size() const;
   int64_t get_max_serialize_size() const;
   TO_STRING_KV(K_(version), K_(length), K_(data_checksum), K_(rowkey_count),
-        K_(rowkey_count), K_(column_count), K_(micro_block_count), K_(occupy_size), K_(data_size),
+        K_(column_count), K_(micro_block_count), K_(occupy_size), K_(data_size),
         K_(data_zsize), K_(original_size), K_(progressive_merge_round), K_(block_offset), K_(block_size), K_(row_count),
         K_(row_count_delta), K_(max_merged_trans_version), K_(is_encrypted),
         K_(is_deleted), K_(contain_uncommitted_row), K_(compressor_type),
         K_(master_key_id), K_(encrypt_id), K_(encrypt_key), K_(row_store_type),
         K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag),
-        K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row));
+        K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row),
+          K_(agg_row_len), KP_(agg_row_buf));
 public:
   int32_t version_;
   int32_t length_;
@@ -89,7 +90,8 @@ public:
   common::ObSEArray<int64_t, 4> column_checksums_;
   bool has_string_out_row_;
   bool all_lob_in_row_;
-
+  int64_t agg_row_len_; // size of agg_row_buf_
+  const char *agg_row_buf_; // data buffer for pre aggregated row
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
 };

@@ -70,7 +70,7 @@
 #include "rootserver/ob_vertical_partition_builder.h"
 #include "rootserver/ddl_task/ob_constraint_task.h"
 #include "rootserver/ddl_task/ob_ddl_retry_task.h"
-#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "share/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "rootserver/ob_alter_primary_zone_checker.h"
 #include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
@@ -3419,6 +3419,38 @@ int ObDDLService::check_is_change_cst_column_name(const ObTableSchema &table_sch
   return ret;
 }
 
+int ObDDLService::check_is_alter_decimal_int_offline(const share::ObDDLType &ddl_type,
+                                                     const ObTableSchema &table_schema,
+                                                     const AlterTableSchema &alter_table_schema,
+                                                     bool &is_alter_decimal_int_offline)
+{
+  int ret = OB_SUCCESS;
+  is_alter_decimal_int_offline = false;
+  if (DDL_MODIFY_COLUMN == ddl_type) {
+    ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
+    AlterColumnSchema *alter_column_schema = nullptr;
+    for(; OB_SUCC(ret) && iter != iter_end; iter++) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*iter))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter is NULL", K(ret));
+      } else if (OB_DDL_MODIFY_COLUMN != alter_column_schema->alter_type_ ||
+          OB_ISNULL(col_schema = table_schema.get_column_schema(alter_column_schema->get_column_id()))) {
+        is_alter_decimal_int_offline = false;
+        break;
+      } else if (ob_is_decimal_int_tc(col_schema->get_data_type()) &&
+          ob_is_number_or_decimal_int_tc(alter_column_schema->get_data_type())) {
+        is_alter_decimal_int_offline = true;
+      } else {
+        is_alter_decimal_int_offline = false;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_arg,
                                            const ObTableSchema &orig_table_schema,
                                            ObSchemaGetterGuard &schema_guard,
@@ -4278,6 +4310,7 @@ int ObDDLService::check_alter_table_constraint(
   char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
   const ObAlterTableArg::AlterConstraintType type = alter_table_arg.alter_constraint_type_;
   bool change_cst_column_name = false;
+  bool is_alter_decimal_int_offline = false;
   switch(type) {
     case obrpc::ObAlterTableArg::ADD_CONSTRAINT:
     case obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE: {
@@ -4303,8 +4336,15 @@ int ObDDLService::check_alter_table_constraint(
     case obrpc::ObAlterTableArg::DROP_CONSTRAINT: {
       if (ObDDLType::DDL_DROP_COLUMN == ddl_type) {
         // In oracle mode, we support to drop constraint implicitly caused by drop column.
-      } else if (is_long_running_ddl(ddl_type)) {
+      } else if (OB_FAIL(check_is_alter_decimal_int_offline(ddl_type,
+                                                            orig_table_schema,
+                                                            alter_table_arg.alter_table_schema_,
+                                                            is_alter_decimal_int_offline))) {
+        LOG_WARN("fail to check is alter decimal int offline ddl", K(ret));
+      } else if (is_long_running_ddl(ddl_type) && !is_alter_decimal_int_offline) {
         ret = OB_NOT_SUPPORTED;
+      } else if (is_alter_decimal_int_offline) {
+        ddl_type = ObDDLType::DDL_MODIFY_COLUMN;
       } else {
         ddl_type = ObDDLType::DDL_NORMAL_TYPE;
       }
@@ -7624,6 +7664,7 @@ int ObDDLService::fill_new_column_attributes(
         alter_column_schema.is_on_update_current_timestamp());
     new_column_schema.set_extended_type_info(alter_column_schema.get_extended_type_info());
     new_column_schema.set_srs_id(alter_column_schema.get_srs_id());
+    new_column_schema.set_skip_index_attr(alter_column_schema.get_skip_index_attr().get_packed_value());
   }
   return ret;
 }
@@ -8164,6 +8205,111 @@ int ObDDLService::add_new_column_to_table_schema(
                 new_table_schema, alter_column_schema))) {
           LOG_WARN("failed to add column", K(ret), K(alter_column_schema));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::add_column_group_to_table_schema(
+    const share::schema::ObTableSchema &origin_table_schema,
+    const share::schema::AlterTableSchema &alter_table_schema,
+    share::schema::ObTableSchema &new_table_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (alter_table_schema.get_column_group_count() == 0) {
+  } else {
+    uint64_t cur_column_group_id = origin_table_schema.get_max_used_column_group_id();
+    new_table_schema.reset_column_group_info();
+    share::schema::ObTableSchema::const_column_group_iterator cg_begin = alter_table_schema.column_group_begin();
+    share::schema::ObTableSchema::const_column_group_iterator cg_end = alter_table_schema.column_group_end();
+    for (; OB_SUCC(ret) && (cg_begin != cg_end); cg_begin++) {
+      ObColumnGroupSchema column_group;
+      const ObColumnGroupSchema *cg = *cg_begin;
+      if (OB_ISNULL(cg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column group", K(ret));
+      } else if (OB_FAIL(column_group.assign(*cg))) {
+        LOG_WARN("failed to assign column group", K(ret), KPC(cg));
+      } else if (FALSE_IT(column_group.set_column_group_id(++cur_column_group_id))) {
+      } else {
+        const ObStoreFormatType store_format = alter_table_schema.get_store_format();
+        const uint64_t tenant_id = origin_table_schema.get_tenant_id();
+        int64_t storage_encoding_mode = 0;
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        if (OB_LIKELY(tenant_config.is_valid())) {
+          storage_encoding_mode = tenant_config->storage_encoding_mode;
+        }
+        bool is_flat = lib::is_oracle_mode() ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
+                                                || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
+                                                || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
+                                             : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
+                                                || (OB_STORE_FORMAT_COMPACT_MYSQL == store_format));
+        if (is_flat || (1 == storage_encoding_mode)) {
+          // all use encoding
+          column_group.set_row_store_type(alter_table_schema.get_row_store_type());
+        } else if (2 == storage_encoding_mode) {
+          // all use cs_encoding
+          column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
+        } else {
+          // row_store uses encoding; column_store uses cs_encoding
+          if ((column_group.get_column_group_type() == ObColumnGroupType::DEFAULT_COLUMN_GROUP)
+              || (column_group.get_column_group_type() == ObColumnGroupType::ALL_COLUMN_GROUP)) {
+            column_group.set_row_store_type(alter_table_schema.get_row_store_type());
+          } else {
+            column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
+          }
+        }
+
+        if (OB_FAIL(new_table_schema.add_column_group(column_group))) {
+          LOG_WARN("fail to add column group into new table schema", K(ret), K(column_group), K(new_table_schema));
+        }
+      }
+    }
+
+    ObArray<uint64_t> column_ids;
+    ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+    AlterColumnSchema *alter_column_schema = nullptr;
+    for(; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+      ObColumnGroupSchema *column_group;
+      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("*it_begin is NULL", K(ret));
+      } else if (alter_column_schema->alter_type_ == OB_DDL_ADD_COLUMN) {
+        const ObColumnSchemaV2 *column_schema = nullptr;
+        if (OB_ISNULL(column_schema = new_table_schema.get_column_schema(alter_column_schema->get_column_name_str()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column schema", K(ret), KPC(alter_column_schema), K(new_table_schema));
+        } else if (column_schema->is_virtual_generated_column()) {
+          // skip virtual column
+        } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+          LOG_WARN("fali to push back column id", K(ret));
+        } else if (OB_FAIL(new_table_schema.get_column_group_by_name(alter_column_schema->get_column_group_name(), column_group))) {
+          LOG_WARN("fail to get column group by name", K(ret), K(new_table_schema), K(alter_column_schema));
+        } else if (OB_ISNULL(column_group)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column group", K(ret), KPC(alter_column_schema), K(new_table_schema));
+        } else if (OB_FAIL(column_group->add_column_id(column_schema->get_column_id()))) {
+          LOG_WARN("fail to add column id", K(ret), KPC(column_group));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // Cuz we checked data_version in resolver, thus we can skip checking here.
+      new_table_schema.set_column_store(true);
+      const ObColumnGroupSchema *all_cg = nullptr;
+      if (OB_FAIL(ddl_operator.insert_column_groups(trans, new_table_schema))) {
+        LOG_WARN("fail to insert column groups", K(ret), K(new_table_schema));
+      } else if (OB_FAIL(origin_table_schema.get_all_cg_type_column_group(all_cg))) {
+        LOG_WARN("fail to get_all_cg_type_column_group", K(ret), K(origin_table_schema));
+      } else if (OB_ISNULL(all_cg) || column_ids.empty() ) {
+        //skip insert column id to all cg
+      } else if (OB_FAIL(ddl_operator.insert_column_ids_into_column_group(trans, new_table_schema, column_ids, *all_cg))) {
+        LOG_WARN("fail to insert_column_id_into_column_group", K(ret), K(new_table_schema), K(column_ids), KPC(all_cg));
       }
     }
   }
@@ -9008,7 +9154,13 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
     }
 
     bool is_add_lob = false;
-    if (OB_SUCC(ret) && !is_origin_table_has_lob_column) {
+    if(OB_FAIL(ret)) {
+    } else if (OB_FAIL(add_column_group_to_table_schema(origin_table_schema,
+        alter_table_schema, new_table_schema, ddl_operator, trans))) {
+      LOG_WARN("fail to add_column_group_to_table_schema", K(ret), K(alter_table_schema), K(new_table_schema));
+    } else if (OB_FAIL(new_table_schema.check_skip_index_valid())) {
+      LOG_WARN("failed to check new table schema skip index", K(ret));
+    } else if (!is_origin_table_has_lob_column) {
       if (OB_FAIL(create_aux_lob_table_if_need(
           new_table_schema, schema_guard, ddl_operator, trans, is_add_lob))) {
         LOG_WARN("fail to create_aux_lob_table_if_need", K(ret), K(new_table_schema));
@@ -11394,7 +11546,12 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       bool has_index_operation = false;
       bool is_adding_constraint = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
-      if (OB_FAIL(check_has_index_operation(schema_guard,
+      if (orig_table_schema->is_normal_column_store_table()) {
+        ret = OB_NOT_SUPPORTED;
+        (void)snprintf(err_msg, sizeof(err_msg), "%s with column store table",
+                       ddl_type_str(ddl_type));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+      } else if (OB_FAIL(check_has_index_operation(schema_guard,
                                           tenant_id,
                                           table_id,
                                           has_index_operation))) {
@@ -18762,6 +18919,7 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
       LOG_WARN("failed to add table schema!", K(ret));
     }
   }
+
   if (OB_SUCC(ret)) {
     //reconstruct index schema
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -23223,7 +23381,7 @@ int ObDDLService::create_sys_table_schemas(
       const ObString *ddl_stmt = NULL;
       bool need_sync_schema_version = !(ObSysTableChecker::is_sys_table_index_tid(table_id) ||
                                         is_sys_lob_table(table_id));
-      if (OB_FAIL(ddl_operator.create_table(table, trans, ddl_stmt,
+      if (FAILEDx(ddl_operator.create_table(table, trans, ddl_stmt,
                                             need_sync_schema_version,
                                             false /*is_truncate_table*/))) {
         LOG_WARN("add table schema failed", KR(ret), K(table_id), K(table_name));

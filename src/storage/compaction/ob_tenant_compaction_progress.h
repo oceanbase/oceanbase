@@ -15,7 +15,7 @@
 
 #include "ob_compaction_suggestion.h" // for ObInfoRingArray
 #include "ob_partition_merge_progress.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 namespace oceanbase
 {
@@ -29,38 +29,41 @@ struct ObCompactionProgress
 {
   ObCompactionProgress()
     : tenant_id_(OB_INVALID_TENANT_ID),
-      merge_type_(storage::INVALID_MERGE_TYPE),
+      merge_type_(compaction::INVALID_MERGE_TYPE),
       merge_version_(0),
       status_(share::ObIDag::DAG_STATUS_MAX),
       data_size_(0),
       unfinished_data_size_(0),
-      occupy_data_size_(0),
       original_size_(0),
       compressed_size_(0),
       start_time_(0),
-      estimated_finish_time_(0)
+      estimated_finish_time_(0),
+      start_cg_idx_(0),
+      end_cg_idx_(0)
   {
   }
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(merge_type), K_(merge_version), K_(status), K_(data_size), K_(unfinished_data_size),
-      K_(occupy_data_size), K_(original_size), K_(compressed_size), K_(start_time), K_(estimated_finish_time));
+  TO_STRING_KV(K_(tenant_id), "merge_type", merge_type_to_str(merge_type_), K_(merge_version), K_(status), K_(data_size), K_(unfinished_data_size),
+      K_(original_size), K_(compressed_size), K_(start_time), K_(estimated_finish_time),
+      K_(start_cg_idx), K_(end_cg_idx));
 
   constexpr static double MERGE_SPEED = 1;  // almost 2 sec per macro_block
   constexpr static double EXTRA_TIME = 15 * 1000 * 1000; // 15 sec
 
   int64_t tenant_id_;
-  storage::ObMergeType merge_type_;
+  compaction::ObMergeType merge_type_;
   int64_t merge_version_;
   share::ObIDag::ObDagStatus status_;
   int64_t data_size_;
   int64_t unfinished_data_size_;
-  int64_t occupy_data_size_;
   int64_t original_size_;
   int64_t compressed_size_;
   int64_t start_time_;
   int64_t estimated_finish_time_;
+  int64_t start_cg_idx_;
+  int64_t end_cg_idx_;
 };
 
 struct ObTenantCompactionProgress : public ObCompactionProgress
@@ -90,8 +93,7 @@ public:
   static const int64_t SERVER_PROGRESS_MAX_CNT = 30;
 
   ObTenantCompactionProgressMgr()
-   : ObInfoRingArray(allocator_),
-     sum_time_guard_()
+   : ObInfoRingArray(allocator_)
   {
     allocator_.set_attr(SET_USE_500("TenCompProgMgr"));
   }
@@ -101,15 +103,16 @@ public:
   void destroy();
 
   int add_progress(const int64_t major_snapshot_version);
-  int update_progress(const int64_t major_snapshot_version, share::ObIDag::ObDagStatus status);
+  int update_progress_status(const int64_t major_snapshot_version, share::ObIDag::ObDagStatus status);
   int update_progress(
       const int64_t major_snapshot_version,
       const int64_t total_data_size_delta,
       const int64_t scanned_data_size_delta,
-      const int64_t output_block_cnt_delta,
       const int64_t estimate_finish_time,
       const bool finish_flag,
-      const ObCompactionTimeGuard *time_guard = nullptr);
+      const ObCompactionTimeGuard *time_guard = nullptr,
+      const bool co_merge = false);
+  int update_unfinish_tablet(const int64_t major_snapshot_version);
   int update_compression_ratio(const int64_t major_snapshot_version, storage::ObSSTableMergeInfo &info);
 
 private:
@@ -123,7 +126,6 @@ private:
 
 private:
   ObArenaAllocator allocator_;
-  ObCompactionTimeGuard sum_time_guard_;
 };
 
 /*
@@ -179,7 +181,6 @@ struct ObDiagnoseTabletCompProgress : public ObCompactionProgress
   ObDiagnoseTabletCompProgress()
     : ObCompactionProgress(),
       is_suspect_abormal_(false),
-      is_waiting_schedule_(false),
       dag_id_(),
       create_time_(0),
       latest_update_ts_(0),
@@ -189,11 +190,10 @@ struct ObDiagnoseTabletCompProgress : public ObCompactionProgress
   }
   bool is_valid() const;
   void reset();
-  INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(is_suspect_abormal), K_(is_waiting_schedule),
+  INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(is_suspect_abormal),
       K_(create_time), K_(latest_update_ts), K_(dag_id), K_(base_version), K_(snapshot_version), K_(status));
 
   bool is_suspect_abormal_;
-  bool is_waiting_schedule_;
   share::ObDagId dag_id_;
   int64_t create_time_;
   int64_t latest_update_ts_;

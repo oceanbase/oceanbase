@@ -61,41 +61,52 @@ public:
   friend class ObTabletTableUpdater;
 
   ObTabletTableUpdateTask()
-      : tenant_id_(OB_INVALID_TENANT_ID),
+      : need_diagnose_(false),
         ls_id_(),
         tablet_id_(),
-        add_timestamp_(OB_INVALID_TIMESTAMP){}
+        add_timestamp_(OB_INVALID_TIMESTAMP),
+        start_timestamp_(OB_INVALID_TIMESTAMP) {}
   explicit ObTabletTableUpdateTask(
-      const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const int64_t add_timestamp)
-      : tenant_id_(tenant_id),
+      : need_diagnose_(false),
         ls_id_(ls_id),
         tablet_id_(tablet_id),
-        add_timestamp_(add_timestamp) {}
+        add_timestamp_(add_timestamp),
+        start_timestamp_(OB_INVALID_TIMESTAMP) {}
+  explicit ObTabletTableUpdateTask(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id)
+      : need_diagnose_(false),
+        ls_id_(ls_id),
+        tablet_id_(tablet_id),
+        add_timestamp_(OB_INVALID_TIMESTAMP),
+        start_timestamp_(OB_INVALID_TIMESTAMP) {}
   virtual ~ObTabletTableUpdateTask();
   int init(
-      const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t add_timestamp);
+      const int64_t add_timestamp,
+      const bool need_diagnose = false);
   void reset();
   // operator-related functions for ObTabletTableUpdateTask
   bool is_valid() const;
   void check_task_status() const;
   int assign(const ObTabletTableUpdateTask &other);
   virtual bool operator==(const ObTabletTableUpdateTask &other) const;
+  virtual void set_start_timestamp() override;
+  virtual int64_t get_start_timestamp() const override;
+  virtual bool need_diagnose() const override { return need_diagnose_; }
 
   // get-related functions for member in ObTabletTableUpdateTask
-  inline int64_t get_tenant_id() const { return tenant_id_; }
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   inline int64_t get_add_timestamp() const { return add_timestamp_; }
 
   // other functions
   bool need_process_alone() const { return false; }
-  uint64_t get_group_id() const { return tenant_id_; }
+  uint64_t get_group_id() const { return ls_id_.id(); }
   int64_t hash() const;
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   bool compare_without_version(
@@ -109,13 +120,14 @@ public:
   // TODO: need to realize barrier related functions
   bool is_barrier() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(add_timestamp));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(need_diagnose), K_(add_timestamp), K_(start_timestamp));
 private:
   const int64_t TABLET_CHECK_INTERVAL = 2 * 3600 * 1000L * 1000L; //2 hour
-  uint64_t tenant_id_;
+  bool need_diagnose_; // task for compaction need diagnose
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   int64_t add_timestamp_;
+  int64_t start_timestamp_;
 };
 
 typedef ObUniqTaskQueue<ObTabletTableUpdateTask, ObTabletTableUpdater> ObTabletTableUpdateTaskQueue;
@@ -127,27 +139,30 @@ class ObTabletTableUpdater
 {
 public:
   ObTabletTableUpdater()
-      : inited_(false),
-        stopped_(true),
-        ob_service_(nullptr),
-        tablet_operator_(nullptr),
+      : is_inited_(false),
+        is_stop_(true),
+        tenant_id_(OB_INVALID_TENANT_ID),
         update_queue_() {}
   virtual ~ObTabletTableUpdater() { destroy(); }
-  int init(ObService &ob_service,
-           share::ObTabletTableOperator &tablet_operator);
-  inline bool is_inited() const { return inited_; }
+  static int mtl_init(ObTabletTableUpdater *&tablet_table_updater);
+  int init();
+  inline bool is_inited() const { return is_inited_; }
   void stop();
   void wait();
   void destroy();
 
+  int submit_tablet_update_task(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const bool need_diagnose = false);
+
   // async update tablets - add task to queue
-  // @param [in] tenant_id, to report which tenant's tablet
   // @param [in] ls_id, to report which ls
   // @param [in] tablet_id, to report which tablet
   int async_update(
-      const uint64_t tenant_id,
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id);
+      const common::ObTabletID &tablet_id,
+      const bool need_diagnose = false);
 
   // batch_process_tasks - divide tasks into different group, and do reput when failed
   // @parma [in] tasks, tasks to process
@@ -159,8 +174,25 @@ public:
   int64_t get_tablet_table_updater_update_queue_size() const { return update_queue_.task_count(); }
   // TODO: need to realize barrier related functions
   int process_barrier(const ObTabletTableUpdateTask &task, bool &stopped);
-
+  int set_thread_count();
+  // for diagnose
+  int check_exist(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      bool &exist);
+  int check_processing_exist(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      bool &exist);
+  int diagnose_existing_task(
+      ObIArray<ObTabletTableUpdateTask> &waiting_tasks,
+      ObIArray<ObTabletTableUpdateTask> &processing_tasks);
 private:
+  int64_t cal_thread_count_();
+  void diagnose_batch_tasks_(
+      const ObIArray<ObTabletTableUpdateTask> &batch_tasks,
+      const int error_code);
+
   // generate_tasks_ - split batch_tasks into update_tasks and remove_tasks
   // @parma [in] batch_tasks, input tasks
   // @parma [out] update_tablet_replicas, generated update replicas
@@ -212,20 +244,17 @@ private:
   int reput_to_queue_(
     const common::ObIArray<ObTabletTableUpdateTask> &tasks);
 
-  // TODO: no need to check tenant dropped after ObTabletTableUpdater has been moved into MTL
-  int check_tenant_status_(
-      const uint64_t tenant_id,
-      bool &tenant_dropped,
-      bool &schema_not_ready);
 private:
   const int64_t MINI_MODE_UPDATE_TASK_THREAD_CNT = 1;
-  const int64_t UPDATE_TASK_THREAD_CNT = 7;
+  const int64_t MIN_UPDATE_TASK_THREAD_CNT = 2;
+  const int64_t MAX_UPDATE_TASK_THREAD_CNT = 7;
+  const double UPDATE_TASK_THREAD_RATIO = 0.2;
   const int64_t MINI_MODE_UPDATE_QUEUE_SIZE = 5 * 10000;
   const int64_t UPDATE_QUEUE_SIZE = 10 * 10000;
-  bool inited_;
-  bool stopped_;
-  ObService *ob_service_;
-  share::ObTabletTableOperator *tablet_operator_;
+  const int64_t DIAGNOSE_MAX_BATCH_COUNT = 3;
+  bool is_inited_;
+  bool is_stop_;
+  uint64_t tenant_id_;
   ObTabletTableUpdateTaskQueue update_queue_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableUpdater);
 };

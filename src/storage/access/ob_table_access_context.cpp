@@ -14,6 +14,7 @@
 #include "ob_table_access_context.h"
 #include "ob_dml_param.h"
 #include "share/ob_lob_access_utils.h"
+#include "ob_store_row_iterator.h"
 
 namespace oceanbase
 {
@@ -49,7 +50,6 @@ int ObTableAccessContext::init_column_scale_info(ObTableScanParam &scan_param)
   return ret;
 }
 
-
 ObTableAccessContext::ObTableAccessContext()
   : is_inited_(false),
     use_fuse_row_cache_(false),
@@ -57,6 +57,7 @@ ObTableAccessContext::ObTableAccessContext()
     timeout_(0),
     query_flag_(),
     sql_mode_(0),
+    micro_block_handle_mgr_(),
     store_ctx_(NULL),
     limit_param_(NULL),
     stmt_allocator_(NULL),
@@ -72,8 +73,9 @@ ObTableAccessContext::ObTableAccessContext()
     lob_allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     lob_locator_helper_(nullptr),
     iter_pool_(nullptr),
+    cg_iter_pool_(nullptr),
+    cg_param_pool_(nullptr),
     block_row_store_(nullptr),
-    io_callback_(nullptr),
     trans_state_mgr_(nullptr)
 {
   merge_scn_.set_max();
@@ -82,6 +84,20 @@ ObTableAccessContext::ObTableAccessContext()
 ObTableAccessContext::~ObTableAccessContext()
 {
   reset_lob_locator_helper();
+  if (nullptr != iter_pool_) {
+    iter_pool_->~ObStoreRowIterPool<ObStoreRowIterator>();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(iter_pool_);
+    }
+    iter_pool_ = nullptr;
+  }
+  if (nullptr != cg_iter_pool_) {
+    cg_iter_pool_->~ObStoreRowIterPool<ObICGIterator>();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(cg_iter_pool_);
+    }
+    cg_iter_pool_ = nullptr;
+  }
 }
 
 int ObTableAccessContext::build_lob_locator_helper(ObTableScanParam &scan_param,
@@ -153,28 +169,13 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
                                const ObVersionRange &trans_version_range)
 {
   int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("cannot init twice", K(ret));
-  } else if (OB_LIKELY(!scan_param.sample_info_.is_block_sample())) {
-    allocator_ = scan_param.scan_allocator_;
+  if (OB_UNLIKELY(is_inited_ && stmt_allocator_ != scan_param.allocator_)) {
+    ret = OB_ERR_SYS;
+    STORAGE_LOG(ERROR, "Unexpected access context reuse scenario",
+        K(ret), KP(stmt_allocator_), KP(allocator_), K(scan_param));
+  } else if (OB_FAIL(init_scan_allocator(scan_param))) {
+    LOG_WARN("Failed to init scan allocator", K(ret));
   } else {
-    if (scan_mem_ == nullptr) {
-      lib::ContextParam param;
-      param.set_mem_attr(scan_param.tenant_id_,
-                         ObModIds::OB_TABLE_SCAN_ITER,
-                         ObCtxIds::DEFAULT_CTX_ID)
-        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
-        .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(scan_mem_, param))) {
-        LOG_WARN("fail to create entity", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      allocator_ = &scan_mem_->get_arena_allocator();
-    }
-  }
-  if (OB_SUCC(ret)) {
     stmt_allocator_ = scan_param.allocator_;
     range_allocator_ = nullptr;
     ls_id_ = scan_param.ls_id_;
@@ -199,6 +200,12 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     } else if (lib::is_oracle_mode() && OB_ISNULL(scan_param.output_exprs_)
         && OB_FAIL(init_column_scale_info(scan_param))) {
       LOG_WARN("init column scale info failed", K(ret), K(scan_param));
+    } else if (!micro_block_handle_mgr_.is_valid()
+               && OB_FAIL(micro_block_handle_mgr_.init(
+                  static_cast<sql::ObStoragePushdownFlag>(scan_param.pd_storage_flag_).is_enable_prefetch_limiting(),
+                  table_store_stat_,
+                  query_flag_))) {
+      LOG_WARN("Fail to init micro block handle mgr", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -210,13 +217,15 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
                                ObStoreCtx &ctx,
                                ObIAllocator &allocator,
                                ObIAllocator &stmt_allocator,
-                               const ObVersionRange &trans_version_range)
+                               const ObVersionRange &trans_version_range,
+                               const bool for_exist)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));
   } else {
+    const bool enable_limit = false;
     query_flag_ = query_flag;
     use_fuse_row_cache_ = false;
     store_ctx_ = &ctx;
@@ -235,8 +244,12 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     // 2. without rowkey, since need not send result to dbmslob/client
     // 3. tablet id/ table id here maybe invalid, call update_lob_locator_ctx to fix
     // 4. only init lob locator helper when nessary?
-    if (OB_FAIL(build_lob_locator_helper(ctx, trans_version_range))) {
+    // exist do not need lob locator
+    if (!for_exist && OB_FAIL(build_lob_locator_helper(ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
+    } else if (!micro_block_handle_mgr_.is_valid()
+               && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
+      LOG_WARN("Fail to init micro block handle mgr", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -253,6 +266,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));
   } else {
+    const bool enable_limit = false;
     query_flag_ = query_flag;
     use_fuse_row_cache_ = false;
     store_ctx_ = &ctx;
@@ -267,13 +281,62 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     table_store_stat_.tablet_id_ = ctx.tablet_id_;
     table_store_stat_.table_id_ = ctx.tablet_id_.id(); // TODO  (yuanzhe) remove table_id in virtual table
     lob_locator_helper_ = nullptr;
-    is_inited_ = true;
+    if (!micro_block_handle_mgr_.is_valid()
+        && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
+      LOG_WARN("Fail to init micro block handle mgr", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObTableAccessContext::inc_micro_access_cnt()
+{
+  ++table_store_stat_.micro_access_cnt_;
+}
+
+int ObTableAccessContext::init_scan_allocator(ObTableScanParam &scan_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(!scan_param.sample_info_.is_block_sample())) {
+    allocator_ = scan_param.scan_allocator_;
+  } else {
+    if (scan_mem_ == nullptr) {
+      lib::ContextParam param;
+      param.set_mem_attr(scan_param.tenant_id_,
+                        ObModIds::OB_TABLE_SCAN_ITER,
+                        ObCtxIds::DEFAULT_CTX_ID)
+        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+        .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(scan_mem_, param))) {
+        LOG_WARN("fail to create entity", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      allocator_ = &scan_mem_->get_arena_allocator();
+    }
   }
   return ret;
 }
 
 void ObTableAccessContext::reset()
 {
+  reset_lob_locator_helper();
+  if (nullptr != iter_pool_) {
+    iter_pool_->~ObStoreRowIterPool();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(iter_pool_);
+    }
+    iter_pool_ = nullptr;
+  }
+  if (nullptr != cg_iter_pool_) {
+    cg_iter_pool_->~ObStoreRowIterPool<ObICGIterator>();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(cg_iter_pool_);
+    }
+    cg_iter_pool_ = nullptr;
+  }
   is_inited_ = false;
   timeout_ = 0;
   ls_id_.reset();
@@ -281,8 +344,8 @@ void ObTableAccessContext::reset()
   query_flag_.reset();
   sql_mode_ = 0;
   store_ctx_ = NULL;
+  micro_block_handle_mgr_.reset();
   limit_param_ = NULL;
-  reset_lob_locator_helper();
   stmt_allocator_ = NULL;
   if (NULL != scan_mem_) {
     DESTROY_CONTEXT(scan_mem_);
@@ -296,13 +359,26 @@ void ObTableAccessContext::reset()
   trans_version_range_.reset();
   use_fuse_row_cache_ = false;
   range_array_pos_ = nullptr;
-  iter_pool_ = nullptr;
+  cg_param_pool_ = nullptr;
   block_row_store_ = nullptr;
+}
+
+int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_scan_allocator(scan_param))) {
+    LOG_WARN("Failed to init scan allocator", K(ret));
+  } else {
+    out_cnt_ = 0;
+    if (nullptr != table_scan_stat_) {
+      table_scan_stat_->reset();
+    }
+  }
+  return ret;
 }
 
 void ObTableAccessContext::reuse()
 {
-  is_inited_ = false;
   timeout_ = 0;
   ls_id_.reset();
   tablet_id_.reset();
@@ -311,19 +387,45 @@ void ObTableAccessContext::reuse()
   store_ctx_ = NULL;
   limit_param_ = NULL;
   reset_lob_locator_helper();
-  stmt_allocator_ = NULL;
   if (NULL != scan_mem_) {
     scan_mem_->reuse_arena();
   }
-  allocator_ = NULL;
   range_allocator_ = nullptr;
   table_scan_stat_ = NULL;
   out_cnt_ = 0;
   trans_version_range_.reset();
   use_fuse_row_cache_ = false;
   range_array_pos_ = nullptr;
-  iter_pool_ = nullptr;
+  cg_param_pool_ = nullptr;
   block_row_store_ = nullptr;
+}
+
+int ObTableAccessContext::alloc_iter_pool(const bool use_column_store)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTableAccessContext not inited", K(ret), KPC(this));
+  } else if (nullptr == iter_pool_) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = stmt_allocator_->alloc(sizeof(ObStoreRowIterPool<ObStoreRowIterator>)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc row iter pool", K(ret));
+    } else {
+      iter_pool_ = new(buf) ObStoreRowIterPool<ObStoreRowIterator>(*stmt_allocator_);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (use_column_store && nullptr == cg_iter_pool_) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = stmt_allocator_->alloc(sizeof(ObStoreRowIterPool<ObICGIterator>)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc row iter pool", K(ret));
+    } else {
+      cg_iter_pool_ = new(buf) ObStoreRowIterPool<ObICGIterator>(*stmt_allocator_);
+    }
+  }
+  return ret;
 }
 
 } // namespace storage

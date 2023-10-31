@@ -13,7 +13,7 @@
 #ifndef  OCEANBASE_COMMON_KV_STORE_CACHE_H_
 #define  OCEANBASE_COMMON_KV_STORE_CACHE_H_
 
-#include "share/cache/ob_kvcache_handle_ref_checker.h"
+#include "storage/ob_storage_leak_checker.h"
 #include "share/ob_define.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/task/ob_timer.h"
@@ -154,13 +154,13 @@ public:
   int get_avg_cache_item_size(const uint64_t tenant_id, const char *cache_name,
                               int64_t &avg_cache_item_size);
 
-  int get_washable_size(const uint64_t tenant_id, int64_t &washable_size, const int64_t ratio = 0);
+  int get_washable_size(const uint64_t tenant_id, int64_t &washable_size);
 
   // wash memblock from cache synchronously
   virtual int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
                             const bool wash_single_mb,
                             lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks);
-  int set_checker_cache_name(const char *cache_name);
+  int set_storage_leak_check_mod(const char *check_mod);
   int get_cache_name(const int64_t cache_id, char *cache_name);
 private:
   template<class Key, class Value> friend class ObIKVCache;
@@ -325,8 +325,8 @@ public:
     mb_handle_ = other.mb_handle_;
     if (mb_handle_ != nullptr) {
 #ifdef ENABLE_DEBUG_LOG
-      ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(*this);
-      ObKVCacheHandleRefChecker::get_instance().handle_ref_de(other);
+      storage::ObStorageLeakChecker::get_instance().handle_hold(this, storage::ObStorageCheckID::ALL_CACHE);
+      storage::ObStorageLeakChecker::get_instance().handle_reset(&other, storage::ObStorageCheckID::ALL_CACHE);
 #endif
     }
     other.mb_handle_ = nullptr;
@@ -338,7 +338,7 @@ private:
   template<class Key, class Value> friend class ObKVCache;
   template<class Key, class Value> friend class ObCacheWorkingSet;
   friend class ObKVCacheIterator;
-  friend class ObKVCacheHandleRefChecker;
+  friend class storage::ObStorageLeakChecker;
   ObKVMemBlockHandle *mb_handle_;
 };
 
@@ -560,7 +560,7 @@ int ObKVCache<Key, Value>::put(const Key &key, const Value &value, bool overwrit
     }
   } else {
 #ifdef ENABLE_DEBUG_LOG
-    ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(handle);
+    storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
 #endif
     handle.reset();
   }
@@ -588,7 +588,7 @@ int ObKVCache<Key, Value>::put_and_fetch(
     }
   } else {
 #ifdef ENABLE_DEBUG_LOG
-    ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(handle);
+    storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
 #endif
   }
   return ret;
@@ -611,7 +611,7 @@ int ObKVCache<Key, Value>::get(const Key &key, const Value *&pvalue, ObKVCacheHa
     } else {
       pvalue = reinterpret_cast<const Value*> (value);
 #ifdef ENABLE_DEBUG_LOG
-      ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(handle);
+      storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
 #endif
     }
   }
@@ -651,7 +651,7 @@ int ObKVCache<Key, Value>::alloc(const uint64_t tenant_id, const int64_t key_siz
     COMMON_LOG(WARN, "failed to alloc", K(ret));
   } else {
 #ifdef ENABLE_DEBUG_LOG
-    ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(handle);
+    storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
 #endif
   }
 
@@ -718,7 +718,7 @@ int ObKVCacheIterator::get_next_kvpair(
     value = reinterpret_cast<const Value*>(node.value_);
     handle.mb_handle_ = node.mb_handle_;
 #ifdef ENABLE_DEBUG_LOG
-    ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(handle);
+    storage::ObStorageLeakChecker::get_instance().handle_hold(&handle, storage::ObStorageCheckID::ALL_CACHE);
 #endif
   }
   return ret;

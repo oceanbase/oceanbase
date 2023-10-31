@@ -279,11 +279,13 @@ public:
                                    const ObObjParam &owner,
                                    const ObObjParam &tab_name,
                                    const ObObjParam &part_name,
-                                   ObTableStatParam &param);
+                                   ObTableStatParam &param,
+                                   bool need_parse_col_group = false);
 
   static int parse_table_part_info(ObExecContext &ctx,
                                    const StatTable stat_table,
-                                   ObTableStatParam &param);
+                                   ObTableStatParam &param,
+                                   bool need_parse_col_group = false);
 
   static int parse_set_table_info(ObExecContext &ctx,
                                   const ObObjParam &owner,
@@ -489,6 +491,9 @@ public:
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                double &stale_percent_threshold);
+
+  static int init_column_group_stat_param(const share::schema::ObTableSchema &table_schema,
+                                          ObIArray<ObColumnGroupStatParam> &column_group_params);
 
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);

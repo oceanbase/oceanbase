@@ -124,7 +124,7 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
     // returning type : 2
     ObExprResType dst_type;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(get_cast_type(types_stack[ret_type_id], dst_type))) {
+      if (OB_FAIL(get_cast_type(types_stack[ret_type_id], dst_type, type_ctx))) {
         LOG_WARN("get cast dest type failed", K(ret));
       } else if (OB_FAIL(set_dest_type(types_stack[json_doc_id], type, dst_type, type_ctx))) {
         LOG_WARN("set dest type failed", K(ret));
@@ -210,7 +210,7 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
     }
 
   }
-
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_CONST_TO_DECIMAL_INT_EQ);
   return ret;
 }
 
@@ -520,7 +520,8 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
       temp_ret = ret;
       ret = OB_SUCCESS;
     }
-    if (lib::is_oracle_mode() && (val_type == ObCharType || val_type == ObNumberType)) {
+    if (lib::is_oracle_mode()
+        && (val_type == ObCharType || val_type == ObNumberType || val_type == ObDecimalIntType)) {
       if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
         is_cover_by_error = false;
         LOG_WARN("pre eval json arg failed", K(ret));
@@ -608,6 +609,17 @@ int ObExprJsonValue::check_default_val_accuracy(const ObAccuracy &accuracy,
       number::ObNumber temp(obj->get_number());
       ret = number_range_check(accuracy, NULL, temp, true);
       LOG_WARN("number range is invalid for json_value", K(ret));
+      break;
+    }
+    case ObDecimalIntTC : {
+      ObNumStackOnceAlloc tmp_alloc;
+      number::ObNumber temp;
+      if (OB_FAIL(wide::to_number(obj->get_decimal_int(), obj->get_int_bytes(),
+                                  accuracy.scale_, tmp_alloc, temp))) {
+        LOG_WARN("to_number failed", K(ret));
+      } else if (OB_FAIL(number_range_check(accuracy, NULL, temp, true))) {
+        LOG_WARN("number range is invalid for json_value", K(ret));
+      }
       break;
     }
     case ObDateTC: {
@@ -804,10 +816,12 @@ int ObExprJsonValue::doc_do_seek(ObJsonBaseVector &hits, bool &is_null_result, O
   return ret;
 }
 
-int ObExprJsonValue::get_accuracy_internal(ObAccuracy &accuracy,
-                                          ObObjType &dest_type,
-                                          const int64_t value,
-                                          const ObLengthSemantics &length_semantics)
+int ObExprJsonValue::get_accuracy_internal(
+    ObEvalCtx& ctx,
+    ObAccuracy &accuracy,
+    ObObjType &dest_type,
+    const int64_t value,
+    const ObLengthSemantics &length_semantics)
 {
   INIT_SUCC(ret);
   ParseNode node;
@@ -857,8 +871,21 @@ int ObExprJsonValue::get_accuracy_internal(ObAccuracy &accuracy,
     if (lib::is_oracle_mode() && ObDoubleType == dest_type) {
       accuracy.set_accuracy(def_acc.get_precision());
     }
+    if (ObNumberType == dest_type
+        && is_decimal_int_accuracy_valid(accuracy.get_precision(), accuracy.get_scale())) {
+      bool enable_decimalint = false;
+      if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("type_ctx.get_session() is null", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(ctx.exec_ctx_.get_my_session(),
+                                                             enable_decimalint))) {
+        LOG_WARN("fail to check_enable_decimalint_type",
+            K(ret), K(ctx.exec_ctx_.get_my_session()->get_effective_tenant_id()));
+      } else if (enable_decimalint) {
+        dest_type = ObDecimalIntType;
+      }
+    }
   }
-
   return ret;
 }
 
@@ -879,7 +906,8 @@ int ObExprJsonValue::get_accuracy(const ObExpr &expr,
     is_cover_by_error = false;
     LOG_WARN("eval dst type datum failed", K(ret));
   } else {
-    ret = get_accuracy_internal(accuracy,
+    ret = get_accuracy_internal(ctx,
+                                accuracy,
                                 dest_type,
                                 dst_type_dat->get_int(),
                                 expr.datum_meta_.length_semantics_);
@@ -954,7 +982,7 @@ int ObExprJsonValue::number_range_check(const ObAccuracy &accuracy,
       if (lib::is_oracle_mode()) {
         ret = OB_ERR_VALUE_LARGER_THAN_ALLOWED;
       } else {
-        ret = OB_DATA_OUT_OF_RANGE;
+        ret = OB_OPERATE_OVERFLOW;
       }
       LOG_WARN("val is out of min range check.", K(val), K(*min_check_num));
       is_finish = true;
@@ -962,7 +990,7 @@ int ObExprJsonValue::number_range_check(const ObAccuracy &accuracy,
       if (lib::is_oracle_mode()) {
         ret = OB_ERR_VALUE_LARGER_THAN_ALLOWED;
       } else {
-        ret = OB_DATA_OUT_OF_RANGE;
+        ret = OB_OPERATE_OVERFLOW;
       }
       LOG_WARN("val is out of max range check.", K(val), K(*max_check_num));
       is_finish = true;
@@ -1602,6 +1630,31 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       }
       break;
     }
+    case ObDecimalIntType: {
+      // TODO:@xiaofeng.lby, modify this after support cast json into decimalint directly in json_decimalint
+      number::ObNumber temp_num;
+      ObDecimalInt *decint = nullptr;
+      int32_t int_bytes;
+      if (OB_FAIL(cast_to_number(allocator, j_base, accuracy, ObNumberType, temp_num, is_type_cast))) {
+        LOG_WARN("cast_to_number failed", K(ret));
+      } else if (OB_FAIL(wide::from_number(temp_num, *allocator, accuracy.scale_, decint, int_bytes))) {
+        LOG_WARN("cast number to decimal int failed", K(ret));
+      }
+      if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, ObNumberType)) {
+        const int len = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(accuracy.precision_);
+        if (len < int_bytes) {
+          res.set_null();
+        } else if (len > int_bytes) {
+          ObDecimalIntBuilder res_builder;
+          res_builder.from(decint, int_bytes);
+          res_builder.extend(len);
+          res.set_decimal_int(res_builder.get_decimal_int(), res_builder.get_int_bytes());
+        } else {
+          res.set_decimal_int(decint, int_bytes);
+        }
+      }
+      break;
+    }
     case ObVarcharType:
     case ObRawType:
     case ObNVarchar2Type:
@@ -1882,7 +1935,8 @@ int ObExprJsonValue::get_on_empty_or_error(const ObExpr &expr,
   json_arg = expr.args_[index + 2];
   val_type = json_arg->datum_meta_.type_;
   if (OB_SUCC(ret) && index != error_type_id) {
-    if (lib::is_oracle_mode() && (val_type == ObCharType || val_type == ObNumberType)) {
+    if (lib::is_oracle_mode()
+        && (val_type == ObCharType || val_type == ObNumberType || val_type == ObDecimalIntType)) {
       if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
         is_cover_by_error = false;
         LOG_WARN("pre eval json arg failed", K(ret));
@@ -1921,7 +1975,7 @@ int ObExprJsonValue::get_on_empty_or_error(const ObExpr &expr,
     if (ret == OB_OPERATE_OVERFLOW) {
       if (val_type >= ObDateTimeType && val_type <= ObYearType) {
         LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "TIME DEFAULT", "json_value");
-      } else if (val_type == ObNumberType || val_type == ObUNumberType) {
+      } else if (val_type == ObNumberType || val_type == ObUNumberType || val_type == ObDecimalIntType) {
         LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DECIMAL DEFAULT", "json_value");
       }
     }
@@ -1932,7 +1986,10 @@ int ObExprJsonValue::get_on_empty_or_error(const ObExpr &expr,
   return ret;
 }
 
-int ObExprJsonValue::get_cast_type(const ObExprResType param_type2, ObExprResType &dst_type) const
+int ObExprJsonValue::get_cast_type(
+    const ObExprResType param_type2,
+    ObExprResType &dst_type,
+    ObExprTypeCtx &type_ctx) const
 {
   INIT_SUCC(ret);
 
@@ -1973,6 +2030,20 @@ int ObExprJsonValue::get_cast_type(const ObExprResType param_type2, ObExprResTyp
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
+      if (ObNumberType == dst_type.get_type()
+          && is_decimal_int_accuracy_valid(dst_type.get_precision(), dst_type.get_scale())) {
+        bool enable_decimalint = false;
+        if (OB_ISNULL(type_ctx.get_session())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("type_ctx.get_session() is null", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(type_ctx.get_session(),
+                                                               enable_decimalint))) {
+          LOG_WARN("fail to check_enable_decimalint_type",
+              K(ret), K(type_ctx.get_session()->get_effective_tenant_id()));
+        } else if (enable_decimalint) {
+          dst_type.set_type(ObDecimalIntType);
+        }
+      }
     }
     LOG_DEBUG("get_cast_type", K(dst_type), K(param_type2));
   }
@@ -2043,6 +2114,9 @@ int ObExprJsonValue::set_dest_type(ObExprResType &type1,
           // MySql:cast (1 as decimal(0)) = cast(1 as decimal)
           // Oracle: cast(1.4 as number) = cast(1.4 as number(-1, -1))
           type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][ObNumberType].get_precision());
+        } else if (ObDecimalIntTC == dst_type.get_type_class() && 0 == dst_type.get_precision()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dst type is decimal int, but precision is zero", K(ret), K(dst_type));
         } else if (ObIntTC == dst_type.get_type_class() || ObUIntTC == dst_type.get_type_class()) {
           // for int or uint , the precision = len
           int32_t len = 0;
@@ -2097,7 +2171,8 @@ int ObExprJsonValue::get_cast_string_len(ObExprResType &type1,
         break;
       }
       case ObNumberType:
-      case ObUNumberType: {
+      case ObUNumberType:
+      case ObDecimalIntType: {
         if (lib::is_oracle_mode()) {
           if (0 < prec) {
             if (0 < scale) {

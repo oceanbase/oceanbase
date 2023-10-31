@@ -18,6 +18,8 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+
 
 namespace oceanbase
 {
@@ -57,11 +59,13 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
   OC( (ObArithExprOperator::calc_result_type2)(type, type1, type2, type_ctx));
   if (OB_SUCC(ret)) {
     const ObObjTypeClass result_tc = type.get_type_class();
-    if (ObNumberTC == result_tc) {
+    if (ObNumberTC == result_tc || ObDecimalIntTC == result_tc) {
       if (is_oracle_mode()) {
         type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
         type.set_precision(PRECISION_UNKNOWN_YET);
-
+      } else if (type.has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
+        type.set_scale(type1.get_scale() - type2.get_scale());
+        type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
       } else {
         ObScale scale1 = static_cast<ObScale>(MAX(type1.get_scale(), 0));
         ObScale scale2 = static_cast<ObScale>(MAX(type2.get_scale(), 0));
@@ -75,8 +79,9 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
             OB_UNLIKELY(PRECISION_UNKNOWN_YET == type2.get_precision())) {
           type.set_precision(PRECISION_UNKNOWN_YET);
         } else {
-          type.set_precision(static_cast<ObPrecision>(
-                               precision1 + MAX(scale2, div_precision_increment)));
+          ObPrecision precision = static_cast<ObPrecision>(
+                                    precision1 + scale2 + div_precision_increment);
+          type.set_precision(precision);
         }
 
         // calc scale.
@@ -87,7 +92,24 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
           ObScale calc_scale = static_cast<ObScale>(
               MAX(ROUND_UP(scale1) + ROUND_UP(scale2),
                   ROUND_UP(scale1 + scale2 + div_precision_increment)));
-          type.set_calc_scale(calc_scale);
+          if (ObNumberTC == result_tc) {
+            type.set_calc_scale(calc_scale);
+          }
+        }
+        if (type.is_decimal_int()) {
+          if (OB_UNLIKELY(PRECISION_UNKNOWN_YET == type.get_precision() ||
+                          SCALE_UNKNOWN_YET == type.get_scale())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected decimal int precision and scale", K(ret), K(type));
+          } else {
+            const ObScale calc_scale = type.get_scale() + type2.get_scale();
+            ObAccuracy dst_acc(type.get_precision(), calc_scale);
+            if (ObRawExprUtils::decimal_int_need_cast(type1.get_accuracy(), dst_acc)) {
+              type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
+              type1.set_calc_accuracy(dst_acc);
+              type2.set_calc_accuracy(type2.get_accuracy());
+            }
+          }
         }
         LOG_DEBUG("div calc_result_type2", K(type.get_calc_scale()), K(scale1), K(scale2),
                   "new_scale1", ROUND_UP(scale1), "new_scale2", ROUND_UP(scale2),
@@ -113,7 +135,7 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
             SCALE_UNKNOWN_YET != scale) {
           ObPrecision p1 = ObMySQLUtil::float_length(scale);
           ObPrecision p2 = type1.get_precision() - type1.get_scale() + scale;
-          if (ObNumberTC == type1.get_type_class()) {
+          if (ObNumberTC == type1.get_type_class() || ObDecimalIntTC == type1.get_type_class()) {
             p2 += decimal_to_double_precision_inc(type1.get_type(), type1.get_scale());
           }
           precision = MIN(p1, p2);
@@ -127,6 +149,8 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
     }
     type.unset_result_flag(NOT_NULL_FLAG); // divided by zero
   }
+  LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+            K(type2.get_accuracy()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()));
   return ret;
 }
 
@@ -753,6 +777,282 @@ int ObExprDiv::div_intervalds_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
   return def_batch_arith_op_by_datum_func<ObIntervalDSNumberDivFunc>(BATCH_EVAL_FUNC_ARG_LIST);
 }
 
+template<typename L, typename R>
+struct ObDecimalIntBatchDivRaw : public ObArithOpRawType<L, L, R>
+{
+  static void raw_op(L &res, const L &l, const R &r, const bool is_error_div_by_zero)
+  {
+    using val_type = typename common::wide::CommonType<L, R>::type;
+    UNUSED(is_error_div_by_zero);
+    res = l / r;
+    const val_type round = l % r;
+    const val_type abs_right = r < 0 ? -r : r;
+    const val_type abs_round = round < 0 ? -round : round;
+    // if |right| is odd, |right|/2 < |r| => need_carry
+    // if |right| is even, |right|/2 <= |r| => need_carry
+    const bool need_carry = ((abs_right >> 1) + (abs_right & 1)) <= abs_round;
+    if (need_carry) {
+      const int32_t carry = res < 0 ? -1 : 1;
+      res = res + carry;
+    }
+  }
+
+  static int raw_check(const L &res, const L &l, const R &r)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+template<typename R>
+struct ObDecimalIntBatchDivRawWithCheck : public ObDecimalIntBatchDivRaw<int512_t, R>
+{
+  static int raw_check(const int512_t &res, const int512_t &l, const R &r)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(res <= wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MIN
+                    || res >= wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MAX)) {
+      char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
+      ret = OB_OPERATE_OVERFLOW;
+      int64_t pos = 0;
+      databuff_printf(expr_str, OB_MAX_TWO_OPERATOR_EXPR_LENGTH, pos, "");
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DECIMAL", expr_str);
+      LOG_WARN("decimal int out of range", K(ret));
+    }
+    return ret;
+  }
+};
+
+// This function is used for arguments whose left-hand side operation width is int64_t or less
+// and whose right-hand operation width is greater than int64_t.
+template<typename L, typename R>
+static void decimal_int_div_raw_op(L &res, const L &l, const R &r)
+{
+  bool is_neg = false;
+  L left = l;
+  if (l < 0) {
+    is_neg = true;
+    left = -l;
+  }
+  R right = r;
+  if (r < 0) {
+    is_neg = !is_neg;
+    right = -r;
+  }
+  if (right > left) {
+    res = ((right >> 1) + (right & 1)) <= left ? 1 : 0;
+  } else {
+    const L right_val = right.items_[0];
+    res = left / right_val;
+    const L round = left % right_val;
+    res += ((right_val >> 1) + (right_val & 1)) <= round ? 1 : 0;
+  }
+  if (is_neg) {
+    res = -res;
+  }
+}
+
+#define SPEC_INT_WIDEINT_DIV_STRUCT(L, R) \
+template<>                                \
+struct ObDecimalIntBatchDivRaw<L, R> : public ObArithOpRawType<L, L, R> \
+{                                                             \
+  static void raw_op(L &res, const L &l, const R &r, const bool is_error_div_by_zero)          \
+  {                                                           \
+    UNUSED(is_error_div_by_zero);                             \
+    decimal_int_div_raw_op(res, l, r);                        \
+  }                                                           \
+                                                              \
+  static int raw_check(const L &res, const L &l, const R &r)  \
+  {                                                           \
+    return OB_SUCCESS;                                        \
+  }                                                           \
+};
+
+SPEC_INT_WIDEINT_DIV_STRUCT(int32_t, int128_t)
+SPEC_INT_WIDEINT_DIV_STRUCT(int32_t, int256_t)
+SPEC_INT_WIDEINT_DIV_STRUCT(int32_t, int512_t)
+SPEC_INT_WIDEINT_DIV_STRUCT(int64_t, int128_t)
+SPEC_INT_WIDEINT_DIV_STRUCT(int64_t, int256_t)
+SPEC_INT_WIDEINT_DIV_STRUCT(int64_t, int512_t)
+
+#undef SPEC_INT_WIDEINT_DIV_STRUCT
+
+template <typename Base, bool is_oracle_mode>
+struct ObDecintDivWrap : public ObArithOpWrap<Base>
+{
+  constexpr static bool is_raw_op_supported() { return false; }
+  static int datum_op(ObDatum &res, const ObDatum &l, const ObDatum &r,
+                      const bool is_error_div_by_zero)
+  {
+    int ret = OB_SUCCESS;
+    if (l.is_null() || r.is_null()) {
+      res.set_null();
+    } else if (*reinterpret_cast<const typename Base::R_RAW_TYPE *>(r.ptr_) == 0) {
+      if (is_oracle_mode) {
+        ret = OB_ERR_DIVISOR_IS_ZERO;
+        LOG_WARN("divisor is equal to zero on oracle mode", K(ret));
+      } else if (is_error_div_by_zero) {
+        ret = OB_DIVISION_BY_ZERO;
+      } else {
+        res.set_null();
+        LOG_DEBUG("divisor is equal to zero", K(l), K(ret));
+      }
+    } else if (*reinterpret_cast<const typename Base::L_RAW_TYPE *>(l.ptr_) == 0) {
+      *const_cast<typename Base::RES_RAW_TYPE *>(
+        reinterpret_cast<const typename Base::RES_RAW_TYPE *>(res.ptr_)) = 0;
+      res.pack_ = sizeof(typename Base::RES_RAW_TYPE);
+    } else {
+      ret = ObArithOpWrap<Base>()(res, l, r, is_error_div_by_zero);
+    }
+    return ret;
+  }
+};
+
+#define DECINC_DIV_EVAL_FUNC_BASIC_DECL(L, R) \
+int ObExprDiv::div_decimalint_##L##_##R(EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_arith_eval_func<ObDecintDivWrap<ObDecimalIntBatchDivRaw<int##L##_t, int##R##_t>, false>>(EVAL_FUNC_ARG_LIST, expr.is_error_div_by_zero_); \
+}                                            \
+int ObExprDiv::div_decimalint_##L##_##R##_batch(BATCH_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_batch_arith_op<ObDecintDivWrap<ObDecimalIntBatchDivRaw<int##L##_t, int##R##_t>, false>>(BATCH_EVAL_FUNC_ARG_LIST, expr.is_error_div_by_zero_); \
+}
+
+#define DECINC_DIV_EVAL_FUNC_DECL(TYPE)                \
+  DECINC_DIV_EVAL_FUNC_BASIC_DECL(TYPE, 32)            \
+  DECINC_DIV_EVAL_FUNC_BASIC_DECL(TYPE, 64)            \
+  DECINC_DIV_EVAL_FUNC_BASIC_DECL(TYPE, 128)           \
+  DECINC_DIV_EVAL_FUNC_BASIC_DECL(TYPE, 256)           \
+  DECINC_DIV_EVAL_FUNC_BASIC_DECL(TYPE, 512)
+
+#define DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(TYPE)                             \
+int ObExprDiv::div_decimalint_512_##TYPE##_with_check(EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_arith_eval_func<ObDecintDivWrap<ObDecimalIntBatchDivRawWithCheck<int##TYPE##_t>, false>>(EVAL_FUNC_ARG_LIST, expr.is_error_div_by_zero_); \
+}                                            \
+int ObExprDiv::div_decimalint_512_##TYPE##_with_check_batch(BATCH_EVAL_FUNC_ARG_DECL)      \
+{                                            \
+  return def_batch_arith_op<ObDecintDivWrap<ObDecimalIntBatchDivRawWithCheck<int##TYPE##_t>, false>>(BATCH_EVAL_FUNC_ARG_LIST, expr.is_error_div_by_zero_); \
+}
+
+
+DECINC_DIV_EVAL_FUNC_DECL(32)
+DECINC_DIV_EVAL_FUNC_DECL(64)
+DECINC_DIV_EVAL_FUNC_DECL(128)
+DECINC_DIV_EVAL_FUNC_DECL(256)
+DECINC_DIV_EVAL_FUNC_DECL(512)
+DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(32)
+DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(64)
+DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(128)
+DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(256)
+DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(512)
+
+#undef DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL
+#undef DECINC_DIV_EVAL_FUNC_DECL
+#undef DECINC_DIV_EVAL_FUNC_BASIC_DECL
+
+void set_decimalint_div_func_ptr(ObExpr &expr)
+{
+  static ObExpr::EvalFunc funcs[DECIMAL_INT_MAX][DECIMAL_INT_MAX] = {
+    {
+      ObExprDiv::div_decimalint_32_32,
+      ObExprDiv::div_decimalint_32_64,
+      ObExprDiv::div_decimalint_32_128,
+      ObExprDiv::div_decimalint_32_256,
+      ObExprDiv::div_decimalint_32_512
+    },
+    {
+      ObExprDiv::div_decimalint_64_32,
+      ObExprDiv::div_decimalint_64_64,
+      ObExprDiv::div_decimalint_64_128,
+      ObExprDiv::div_decimalint_64_256,
+      ObExprDiv::div_decimalint_64_512
+    },
+    {
+      ObExprDiv::div_decimalint_128_32,
+      ObExprDiv::div_decimalint_128_64,
+      ObExprDiv::div_decimalint_128_128,
+      ObExprDiv::div_decimalint_128_256,
+      ObExprDiv::div_decimalint_128_512
+    },
+    {
+      ObExprDiv::div_decimalint_256_32,
+      ObExprDiv::div_decimalint_256_64,
+      ObExprDiv::div_decimalint_256_128,
+      ObExprDiv::div_decimalint_256_256,
+      ObExprDiv::div_decimalint_256_512
+    },
+    {
+      ObExprDiv::div_decimalint_512_32,
+      ObExprDiv::div_decimalint_512_64,
+      ObExprDiv::div_decimalint_512_128,
+      ObExprDiv::div_decimalint_512_256,
+      ObExprDiv::div_decimalint_512_512
+    }
+  };
+  static ObExpr::EvalBatchFunc batch_funcs[DECIMAL_INT_MAX][DECIMAL_INT_MAX] = {
+    {
+      ObExprDiv::div_decimalint_32_32_batch,
+      ObExprDiv::div_decimalint_32_64_batch,
+      ObExprDiv::div_decimalint_32_128_batch,
+      ObExprDiv::div_decimalint_32_256_batch,
+      ObExprDiv::div_decimalint_32_512_batch
+    },
+    {
+      ObExprDiv::div_decimalint_64_32_batch,
+      ObExprDiv::div_decimalint_64_64_batch,
+      ObExprDiv::div_decimalint_64_128_batch,
+      ObExprDiv::div_decimalint_64_256_batch,
+      ObExprDiv::div_decimalint_64_512_batch
+    },
+    {
+      ObExprDiv::div_decimalint_128_32_batch,
+      ObExprDiv::div_decimalint_128_64_batch,
+      ObExprDiv::div_decimalint_128_128_batch,
+      ObExprDiv::div_decimalint_128_256_batch,
+      ObExprDiv::div_decimalint_128_512_batch
+    },
+    {
+      ObExprDiv::div_decimalint_256_32_batch,
+      ObExprDiv::div_decimalint_256_64_batch,
+      ObExprDiv::div_decimalint_256_128_batch,
+      ObExprDiv::div_decimalint_256_256_batch,
+      ObExprDiv::div_decimalint_256_512_batch
+    },
+    {
+      ObExprDiv::div_decimalint_512_32_batch,
+      ObExprDiv::div_decimalint_512_64_batch,
+      ObExprDiv::div_decimalint_512_128_batch,
+      ObExprDiv::div_decimalint_512_256_batch,
+      ObExprDiv::div_decimalint_512_512_batch
+    }
+  };
+  static ObExpr::EvalFunc funcs_with_check[] =
+  {
+    ObExprDiv::div_decimalint_512_32_with_check,
+    ObExprDiv::div_decimalint_512_64_with_check,
+    ObExprDiv::div_decimalint_512_128_with_check,
+    ObExprDiv::div_decimalint_512_256_with_check,
+    ObExprDiv::div_decimalint_512_512_with_check
+  };
+  static ObExpr::EvalBatchFunc batch_funcs_with_check[] =
+  {
+    ObExprDiv::div_decimalint_512_32_with_check_batch,
+    ObExprDiv::div_decimalint_512_64_with_check_batch,
+    ObExprDiv::div_decimalint_512_128_with_check_batch,
+    ObExprDiv::div_decimalint_512_256_with_check_batch,
+    ObExprDiv::div_decimalint_512_512_with_check_batch
+  };
+  const int lt = get_decimalint_type(expr.args_[0]->datum_meta_.precision_);
+  const int rt = get_decimalint_type(expr.args_[1]->datum_meta_.precision_);
+  if (expr.datum_meta_.precision_ < OB_MAX_DECIMAL_POSSIBLE_PRECISION) {
+    expr.eval_func_ = funcs[lt][rt];
+    expr.eval_batch_func_ = batch_funcs[lt][rt];
+  } else {
+    expr.eval_func_ = funcs_with_check[rt];
+    expr.eval_batch_func_ = batch_funcs_with_check[rt];
+  }
+}
+
 int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
@@ -794,6 +1094,10 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     case ObIntervalDSType: {
       SET_DIV_FUNC_PTR(div_intervalds_number);
+      break;
+    }
+    case ObDecimalIntType: {
+      set_decimalint_div_func_ptr(rt_expr);
       break;
     }
     default: {

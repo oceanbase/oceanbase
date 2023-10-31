@@ -28,6 +28,7 @@
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/blocksstable/ob_tmp_file_store.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_logger_manager.h"
@@ -348,11 +349,10 @@ int ObBlockManager::read_block(
     ObMacroBlockHandle &macro_handle)
 {
   int ret = OB_SUCCESS;
-  const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
   if (OB_FAIL(async_read_block(read_info, macro_handle))) {
     LOG_WARN("Fail to sync read block", K(ret), K(read_info));
-  } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
-    LOG_WARN("Fail to wait io finish", K(ret));
+  } else if (OB_FAIL(macro_handle.wait())) {
+    LOG_WARN("Fail to wait io finish", K(ret), K(read_info));
   }
   return ret;
 }
@@ -362,11 +362,10 @@ int ObBlockManager::write_block(
     ObMacroBlockHandle &macro_handle)
 {
   int ret = OB_SUCCESS;
-  const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
   if (OB_FAIL(async_write_block(write_info, macro_handle))) {
     LOG_WARN("Fail to sync write block", K(ret), K(write_info), K(macro_handle));
-  } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
-    LOG_WARN("Fail to wait io finish", K(ret));
+  } else if (OB_FAIL(macro_handle.wait())) {
+    LOG_WARN("Fail to wait io finish", K(ret), K(write_info));
   }
   return ret;
 }
@@ -743,7 +742,6 @@ int ObBlockManager::dec_ref(const MacroBlockId &macro_id)
   return ret;
 }
 
-
 int ObBlockManager::update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time)
 {
   int ret = OB_SUCCESS;
@@ -1118,7 +1116,7 @@ int ObBlockManager::mark_sstable_blocks(
   if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(handle));
-  } else if (OB_FAIL(handle.get_obj()->get_all_sstables(table_store_iter))) {
+  } else if (OB_FAIL(handle.get_obj()->get_all_sstables(table_store_iter, true /* unpac cosstable */))) {
     LOG_WARN("fail to get all sstables", K(ret));
   } else {
      while (OB_SUCC(ret)) {
@@ -1477,7 +1475,7 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
     ObMacroBlockReadInfo read_info;
     ObMacroBlockHandle macro_handle;
     common::ObArenaAllocator allocator(ObModIds::OB_SSTABLE_BLOCK_FILE);
-    const int64_t io_timeout_ms =
+    read_info.io_timeout_ms_ =
       std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
     read_info.macro_block_id_ = macro_id;
     read_info.offset_ = 0;
@@ -1485,19 +1483,21 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_desc_.set_group_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
 
-    if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {
+    if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
+    } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {
       LOG_WARN("async read block failed", K(ret), K(macro_id), K(read_info));
-    } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
-      LOG_WARN("io wait failed", K(ret), K(macro_id), K(io_timeout_ms));
-    } else if (NULL == macro_handle.get_buffer()
-            || macro_handle.get_data_size() != read_info.size_) {
+    } else if (OB_FAIL(macro_handle.wait())) {
+      LOG_WARN("io wait failed", K(ret), K(macro_id), K(read_info));
+    } else if (macro_handle.get_data_size() != read_info.size_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("buf is null or buf size is too small", K(ret), K(macro_id),
-          KP(macro_handle.get_buffer()), K(macro_handle.get_data_size()), K(read_info.size_));
-    } else if (OB_FAIL(ObSSTableMacroBlockChecker::check(macro_handle.get_buffer(),
-        macro_handle.get_data_size(), ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL))) {
+      LOG_WARN("buf size is too small", K(ret), K(macro_id),
+          K(macro_handle.get_data_size()), K(read_info.size_));
+    } else if (OB_FAIL(ObSSTableMacroBlockChecker::check(read_info.buf_,
+        read_info.size_, ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL))) {
       LOG_ERROR("fail to check sstable macro block", K(ret), K(macro_id),
-          KP(macro_handle.get_buffer()),  K(macro_handle.get_data_size()));
+          KP(read_info.buf_),  K(read_info.size_));
       char error_msg[common::OB_MAX_ERROR_MSG_LEN];
       char macro_id_str[128];
       MEMSET(error_msg, 0, sizeof(error_msg));

@@ -13190,6 +13190,33 @@ int ObTransformUtils::convert_aggr_expr(ObTransformerCtx *ctx,
   return ret;
 }
 
+int ObTransformUtils::check_stmt_is_only_full_group_by(const ObSelectStmt *stmt,
+                                                       bool &is_only_full_group_by)
+{
+  int ret = OB_SUCCESS;
+  is_only_full_group_by = true;
+  ObSEArray<ObRawExpr *, 4> exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_select_exprs(exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(stmt->get_order_exprs(exprs))) {
+    LOG_WARN("failed to get order exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_only_full_group_by && i < exprs.count(); i++) {
+    if (OB_FAIL(check_group_by_subset(exprs.at(i), stmt->get_group_exprs(), is_only_full_group_by))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_only_full_group_by && i < stmt->get_having_exprs().count(); i++) {
+    if (OB_FAIL(check_group_by_subset(stmt->get_having_exprs().at(i), stmt->get_group_exprs(), is_only_full_group_by))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::wrap_case_when_for_count(ObTransformerCtx *ctx,
                                                ObDMLStmt *stmt,
                                                ObColumnRefRawExpr *view_count,
@@ -13407,6 +13434,36 @@ int ObTransformUtils::check_is_index_part_key(ObTransformerCtx &ctx,
     } else if (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
                           table->ref_id_, col->get_column_id(), is_valid)) {
       LOG_WARN("failed to check if partition key", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_group_by_subset(ObRawExpr *expr,
+                                            const ObIArray<ObRawExpr *> &group_exprs,
+                                            bool &bret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    bret = true;
+    int64_t idx = -1;
+    if (expr->has_flag(IS_AGG) || expr->has_flag(IS_CONST)) {
+      //do nothing
+    } else if (OB_FAIL(ObTransformUtils::get_expr_idx(group_exprs, expr, idx))) {
+      LOG_WARN("get expr idx failed", K(ret));
+    } else if (idx == -1) { //not found
+      if (expr->get_param_count() == 0) {
+        bret = false;
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && bret && i < expr->get_param_count(); i++) {
+          if (OB_FAIL(SMART_CALL(check_group_by_subset(expr->get_param_expr(i), group_exprs, bret)))) {
+            LOG_WARN("check group by subset faield", K(ret));
+          }
+        }
+      }
     }
   }
   return ret;

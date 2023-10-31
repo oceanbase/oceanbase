@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_ALL_MICRO_BLOCK_RANGE_ITERATOR_H
 #define OCEANBASE_STORAGE_OB_ALL_MICRO_BLOCK_RANGE_ITERATOR_H
 
-#include "storage/blocksstable/ob_index_block_tree_cursor.h"
+#include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
 
 namespace oceanbase
 {

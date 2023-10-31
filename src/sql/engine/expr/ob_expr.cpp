@@ -186,8 +186,9 @@ OB_DEF_DESERIALIZE(ObExpr)
   }
 
   if (OB_SUCC(ret)) {
-    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_, datum_meta_.scale_,
-                                                lib::is_oracle_mode(), obj_meta_.has_lob_header());
+    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_,
+                                                datum_meta_.scale_, lib::is_oracle_mode(),
+                                                obj_meta_.has_lob_header(), datum_meta_.precision_);
     CK(NULL != basic_funcs_);
   }
   if (is_batch_result()) {
@@ -460,7 +461,7 @@ int ObDatumObjParam::construct_array_param_datum(const ObObjParam &obj_param, Ob
       ObObjDatumMapType obj_datum_map = ObDatum::get_obj_datum_map_type(
           array_obj->data_[i].get_type());
       if (OB_LIKELY(OBJ_DATUM_NULL != obj_datum_map)) {
-        uint32_t def_res_len = ObDatum::get_reserved_size(obj_datum_map);
+        uint32_t def_res_len = ObDatum::get_reserved_size(obj_datum_map, array_obj->data_[i].get_precision());
         if (OB_ISNULL(datum_array->data_[i].ptr_ = static_cast<char *>(allocator.alloc(def_res_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(def_res_len), K(ret));
@@ -791,9 +792,16 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         cast_mode |= CM_ENABLE_BLOB_CAST;
       }
       ObCastCtx cast_ctx(&allocator, &dtc_params, cast_mode, dst_meta.get_collation_type());
+      ObAccuracy res_acc;
+      if (dst_meta.is_decimal_int()) {
+        res_acc.scale_ = expr.datum_meta_.scale_;
+        res_acc.precision_ = expr.datum_meta_.precision_;
+        cast_ctx.res_accuracy_ = &res_acc;
+      }
       if (OB_FAIL(ObObjCaster::to_type(dst_meta.get_type(), cast_ctx, v, dst_obj))) {
         LOG_WARN("failed to cast obj to dst type", K(ret), K(v), K(dst_meta));
-      } else if (OB_FAIL(datum_param.alloc_datum_reserved_buff(dst_meta, allocator))) {
+      } else if (OB_FAIL(datum_param.alloc_datum_reserved_buff(
+                          dst_meta, expr.datum_meta_.precision_, allocator))) {
         LOG_WARN("alloc datum reserved buffer failed", K(ret));
       } else if (OB_FAIL(datum_param.from_objparam(dst_obj, &allocator))) {
         LOG_WARN("fail to convert obj param", K(ret), K(dst_obj));

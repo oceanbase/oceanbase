@@ -255,13 +255,14 @@ public:
 
   void check_freeze_info_mgr(const int64_t expected_snapshot_version)
   {
-    int64_t snapshot_version = 0;
+    ObStorageSnapshotInfo snapshot_info;
     share::SCN snapshot_version_for_txn;
     ASSERT_EQ(OB_SUCCESS, MTL(storage::ObTenantFreezeInfoMgr *)->
-              get_min_reserved_snapshot(ObTabletID(200001), 1, snapshot_version));
+              get_min_reserved_snapshot(ObTabletID(200001), 1, snapshot_info));
     snapshot_version_for_txn = MTL(concurrency_control::ObMultiVersionGarbageCollector *)->
       get_reserved_snapshot_for_active_txn();
-    ASSERT_EQ(TRUE, expected_snapshot_version >= snapshot_version);
+    MVCC_LOG(INFO, "check_freeze_info_mgr", K(snapshot_info), K(expected_snapshot_version), K(expected_snapshot_version >= snapshot_info.snapshot_));
+    ASSERT_EQ(TRUE, expected_snapshot_version >= snapshot_info.snapshot_);
     ASSERT_EQ(expected_snapshot_version, snapshot_version_for_txn.get_val_for_tx());
   }
 
@@ -744,6 +745,9 @@ int ObMultiVersionGarbageCollector::is_disk_almost_full_(bool &is_almost_full)
 
 int main(int argc, char **argv)
 {
+  system("rm -rf test_mvcc_gc.log*");
+  OB_LOGGER.set_file_name("test_mvcc_gc.log");
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("info");
   ::testing::InitGoogleTest(&argc, argv);

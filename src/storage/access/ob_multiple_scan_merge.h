@@ -52,6 +52,7 @@ protected:
   virtual int supply_consume();
   virtual int inner_merge_row(blocksstable::ObDatumRow &row);
   int set_rows_merger(const int64_t table_cnt);
+  int locate_blockscan_border();
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
 protected:

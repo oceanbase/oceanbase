@@ -4896,6 +4896,10 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
         }
         OZ(create_runtime_filter_info(node,
             join_filter_create, join_filter_use, info.join_filter_selectivity_));
+        if (OB_SUCC(ret) && LOG_TABLE_SCAN == node->get_type()) {
+          ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
+          scan->set_use_column_store(info.use_column_store_);
+        }
       }
     }
   }

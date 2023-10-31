@@ -195,7 +195,9 @@ public:
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,
-      int64_t &memtable_row_count) const;
+      int64_t &memtable_row_count,
+      common::ObIArray<int64_t> &cg_macro_cnt_arr,
+      common::ObIArray<int64_t> &cg_micro_cnt_arr) const;
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
   int check_data_disk_full_(bool &is_full);

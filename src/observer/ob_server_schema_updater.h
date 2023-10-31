@@ -35,7 +35,7 @@ class ObServerSchemaTask;
 class ObServerSchemaUpdater;
 typedef ObUniqTaskQueue<ObServerSchemaTask, ObServerSchemaUpdater> ObServerSchemaTaskQueue;
 
-class ObServerSchemaTask : public common::ObDLinkBase<ObServerSchemaTask>
+class ObServerSchemaTask : public ObIUniqTaskQueueTask<ObServerSchemaTask>
 {
 public:
   friend class ObServerSchemaUpdater;
@@ -61,8 +61,9 @@ public:
                               const int64_t schema_version);
   virtual ~ObServerSchemaTask() {}
 
-  bool need_process_alone() const;
-  bool is_valid() const;
+  virtual bool need_process_alone() const;
+  virtual bool is_valid() const;
+  virtual void reset();
 
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
@@ -71,14 +72,14 @@ public:
   bool operator <(const ObServerSchemaTask &other) const;
   static bool greator_than(const ObServerSchemaTask &lt,
                            const ObServerSchemaTask &rt);
-  uint64_t get_group_id() const;
-  bool is_barrier() const;
+  virtual uint64_t get_group_id() const;
+  virtual bool is_barrier() const;
 
   uint64_t get_tenant_id() const { return schema_info_.get_tenant_id(); }
   uint64_t get_schema_version() const { return schema_info_.get_schema_version(); }
 
-  inline bool need_assign_when_equal() const { return false; }
-  inline int assign_when_equal(const ObServerSchemaTask &other)
+  virtual bool need_assign_when_equal() const { return false; }
+  virtual int assign_when_equal(const ObServerSchemaTask &other)
   {
     UNUSED(other);
     return common::OB_NOT_SUPPORTED;

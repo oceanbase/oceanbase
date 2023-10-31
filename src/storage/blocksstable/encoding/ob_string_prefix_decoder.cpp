@@ -30,7 +30,7 @@ ObStringPrefixDecoder::~ObStringPrefixDecoder()
 {
 }
 
-int ObStringPrefixDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell,
+int ObStringPrefixDecoder::decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum,
     const int64_t row_id, const ObBitStream &bs, const char *data, const int64_t len) const
 {
   int ret = OB_SUCCESS;
@@ -53,11 +53,8 @@ int ObStringPrefixDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell,
     }
     if (OB_SUCC(ret)) {
       if (STORED_NOT_EXT != val) {
-        set_stored_ext_value(cell, static_cast<ObStoredExtValue>(val));
+        set_stored_ext_value(datum, static_cast<ObStoredExtValue>(val));
       } else {
-        if (cell.get_meta() != ctx.obj_meta_) {
-          cell.set_meta_type(ctx.obj_meta_);
-        }
         const char *cell_data = NULL;
         int64_t cell_len = 0;
         if (OB_FAIL(ObRawDecoder::locate_cell_data(cell_data, cell_len,
@@ -106,13 +103,13 @@ int ObStringPrefixDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell,
               for (int64_t i = cell_header->len_; i < str_len + cell_header->len_; ++i) {
                 string[i] = static_cast<char>(unpacker.unpack());
               }
-              cell.val_len_ = static_cast<int32_t>(cell_header->len_ + str_len);
-              cell.v_.string_ = string;
+              datum.pack_ = static_cast<int32_t>(cell_header->len_ + str_len);
+              datum.ptr_ = string;
               //LOG_DEBUG("debug: fill hex data", K(cell_header->len_), K(cell_len), K(str_len));
             } else {
               MEMCPY(string + cell_header->len_, cell_data, cell_len);
-              cell.val_len_ = static_cast<int32_t>(cell_header->len_ + cell_len);
-              cell.v_.string_ = string;
+              datum.pack_ = static_cast<int32_t>(cell_header->len_ + cell_len);
+              datum.ptr_ = string;
               //LOG_DEBUG("debug: fill data", K(cell_header->len_), K(cell_len));
             }
           }

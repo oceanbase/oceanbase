@@ -474,7 +474,7 @@ TEST_F(TestTablet, test_serialize_mig_param_compat)
   mig_param.ddl_data_format_version_ = 6;
   mig_param.max_serialized_medium_scn_ = 5;
   mig_param.ddl_commit_scn_ = share::SCN::base_scn();
-  mig_param.storage_schema_.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V2;
+  mig_param.storage_schema_.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
   mig_param.storage_schema_.schema_version_ = 1;
   mig_param.storage_schema_.column_cnt_ = 1;
   mig_param.storage_schema_.table_type_ = SYSTEM_TABLE;

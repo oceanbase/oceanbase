@@ -198,14 +198,13 @@ void ObSharedBlockBaseHandle::reset()
 int ObSharedBlockBaseHandle::wait()
 {
   int ret = OB_SUCCESS;
-  const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   for (int64_t i = 0; OB_SUCC(ret) && i < macro_handles_.count(); ++i) {
     ObMacroBlockHandle macro_handle = macro_handles_.at(i);
     if (OB_UNLIKELY(!macro_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected invalid macro handle", K(ret), K(i), K(macro_handle), KPC(this));
-    } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
-      LOG_WARN("Failt to wait macro handle finish", K(ret), K(macro_handle), K(io_timeout_ms));
+    } else if (OB_FAIL(macro_handle.wait())) {
+      LOG_WARN("Failt to wait macro handle finish", K(ret), K(macro_handle));
     }
   }
   return ret;
@@ -241,6 +240,30 @@ bool ObSharedBlockWriteHandle::is_valid() const
   return macro_handles_.count() > 0 && addrs_.count() == 1;
 }
 
+
+ObSharedBlockReadHandle::ObSharedBlockReadHandle()
+  : allocator_(nullptr),
+    macro_handle_()
+{
+}
+
+ObSharedBlockReadHandle::ObSharedBlockReadHandle(ObIAllocator &allocator)
+  : allocator_(&allocator),
+    macro_handle_()
+{
+}
+
+ObSharedBlockReadHandle::~ObSharedBlockReadHandle()
+{
+  reset();
+}
+
+void ObSharedBlockReadHandle::reset()
+{
+  allocator_ = nullptr;
+  macro_handle_.reset();
+}
+
 bool ObSharedBlockReadHandle::is_valid() const
 {
   return macro_handle_.is_valid();
@@ -259,20 +282,32 @@ ObSharedBlockReadHandle &ObSharedBlockReadHandle::operator=(const ObSharedBlockR
 {
   if (&other != this) {
     macro_handle_ = other.macro_handle_;
+    allocator_ = other.allocator_;
   }
   return *this;
 }
 
-int ObSharedBlockReadHandle::wait(const int64_t timeout_ms)
+int ObSharedBlockReadHandle::wait()
 {
   int ret = OB_SUCCESS;
-  const int64_t io_timeout_ms = timeout_ms > 0
-      ? timeout_ms : MAX(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   if (OB_UNLIKELY(!macro_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected read handle", K(ret), K_(macro_handle));
-  } else if (OB_FAIL(macro_handle_.wait(io_timeout_ms))) {
-    LOG_WARN("Failt to wait macro handle finish", K(ret), K(macro_handle_), K(io_timeout_ms));
+  } else if (OB_FAIL(macro_handle_.wait())) {
+    LOG_WARN("Failt to wait macro handle finish", K(ret), K(macro_handle_));
+  }
+  return ret;
+}
+
+int ObSharedBlockReadHandle::alloc_io_buf(char *&buf, const int64_t &buf_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, allocator is nullptr");
+  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_->alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc macro read info buffer", K(ret), K(buf_size));
   }
   return ret;
 }
@@ -286,7 +321,9 @@ int ObSharedBlockReadHandle::get_data(ObIAllocator &allocator, char *&buf, int64
     const char *data_buf = macro_handle_.get_buffer();
     const int64_t data_size = macro_handle_.get_data_size();
     int64_t header_size = 0;
-    if (OB_FAIL(verify_checksum(data_buf, data_size, header_size, buf_len))) {
+    if (allocator_ == &allocator && OB_FAIL(parse_data(data_buf, data_size, buf, buf_len))) { // shallow copy
+      LOG_WARN("fail to parse data", K(ret));
+    } else if (OB_FAIL(verify_checksum(data_buf, data_size, header_size, buf_len))) {
       LOG_WARN("fail to verify checksum", K(ret), KP(data_buf), K(data_size), K(header_size), K(buf_len));
     } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -313,6 +350,7 @@ int ObSharedBlockReadHandle::parse_data(
   }
   return ret;
 }
+
 
 int ObSharedBlockReadHandle::verify_checksum(
     const char *data_buf,
@@ -468,7 +506,7 @@ int ObSharedBlockLinkIter::reuse()
 int ObSharedBlockLinkIter::get_next_block(ObIAllocator &allocator, char *&buf, int64_t &buf_len)
 {
   int ret = OB_SUCCESS;
-  ObSharedBlockReadHandle block_handle;
+  ObSharedBlockReadHandle block_handle(allocator);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), KPC(this));
@@ -485,7 +523,8 @@ int ObSharedBlockLinkIter::get_next_block(ObIAllocator &allocator, char *&buf, i
 int ObSharedBlockLinkIter::get_next_macro_id(MacroBlockId &macro_id)
 {
   int ret = OB_SUCCESS;
-  ObSharedBlockReadHandle block_handle;
+  ObArenaAllocator allocator("share_block");
+  ObSharedBlockReadHandle block_handle(allocator);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), KPC(this));
@@ -512,11 +551,11 @@ int ObSharedBlockLinkIter::read_next_block(ObSharedBlockReadHandle &block_handle
   } else if (OB_FAIL(block_handle.wait())) {
     LOG_WARN("Fail to wait read io finish", K(ret), K(block_handle));
   } else {
-    ObMacroBlockHandle &macro_handle = block_handle.macro_handle_;
-    const ObSharedBlockHeader *header =
-        reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
-    cur_ = header->prev_addr_;
-    LOG_DEBUG("get next link block macro id", K(ret), K(head_), K(cur_), KPC(header));
+      ObMacroBlockHandle &macro_handle = block_handle.macro_handle_;
+      const ObSharedBlockHeader *header =
+          reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
+      cur_ = header->prev_addr_;
+      LOG_DEBUG("zhuixin debug get next link block", K(ret), K(head_), K(cur_), KPC(header));
   }
   return ret;
 }
@@ -525,7 +564,8 @@ int ObSharedBlockLinkIter::read_next_block(ObSharedBlockReadHandle &block_handle
 //=================================== ObSharedBlockReaderWriter =============================
 const MacroBlockId ObSharedBlockHeader::DEFAULT_MACRO_ID(0, MacroBlockId::AUTONOMIC_BLOCK_INDEX, 0);
 ObSharedBlockReaderWriter::ObSharedBlockReaderWriter()
-    : mutex_(), data_("SharedBlockRW"), macro_handle_(), offset_(0), align_offset_(0), write_align_size_(0),
+    : mutex_(), data_("SHARE_BLOCK", 0, false, false/*use_fixed_blk*/),
+      macro_handle_(), offset_(0), align_offset_(0), write_align_size_(0),
       hanging_(false), need_align_(false), need_cross_(false),
       is_inited_(false)
 {}
@@ -902,6 +942,8 @@ int ObSharedBlockReaderWriter::async_read(
   ObMacroBlockReadInfo macro_read_info;
   ObMacroBlockHandle macro_handle;
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  macro_read_info.io_timeout_ms_ = read_info.io_timeout_ms_;
+
   macro_read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
   macro_read_info.io_callback_ = read_info.io_callback_;
   if (OB_UNLIKELY(!read_info.is_valid())) {
@@ -912,10 +954,19 @@ int ObSharedBlockReaderWriter::async_read(
       macro_read_info.offset_,
       macro_read_info.size_))) {
     LOG_WARN("Fail to get block addr", K(ret), K(read_info));
-  } else if (OB_FAIL(macro_handle.async_read(macro_read_info))) {
-    LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
-  } else if (OB_FAIL(block_handle.set_macro_handle(macro_handle))) {
-    LOG_WARN("Fail to add macro handle", K(ret), K(macro_read_info));
+  } else {
+    if (nullptr == read_info.io_callback_
+        && OB_FAIL(block_handle.alloc_io_buf(macro_read_info.buf_, macro_read_info.size_))) {
+      LOG_WARN("Fail to alloc io buf", K(ret), K(macro_read_info));
+    } else {
+      macro_read_info.io_callback_ = read_info.io_callback_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(macro_handle.async_read(macro_read_info))) {
+      LOG_WARN("Fail to async read block", K(ret), K(macro_read_info));
+    } else if (OB_FAIL(block_handle.set_macro_handle(macro_handle))) {
+      LOG_WARN("Fail to add macro handle", K(ret), K(macro_read_info));
+    }
   }
   return ret;
 }

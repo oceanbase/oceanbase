@@ -30,6 +30,8 @@ OB_SERIALIZE_MEMBER(ObTenantAdminMergeRequest, tenant_id_, type_);
 
 OB_SERIALIZE_MEMBER(ObTenantAdminMergeResponse, err_code_);
 
+OB_SERIALIZE_MEMBER(ObTabletMajorFreezeRequest, tenant_id_, ls_id_, tablet_id_, is_rebuild_column_group_);
+
 int ObTenantMajorFreezeP::process()
 {
   int ret = OB_SUCCESS;

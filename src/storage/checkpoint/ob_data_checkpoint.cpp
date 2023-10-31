@@ -609,7 +609,7 @@ int ObDataCheckpoint::traversal_flush_()
   // based on the order of rec_scn. So we should can simply use a small
   // number for flush tasks.
   const int MAX_DATA_CHECKPOINT_FLUSH_COUNT = 10000;
-  ObSEArray<ObTableHandleV2, 16> flush_tasks;
+  ObSEArray<ObTableHandleV2, BASIC_MEMSTORE_CNT> flush_tasks;
 
   {
     RLOCK(PREPARE);

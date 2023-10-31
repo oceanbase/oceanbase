@@ -18,6 +18,9 @@
 #include "storage/access/ob_table_estimator.h"
 #include "storage/access/ob_index_sstable_estimator.h"
 #include "ob_tenant_compaction_progress.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/column_store/ob_co_merge_dag.h"
+#include "storage/memtable/ob_memtable.h"
 
 namespace oceanbase
 {
@@ -32,9 +35,9 @@ namespace compaction
 
 ObPartitionMergeProgress::ObPartitionMergeProgress(common::ObIAllocator &allocator)
   : allocator_(allocator),
+    ctx_(nullptr),
     merge_dag_(nullptr),
     scanned_row_cnt_arr_(nullptr),
-    output_block_cnt_arr_(nullptr),
     concurrent_cnt_(0),
     estimate_row_cnt_(0),
     estimate_occupy_size_(0),
@@ -42,9 +45,9 @@ ObPartitionMergeProgress::ObPartitionMergeProgress(common::ObIAllocator &allocat
     latest_update_ts_(ObTimeUtility::fast_current_time()),
     estimated_finish_time_(0),
     pre_scanned_row_cnt_(0),
-    pre_output_block_cnt_(0),
+    start_cg_idx_(0),
+    end_cg_idx_(0),
     is_updating_(false),
-    is_waiting_schedule_(true),
     is_inited_(false)
 {
 }
@@ -57,22 +60,22 @@ ObPartitionMergeProgress::~ObPartitionMergeProgress()
 void ObPartitionMergeProgress::reset()
 {
   is_inited_ = false;
+  ctx_ = nullptr;
   merge_dag_ = nullptr;
   if (OB_NOT_NULL(scanned_row_cnt_arr_)) {
     allocator_.free(scanned_row_cnt_arr_);
     scanned_row_cnt_arr_ = nullptr;
   }
-  output_block_cnt_arr_ = nullptr;
   estimate_row_cnt_ = 0;
   estimate_occupy_size_ = 0;
   avg_row_length_ = 0;
   latest_update_ts_ = 0;
   estimated_finish_time_ = 0;
   pre_scanned_row_cnt_ = 0;
-  pre_output_block_cnt_ = 0;
+  start_cg_idx_ = 0;
+  end_cg_idx_ = 0;
   concurrent_cnt_ = 0;
   is_updating_ = false;
-  is_waiting_schedule_ = true;
 }
 
 
@@ -82,44 +85,47 @@ int64_t ObPartitionMergeProgress::to_string(char *buf, const int64_t buf_len) co
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(is_inited), KPC_(merge_dag), KP_(scanned_row_cnt_arr), KP_(output_block_cnt_arr),
+    J_KV(K_(is_inited), KP_(merge_dag), KP_(scanned_row_cnt_arr),
         K_(concurrent_cnt), K_(estimate_row_cnt), K_(estimate_occupy_size),
-        K_(latest_update_ts), K_(estimated_finish_time));
+        K_(latest_update_ts), K_(estimated_finish_time), K_(start_cg_idx), K_(end_cg_idx));
     J_OBJ_END();
   }
   return pos;
 }
 
-int ObPartitionMergeProgress::init(ObTabletMergeCtx *ctx)
+int ObPartitionMergeProgress::init(ObBasicTabletMergeCtx *ctx,
+    ObTabletMergeDag *merge_dag,
+    const int64_t start_cg_idx,
+    const int64_t end_cg_idx)
 {
   int ret = OB_SUCCESS;
   int64_t *buf = NULL;
-  ObTabletMergeDag *merge_dag = nullptr;
   int64_t concurrent_cnt = 0;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObPartitionMergeProgress inited twice", K(ret));
   } else if (OB_UNLIKELY(NULL == ctx
-      || NULL == (merge_dag = static_cast<ObTabletMergeDag *>(ctx->merge_dag_))
+      || NULL == merge_dag
       || 0 == (concurrent_cnt = ctx->get_concurrent_cnt()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(ctx), K(merge_dag), K(concurrent_cnt));
-  } else if (OB_ISNULL(buf = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * concurrent_cnt * 2)))) {
+    LOG_WARN("get invalid arguments", K(ret), KPC(ctx), K(merge_dag), K(concurrent_cnt));
+  } else if (OB_ISNULL(buf = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * concurrent_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc memory for unit_cnt_arr_", K(ret), K(concurrent_cnt));
   } else {
-    // for parallel merge, [0, concurrent_cnt) stores row count, [concurrent_cnt, concurrent_cnt * 2) stores block count
-    MEMSET(buf, 0, sizeof(int64_t) * concurrent_cnt * 2);
+    // for parallel merge, [0, concurrent_cnt) stores row count
+    MEMSET(buf, 0, sizeof(int64_t) * concurrent_cnt);
     scanned_row_cnt_arr_ = buf;
-    output_block_cnt_arr_ = buf + concurrent_cnt;
-    is_waiting_schedule_ = false;
 
     concurrent_cnt_ = concurrent_cnt;
+    ctx_ = ctx;
     merge_dag_ = merge_dag;
+    start_cg_idx_ = start_cg_idx;
+    end_cg_idx_ = end_cg_idx;
 
-    if (OB_FAIL(estimate(ctx))) {
-      LOG_WARN("failed to estimate unit count", K(ret), K(ctx));
+    if (OB_FAIL(estimate())) {
+      LOG_WARN("failed to estimate unit count", K(ret), KPC(ctx));
     } else {
       is_inited_ = true;
     }
@@ -127,76 +133,75 @@ int ObPartitionMergeProgress::init(ObTabletMergeCtx *ctx)
   return ret;
 }
 
-int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
+int ObPartitionMergeProgress::estimate_mini_merge(
+    const ObIArray<storage::ObITable*> &tables,
+    const storage::ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(ctx));
+  memtable::ObMemtable *data_memtable = nullptr;
+
+  if (OB_UNLIKELY(0 == tables.count() || nullptr == tables.at(0) || !tables.at(0)->is_data_memtable())) {
+    ret =  OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(tables));
+  } else if (OB_ISNULL(data_memtable = static_cast<memtable::ObMemtable *>(tables.at(0)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null data memtable", K(ret), KPC(tables.at(0)));
+  } else {
+    const memtable::ObMtStat &mt_stat = data_memtable->get_mt_stat();
+    estimate_row_cnt_ = MAX(1, mt_stat.insert_row_count_ + mt_stat.update_row_count_ + mt_stat.delete_row_count_);
+
+    for (int64_t i = tables.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (OB_UNLIKELY(nullptr == tables.at(i) || !tables.at(i)->is_memtable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null table", K(ret), K(i), K(tables.at(i)));
+      } else {
+        estimate_occupy_size_ += static_cast<ObMemtable *>(tables.at(i))->get_occupied_size();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionMergeProgress::estimate()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is unexpected null", K(ret), KP_(ctx));
   } else {
     ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> tables;
     int64_t old_major_data_size = 0;
-    if (OB_FAIL(ctx->tables_handle_.get_tables(tables))) {
+    if (OB_FAIL(ctx_->get_tables_handle().get_tables(tables))) {
       LOG_WARN("failed to get tables", K(ret), K(tables));
     } else if (OB_UNLIKELY(0 == tables.count() || NULL == tables.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected tables", K(ret), K(tables));
-    } else if (is_mini_merge(ctx->param_.merge_type_)) { // only mini merge use estimate row interface
-      ObQueryFlag query_flag(ObQueryFlag::Forward,
-                             true,   /*is daily merge scan*/
-                             true,   /*is read multiple macro block*/
-                             true,   /*sys task scan, read one macro block in single io*/
-                             false,  /*full row scan flag, obsoleted*/
-                             false,  /*index back*/
-                             false); /*query_stat*/
-      ObTableEstimateBaseInput base_input(query_flag, tables.at(0)->get_key().tablet_id_.id(), transaction::ObTransID(), tables, ctx->tablet_handle_);
-
-      ObDatumRange whole_range;
-      whole_range.set_whole_range();
-      ObSEArray<ObDatumRange, 1> ranges;
-      if (OB_FAIL(ranges.push_back(whole_range))) {
-        LOG_WARN("failed to add ranges", K(ret), K(ranges), K(whole_range));
-      } else {
-        ObPartitionEst part_estimate;
-        ObSEArray<ObEstRowCountRecord, MAX_SSTABLE_CNT_IN_STORAGE> records;
-        if (OB_FAIL(ObTableEstimator::estimate_row_count_for_scan(base_input, ranges, part_estimate, records))) {
-          LOG_WARN("failed to estimate row counts", K(ret), K(part_estimate), K(records));
-        } else {
-          estimate_row_cnt_ = MAX(1, part_estimate.physical_row_count_);
-          for (int64_t i = tables.count() - 1; i >= 0; --i) {
-            if (OB_UNLIKELY(nullptr == tables.at(i) || !tables.at(i)->is_memtable())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected null table", K(ret), K(i), K(tables.at(i)));
-            } else {
-              estimate_occupy_size_ += static_cast<ObMemtable *>(tables.at(i))->get_occupied_size();
-            }
-          }
-        }
+    } else if (is_mini_merge(ctx_->get_merge_type())) {
+      if (OB_FAIL(estimate_mini_merge(tables, ctx_->tablet_handle_))) { // only mini merge use estimate row interface
+        LOG_WARN("fail to estimate mini merge", K(ret), K(tables));
       }
     } else {
       int64_t total_macro_block_cnt = 0;
       const ObITable *table = nullptr;
       for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
-        ObSSTableMetaHandle sst_meta_hdl;
         if (OB_ISNULL(table = tables.at(i)) || OB_UNLIKELY(!tables.at(i)->is_sstable())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null table", K(ret), K(i), KPC(table), K(tables));
-        } else if (static_cast<const ObSSTable *>(table)->is_empty()) {
-          LOG_DEBUG("table is empty, skip it", K(i), KPC(static_cast<const ObSSTable *>(table)));
+        } else if (table->is_empty()) {
+          LOG_DEBUG("table is empty, skip it", K(i), KPC(table));
           continue;
-        } else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-          LOG_WARN("fail to get sstable meta handle", K(ret));
         } else {
-          total_macro_block_cnt += (sst_meta_hdl.get_sstable_meta().get_total_macro_block_count()
-              - sst_meta_hdl.get_sstable_meta().get_total_use_old_macro_block_count());
-          estimate_row_cnt_ += sst_meta_hdl.get_sstable_meta().get_row_count();
-          estimate_occupy_size_ += sst_meta_hdl.get_sstable_meta().get_occupy_size();
+          const ObSSTable* sstable = static_cast<const ObSSTable *>(table);
+          total_macro_block_cnt += (sstable->get_total_macro_block_count()
+              - sstable->get_total_use_old_macro_block_count());
+          estimate_row_cnt_ += sstable->get_row_count();
+          estimate_occupy_size_ += sstable->get_occupy_size();
           if (table->is_major_sstable()) {
-            old_major_data_size = sst_meta_hdl.get_sstable_meta().get_occupy_size();
+            old_major_data_size = sstable->get_occupy_size();
           }
         }
       }
-      if (0 != total_macro_block_cnt) {
+      if (OB_SUCC(ret) && 0 != total_macro_block_cnt) {
         estimate_row_cnt_ = (0 == estimate_row_cnt_) ? DEFAULT_ROW_CNT_PER_MACRO_BLOCK * total_macro_block_cnt : estimate_row_cnt_;
         estimate_occupy_size_ = (0 == estimate_occupy_size_) ? common::OB_DEFAULT_MACRO_BLOCK_SIZE * total_macro_block_cnt : estimate_occupy_size_;
       }
@@ -207,18 +212,23 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
         avg_row_length_ = estimate_occupy_size_ * 1.0 / estimate_row_cnt_;
       }
       update_estimated_finish_time_();
-      if (ctx->param_.is_tenant_major_merge_) {
-          if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-                    merge_dag_->get_ctx()->param_.merge_version_,
-                    estimate_occupy_size_ - old_major_data_size, // estimate_occupy_size_delta
-                    0, // scanned_data_size_delta
-                    0, // output_block_cnt_delta
-                    estimated_finish_time_,
-                    false))) {
+      if (ctx_->get_is_tenant_major_merge()) {
+        int64_t estimate_occupy_size_delta = estimate_occupy_size_ - old_major_data_size;
+        if (start_cg_idx_ != 0) {
+          // total data_size = (minor/mini + co_row_store_cg major) * batch execute dag number
+          estimate_occupy_size_delta = estimate_occupy_size_;
+        }
+        // old_major_data_size has been calculated when TenantCompactionProgress inited
+        if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
+                  ctx_->get_merge_version(),
+                  estimate_occupy_size_delta,
+                  0, // scanned_data_size_delta
+                  estimated_finish_time_,
+                  false/*finish_flag*/))) {
           LOG_WARN("failed to update progress", K(ret), K(old_major_data_size));
         } else {
           LOG_DEBUG("init() success to update progress", K(ret),
-              "param", merge_dag_->get_ctx()->param_, K_(estimate_row_cnt), K_(estimate_occupy_size),
+              "param", ctx_->static_param_, K_(estimate_row_cnt), K_(estimate_occupy_size),
               K(old_major_data_size));
         }
       }
@@ -229,40 +239,46 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
 
 int ObPartitionMergeProgress::update_merge_progress(
     const int64_t idx,
-    const int64_t scanned_row_cnt,
-    const int64_t output_block_cnt)
+    const int64_t scanned_row_cnt)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMergeProgress not inited", K(ret));
-  } else if (OB_UNLIKELY(idx < 0 || idx >= concurrent_cnt_ || scanned_row_cnt < 0 || output_block_cnt < 0)) {
+  } else if (OB_UNLIKELY(idx < 0 || idx >= concurrent_cnt_ || scanned_row_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(idx), K(concurrent_cnt_), K(scanned_row_cnt), K(output_block_cnt));
-  } else if (scanned_row_cnt > scanned_row_cnt_arr_[idx] || output_block_cnt > output_block_cnt_arr_[idx]) {
+    LOG_WARN("get invalid arguments", K(ret), K(idx), K(concurrent_cnt_), K(scanned_row_cnt));
+  } else if (scanned_row_cnt > scanned_row_cnt_arr_[idx]) {
     scanned_row_cnt_arr_[idx] = MAX(scanned_row_cnt_arr_[idx], scanned_row_cnt);
-    output_block_cnt_arr_[idx] = MAX(output_block_cnt_arr_[idx], output_block_cnt);
+
     if (REACH_TENANT_TIME_INTERVAL(UPDATE_INTERVAL)) {
       if (!ATOMIC_CAS(&is_updating_, false, true)) {
         latest_update_ts_ = ObTimeUtility::fast_current_time();
 
-        int64_t scanned_row_cnt = 0;
+        int64_t total_scanned_row_cnt = 0;
         int64_t output_block_cnt = 0;
 
+        int64_t scan_data_size_delta = 0;
         for (int64_t i = 0; i < concurrent_cnt_; ++i) {
-          scanned_row_cnt += scanned_row_cnt_arr_[i];
-          output_block_cnt += output_block_cnt_arr_[i];
+          total_scanned_row_cnt += scanned_row_cnt_arr_[i];
         }
 
-        if (scanned_row_cnt >= estimate_row_cnt_) {
-          estimate_row_cnt_ += MAX(scanned_row_cnt / DEFAULT_INCREMENT_ROW_FACTOR, 1);
+        if (total_scanned_row_cnt >= estimate_row_cnt_) {
+          estimate_row_cnt_ += MAX(total_scanned_row_cnt / DEFAULT_INCREMENT_ROW_FACTOR, 1);
           avg_row_length_ = estimate_occupy_size_ * 1.0 / estimate_row_cnt_;
         }
+        scan_data_size_delta = (total_scanned_row_cnt - pre_scanned_row_cnt_) * avg_row_length_;
 
         // record old value
-        pre_scanned_row_cnt_ = scanned_row_cnt;
-        pre_output_block_cnt_= output_block_cnt;
+        pre_scanned_row_cnt_ = total_scanned_row_cnt;
         update_estimated_finish_time_();
+
+        if (OB_FAIL(update_tenant_merge_progress(scan_data_size_delta))) {
+          LOG_WARN("failed to update progress", K(ret), K(idx), K(scan_data_size_delta));
+        } else {
+          LOG_DEBUG("update() success to update progress", K(ret), KPC(this),
+              "param", ctx_->static_param_, K(scan_data_size_delta), K(total_scanned_row_cnt));
+        }
 
         ATOMIC_STORE(&is_updating_, false);
       }
@@ -281,7 +297,6 @@ int ObPartitionMergeProgress::update_merge_info(ObSSTableMergeInfo &merge_info)
   }
   return ret;
 }
-
 
 void ObPartitionMergeProgress::update_estimated_finish_time_()
 {
@@ -308,19 +323,6 @@ void ObPartitionMergeProgress::update_estimated_finish_time_()
   }
 }
 
-// called by ObTabletMergeFinishTask::process()
-int ObPartitionMergeProgress::finish_merge_progress(const int64_t output_cnt)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPartitionMergeProgress not inited", K(ret));
-  } else {
-    pre_output_block_cnt_ = output_cnt;
-  }
-  return ret;
-}
-
 int ObPartitionMergeProgress::get_progress_info(ObCompactionProgress &input_progress)
 {
   int ret = OB_SUCCESS;
@@ -328,8 +330,10 @@ int ObPartitionMergeProgress::get_progress_info(ObCompactionProgress &input_prog
     int64_t estimate_unfinished_data_size = estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_;
     input_progress.data_size_ = estimate_occupy_size_;
     input_progress.unfinished_data_size_ =
-        0 == estimate_occupy_size_ ? 0 :
-        (estimate_unfinished_data_size < 0 ? 0 : estimate_unfinished_data_size);
+        0 == estimate_occupy_size_ ? 0 : estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_;
+    if (0 > input_progress.unfinished_data_size_) {
+      input_progress.unfinished_data_size_ = 0;
+    }
     input_progress.estimated_finish_time_ = estimated_finish_time_;
   }
   return ret;
@@ -338,10 +342,14 @@ int ObPartitionMergeProgress::get_progress_info(ObCompactionProgress &input_prog
 int ObPartitionMergeProgress::diagnose_progress(ObDiagnoseTabletCompProgress &input_progress)
 {
   int ret = OB_SUCCESS;
-  if (ObTimeUtility::fast_current_time() - latest_update_ts_ > UPDATE_INTERVAL * NORMAL_UPDATE_PARAM) {
+  int64_t update_threshold = UPDATE_INTERVAL * NORMAL_UPDATE_PARAM;
+#ifdef ERRSIM
+  update_threshold = 100;
+#endif
+  if (ObTimeUtility::fast_current_time() - latest_update_ts_ > update_threshold) {
     input_progress.is_suspect_abormal_ = true;
-    input_progress.is_waiting_schedule_ = is_waiting_schedule_;
   }
+
   input_progress.latest_update_ts_ = latest_update_ts_;
   return ret;
 }
@@ -350,96 +358,105 @@ int ObPartitionMergeProgress::diagnose_progress(ObDiagnoseTabletCompProgress &in
  * ObPartitionMajorMergeProgress implement
  * */
 
-int ObPartitionMajorMergeProgress::update_merge_progress(
-    const int64_t idx,
-    const int64_t scanned_row_cnt,
-    const int64_t output_block_cnt)
+int ObPartitionMajorMergeProgress::update_tenant_merge_progress(const int64_t scan_data_size_delta)
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPartitionMergeProgress not inited", K(ret));
-  } else if (OB_UNLIKELY(0 == estimate_row_cnt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected zero estimate_total_units_", K(ret));
-  } else if (OB_UNLIKELY(idx < 0 || idx >= concurrent_cnt_ || scanned_row_cnt < 0 || output_block_cnt < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(idx), K(concurrent_cnt_), K(scanned_row_cnt), K(output_block_cnt));
-  } else if (scanned_row_cnt > scanned_row_cnt_arr_[idx] || output_block_cnt > output_block_cnt_arr_[idx]) {
-    scanned_row_cnt_arr_[idx] = MAX(scanned_row_cnt_arr_[idx], scanned_row_cnt);
-    output_block_cnt_arr_[idx] = MAX(output_block_cnt_arr_[idx], output_block_cnt);
-
-    if (REACH_TENANT_TIME_INTERVAL(UPDATE_INTERVAL)) {
-      if (!ATOMIC_CAS(&is_updating_, false, true)) {
-        latest_update_ts_ = ObTimeUtility::fast_current_time();
-
-        int64_t scanned_row_cnt = 0;
-        int64_t output_block_cnt = 0;
-
-        int64_t scan_data_size_delta = 0;
-        int64_t output_block_cnt_delta = 0;
-        for (int64_t i = 0; i < concurrent_cnt_; ++i) {
-          scanned_row_cnt += scanned_row_cnt_arr_[i];
-          output_block_cnt += output_block_cnt_arr_[i];
-        }
-
-        if (scanned_row_cnt >= estimate_row_cnt_) {
-          estimate_row_cnt_ += MAX(scanned_row_cnt / DEFAULT_INCREMENT_ROW_FACTOR, 1);
-          avg_row_length_ = estimate_occupy_size_ * 1.0 / estimate_row_cnt_;
-        }
-
-        // calculate delta value
-        scan_data_size_delta = (scanned_row_cnt - pre_scanned_row_cnt_) * avg_row_length_;
-        output_block_cnt_delta = output_block_cnt - pre_output_block_cnt_;
-        LOG_DEBUG("success to calculate current merge progress", K(ret), K(idx), K(scan_data_size_delta), K(output_block_cnt_delta));
-        // record old value
-        pre_scanned_row_cnt_ = scanned_row_cnt;
-        pre_output_block_cnt_= output_block_cnt;
-        update_estimated_finish_time_();
-
-        if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-                merge_dag_->get_ctx()->param_.merge_version_,
-                0, // estimate_occupy_size_delta
-                scan_data_size_delta,
-                output_block_cnt_delta,
-                estimated_finish_time_,
-                false/*finish_flag*/))) {
-          LOG_WARN("failed to update progress", K(ret), K(idx), K(scan_data_size_delta), K(output_block_cnt_delta));
-        } else {
-          LOG_DEBUG("update() success to update progress", K(ret),
-              "param", merge_dag_->get_ctx()->param_, K(scan_data_size_delta), K(output_block_cnt_delta));
-        }
-        ATOMIC_STORE(&is_updating_, false);
-      }
-    }
+  if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
+          ctx_->get_merge_version(),
+          0, // estimate_occupy_size_delta
+          scan_data_size_delta,
+          estimated_finish_time_,
+          false/*finish_flag*/))) {
+    LOG_WARN("failed to update tenant compaction progress", K(ret), K(scan_data_size_delta));
   }
   return ret;
 }
 
-int ObPartitionMajorMergeProgress::finish_merge_progress(const int64_t output_cnt)
+int ObPartitionMajorMergeProgress::finish_progress(
+  const int64_t merge_version,
+  ObCompactionTimeGuard *time_guard,
+  const bool is_co_merge)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
+      merge_version,
+      0, // estimate_occupy_size_delta
+      estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_,// scanned_data_size_delta
+      estimated_finish_time_,
+      true/*finish_flag*/,
+      time_guard,
+      is_co_merge))) {
+  }
+  return ret;
+}
+
+int ObPartitionMajorMergeProgress::finish_merge_progress()
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeCtx *ctx = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPartitionMajorMergeProgress not inited", K(ret));
+  } else if (OB_UNLIKELY(OB_ISNULL(ctx_) || typeid(*ctx_) != typeid(ObTabletMajorMergeCtx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
+  } else if (FALSE_IT(ctx = static_cast<ObTabletMergeCtx *>(ctx_))) {
+  } else if (OB_FAIL(finish_progress(
+      ctx->get_merge_version(),
+      &ctx->info_collector_.time_guard_,
+      false/*is_co_merge*/))) {
+    LOG_WARN("failed to update progress", K(ret), K(estimate_occupy_size_),
+      K(pre_scanned_row_cnt_), K(avg_row_length_));
+  } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_compression_ratio(
+      ctx->get_merge_version(),
+      ctx->get_merge_info().get_sstable_merge_info()))) {
+    LOG_WARN("failed to update progress", K(ret));
+  } else {
+    LOG_DEBUG("finish() success to update progress", K(ret),
+        "param", ctx->get_dag_param(),
+        K(pre_scanned_row_cnt_), K(avg_row_length_));
+  }
+  return ret;
+}
+
+int ObCOMajorMergeProgress::finish_merge_progress()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObPartitionMajorMergeProgress not inited", K(ret));
-  } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-      merge_dag_->get_ctx()->param_.merge_version_,
-      0, // estimate_occupy_size_delta
-      estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_,// scanned_data_size_delta
-      output_cnt - pre_output_block_cnt_,// output_block_cnt_delta
-      estimated_finish_time_,
-      true/*finish_flag*/,
-      &merge_dag_->get_ctx()->time_guard_))) {
-    LOG_WARN("failed to update progress", K(ret), K(output_cnt), K(estimate_occupy_size_),
-        K(pre_scanned_row_cnt_), K(avg_row_length_));
-  } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_compression_ratio(
-      merge_dag_->get_ctx()->param_.merge_version_,
-      merge_dag_->get_ctx()->merge_info_.get_sstable_merge_info()))) {
-    LOG_WARN("failed to update progress", K(ret), K(output_cnt));
+    LOG_WARN("ObCOMajorMergeProgress not inited", K(ret));
+  } else if (OB_UNLIKELY(OB_ISNULL(merge_dag_) || typeid(*merge_dag_) != typeid(ObCOMergeBatchExeDag))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge_dag has unexpected type", K(ret), KPC_(merge_dag));
+  } else if (OB_UNLIKELY(OB_ISNULL(ctx_) || typeid(*ctx_) != typeid(ObCOTabletMergeCtx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
   } else {
+    ObCOMergeBatchExeDag *merge_dag = static_cast<ObCOMergeBatchExeDag*>(merge_dag_);
+    ObCOTabletMergeCtx *ctx = static_cast<ObCOTabletMergeCtx*>(ctx_);
+    if (OB_FAIL(finish_progress(
+      ctx->get_merge_version(),
+      &merge_dag->get_time_guard(),
+      true/*co_merge*/))) {
+      LOG_WARN("failed to update progress", K(ret), K(estimate_occupy_size_),
+          K(pre_scanned_row_cnt_), K(avg_row_length_));
+    } else {
+      for (int64_t i = start_cg_idx_; OB_SUCC(ret) && i < end_cg_idx_; ++i) {
+        if (OB_UNLIKELY(OB_ISNULL(ctx->cg_merge_info_array_) || OB_ISNULL(ctx->cg_merge_info_array_[i]))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("merge_info is unexpected null", K(ret), KPC(ctx));
+        } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_compression_ratio(
+          ctx->get_merge_version(),
+          ctx->cg_merge_info_array_[i]->get_sstable_merge_info()))) {
+          LOG_WARN("failed to update progress", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     LOG_DEBUG("finish() success to update progress", K(ret),
-        "param", merge_dag_->get_ctx()->param_, K(output_cnt),
-        K(pre_scanned_row_cnt_), K(avg_row_length_));
+            "param", ctx_->static_param_,
+            K(pre_scanned_row_cnt_), K(avg_row_length_));
   }
   return ret;
 }

@@ -63,6 +63,7 @@ namespace sql {
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
+  class ObDecodeResourcePool;
 }
 namespace storage {
 namespace mds {
@@ -73,13 +74,13 @@ class ObTenantMdsService;
   class ObTenantFreezer;
   class ObTenantMetaMemMgr;
   class ObStorageLogger;
-  class ObTenantTabletScheduler;
   class ObTenantCheckpointSlogHandler;
   class ObTenantFreezeInfoMgr;
   class ObStorageHAService;
   class ObStorageHAHandlerService;
   class ObTenantSSTableMergeInfoMgr;
   class ObTenantTabletStatMgr;
+  class ObTenantCompactionMemPool;
   namespace checkpoint {
     class ObCheckPointService;
     class ObTabletGCService;
@@ -88,8 +89,9 @@ class ObTenantMdsService;
   class ObTransferService;
   class ObRebuildService;
   class ObTableScanIterator;
+  class ObTenantCGReadInfoMgr;
+  class ObEmptyReadBucket;
 } // namespace storage
-
 namespace transaction {
   class ObTenantWeakReadService; // 租户弱一致性读服务
   class ObTransService;          // 事务服务
@@ -137,6 +139,9 @@ namespace compaction
   class ObTenantCompactionProgressMgr;
   class ObServerCompactionEventHistory;
   class ObScheduleSuspectInfoMgr;
+  class ObDiagnoseTabletMgr;
+  class ObTenantMediumChecker;
+  class ObTenantTabletScheduler;
 }
 namespace memtable
 {
@@ -169,6 +174,7 @@ namespace observer
   class ObTenantMetaChecker;
   class QueueThread;
   class ObTableLoadService;
+  class ObTabletTableUpdater;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -226,6 +232,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
       omt::ObSharedTimer*,                           \
+      blocksstable::ObDecodeResourcePool*,           \
       storage::ObTenantMetaMemMgr*,                  \
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
@@ -248,6 +255,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObPrimaryMajorFreezeService*,      \
       rootserver::ObRestoreMajorFreezeService*,      \
       observer::ObTenantMetaChecker*,                \
+      observer::ObTabletTableUpdater*,               \
       observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantInfoLoader*,         \
@@ -267,6 +275,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTenantSSTableMergeInfoMgr*,         \
       share::ObDagWarningHistoryManager*,            \
       compaction::ObScheduleSuspectInfoMgr*,         \
+      compaction::ObDiagnoseTabletMgr *,             \
       storage::ObLobManager*,                        \
       share::ObGlobalAutoIncService*,                \
       share::detector::ObDeadLockDetectorMgr*,       \
@@ -294,7 +303,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::checkpoint::ObCheckPointService *,    \
       storage::checkpoint::ObTabletGCService *,      \
       archive::ObArchiveService*,                    \
-      storage::ObTenantTabletScheduler*,             \
+      compaction::ObTenantTabletScheduler*,          \
+      compaction::ObTenantMediumChecker*,            \
+      storage::ObTenantCompactionMemPool*,           \
       share::ObTenantDagScheduler*,                  \
       storage::ObStorageHAService*,                  \
       storage::ObTenantFreezeInfoMgr*,               \
@@ -309,10 +320,12 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
+      storage::ObTenantCGReadInfoMgr*,               \
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
       oceanbase::common::ObDetectManager*,          \
+      storage::ObEmptyReadBucket*,                  \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       oceanbase::sql::ObTenantSQLSessionMgr*,       \

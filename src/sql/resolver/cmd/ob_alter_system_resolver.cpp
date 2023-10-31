@@ -477,13 +477,14 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
     stmt_ = freeze_stmt;
     if (1 == parse_tree.children_[0]->value_) { // MAJOR FREEZE
       freeze_stmt->set_major_freeze(true);
-      if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+      if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("wrong freeze parse tree", K(parse_tree.num_child_));
       } else {
-        ParseNode *opt_tenant_list_v2 = parse_tree.children_[1];
-        if (OB_FAIL(resolve_major_freeze_(freeze_stmt, opt_tenant_list_v2))) {
-          LOG_WARN("resolve major freeze failed", KR(ret), KP(opt_tenant_list_v2));
+        ParseNode *opt_tenant_list_or_tablet_id = parse_tree.children_[1];
+        const ParseNode *opt_rebuild_column_group = parse_tree.children_[2];
+        if (OB_FAIL(resolve_major_freeze_(freeze_stmt, opt_tenant_list_or_tablet_id, opt_rebuild_column_group))) {
+          LOG_WARN("resolve major freeze failed", KR(ret), KP(opt_tenant_list_or_tablet_id));
         }
       }
     } else if (2 == parse_tree.children_[0]->value_) {  // MINOR FREEZE
@@ -513,7 +514,7 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2)
+int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2, const ParseNode *opt_rebuild_column_group)
 {
   int ret = OB_SUCCESS;
   const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
@@ -523,45 +524,37 @@ int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode
     if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
       LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
     }
-  } else if (OB_SYS_TENANT_ID != cur_tenant_id) {
+  } else if (OB_UNLIKELY(nullptr == opt_tenant_list_v2->children_ || 0 == opt_tenant_list_v2->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children of tenant should not be null", KR(ret), KP(opt_tenant_list_v2));
+  } else if (OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_v2))) {
+    LOG_WARN("fail to resolve tenant or tablet", KR(ret));
+  } else if (OB_UNLIKELY(share::ObLSID::INVALID_LS_ID != freeze_stmt->get_ls_id())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to specify ls to major freeze", K(ret), "ls_id", freeze_stmt->get_ls_id());
+  } else if (freeze_stmt->get_tablet_id().is_valid()) { // tablet major freeze
+    if (OB_SYS_TENANT_ID != cur_tenant_id) {
+      ret = OB_ERR_NO_PRIVILEGE;
+      LOG_WARN("Only sys tenant can add suffix opt of tablet_id", KR(ret), K(cur_tenant_id));
+    } else if (1 != freeze_stmt->get_tenant_ids().count()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not suppport to specify several tenant ids or no tenant_id for tablet major freeze", K(ret),
+        "tenant_ids", freeze_stmt->get_tenant_ids());
+    }
+  } else if (OB_SYS_TENANT_ID != cur_tenant_id && !freeze_stmt->get_tenant_ids().empty()) { // tenant major freeze
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can add suffix opt(tenant=name)", KR(ret), K(cur_tenant_id));
-  } else if ((T_TENANT_LIST == opt_tenant_list_v2->type_)) {
-    // if opt_tenant_list_v2 != NULL && type == T_TENANT_LIST, resolve it
-    if (OB_UNLIKELY(nullptr == opt_tenant_list_v2->children_) || OB_UNLIKELY(0 == opt_tenant_list_v2->num_child_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("children of tenant should not be null", KR(ret));
-    } else {
-      bool affect_all = false;
-      bool affect_all_user = false;
-      bool affect_all_meta = false;
-      if (OB_FAIL(Util::resolve_tenant(*opt_tenant_list_v2, cur_tenant_id,
-        freeze_stmt->get_tenant_ids(), affect_all, affect_all_user, affect_all_meta))) {
-        LOG_WARN("fail to resolve tenant", KR(ret));
-      } else if (affect_all || affect_all_user || affect_all_meta) {
-        if ((true == affect_all && true == affect_all_user) ||
-            (true == affect_all && true == affect_all_meta) ||
-            (true == affect_all_user && true == affect_all_meta)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
-                  KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "all/all_user/all_meta in combination with other names is");
-        } else {
-          if (affect_all) {
-            freeze_stmt->set_freeze_all();
-          } else if (affect_all_user) {
-            freeze_stmt->set_freeze_all_user();
-          } else {
-            freeze_stmt->set_freeze_all_meta();
-          }
-        }
-      }
-    }
-  } else {
-    LOG_WARN("invalid type when resolve opt_tenant_list_v2", K(T_TENANT_LIST), K(opt_tenant_list_v2->type_));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (opt_rebuild_column_group != nullptr) {
+    if (OB_UNLIKELY(!freeze_stmt->get_tablet_id().is_valid())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rebuild only supports tablet major freeze", KR(ret), K(cur_tenant_id));
+    } else {
+      freeze_stmt->set_rebuild_column_group(true);
+    }
+  }
   return ret;
 }
 
@@ -610,7 +603,8 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
     switch (opt_tenant_list_or_ls_or_tablet_id->type_) {
       case T_TENANT_TABLET:
         if (opt_tenant_list_or_ls_or_tablet_id->num_child_ != 2) {
-          LOG_WARN("invalid child num", K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid child num", K(ret), K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
         } else {
           tenant_list_tuple = opt_tenant_list_or_ls_or_tablet_id->children_[0];
           opt_tablet_id = opt_tenant_list_or_ls_or_tablet_id->children_[1];
@@ -622,7 +616,8 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
         break;
       case T_TENANT_LS_TABLET:
         if (opt_tenant_list_or_ls_or_tablet_id->num_child_ != 3) {
-          LOG_WARN("invalid child num", K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid child num", K(ret), K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
         } else {
           tenant_list_tuple = opt_tenant_list_or_ls_or_tablet_id->children_[0];
           ls_id = opt_tenant_list_or_ls_or_tablet_id->children_[1];
@@ -634,6 +629,7 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
         }
         break;
       default:
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid parse node type",
                  K(T_TENANT_TABLET),
                  K(T_TENANT_LS_TABLET),
@@ -2100,7 +2096,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                   } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_FLUSH)) {
                     if(OB_FAIL(observer::ObRSTCollector::get_instance().flush_query_response_time(item.exec_tenant_id_, item.value_.str()))){
                       LOG_WARN("set query response time flush", K(ret));
-                    }  
+                    }
                   } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_STATS)) {
                     if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
                       LOG_WARN("set query response time stats", K(ret));
@@ -2822,7 +2818,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3],
                                               stmt->get_rpc_arg().restore_option_))) {
         LOG_WARN("resolve string failed", K(ret));
-      } else if (OB_NOT_NULL(description_node) 
+      } else if (OB_NOT_NULL(description_node)
           && OB_FAIL(Util::resolve_string(description_node, stmt->get_rpc_arg().description_))) {
         LOG_WARN("fail to resolve description", K(ret));
 #ifdef OB_BUILD_TDE_SECURITY
@@ -4122,7 +4118,7 @@ int ObBackupDatabaseResolver::resolve(const ParseNode &parse_tree)
     const uint64_t tenant_id = session_info_->get_login_tenant_id();
     const int64_t with_tenant = parse_tree.children_[0]->value_;
     common::ObSArray<uint64_t> backup_tenant_ids;
-    ObBackupPathString backup_dest; 
+    ObBackupPathString backup_dest;
     ObBackupDescription backup_description;
     if (0 == with_tenant && OB_SYS_TENANT_ID != tenant_id) {
       // user tenant backup
@@ -4479,9 +4475,9 @@ int ObBackupCleanResolver::resolve(const ParseNode &parse_tree)
     } else if (5 == parse_tree.num_child_) {
       copy_id = NULL == parse_tree.children_[3]
                   ? 0 : parse_tree.children_[3]->children_[0]->value_;
-      t_node = parse_tree.children_[4]; 
+      t_node = parse_tree.children_[4];
     } else {
-      t_node = parse_tree.children_[3]; 
+      t_node = parse_tree.children_[3];
     }
 
     if (NULL == stmt) {
@@ -4504,12 +4500,12 @@ int ObBackupCleanResolver::resolve(const ParseNode &parse_tree)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("To initiate cleanup set or piece under the system tenant, only one tenant name can be specified", K(ret), K(tenant_id), K(clean_tenant_ids));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Too many tenant names specified, only one tenant name can be specified");
-      } 
+      }
     } else if (NULL == t_node && OB_SYS_TENANT_ID == tenant_id) {
       if (1 == type || 2 == type) { // type=1 is BACKUPSET and type=2 is BACKUPPIECE
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("To initiate cleanup set or piece under the system tenant, need to specify one tenant name", K(ret), K(tenant_id), K(clean_tenant_ids));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "need to specify a tenant name"); 
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "need to specify a tenant name");
       }
     }
 
@@ -4568,7 +4564,7 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("To handle deleted policy under the system tenant, only one tenant name can be specified", K(ret), K(tenant_id), K(clean_tenant_ids));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Too many tenant names specified, only one tenant name can be specified");
-      } 
+      }
     } else if (NULL == t_node && OB_SYS_TENANT_ID == tenant_id) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("To handle deleted policy under the system tenant, only one tenant name can be specified", K(ret));
@@ -4582,7 +4578,7 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
       if (OB_ISNULL(parse_tree.children_[3]) && OB_ISNULL(parse_tree.children_[4])) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("recovery_window and redundancy must set one", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Neither recovery_window nor redundancy is set");  
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Neither recovery_window nor redundancy is set");
       } else if (0 !=recovery_window.length()) {
         bool is_valid = true;
         int64_t val = 0;
@@ -4595,7 +4591,7 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
       } else if (1 != redundancy) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("redundancy is not equal to 1", K(ret), K(redundancy));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Redundancy not equal to 1 is"); 
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Redundancy not equal to 1 is");
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(stmt->set_delete_policy(recovery_window, redundancy, backup_copies))) {

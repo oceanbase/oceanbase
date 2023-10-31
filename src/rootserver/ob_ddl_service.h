@@ -316,6 +316,12 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
+  int add_column_group_to_table_schema(
+      const share::schema::ObTableSchema &origin_table_schema,
+      const share::schema::AlterTableSchema &alter_table_schema,
+      share::schema::ObTableSchema &new_table_schema,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans);
   int gen_alter_column_new_table_schema_offline(
       const share::schema::ObTableSchema &origin_table_schema,
       share::schema::AlterTableSchema &alter_table_schema,
@@ -1471,6 +1477,10 @@ private:
   int check_is_change_cst_column_name(const share::schema::ObTableSchema &table_schema,
                                       const AlterTableSchema &alter_table_schema,
                                       bool &change_cst_column_name);
+  int check_is_alter_decimal_int_offline(const share::ObDDLType &ddl_type,
+                                         const share::schema::ObTableSchema &table_schema,
+                                         const AlterTableSchema &alter_table_schema,
+                                         bool &is_alter_decimal_int_off);
   int check_exist_stored_gen_col(const ObTableSchema &orig_table_schema,
                                  const AlterTableSchema &alter_table_schema,
                                  bool &is_exist);

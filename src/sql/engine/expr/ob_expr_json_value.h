@@ -63,10 +63,12 @@ private:
   static int check_default_val_accuracy(const ObAccuracy &accuracy,
                                         const ObObjType &type,
                                         const Obj *obj);
-  static int get_accuracy_internal(common::ObAccuracy &accuracy,
-                                  ObObjType &dest_type,
-                                  const int64_t value,
-                                  const ObLengthSemantics &length_semantics);
+  static int get_accuracy_internal(
+      ObEvalCtx& ctx,
+      common::ObAccuracy &accuracy,
+      ObObjType &dest_type,
+      const int64_t value,
+      const ObLengthSemantics &length_semantics);
   static int get_accuracy(const ObExpr &expr,
                           ObEvalCtx& ctx,
                           common::ObAccuracy &accuracy,
@@ -211,7 +213,9 @@ private:
                              ObVector<uint8_t> &type);
   /* code from ob_expr_cast for cal_result_type */
   const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
-  int get_cast_type(const ObExprResType param_type2, ObExprResType &dst_type) const;
+  int get_cast_type(const ObExprResType param_type2,
+                    ObExprResType &dst_type,
+                    ObExprTypeCtx &type_ctx) const;
   int set_dest_type(ObExprResType &type1, ObExprResType &type, ObExprResType &dst_type, ObExprTypeCtx &type_ctx) const;
   int get_cast_string_len(ObExprResType &type1,
                           ObExprResType &type2,

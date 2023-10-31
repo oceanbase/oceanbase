@@ -532,7 +532,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
           const uint64_t tenant_id = tenant_ids.at(i);
           ObFreezeInfoProxy freeze_info_proxy(tenant_id);
           ObGlobalMergeInfo global_info;
-          ObArray<ObSimpleFrozenStatus> frozen_status_arr;
+          ObArray<ObFreezeInfo> frozen_status_arr;
           TenantIdAndSchemaVersion schema_version;
 
           if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*sql_proxy_, tenant_id, global_info))) {

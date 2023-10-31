@@ -561,17 +561,18 @@ class ObBitMapMetaReader
 public:
   static int read(const char *buf, const int64_t row_count,
       const bool bit_packing, const int64_t row_id, const int64_t len,
-      int64_t &ref, common::ObObj &cell, const common::ObObjType type);
+      int64_t &ref, common::ObDatum &datum, const common::ObObjType &obj_type);
 
   OB_INLINE static int read_exc_cell(const char *buf, const ObBitMapMetaHeader *meta,
     const bool bit_packing, const int64_t ref, const int64_t len,
-    common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type);
+    common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type);
 };
+
 
 template <ObObjTypeStoreClass StoreClass>
 int ObBitMapMetaReader<StoreClass>::read(const char *buf, const int64_t row_count,
     const bool bit_packing, const int64_t row_id, const int64_t len,
-    int64_t &ref, common::ObObj &cell, const common::ObObjType type)
+    int64_t &ref, common::ObDatum &datum, const common::ObObjType &obj_type)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(buf)
@@ -600,14 +601,14 @@ int ObBitMapMetaReader<StoreClass>::read(const char *buf, const int64_t row_coun
       }
       // read data
       uint64_t integer_mask = 0;
-      if (common::ObIntTC == ob_obj_type_class(type)) {
-        integer_mask = ~INTEGER_MASK_TABLE[get_type_size_map()[type]];
+      if (common::ObIntTC == ob_obj_type_class(obj_type)) {
+        integer_mask = ~INTEGER_MASK_TABLE[get_type_size_map()[obj_type]];
       }
       if (OB_FAIL(ret)) {
       } else if (STORED_NOT_EXT != ext_val) {
-        set_stored_ext_value(cell, static_cast<ObStoredExtValue>(ext_val));
+        set_stored_ext_value(datum, static_cast<ObStoredExtValue>(ext_val));
       } else if (OB_FAIL(read_exc_cell(buf, meta, bit_packing, ref,
-              len - sizeof(ObBitMapMetaHeader) - meta->data_offset_, cell, integer_mask, type))) {
+              len - sizeof(ObBitMapMetaHeader) - meta->data_offset_, datum, integer_mask, obj_type))) {
         STORAGE_LOG(WARN, "read exc cell failed", K(ret));
       }
     }
@@ -618,26 +619,32 @@ int ObBitMapMetaReader<StoreClass>::read(const char *buf, const int64_t row_coun
 template <ObObjTypeStoreClass StoreClass>
 OB_INLINE int ObBitMapMetaReader<StoreClass>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
+    const int64_t len, common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type)
 {
-  UNUSED(type);
   int ret = common::OB_SUCCESS;
-  if (bit_packing) {
-    uint64_t v = 0;
+  uint32_t datum_len = 0;
+  uint64_t v = 0;
+  if (OB_FAIL(get_uint_data_datum_len(
+      common::ObDatum::get_obj_datum_map_type(obj_type),
+      datum_len))){
+    STORAGE_LOG(WARN, "Failed to get datum len for int data", K(ret));
+  } else if (bit_packing) {
     if (OB_FAIL(ObBitStream::get(reinterpret_cast<unsigned char *>
         (const_cast<char *>(buf + meta->data_offset_)),
         ref * meta->bit_packing_len_, meta->bit_packing_len_, v))) {
       STORAGE_LOG(WARN, "bs get failed", K(ret), K(ref), K(*meta));
     } else {
-      cell.v_.uint64_ = v;
+      datum.pack_ = datum_len;
+      MEMCPY(const_cast<char *>(datum.ptr_), &v, datum_len);
     }
   } else {
     const int64_t cell_len = meta->get_fix_data_size(len);
-    cell.v_.uint64_ = 0;
-    MEMCPY(&cell.v_, buf + meta->data_offset_ + ref * cell_len, cell_len);
-    if (0 != integer_mask && (cell.v_.uint64_ & (integer_mask >> 1))) {
-      cell.v_.uint64_ |= integer_mask;
+    MEMCPY(&v, buf + meta->data_offset_ + ref * cell_len, cell_len);
+    if (0 != integer_mask && (v & (integer_mask >> 1))) {
+      v |= integer_mask;
     }
+    datum.pack_ = datum_len;
+    MEMCPY(const_cast<char *>(datum.ptr_), &v, datum_len);
   }
   return ret;
 }
@@ -645,10 +652,10 @@ OB_INLINE int ObBitMapMetaReader<StoreClass>::read_exc_cell(const char *buf,
 template <>
 OB_INLINE int ObBitMapMetaReader<ObNumberSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
+    const int64_t len, common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type)
 {
   int ret = common::OB_SUCCESS;
-  UNUSEDx(bit_packing, integer_mask, type);
+  UNUSEDx(bit_packing, integer_mask, obj_type);
   // get offset and length
   int64_t offset = 0;
   if (!meta->is_var_exc()) {
@@ -663,19 +670,58 @@ OB_INLINE int ObBitMapMetaReader<ObNumberSC>::read_exc_cell(const char *buf,
       }
     }
   }
-  cell.nmb_desc_.desc_ = *reinterpret_cast<const uint32_t *>(buf + meta->data_offset_ + offset);
-  cell.v_.nmb_digits_ = reinterpret_cast<uint32_t *>(
-      const_cast<char *>(buf + meta->data_offset_ + offset) + sizeof(uint32_t));
+  MEMCPY(const_cast<char *>(datum.ptr_), buf + meta->data_offset_ + offset,
+            sizeof(ObNumberDesc) + sizeof(uint32_t));
+  uint8_t num_len = datum.num_->desc_.len_;
+  datum.pack_ = sizeof(ObNumberDesc) + num_len * sizeof(uint32_t);
+  if (OB_UNLIKELY(num_len > 1)) {
+    int64_t copy_offset = sizeof(ObNumberDesc) + sizeof(uint32_t);
+    MEMCPY(const_cast<char *>(datum.ptr_) + copy_offset,
+        buf + meta->data_offset_ + offset + copy_offset, (num_len - 1) * sizeof(uint32_t));
+  }
+  return ret;
+}
+
+template <>
+OB_INLINE int ObBitMapMetaReader<ObDecimalIntSC>::read_exc_cell(const char *buf,
+    const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
+    const int64_t len, common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type)
+{
+  int ret = common::OB_SUCCESS;
+  UNUSEDx(bit_packing, integer_mask, obj_type);
+  int64_t offset = 0;
+  int64_t cell_len = 0;
+  if (!meta->is_var_exc()) {
+    cell_len = meta->get_fix_data_size(len);
+    offset = ref * cell_len;
+  } else {
+    const int64_t exc_cnt = meta->get_var_cnt();
+    ObIntegerArrayGenerator index_gen;
+    if (OB_FAIL(index_gen.init(buf + meta->index_offset_, meta->index_byte_))) {
+      STORAGE_LOG(WARN, "init index gen failed", K(ret));
+    } else {
+      if (0 != ref) {
+        offset = index_gen.get_array().at(ref - 1);
+      }
+      if (ref == exc_cnt - 1) {
+        cell_len = len - offset;
+      } else {
+        cell_len = index_gen.get_array().at(ref) - offset;
+      }
+    }
+  }
+  datum.pack_ = static_cast<int32_t>(cell_len);
+  MEMCPY(const_cast<char *>(datum.ptr_), buf + meta->data_offset_ + offset, cell_len);
   return ret;
 }
 
 template <>
 OB_INLINE int ObBitMapMetaReader<ObStringSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
+    const int64_t len, common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type)
 {
   int ret = common::OB_SUCCESS;
-  UNUSEDx(bit_packing, integer_mask, type);
+  UNUSEDx(bit_packing, integer_mask, obj_type);
   // get offset and length
   int64_t offset = 0;
   int64_t cell_len = 0;
@@ -698,15 +744,15 @@ OB_INLINE int ObBitMapMetaReader<ObStringSC>::read_exc_cell(const char *buf,
       }
     }
   }
-  cell.v_.string_ = buf + meta->data_offset_ + offset;
-  cell.val_len_ = static_cast<int32_t>(cell_len);
+  datum.pack_ = static_cast<int32_t>(cell_len);
+  datum.ptr_ = buf + meta->data_offset_ + offset;
   return ret;
 }
 
 template <>
 OB_INLINE int ObBitMapMetaReader<ObOTimestampSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
+    const int64_t len, common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type)
 {
   int ret = common::OB_SUCCESS;
   UNUSEDx(bit_packing, integer_mask);
@@ -726,17 +772,10 @@ OB_INLINE int ObBitMapMetaReader<ObOTimestampSC>::read_exc_cell(const char *buf,
   }
 
   if (OB_SUCC(ret)) {
-    ObStorageDatum tmp_datum; // TODO: remove
-    ObObjMeta tmp_obj_meta;
-    tmp_obj_meta.set_type(type);
-
-    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(type);
+    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(obj_type);
     const uint32_t size = ObDatum::get_reserved_size(datum_type);
-    MEMCPY(const_cast<char *>(tmp_datum.ptr_), buf + meta->data_offset_ + offset, size);
-    tmp_datum.len_ = size;
-    if (OB_FAIL(tmp_datum.to_obj(cell, tmp_obj_meta))) {
-      STORAGE_LOG(WARN, "Failed to read datum", K(ret));
-    }
+    MEMCPY(const_cast<char *>(datum.ptr_), buf + meta->data_offset_ + offset, size);
+    datum.pack_ = size;
   }
   return ret;
 }
@@ -744,7 +783,7 @@ OB_INLINE int ObBitMapMetaReader<ObOTimestampSC>::read_exc_cell(const char *buf,
 template <>
 OB_INLINE int ObBitMapMetaReader<ObIntervalSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
+    const int64_t len, common::ObDatum &datum, const uint64_t integer_mask, const common::ObObjType &obj_type)
 {
   int ret = common::OB_SUCCESS;
   UNUSEDx(bit_packing, integer_mask);
@@ -764,17 +803,10 @@ OB_INLINE int ObBitMapMetaReader<ObIntervalSC>::read_exc_cell(const char *buf,
   }
 
   if (OB_SUCC(ret)) {
-    ObStorageDatum tmp_datum; // TODO: remove
-    ObObjMeta tmp_obj_meta;
-    tmp_obj_meta.set_type(type);
-
-    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(type);
+    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(obj_type);
     const uint32_t size = ObDatum::get_reserved_size(datum_type);
-    MEMCPY(const_cast<char *>(tmp_datum.ptr_), buf + meta->data_offset_ + offset, size);
-    tmp_datum.len_ = size;
-    if (OB_FAIL(tmp_datum.to_obj(cell, tmp_obj_meta))) {
-      STORAGE_LOG(WARN, "Failed to read datum", K(ret));
-    }
+    MEMCPY(const_cast<char *>(datum.ptr_), buf + meta->data_offset_ + offset, size);
+    datum.pack_ = size;
   }
   return ret;
 }

@@ -16,7 +16,8 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "lib/atomic/ob_atomic.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "observer/omt/ob_tenant_node_balancer.h"
@@ -68,6 +69,7 @@ class TestDagScheduler : public ::testing::Test
 public:
   TestDagScheduler()
     : tenant_id_(500),
+      tablet_scheduler_(nullptr),
       scheduler_(nullptr),
       dag_history_mgr_(nullptr),
       tenant_base_(500)
@@ -84,11 +86,17 @@ public:
     ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, 500);
     tenant_base_.set(t3m);
 
+    tablet_scheduler_ = OB_NEW(compaction::ObTenantTabletScheduler, ObModIds::TEST);
+    tenant_base_.set(tablet_scheduler_);
+
     scheduler_ = OB_NEW(ObTenantDagScheduler, ObModIds::TEST);
     tenant_base_.set(scheduler_);
 
     dag_history_mgr_ = OB_NEW(ObDagWarningHistoryManager, ObModIds::TEST);
     tenant_base_.set(dag_history_mgr_);
+
+    diagnose_mgr_ = OB_NEW(compaction::ObDiagnoseTabletMgr, ObModIds::TEST);
+    tenant_base_.set(diagnose_mgr_);
 
     ObTenantEnv::set_tenant(&tenant_base_);
     ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
@@ -99,21 +107,31 @@ public:
 
     ASSERT_EQ(OB_SUCCESS, t3m->init());
     ASSERT_EQ(OB_SUCCESS, scheduler_->init(tenant_id_, time_slice, check_waiting_list_period, MAX_DAG_CNT));
+    ObAddr addr(1683068975,9999);
+    if (OB_SUCCESS != (ObSysTaskStatMgr::get_instance().set_self_addr(addr))) {
+      COMMON_LOG_RET(WARN, OB_ERROR, "failed to add sys task", K(addr));
+    }
   }
   void TearDown()
   {
+    tablet_scheduler_->destroy();
+    tablet_scheduler_ = nullptr;
     scheduler_->destroy();
     scheduler_ = nullptr;
     dag_history_mgr_->~ObDagWarningHistoryManager();
     dag_history_mgr_ = nullptr;
+    diagnose_mgr_->destroy();
+    diagnose_mgr_ = nullptr;
     tenant_base_.destroy();
     ObTenantEnv::set_tenant(nullptr);
   }
 private:
   const static int64_t MAX_DAG_CNT = 64;
   const uint64_t tenant_id_;
+  compaction::ObTenantTabletScheduler *tablet_scheduler_;
   ObTenantDagScheduler *scheduler_;
   ObDagWarningHistoryManager *dag_history_mgr_;
+  compaction::ObDiagnoseTabletMgr *diagnose_mgr_;
   ObTenantBase tenant_base_;
   DISALLOW_COPY_AND_ASSIGN(TestDagScheduler);
 };
@@ -180,16 +198,21 @@ public:
   virtual ~ObWaitTask() {}
   virtual int process()
   {
+    int ret = OB_SUCCESS;
     if (cnt_ == 0) {
       start_time_ = ObTimeUtility::current_time();
     } else if (cnt_ < FINISH_CNT) {
       cnt_++;
-      dag_yield();
+      if (OB_FAIL(dag_yield())) {
+        if (OB_CANCELED != ret) {
+          COMMON_LOG(WARN, "Invalid return value for dag_yield", K(ret));
+        }
+      }
     } else {
       finish_time_ = ObTimeUtility::current_time();
       COMMON_LOG(INFO, "finish process", K(start_time_), K_(finish_time));
     }
-    return OB_SUCCESS;
+    return ret;
   }
 private:
   const static int64_t FINISH_CNT = 5;
@@ -300,7 +323,6 @@ public:
         COMMON_LOG(WARN, "task is null", K(ret));
       } else {
         ntask->init(seq_ + 1);
-        ntask->set_max_retry_times(3);
         next_task = ntask;
       }
     }
@@ -312,44 +334,6 @@ private:
   int cnt_;
   int64_t seq_;
 };
-
-class ObTaskRetryDag : public ObBasicDag
-{
-public:
-  ObTaskRetryDag() :
-    ObBasicDag()
-  {}
-  virtual int create_first_task() override
-  {
-    int ret = OB_SUCCESS;
-    ObRetryTask *task = NULL;
-    if (OB_FAIL(alloc_task(task))) {
-      COMMON_LOG(WARN, "Fail to alloc task", K(ret));
-    } else if (OB_FAIL(add_task(*task))) {
-      COMMON_LOG(WARN, "Fail to add task", K(ret));
-    } else {
-      task->init(0);
-      task->set_max_retry_times(10);
-    }
-    return common::OB_SUCCESS;
-  }
-};
-
-TEST_F(TestDagScheduler, test_task_retry)
-{
-  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
-  ASSERT_TRUE(nullptr != scheduler);
-  ObDagWarningHistoryManager* manager = MTL(ObDagWarningHistoryManager *);
-  ASSERT_TRUE(nullptr != manager);
-  EXPECT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->init(true, MTL_ID(), "DagWarnHis"));
-
-  for (int i = 0; i < 2; ++i) {
-    EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag<ObTaskRetryDag>(nullptr));
-  }
-
-  wait_scheduler();
-  EXPECT_EQ(0, MTL(ObDagWarningHistoryManager *)->size());
-}
 
 class ObDagRetryTask : public ObITask
 {
@@ -714,7 +698,7 @@ class ObFatherDagNet : public ObIDagNet
 {
 public:
   ObFatherDagNet() :
-    ObIDagNet(ObDagNetType::DAG_NET_TYPE_MIGARTION),
+    ObIDagNet(ObDagNetType::DAG_NET_TYPE_MIGRATION),
     id_(ObTimeUtility::current_time() + random()),
     op_()
   {}
@@ -766,6 +750,29 @@ public:
   { UNUSEDx(buf, buf_len); return OB_SUCCESS; }
   virtual bool is_ha_dag_net() const override { return false; }
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(type), K_(id));
+  virtual int clear_dag_net_ctx() override
+  {
+    int ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+    ObTenantDagWorker *worker = ObTenantDagWorker::self();
+
+    if (worker != nullptr) {
+      ObITask * task = worker->get_task();
+      ObTenantDagWorker::DagWorkerStatus status = worker->get_status();
+      EXPECT_EQ(status, ObTenantDagWorker::DWS_FREE);
+      EXPECT_EQ(task, nullptr);
+      if(OB_TMP_FAIL(worker->yield())) {
+        if (tmp_ret == OB_CANCELED) {
+          ret = OB_SUCCESS;
+        }
+      }
+      COMMON_LOG(WARN, "call worker->yiled() after task is destoryed", K(ret), K(tmp_ret));
+    } else {
+      COMMON_LOG(WARN, "worker in this thread is nullptr");
+    }
+
+    return ret;
+  }
 private:
 
   int64_t id_;
@@ -892,7 +899,7 @@ public:
       ret = OB_ERR_UNEXPECTED;
     } else {
       ObIDag *dag = get_dag();
-      ObRetryTask *ntask = NULL;
+      ObDagRetryTask *ntask = NULL;
       if (NULL == dag) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "dag is null", K(ret));
@@ -902,7 +909,6 @@ public:
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "task is null", K(ret));
       } else {
-        ntask->init(seq_ + 1);
         next_task = ntask;
       }
     }
@@ -1327,7 +1333,7 @@ public:
     }
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(new_dag)) {
-        new_dag->reset_children();
+        new_dag->reset_node();
         if (OB_SUCCESS != (tmp_ret = dag_net->erase_dag_from_dag_net(*new_dag))) {
           COMMON_LOG(WARN, "failed to erase dag from dag net", K(tmp_ret), KPC(new_dag));
         }
@@ -1337,7 +1343,7 @@ public:
 
       for (int64_t i = 0; i < new_dag_array.count(); ++i) {
         ObIDag *dag = new_dag_array.at(i);
-        dag->reset_children();
+        dag->reset_node();
         if (OB_SUCCESS != (tmp_ret = dag_net->erase_dag_from_dag_net(*dag))) {
           COMMON_LOG(WARN, "failed to erase dag from dag net", K(tmp_ret), KPC(dag));
         }
@@ -1350,7 +1356,7 @@ public:
         }
       }
       new_dag_array.reset();
-      this->get_dag()->reset_children();
+      this->get_dag()->reset_node();
     }
     return ret;
   }
@@ -1460,7 +1466,7 @@ public:
       COMMON_LOG(WARN, "Fail to add child", K(ret), KPC(prepare_dag), KPC(finish_dag));
     }
     EXPECT_EQ(OB_SUCCESS, ret);
-    MTL(ObTenantDagScheduler*)->free_dag(*finish_dag, prepare_dag);
+    MTL(ObTenantDagScheduler*)->free_dag(*finish_dag);
     COMMON_LOG(INFO, "free dag", K(ret), KPC(prepare_dag), KPC(this));
     EXPECT_EQ(dag_record_map_.size(), 1);
     EXPECT_EQ(0, prepare_dag->children_.count());

@@ -16,6 +16,7 @@
 #include "lib/charset/ob_charset.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_func_round.h"
 #include "share/system_variable/ob_nls_system_variable.h"
 
 namespace oceanbase
@@ -1335,6 +1336,7 @@ int ObNFMBase::conv_num_to_nfm_obj(const common::ObObjMeta &obj_meta,
   const bool is_ufloat = obj_meta.is_ufloat();
   const bool is_udouble = obj_meta.is_udouble();
   const bool is_int_tc = obj_meta.is_integer_type();
+  const bool is_decimal_int = obj_meta.is_decimal_int();
   if (is_float || is_ufloat || is_double || is_udouble) {
     if (is_float || is_ufloat) {
       nfm_obj.set_obj_type(ObFloatType);
@@ -1343,6 +1345,9 @@ int ObNFMBase::conv_num_to_nfm_obj(const common::ObObjMeta &obj_meta,
       nfm_obj.set_obj_type(ObDoubleType);
       nfm_obj.set_double(obj.get_double());
     }
+  } else if (is_decimal_int) {
+    nfm_obj.set_obj_type(ObDecimalIntType);
+    nfm_obj.set_decimal_int(obj.get_decimal_int(), obj.get_int_bytes());
   } else {
     number::ObNumber num;
     if (is_int_tc) { // int tc, to support PLS_INTERGER type
@@ -1361,7 +1366,8 @@ int ObNFMBase::conv_num_to_nfm_obj(const common::ObObjMeta &obj_meta,
   return ret;
 }
 
-int ObNFMBase::cast_obj_to_int(const ObNFMObj &nfm_obj, int64_t &res_val)
+int ObNFMBase::cast_obj_to_int(
+    const ObDatumMeta &in_meta, const ObNFMObj &nfm_obj, int64_t &res_val)
 {
   int ret = OB_SUCCESS;
   ObObjType obj_type = nfm_obj.get_obj_type();
@@ -1370,6 +1376,28 @@ int ObNFMBase::cast_obj_to_int(const ObNFMObj &nfm_obj, int64_t &res_val)
     res_val = static_cast<int64_t>(ObExprUtil::round_double(nfm_obj.get_float(), scale));
   } else if (ObDoubleType == obj_type) {
     res_val = static_cast<int64_t>(ObExprUtil::round_double(nfm_obj.get_double(), scale));
+  } else if (ObDecimalIntType == obj_type) {
+    ObDatum tmp_datum;
+    tmp_datum.set_decimal_int_shallow(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes());
+    ObDecimalIntBuilder builder;
+    bool is_valid_int64 = true;
+    if (OB_FAIL(ObExprFuncRound::do_round_decimalint(
+                in_meta.precision_, in_meta.scale_,
+                in_meta.precision_ - in_meta.scale_ + 1, scale, scale,
+                tmp_datum, builder))) {
+      LOG_WARN("do_round_decimalint failed",
+               K(ret), K(in_meta.precision_), K(in_meta.scale_),
+               K(in_meta.precision_ - in_meta.scale_ + 1), K(scale));
+    } else if (OB_FAIL(wide::check_range_valid_int64(
+               builder.get_decimal_int(), builder.get_int_bytes(), is_valid_int64, res_val))) {
+      LOG_WARN("check_range_valid_int64 failed", K(ret), K(builder.get_int_bytes()));
+    } else if (!is_valid_int64) {
+      if (wide::str_helper::is_negative(builder.get_decimal_int(), builder.get_int_bytes())) {
+        res_val = INT64_MIN;
+      } else {
+        res_val = INT64_MAX;
+      }
+    }
   } else {
     number::ObNumber num = nfm_obj.get_number();
     number::ObNumber nmb;
@@ -1425,9 +1453,9 @@ int ObNFMBase::remove_leading_zero(char *buf, int64_t &offset)
   return ret;
 }
 
-int ObNFMBase::cast_obj_to_num_str(const ObNFMObj &nfm_obj,
-                                   const int64_t scale,
-                                   common::ObString &num_str)
+int ObNFMBase::cast_obj_to_num_str(
+    const ObNFMObj &nfm_obj, const int64_t in_scale, const int64_t out_scale,
+    common::ObString &num_str)
 {
   int ret = OB_SUCCESS;
   bool is_negative = false;
@@ -1441,54 +1469,76 @@ int ObNFMBase::cast_obj_to_num_str(const ObNFMObj &nfm_obj,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else {
-    if (ObFloatType == obj_type || ObDoubleType == obj_type) {
-      if (ObFloatType == obj_type) {
-        num_str_len = ob_gcvt_strict(nfm_obj.get_float(), OB_GCVT_ARG_FLOAT, alloc_size,
-                                    num_str_buf, NULL, lib::is_oracle_mode(), TRUE, FALSE);
-      } else if (ObDoubleType == obj_type) {
-        num_str_len = ob_gcvt_strict(nfm_obj.get_double(), OB_GCVT_ARG_DOUBLE, alloc_size,
-                                    num_str_buf, NULL, lib::is_oracle_mode(), TRUE, FALSE);
+    if (ObDecimalIntType == obj_type) {
+      ObDatum tmp_datum;
+      tmp_datum.set_decimal_int_shallow(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes());
+      ObDecimalIntBuilder builder;
+      int32_t in_precision =
+          wide::ObDecimalIntConstValue::get_max_precision_by_int_bytes(nfm_obj.get_int_bytes());
+      // out_scale < 0 only when NFM_EEEE_FLAG, need to change it to in_scale while dealing decint
+      const int64_t scale = out_scale < 0 ? in_scale : out_scale;
+      if (OB_FAIL(ObExprFuncRound::do_round_decimalint(
+          in_precision, in_scale, in_precision, scale, scale, tmp_datum, builder))) {
+        LOG_WARN("do_round_decimalint failed", K(ret), K(in_precision), K(in_scale), K(out_scale));
+      } else if (OB_FAIL(wide::to_string(builder.get_decimal_int(), builder.get_int_bytes(), scale,
+                                         num_str_buf, alloc_size, num_str_len, false))) {
+        LOG_WARN("to_string failed", K(ret));
+      } else {
+        is_negative = wide::str_helper::is_negative(
+                      nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes());
       }
-      if (OB_FAIL(nmb.from(num_str_buf, num_str_len, allocator_))) {
-        LOG_WARN("number from str failed", K(ret));
-      }
-      num_str_len = 0;
     } else {
-      number::ObNumber num = nfm_obj.get_number();
-      if (OB_FAIL(nmb.from(num, allocator_))) {
-        LOG_WARN("copy number failed.", K(ret), K(num));
+      if (ObFloatType == obj_type || ObDoubleType == obj_type) {
+        if (ObFloatType == obj_type) {
+          num_str_len = ob_gcvt_strict(nfm_obj.get_float(), OB_GCVT_ARG_FLOAT, alloc_size,
+                                      num_str_buf, NULL, lib::is_oracle_mode(), TRUE, FALSE);
+        } else if (ObDoubleType == obj_type) {
+          num_str_len = ob_gcvt_strict(nfm_obj.get_double(), OB_GCVT_ARG_DOUBLE, alloc_size,
+                                      num_str_buf, NULL, lib::is_oracle_mode(), TRUE, FALSE);
+        }
+        if (OB_FAIL(nmb.from(num_str_buf, num_str_len, allocator_))) {
+          LOG_WARN("number from str failed", K(ret));
+        }
+        num_str_len = 0;
+      } else {
+        number::ObNumber num = nfm_obj.get_number();
+        if (OB_FAIL(nmb.from(num, allocator_))) {
+          LOG_WARN("copy number failed.", K(ret), K(num));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(nmb.format_v2(num_str_buf, alloc_size, num_str_len, out_scale, false))) {
+          LOG_WARN("fail to convert number to string", K(ret));
+        } else {
+          is_negative = nmb.is_negative();
+        }
       }
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(nmb.format_v2(num_str_buf, alloc_size, num_str_len, scale, false))) {
-      LOG_WARN("fail to convert number to string", K(ret));
-    } else {
-      is_negative = nmb.is_negative();
-      num_str.assign_ptr(num_str_buf, static_cast<int32_t>(num_str_len));
-      // is if "-0", special treatment for compatible with oracle
-      // eg: to_char(-0.4000,  '0000') --> -0000
-      if (is_zero(num_str)) {
-        int32_t pos = 0;
-        if (is_negative) {
-          num_str_buf[pos++] = '-';
-        }
-        if (fmt_desc_.pre_num_count_ != 0
-            && 0 == fmt_desc_.post_num_count_) {
-          num_str_buf[pos++] = '0';
-        }
-        num_str_buf[pos++] = '.';
-        if (fmt_desc_.post_num_count_ != 0) {
-          num_str_buf[pos++] = '0';
-        }
-        num_str.assign_ptr(num_str_buf, pos);
-      } else if (OB_FAIL(remove_leading_zero(num_str_buf, num_str_len))) {
-        LOG_WARN("fail to remove leading zero", K(ret));
-      } else {
-        num_str.assign_ptr(num_str_buf, static_cast<int32_t>(num_str_len));
+    num_str.assign_ptr(num_str_buf, static_cast<int32_t>(num_str_len));
+    // is if "-0", special treatment for compatible with oracle
+    // eg: to_char(-0.4000,  '0000') --> -0000
+    if (is_zero(num_str)) {
+      int32_t pos = 0;
+      if (is_negative) {
+        num_str_buf[pos++] = '-';
       }
-      LOG_DEBUG("cast_obj_to_num_str", K(num_str));
+      if (fmt_desc_.pre_num_count_ != 0
+          && 0 == fmt_desc_.post_num_count_) {
+        num_str_buf[pos++] = '0';
+      }
+      num_str_buf[pos++] = '.';
+      if (fmt_desc_.post_num_count_ != 0) {
+        num_str_buf[pos++] = '0';
+      }
+      num_str.assign_ptr(num_str_buf, pos);
+    } else if (OB_FAIL(remove_leading_zero(num_str_buf, num_str_len))) {
+      LOG_WARN("fail to remove leading zero", K(ret));
+    } else {
+      num_str.assign_ptr(num_str_buf, static_cast<int32_t>(num_str_len));
     }
+    LOG_DEBUG("cast_obj_to_num_str", K(num_str));
   }
   return ret;
 }
@@ -1677,18 +1727,18 @@ int ObNFMBase::num_str_to_sci(const common::ObString &num_str, const int32_t sca
   return ret;
 }
 
-int ObNFMToChar::process_mul_format(const ObNFMObj &nfm_obj, common::ObString &num_str)
+int ObNFMToChar::process_mul_format(
+    const ObNFMObj &nfm_obj,
+    const ObDatumMeta &in_meta,
+    common::ObString &num_str)
 {
   int ret = OB_SUCCESS;
-  number::ObNumber num_val;
-  number::ObNumber base_num;
-  number::ObNumber power_num;
-  number::ObNumber origin_num;
   const int64_t base_val = 10;
   const int64_t scale = 0;
   int64_t origin_str_len = 0;
   char *origin_str_buf = NULL;
-  int64_t exponent = fmt_desc_.multi_;
+  int32_t exponent = fmt_desc_.multi_;
+  int32_t extra_zeros_count = 0;
   const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
   if (OB_ISNULL(origin_str_buf = static_cast<char *>(
                 allocator_.alloc(alloc_size)))) {
@@ -1704,6 +1754,10 @@ int ObNFMToChar::process_mul_format(const ObNFMObj &nfm_obj, common::ObString &n
       origin_str_len = ob_fcvt(ObExprUtil::round_double(nfm_obj.get_double() * power_val, scale),
                                scale, alloc_size, origin_str_buf, NULL);
     } else if (ObNumberType == obj_type) {
+      number::ObNumber num_val;
+      number::ObNumber base_num;
+      number::ObNumber power_num;
+      number::ObNumber origin_num;
       num_val = nfm_obj.get_number();
       if (OB_FAIL(base_num.from(base_val, allocator_))) {
         LOG_WARN("fail to cast int to number", K(ret));
@@ -1717,24 +1771,61 @@ int ObNFMToChar::process_mul_format(const ObNFMObj &nfm_obj, common::ObString &n
                  origin_str_len, scale, false))) {
         LOG_WARN("fail to convert number to string", K(ret));
       }
+    } else if (ObDecimalIntType == obj_type) {
+      const int16_t in_prec = in_meta.precision_;
+      const int16_t in_scale = in_meta.scale_;
+      int16_t new_scale = 0;
+      if (wide::str_helper::is_zero(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes())
+          || in_scale == exponent) { // needn't multiplication
+        if (OB_FAIL(wide::to_string(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes(),
+            new_scale, origin_str_buf, alloc_size, origin_str_len, false))) {
+          LOG_WARN("to_string failed", K(ret));
+        }
+      } else if (in_scale > exponent) {
+        new_scale = in_scale - exponent; // => input * power_val, calc round with new_scale directly
+        ObDatum tmp_datum;
+        tmp_datum.set_decimal_int_shallow(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes());
+        ObDecimalIntBuilder builder;
+        if (OB_FAIL(ObExprFuncRound::do_round_decimalint(
+                    in_meta.precision_, new_scale,
+                    in_meta.precision_, scale, scale,
+                    tmp_datum, builder))) {
+          LOG_WARN("do_round_decimalint failed",
+                   K(ret), K(in_meta.precision_), K(in_meta.scale_),
+                   K(in_meta.precision_ - in_meta.scale_ + 1), K(scale));
+        } else if (OB_FAIL(wide::to_string(builder.get_decimal_int(), builder.get_int_bytes(),
+                           scale, origin_str_buf, alloc_size, origin_str_len, false))) {
+          LOG_WARN("to_string failed", K(ret));
+        }
+      } else { // in_scale < exponent
+        // result has no decimal place, needn't to round, need to print extra zeros instead
+        extra_zeros_count = exponent - in_scale;
+        if (OB_FAIL(wide::to_string(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes(),
+                    scale, origin_str_buf, alloc_size, origin_str_len, false))) {
+          LOG_WARN("to_string failed", K(ret));
+        } else {
+          MEMSET(origin_str_buf + origin_str_len, '0', extra_zeros_count);
+        }
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid obj type", K(ret), K(obj_type));
     }
     if (OB_SUCC(ret)) {
-      num_str.assign_ptr(origin_str_buf, static_cast<int32_t>(origin_str_len));
+      num_str.assign_ptr(origin_str_buf, static_cast<int32_t>(origin_str_len + extra_zeros_count));
       LOG_DEBUG("obj_to_multi_num_str", K(num_str));
     }
   }
   return ret;
 }
 
-int ObNFMToChar::process_roman_format(const ObNFMObj &nfm_obj, char *buf,
-                                      const int64_t buf_len, int64_t &pos)
+int ObNFMToChar::process_roman_format(
+    const ObDatumMeta &in_meta, const ObNFMObj &nfm_obj,
+    char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t val;
-  if (OB_FAIL(cast_obj_to_int(nfm_obj, val))) {
+  if (OB_FAIL(cast_obj_to_int(in_meta, nfm_obj, val))) {
     LOG_WARN("fail to cast obj to int", K(ret));
   } else if (OB_FAIL(int_to_roman_str(val, buf, buf_len, pos))) {
     LOG_WARN("fail to convert int to roman str", K(ret));
@@ -1742,13 +1833,13 @@ int ObNFMToChar::process_roman_format(const ObNFMObj &nfm_obj, char *buf,
   return ret;
 }
 
-int ObNFMToChar::process_hex_format(const ObNFMObj &nfm_obj, char *buf,
+int ObNFMToChar::process_hex_format(const ObNFMObj &nfm_obj, const int64_t in_scale, char *buf,
                                     const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  int64_t scale = 0;
+  int64_t out_scale = 0;
   ObString origin_str;
-  if (OB_FAIL(cast_obj_to_num_str(nfm_obj, scale, origin_str))) {
+  if (OB_FAIL(cast_obj_to_num_str(nfm_obj, in_scale, out_scale, origin_str))) {
     LOG_WARN("fail to cast obj to num str", K(ret));
   } else if (OB_FAIL(decimal_to_hex(origin_str, buf, buf_len, pos))) {
     LOG_WARN("fail to convert decimal to hex str", K(ret));
@@ -1756,14 +1847,14 @@ int ObNFMToChar::process_hex_format(const ObNFMObj &nfm_obj, char *buf,
   return ret;
 }
 
-int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, char *buf,
+int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, const int64_t in_scale, char *buf,
                                    const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t num_str_len = 0;
   char *num_str_buf = NULL;
   ObString num_str;
-  const int32_t scale = -1;
+  const int32_t out_scale = -1;
   const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
   if (OB_ISNULL(num_str_buf = static_cast<char *>(
                               allocator_.alloc(alloc_size)))) {
@@ -1782,8 +1873,13 @@ int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, char *buf,
       number::ObNumber nmb;
       if (OB_FAIL(nmb.from(num, allocator_))) {
         LOG_WARN("copy number failed.", K(ret), K(num));
-      } else if (OB_FAIL(nmb.format_v2(num_str_buf, alloc_size, num_str_len, scale, false))) {
+      } else if (OB_FAIL(nmb.format_v2(num_str_buf, alloc_size, num_str_len, out_scale, false))) {
         LOG_WARN("fail to format", K(ret), K(nmb));
+      }
+    } else if (ObDecimalIntType == obj_type) {
+      if (OB_FAIL(wide::to_string(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes(), in_scale,
+                                  num_str_buf, alloc_size, num_str_len, false))) {
+        LOG_WARN("to_string failed", K(ret));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1796,7 +1892,7 @@ int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, char *buf,
         MEMCPY(buf, num_str_buf, num_str_len);
         pos += num_str_len;
       } else if (num_str_len > 64) {
-        if (OB_FAIL(num_str_to_sci(num_str, scale, buf, buf_len, pos, true))) {
+        if (OB_FAIL(num_str_to_sci(num_str, out_scale, buf, buf_len, pos, true))) {
           LOG_WARN("failed to convert num to sci str", K(ret));
         }
       }
@@ -1808,14 +1904,14 @@ int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, char *buf,
   return ret;
 }
 
-int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, char *buf,
+int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, const int64_t in_scale, char *buf,
                                     const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t num_str_len = 0;
   char *num_str_buf = NULL;
   ObString num_str;
-  const int32_t scale = -1;
+  const int32_t out_scale = -1;
   const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
   if (OB_ISNULL(num_str_buf = static_cast<char *>(
                               allocator_.alloc(alloc_size)))) {
@@ -1834,8 +1930,13 @@ int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, char *buf,
       number::ObNumber nmb;
       if (OB_FAIL(nmb.from(num, allocator_))) {
         LOG_WARN("copy number failed.", K(ret), K(num));
-      } else if (OB_FAIL(nmb.format_v2(num_str_buf, alloc_size, num_str_len, scale, false))) {
+      } else if (OB_FAIL(nmb.format_v2(num_str_buf, alloc_size, num_str_len, out_scale, false))) {
         LOG_WARN("fail to format", K(ret), K(nmb));
+      }
+    } else if (ObDecimalIntType == obj_type) {
+      if (OB_FAIL(wide::to_string(nfm_obj.get_decimal_int(), nfm_obj.get_int_bytes(), in_scale,
+                                  num_str_buf, alloc_size, num_str_len, false))) {
+        LOG_WARN("to_string failed", K(ret));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1844,7 +1945,7 @@ int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, char *buf,
     if (OB_SUCC(ret)) {
       num_str.assign_ptr(num_str_buf, static_cast<int32_t>(num_str_len));
       LOG_DEBUG("process_tme_format", K(ret), K(num_str_buf), K(num_str_len));
-      if (OB_FAIL(num_str_to_sci(num_str, scale, buf, buf_len, pos, true))) {
+      if (OB_FAIL(num_str_to_sci(num_str, out_scale, buf, buf_len, pos, true))) {
         LOG_WARN("failed to convert num to sci str", K(ret));
       } else if (OB_FAIL(process_fillmode(buf, buf_len, pos))) {
         LOG_WARN("fail to process fillmode", K(ret));
@@ -2125,6 +2226,7 @@ int ObNFMToChar::process_output_fmt(const common::ObString &str,
 
 int ObNFMToChar::process_fmt_conv(const ObSQLSessionInfo &session,
                                   const char *fmt_str, const int32_t fmt_len,
+                                  const ObDatumMeta &in_meta,
                                   const ObNFMObj &nfm_obj, char *res_buf,
                                   const int64_t res_buf_len, int64_t &offset)
 {
@@ -2137,44 +2239,44 @@ int ObNFMToChar::process_fmt_conv(const ObSQLSessionInfo &session,
   } else {
     // processing calculation conversion element
     if (ObNFMElem::has_type(NFM_RN_FLAG, fmt_desc_.elem_flag_)) {
-      if (OB_FAIL(process_roman_format(nfm_obj, res_buf, res_buf_len, offset))) {
+      if (OB_FAIL(process_roman_format(in_meta, nfm_obj, res_buf, res_buf_len, offset))) {
         LOG_WARN("fail to process roman fmt", K(ret));
       }
     } else if (ObNFMElem::has_type(NFM_HEX_FLAG, fmt_desc_.elem_flag_)) {
-      if (OB_FAIL(process_hex_format(nfm_obj, res_buf, res_buf_len, offset))) {
+      if (OB_FAIL(process_hex_format(nfm_obj, in_meta.scale_, res_buf, res_buf_len, offset))) {
         LOG_WARN("fail to process hex fmt", K(ret));
       }
     } else if (ObNFMElem::has_type(NFM_TM_FLAG, fmt_desc_.elem_flag_)) {
-      if (OB_FAIL(process_tm_format(nfm_obj, res_buf, res_buf_len, offset))) {
+      if (OB_FAIL(process_tm_format(nfm_obj, in_meta.scale_, res_buf, res_buf_len, offset))) {
         LOG_WARN("fail to process tm fmt", K(ret));
       }
     } else if (ObNFMElem::has_type(NFM_TME_FLAG, fmt_desc_.elem_flag_)) {
-      if (OB_FAIL(process_tme_format(nfm_obj, res_buf, res_buf_len, offset))) {
+      if (OB_FAIL(process_tme_format(nfm_obj, in_meta.scale_, res_buf, res_buf_len, offset))) {
         LOG_WARN("fail to process tme fmt", K(ret));
       }
     } else {
       // the number of digits after the decimal point means how many decimal places are reserved
       // eg: to_char(123.123, '999.99') --> 123.12
       // the value is rounded to two decimal places
-      const int32_t scale = fmt_desc_.post_num_count_;
+      const int32_t out_scale = fmt_desc_.post_num_count_;
       if (ObNFMElem::has_type(NFM_MULTI_FLAG, fmt_desc_.elem_flag_)) {
-        if (OB_FAIL(process_mul_format(nfm_obj, num_str))) {
+        if (OB_FAIL(process_mul_format(nfm_obj, in_meta, num_str))) {
           LOG_WARN("fail to process mul format", K(ret));
         }
       } else {
         if (ObNFMElem::has_type(NFM_EEEE_FLAG, fmt_desc_.elem_flag_)) {
-          if (OB_FAIL(cast_obj_to_num_str(nfm_obj, -1, num_str))) {
+          if (OB_FAIL(cast_obj_to_num_str(nfm_obj, in_meta.scale_, -1, num_str))) {
             LOG_WARN("fail to cast obj to num str", K(ret));
           }
         } else {
-          if (OB_FAIL(cast_obj_to_num_str(nfm_obj, scale, num_str))) {
+          if (OB_FAIL(cast_obj_to_num_str(nfm_obj, in_meta.scale_, out_scale, num_str))) {
             LOG_WARN("fail to cast obj to num str", K(ret));
           }
         }
       }
       if (OB_SUCC(ret)) {
         if (ObNFMElem::has_type(NFM_EEEE_FLAG, fmt_desc_.elem_flag_)) {
-          if (OB_FAIL(process_sci_format(num_str, scale, num_str))) {
+          if (OB_FAIL(process_sci_format(num_str, out_scale, num_str))) {
             LOG_WARN("fail to process sci fmt", K(ret));
           }
         }
@@ -2225,6 +2327,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const ObObj &obj,
   ObNFMObj nfm_obj;
   ObSQLSessionInfo *session = expr_ctx.my_session_;
   const int64_t res_buf_len = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  ObDatumMeta in_meta;
   if (OB_ISNULL(fmt_str) || OB_ISNULL(expr_ctx.calc_buf_) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(expr_ctx.calc_buf_),
@@ -2238,7 +2341,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const ObObj &obj,
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_FAIL(conv_num_to_nfm_obj(obj, expr_ctx, nfm_obj))) {
     LOG_WARN("fail to conv obj to nfm obj", K(ret));
-  } else if (OB_FAIL(process_fmt_conv(*session, fmt_str, fmt_len, nfm_obj,
+  } else if (OB_FAIL(process_fmt_conv(*session, fmt_str, fmt_len, in_meta, nfm_obj,
                                       res_buf, res_buf_len, offset))) {
     LOG_WARN("fail to process fmt conversion", K(ret), K(fmt_len));
   } else {
@@ -2268,6 +2371,7 @@ int ObNFMToChar::calc_result_length(const common::ObObj &obj, int32_t &length)
 }
 
 int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
+                                        const ObDatumMeta &in_meta,
                                         const common::ObDatum &obj,
                                         common::ObIAllocator &alloc,
                                         const char *fmt_str, const int32_t fmt_len,
@@ -2291,7 +2395,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_FAIL(conv_num_to_nfm_obj(obj_meta, obj, nfm_obj, alloc))) {
     LOG_WARN("fail to conv obj to nfm obj", K(ret));
-  } else if (OB_FAIL(process_fmt_conv(*session, fmt_str, fmt_len, nfm_obj,
+  } else if (OB_FAIL(process_fmt_conv(*session, fmt_str, fmt_len, in_meta, nfm_obj,
                                       res_buf, res_buf_len, offset))) {
     LOG_WARN("fail to process fmt conversion", K(ret), K(fmt_len));
   } else {

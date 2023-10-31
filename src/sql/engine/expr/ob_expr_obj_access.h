@@ -37,8 +37,9 @@ public:
 
   ExtraInfo &get_info() { return info_; }
 
-  int calc_result(common::ObObj &result, const common::ObObj *objs_stack,
-                  int64_t param_num, const ParamStore &param_store) const;
+  int calc_result(common::ObObj &result, common::ObIAllocator &alloc,
+                  const common::ObObj *objs_stack, int64_t param_num,
+                  const ParamStore &param_store) const;
 
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
@@ -91,6 +92,7 @@ public:
 
 
     int calc(ObObj &result,
+             ObIAllocator &alloc,
              const ObObjMeta &res_type,
              const int32_t extend_size,
              const ParamStore &param_store,

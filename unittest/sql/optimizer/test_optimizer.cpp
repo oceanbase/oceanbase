@@ -367,7 +367,9 @@ TEST_F(TestOptimizer, scan_cost) {
   column_count = 10;
   access_row_count = 500.0;
   index_back = false;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
  // ASSERT_TRUE(1266 == cost);
 
@@ -375,7 +377,9 @@ TEST_F(TestOptimizer, scan_cost) {
   column_count = 10;
   access_row_count = 500.0;
   index_back = false;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(502 == cost);
 
@@ -384,38 +388,50 @@ TEST_F(TestOptimizer, scan_cost) {
   column_count = 10;
   access_row_count = 1000.0;
   index_back = false;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(1718 == cost);
 
   //the more rows, the bigger cost is
   access_row_count = 10000.0;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(9845 == cost);
 
   //the more rows, the bigger cost is
   access_row_count = 100000.0;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(97496 == cost);
 
   //the more columns, the bigger cost is
   column_count = 20;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(126709 == cost);
 
   //the wider the table is, the bigger cost is
   est_cost_info.index_meta_info_.index_column_count_ = 2 * static_cast<int64_t>(STANDARD_SCHEMA_COL_COUNT);
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(182992 == cost);
 
   //scan index back
   index_back = true;
   est_cost_info.postfix_filter_sel_ = 0.1;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(283235 == cost);
 
@@ -426,33 +442,43 @@ TEST_F(TestOptimizer, scan_cost) {
   column_count = 10;
   access_row_count = 500.0;
   index_back = false;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(6751 == cost);
 
   //the more rows, the bigger cost is
   access_row_count = 1000;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(13503 == cost);
 
   //Compare of scan and get at 1000 rows
   //cost of get is roughly 10 times bigger than cost of scan at same row count
   est_cost_info.batch_type_ = common::ObSimpleBatch::T_SCAN;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(1718 == cost);
   est_cost_info.batch_type_ = common::ObSimpleBatch::T_GET;
 
   //the more columns, the bigger cost is
   column_count = 20;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
  // ASSERT_TRUE(14041 == cost);
 
   //get index back
   index_back = true;
-  ObOptEstCost::cost_table(est_cost_info, 1, access_row_count, access_row_count, cost, index_back_cost, ObOptEstCost::VECTOR_MODEL);
+  est_cost_info.logical_query_range_row_count_ = access_row_count;
+  est_cost_info.phy_query_range_row_count_ = access_row_count;
+  ObOptEstCost::cost_table(est_cost_info, 1, cost, ObOptEstCost::VECTOR_MODEL);
   //std::cout << type << ',' << access_row_count << ',' << column_count << ',' << cost << std::endl;
 //  ASSERT_TRUE(27168 == cost);
 }

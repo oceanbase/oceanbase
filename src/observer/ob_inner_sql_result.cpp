@@ -510,7 +510,40 @@ int ObInnerSQLResult::get_int(const int64_t col_idx, int64_t &int_val) const
   return ret;
 }
 
-DEF_GET_VALUE_BY_INDEX_IMPL(get_number_impl, get_number, number::ObNumber);
+int ObInnerSQLResult::get_number_impl(const int64_t col_idx, number::ObNumber &ret_nmb) const
+{
+  int ret = OB_SUCCESS;
+  if (!opened_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not opened", K(ret));
+  } else if (NULL == row_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row is null", K(ret));
+  } else if (col_idx >= (NULL == row_->projector_ ? row_->count_ : row_->projector_size_)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("column index overflow", K(ret), K(col_idx), "row", *row_);
+  } else {
+    const int64_t idx = (NULL != row_->projector_ ? row_->projector_[col_idx] : col_idx);
+    if (idx < 0 || idx >= row_->count_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid index", K(ret), K(idx), "cell count", row_->count_);
+    } else {
+      const ObObj &obj = row_->cells_[idx];
+      if (OB_FAIL(check_extend_value(obj))) {
+        LOG_DEBUG("check extend value failed", K(ret));
+      } else if (obj.is_decimal_int()) {
+        if (OB_FAIL(wide::to_number(obj.get_decimal_int(), obj.get_int_bytes(), obj.get_scale(),
+                                    mem_context_->get_arena_allocator(), ret_nmb))) {
+          LOG_WARN("to_number failed", K(ret));
+        }
+      } else if (OB_FAIL(obj.get_number(ret_nmb))) {
+        LOG_WARN("get number failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 DEF_GET_VALUE_BY_INDEX_IMPL(get_urowid_impl, get_urowid, ObURowIDData);
 
 #undef DEF_GET_VALUE_BY_INDEX

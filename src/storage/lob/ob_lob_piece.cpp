@@ -25,30 +25,30 @@ namespace storage
 {
 
 
-int ObLobPieceUtil::transform_piece_id(common::ObNewRow* row, ObLobPieceInfo &info)
+int ObLobPieceUtil::transform_piece_id(blocksstable::ObDatumRow* row, ObLobPieceInfo &info)
 {
-  return row->cells_[0].get_uint64(info.piece_id_);
+  info.piece_id_ = row->storage_datums_[0].get_uint64();
+  return OB_SUCCESS;
 }
 
-int ObLobPieceUtil::transform_len(common::ObNewRow* row, ObLobPieceInfo &info)
+int ObLobPieceUtil::transform_len(blocksstable::ObDatumRow* row, ObLobPieceInfo &info)
 {
-  return row->cells_[1].get_uint32(info.len_);
+  info.len_ = row->storage_datums_[1].get_uint32();
+  return OB_SUCCESS;
 }
 
-int ObLobPieceUtil::transform_macro_id(common::ObNewRow* row, ObLobPieceInfo &info)
+int ObLobPieceUtil::transform_macro_id(blocksstable::ObDatumRow* row, ObLobPieceInfo &info)
 {
   int ret = OB_SUCCESS;
-  ObString ser_macro_id;
+  ObString ser_macro_id = row->storage_datums_[2].get_string();;
   int64_t pos = 0;
-  if (OB_FAIL(row->cells_[2].get_varchar(ser_macro_id))) {
-    LOG_WARN("get macro id from row failed.", K(ret), KPC(row));
-  } else if (OB_FAIL(info.macro_id_.deserialize(ser_macro_id.ptr(), ser_macro_id.length(), pos))) {
+  if (OB_FAIL(info.macro_id_.deserialize(ser_macro_id.ptr(), ser_macro_id.length(), pos))) {
     LOG_WARN("deserialize macro id from buffer failed.", K(ret), K(ser_macro_id));
   }
   return ret;
 }
 
-int ObLobPieceUtil::transform(common::ObNewRow* row, ObLobPieceInfo &info)
+int ObLobPieceUtil::transform(blocksstable::ObDatumRow* row, ObLobPieceInfo &info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row)) {
@@ -57,7 +57,7 @@ int ObLobPieceUtil::transform(common::ObNewRow* row, ObLobPieceInfo &info)
   } else if (!row->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
-  } else if (row->get_count() != 3) {
+  } else if (row->get_column_count() != 3) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
   } else if (OB_FAIL(transform_piece_id(row, info))) {

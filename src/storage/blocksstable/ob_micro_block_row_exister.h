@@ -22,7 +22,7 @@ namespace blocksstable {
 
 class ObMicroBlockRowExister : public ObIMicroBlockRowFetcher {
 public:
-  ObMicroBlockRowExister(): read_info_(nullptr) {}
+  ObMicroBlockRowExister() {}
   virtual ~ObMicroBlockRowExister() {}
   virtual int init(
       const storage::ObTableIterParam &param,
@@ -33,8 +33,6 @@ public:
       const ObMicroBlockData &block_data,
       bool &exist,
       bool &found);
-private:
-  const ObITableReadInfo *read_info_;
 };
 
 }

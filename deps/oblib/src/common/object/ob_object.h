@@ -26,6 +26,7 @@
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/charset/ob_dtoa.h"
 #include "lib/rowid/ob_urowid.h"
+#include "lib/wide_integer/ob_wide_integer.h"
 
 namespace oceanbase
 {
@@ -115,7 +116,7 @@ public:
 
   OB_INLINE bool operator ==(const ObObjMeta &other) const
   {
-    return (type_ == other.type_ && cs_level_ == other.cs_level_&& cs_type_ == other.cs_type_);
+    return (type_ == other.type_ && cs_level_ == other.cs_level_ && cs_type_ == other.cs_type_);
   }
   OB_INLINE bool operator !=(const ObObjMeta &other) const { return !this->operator ==(other); }
   // this method is inefficient, you'd better use set_tinyint() etc. instead
@@ -249,6 +250,12 @@ public:
 
   OB_INLINE void set_clob_locator() { type_ = static_cast<uint8_t>(ObLobType); set_default_collation_type(); }
   OB_INLINE void set_blob_locator() { type_ = static_cast<uint8_t>(ObLobType); set_collation_type(CS_TYPE_BINARY); }
+  OB_INLINE void set_decimal_int() { type_ = static_cast<uint8_t>(ObDecimalIntType); set_collation_level(CS_LEVEL_NUMERIC);set_collation_type(CS_TYPE_BINARY); }
+  OB_INLINE void set_decimal_int(ObScale scale)
+  {
+    set_decimal_int();
+    scale_ = scale;
+  }
 
   OB_INLINE bool is_valid() const { return ob_is_valid_obj_type(static_cast<ObObjType>(type_)); }
   OB_INLINE bool is_invalid() const { return !ob_is_valid_obj_type(static_cast<ObObjType>(type_)); }
@@ -283,6 +290,7 @@ public:
   OB_INLINE bool is_interval_ds() const {  return type_ == static_cast<uint8_t>(ObIntervalDSType); }
   OB_INLINE bool is_nvarchar2() const { return type_ == static_cast<uint8_t>(ObNVarchar2Type); }
   OB_INLINE bool is_nchar() const { return type_ == static_cast<uint8_t>(ObNCharType); }
+  OB_INLINE bool is_decimal_int() const { return type_ == static_cast<uint8_t>(ObDecimalIntType); }
   OB_INLINE bool is_varchar() const
   {
     return ((type_ == static_cast<uint8_t>(ObVarcharType)) && (CS_TYPE_BINARY != cs_type_));
@@ -386,7 +394,8 @@ public:
   OB_INLINE bool is_enumset_inner_type() const { return static_cast<uint8_t>(ObEnumInnerType) == type_
     || static_cast<uint8_t>(ObSetInnerType) == type_;}
   OB_INLINE bool is_otimestamp_type() const { return ObTimestampTZType <= get_type() && get_type() <= ObTimestampNanoType; }
-  OB_INLINE bool is_oracle_decimal() const { return ObNumberType == type_ || ObFloatType == type_ || ObDoubleType == type_; }
+  OB_INLINE bool is_oracle_decimal() const { return ObNumberType == type_ || ObFloatType == type_ || ObDoubleType == type_ || ObDecimalIntType == type_; }
+
   OB_INLINE bool is_urowid() const { return ObURowIDType == type_; }
   OB_INLINE bool is_blob_locator() const { return (ObLobType == type_ && CS_TYPE_BINARY == cs_type_); }
   OB_INLINE bool is_clob_locator() const { return (ObLobType == type_ && CS_TYPE_BINARY != cs_type_); }
@@ -420,7 +429,7 @@ public:
   OB_INLINE void set_extend_type(uint8_t type) { extend_type_ = type; }
   OB_INLINE uint8_t get_extend_type() const { return is_ext() ? extend_type_ : -1; }
 
-  TO_STRING_KV(N_TYPE, ob_obj_type_str(static_cast<ObObjType>(type_)),
+  TO_STRING_KV(N_TYPE, inner_obj_type_str(static_cast<ObObjType>(type_)),
                N_COLLATION, ObCharset::collation_name(get_collation_type()),
                N_COERCIBILITY, ObCharset::collation_level(get_collation_level()));
   NEED_SERIALIZE_AND_DESERIALIZE;
@@ -445,10 +454,35 @@ public:
   OB_INLINE bool is_user_defined_sql_type() const { return ObUserDefinedSQLType == type_; }
   OB_INLINE bool is_xml_sql_type() const { return (ObUserDefinedSQLType == type_ && get_subschema_id() == ObXMLSqlType); }
 
+  void set_stored_precision(int16_t precision)
+  {
+    OB_ASSERT(precision <= OB_MAX_DECIMAL_PRECISION);
+    // if stored_numeric_precision < CS_LEVELINVALID, is's cs_level
+    // otherwise it's precision + cs_level_invalid
+    stored_numeric_precision_ = static_cast<uint8_t>(precision) + CS_LEVEL_INVALID;
+  }
+
+  int16_t get_stored_precision() const
+  {
+    OB_ASSERT(stored_numeric_precision_ >= CS_LEVEL_INVALID);
+    if (stored_numeric_precision_ <= CS_LEVEL_INVALID
+        || stored_numeric_precision_ > CS_LEVEL_INVALID + OB_MAX_DECIMAL_PRECISION) {
+      return PRECISION_UNKNOWN_YET;
+    } else {
+      return stored_numeric_precision_ - CS_LEVEL_INVALID;
+    }
+  }
+
 protected:
   uint8_t type_;
-  uint8_t cs_level_;    // collation level, low bits of sub schema id if type_ is UDT
-  uint8_t cs_type_;     // collation type, high bits of sub schema id if type_ is UDT
+  union
+  {
+    uint8_t cs_level_; // collation level, low bits of sub schema id if type_ is UDT
+    // only used in storage layer!!!
+    // numeric type's precision is stored here
+    uint8_t stored_numeric_precision_;
+  };
+  uint8_t cs_type_; // collation type, high bits of sub schema id if type_ is UDT
   union {
     int8_t scale_;  // scale, length of bit if type_ is ObBitType; reserved flags if type_ is UDT
     ObLobScale lob_scale_;
@@ -1153,6 +1187,8 @@ union ObObjValue
   const ObMemLobCommon *lob_locator_v2_;
   int64_t nmonth_; //for interval year to month
   int64_t nsecond_; //for interval day to second
+
+  ObDecimalInt *decimal_int_;
   void *ptr_;
 };
 
@@ -1524,6 +1560,8 @@ public:
   OB_INLINE number::ObNumber get_unumber() const { return number::ObNumber(nmb_desc_.desc_, v_.nmb_digits_); }
   OB_INLINE number::ObNumber get_number_float() const { return number::ObNumber(nmb_desc_.desc_, v_.nmb_digits_); }
 
+  OB_INLINE bool is_zero_decimalint() const { return val_len_ == 0; }
+
   OB_INLINE int64_t get_datetime() const { return v_.datetime_; }
   OB_INLINE int64_t get_timestamp() const { return v_.datetime_; }
   OB_INLINE int32_t get_date() const { return v_.date_; }
@@ -1664,6 +1702,20 @@ public:
     return ObURowIDData(val_len_, (const uint8_t *)v_.string_);
   }
 
+  inline const ObDecimalInt *get_decimal_int() const
+  {
+    return v_.decimal_int_;
+  }
+  inline void set_decimal_int(int32_t int_bytes, ObScale scale, ObDecimalInt *decimal_int)
+  {
+    meta_.set_decimal_int(scale);
+    val_len_ = int_bytes;
+    v_.decimal_int_ = decimal_int;
+  }
+
+  inline int32_t get_int_bytes() const {
+    return val_len_;
+  }
   inline uint16_t get_udt_subschema_id() const { return meta_.get_subschema_id(); }
   inline uint8_t get_udt_flags() const { return meta_.get_udt_flags(); }
   inline int get_udt(ObString &udt_data) const;
@@ -1839,6 +1891,7 @@ public:
     return bret;
   }
 
+  inline bool is_decimal_int() const { return meta_.is_decimal_int(); }
   inline bool is_min_value() const;
   inline bool is_max_value() const;
   inline bool is_nop_value() const;
@@ -2861,7 +2914,9 @@ inline bool ObObj::need_deep_copy()const
             || ob_is_user_defined_sql_type(meta_.get_type())
             || ob_is_rowid_tc(meta_.get_type())) && 0 != val_len_ && NULL != get_string_ptr())
             || (ob_is_number_tc(meta_.get_type())
-             && 0 != nmb_desc_.len_ && NULL != get_number_digits()));
+             && 0 != nmb_desc_.len_ && NULL != get_number_digits())
+            || (ob_is_decimal_int(meta_.get_type())
+             && 0 != val_len_ && NULL != get_decimal_int()));
 }
 
 inline int64_t ObObj::get_ext() const
@@ -3493,6 +3548,8 @@ inline const void *ObObj::get_data_ptr() const
     ret = const_cast<uint32_t *>(v_.nmb_digits_);
   } else if (ob_is_lob_locator(get_type())) {
     ret = const_cast<ObLobLocator *>(v_.lob_locator_);
+  } else if (ob_is_decimal_int(get_type())) {
+    ret = const_cast<ObDecimalInt *>(v_.decimal_int_);
   } else {
     ret = &v_;
   }
@@ -3508,6 +3565,8 @@ inline void ObObj::set_data_ptr(void *data_ptr)
     v_.nmb_digits_ = static_cast<uint32_t*>(data_ptr);
   } else if (ob_is_lob_locator(get_type())) {
     v_.lob_locator_ = static_cast<ObLobLocator *>(data_ptr);
+  } else if (ob_is_decimal_int(get_type())) {
+    v_.decimal_int_ = static_cast<ObDecimalInt *>(data_ptr);
   } else {
     //@TODO other value pointer
   }
@@ -3960,7 +4019,24 @@ public:
   }
   OB_INLINE int32_t get_raw_text_pos() const { return raw_text_pos_; }
   OB_INLINE int32_t get_raw_text_len() const { return raw_text_len_; }
-  OB_INLINE void set_param_meta() { param_meta_ = get_meta(); }
+  OB_INLINE void set_param_meta()
+  {
+    param_meta_ = get_meta();
+    if (ob_is_numeric_type(get_type())) {
+      ObPrecision default_prec =
+        ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][get_type()].get_precision();
+      ObScale default_scale =
+        ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][get_type()].get_scale();
+      if (get_scale() < 0) {
+        if (meta_.get_scale() >= 0) {
+          set_scale(meta_.get_scale());
+        } else if (ob_is_integer_type(get_type())) {
+          set_scale(default_scale);
+        }
+      }
+      if (get_precision() == PRECISION_UNKNOWN_YET) { set_precision(default_prec); }
+    }
+  }
   OB_INLINE void set_param_meta(const ObObjMeta &meta) { param_meta_ = meta; }
   OB_INLINE const ObObjMeta &get_param_meta() const
   {
@@ -4090,7 +4166,7 @@ OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;
   if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()
-      || is_geometry() || is_user_defined_sql_type()) {
+      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type())) {
     ret += val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret += (sizeof(uint32_t) * nmb_desc_.len_);

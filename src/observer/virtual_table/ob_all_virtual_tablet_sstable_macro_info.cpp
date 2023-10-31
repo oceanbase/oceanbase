@@ -12,7 +12,7 @@
 
 #include "ob_all_virtual_tablet_sstable_macro_info.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
 
@@ -71,7 +71,7 @@ ObAllVirtualTabletSSTableMacroInfo::ObAllVirtualTabletSSTableMacroInfo()
     tablet_iter_(nullptr),
     tablet_allocator_("VTTable"),
     tablet_handle_(),
-	cols_desc_(),
+    cols_desc_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
     table_store_iter_(),
     curr_sstable_(nullptr),
@@ -82,7 +82,8 @@ ObAllVirtualTabletSSTableMacroInfo::ObAllVirtualTabletSSTableMacroInfo()
     rowkey_allocator_(),
     curr_range_(),
     block_idx_(0),
-    iter_buf_(nullptr)
+    iter_buf_(nullptr),
+    io_buf_(nullptr)
 {
 }
 
@@ -104,6 +105,10 @@ void ObAllVirtualTabletSSTableMacroInfo::reset()
   if (OB_NOT_NULL(iter_buf_)) {
     allocator_->free(iter_buf_);
     iter_buf_ = nullptr;
+  }
+  if (OB_NOT_NULL(io_buf_)) {
+    allocator_->free(io_buf_);
+    io_buf_ = nullptr;
   }
   curr_sstable_ = nullptr;
   curr_sstable_meta_handle_.reset();
@@ -201,40 +206,49 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   macro_read_info.offset_ = 0;
   macro_read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  macro_read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   macro_handle.reset();
-  if (OB_UNLIKELY(!macro_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid argument", K(ret), K(macro_id));
-  } else if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {
-    SERVER_LOG(WARN, "fail to read macro block", K(ret), K(macro_read_info));
+  if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =
+      reinterpret_cast<char*>(allocator_->alloc(OB_SERVER_BLOCK_MGR.get_macro_block_size())))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    int64_t io_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(io_size));
   } else {
-    ObMacroBlockCommonHeader common_header;
-    ObSSTableMacroBlockHeader macro_header;
-    const char *buf = macro_handle.get_buffer();
-    const int64_t size = macro_handle.get_data_size();
-    int64_t pos = 0;
-    if (OB_FAIL(common_header.deserialize(buf, size, pos))) {
-      STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(buf), K(size), K(pos));
-    } else if (OB_FAIL(common_header.check_integrity())) {
-      STORAGE_LOG(WARN, "invalid common header", K(ret), K(common_header));
-    } else if (OB_FAIL(macro_header.deserialize(buf, size, pos))) {
-      STORAGE_LOG(ERROR, "fail to deserialize macro header", K(ret), KP(buf), K(size), K(pos));
-    } else if (OB_UNLIKELY(!macro_header.is_valid())) {
-      ret = OB_INVALID_DATA;
-      STORAGE_LOG(WARN, "invalid macro header", K(ret), K(macro_header));
+    macro_read_info.buf_ = io_buf_;
+    if (OB_UNLIKELY(!macro_id.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      SERVER_LOG(WARN, "invalid argument", K(ret), K(macro_id));
+    } else if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {
+      SERVER_LOG(WARN, "fail to read macro block", K(ret), K(macro_read_info));
     } else {
-      info.data_seq_ = macro_header.fixed_header_.data_seq_;
-      info.macro_logic_version_ = macro_header.fixed_header_.logical_version_;
-      info.macro_block_index_ = macro_id.block_index();
-      info.row_count_ = macro_header.fixed_header_.row_count_;
-      info.original_size_ = macro_header.fixed_header_.occupy_size_;
-      info.data_size_ = macro_header.fixed_header_.occupy_size_;
-      info.data_zsize_ = macro_header.fixed_header_.occupy_size_;
-      info.occupy_size_ = macro_header.fixed_header_.occupy_size_;
-      info.micro_block_count_ = macro_header.fixed_header_.micro_block_count_;
-      info.data_checksum_ = macro_header.fixed_header_.data_checksum_;
-      info.compressor_type_ = macro_header.fixed_header_.compressor_type_;
-      info.row_store_type_ = static_cast<ObRowStoreType>(macro_header.fixed_header_.row_store_type_);
+      ObMacroBlockCommonHeader common_header;
+      ObSSTableMacroBlockHeader macro_header;
+      const char *buf = macro_read_info.buf_;
+      const int64_t size = macro_handle.get_data_size();
+      int64_t pos = 0;
+      if (OB_FAIL(common_header.deserialize(buf, size, pos))) {
+        STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(buf), K(size), K(pos));
+      } else if (OB_FAIL(common_header.check_integrity())) {
+        STORAGE_LOG(WARN, "invalid common header", K(ret), K(common_header));
+      } else if (OB_FAIL(macro_header.deserialize(buf, size, pos))) {
+        STORAGE_LOG(ERROR, "fail to deserialize macro header", K(ret), KP(buf), K(size), K(pos));
+      } else if (OB_UNLIKELY(!macro_header.is_valid())) {
+        ret = OB_INVALID_DATA;
+        STORAGE_LOG(WARN, "invalid macro header", K(ret), K(macro_header));
+      } else {
+        info.data_seq_ = macro_header.fixed_header_.data_seq_;
+        info.macro_logic_version_ = macro_header.fixed_header_.logical_version_;
+        info.macro_block_index_ = macro_id.block_index();
+        info.row_count_ = macro_header.fixed_header_.row_count_;
+        info.original_size_ = macro_header.fixed_header_.occupy_size_;
+        info.data_size_ = macro_header.fixed_header_.occupy_size_;
+        info.data_zsize_ = macro_header.fixed_header_.occupy_size_;
+        info.occupy_size_ = macro_header.fixed_header_.occupy_size_;
+        info.micro_block_count_ = macro_header.fixed_header_.micro_block_count_;
+        info.data_checksum_ = macro_header.fixed_header_.data_checksum_;
+        info.compressor_type_ = macro_header.fixed_header_.compressor_type_;
+        info.row_store_type_ = static_cast<ObRowStoreType>(macro_header.fixed_header_.row_store_type_);
+      }
     }
   }
   return ret;
@@ -249,13 +263,24 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
   if (OB_UNLIKELY(!macro_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(ret), K(macro_desc));
+  } else if (curr_sstable_->is_normal_cg_sstable()) {
+    const storage::ObITableReadInfo *index_read_info = nullptr;
+    if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
+      SERVER_LOG(WARN, "failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
+    } else if (OB_FAIL(macro_desc.range_.to_store_range(index_read_info->get_columns_desc(),
+                                                 rowkey_allocator_,
+                                                 info.store_range_))) {
+      SERVER_LOG(WARN, "fail to get store range", K(ret), K(macro_desc.range_));
+    }
   } else if (OB_FAIL(macro_desc.range_.to_store_range(cols_desc_,
                                                       rowkey_allocator_,
                                                       info.store_range_))) {
     SERVER_LOG(WARN, "fail to get store range", K(ret), K(macro_desc.range_));
-  } else {
+  }
+
+  if (OB_SUCC(ret)) {
     ObDataMacroBlockMeta *macro_meta = macro_desc.macro_meta_;
-    info.data_seq_ = macro_meta->get_logic_id().data_seq_;
+    info.data_seq_ = macro_meta->get_logic_id().data_seq_.macro_data_seq_;
     info.macro_logic_version_ = macro_meta->get_logic_id().logic_version_;
     info.macro_block_index_ = macro_desc.macro_block_id_.block_index();
     info.row_count_ = macro_desc.row_count_;
@@ -269,13 +294,14 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     info.row_store_type_ = static_cast<ObRowStoreType>(macro_desc.row_store_type_);
     ObStoreRowkey &start_key = info.store_range_.get_start_key();
     ObStoreRowkey &end_key = info.store_range_.get_end_key();
+    const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     if (start_key != ObStoreRowkey::MIN_STORE_ROWKEY
         && OB_FAIL(start_key.assign(start_key.get_obj_ptr(),
-            start_key.get_obj_cnt() - OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER))) {
+            start_key.get_obj_cnt() > extra_rowkey_cnt ? start_key.get_obj_cnt() - extra_rowkey_cnt : start_key.get_obj_cnt()))) {
       SERVER_LOG(WARN, "fail to set start key", K(ret), K(start_key));
     } else if (end_key != ObStoreRowkey::MAX_STORE_ROWKEY
         && OB_FAIL(end_key.assign(end_key.get_obj_ptr(),
-            end_key.get_obj_cnt() - OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER))) {
+            end_key.get_obj_cnt() > extra_rowkey_cnt ? end_key.get_obj_cnt() - extra_rowkey_cnt : end_key.get_obj_cnt()))) {
       SERVER_LOG(WARN, "fail to set end key", K(ret), K(end_key));
     }
   }
@@ -393,10 +419,19 @@ int ObAllVirtualTabletSSTableMacroInfo::gen_row(
         //data_checksum
         cur_row_.cells_[i].set_int(macro_info.data_checksum_);
         break;
-      case MACRO_RANGE: {
-        //macro_range
-        if (macro_info.store_range_.to_plain_string(range_buf_, sizeof(range_buf_)) >= 0) {
-          cur_row_.cells_[i].set_varchar(range_buf_);
+      case START_KEY: {
+        if (macro_info.store_range_.get_start_key().to_plain_string(start_key_buf_, sizeof(start_key_buf_)) >= 0) {
+          cur_row_.cells_[i].set_varchar(start_key_buf_);
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          // if error occur, set to null
+          cur_row_.cells_[i].set_null();
+        }
+        break;
+      }
+      case END_KEY: {
+        if (macro_info.store_range_.get_end_key().to_plain_string(end_key_buf_, sizeof(end_key_buf_)) >= 0) {
+          cur_row_.cells_[i].set_varchar(end_key_buf_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         } else {
           // if error occur, set to null
@@ -428,6 +463,10 @@ int ObAllVirtualTabletSSTableMacroInfo::gen_row(
       case ROW_STORE_TYPE:
         //row_store_type
         cur_row_.cells_[i].set_varchar(ObString::make_string(ObStoreFormat::get_row_store_name(static_cast<ObRowStoreType>(macro_info.row_store_type_))));
+        break;
+      case CG_IDX:
+        //cg_idx
+        cur_row_.cells_[i].set_int(table_key.get_column_group_id());
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -579,7 +618,7 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_sstable()
         } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K_(tablet_handle));
-        } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(table_store_iter_))) {
+        } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_sstables(table_store_iter_, true/*unpack co table*/))) {
           SERVER_LOG(WARN, "fail to get all tables", K(ret), K_(tablet_handle), K_(table_store_iter));
         } else if (0 != table_store_iter_.count()) {
           break;
@@ -602,15 +641,25 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_sstable()
       clean_cur_sstable();
     } else if (OB_FAIL(curr_sstable_->get_meta(curr_sstable_meta_handle_))) {
       SERVER_LOG(WARN, "fail to get curr sstable meta handle", K(ret));
-    } else if (OB_FAIL(curr_sstable_->scan_macro_block(
-        curr_range_,
-        tablet_handle_.get_obj()->get_rowkey_read_info(),
-        iter_allocator_,
-        macro_iter_,
-        false,
-        false,
-        true/*need_scan_sec_meta*/))) {
-      SERVER_LOG(WARN, "Fail to scan macro block", K(ret), K(curr_range_));
+    } else {
+      const storage::ObITableReadInfo *index_read_info = nullptr;
+      if (curr_sstable_->is_normal_cg_sstable()) {
+        if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
+          SERVER_LOG(WARN, "failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
+        }
+      } else {
+        index_read_info = &tablet_handle_.get_obj()->get_rowkey_read_info();
+      }
+      if (FAILEDx(curr_sstable_->scan_macro_block(
+          curr_range_,
+          *index_read_info,
+          iter_allocator_,
+          macro_iter_,
+          false,
+          false,
+          true/*need_scan_sec_meta*/))) {
+        SERVER_LOG(WARN, "Fail to scan macro block", K(ret), K(curr_range_));
+      }
     }
   }
   return ret;

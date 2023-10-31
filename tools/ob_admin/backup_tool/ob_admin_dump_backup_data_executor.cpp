@@ -2086,10 +2086,10 @@ int ObAdminDumpBackupDataExecutor::dump_macro_range_index_(const backup::ObBacku
   PrintHelper::print_dump_title("Backup Macro Range Index");
   PrintHelper::print_dump_line("start_key:tablet_id", index.start_key_.tablet_id_);
   PrintHelper::print_dump_line("start_key:logic_version", index.start_key_.logic_version_);
-  PrintHelper::print_dump_line("start_key:data_seq", index.start_key_.data_seq_);
+  PrintHelper::print_dump_line("start_key:data_seq", index.start_key_.data_seq_.macro_data_seq_);
   PrintHelper::print_dump_line("end_key:tablet_id", index.end_key_.tablet_id_);
   PrintHelper::print_dump_line("end_key:logic_version", index.end_key_.logic_version_);
-  PrintHelper::print_dump_line("end_key:data_seq", index.end_key_.data_seq_);
+  PrintHelper::print_dump_line("end_key:data_seq", index.end_key_.data_seq_.macro_data_seq_);
   PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.turn_id_);
@@ -2254,18 +2254,28 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
   PrintHelper::print_dump_title("Backup SSTable Macro Block ID Mapping Meta");
   PrintHelper::print_dump_line("version", mapping_meta.version_);
   PrintHelper::print_dump_line("sstable_count", mapping_meta.sstable_count_);
+  if (OB_UNLIKELY(mapping_meta.sstable_count_ != mapping_meta.id_map_list_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "sstable count must be equal with id mapping", K(ret), K(mapping_meta), K(mapping_meta.id_map_list_.count()));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < mapping_meta.sstable_count_; ++i) {
-    const ObBackupMacroBlockIDMapping &item = mapping_meta.id_map_list_[i];
-    const ObITable::TableKey &table_key = item.table_key_;
-    int64_t num_of_entries = item.id_pair_list_.count();
-    PrintHelper::print_dump_line("table_key", to_cstring(table_key));
-    PrintHelper::print_dump_line("num_of_entries", num_of_entries);
-    for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
-      const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
-      const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
-      const ObBackupPhysicalID &physical_id = pair.physical_id_;
-      PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));
-      PrintHelper::print_dump_line("physical_id", to_cstring(physical_id));
+    if (OB_ISNULL(mapping_meta.id_map_list_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get unexpected null id mapping", K(ret), K(i));
+    } else {
+      const ObBackupMacroBlockIDMapping &item = *mapping_meta.id_map_list_[i];
+      const ObITable::TableKey &table_key = item.table_key_;
+      int64_t num_of_entries = item.id_pair_list_.count();
+      PrintHelper::print_dump_line("table_key", to_cstring(table_key));
+      PrintHelper::print_dump_line("num_of_entries", num_of_entries);
+      for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
+        const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
+        const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
+        const ObBackupPhysicalID &physical_id = pair.physical_id_;
+        PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));
+        PrintHelper::print_dump_line("physical_id", to_cstring(physical_id));
+      }
     }
   }
   PrintHelper::print_end_line();

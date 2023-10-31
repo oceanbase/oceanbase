@@ -134,7 +134,7 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
   while (test_round--) {
     ObSharedBlockWriteInfo write_info;
     ObSharedBlockWriteHandle write_handle;
-    ObSharedBlockReadHandle read_handle;
+    ObSharedBlockReadHandle read_handle(allocator_);
     for (int i = 0; i < 10; ++i) {
       s[i] = '0' + test_round;
     }
@@ -154,6 +154,7 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
     }
 
     read_info.addr_ = write_ctx.addr_;
+    ASSERT_EQ(read_info.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));
     char *buf = nullptr;
@@ -172,11 +173,10 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
   read_info.offset_ = 0;
   read_info.size_ = (2L << 20);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  const int64_t io_timeout_ms =
-      std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+  read_info.buf_ = static_cast<char *>(allocator_.alloc(read_info.size_));
 
   OK(ObBlockManager::async_read_block(read_info, macro_handle));
-  OK(macro_handle.wait(io_timeout_ms));
+  OK(macro_handle.wait());
   OK((ObSSTableMacroBlockChecker::check(macro_handle.get_buffer(),
     macro_handle.get_data_size(), ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL)));
 }
@@ -211,8 +211,9 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_easy_block)
 
   for (int i = 0; i < test_round; ++i) {
     ObSharedBlockReadInfo read_info;
-    ObSharedBlockReadHandle read_handle;
+    ObSharedBlockReadHandle read_handle(allocator_);
     read_info.addr_ = write_ctxs.at(i).addr_;
+    ASSERT_EQ(read_info.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));
     char *buf = nullptr;
@@ -250,6 +251,7 @@ TEST_F(TestSharedBlockRWriter, test_link_write)
   ObSharedBlocksWriteCtx write_ctx;
   ObSharedBlockLinkIter iter;
   OK(write_handle.get_write_ctx(write_ctx));
+  ASSERT_EQ(write_ctx.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
   OK(iter.init(write_ctx.addr_));
   char *buf = nullptr;
   int64_t buf_len = 0;
@@ -296,13 +298,23 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
   ObStorageMetaKey meta_key;
   meta_key.tenant_id_ = tenant_id;
   meta_key.phy_addr_ = write_ctx.addr_;
-  ObStorageMetaCache::ObStorageMetaIOCallback cb(
-      meta_type, meta_key, meta_handle.cache_handle_, &allocator_, fake_tablet);
+  void *callback_buf = nullptr;
+  ObStorageMetaCache::ObStorageMetaIOCallback *cb = nullptr;
+  callback_buf = allocator_.alloc(sizeof(ObStorageMetaCache::ObStorageMetaIOCallback));
+  ASSERT_NE(nullptr, callback_buf);
+  cb = new (callback_buf) ObStorageMetaCache::ObStorageMetaIOCallback;
+  cb->meta_type_ = meta_type;
+  cb->offset_ = meta_key.get_meta_addr().offset();
+  cb->buf_size_ = meta_key.get_meta_addr().size();
+  cb->handle_ = meta_handle.cache_handle_;
+  cb->allocator_ = &allocator_;
+  cb->tablet_= fake_tablet;
+  cb->key_ = meta_key;
   ObSharedBlockReadInfo read_info;
   ObSharedBlockReadHandle read_handle;
   read_info.addr_ = write_ctx.addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_callback_ = &cb;
+  read_info.io_callback_ = cb;
   OK(rwriter.async_read(read_info, read_handle));
   OK(read_handle.wait());
   // test the buf of read handle
@@ -361,13 +373,23 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
   ObStorageMetaKey meta_key;
   meta_key.tenant_id_ = tenant_id;
   meta_key.phy_addr_ = write_ctxs[test_round].addr_;
-  ObStorageMetaCache::ObStorageMetaIOCallback cb(
-      meta_type, meta_key, meta_handle.cache_handle_, &allocator_, fake_tablet);
+  void *callback_buf = nullptr;
+  ObStorageMetaCache::ObStorageMetaIOCallback *cb = nullptr;
+  callback_buf = allocator_.alloc(sizeof(ObStorageMetaCache::ObStorageMetaIOCallback));
+  ASSERT_NE(nullptr, callback_buf);
+  cb = new (callback_buf) ObStorageMetaCache::ObStorageMetaIOCallback;
+  cb->meta_type_ = meta_type;
+  cb->offset_ = meta_key.get_meta_addr().offset();
+  cb->buf_size_ = meta_key.get_meta_addr().size();
+  cb->handle_ = meta_handle.cache_handle_;
+  cb->allocator_ = &allocator_;
+  cb->tablet_= fake_tablet;
+  cb->key_ = meta_key;
   ObSharedBlockReadInfo read_info;
   ObSharedBlockReadHandle read_handle;
   read_info.addr_ = write_ctxs[test_round].addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_callback_ = &cb;
+  read_info.io_callback_ = cb;
   OK(rwriter.async_read(read_info, read_handle));
   OK(read_handle.wait());
   // test the buf of read handle
@@ -416,7 +438,7 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_switch_block)
 
   for (int i = 0; i < write_ctxs.count(); ++i) {
     ObSharedBlockReadInfo read_info;
-    ObSharedBlockReadHandle read_handle;
+    ObSharedBlockReadHandle read_handle(allocator_);
     read_info.addr_ = write_ctxs.at(i).addr_;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));

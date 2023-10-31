@@ -165,8 +165,6 @@ void TestSSTableRowMultiGetter::test_one_case(
       ASSERT_TRUE(kv_prow->row_flag_.is_not_exist());
     } else {
       ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seeds.at(i), check_row_));
-      ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(prow))->prepare_new_row(schema_cols_));
-      ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(kv_prow))->prepare_new_row(schema_cols_));
       ASSERT_TRUE(check_row_ == *prow);
       ASSERT_TRUE(check_row_ == *kv_prow);
     }
@@ -190,8 +188,6 @@ void TestSSTableRowMultiGetter::test_one_case(
         ASSERT_TRUE(prow->row_flag_.is_not_exist());
         ASSERT_TRUE(kv_prow->row_flag_.is_not_exist());
       } else {
-        ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(prow))->prepare_new_row(schema_cols_));
-        ASSERT_EQ(OB_SUCCESS, (const_cast<ObDatumRow *>(kv_prow))->prepare_new_row(schema_cols_));
         ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seeds.at(i), check_row_));
         ASSERT_TRUE(check_row_ == *prow);
         ASSERT_TRUE(check_row_ == *kv_prow);

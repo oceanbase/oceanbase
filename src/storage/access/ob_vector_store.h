@@ -30,6 +30,7 @@ class ObIMicroBlockReader;
 
 namespace storage
 {
+class ObGroupByCell;
 class ObVectorStore : public ObBlockBatchedRowStore {
 public:
   ObVectorStore(
@@ -45,32 +46,59 @@ public:
       blocksstable::ObIMicroBlockReader *reader,
       int64_t &begin_index,
       const int64_t end_index,
-      const common::ObBitmap *bitmap = nullptr) override;
+      const ObFilterResult &res) override;
   virtual int fill_row(blocksstable::ObDatumRow &row) override;
-  void set_end()
+  virtual int fill_rows(const int64_t group_idx, const int64_t row_count) override;
+  virtual void set_end() override
   {
     if (count_ > 0) {
       iter_end_flag_ = IterEndState::ITER_END;
       eval_ctx_.set_batch_idx(0);
     }
   }
-  int64_t get_row_count() { return count_; }
+  OB_INLINE int64_t get_row_count() { return count_; }
+  OB_INLINE ObGroupByCell *get_group_by_cell() { return group_by_cell_; }
   virtual int reuse_capacity(const int64_t capacity) override;
   virtual bool is_empty() const override final { return 0 == count_; }
   DECLARE_TO_STRING;
 private:
   void fill_group_idx(const int64_t group_idx);
+  int fill_output_rows(
+      const int64_t group_idx,
+      blocksstable::ObIMicroBlockReader *reader,
+      int64_t &begin_index,
+      const int64_t end_index,
+      const ObFilterResult &res);
+  int fill_group_by_rows(
+      const int64_t group_idx,
+      blocksstable::ObIMicroBlockReader *reader,
+      int64_t &begin_index,
+      const int64_t end_index,
+      const ObFilterResult &res);
+  int check_can_group_by(
+      blocksstable::ObIMicroBlockReader *reader,
+      int64_t &begin_index,
+      const int64_t end_index,
+      const ObFilterResult &res,
+      bool &can_group_by);
+
+  int do_group_by(
+      const int64_t group_idx,
+      blocksstable::ObIMicroBlockReader *reader,
+      int64_t begin_index,
+      const int64_t end_index,
+      const ObFilterResult &res);
 
   int64_t count_;
   // exprs needed fill in
   sql::ExprFixedArray exprs_;
   common::ObFixedArray<int32_t, common::ObIAllocator> cols_projector_;
-  common::ObFixedArray<common::ObDatum *, common::ObIAllocator> datums_;
+  common::ObFixedArray<blocksstable::ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
   common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> col_params_;
-  common::ObFixedArray<ObObjDatumMapType, common::ObIAllocator> map_types_;
   blocksstable::ObDatumRow row_buf_;
   sql::ObExpr *group_idx_expr_;
   blocksstable::ObDatumRow default_row_;
+  ObGroupByCell *group_by_cell_;
 };
 
 }

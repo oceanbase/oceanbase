@@ -67,6 +67,7 @@ int string_collation_check(const bool is_strict_mode,
 // 将datum中的值转换为ob_time结构
 int ob_datum_to_ob_time_with_date(const common::ObDatum &datum,
                                   const common::ObObjType type,
+                                  const ObScale scale,
                                   const common::ObTimeZoneInfo* tz_info,
                                   common::ObTime& ob_time,
                                   const int64_t cur_ts_value,
@@ -75,6 +76,7 @@ int ob_datum_to_ob_time_with_date(const common::ObDatum &datum,
                                   const bool has_lob_header);
 int ob_datum_to_ob_time_without_date(const common::ObDatum &datum,
                                     const common::ObObjType type,
+                                    const ObScale scale,
                                     const common::ObTimeZoneInfo *tz_info,
                                     common::ObTime &ob_time,
                                     const bool has_lob_header);
@@ -91,6 +93,11 @@ int padding_char_for_cast(int64_t padding_cnt,
                           common::ObIAllocator &alloc, 
                           common::ObString &padding_res);
 
+int check_decimalint_accuracy(const ObCastMode cast_mode,
+                              const ObDecimalInt *res_decint, const int32_t int_bytes,
+                              const ObPrecision precision, const ObScale scale,
+                              ObDecimalIntBuilder &res_val, int &warning);
+
 // copied from ob_obj_cast.cpp，函数逻辑没有修改，只是将输入参数从ObObj变为ObDatum
 class ObDatumHexUtils
 {
@@ -101,10 +108,11 @@ static int hextoraw_string(const ObExpr &expr,
                     ObDatum &res_datum,
                     bool &has_set_res);
 static int hextoraw(const ObExpr &expr, const common::ObDatum &in,
-                    const common::ObObjType &in_type,
-                    const common::ObCollationType &in_cs_type,
+                    const ObDatumMeta &in_datum_meta,
                     ObEvalCtx &ctx, ObDatum &res);
-static int get_uint(const common::ObObjType &in_type, const common::ObDatum &in,
+static int get_uint(const common::ObObjType &in_type,
+                    const int8_t scale,
+                    const common::ObDatum &in,
                     common::ObIAllocator &alloc, common::number::ObNumber &out);
 static int uint_to_raw(const common::number::ObNumber &uint_num, const ObExpr &expr,
                            ObEvalCtx &ctx, ObDatum &res_datum);
@@ -167,6 +175,7 @@ public:
   //    EXPR_CAST_OBJ_V2(obj_type, obj, res_obj)
   static int cast_obj(ObEvalCtx &ctx, common::ObIAllocator &alloc,
                       const common::ObObjType &dst_type,
+                      common::ObAccuracy &dst_acc,
                       const common::ObCollationType &dst_cs_type,
                       const common::ObObj &src_obj,
                       common::ObObj &dst_obj);
@@ -188,6 +197,45 @@ public:
     }
     return bret;
   }
+
+  inline static bool need_scale_decimalint(const ObScale in_scale,
+                                           const ObPrecision in_precision,
+                                           const ObScale out_scale,
+                                           const ObPrecision out_precision) {
+    bool ret = false;
+    if (in_scale != out_scale) {
+      ret = true;
+    } else if (get_decimalint_type(in_precision) !=
+               get_decimalint_type(out_precision)) {
+      ret = true;
+    }
+    return ret;
+  }
+
+  inline static bool need_scale_decimalint(const ObScale in_scale,
+                                           const int32_t in_bytes,
+                                           const ObScale out_scale,
+                                           const int32_t out_bytes) {
+    bool ret = false;
+    if (in_scale != out_scale) {
+      ret = true;
+    } else if (in_bytes != out_bytes) {
+      ret = true;
+    }
+    return ret;
+  }
+
+  static int common_scale_decimalint(const ObDecimalInt *decint, const int32_t int_bytes,
+                                     const ObScale in_scale, const ObScale out_scale,
+                                     const ObPrecision out_prec,
+                                     const ObCastMode cast_mode, ObDecimalIntBuilder &val);
+
+  static int align_decint_precision_unsafe(const ObDecimalInt *decint, const int32_t int_bytes,
+                                           const int32_t expected_int_bytes,
+                                           ObDecimalIntBuilder &res);
+  static void get_decint_cast(ObObjTypeClass in_tc, ObPrecision in_prec, ObScale in_scale,
+                              ObPrecision out_prec, ObScale out_scale, bool is_explicit,
+                              ObExpr::EvalBatchFunc &batch_cast_func, ObExpr::EvalFunc &cast_func);
 };
 
 class ObDatumCaster {
@@ -236,6 +284,29 @@ private:
   ObEvalCtx *eval_ctx_;
   ObExpr *cast_expr_;
   ObExpr *extra_cast_expr_;
+};
+
+struct ObBatchCast
+{
+  using batch_func_ = int (*)(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                              const int64_t batch_size);
+  static batch_func_ get_explicit_cast_func(const ObObjTypeClass tc1, const ObObjTypeClass tc2);
+
+  static batch_func_ get_implicit_cast_func(const ObObjTypeClass tc1, const ObObjTypeClass tc2);
+
+  template <ObObjTypeClass in_tc, ObObjTypeClass out_tc>
+  static int explicit_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                                 const int64_t batch_size);
+
+  template <ObObjTypeClass in_tc, ObObjTypeClass out_tc>
+  static int implicit_batch_cast(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                                 const int64_t batch_size);
+
+private:
+  template<ObObjTypeClass tc1, ObObjTypeClass tc2>
+  friend struct init_batch_func;
+  static batch_func_ implicit_batch_funcs_[ObMaxTC][ObMaxTC];
+  static batch_func_ explicit_batch_funcs_[ObMaxTC][ObMaxTC];
 };
 
 } // namespace sql

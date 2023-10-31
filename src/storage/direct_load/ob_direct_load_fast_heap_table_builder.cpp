@@ -114,8 +114,8 @@ int ObDirectLoadFastHeapTableBuilder::collect_obj(const ObDatumRow &datum_row)
   for (int64_t i = 0; OB_SUCC(ret) && i < param_.table_data_desc_.column_count_; i++) {
     const ObStorageDatum &datum =
       datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
-    const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
     const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i + 1).get_cmp_func();
+    const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
     ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
     bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
     if (col_stat != nullptr && is_valid) {

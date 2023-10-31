@@ -42,7 +42,7 @@ int ObTabletObjLoadHelper::read_from_addr(
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
 
-    ObSharedBlockReadHandle io_handle;
+    ObSharedBlockReadHandle io_handle(allocator);
     if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, io_handle))) {
       LOG_WARN("fail to async read", K(ret), K(read_info));
     } else if (OB_FAIL(io_handle.wait())) {

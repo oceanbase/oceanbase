@@ -31,9 +31,10 @@ static int make_random_mapping_meta(ObBackupMacroBlockIDMappingsMeta &mapping_me
   int ret = OB_SUCCESS;
   const int64_t sstable_count = random(1, MAX_SSTABLE_CNT_IN_STORAGE);
   mapping_meta.version_ = ObBackupMacroBlockIDMappingsMeta::MAPPING_META_VERSION_V1;
-  mapping_meta.sstable_count_ = sstable_count;
+  ret = mapping_meta.prepare_id_mappings(sstable_count);
+  EXPECT_EQ(OB_SUCCESS, ret);
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_count; ++i) {
-    ObBackupMacroBlockIDMapping &mapping = mapping_meta.id_map_list_[i];
+    ObBackupMacroBlockIDMapping &mapping = *mapping_meta.id_map_list_[i];
     make_random_table_key(mapping.table_key_);
     const int64_t pair_count = random(1, 10000);
     for (int64_t j = 0; OB_SUCC(ret) && j < pair_count; ++j) {
@@ -53,8 +54,8 @@ static bool meta_is_equal(const ObBackupMacroBlockIDMappingsMeta &lhs, const ObB
     bret = false;
   } else {
     for (int64_t i = 0; i < lhs.sstable_count_; ++i) {
-      const ObBackupMacroBlockIDMapping &lhs_map = lhs.id_map_list_[i];
-      const ObBackupMacroBlockIDMapping &rhs_map = rhs.id_map_list_[i];
+      const ObBackupMacroBlockIDMapping &lhs_map = *lhs.id_map_list_[i];
+      const ObBackupMacroBlockIDMapping &rhs_map = *rhs.id_map_list_[i];
       if (lhs_map.table_key_ != rhs_map.table_key_) {
         bret = false;
         break;

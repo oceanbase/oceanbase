@@ -102,9 +102,14 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
     // to avoid overflow, we have to limit the max excepction count
     const int64_t max_exc_cnt = std::min(MAX_EXC_CNT, rows_->count() * EXC_THRESHOLD_PCT / 100 + 1);
     bool has_lob_header = is_lob_storage(column_type_.get_type());
+    ObPrecision precision = PRECISION_UNKNOWN_YET;
+    if (column_type_.is_decimal_int()) {
+      precision = column_type_.get_stored_precision();
+      OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
+    }
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
         column_type_.get_type(), column_type_.get_collation_type(), column_type_.get_scale(),
-        lib::is_oracle_mode(), has_lob_header);
+        lib::is_oracle_mode(), has_lob_header, precision);
     ObCmpFunc cmp_func;
     cmp_func.cmp_func_ = lib::is_oracle_mode()
         ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
@@ -149,6 +154,7 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
             }
             break;
           }
+          case ObDecimalIntSC:
           case ObStringSC:
           case ObTextSC:
           case ObJsonSC:
@@ -213,6 +219,13 @@ int64_t ObColumnEqualEncoder::calc_size() const
   return size;
 }
 
+int ObColumnEqualEncoder::get_encoding_store_meta_need_space(int64_t &need_size) const
+{
+  int ret = OB_SUCCESS;
+  need_size = calc_size() + sizeof(uint64_t);
+  return ret;
+}
+
 int ObColumnEqualEncoder::store_meta(ObBufferWriter &writer)
 {
   int ret = OB_SUCCESS;
@@ -254,6 +267,7 @@ int ObColumnEqualEncoder::store_meta(ObBufferWriter &writer)
             }
             break;
           }
+          case ObDecimalIntSC:
           case ObStringSC:
           case ObTextSC:
           case ObJsonSC:

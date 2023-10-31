@@ -277,10 +277,10 @@ int ObExprLike::calc_result_type3(ObExprResType &type,
     type.set_calc_type(ObVarcharType);
     type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
-    if (!type1.is_clob()) {
+    if (!ob_is_text_tc(type1.get_type())) {
       type1.set_calc_type(ObVarcharType);
     }
-    if (!type2.is_clob()) {
+    if (!ob_is_text_tc(type2.get_type())) {
       type2.set_calc_type(ObVarcharType);
     }
     type3.set_calc_type(ObVarcharType);
@@ -560,12 +560,12 @@ int ObExprLike::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("child is null", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]),
                               K(rt_expr.args_[2]));
   } else if (OB_UNLIKELY(!((ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
-                            || ObLongTextType == rt_expr.args_[0]->datum_meta_.type_
+                            || ob_is_text_tc(rt_expr.args_[0]->datum_meta_.type_)
                             || ObNullType == rt_expr.args_[0]->datum_meta_.type_)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[0]->datum_meta_));
   } else if (OB_UNLIKELY(!(ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)
-                           || ObLongTextType == rt_expr.args_[1]->datum_meta_.type_
+                           || ob_is_text_tc(rt_expr.args_[1]->datum_meta_.type_)
                            || ObNullType == rt_expr.args_[1]->datum_meta_.type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[1]->datum_meta_));

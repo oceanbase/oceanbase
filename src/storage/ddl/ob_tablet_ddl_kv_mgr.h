@@ -21,6 +21,7 @@
 #include "share/ob_ls_id.h"
 #include "storage/ob_i_table.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {

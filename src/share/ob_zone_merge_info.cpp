@@ -18,6 +18,9 @@
 #include "share/ob_storage_format.h"
 #include "share/config/ob_server_config.h"
 #include "common/ob_zone_type.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_table_param.h"
+#include "share/schema/ob_column_schema.h"
 
 namespace oceanbase
 {
@@ -142,7 +145,7 @@ ObMergeInfoItem &ObMergeInfoItem::operator =(const ObMergeInfoItem &item)
   INIT_SCN_ITEM(frozen_scn, SCN::base_scn(), false)
 
 ObZoneMergeInfo::ObZoneMergeInfo()
-  : tenant_id_(OB_INVALID_TENANT_ID), 
+  : tenant_id_(OB_INVALID_TENANT_ID),
     zone_(),
     CONSTRUCT_ZONE_MERGE_INFO(),
     start_merge_fail_times_(0)
@@ -170,7 +173,7 @@ int ObZoneMergeInfo::assign(const ObZoneMergeInfo &other)
     }
   }
   return ret;
-} 
+}
 
 int ObZoneMergeInfo::assign_value(
     const ObZoneMergeInfo &other)
@@ -194,38 +197,12 @@ int ObZoneMergeInfo::assign_value(
     }
   }
   return ret;
-} 
+}
 
 void ObZoneMergeInfo::reset()
 {
   this->~ObZoneMergeInfo();
   new(this) ObZoneMergeInfo();
-}
-
-const char *ObZoneMergeInfo::get_merge_status_str(const MergeStatus status)
-{
-  const char *str = "UNKNOWN";
-  const char *str_array[] = { "IDLE", "MERGING", "CHECKSUM" };
-  STATIC_ASSERT(MERGE_STATUS_MAX == ARRAYSIZEOF(str_array), "status count mismatch");
-  if (status < 0 || status >= MERGE_STATUS_MAX) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid merge status", K(status));
-  } else {
-    str = str_array[status];
-  }
-  return str;
-}
-
-ObZoneMergeInfo::MergeStatus ObZoneMergeInfo::get_merge_status(const char* merge_status_str)
-{
-  ObZoneMergeInfo::MergeStatus status = MERGE_STATUS_MAX;
-  const char *str_array[] = { "IDLE", "MERGING", "CHECKSUM" };
-  STATIC_ASSERT(MERGE_STATUS_MAX == ARRAYSIZEOF(str_array), "status count mismatch");
-  for (int64_t i = 0; i < ARRAYSIZEOF(str_array); i++) {
-    if (0 == STRCMP(str_array[i], merge_status_str)) {
-      status = static_cast<MergeStatus>(i);
-    }
-  }
-  return status;
 }
 
 bool ObZoneMergeInfo::is_valid() const
@@ -240,11 +217,6 @@ bool ObZoneMergeInfo::is_valid() const
     is_valid = false;
   }
   return is_valid;
-}
-
-bool ObZoneMergeInfo::is_in_merge() const
-{
-  return is_merging_.get_value();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -279,8 +251,7 @@ bool ObGlobalMergeInfo::is_last_merge_complete() const
 
 bool ObGlobalMergeInfo::is_in_merge() const
 {
-  return (last_merged_scn() != global_broadcast_scn())
-         && (0 == suspend_merging_.get_value());
+  return last_merged_scn() != global_broadcast_scn();
 }
 
 bool ObGlobalMergeInfo::is_merge_error() const
@@ -347,27 +318,6 @@ int ObGlobalMergeInfo::assign_value(
     }
   }
   return ret;
-}
-///////////////////////////////////////////////////////////////////////////////
-
-int64_t ObMergeProgress::get_merged_tablet_percentage() const
-{
-  return first_param_percnetage(merged_tablet_cnt_, unmerged_tablet_cnt_);
-}
-
-int64_t ObMergeProgress::get_merged_data_percentage() const
-{
-  return first_param_percnetage(merged_data_size_, unmerged_data_size_);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-ObTableCompactionInfo &ObTableCompactionInfo::operator=(const ObTableCompactionInfo &other)
-{
-  table_id_ = other.table_id_;
-  tablet_cnt_ = other.tablet_cnt_;
-  status_ = other.status_;
-  return *this;
 }
 
 } // end namespace share

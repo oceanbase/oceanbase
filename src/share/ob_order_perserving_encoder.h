@@ -116,6 +116,10 @@ public:
   static int encode_from_timestamp(ObOTimestampData val, unsigned char *to, int64_t &to_len);
 
   static int encode_from_interval_ds(ObIntervalDSValue val, unsigned char *to, int64_t &to_len);
+
+  static int encode_from_decint(const ObDecimalInt *decint, int32_t int_bytes, unsigned char *to,
+                                int64_t &to_len);
+
   static int encode_tails(unsigned char *to, int64_t max_buf_len, int64_t &to_len, bool is_mem, common::ObCollationType cs,  bool with_empty_str);
   inline static bool can_encode_sortkey(common::ObObjType type, common::ObCollationType cs)
   {
@@ -130,7 +134,7 @@ public:
            || type == ObNumberFloatType || type == ObTimestampTZType || type == ObTimestampLTZType
            || type == ObTimestampNanoType || type == ObIntervalDSType || type == ObVarcharType
            || type == ObNVarchar2Type || type == ObRawType || type == ObNCharType
-           || type == ObCharType)
+           || type == ObCharType || type == ObDecimalIntType)
            && (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
               || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_UTF8MB4_GENERAL_CI
               || cs == CS_TYPE_GBK_CHINESE_CI
@@ -152,6 +156,8 @@ private:
                                                int64_t len,
                                                unsigned char *to,
                                                int64_t &to_len);
+  template<typename T>
+  static int encode_from_decint(const T &decint, unsigned char *to, int64_t &to_len);
 };
 
 // allocator

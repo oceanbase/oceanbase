@@ -38,7 +38,6 @@ public:
   OB_INLINE common::ObIArray<blocksstable::MacroBlockId> &get_macro_block_list() { return macro_block_list_; }
   TO_STRING_KV(K(macro_block_list_.count()), K_(use_old_macro_block_count));
 public:
-  common::ObArenaAllocator allocator_;
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_READ_BLOCK_NUM> macro_block_list_;
   int64_t use_old_macro_block_count_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlocksWriteCtx);

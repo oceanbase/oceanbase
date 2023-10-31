@@ -575,11 +575,39 @@ DEFINE_GET_SERIALIZE_SIZE(ObColDesc)
   return len;
 }
 
+/************************************* ObColExtend **********************************/
+void ObColExtend::reset()
+{
+  skip_index_attr_.reset();
+}
+
+OB_DEF_SERIALIZE(ObColExtend)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, skip_index_attr_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObColExtend)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, skip_index_attr_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObColExtend)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, skip_index_attr_);
+  return len;
+}
+
 /************************************* ObTableParam **********************************/
 ObTableParam::ObTableParam(ObIAllocator &allocator)
   : allocator_(allocator),
     output_projector_(allocator),
     aggregate_projector_(allocator),
+    group_by_projector_(allocator),
     output_sel_mask_(allocator),
     pad_col_projector_(allocator),
     main_read_info_(),
@@ -602,6 +630,7 @@ void ObTableParam::reset()
   table_id_ = OB_INVALID_ID;
   output_projector_.reset();
   aggregate_projector_.reset();
+  group_by_projector_.reset();
   output_sel_mask_.reset();
   pad_col_projector_.reset();
   has_virtual_column_ = false;
@@ -629,7 +658,8 @@ OB_DEF_SERIALIZE(ObTableParam)
               rowid_projector_,
               main_read_info_,
               enable_lob_locator_v2_,
-              is_spatial_index_);
+              is_spatial_index_,
+              group_by_projector_);
   return ret;
 }
 
@@ -657,6 +687,11 @@ OB_DEF_DESERIALIZE(ObTableParam)
                 enable_lob_locator_v2_,
                 is_spatial_index_);
   }
+  if (OB_SUCC(ret) && pos < data_len) {
+    if (OB_FAIL(group_by_projector_.deserialize(buf, data_len, pos))) {
+      LOG_WARN("Fail to deserialize group by projector", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -677,7 +712,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               rowid_projector_,
               main_read_info_,
               enable_lob_locator_v2_,
-              is_spatial_index_);
+              is_spatial_index_,
+              group_by_projector_);
   return len;
 }
 
@@ -763,30 +799,40 @@ int ObTableParam::construct_columns_and_projector(
     const ObTableSchema &table_schema,
     const common::ObIArray<uint64_t> & output_column_ids,
     const common::ObIArray<uint64_t> *tsc_out_cols,
-    const bool force_mysql_mode)
+    const bool force_mysql_mode,
+    const sql::ObStoragePushdownFlag &pd_pushdown_flag)
 {
   int ret = OB_SUCCESS;
   static const int64_t COMMON_COLUMN_NUM = 16;
   ObSEArray<ObColDesc, COMMON_COLUMN_NUM> tmp_access_cols_desc;
+  ObSEArray<ObColExtend, COMMON_COLUMN_NUM> tmp_access_cols_extend;
   ObSEArray<ObColumnParam *, COMMON_COLUMN_NUM> tmp_access_cols_param;
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_access_cols_index;
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_output_projector;
   ObSEArray<bool, COMMON_COLUMN_NUM> tmp_output_sel_mask;
+  ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_cg_idxs;
   share::schema::ObColDesc tmp_col_desc;
-
-  // rowkey columns front, other columns behind
-  ObSEArray<ObColDesc, COMMON_COLUMN_NUM> column_ids_no_virtual;
-  ObSEArray<ObColDesc, COMMON_COLUMN_NUM> column_ids;
-  if (OB_FAIL(table_schema.get_column_ids(column_ids_no_virtual, true))) {
-    LOG_WARN("get column ids no virtual failed", K(ret));
-  } else if (OB_FAIL(table_schema.get_column_ids(column_ids, false))) {
-    LOG_WARN("get column ids failed", K(ret));
+  share::schema::ObColExtend tmp_col_extend;
+  int32_t cg_idx = 0;
+  bool has_all_column_group = false;
+  bool is_cs = !table_schema.is_row_store();
+  int64_t rowkey_count = 0;
+  if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+    LOG_WARN("Failed to check if has all column group", K(ret));
   }
 
-  // column array
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  int64_t rowkey_count = rowkey_info.get_size();
   if (OB_SUCC(ret)) {
+    // column array
+    const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+    rowkey_count = rowkey_info.get_size();
+    // rowkey columns front, other columns behind
+    ObSEArray<ObColDesc, COMMON_COLUMN_NUM> column_ids_no_virtual;
+    ObSEArray<ObColDesc, COMMON_COLUMN_NUM> column_ids;
+    if (OB_FAIL(table_schema.get_column_ids(column_ids_no_virtual, true))) {
+      LOG_WARN("get column ids no virtual failed", K(ret));
+    } else if (OB_FAIL(table_schema.get_column_ids(column_ids, false))) {
+      LOG_WARN("get column ids failed", K(ret));
+    }
     //add rowkey columns
     for (int32_t i = 0; OB_SUCC(ret) && i < rowkey_count; ++i) {
       const ObRowkeyColumn *rowkey_column = NULL;
@@ -810,17 +856,27 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_id_ = static_cast<uint32_t>(column->get_column_id());
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
+        tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
         if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
           tmp_col_desc.col_type_.set_has_lob_header();
         }
         if (OB_FAIL(tmp_access_cols_desc.push_back(tmp_col_desc))) {
           LOG_WARN("fail to push_back tmp_col_desc", K(ret));
+        } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
+          LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
+        } else if (is_cs) {
+          if (OB_FAIL(table_schema.get_column_group_index(*column, cg_idx))) {
+            LOG_WARN("Fail to get column group index", K(ret));
+          } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
+            LOG_WARN("Fail to push back cg idx", K(ret));
+          }
         }
       }
     }
 
     //add other columns
     for (int32_t i = 0; OB_SUCC(ret) && i < output_column_ids.count(); ++i) {
+      tmp_col_extend.reset();
       const uint64_t column_id = output_column_ids.at(i);
       const ObColumnSchemaV2 *column_schema = NULL;
       ObColumnParam *column = NULL;
@@ -862,6 +918,7 @@ int ObTableParam::construct_columns_and_projector(
             }
           }
           col_index = idx;
+          tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
         }
       }
 
@@ -879,6 +936,14 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("fail to push_back tmp_access_cols_desc", K(ret));
         } else if (OB_FAIL(tmp_access_cols_index.push_back(col_index))) {
           LOG_WARN("fail to push_back tmp_access_cols_index", K(ret));
+        } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
+          LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
+        } else if (is_cs) {
+          if (OB_FAIL(table_schema.get_column_group_index(*column, cg_idx))) {
+            LOG_WARN("Fail to get column group index", K(ret));
+          } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
+            LOG_WARN("Fail to push back cg idx", K(ret));
+          }
         }
       }
     }
@@ -947,7 +1012,10 @@ int ObTableParam::construct_columns_and_projector(
                                      force_mysql_mode ? false : lib::is_oracle_mode(),
                                      tmp_access_cols_desc,
                                      &tmp_access_cols_index,
-                                     &tmp_access_cols_param))) {
+                                     &tmp_access_cols_param,
+                                     is_cs ? &tmp_cg_idxs : nullptr,
+                                     &tmp_access_cols_extend,
+                                     has_all_column_group))) {
       LOG_WARN("fail to init main read info", K(ret));
     } else if (OB_FAIL(output_projector_.assign(tmp_output_projector))) {
       LOG_WARN("assign failed", K(ret));
@@ -1017,6 +1085,7 @@ int ObTableParam::construct_pad_projector(
 
 int ObTableParam::convert(const ObTableSchema &table_schema,
                           const ObIArray<uint64_t> &access_column_ids,
+                          const sql::ObStoragePushdownFlag &pd_pushdown_flag,
                           const common::ObIArray<uint64_t> *tsc_out_cols,
                           const bool force_mysql_mode)
 {
@@ -1025,15 +1094,19 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
     // because eventually, we use primary key to do table scan
   table_id_ = table_schema.get_table_id();
   bool is_oracle_mode = false;
-  if (OB_FAIL(construct_columns_and_projector(table_schema, access_column_ids, tsc_out_cols, force_mysql_mode))) {
+  const common::ObIArray<ObColumnParam *> *cols_param = nullptr;
+  if (OB_FAIL(construct_columns_and_projector(table_schema, access_column_ids, tsc_out_cols, force_mysql_mode, pd_pushdown_flag))) {
     LOG_WARN("construct failed", K(ret));
-  } else if (OB_FAIL(construct_pad_projector(*main_read_info_.get_columns(), output_projector_, pad_col_projector_))) {
+  } else if (OB_ISNULL(cols_param = main_read_info_.get_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cols param array is unexpected null ", K(ret), K(main_read_info_));
+  } else if (OB_FAIL(construct_pad_projector(*cols_param, output_projector_, pad_col_projector_))) {
     LOG_WARN("Fail to construct pad projector, ", K(ret));
   } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
   } else if ((enable_lob_locator_v2_ || is_oracle_mode)
              && OB_FAIL(construct_lob_locator_param(table_schema,
-                                                    *main_read_info_.get_columns(),
+                                                    *cols_param,
                                                     output_projector_,
                                                     use_lob_locator_,
                                                     rowid_version_,
@@ -1047,43 +1120,75 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
   return ret;
 }
 
-int ObTableParam::convert_agg(const ObIArray<uint64_t> &output_column_ids,
-                              const common::ObIArray<uint64_t> &aggregate_column_ids)
+int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
+                                   const ObIArray<uint64_t> &output_column_ids,
+                                   const common::ObIArray<uint64_t> &aggregate_column_ids,
+                                   const common::ObIArray<uint64_t> &group_by_column_ids,
+                                   const sql::ObStoragePushdownFlag &pd_pushdown_flag)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(aggregate_projector_.init(aggregate_column_ids.count()))) {
-    LOG_WARN("failed to init aggregate projector", K(ret), K(aggregate_column_ids.count()));
-  } else {
+  if (aggregate_column_ids.count() > 0) {
+     if (OB_FAIL(aggregate_projector_.init(aggregate_column_ids.count()))) {
+      LOG_WARN("failed to init aggregate projector", K(ret), K(aggregate_column_ids.count()));
+    }
     for (int32_t i = 0; OB_SUCC(ret) && i < aggregate_column_ids.count(); ++i) {
-      int32_t idx = OB_INVALID_INDEX;
       if (OB_COUNT_AGG_PD_COLUMN_ID == aggregate_column_ids.at(i)) {
         // count(*/CONST)
         if (OB_FAIL(aggregate_projector_.push_back(OB_COUNT_AGG_PD_COLUMN_ID))) {
           LOG_WARN("failed to push aggregate projector", K(ret), K(i));
         }
       } else {
-        for (int32_t j = 0; OB_SUCC(ret) && j < output_column_ids.count(); ++j) {
+        int32_t j = 0;
+        for ( ; OB_SUCC(ret) && j < output_column_ids.count(); ++j) {
           if (aggregate_column_ids.at(i) == output_column_ids.at(j)) {
             if (j > output_projector_.count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected index", K(ret), K(j), K(output_column_ids.count()), K(output_projector_.count()));
             } else {
-              idx = output_projector_.at(j);
+              break;
             }
-            break;
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_INVALID_INDEX == idx) {
+          if (OB_INVALID_INDEX == output_projector_.at(j)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected index", K(ret), K(aggregate_column_ids), K(aggregate_column_ids), K(i));
-          } else if (OB_FAIL(aggregate_projector_.push_back(idx))) {
-            LOG_WARN("failed to push aggregate projector", K(ret), K(i), K(idx));
+            LOG_WARN("unexpected index", K(ret), K(output_column_ids), K(aggregate_column_ids), K(i));
+          } else if (OB_FAIL(aggregate_projector_.push_back(output_projector_.at(j)))) {
+            LOG_WARN("failed to push aggregate projector", K(ret), K(i));
           }
         }
       }
     }
   }
+  if (OB_SUCC(ret) && group_by_column_ids.count() > 0) {
+    if (OB_FAIL(group_by_projector_.init(group_by_column_ids.count()))) {
+      LOG_WARN("failed to init group by projector", K(ret), K(group_by_column_ids.count()));
+    }
+    for (int32_t i = 0; OB_SUCC(ret) && i < group_by_column_ids.count(); ++i) {
+      bool found = false;
+      for (int32_t j = 0; OB_SUCC(ret) && j < output_column_ids.count() && !found; ++j) {
+        if (group_by_column_ids.at(i) == output_column_ids.at(j)) {
+          if (j > output_projector_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected index", K(ret), K(j), K(output_column_ids.count()), K(output_projector_.count()));
+          } else if (OB_INVALID_INDEX == output_projector_.at(j)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected index", K(ret), K(output_column_ids), K(output_projector_), K(i));
+          } else if (OB_FAIL(group_by_projector_.push_back(output_projector_.at(j)))) {
+            LOG_WARN("failed to push aggregate projector", K(ret), K(i));
+          } else {
+            found = true;
+          }
+        }
+      }
+      if (OB_UNLIKELY(!found)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected group by column id", K(ret), K(i), K(output_column_ids), K(group_by_column_ids));
+      }
+    }
+  }
+  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(output_column_ids), K(aggregate_column_ids), K(group_by_column_ids),
+      K(output_projector_), K(aggregate_projector_), K(group_by_projector_));
   return ret;
 }
 
@@ -1201,8 +1306,13 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2 &column_
                                                  ObColumnParam &column_param)
 {
   int ret = OB_SUCCESS;
+  ObObjMeta meta_type = column_schema.get_meta_type();
+  if (meta_type.is_decimal_int()) {
+    meta_type.set_stored_precision(column_schema.get_accuracy().get_precision());
+    meta_type.set_scale(column_schema.get_accuracy().get_scale());
+  }
   column_param.set_column_id(column_schema.get_column_id());
-  column_param.set_meta_type(column_schema.get_meta_type());
+  column_param.set_meta_type(meta_type);
   column_param.set_column_order(column_schema.get_order_in_rowkey());
   column_param.set_accuracy(column_schema.get_accuracy());
   column_param.set_nullable_for_write(!column_schema.is_not_null_for_write());
@@ -1245,6 +1355,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
   J_KV(K_(table_id),
        K_(output_projector),
        K_(aggregate_projector),
+       K_(group_by_projector),
        K_(output_sel_mask),
        K_(pad_col_projector),
        K_(main_read_info),

@@ -77,7 +77,7 @@ int ObExprIntDiv::calc_result_type2(ObExprResType &type, ObExprResType &type1, O
   if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
     LOG_WARN("fail to calc result type", K(ret), K(type), K(type1), K(type2));
   } else {
-    type.set_precision(static_cast<ObPrecision>(MIN(type1.get_precision() -  type2.get_precision() + 1, 0)));
+    type.set_precision(static_cast<ObPrecision>(MAX(type1.get_precision(), 0)));
     type.set_scale(0);
   }
   return ret;

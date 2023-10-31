@@ -182,11 +182,10 @@ int ObLSPrepareMigrationDagNet::start_running_for_migration_()
   }
 
   if (OB_NOT_NULL(initial_dag) && OB_NOT_NULL(scheduler)) {
-    initial_dag->reset_children();
     if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_dag))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_dag));
     }
-    scheduler->free_dag(*initial_dag);
+    scheduler->free_dag(*initial_dag); // contain reset_children
   }
 
   return ret;
@@ -576,7 +575,7 @@ int ObInitialPrepareMigrationTask::generate_migration_dags_()
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
       }
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_prepare_dag, start_prepare_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_prepare_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_prepare_migration_dag));
       } else {
         finish_prepare_dag = nullptr;
@@ -589,12 +588,12 @@ int ObInitialPrepareMigrationTask::generate_migration_dags_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_prepare_dag)) {
-        scheduler->free_dag(*finish_prepare_dag, start_prepare_dag);
+        scheduler->free_dag(*finish_prepare_dag);
         finish_prepare_dag = nullptr;
       }
 
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_prepare_dag)) {
-        scheduler->free_dag(*start_prepare_dag, initial_prepare_migration_dag);
+        scheduler->free_dag(*start_prepare_dag);
         start_prepare_dag = nullptr;
       }
 
@@ -1039,7 +1038,7 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
       }
 
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
-        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_backfill_tx_dag, start_prepare_migration_dag))) {
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_backfill_tx_dag))) {
           LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_prepare_migration_dag));
         } else {
           tablet_backfill_tx_dag = nullptr;
@@ -1054,12 +1053,12 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(finish_backfill_tx_dag)) {
-        scheduler->free_dag(*finish_backfill_tx_dag, tablet_backfill_tx_dag);
+        scheduler->free_dag(*finish_backfill_tx_dag);
         finish_backfill_tx_dag = nullptr;
       }
 
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
-        scheduler->free_dag(*tablet_backfill_tx_dag, start_prepare_migration_dag);
+        scheduler->free_dag(*tablet_backfill_tx_dag);
         tablet_backfill_tx_dag = nullptr;
       }
     }
@@ -1554,7 +1553,7 @@ int ObFinishPrepareMigrationTask::generate_prepare_initial_dag_()
     }
 
     if (OB_NOT_NULL(initial_prepare_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_prepare_dag, finish_prepare_migration_dag);
+      scheduler->free_dag(*initial_prepare_dag);
       initial_prepare_dag = nullptr;
     }
   }

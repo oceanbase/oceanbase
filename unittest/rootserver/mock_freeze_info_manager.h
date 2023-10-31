@@ -14,7 +14,7 @@
 #define OCEANBASE_ROOTSERVER_MOCK_FREEZE_INFO_MANAGER_H_
 
 #include <gmock/gmock.h>
-#include "rootserver/ob_freeze_info_manager.h"
+#include "rootserver/freeze/ob_major_merge_info_manager.h"
 
 namespace oceanbase
 {
@@ -25,7 +25,7 @@ class ObFrozenStatus;
 namespace rootserver
 {
 
-class MockFreezeInfoManager: public ObFreezeInfoManager
+class MockFreezeInfoManager: public ObMajorMergeInfoManager
 {
 public:
   virtual int get_freeze_info(int64_t input_frozen_version, storage::ObFrozenStatus &frozen_status)

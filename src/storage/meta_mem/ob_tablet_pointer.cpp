@@ -25,6 +25,7 @@
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -37,7 +38,8 @@ namespace oceanbase
 namespace storage
 {
 ObTabletPointer::ObTabletPointer()
-  : ObMetaPointer<ObTablet>(),
+  : phy_addr_(),
+    obj_(),
     ls_handle_(),
     ddl_kv_mgr_handle_(),
     memtable_mgr_handle_(),
@@ -48,14 +50,15 @@ ObTabletPointer::ObTabletPointer()
     old_version_chain_(nullptr)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 272, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 264, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
 ObTabletPointer::ObTabletPointer(
     const ObLSHandle &ls_handle,
     const ObMemtableMgrHandle &memtable_mgr_handle)
-  : ObMetaPointer<ObTablet>(),
+  : phy_addr_(),
+    obj_(),
     ls_handle_(ls_handle),
     memtable_mgr_handle_(memtable_mgr_handle),
     ddl_info_(),
@@ -84,11 +87,192 @@ void ObTabletPointer::reset()
   initial_state_ = true;
   ATOMIC_STORE(&initial_state_, true);
   old_version_chain_ = nullptr;
-
-  ObMetaPointer<ObTablet>::reset();
+  reset_obj();
+  phy_addr_.reset();
 }
 
-int ObTabletPointer::set_attr_for_obj(ObTablet *tablet)
+void ObTabletPointer::reset_obj()
+{
+  if (nullptr != obj_.ptr_) {
+    if (OB_UNLIKELY(nullptr == obj_.pool_ && nullptr == obj_.allocator_)) {
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K_(obj));
+      ob_abort();
+    } else {
+      const int64_t ref_cnt = obj_.ptr_->dec_ref();
+      if (0 == ref_cnt) {
+        if (nullptr != obj_.pool_) {
+          obj_.pool_->free_obj(obj_.ptr_);
+        } else {
+          obj_.ptr_->~ObTablet();
+          obj_.allocator_->free(obj_.ptr_);
+        }
+      } else if (OB_UNLIKELY(ref_cnt < 0)) {
+        STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
+      }
+      // The pool ptr on tablet pointer cann't be reset nullptr here. Otherwise, you will
+      // encounter the following bug when the tablet is deleted from the map.
+      //
+      // Bug timeline:
+      //  - Thread 1 load tablet from meta.
+      //  - Thread 2 remove tablet from map.
+      //  - Thread 1 fail to hook loaded tablet into pointer.
+      //  - Thread 1 rolls back and releases the tablet and encounters an error.
+      obj_.ptr_ = nullptr;
+      obj_.allocator_ = nullptr;
+    }
+  }
+}
+
+int ObTabletPointer::read_from_disk(
+    common::ObArenaAllocator &allocator,
+    char *&r_buf,
+    int64_t &r_len,
+    ObMetaDiskAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  const int64_t buf_len = phy_addr_.size();
+  const ObMemAttr mem_attr(MTL_ID(), "MetaPointer");
+  ObTenantCheckpointSlogHandler *ckpt_slog_hanlder = MTL(ObTenantCheckpointSlogHandler*);
+  if (OB_ISNULL(ckpt_slog_hanlder)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "slog handler is nullptr", K(ret), KP(ckpt_slog_hanlder));
+  } else if (OB_FAIL(ckpt_slog_hanlder->read_from_disk(phy_addr_, allocator, r_buf, r_len))) {
+    if (OB_SEARCH_NOT_FOUND != ret) {
+      STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(phy_addr_));
+    }
+  } else {
+    addr = phy_addr_;
+  }
+  return ret;
+}
+
+int ObTabletPointer::hook_obj(ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
+{
+  int ret = OB_SUCCESS;
+  guard.reset();
+
+  if (OB_ISNULL(t)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "load null obj from disk", K(ret), K(phy_addr_));
+  } else if (OB_NOT_NULL(obj_.ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "obj already hooked", K(ret), K(phy_addr_), KP(t), KP(obj_.ptr_));
+  } else if (OB_UNLIKELY(0 != t->get_ref())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "obj ref cnt not 0", K(ret), K(phy_addr_), K(t->get_ref()));
+  } else {
+    t->inc_ref();
+    t->set_tablet_addr(phy_addr_);
+    obj_.ptr_ = t;
+    guard.set_obj(obj_);
+    ObMetaObjBufferHelper::set_in_map(reinterpret_cast<char *>(t), true/*in_map*/);
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(t)) {
+    obj_.pool_->free_obj(t);
+    obj_.ptr_ = nullptr;
+    t = nullptr;
+  }
+
+  return ret;
+}
+
+int ObTabletPointer::get_in_memory_obj(ObMetaObjGuard<ObTablet> &guard)
+{
+  int ret = OB_SUCCESS;
+  guard.reset();
+
+  if (OB_UNLIKELY(phy_addr_.is_none())) {
+    ret = OB_ITEM_NOT_SETTED;
+    STORAGE_LOG(DEBUG, "meta disk addr is none, no object to be got", K(ret), K(phy_addr_));
+  } else if (OB_UNLIKELY(!is_in_memory())) {
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(ERROR, "object isn't in memory, not support", K(ret), K(phy_addr_));
+  } else {
+    guard.set_obj(obj_);
+  }
+  return ret;
+}
+
+void ObTabletPointer::get_obj(ObMetaObjGuard<ObTablet> &guard)
+{
+  guard.set_obj(obj_);
+}
+
+bool ObTabletPointer::is_in_memory() const
+{
+  return nullptr != obj_.ptr_;
+}
+
+void ObTabletPointer::set_obj_pool(ObITenantMetaObjPool &obj_pool)
+{
+  obj_.pool_ = &obj_pool;
+}
+
+void ObTabletPointer::set_addr_without_reset_obj(const ObMetaDiskAddr &addr)
+{
+  phy_addr_ = addr;
+}
+
+void ObTabletPointer::set_addr_with_reset_obj(const ObMetaDiskAddr &addr)
+{
+  reset_obj();
+  phy_addr_ = addr;
+}
+
+void ObTabletPointer::set_obj(const ObMetaObjGuard<ObTablet> &guard)
+{
+  reset_obj();
+  guard.get_obj(obj_);
+  get_attr_for_obj(obj_.ptr_);
+  if (nullptr != obj_.ptr_) {
+    if (OB_UNLIKELY(nullptr == obj_.pool_ && nullptr == obj_.allocator_)) {
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K_(obj));
+      ob_abort();
+    } else {
+      obj_.ptr_->inc_ref();
+    }
+  }
+}
+
+int ObTabletPointer::deserialize(
+    common::ObArenaAllocator &allocator,
+    const char *buf,
+    const int64_t buf_len,
+    ObTablet *t)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_UNLIKELY(buf_len <= 0) || OB_ISNULL(buf) || OB_ISNULL(t)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len), KP(t));
+  } else if (OB_FAIL(get_attr_for_obj(t))) {
+    STORAGE_LOG(WARN, "fail to set attr for obj", K(ret));
+  } else if (OB_FAIL(t->load_deserialize(allocator, buf, buf_len, pos))) {
+    STORAGE_LOG(WARN, "fail to de-serialize T", K(ret), KP(buf), K(buf_len), KP(t));
+  }
+  return ret;
+}
+
+int ObTabletPointer::deserialize(
+    const char *buf,
+    const int64_t buf_len,
+    ObTablet *t)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_UNLIKELY(buf_len <= 0) || OB_ISNULL(buf) || OB_ISNULL(t)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len), KP(t));
+  } else if (OB_FAIL(get_attr_for_obj(t))) {
+    STORAGE_LOG(WARN, "fail to set attr for obj", K(ret));
+  } else if (OB_FAIL(t->deserialize(buf, buf_len, pos))) {
+    STORAGE_LOG(WARN, "fail to de-serialize T", K(ret), KP(buf), K(buf_len), KP(t));
+  }
+  return ret;
+}
+
+int ObTabletPointer::get_attr_for_obj(ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogHandler *log_handler = nullptr;
@@ -145,7 +329,7 @@ int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_
             || buf_len != ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid tablet buffer length", K(ret), K(cur_buf_len), K(buf_len), KP(tmp_obj), KP(meta_obj.ptr_));
-      } else if (OB_FAIL(set_attr_for_obj(meta_obj.ptr_))) {
+      } else if (OB_FAIL(get_attr_for_obj(meta_obj.ptr_))) {
         LOG_WARN("fail to set attr for object", K(ret), K(meta_obj));
       } else if (OB_FAIL(ObTabletPersister::transform_tablet_memory_footprint(*obj_.ptr_, buf, buf_len))) {
         LOG_WARN("fail to degrade tablet memory", K(ret), KPC(obj_.ptr_), KP(buf), K(buf_len));
@@ -172,7 +356,7 @@ int64_t ObTabletPointer::get_deep_copy_size() const
   return sizeof(ObTabletPointer);
 }
 
-int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObMetaPointer<ObTablet> *&value) const
+int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObTabletPointer *&value) const
 {
   int ret = OB_SUCCESS;
   const int64_t deep_copy_size = get_deep_copy_size();

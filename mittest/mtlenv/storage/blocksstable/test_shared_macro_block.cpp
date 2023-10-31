@@ -34,9 +34,10 @@ TestSharedMacroBlk::TestSharedMacroBlk()
   : TestIndexBlockDataPrepare(
       "Test Shared Macro Block",
       MINI_MERGE,
+      false,
       OB_DEFAULT_MACRO_BLOCK_SIZE,
       10000,
-      20)
+      10)
 {
 }
 
@@ -102,7 +103,7 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   int ret = shared_blk_mgr->rebuild_sstable(allocator,
       *(tablet_handle.get_obj()), sstable_, 0, *sstable_index_builder, *index_block_rebuilder, sstable);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, sstable_.meta_->basic_meta_ == sstable.meta_->basic_meta_);
+  ASSERT_EQ(true, sstable_.meta_->basic_meta_.check_basic_meta_equality(sstable.meta_->basic_meta_));
 
   // get old and new sstable
   ObMacroBlockHandle old_handle;
@@ -113,6 +114,8 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   read_info.offset_ = sstable_.meta_->macro_info_.nested_offset_;
   read_info.size_ = sstable_.meta_->macro_info_.nested_size_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  ASSERT_NE(nullptr, read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)));
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, old_handle));
 
   ObMacroBlockHandle new_handle;
@@ -160,6 +163,8 @@ TEST_F(TestSharedMacroBlk, test_invalid_write)
   read_info.size_ = block_info.nested_size_;
   read_info.offset_ = block_info.nested_offset_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  ASSERT_NE(nullptr, read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)));
   ObMacroBlockHandle read_handle;
   ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, read_handle));
   MEMCMP(read_handle.get_buffer(), buf, BUF_SIZE);

@@ -305,6 +305,7 @@ private:
 
   // generate normal table scan
   int generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &spec);
+  int generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec);
   int need_prior_exprs(common::ObIArray<ObExpr*> &self_output,
       common::ObIArray<ObExpr*> &left_output,
       bool &need_prior);

@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_bloom_filter_cache.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/access/ob_empty_read_bucket.h"
 
 namespace oceanbase
 {
@@ -89,6 +90,7 @@ TEST_F(TestBloomFilterCache, test_invalid)
   EXPECT_NE(OB_SUCCESS, ret);
 
   bf_cache.destroy();
+  MTL(storage::ObEmptyReadBucket *)->reset();
 }
 
 
@@ -136,42 +138,23 @@ TEST_F(TestBloomFilterCache, test_normal)
   ret = bf_cache.put_bloom_filter(tenant_id, block_id, bf_value);
   EXPECT_EQ(OB_SUCCESS, ret);
 
-  ObEmptyReadCell *cell;
+  storage::ObEmptyReadCell *cell;
   ObBloomFilterCacheKey bf_key(tenant_id, block_id, rowkey.get_datum_cnt());
   ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, block_id, rowkey.get_datum_cnt());
   EXPECT_EQ(OB_SUCCESS, ret);
-  bf_cache.get_cell(bf_key.hash(),cell);
+  MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);
   EXPECT_EQ(1, cell->count_);
 
   ret = bf_cache.inc_empty_read(tenant_id, 1099511627877, block_id, rowkey.get_datum_cnt());
   EXPECT_EQ(OB_SUCCESS, ret);
-  bf_cache.get_cell(bf_key.hash(),cell);
+  MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);
   EXPECT_EQ(2, cell->count_);
 
   bf_cache.destroy();
   ObKVGlobalCache::get_instance().destroy();
-}
-
-TEST_F(TestBloomFilterCache, test_empty_read_cell_invalid)
-{
-  int ret = OB_SUCCESS;
-  ObBloomFilterCache bf_cache;
-  const uint64_t tenant_id = 1;
-  MacroBlockId block_id(0, 3, 0);
-  int8_t empty_read_prefix=3;
-  ObEmptyReadCell *cell;
-
-  ret = bf_cache.init("test_bf_cache", 1,7);
-  EXPECT_NE(OB_SUCCESS, ret);
-
-  ObBloomFilterCacheKey bf_key(tenant_id, block_id, empty_read_prefix);
-  ret = bf_cache.get_cell(bf_key.hash(),cell);
-  EXPECT_NE(OB_SUCCESS, ret);
-  ASSERT_TRUE(NULL == cell);
-
-  bf_cache.destroy();
+  MTL(storage::ObEmptyReadBucket *)->reset();
 }
 
 
@@ -195,9 +178,9 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
   const uint64_t tenant_id = 1;
   MacroBlockId block_id(0, 3, 0);
   ObBloomFilterCacheKey bf_key(tenant_id, block_id, rowkey.get_obj_cnt());
-  ObEmptyReadCell *cell;
+  storage::ObEmptyReadCell *cell;
 
-  bf_cache.get_cell(bf_key.hash(),cell);
+  MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash(),cell);
   ASSERT_TRUE(NULL != cell);
 
   cell->inc_and_fetch(bf_key.hash(), cur_cnt);
@@ -205,14 +188,14 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
   cell->inc_and_fetch(bf_key.hash(), cur_cnt);
   EXPECT_EQ(3, cur_cnt);
 
-  bf_cache.get_cell(bf_key.hash() + bf_cache.get_bucket_size(),cell);
+  MTL(storage::ObEmptyReadBucket *)->get_cell(bf_key.hash() + MTL(ObEmptyReadBucket *)->get_bucket_size(),cell);
   ASSERT_TRUE(NULL != cell);
-  cell->inc_and_fetch(bf_key.hash() + bf_cache.get_bucket_size(), cur_cnt);
+  cell->inc_and_fetch(bf_key.hash() + MTL(storage::ObEmptyReadBucket *)->get_bucket_size(), cur_cnt);
   EXPECT_EQ(1, cur_cnt);
-  cell->inc_and_fetch(bf_key.hash() + bf_cache.get_bucket_size(), cur_cnt);
+  cell->inc_and_fetch(bf_key.hash() + MTL(storage::ObEmptyReadBucket *)->get_bucket_size(), cur_cnt);
   EXPECT_EQ(1, cur_cnt);
 
-  cell->set(bf_key.hash());
+  cell->set(bf_key.hash(), 1);
   cell->inc_and_fetch(bf_key.hash(), cur_cnt);
   EXPECT_EQ(2, cur_cnt);
 
@@ -222,6 +205,7 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
 
   bf_cache.destroy();
   ObKVGlobalCache::get_instance().destroy();
+  MTL(storage::ObEmptyReadBucket *)->reset();
 }
 
 }

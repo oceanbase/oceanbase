@@ -109,6 +109,7 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(session->get_sql_mode());
     if (OB_FAIL(ob_datum_to_ob_time_with_date(*param_datum, expr.args_[0]->datum_meta_.type_,
+                                              expr.args_[0]->datum_meta_.scale_,
                                               get_timezone_info(session), ot,
                                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                                               false, date_sql_mode,
@@ -504,9 +505,10 @@ int ObExprSubAddtime::subaddtime_common(const ObExpr &expr,
     ObTime ot2(DT_TYPE_TIME);
     if (ObTimeType == expr.args_[1]->datum_meta_.type_) {
       time_val = time_arg->get_time();
-    } else if (OB_FAIL(ob_datum_to_ob_time_without_date(*time_arg, expr.args_[1]->datum_meta_.type_,
-                                      get_timezone_info(ctx.exec_ctx_.get_my_session()), ot2,
-                                      expr.args_[1]->obj_meta_.has_lob_header()))) {
+    } else if (OB_FAIL(ob_datum_to_ob_time_without_date(
+                 *time_arg, expr.args_[1]->datum_meta_.type_, expr.args_[1]->datum_meta_.scale_,
+                 get_timezone_info(ctx.exec_ctx_.get_my_session()), ot2,
+                 expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       expr_datum.set_null();
       null_res = true;
@@ -569,7 +571,8 @@ int ObExprSubAddtime::subaddtime_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else if (!null_res) {
     ObTime ot1(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(*date_arg, expr.args_[0]->datum_meta_.type_,
-                                                tz_info, ot1, expr.args_[0]->obj_meta_.has_lob_header()))) {
+                                                 expr.args_[0]->datum_meta_.scale_, tz_info, ot1,
+                                                 expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the first param failed", K(ret));
       expr_datum.set_null();
     } else {

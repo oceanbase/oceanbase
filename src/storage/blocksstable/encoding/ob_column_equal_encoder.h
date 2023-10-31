@@ -57,6 +57,7 @@ public:
 
   virtual int traverse(bool &suitable) override;
   virtual int64_t calc_size() const override;
+  virtual int get_encoding_store_meta_need_space(int64_t &need_size) const override;
 
   virtual int store_meta(ObBufferWriter &buf_writer) override;
   virtual int store_data(const int64_t row_id, ObBitStream &bs,

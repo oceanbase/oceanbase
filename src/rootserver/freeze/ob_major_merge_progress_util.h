@@ -1,0 +1,246 @@
+//Copyright (c) 2021 OceanBase
+// OceanBase is licensed under Mulan PubL v2.
+// You can use this software according to the terms and conditions of the Mulan PubL v2.
+// You may obtain a copy of Mulan PubL v2 at:
+//          http://license.coscl.org.cn/MulanPubL-2.0
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+// See the Mulan PubL v2 for more details.
+#ifndef OB_ROOTSERVER_FREEZE_MAJOR_MERGE_PROGRESS_UTIL_H_
+#define OB_ROOTSERVER_FREEZE_MAJOR_MERGE_PROGRESS_UTIL_H_
+#include "share/compaction/ob_compaction_time_guard.h"
+#include "share/ob_delegate.h"
+#include "share/ob_ls_id.h"
+namespace oceanbase
+{
+namespace compaction
+{
+
+enum ObTabletCompactionStatus
+{
+  INITIAL = 0,
+  COMPACTED, // tablet finished compaction
+  CAN_SKIP_VERIFYING,  // tablet finished compaction and not need to verify
+  STATUS_MAX
+};
+
+struct ObTableCompactionInfo {
+public:
+  enum Status
+  {
+    INITIAL = 0,
+    // already finished compaction and verified tablet checksum
+    COMPACTED,
+    // already finished compaction and can skip verification due to the following two reasons:
+    // 1. this table has no tablet.
+    // 2. this table has tablets, but compaction_scn of tablets > frozen_scn of this round major compaction.
+    // i.e., already launched another medium compaction for this table.
+    CAN_SKIP_VERIFYING,
+    // already verified index checksum
+    INDEX_CKM_VERIFIED,
+    // already verified all kinds of checksum (i.e., tablet checksum, index checksum, cross-cluster checksum)
+    VERIFIED,
+    TB_STATUS_MAX
+  };
+  const static char *TableStatusStr[];
+  static const char *status_to_str(const Status &status);
+
+  ObTableCompactionInfo();
+  ~ObTableCompactionInfo() { reset(); }
+
+  void reset()
+  {
+    table_id_ = OB_INVALID_ID;
+    tablet_cnt_ = 0;
+    status_ = Status::INITIAL;
+    unfinish_index_cnt_ = INVALID_INDEX_CNT;
+  }
+
+  ObTableCompactionInfo &operator=(const ObTableCompactionInfo &other);
+  void set_uncompacted() { status_ = Status::INITIAL; }
+  void set_compacted() { status_ = Status::COMPACTED; }
+  bool is_compacted() const { return Status::COMPACTED == status_; }
+  bool is_uncompacted() const { return Status::INITIAL == status_; }
+  void set_can_skip_verifying() { status_ = Status::CAN_SKIP_VERIFYING; }
+  bool can_skip_verifying() const { return Status::CAN_SKIP_VERIFYING == status_; }
+  void set_index_ckm_verified() { status_ = Status::INDEX_CKM_VERIFIED; }
+  bool is_index_ckm_verified() const { return Status::INDEX_CKM_VERIFIED == status_; }
+  void set_verified() { status_ = Status::VERIFIED; }
+  bool is_verified() const { return Status::VERIFIED == status_; }
+  bool finish_compaction() const { return (is_compacted() ||  can_skip_verifying()); }
+  bool finish_verified() const { return is_verified() || can_skip_verifying(); }
+  bool finish_idx_verified() const { return finish_verified() || is_index_ckm_verified(); }
+  const int64_t INVALID_INDEX_CNT = -1;
+  bool is_index_table() const { return INVALID_INDEX_CNT == unfinish_index_cnt_; }
+
+  TO_STRING_KV(K_(table_id), K_(tablet_cnt), "status", status_to_str(status_), K_(unfinish_index_cnt));
+public:
+  uint64_t table_id_;
+  int64_t tablet_cnt_;
+  int64_t unfinish_index_cnt_; // accurate for main table, record cnt of unfinish index_table
+  Status status_;
+};
+
+struct ObMergeProgress
+{
+public:
+  ObMergeProgress()
+    : unmerged_tablet_cnt_(0),
+      merged_tablet_cnt_(0),
+      total_table_cnt_(0),
+      table_cnt_()
+  {
+    MEMSET(table_cnt_, 0, sizeof(int64_t) * RECORD_TABLE_TYPE_CNT);
+  }
+  ~ObMergeProgress() {}
+  void reset()
+  {
+    unmerged_tablet_cnt_ = 0;
+    merged_tablet_cnt_ = 0;
+    total_table_cnt_ = 0;
+    MEMSET(table_cnt_, 0, sizeof(int64_t) * RECORD_TABLE_TYPE_CNT);
+  }
+  bool is_merge_finished() const
+  {
+    return total_table_cnt_ > 0
+    && (total_table_cnt_ == get_finish_verified_table_cnt());
+  }
+
+  bool is_merge_abnomal() const
+  {
+    return total_table_cnt_ > 0
+    && (total_table_cnt_ < get_finish_verified_table_cnt());
+  }
+  bool only_remain_special_table_to_verified() const
+  {
+    return total_table_cnt_ == get_finish_verified_table_cnt() + 1; // rest tables are in finish_verified status
+  }
+  void update_table_cnt(const ObTableCompactionInfo::Status status)
+  {
+    if (status >= ObTableCompactionInfo::INITIAL && status < RECORD_TABLE_TYPE_CNT) {
+      ++table_cnt_[status];
+    }
+  }
+  int64_t get_wait_index_ckm_table_cnt()
+  {
+    return table_cnt_[ObTableCompactionInfo::INITIAL] + table_cnt_[ObTableCompactionInfo::COMPACTED];
+  }
+  void deal_with_special_tablet()
+  {
+    ++table_cnt_[ObTableCompactionInfo::VERIFIED];
+  }
+  void clear_before_each_loop()
+  {
+    // clear info that will change in cur loop
+    unmerged_tablet_cnt_ = 0;
+    table_cnt_[ObTableCompactionInfo::INITIAL] = 0;
+    table_cnt_[ObTableCompactionInfo::COMPACTED] = 0;
+    table_cnt_[ObTableCompactionInfo::INDEX_CKM_VERIFIED] = 0;
+  }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  int64_t get_finish_verified_table_cnt() const
+  {
+    return table_cnt_[ObTableCompactionInfo::VERIFIED] + table_cnt_[ObTableCompactionInfo::CAN_SKIP_VERIFYING];
+  }
+public:
+  static const int64_t RECORD_TABLE_TYPE_CNT = ObTableCompactionInfo::Status::TB_STATUS_MAX;
+  int64_t unmerged_tablet_cnt_;
+  int64_t merged_tablet_cnt_;
+  int64_t total_table_cnt_;
+  int64_t table_cnt_[RECORD_TABLE_TYPE_CNT];
+};
+
+struct ObUnfinishTableIds
+{
+  ObUnfinishTableIds()
+    : batch_start_idx_(0),
+      batch_end_idx_(0),
+      array_()
+  {
+    array_.set_label("RSCompTableIds");
+  }
+  ~ObUnfinishTableIds() { reset(); }
+  void reset()
+  {
+    batch_start_idx_ = 0;
+    batch_end_idx_ = 0;
+    array_.reset();
+  }
+  CONST_DELEGATE_WITH_RET(array_, empty, bool);
+  CONST_DELEGATE_WITH_RET(array_, count, int64_t);
+  DELEGATE_WITH_RET(array_, assign, int);
+  DELEGATE_WITH_RET(array_, push_back, int);
+  uint64_t at(int64_t idx) const
+  {
+    OB_ASSERT(idx >= 0 && idx < array_.count());
+    return array_.at(idx);
+  }
+  bool loop_finish() const
+  {
+    return batch_end_idx_ >= array_.count();
+  }
+  void finish_cur_batch()
+  {
+    batch_start_idx_ = batch_end_idx_;
+  }
+  void start_looping()
+  {
+    batch_start_idx_ = 0;
+    batch_end_idx_ = 0;
+  }
+  TO_STRING_KV(K_(batch_start_idx), K_(batch_end_idx), "count", array_.count());
+  int64_t batch_start_idx_;
+  int64_t batch_end_idx_;
+  // record the table_ids in the schema_guard obtained in check_merge_progress
+  common::ObArray<uint64_t> array_;
+};
+
+typedef hash::ObHashMap<ObTabletID, ObTabletCompactionStatus> ObTabletStatusMap;
+typedef common::ObArray<share::ObTabletLSPair> ObTabletLSPairArray;
+typedef hash::ObHashMap<uint64_t, ObTableCompactionInfo> ObTableCompactionInfoMap;
+
+struct ObRSCompactionTimeGuard : public ObCompactionTimeGuard
+{
+public:
+  ObRSCompactionTimeGuard()
+    : ObCompactionTimeGuard(UINT64_MAX, "[RS] ")
+  {}
+  virtual ~ObRSCompactionTimeGuard() {}
+  enum CompactionEvent : uint16_t {
+    PREPARE_UNFINISH_TABLE_IDS = 0,
+    GET_TABLET_LS_PAIRS,
+    GET_TABLET_META_TABLE,
+    CKM_VERIFICATION,
+    COMPACTION_EVENT_MAX,
+  };
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+private:
+  const static char *CompactionEventStr[];
+  static const char *get_comp_event_str(enum CompactionEvent event);
+};
+
+struct ObCkmValidatorStatistics
+{
+  ObCkmValidatorStatistics() { reset(); }
+  ~ObCkmValidatorStatistics() {}
+  void reset()
+  {
+    query_ckm_sql_cnt_ = 0;
+    use_cached_ckm_cnt_ = 0;
+    write_ckm_sql_cnt_ = 0;
+    update_report_scn_sql_cnt_ = 0;
+  }
+  TO_STRING_KV(K_(query_ckm_sql_cnt), K_(use_cached_ckm_cnt), K_(write_ckm_sql_cnt), K_(update_report_scn_sql_cnt));
+  int64_t query_ckm_sql_cnt_;
+  int64_t use_cached_ckm_cnt_;
+  int64_t write_ckm_sql_cnt_;
+  int64_t update_report_scn_sql_cnt_;
+};
+
+
+} // namespace compaction
+} // namespace oceanbase
+
+#endif // OB_ROOTSERVER_FREEZE_MAJOR_MERGE_PROGRESS_UTIL_H_

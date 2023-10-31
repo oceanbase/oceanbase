@@ -18,12 +18,13 @@
 
 namespace oceanbase {
 namespace storage {
-class ObSSTableRowMultiScanner : public ObSSTableRowScanner<>
+template<typename PrefetchType = ObIndexTreeMultiPassPrefetcher<>>
+class ObSSTableRowMultiScanner : public ObSSTableRowScanner<PrefetchType>
 {
 public:
   ObSSTableRowMultiScanner()
   {
-    type_ = ObStoreRowIterator::IteratorMultiScan;
+    this->type_ = ObStoreRowIterator::IteratorMultiScan;
   }
   virtual ~ObSSTableRowMultiScanner();
   virtual void reset() override;

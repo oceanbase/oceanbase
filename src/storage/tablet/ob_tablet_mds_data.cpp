@@ -379,7 +379,7 @@ int ObTabletMdsData::init_for_evict_medium_info(
     common::ObIAllocator &allocator,
     const ObTabletMdsData &other,
     const int64_t finish_medium_scn,
-    const ObMergeType merge_type)
+    const compaction::ObMergeType merge_type)
 {
   int ret = OB_SUCCESS;
 

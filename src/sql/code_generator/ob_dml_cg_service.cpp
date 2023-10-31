@@ -988,7 +988,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   if (OB_SUCC(ret)) {
     scan_ctdef.table_param_.get_enable_lob_locator_v2()
         = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
-    if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_))) {
+    if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_,
+                                                scan_ctdef.pd_expr_spec_.pd_storage_flag_))) {
       LOG_WARN("convert table param failed", K(ret));
     } else if (OB_FAIL(cg_.generate_calc_exprs(dep_exprs,
                                                index_dml_info.column_old_values_exprs_,
@@ -2694,7 +2695,10 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
     } else {
       fk_column.obj_meta_ = column_schema->get_meta_type();
-      if (ob_is_double_tc(fk_column.obj_meta_.get_type())) {
+      if (fk_column.obj_meta_.is_decimal_int()) {
+        fk_column.obj_meta_.set_stored_precision(column_schema->get_accuracy().get_precision());
+        fk_column.obj_meta_.set_scale(column_schema->get_accuracy().get_scale());
+      } else if (ob_is_double_tc(fk_column.obj_meta_.get_type())) {
         fk_column.obj_meta_.set_scale(column_schema->get_accuracy().get_scale());
       }
       if (OB_FAIL(fk_arg.columns_.push_back(fk_column))) {
@@ -2878,7 +2882,8 @@ int ObDmlCgService::generate_fk_scan_ctdef(share::schema::ObSchemaGetterGuard &s
   } else {
     scan_ctdef.table_param_.get_enable_lob_locator_v2()
         = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
-    if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_))) {
+    if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_,
+                                                scan_ctdef.pd_expr_spec_.pd_storage_flag_))) {
       LOG_WARN("convert table param failed", K(ret));
     }
   }

@@ -61,7 +61,8 @@ int ObExprWeightString::calc_result_typeN(ObExprResType &type,
       coll_level = types_stack[0].get_collation_level();
       if (types_stack[0].get_type() > ObUNumberType &&
           types_stack[0].get_type() != ObBitType &&
-          types_stack[0].get_type() != ObYearType) {
+          types_stack[0].get_type() != ObYearType &&
+          types_stack[0].get_type() != ObDecimalIntType) {
         // When the input is not a numeric type, convert to a varchar type
         type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
         types_stack[0].set_calc_type(ObVarcharType);
@@ -123,7 +124,8 @@ int ObExprWeightString::eval_weight_string(const ObExpr &expr, ObEvalCtx &ctx, O
       res_datum.set_null();
     } else if (!as_binary && (expr.args_[0]->datum_meta_.type_ <= ObUNumberType ||
                               expr.args_[0]->datum_meta_.type_ == ObBitType ||
-                              expr.args_[0]->datum_meta_.type_ == ObYearType)) {
+                              expr.args_[0]->datum_meta_.type_ == ObYearType ||
+                              expr.args_[0]->datum_meta_.type_ == ObDecimalIntType)) {
       res_datum.set_null();
     } else if (arg->get_string().empty() && nweights == 0) {
       res_datum.set_string(nullptr,0);

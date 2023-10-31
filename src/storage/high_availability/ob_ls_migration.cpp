@@ -211,7 +211,7 @@ bool ObMigrationDagNetInitParam::is_valid() const
 
 
 ObMigrationDagNet::ObMigrationDagNet()
-    : ObIDagNet(ObDagNetType::DAG_NET_TYPE_MIGARTION),
+    : ObIDagNet(ObDagNetType::DAG_NET_TYPE_MIGRATION),
       is_inited_(false),
       ctx_(nullptr),
       bandwidth_throttle_(nullptr),
@@ -565,7 +565,7 @@ int ObInitialMigrationDag::init(ObIDagNet *dag_net)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -628,7 +628,7 @@ int ObInitialMigrationTask::init()
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -735,7 +735,7 @@ int ObInitialMigrationTask::generate_migration_dags_()
     }
   } else if (OB_FAIL(scheduler->add_dag(start_migration_dag))) {
     LOG_WARN("failed to add dag", K(ret), K(*start_migration_dag));
-    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(migration_finish_dag, start_migration_dag))) {
+    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(migration_finish_dag))) {
       LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_migration_dag));
     } else {
       migration_finish_dag = nullptr;
@@ -751,11 +751,11 @@ int ObInitialMigrationTask::generate_migration_dags_()
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(migration_finish_dag)) {
-      scheduler->free_dag(*migration_finish_dag, start_migration_dag);
+      scheduler->free_dag(*migration_finish_dag);
       migration_finish_dag = nullptr;
     }
     if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_migration_dag)) {
-      scheduler->free_dag(*start_migration_dag, initial_migration_dag);
+      scheduler->free_dag(*start_migration_dag);
       start_migration_dag = nullptr;
     }
     const bool need_retry = true;
@@ -861,7 +861,7 @@ int ObStartMigrationDag::init(ObIDagNet *dag_net)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -923,7 +923,7 @@ int ObStartMigrationTask::init()
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -1338,7 +1338,7 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
       }
     } else if (OB_FAIL(scheduler->add_dag(data_tablets_migration_dag))) {
       LOG_WARN("failed to add data tablets migration dag", K(ret), K(*data_tablets_migration_dag));
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(sys_tablets_migration_dag, start_migration_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(sys_tablets_migration_dag))) {
         LOG_WARN("failed to cancel ha dag", K(ret), KPC(start_migration_dag));
       } else {
         sys_tablets_migration_dag = nullptr;
@@ -1359,13 +1359,13 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED", K(ret));
 
-        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(data_tablets_migration_dag, sys_tablets_migration_dag))) {
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(data_tablets_migration_dag))) {
           LOG_WARN("failed to cancel ha dag", K(ret), KPC(sys_tablets_migration_dag));
         } else {
           data_tablets_migration_dag = nullptr;
         }
 
-        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(sys_tablets_migration_dag, start_migration_dag))) {
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(sys_tablets_migration_dag))) {
           LOG_WARN("failed to cancel ha dag", K(ret), KPC(start_migration_dag));
         } else {
           sys_tablets_migration_dag = nullptr;
@@ -1376,12 +1376,12 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(data_tablets_migration_dag)) {
-        scheduler->free_dag(*data_tablets_migration_dag, sys_tablets_migration_dag);
+        scheduler->free_dag(*data_tablets_migration_dag);
         data_tablets_migration_dag = nullptr;
       }
 
       if (OB_NOT_NULL(sys_tablets_migration_dag)) {
-        scheduler->free_dag(*sys_tablets_migration_dag, start_migration_dag);
+        scheduler->free_dag(*sys_tablets_migration_dag);
         sys_tablets_migration_dag = nullptr;
       }
     }
@@ -1714,7 +1714,7 @@ int ObSysTabletsMigrationDag::init(ObIDagNet *dag_net)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -1779,7 +1779,7 @@ int ObSysTabletsMigrationTask::init()
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -1918,10 +1918,9 @@ int ObSysTabletsMigrationTask::generate_sys_tablet_migartion_dag_()
         ObIDag *last = tablet_migration_dag_array.at(tablet_migration_dag_array.count() - 1);
         if (last == tablet_migration_dag) {
           tablet_migration_dag_array.pop_back();
-          last = tablet_migration_dag_array.at(tablet_migration_dag_array.count() - 1);
         }
 
-        scheduler->free_dag(*tablet_migration_dag, last);
+        scheduler->free_dag(*tablet_migration_dag);
         tablet_migration_dag = nullptr;
       }
     }
@@ -1930,9 +1929,7 @@ int ObSysTabletsMigrationTask::generate_sys_tablet_migartion_dag_()
     if (OB_FAIL(ret)) {
       // The i-th dag is the parent dag of (i+1)-th dag.
       for (int64_t child_idx = tablet_migration_dag_array.count() - 1; child_idx > 0; child_idx--) {
-        if (OB_TMP_FAIL(scheduler->cancel_dag(
-              tablet_migration_dag_array.at(child_idx),
-              tablet_migration_dag_array.at(child_idx - 1)))) {
+        if (OB_TMP_FAIL(scheduler->cancel_dag(tablet_migration_dag_array.at(child_idx)))) {
           LOG_WARN("failed to cancel inner tablet migration dag", K(tmp_ret), K(child_idx));
         }
       }
@@ -2062,7 +2059,7 @@ int ObTabletMigrationDag::init(
   } else if (!tablet_id.is_valid() || OB_ISNULL(dag_net)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet migration dag init get invalid argument", K(ret), K(tablet_id), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -2350,7 +2347,7 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION !=  dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION !=  dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -2597,6 +2594,7 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
     } else if (FALSE_IT(init_param.src_info_ = src_info)) {
     } else if (FALSE_IT(init_param.tablet_copy_finish_task_ = tablet_copy_finish_task)) {
     } else if (FALSE_IT(init_param.ls_ = ls)) {
+    } else if (FALSE_IT(init_param.need_sort_macro_meta_ = false)) {
     } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
     } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->local_rebuild_seq_)) {
     } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
@@ -2616,7 +2614,7 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
       // parent->copy->finish->child
       if (OB_FAIL(dag_->alloc_task(copy_task))) {
         LOG_WARN("failed to alloc copy task", K(ret));
-      } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task))) {
+      } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task, 0))) {
         LOG_WARN("failed to init copy task", K(ret));
       } else if (OB_FAIL(parent_task->add_child(*copy_task))) {
         LOG_WARN("failed to add child copy task", K(ret));
@@ -3121,7 +3119,7 @@ int ObDataTabletsMigrationDag::init(ObIDagNet *dag_net)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -3186,7 +3184,7 @@ int ObDataTabletsMigrationTask::init()
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -3555,7 +3553,7 @@ int ObDataTabletsMigrationTask::generate_tablet_group_dag_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(tablet_group_dag)) {
-        scheduler->free_dag(*tablet_group_dag, data_tablets_migration_dag);
+        scheduler->free_dag(*tablet_group_dag);
         tablet_group_dag = nullptr;
       }
     }
@@ -3781,7 +3779,7 @@ int ObTabletGroupMigrationDag::init(
     LOG_WARN("tablet group migration init get invalid argument", K(ret), KP(dag_net), KP(finish_dag), KP(tablet_group_ctx));
   } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
     LOG_WARN("failed to assgin tablet id array", K(ret), K(tablet_id_array));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -3954,7 +3952,7 @@ int ObTabletGroupMigrationTask::init(
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -4096,7 +4094,7 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(tablet_migration_dag)) {
-        scheduler->free_dag(*tablet_migration_dag, tablet_group_migration_dag);
+        scheduler->free_dag(*tablet_migration_dag);
         tablet_migration_dag = nullptr;
       }
     }
@@ -4265,7 +4263,7 @@ int ObMigrationFinishDag::init(ObIDagNet *dag_net)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -4325,7 +4323,7 @@ int ObMigrationFinishTask::init()
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGARTION != dag_net->get_type()) {
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
@@ -4403,7 +4401,7 @@ int ObMigrationFinishTask::generate_migration_init_dag_()
     }
 
     if (OB_NOT_NULL(initial_migration_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_migration_dag, migration_finish_dag);
+      scheduler->free_dag(*initial_migration_dag);
       initial_migration_dag = nullptr;
     }
   }

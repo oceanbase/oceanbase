@@ -845,6 +845,22 @@ private:
                                         double &late_mater_cost,
                                         bool &need);
 
+  int if_index_back_plan_need_late_materialization(ObLogSort *child_sort,
+                                                  ObLogTableScan *table_scan,
+                                                  ObIArray<uint64_t> &used_column_ids,
+                                                  bool &need);
+
+  int if_column_store_plan_need_late_materialization(ObLogSort *child_sort,
+                                                    ObLogTableScan *table_scan,
+                                                    ObIArray<uint64_t> &used_column_ids,
+                                                    bool &need);
+
+  int adjust_est_info_for_index_back_plan(ObLogTableScan *table_scan,
+                                          ObIArray<uint64_t> &used_column_ids);
+
+  int adjust_est_cost_info_for_column_store_plan(ObLogTableScan *table_scan,
+                                                 ObIArray<uint64_t> &used_column_ids);
+
   int if_stmt_need_late_materialization(bool &need);
 
   int candi_allocate_unpivot();

@@ -42,9 +42,12 @@ class TestIColumnEncoder : public ::testing::Test
 {
 public:
   TestIColumnEncoder(const bool is_multi_version_row = false)
-    : is_multi_version_row_(is_multi_version_row), tenant_ctx_(OB_SERVER_TENANT_ID)
+    : tenant_ctx_(OB_SERVER_TENANT_ID), is_multi_version_row_(is_multi_version_row)
   {
+    decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
+    tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
+    decode_res_pool_->init();
   }
   virtual ~TestIColumnEncoder() {}
   virtual void SetUp();
@@ -59,8 +62,9 @@ protected:
   ObRowkeyReadInfo read_info_;
   ObArenaAllocator allocator_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
-  bool is_multi_version_row_;
   share::ObTenantBase tenant_ctx_;
+  ObDecodeResourcePool *decode_res_pool_;
+  bool is_multi_version_row_;
 };
 
 void TestIColumnEncoder::SetUp()
@@ -115,6 +119,7 @@ void TestIColumnEncoder::SetUp()
   ctx_.col_descs_ = &col_descs_;
   ctx_.major_working_cluster_version_=cal_version(3, 1, 0, 0);
   ctx_.row_store_type_ = common::ENCODING_ROW_STORE;
+  ctx_.compressor_type_ = common::ObCompressorType::NONE_COMPRESSOR;
 }
 
 static const int64_t test_encoder_overflow = 3;
@@ -141,6 +146,8 @@ TEST_F(TestEncoderOverFlow, test_append_row_with_timestamp_and_max_estimate_limi
 {
   common::ObClusterVersion::get_instance().update_cluster_version(cal_version(2, 2, 0, 75));
   ObMicroBlockEncoder encoder;
+  encoder.data_buffer_.allocator_.set_tenant_id(500);
+  encoder.row_buf_holder_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   encoder.estimate_size_limit_ = ctx_.macro_block_size_;
@@ -196,6 +203,8 @@ TEST_F(TestDictLargeVarchar, test_dict_large_varchar)
     ctx_.column_encodings_[i] = ObColumnHeader::Type::DICT;
   }
   ObMicroBlockEncoder encoder;
+  encoder.data_buffer_.allocator_.set_tenant_id(500);
+  encoder.row_buf_holder_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   ObDatumRow row;
@@ -305,8 +314,9 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
   ObDatumRow read_row;
   ASSERT_EQ(OB_SUCCESS, read_row.init(column_cnt_));
   ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, nullptr));
+  ObMicroBlockChecksumHelper checksum_helper;
+  ASSERT_EQ(OB_SUCCESS, checksum_helper.init(ctx_.col_descs_, true));
 
-  int64_t new_checksum = 0;
   for (int64_t i = 0; i < row_cnt; ++i) {
     ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, read_row));
     STORAGE_LOG(DEBUG, "read row", K(read_row));
@@ -314,9 +324,10 @@ TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
       const bool is_invalid_datum = (read_row.storage_datums_[j].is_null() && read_row.storage_datums_[j].len_ != 0);
       ASSERT_EQ(false, is_invalid_datum);
     }
-    new_checksum = ObIMicroBlockWriter::cal_row_checksum(read_row, new_checksum);
+    ASSERT_EQ(OB_SUCCESS, checksum_helper.cal_row_checksum(
+        read_row.storage_datums_, read_row.get_column_count()));
   }
-  ASSERT_EQ(new_checksum, encoder_checksum);
+  ASSERT_EQ(checksum_helper.get_row_checksum(), encoder_checksum);
 
 
 }

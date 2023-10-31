@@ -26,6 +26,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObGroupByCell;
+}
 namespace blocksstable
 {
 
@@ -89,12 +93,14 @@ public:
 class ObIColumnDecoder
 {
 public:
+  static const uint64_t BITS_PER_BLOCK = 64;
+public:
   ObIColumnDecoder() {}
   virtual ~ObIColumnDecoder() {}
   VIRTUAL_TO_STRING_KV(K(this));
 
-  virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
-      const ObBitStream &bs, const char *data, const int64_t len) const = 0;
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
+     const ObBitStream &bs, const char *data, const int64_t len) const = 0;
 
   virtual ObColumnHeader::Type get_type() const = 0;
 
@@ -132,9 +138,24 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const
   {
-    UNUSEDx(parent, col_ctx, filter, meta_data, row_index, result_bitmap);
+    UNUSEDx(parent, col_ctx, filter, meta_data, row_index, pd_filter_info, result_bitmap);
+    return common::OB_NOT_SUPPORTED;
+  }
+
+  virtual int pushdown_operator(
+      const sql::ObPushdownFilterExecutor *parent,
+      const ObColumnDecoderCtx &col_ctx,
+      sql::ObBlackFilterExecutor &filter,
+      const char* meta_data,
+      const ObIRowIndex* row_index,
+      sql::PushdownFilterInfo &pd_filter_info,
+      ObBitmap &result_bitmap,
+      bool &filter_applied) const
+  {
+    UNUSEDx(parent, col_ctx, filter, meta_data, row_index, pd_filter_info, result_bitmap, filter_applied);
     return common::OB_NOT_SUPPORTED;
   }
 
@@ -156,11 +177,13 @@ public:
   virtual int get_is_null_bitmap_from_fixed_column(
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   virtual int get_is_null_bitmap_from_var_column(
       const ObColumnDecoderCtx &col_ctx,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   virtual int set_null_datums_from_fixed_column(
@@ -198,6 +221,28 @@ public:
       const int64_t row_cap,
       int64_t &null_count) const;
 
+  virtual bool fast_decode_valid(const ObColumnDecoderCtx &ctx) const
+  {
+    UNUSED(ctx);
+    return false;
+  }
+
+  virtual int get_distinct_count(int64_t &distinct_count) const
+  { UNUSED(distinct_count); return OB_NOT_SUPPORTED; }
+
+  virtual int read_distinct(
+      const ObColumnDecoderCtx &ctx,
+      const char **cell_datas,
+      storage::ObGroupByCell &group_by_cell)  const
+  { return OB_NOT_SUPPORTED; }
+
+  virtual int read_reference(
+      const ObColumnDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObGroupByCell &group_by_cell) const
+  { return OB_NOT_SUPPORTED; }
+
 protected:
   int get_null_count_from_extend_value(
     const ObColumnDecoderCtx &ctx,
@@ -224,10 +269,12 @@ class ObNoneExistColumnDecoder : public ObIColumnDecoder
 {
 public:
   static const ObColumnHeader::Type type_ = ObColumnHeader::MAX_TYPE;
-  virtual int decode(ObColumnDecoderCtx &, common::ObObj &cell, const int64_t,
-      const ObBitStream &, const char *, const int64_t) const override
+
+  virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
+      const ObBitStream &bs, const char *data, const int64_t len)const override
   {
-    cell.set_nop_value();
+    datum.set_ext();
+    datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);
     return common::OB_SUCCESS;
   }
 

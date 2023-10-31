@@ -242,6 +242,10 @@ int ObExprIsBase::cg_result_type_class(ObObjType type, ObExpr::EvalFunc &eval_fu
         EVAL_FUNC(double);
         break;
     }
+    case ObDecimalIntType: {
+      EVAL_FUNC(decimal_int);
+      break;
+    }
     case ObMaxType: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("is expr got unexpected type param", K(ret), K(type));
@@ -484,14 +488,31 @@ int ObExprIsNot::calc_is_not_nan(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
 }
 
 template <typename T>
-int ObExprIsBase::is_zero(T number)
+int ObExprIsBase::is_zero(T number, const uint32_t len)
 {
+  UNUSED(len);
   return 0 == number;
 }
 template <>
-int ObExprIsBase::is_zero<number::ObCompactNumber>(number::ObCompactNumber number)
+int ObExprIsBase::is_zero<number::ObCompactNumber>(number::ObCompactNumber number,
+                                                   const uint32_t len)
 {
+  UNUSED(len);
   return number.is_zero();
+}
+
+template <>
+int ObExprIsBase::is_zero<const ObDecimalInt *>(const ObDecimalInt *decimal_int, const uint32_t len)
+{
+  const char *data = reinterpret_cast<const char *>(decimal_int);
+  bool is_zero = true;
+  for (int64_t i = 0; i < len; ++i) {
+    if (data[i] != 0) {
+      is_zero = false;
+      break;
+    }
+  }
+  return is_zero;
 }
 
 #define NUMERIC_CALC_FUNC(type, func_name, bool_is_not, is_true, str_is_not)                \
@@ -507,8 +528,8 @@ int ObExprIsBase::is_zero<number::ObCompactNumber>(number::ObCompactNumber numbe
       ret_bool = bool_is_not;                                 \
     } else {                                                  \
       ret_bool = bool_is_not == is_true ?                     \
-                is_zero(param1->get_##type()) :               \
-                !is_zero(param1->get_##type());               \
+                is_zero(param1->get_##type(), param1->len_) : \
+                !is_zero(param1->get_##type(), param1->len_); \
     }                                                         \
     if (OB_SUCC(ret)) {                                       \
       expr_datum.set_int32(static_cast<int32_t>(ret_bool));   \
@@ -520,20 +541,26 @@ NUMERIC_CALC_FUNC(int, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(float, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(double, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(number, ObExprIsNot, true, true, is_not)
+NUMERIC_CALC_FUNC(decimal_int, ObExprIsNot, true, true, is_not)
+
 
 NUMERIC_CALC_FUNC(int, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(float, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(double, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(number, ObExprIsNot, true, false, is_not)
+NUMERIC_CALC_FUNC(decimal_int, ObExprIsNot, true, false, is_not)
 
 NUMERIC_CALC_FUNC(int, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, true, is)
+NUMERIC_CALC_FUNC(decimal_int, ObExprIs, false, true, is)
 
 NUMERIC_CALC_FUNC(int, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, false, is)
+NUMERIC_CALC_FUNC(decimal_int, ObExprIs, false, false, is)
+
 }
 }

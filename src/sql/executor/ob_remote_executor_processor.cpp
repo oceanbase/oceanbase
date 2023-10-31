@@ -28,7 +28,7 @@
 #include "observer/ob_server.h"
 #include "lib/stat/ob_session_stat.h"
 #include "sql/ob_sql.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

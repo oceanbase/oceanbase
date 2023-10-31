@@ -22,7 +22,7 @@ namespace oceanbase
 {
 using namespace common;
 // following .map file depends on ns oceanbase::common;
-#include "sql/engine/expr/ob_expr_merge_result_type.map"
+#include "sql/engine/expr/ob_expr_merge_result_type_oracle.map"
 #include "sql/engine/expr/ob_expr_relational_result_type.map"
 #include "sql/engine/expr/ob_expr_abs_result_type.map"
 #include "sql/engine/expr/ob_expr_neg_result_type.map"
@@ -129,11 +129,9 @@ int ObExprResultTypeUtil::get_merge_result_type(ObObjType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("the wrong type", K(type1),K(type2),K(ret));
   } else {
-    if (is_oracle_mode()) {
-      type = MERGE_RESULT_TYPE_ORACLE[type1][type2];
-    } else {
-      type = MERGE_RESULT_TYPE[type1][type2];
-    }
+    type = lib::is_oracle_mode()
+           ? MERGE_RESULT_TYPE_ORACLE[type1][type2]
+           : MERGE_RESULT_TYPE[type1][type2];
   }
 
   return ret;
@@ -236,8 +234,19 @@ int ObExprResultTypeUtil::get_div_result_type(ObObjType &result_type,
     }
   } else {
     result_type = DIV_RESULT_TYPE[type1][type2];
-    result_ob1_type = result_type;
-    result_ob2_type = result_type;
+    // FIXME: @zuojiao.hzj : remove this after we can keep high division calc scale
+    // using decimal int
+    bool all_decint_args = (ob_is_decimal_int(type1) && ob_is_decimal_int(type2));
+    if (ob_is_decimal_int(result_type)) {
+      result_type = ObNumberType;
+    }
+    if (ob_is_decimal_int(result_type) && !all_decint_args) {
+      result_ob1_type = ObNumberType;
+      result_ob2_type = ObNumberType;
+    } else {
+      result_ob1_type = result_type;
+      result_ob2_type = result_type;
+    }
   }
   return ret;
 }
@@ -347,7 +356,8 @@ int ObExprResultTypeUtil::get_mod_result_type(ObExprResType &res_type,
   ObObjType type = ObMaxType;
   ObObjType result_ob1_type = ObMaxType;
   ObObjType result_ob2_type = ObMaxType;
-  if (OB_FAIL(get_mod_result_type(type, result_ob1_type, result_ob2_type, res_type1.get_type(), res_type2.get_type()))) {
+  if (OB_FAIL(get_mod_result_type(type, result_ob1_type, result_ob2_type, res_type1.get_type(),
+                                  res_type2.get_type()))) {
   } else {
     res_type.set_type(type);
   }

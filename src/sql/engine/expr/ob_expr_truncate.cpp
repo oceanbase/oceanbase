@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_truncate.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "objit/common/ob_item_type.h"
 #include "share/object/ob_obj_cast.h"
@@ -59,38 +60,46 @@ int ObExprTruncate::calc_result_type2(ObExprResType &type,
     if (type2.is_literal()) {
       ObObjTypeClass target_tc = type1.get_type_class();
       switch(target_tc) {
-      case ObIntTC: {
-        type.set_int();
-        type.set_scale(type1.get_scale());
-        not_int_flag = false;
-        break;
-      }
-      case ObUIntTC:
-      case ObBitTC:
-      case ObYearTC: {
-        type.set_uint64();
-        type.set_scale(type1.get_scale());
-        not_int_flag = false;
-        break;
-      }
-      case ObNumberTC: {
-        if (type1.is_unumber()) {
-          type.set_unumber();
-        } else {
-          type.set_number();
+        case ObIntTC: {
+          type.set_int();
+          type.set_scale(type1.get_scale());
+          not_int_flag = false;
+          break;
         }
-        break;
-      }
-      default: {
-        if (type1.is_ufloat() || type1.is_udouble()) {
-          type.set_udouble();
-        } else {
-          type.set_double();
+        case ObUIntTC:
+        case ObBitTC:
+        case ObYearTC: {
+          type.set_uint64();
+          type.set_scale(type1.get_scale());
+          not_int_flag = false;
+          break;
         }
-        break;
+        case ObNumberTC: {
+          if (type1.is_unumber()) {
+            type.set_unumber();
+          } else {
+            type.set_number();
+          }
+          break;
+        }
+        case ObDecimalIntTC : {
+          if (is_oracle_mode()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("oracle mode won't come here", K(ret));
+          } else {
+            type.set_decimal_int(type1.get_scale()); // not the final scale
+          }
+          break;
+        }
+        default: {
+          if (type1.is_ufloat() || type1.is_udouble()) {
+            type.set_udouble();
+          } else {
+            type.set_double();
+          }
+          break;
+        }
       }
-      }
-
       const ObObj& obj2 = type2.get_param();
       ObArenaAllocator oballocator(ObModIds::BLOCK_ALLOC);
       ObCastMode cast_mode = CM_NONE;
@@ -116,29 +125,32 @@ int ObExprTruncate::calc_result_type2(ObExprResType &type,
             } else {
               type.set_scale(static_cast<int16_t>(GET_SCALE_FOR_DEDUCE(scale_val)));
             }
-            ObPrecision precision = static_cast<ObPrecision>
-              (type1.get_precision() - type1.get_scale() + scale_val + 1);
-            //防御可能出现的没有设置precision的decimal 或者scale_val 为负数
-            precision = std::max(static_cast<int16_t>(-1), precision);
+            ObPrecision precision = (type1.get_precision() - type1.get_scale() + type.get_scale());
+            if (0 == precision) {
+              precision = 1;
+            }
             type.set_precision(precision);
           } else { /* do nothing */}
         } else if (ret == OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD ||
             ret == OB_ERR_DATA_TRUNCATED){
-          // cast obj2 to int failed, just set scale to SCALE_UNKNOWN_YET
-          type.set_scale(SCALE_UNKNOWN_YET);
-          type.set_precision(PRECISION_UNKNOWN_YET);
+          type.set_scale(0);
+          ObPrecision precision = type1.get_precision() - type1.get_scale();
+          if (0 == precision) {
+            precision = 1;
+          }
+          type.set_precision(precision);
           ret = OB_SUCCESS;
         } else {
           // do nothing
         }
       } else {
-        type.set_scale(SCALE_UNKNOWN_YET);
-        type.set_precision(PRECISION_UNKNOWN_YET);
+        type.set_scale(0);
+        type.set_precision(type1.get_precision() - type1.get_scale());
         ret = OB_SUCCESS;
       }
     } else {
       ObObjType expr1_ty = type1.get_type();
-      if (ObNumberType == expr1_ty || ObUNumberType == expr1_ty) {
+      if (ObNumberType == expr1_ty || ObUNumberType == expr1_ty || ObDecimalIntType == expr1_ty) {
         type.set_type(expr1_ty);
       } else if ((expr1_ty >= ObUTinyIntType && expr1_ty <= ObUInt64Type) ||
           (expr1_ty >= ObUFloatType && expr1_ty <= ObUDoubleType) ||
@@ -237,6 +249,64 @@ int ObExprTruncate::set_trunc_val(common::ObObj &result,
   return ret;
 }
 
+int ObExprTruncate::do_trunc_decimalint(
+    const int16_t in_prec, const int16_t in_scale,
+    const int16_t out_prec, const int64_t trunc_scale, const int64_t out_scale,
+    const ObDatum &in_datum, ObDecimalIntBuilder &res_val)
+{
+  int ret = OB_SUCCESS;
+  const ObDecimalInt *decint = in_datum.get_decimal_int();
+  const int32_t int_bytes = in_datum.get_int_bytes();
+  ObScale calc_scale = in_scale;
+  int16_t expected_int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+  if (trunc_scale < in_scale) {
+    if (OB_FAIL(wide::common_scale_decimalint(decint, int_bytes, in_scale, trunc_scale, res_val, true))) {
+      LOG_WARN("failed to scale decimal int", K(ret));
+    } else {
+      calc_scale = trunc_scale;
+    }
+  } else {
+    res_val.from(decint, int_bytes);
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (calc_scale != out_scale) {
+    if (OB_FAIL(wide::common_scale_decimalint(res_val.get_decimal_int(), res_val.get_int_bytes(),
+                                              calc_scale, out_scale, res_val))) {
+      LOG_WARN("failed to scale decimal int", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (res_val.get_int_bytes() != expected_int_bytes) {
+    ObDecimalIntBuilder tmp_val;
+    if (OB_FAIL(ObDatumCast::align_decint_precision_unsafe(
+        res_val.get_decimal_int(), res_val.get_int_bytes(), expected_int_bytes, tmp_val))) {
+      LOG_WARN("align decimal int length failed", K(ret));
+    } else {
+      res_val.from(tmp_val);
+    }
+  }
+  return ret;
+}
+
+int ObExprTruncate::calc_trunc_decimalint(
+    const int16_t in_prec, const int16_t in_scale,
+    const int16_t out_prec, const int64_t trunc_scale, const int16_t out_scale,
+    const ObDatum &in_datum, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDecimalIntBuilder res_val;
+  if (OB_FAIL(do_trunc_decimalint(
+      in_prec, in_scale, out_prec, trunc_scale, out_scale, in_datum, res_val))) {
+    LOG_WARN("do_round_decimalint failed",
+        K(ret), K(in_prec), K(in_scale), K(out_prec), K(trunc_scale), K(out_scale));
+  } else {
+    res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+  }
+  return ret;
+}
+
 int calc_truncate_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
@@ -283,6 +353,22 @@ int calc_truncate_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         } else {
           res_datum.set_number(res_nmb);
         }
+        break;
+      }
+      case ObDecimalIntType: {
+        const ObDatumMeta &in_meta = expr.args_[0]->datum_meta_;
+        const ObDatumMeta &out_meta = expr.datum_meta_;
+        if (OB_FAIL(ObExprTruncate::calc_trunc_decimalint(in_meta.precision_,
+                                                          in_meta.scale_,
+                                                          out_meta.precision_,
+                                                          lib::is_oracle_mode()
+                                                            ? GET_SCALE_FOR_CALC_ORACLE(scale)
+                                                            : GET_SCALE_FOR_CALC(scale),
+                                                          out_meta.scale_, *x_datum, res_datum))) {
+          LOG_WARN("calc_trunc_decimalint failed", K(ret), K(in_meta.precision_), K(in_meta.scale_),
+                   K(out_meta.precision_), K(scale));
+        }
+
         break;
       }
       default: {

@@ -524,6 +524,8 @@ private:
                                          ObBatchRows &my_brs,
                                          bool &insert_group_ht);
   int init_by_pass_op();
+  int64_t get_input_rows() const;
+  int64_t get_input_size() const;
   // Alloc one batch group_row_item at a time
   static const int64_t BATCH_GROUP_ITEM_SIZE = 16;
   const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / sizeof(ObGroupRowItem);

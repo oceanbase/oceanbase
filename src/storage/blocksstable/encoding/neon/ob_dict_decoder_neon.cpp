@@ -34,18 +34,20 @@ template <int CMP_TYPE>
 struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
 {
   static void dict_cmp_ref_func(
-      const int64_t row_cnt,
       const int64_t dict_ref,
       const int64_t dict_cnt,
       const unsigned char *col_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       sql::ObBitVector &result)
   {
-    const uint8_t *ref_arr = reinterpret_cast<const uint8_t *>(col_data);
+    const unsigned char *filter_col_data = col_data + pd_filter_info.start_ * sizeof(uint8_t);
+    const uint8_t *ref_arr = reinterpret_cast<const uint8_t *>(filter_col_data);
     const uint8_t casted_dict_ref = *reinterpret_cast<const uint8_t *>(&dict_ref);
     const uint8_t casted_dict_cnt = *reinterpret_cast<const uint8_t *>(&dict_cnt);
 
     uint8x16_t power_vec = vld1q_u8(NEON_CMP_MASK_POWER_16);
     uint8x16_t dict_ref_vec = vdupq_n_u8(casted_dict_ref);
+    const int64_t row_cnt = pd_filter_info.count_;
     if (CMP_TYPE <= sql::WHITE_OP_LT) {
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
         uint8x16_t data_vec = vld1q_u8(ref_arr + i * 16);
@@ -56,7 +58,8 @@ struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
         result.reinterpret_data<uint16_t>()[i] = *reinterpret_cast<uint16_t *>(&mask);
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 16 * 16;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
@@ -66,7 +69,7 @@ struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
       for (int64_t i = 0; i < row_cnt / 16; ++i) {
         uint8x16_t data_vec = vld1q_u8(ref_arr + i * 16);
         uint8x16_t cmp_res_ref = neon_cmp_int<uint8x16_t, uint8x16_t, CMP_TYPE>(data_vec, dict_ref_vec);
-        uint8x16_t cmp_res_cnt = neon_cmp_int<uint8x16_t, uint8x16_t, CMP_TYPE>(data_vec, dict_cnt_vec);
+        uint8x16_t cmp_res_cnt = neon_cmp_int<uint8x16_t, uint8x16_t, sql::WHITE_OP_GE>(data_vec, dict_cnt_vec);
         uint8x16_t cmp_res = cmp_res_ref & (~cmp_res_cnt);
         // generate result bitmap from compare result
         uint64x2_t bi_mask = vpaddlq_u32(vpaddlq_u16(vpaddlq_u8(vandq_u8(cmp_res, power_vec))));
@@ -74,7 +77,8 @@ struct DictCmpRefNeonFunc_T<1, CMP_TYPE>
         result.reinterpret_data<uint16_t>()[i] = *reinterpret_cast<uint16_t *>(&mask);
       }
 
-      for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 16 * 16;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
@@ -89,18 +93,20 @@ template <int CMP_TYPE>
 struct DictCmpRefNeonFunc_T<2, CMP_TYPE>
 {
   static void dict_cmp_ref_func(
-      const int64_t row_cnt,
       const int64_t dict_ref,
       const int64_t dict_cnt,
       const unsigned char *col_data,
+      const sql::PushdownFilterInfo &pd_filter_info,
       sql::ObBitVector &result)
   {
-    const uint16_t *ref_arr = reinterpret_cast<const uint16_t *>(col_data);
+    const unsigned char *filter_col_data = col_data + pd_filter_info.start_ * sizeof(uint16_t);
+    const uint16_t *ref_arr = reinterpret_cast<const uint16_t *>(filter_col_data);
     const uint16_t casted_dict_ref = *reinterpret_cast<const uint16_t *>(&dict_ref);
     const uint16_t casted_dict_cnt = *reinterpret_cast<const uint16_t *>(&dict_cnt);
 
     uint16x8_t power_vec = vld1q_u16(NEON_CMP_MASK_POWER_8);
     uint16x8_t dict_ref_vec = vdupq_n_u16(casted_dict_ref);
+    const int64_t row_cnt = pd_filter_info.count_;
     if (CMP_TYPE <= sql::WHITE_OP_LT) {
       for (int64_t i = 0; i < row_cnt / 8; ++i) {
         uint16x8_t data_vec = vld1q_u16(ref_arr + i * 8);
@@ -110,7 +116,8 @@ struct DictCmpRefNeonFunc_T<2, CMP_TYPE>
         result.reinterpret_data<uint8_t>()[i] = *reinterpret_cast<uint8_t *>(&mask);
       }
 
-      for (int64_t row_id = row_cnt / 8 * 8; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 8 * 8;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint16_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
@@ -120,14 +127,15 @@ struct DictCmpRefNeonFunc_T<2, CMP_TYPE>
       for (int64_t i = 0; i < row_cnt / 8; ++i) {
         uint16x8_t data_vec = vld1q_u16(ref_arr + i * 8);
         uint16x8_t cmp_res_ref = neon_cmp_int<uint16x8_t, uint16x8_t, CMP_TYPE>(data_vec, dict_ref_vec);
-        uint16x8_t cmp_res_cnt = neon_cmp_int<uint16x8_t, uint16x8_t, CMP_TYPE>(data_vec, dict_cnt_vec);
+        uint16x8_t cmp_res_cnt = neon_cmp_int<uint16x8_t, uint16x8_t, sql::WHITE_OP_GE>(data_vec, dict_cnt_vec);
         uint16x8_t cmp_res = cmp_res_ref & (~cmp_res_cnt);
         // generate result bitmap from compare result
         uint64_t mask = vpaddd_u64(vpaddlq_u32(vpaddlq_u16(vandq_u16(cmp_res, power_vec))));
         result.reinterpret_data<uint8_t>()[i] = *reinterpret_cast<uint8_t *>(&mask);
       }
 
-      for (int64_t row_id = row_cnt / 8 * 8; row_id < row_cnt; ++row_id) {
+      for (int64_t row_id = row_cnt / 8 * 8;
+          row_id < row_cnt; ++row_id) {
         if (value_cmp_t<uint8_t, CMP_TYPE>(ref_arr[row_id], casted_dict_ref)) {
           result.set(row_id);
         }
@@ -156,4 +164,4 @@ bool init_dict_cmp_ref_neon_simd_funcs()
 }
 
 } // namespace blocksstable
-} // namespace oceanbase    
+} // namespace oceanbase

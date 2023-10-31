@@ -22,6 +22,7 @@ using namespace storage;
 using namespace lib;
 using namespace share;
 using namespace omt;
+using namespace compaction;
 
 namespace unittest
 {
@@ -117,6 +118,7 @@ TEST_F(TestSSTableMergeInfoMgr, iterator)
   info_param.struct_type_ = compaction::ObInfoParamStructType::SUSPECT_INFO_PARAM;
   merge_info.info_param_ = &info_param;
 
+  const uint64_t tenant_id = 1001;
   merge_info.tenant_id_ = 1;
   merge_info.ls_id_ = 1;
   merge_info.tablet_id_ = 3;
@@ -198,7 +200,8 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   info_param.struct_type_ = compaction::ObInfoParamStructType::SUSPECT_INFO_PARAM;
   merge_info.info_param_ = &info_param;
 
-  merge_info.tenant_id_ = 1;
+  const uint64_t tenant_id = 1001;
+  merge_info.tenant_id_ = tenant_id;
   merge_info.ls_id_ = 1;
   merge_info.compaction_scn_ = 100;
   merge_info.merge_type_ = ObMergeType::MINOR_MERGE;
@@ -300,10 +303,10 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
 
   // after set_max, major pool has 1 page, minor pool has 2 pages
   // major pool don't need to purge (5)
-  // minor pool left 7 info (7 * 880 < 16384 * 0.4) (3 4)
+  // minor pool left 6 info (6 * 912 < 16384 * 0.4) (3 4)
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->set_max(2 * MERGE_INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(6 + 7, MTL(ObTenantSSTableMergeInfoMgr*)->size());
+  ASSERT_EQ(6 + 6, MTL(ObTenantSSTableMergeInfoMgr*)->size());
 
   merge_info.merge_type_ = ObMergeType::MAJOR_MERGE;
   merge_info.tablet_id_ = 31;
@@ -312,10 +315,12 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   // the iterator will not get the new major merge info because it is in the iter_end
   // but it can continue to get the info in minor merge info pool
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator, minor_iterator, read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(14));
+  COMMON_LOG(INFO, "print read info", K(read_info));
+  ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(15));
   ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MINOR_MERGE);
 
   ASSERT_EQ(OB_SUCCESS, ObTenantSSTableMergeInfoMgr::get_next_info(major_iterator1, minor_iterator1, read_info, comment, sizeof(comment)));
+  COMMON_LOG(INFO, "print read info", K(read_info));
   ASSERT_EQ(TRUE, read_info.tablet_id_ == ObTabletID(31));
   ASSERT_EQ(TRUE, read_info.merge_type_ == ObMergeType::MAJOR_MERGE);
 }

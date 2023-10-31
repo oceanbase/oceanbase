@@ -13,7 +13,7 @@
 #ifndef OCEABASE_STORAGE_LS_COMPLETE_MIGRATION
 #define OCEABASE_STORAGE_LS_COMPLETE_MIGRATION
 
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 #include "ob_storage_ha_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -86,7 +86,6 @@ public:
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
   virtual int deal_with_cancel() override;
-  bool is_ha_dag_net() const override { return true; }
 
   ObLSCompleteMigrationCtx *get_ctx() { return &ctx_; }
   const share::ObLSID &get_ls_id() const { return ctx_.arg_.ls_id_; }

@@ -119,9 +119,15 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
     const bool need_binary_hash =
         (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC);
     bool has_lob_header = col_desc.col_type_.is_lob_storage();
+    ObPrecision precision = PRECISION_UNKNOWN_YET;
+    if (col_desc.col_type_.is_decimal_int()) {
+      precision = col_desc.col_type_.get_stored_precision();
+      OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
+      OB_ASSERT(precision >= 0 && precision <= OB_MAX_DECIMAL_PRECISION);
+    }
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
         col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type(),
-        col_desc.col_type_.get_scale(), lib::is_oracle_mode(), has_lob_header);
+        col_desc.col_type_.get_scale(), lib::is_oracle_mode(), has_lob_header, precision);
     ObHashFunc hash_func;
     hash_func.hash_func_ = basic_funcs->murmur_hash_;
     const uint64_t mask = (bucket_num_ - 1);
@@ -350,6 +356,8 @@ int build_column_encoding_ctx(ObEncodingHashTable *ht,
         }
         break;
       }
+      case ObDecimalIntSC:
+        // wide int type is neither packed not delta coded yet, store as fixed-length buf for now
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
@@ -370,6 +378,10 @@ int build_column_encoding_ctx(ObEncodingHashTable *ht,
               var_store = true;
             }
           }
+        }
+        if (OB_UNLIKELY(ObDecimalIntSC == store_class && var_store)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("var store for store class invalid", K(ret), K(store_class), K(var_store), K(col_ctx));
         }
         break;
       }

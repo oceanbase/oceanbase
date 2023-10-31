@@ -23,6 +23,7 @@
 #include "common/storage/ob_io_device.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "observer/ob_server_struct.h"
 
@@ -39,6 +40,7 @@ ObAdminExecutor::ObAdminExecutor()
       config_mgr_(ObServerConfig::get_instance(), reload_config_)
 {
   // 设置MTL上下文
+  mock_server_tenant_.set(&blocksstable::ObDecodeResourcePool::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);
 
   storage_env_.data_dir_ = data_dir_;
@@ -72,6 +74,7 @@ ObAdminExecutor::ObAdminExecutor()
 
 ObAdminExecutor::~ObAdminExecutor()
 {
+  blocksstable::ObDecodeResourcePool::get_instance().destroy();
   ObIOManager::get_instance().stop();
   ObIOManager::get_instance().destroy();
   OB_SERVER_BLOCK_MGR.stop();
@@ -135,6 +138,15 @@ int ObAdminExecutor::prepare_io()
     LOG_WARN("fail to start block manager, ", K(ret));
   }
 
+  return ret;
+}
+
+int ObAdminExecutor::prepare_decoder()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(blocksstable::ObDecodeResourcePool::get_instance().init())) {
+    LOG_WARN("fail to init decoder resource pool");
+  }
   return ret;
 }
 

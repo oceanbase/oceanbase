@@ -21,6 +21,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/meta_mem/ob_tablet_pointer_handle.h"
 
 namespace oceanbase
 {
@@ -36,7 +37,6 @@ class ObAllVirtualTabletPtr : public common::ObVirtualTableScannerIterator,
                               public omt::ObMultiTenantOperator
 {
 private:
-  typedef ObMetaPointerHandle<ObTabletMapKey, ObTablet> ObTabletPointerHandle;
   enum COLUMN_ID_LIST
   {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,

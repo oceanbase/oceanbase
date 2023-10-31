@@ -42,7 +42,6 @@ namespace rootserver
 {
 class ObUnitManager;
 class ObZoneManager;
-class ObFreezeInfoManager;
 class ObDRTaskMgr;
 class ObIStatusChangeCallback
 {

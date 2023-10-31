@@ -303,7 +303,6 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx()
                                             trans_version_range))) {
     LOG_WARN("fail to init table access context", KR(ret));
   } else {
-    table_access_ctx_.io_callback_ = &io_callback_;
     table_access_ctx_.lob_locator_helper_->update_lob_locator_ctx(table_id, tablet_id.id(), 0);
   }
   return ret;

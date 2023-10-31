@@ -702,7 +702,9 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
                             expr->datum_meta_.cs_type_,
                             expr->datum_meta_.scale_,
                             lib::is_oracle_mode(),
-                            expr->obj_meta_.has_lob_header());
+                            expr->obj_meta_.has_lob_header(),
+                            expr->datum_meta_.precision_,
+                            expr->datum_meta_.precision_);
       hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_v2_;
       hash_func.batch_hash_func_ = expr->basic_funcs_->murmur_hash_v2_batch_;
       if (OB_FAIL(hash_funcs_.push_back(hash_func))) {
@@ -866,8 +868,8 @@ int ObHashGroupByOp::load_data()
   DatumStoreLinkPartition *cur_part = NULL;
   int64_t part_id = 0;
   int64_t part_shift = part_shift_; // low half bits for hash table lookup.
-  int64_t input_rows = child_->get_spec().rows_;
-  int64_t input_size = child_->get_spec().width_ * input_rows;
+  int64_t input_rows = get_input_rows();
+  int64_t input_size = get_input_size();
   static_assert(MAX_PARTITION_CNT <= (1 << (CHAR_BIT)), "max partition cnt is too big");
 
   if (!dumped_group_parts_.is_empty() || (is_init_distinct_data_ && !use_distinct_data_)) {
@@ -1587,8 +1589,8 @@ int ObHashGroupByOp::load_data_batch(int64_t max_row_cnt)
   DatumStoreLinkPartition *cur_part = NULL;
   int64_t part_id = 0;
   int64_t part_shift = part_shift_; // low half bits for hash table lookup.
-  int64_t input_rows = child_->get_spec().rows_;
-  int64_t input_size = child_->get_spec().width_ * input_rows;
+  int64_t input_rows = get_input_rows();
+  int64_t input_size = get_input_size();
   static_assert(MAX_PARTITION_CNT <= (1 << (CHAR_BIT)), "max partition cnt is too big");
 
   if (!dumped_group_parts_.is_empty() || (is_init_distinct_data_ && !use_distinct_data_)) {
@@ -2708,13 +2710,6 @@ int ObHashGroupByOp::by_pass_restart_round()
   cur_group_item_buf_ = nullptr;
   gri_cnt_per_batch_ = 0;
   aggr_processor_.reuse();
-  sql_mem_processor_.reset();
-  OZ(ObPxEstimateSizeUtil::get_px_size(&ctx_,
-                                        MY_SPEC.px_est_size_factor_,
-                                        est_group_cnt,
-                                        est_group_cnt));
-  OX(est_hash_mem_size = estimate_hash_bucket_size(est_group_cnt));
-  OX(estimate_mem_size = est_hash_mem_size + MY_SPEC.width_ * est_group_cnt);
   // if last round is in L2 cache, reuse the bucket
   // otherwise resize to init size to avoid L2 cache overflow
   if (bypass_ctrl_.need_resize_hash_table_) {
@@ -2722,12 +2717,6 @@ int ObHashGroupByOp::by_pass_restart_round()
   } else {
     OX(local_group_rows_.reuse());
   }
-  OZ(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
-                                               ctx_.get_my_session()->get_effective_tenant_id(),
-                                               estimate_mem_size,
-                                               MY_SPEC.type_,
-                                               MY_SPEC.id_,
-                                               &ctx_));
   OZ(init_group_store());
   if (OB_SUCC(ret)) {
     group_rows_arr_.reuse();
@@ -2741,6 +2730,24 @@ int ObHashGroupByOp::by_pass_restart_round()
     }
   }
   return ret;
+}
+
+int64_t ObHashGroupByOp::get_input_rows() const
+{
+  int64_t res = child_->get_spec().rows_;
+  if (ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_) {
+    res = std::max(res, res * (MY_SPEC.dist_col_group_idxs_.count() + 1));
+  }
+  return res;
+}
+
+int64_t ObHashGroupByOp::get_input_size() const
+{
+  int64_t res = child_->get_spec().rows_ * child_->get_spec().width_;
+  if (ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_) {
+    res = std::max(res, res * (MY_SPEC.dist_col_group_idxs_.count() + 1));
+  }
+  return res;
 }
 
 } // end namespace sql

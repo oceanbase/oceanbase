@@ -1152,6 +1152,12 @@ int64_t DmlStmtTask::get_global_schema_version() const
   return host_.get_global_schema_version();
 }
 
+int DmlStmtTask::parse_aux_meta_table_cols(
+    const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info)
+{
+  return row_.parse_cols(lob_aux_table_schema_info);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////
 int64_t DdlStmtUniqueID::to_string(char *buf, const int64_t buf_len) const
 {

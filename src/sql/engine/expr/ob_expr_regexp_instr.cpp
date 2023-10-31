@@ -220,15 +220,20 @@ int ObExprRegexpInstr::eval_regexp_instr(
                                                 (occurrence != NULL && occurrence->is_null()) ||
                                                 (return_opt != NULL && return_opt->is_null()) ||
                                                 (match_type != NULL && match_type->is_null()));
-    if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos))
-        || OB_FAIL(ObExprUtil::get_int_param_val(occurrence, occur))
-        || OB_FAIL(ObExprUtil::get_int_param_val(return_opt, return_opt_val))
-        || OB_FAIL(ObExprUtil::get_int_param_val(subexpr, subexpr_val))) {
+    if (OB_FAIL(ObExprUtil::get_int_param_val(
+          position, expr.arg_cnt_ > 2 && expr.args_[2]->obj_meta_.is_decimal_int(), pos))
+        || OB_FAIL(ObExprUtil::get_int_param_val(
+          occurrence, expr.arg_cnt_ > 3 && expr.args_[3]->obj_meta_.is_decimal_int(), occur))
+        || OB_FAIL(ObExprUtil::get_int_param_val(
+          return_opt, expr.arg_cnt_ > 4 && expr.args_[4]->obj_meta_.is_decimal_int(),
+          return_opt_val))
+        || OB_FAIL(ObExprUtil::get_int_param_val(
+          subexpr, expr.arg_cnt_ > 6 && expr.args_[6]->obj_meta_.is_decimal_int(), subexpr_val))) {
       LOG_WARN("get integer parameter value failed", K(ret));
-    } else if (!null_result &&
-               (pos <= 0 || occur < 0 || subexpr_val < 0
-                || (lib::is_mysql_mode() && (return_opt_val < 0 || return_opt_val > 1))
-                || (lib::is_oracle_mode() && occurrence != NULL && occur ==0))) {
+    } else if (!null_result
+               && (pos <= 0 || occur < 0 || subexpr_val < 0
+                   || (lib::is_mysql_mode() && (return_opt_val < 0 || return_opt_val > 1))
+                   || (lib::is_oracle_mode() && occurrence != NULL && occur == 0))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("regexp_instr position or occurrence or return_option or subexpr is invalid",
                K(ret), K(pos), K(occur), K(subexpr_val));

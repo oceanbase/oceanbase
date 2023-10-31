@@ -55,11 +55,6 @@ public:
         limit_offset_expr_(NULL),
         sample_info_(),
         est_cost_info_(NULL),
-        table_row_count_(0),
-        output_row_count_(0),
-        phy_query_range_row_count_(0),
-        query_range_row_count_(0),
-        index_back_row_count_(0),
         estimate_method_(INVALID_METHOD),
         table_opt_info_(NULL),
         est_records_(),
@@ -83,7 +78,8 @@ public:
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
-        table_type_(share::schema::MAX_TABLE_TYPE)
+        table_type_(share::schema::MAX_TABLE_TYPE),
+        use_column_store_(false)
   {
   }
 
@@ -126,6 +122,13 @@ public:
 
   inline bool use_das() const
   { return use_das_; }
+
+  inline void set_use_column_store(bool use_column_store)
+  { use_column_store_ = use_column_store; }
+
+  inline bool use_column_store() const
+  { return use_column_store_; }
+
   /**
    *  Get index table id
    */
@@ -283,6 +286,10 @@ public:
   inline common::ObIArray<ObAggFunRawExpr *> &get_pushdown_aggr_exprs()
   { return pushdown_aggr_exprs_; }
 
+  inline common::ObIArray<ObRawExpr *> &get_pushdown_groupby_columns() { return pushdown_groupby_columns_; }
+
+  inline const common::ObIArray<ObRawExpr *> &get_pushdown_groupby_columns() const { return pushdown_groupby_columns_; }
+
   /**
    * Generate the filtering expressions
    */
@@ -351,16 +358,13 @@ public:
   inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
   inline ObRawExpr *get_offset_expr() { return limit_offset_expr_; }
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);
-  inline void set_table_row_count(int64_t table_row_count) { table_row_count_ = table_row_count; }
-  inline int64_t get_table_row_count() const { return table_row_count_; }
-  inline void set_output_row_count(double output_row_count) { output_row_count_ = output_row_count; }
-  inline double get_output_row_count() const { return output_row_count_; }
-  inline void set_phy_query_range_row_count(double phy_query_range_row_count) { phy_query_range_row_count_ = phy_query_range_row_count; }
-  inline double get_phy_query_range_row_count() const { return phy_query_range_row_count_ ; }
-  inline void set_query_range_row_count(double query_range_row_count) { query_range_row_count_ = query_range_row_count; }
-  inline double get_query_range_row_count() const { return query_range_row_count_; }
-  inline void set_index_back_row_count(double index_back_row_count) { index_back_row_count_ = index_back_row_count; }
-  inline double get_index_back_row_count() const { return index_back_row_count_; }
+  inline int64_t get_table_row_count() const
+  { return est_cost_info_ == NULL || est_cost_info_->table_meta_info_ == NULL ? 0.0 : est_cost_info_->table_meta_info_->table_row_count_; }
+  inline double get_output_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->output_row_count_; }
+  inline double get_phy_query_range_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->phy_query_range_row_count_; }
+  inline double get_logical_query_range_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->logical_query_range_row_count_; }
+  inline void set_index_back_row_count(double index_back_row_count) { if (est_cost_info_ != NULL) est_cost_info_->index_back_row_count_ = index_back_row_count; }
+  inline double get_index_back_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->index_back_row_count_; }
   inline void set_estimate_method(RowCountEstMethod method) { estimate_method_ = method; }
   inline RowCountEstMethod get_estimate_method() const { return estimate_method_; }
   int is_top_table_scan(bool &is_top_table_scan)
@@ -530,6 +534,8 @@ protected: // memeber variables
   common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
   // aggr func pushdwon to table scan
   common::ObSEArray<ObAggFunRawExpr *, 4, common::ModulePageAllocator, true> pushdown_aggr_exprs_;
+  // group by columns pushdown to table scan
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pushdown_groupby_columns_;
   // whether a filter can be evaluated before index back
   common::ObSEArray<bool, 4, common::ModulePageAllocator, true> filter_before_index_back_;
 // // removal these in cg layer, up to opt layer.
@@ -549,12 +555,6 @@ protected: // memeber variables
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
   ObCostTableScanInfo *est_cost_info_;
-  /* only used to remember how index are selected */
-  int64_t table_row_count_;
-  double output_row_count_;
-  double phy_query_range_row_count_; // 估计出的抽出的query range中所包含的行数(physical)
-  double query_range_row_count_; // 估计出的抽出的query range中所包含的行数(logical)
-  double index_back_row_count_;  // 估计出的需要回表的行数
   RowCountEstMethod estimate_method_;
   BaseTableOptInfo *table_opt_info_;
   common::ObSEArray<common::ObEstRowCountRecord, 4, common::ModulePageAllocator, true> est_records_;
@@ -596,6 +596,7 @@ protected: // memeber variables
   // end for global index lookup
 
   share::schema::ObTableType table_type_;
+  bool use_column_store_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

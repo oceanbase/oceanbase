@@ -19,7 +19,7 @@
 #include "share/backup/ob_archive_struct.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rs_mgr.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_iterator.h"
@@ -49,6 +49,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant.h"
 #include <algorithm>
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -161,7 +162,14 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
               K(last_advance_checkpoint_ts));
         }
         ob_usleep(CHECK_TIME_INTERVAL);
-        share::dag_yield();
+        if (OB_FAIL(share::dag_yield())) {
+          if (OB_CANCELED == ret) {
+            LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
+            break;
+          } else {
+            LOG_WARN("Invalid return value for dag_yield", K(ret));
+          }
+        }
       }
     } while (OB_SUCC(ret));
   }
@@ -3387,9 +3395,7 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
   ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
   ObArray<ObITable *> sstable_array;
-  ObITable* table_ptr = NULL;
-  ObSSTable *sstable_ptr = NULL;
-  ObArray<ObLogicMacroBlockId> logic_id_list;
+
   if (OB_ISNULL(ls_backup_ctx_) || OB_ISNULL(tablet_stat)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
@@ -3406,15 +3412,35 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     LOG_WARN("failed to get sstable by data type", K(ret), K(tablet_handle));
   } else if (sstable_array.empty()) {
     // do nothing
-  } else if (1 != sstable_array.count()) {
+  } else if (1 != sstable_array.count() && tablet_handle.get_obj()->is_row_store()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable array count not 1", K(ret), K(sstable_array));
-  } else if (OB_ISNULL(table_ptr = sstable_array.at(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sstable should not be null", K(ret), K(sstable_array));
-  } else if (!table_ptr->is_major_sstable()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get incorrect table type", K(ret), KPC(table_ptr));
+  } else if (1 == sstable_array.count()) {
+    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0), tablet_handle, tablet_stat))) {
+      LOG_WARN("failed to check and mark item reused", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
+      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i), tablet_handle, tablet_stat))) {
+        LOG_WARN("failed to check and mark item reused", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupDataTask::check_and_mark_item_reused_(
+    ObITable* table_ptr,
+    ObTabletHandle &tablet_handle,
+    ObBackupTabletStat *tablet_stat)
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *sstable_ptr = nullptr;
+  ObArray<ObLogicMacroBlockId> logic_id_list;
+
+  if (OB_UNLIKELY(nullptr == table_ptr || !table_ptr->is_major_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid table ptr", K(ret), KPC(table_ptr));
   } else if (FALSE_IT(sstable_ptr = static_cast<ObSSTable *>(table_ptr))) {
   } else if (OB_FAIL(ObBackupUtils::fetch_macro_block_logic_id_list(
       tablet_handle, *sstable_ptr, logic_id_list))) {
@@ -3423,6 +3449,7 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     std::sort(logic_id_list.begin(), logic_id_list.end());
     const ObITable::TableKey &table_key = table_ptr->get_key();
     const ObArray<ObBackupMacroBlockIDPair> &id_array = ls_backup_ctx_->backup_retry_ctx_.reused_pair_list_;
+
     for (int64_t i = 0; OB_SUCC(ret) && i < id_array.count(); ++i) {
       const ObBackupMacroBlockIDPair &pair = id_array.at(i);
       bool need_reuse = true;
@@ -3872,7 +3899,7 @@ int ObLSBackupPrepareTask::process()
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
         if (!add_dag_success) {
-          scheduler->free_dag(*child_dag, dag_);
+          scheduler->free_dag(*child_dag);
         }
       }
     }
@@ -3897,7 +3924,7 @@ int ObLSBackupPrepareTask::process()
       ObPrefetchBackupInfoDag *prefetch_dag = success_add_prefetch_dags.at(i);
       if (OB_ISNULL(prefetch_dag)) {
         // do nothing
-      } else if (OB_TMP_FAIL(scheduler->cancel_dag(prefetch_dag, dag_))) {
+      } else if (OB_TMP_FAIL(scheduler->cancel_dag(prefetch_dag))) {
         LOG_ERROR("failed to cancel dag", K(tmp_ret), KP(prefetch_dag), KP(dag_));
       } else {
         success_add_prefetch_dags.at(i) = NULL;
@@ -5017,7 +5044,14 @@ int ObLSBackupComplementLogTask::wait_piece_frozen_(const share::ObTenantArchive
     } else {
       LOG_INFO("wait piece frozen", K(piece));
       ob_usleep(CHECK_TIME_INTERVAL);
-      share::dag_yield();
+      if (OB_FAIL(share::dag_yield())) {
+        if (OB_CANCELED == ret) {
+          LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
+          break;
+        } else {
+          LOG_WARN("Invalid return value for dag_yield", K(ret));
+        }
+      }
     }
   } while (OB_SUCC(ret));
   return ret;

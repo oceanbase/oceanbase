@@ -20,7 +20,8 @@ namespace blocksstable
 
 
 ObDataMacroBlockMergeWriter::ObDataMacroBlockMergeWriter()
-    : curr_macro_logic_id_(),
+    : ObMacroBlockWriter(true),
+      curr_macro_logic_id_(),
       is_use_freespace_(false),
       next_block_use_freespace_(false)
 {
@@ -39,7 +40,7 @@ void ObDataMacroBlockMergeWriter::reset()
 }
 
 int ObDataMacroBlockMergeWriter::open(
-    ObDataStoreDesc &data_store_desc,
+    const ObDataStoreDesc &data_store_desc,
     const ObMacroDataSeq &start_seq,
     ObIMacroBlockFlushCallback *callback)
 {
@@ -111,7 +112,7 @@ void ObDataMacroBlockMergeWriter::adjust_freespace(const ObMacroBlockDesc *curr_
   if (OB_NOT_NULL(curr_macro_desc) && curr_macro_logic_id_ != curr_macro_desc->macro_meta_->get_logic_id()) {
     curr_macro_logic_id_ = curr_macro_desc->macro_meta_->get_logic_id();
     is_use_freespace_ = static_cast<blocksstable::ObDataMacroBlockMeta *>(curr_macro_desc->macro_meta_)->val_.data_zsize_
-                        + get_macro_data_size() <= data_store_desc_->macro_block_size_;
+                        + get_macro_data_size() <= data_store_desc_->get_macro_block_size();
     next_block_use_freespace_ = !is_use_freespace_;
   }
 }
@@ -122,7 +123,7 @@ bool ObDataMacroBlockMergeWriter::check_need_switch_macro_block()
 
   if (get_curr_micro_writer_row_count() > 0) {
     need_switch_macro_block = false;
-  } else if (!is_use_freespace_ && get_macro_data_size() >= data_store_desc_->macro_store_size_) {
+  } else if (!is_use_freespace_ && get_macro_data_size() >= data_store_desc_->get_macro_store_size()) {
     need_switch_macro_block = true;
   }
 

@@ -35,6 +35,7 @@ public:
                   const int64_t date_unit,
                   const T &date,
                   common::ObObjType date_type,
+                  const ObScale scale,
                   const common::ObCastMode cast_mode,
                   const common::ObTimeZoneInfo *tz_info,
                   const int64_t cur_ts_value,

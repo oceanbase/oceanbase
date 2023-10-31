@@ -5221,7 +5221,9 @@ int ObHashJoinOp::outer_join_read_hashrow_going_batch()
   int64_t idx = 0;
   for (int64_t i = 0; i < right_selector_cnt_; i++) {
     int64_t batch_idx = right_selector_[i];
-    cur_tuples_[i]->set_is_match(true);
+    if (RIGHT_OUTER_JOIN != MY_SPEC.join_type_) {
+      cur_tuples_[i]->set_is_match(true);
+    }
     brs_.skip_->unset(batch_idx);
     auto tuple = cur_tuples_[i]->get_next();
     if (NULL != tuple) {

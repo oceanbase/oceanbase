@@ -347,6 +347,7 @@ public:
                            const common::ObCollationType server_collation,
                            ObExprInfo *parents_expr_info,
                            const ObSQLMode mode,
+                           bool enable_decimal_int_type,
                            bool is_from_pl = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
@@ -363,6 +364,7 @@ public:
                                const bool is_for_pl_type,
                                const ObSessionNLSParams &nls_session_param,
                                uint64_t tenant_id,
+                               const bool enable_decimal_int_type,
                                const bool convert_real_type_to_decimal = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,
@@ -765,7 +767,8 @@ public:
                             const ObPCParam *pc_param,
                             const int64_t param_idx,
                             ObObjParam &obj_param,
-                            bool &is_param);
+                            bool &is_param,
+                            const bool enable_decimal_int);
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);

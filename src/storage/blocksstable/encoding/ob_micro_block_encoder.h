@@ -65,24 +65,21 @@ public:
   // Valid to double init. will call reuse() every time befor initialization.
   int init(const ObMicroBlockEncodingCtx &ctx);
   // return OB_BUF_NOT_ENOUGH if exceed micro block size
-  virtual int append_row(const ObDatumRow &row);
-  virtual int build_block(char *&buf, int64_t &size);
+  virtual int append_row(const ObDatumRow &row) override;
+  virtual int build_block(char *&buf, int64_t &size) override;
   // clear status and release memory, reset along with macro block writer
-  virtual void reset();
+  virtual void reset() override;
   // reuse() will clean status of members partially.
   // Can be called alone or along with init()
-  virtual void reuse();
-  ObBufferHolder &get_data() { return data_buffer_; }
-  virtual int64_t get_row_count() const { return datum_rows_.count(); }
-  virtual int64_t get_data_size() const;
-  virtual int64_t get_block_size() const { return header_size_ + estimate_size_ * 100 / expand_pct_; }
-  virtual int64_t get_column_count() const { return ctx_.column_cnt_;}
-  virtual int64_t get_original_size() const { return estimate_size_; }
+  virtual void reuse() override;
+  virtual int64_t get_row_count() const override { return datum_rows_.count(); }
+  virtual int64_t get_block_size() const override { return header_size_ + estimate_size_ * 100 / expand_pct_; }
+  virtual int64_t get_column_count() const override { return ctx_.column_cnt_;}
+  virtual int64_t get_original_size() const override { return estimate_size_; }
   virtual void dump_diagnose_info() const override;
 private:
   int inner_init();
   int reserve_header(const ObMicroBlockEncodingCtx &ctx);
-  int calc_and_validate_checksum(const ObDatumRow &row);
   int pivot();
   int try_to_append_row(const int64_t &store_size);
   int init_column_ctxs();
@@ -94,9 +91,11 @@ private:
       const ObStorageDatum &src,
       ObDatum &dest,
       int64_t &store_size,
-      bool &is_large_row);
+      bool &is_large_row,
+      bool &is_buffer_not_enough);
   int process_large_row(const ObDatumRow &src, ObDatum *&datum_arr, int64_t &store_size);
-  int encoder_detection();
+  int64_t calc_datum_row_size(const ObDatumRow &src, int64_t &var_len_column_cnt) const;
+  int encoder_detection(int64_t &encoders_need_size);
   // detect encoder with pre-scan result
   int fast_encoder_detect(const int64_t column_idx, const ObColumnEncodingCtx &cc);
   int prescan(const int64_t column_index);
@@ -147,19 +146,19 @@ private:
   int store_encoding_meta_and_fix_cols(int64_t &encoding_meta_offset);
   int init_all_col_values(const ObMicroBlockEncodingCtx &ctx);
   void print_micro_block_encoder_status() const;
+  int set_datum_rows_ptr();
 
 private:
   ObMicroBlockEncodingCtx ctx_;
   ObMicroBlockHeader *header_;
-  ObSelfBufferWriter data_buffer_;
+  ObMicroBufferWriter data_buffer_;
   ObConstDatumRowArray datum_rows_;
   common::ObArray<ObColDatums *> all_col_datums_;
-  int64_t buffered_rows_checksum_;
   int64_t estimate_size_;
   int64_t estimate_size_limit_;
   int64_t header_size_;
   int64_t expand_pct_;
-  ObEncodingRowBufHolder row_buf_holder_;
+  ObMicroBufferWriter row_buf_holder_;
   common::ObArray<ObIColumnEncoder *> encoders_;
   common::ObArray<ObIColumnEncoder *> fix_data_encoders_;
   common::ObArray<ObIColumnEncoder *> var_data_encoders_;

@@ -16,6 +16,7 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/tablet/ob_tablet_table_store_iterator.h"
 #include "storage/tablet/ob_tablet_table_store.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ ObTableStoreIterator::ObTableStoreIterator(const bool reverse, const bool need_l
     transfer_src_table_store_handle_(nullptr)
 {
   step_ = reverse ? -1 : 1;
+  sstable_handle_array_.set_attr(ObMemAttr(MTL_ID(), "TblHdlArray"));
 }
 
 void ObTableStoreIterator::operator=(const ObTableStoreIterator& other)
@@ -203,7 +205,7 @@ int ObTableStoreIterator::add_table(ObITable *table)
   } else {
     ObStorageMetaHandle sstable_meta_hdl;
     if (OB_FAIL(ObTabletTableStore::load_sstable(static_cast<ObSSTable *>(table)->get_addr(),
-        sstable_meta_hdl))) {
+        table->is_co_sstable(), sstable_meta_hdl))) {
       LOG_WARN("fail to load sstable", K(ret));
     } else if (OB_FAIL(sstable_handle_array_.push_back(sstable_meta_hdl))) {
       LOG_WARN("fail to push sstable meta handle", K(ret), K(sstable_meta_hdl));
@@ -238,7 +240,8 @@ int ObTableStoreIterator::inner_move_idx_to_next()
 int ObTableStoreIterator::add_tables(
     const ObSSTableArray &sstable_array,
     const int64_t start_pos,
-    const int64_t count)
+    const int64_t count,
+    const bool unpack_co_table)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!sstable_array.is_valid()
@@ -250,6 +253,14 @@ int ObTableStoreIterator::add_tables(
     for (int64_t i = start_pos; OB_SUCC(ret) && i < start_pos + count; ++i) {
       if (OB_FAIL(add_table(sstable_array[i]))) {
         LOG_WARN("fail to add sstable to iterator", K(ret), K(i));
+      } else if (sstable_array[i]->is_co_sstable() && unpack_co_table) {
+        ObCOSSTableV2 *co_table = static_cast<ObCOSSTableV2 *>(sstable_array[i]);
+        ObSSTableArray &cg_sstables = co_table->get_cg_sstables();
+        if (co_table->is_empty_co_table()) {
+          // empty co table, no need to call this func recursively
+        } else if (OB_FAIL(add_tables(cg_sstables, 0, cg_sstables.count(), false))) {
+          LOG_WARN("fail to add cg table to iterator", K(ret), KPC(co_table));
+        }
       }
     }
   }

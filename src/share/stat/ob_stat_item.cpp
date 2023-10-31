@@ -17,6 +17,7 @@
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace sql;
@@ -109,14 +110,14 @@ int ObStatMaxValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   return ret;
 }
 
-int ObStatMaxValue::decode(ObObj &obj)
+int ObStatMaxValue::decode(ObObj &obj, ObIAllocator &allocator)
 {
   // print cstring and hex string here
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj, allocator))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_max_value(obj);
@@ -139,14 +140,14 @@ int ObStatMinValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   return ret;
 }
 
-int ObStatMinValue::decode(ObObj &obj)
+int ObStatMinValue::decode(ObObj &obj, ObIAllocator &allocator)
 {
   // print cstring and hex string here
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj, allocator))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_min_value(obj);
@@ -503,6 +504,52 @@ void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int
     micro_block_count_ += mic;
     part_cnt_ ++;
   }
+}
+
+int ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
+                           ObIArray<int64_t> &cg_macro_arr, ObIArray<int64_t> &cg_micro_arr)
+{
+  // skip empty partition
+  int ret = OB_SUCCESS;
+  if (rc > 0) {
+    row_count_ += rc;
+    row_size_ += rs;
+    data_size_ += ds;
+    macro_block_count_ += mac;
+    micro_block_count_ += mic;
+    part_cnt_ ++;
+    if (cg_macro_arr.empty()) {
+      //do nothing
+    } else if (cg_macro_cnt_arr_.empty()) {
+      if (OB_FAIL(cg_macro_cnt_arr_.assign(cg_macro_arr))) {
+        LOG_WARN("failed to assign", K(ret));
+      }
+    } else if (OB_UNLIKELY(cg_macro_arr.count() != cg_macro_cnt_arr_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(cg_macro_arr), K(cg_macro_cnt_arr_));
+    } else {
+      for (int64_t i = 0; i < cg_macro_arr.count(); ++i) {
+        cg_macro_cnt_arr_.at(i) += cg_macro_arr.at(i);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (cg_micro_arr.empty()) {
+      //do nothing
+      } else if (cg_micro_cnt_arr_.empty()) {
+        if (OB_FAIL(cg_micro_cnt_arr_.assign(cg_micro_arr))) {
+          LOG_WARN("failed to assign", K(ret));
+        }
+      } else if (OB_UNLIKELY(cg_micro_arr.count() != cg_micro_cnt_arr_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(cg_micro_arr), K(cg_micro_cnt_arr_));
+      } else {
+        for (int64_t i = 0; i < cg_micro_arr.count(); ++i) {
+          cg_micro_cnt_arr_.at(i) += cg_micro_arr.at(i);
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int64_t ObGlobalTableStat::get_row_count() const

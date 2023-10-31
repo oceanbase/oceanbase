@@ -14,7 +14,6 @@
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/access/ob_multiple_scan_merge.h"
 #include "storage/access/ob_store_row_iterator.h"
-#include "storage/direct_load/ob_direct_load_io_callback.h"
 
 namespace oceanbase
 {
@@ -90,7 +89,6 @@ private:
   ObArray<int32_t> col_ids_;
   share::schema::ObTableSchemaParam schema_param_;
   ObTableAccessParam table_access_param_;
-  ObDirectLoadIOCallback io_callback_;
   ObStoreCtx store_ctx_;
   ObTableAccessContext table_access_ctx_;
   ObGetTableParam get_table_param_;

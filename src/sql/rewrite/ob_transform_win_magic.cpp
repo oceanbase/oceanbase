@@ -1370,9 +1370,20 @@ int ObTransformWinMagic::adjust_agg_to_win(ObSelectStmt *view_stmt)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(append(aggr_exprs, view_stmt->get_aggr_items()))) {
       LOG_WARN("failed to convert aggregation exprs", K(ret));
-    } else if (OB_FAIL(append(win_exprs, view_stmt->get_window_func_exprs()))) {
-      LOG_WARN("failed to convert window function exprs", K(ret));
-    } else if (OB_FAIL(view_stmt->replace_relation_exprs(aggr_exprs, win_exprs))) {
+    } else if (OB_UNLIKELY(aggr_exprs.count() != view_stmt->get_window_func_exprs().count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected aggr and winfun count", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_window_func_exprs().count(); i ++) {
+      ObRawExpr *expr = view_stmt->get_window_func_exprs().at(i);
+      if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
+                                    *ctx_->expr_factory_, aggr_exprs.at(i), expr, ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
+      } else if (OB_FAIL(win_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(view_stmt->replace_relation_exprs(aggr_exprs, win_exprs))) {
       LOG_WARN("failed to replace relation expr", K(ret));
     }
   }
@@ -1582,6 +1593,7 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
   ObSelectStmt *transed_stmt = NULL;
   ObAggFunRawExpr *new_agg_expr = NULL;
   ObWinFunRawExpr *win_expr = NULL;
+  ObRawExpr *cast_win_expr = NULL;
   
   ObSEArray<ObRawExpr *, 4> drill_select_exprs;
 
@@ -1683,9 +1695,13 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
       LOG_WARN("win function expr is null", K(ret));
     } else if (OB_FAIL(transed_stmt->add_window_func_expr(win_expr))) {
       LOG_WARN("add windon func expr failed", K(ret));
+    } else if (FALSE_IT(cast_win_expr = win_expr)) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
+                                    *ctx_->expr_factory_, col_expr, cast_win_expr, ctx_->session_info_))) {
+      LOG_WARN("failed to add cast", K(ret));
     } else if (OB_FAIL(old_col.push_back(col_expr))) {
       LOG_WARN("failed to push expr into array", K(ret));
-    } else if (OB_FAIL(new_win.push_back(win_expr))) {
+    } else if (OB_FAIL(new_win.push_back(cast_win_expr))) {
       LOG_WARN("failed to push expr into array", K(ret));
     } else {
     }

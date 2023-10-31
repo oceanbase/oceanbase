@@ -96,6 +96,7 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*date,
                                             expr.args_[0]->datum_meta_.type_,
+                                            expr.args_[0]->datum_meta_.scale_,
                                             get_timezone_info(session),
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),

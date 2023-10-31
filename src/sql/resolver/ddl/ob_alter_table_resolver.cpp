@@ -904,6 +904,12 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         }
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(resolve_column_group())) {
+      LOG_WARN("failed to resolve column group", K(ret));
+    } else if (OB_FAIL(check_skip_index(alter_table_stmt->get_alter_table_arg().alter_table_schema_))) {
+      LOG_WARN("failed to resolve skip index", K(ret));
+    }
     //deal with drop column affer drop constraint (mysql mode)
     if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
       for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
@@ -5292,10 +5298,13 @@ int ObAlterTableResolver::check_modify_column_allowed(
   const ObAccuracy &alter_col_accuracy = alter_column_schema.get_accuracy();
   // The number type does not specify precision, which means that it is the largest range and requires special judgment
   if (lib::is_oracle_mode()
-      && origin_col_type == alter_col_type
+      && (origin_col_type == alter_col_type
+          || (origin_col_type == ObDecimalIntType && alter_col_type == ObNumberType)
+          || (origin_col_type == ObNumberType && alter_col_type == ObDecimalIntType))
       && (origin_col_type == ObNumberType
           || origin_col_type == ObUNumberType
-          || origin_col_type == ObNumberFloatType)
+          || origin_col_type == ObNumberFloatType
+          || origin_col_type == ObDecimalIntType)
       && (origin_col_accuracy.get_precision() >
           alter_col_accuracy.get_precision()
           || origin_col_accuracy.get_scale() >
@@ -5879,6 +5888,55 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
       OX (new_tg_arg.set_trigger_id(table_schema_->get_trigger_list().at(i)));
       OZ (alter_table_stmt->get_tg_arg().trigger_infos_.push_back(new_tg_arg));
       LOG_DEBUG("alter table all triggers", K(new_tg_arg.get_trigger_id()), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_column_group()
+{
+  int ret = OB_SUCCESS;
+  bool is_normal_column_store_table = false;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t compat_version = 0;
+  const uint64_t tenant_id = table_schema_->get_tenant_id();
+  if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null alter_table_stmt", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_3_0_0) { //skip resolve cg
+  } else if (table_schema_->is_normal_column_store_table()) {
+    ObColumnGroupSchema column_group;
+    char cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH];
+    ObArray<uint64_t> column_ids;
+    const share::schema::AlterTableSchema &alter_table_schema =
+        alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+    uint64_t cur_column_group_id = table_schema_->get_max_used_column_group_id();
+    ObTableSchema::const_column_iterator tmp_begin = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator tmp_end = alter_table_schema.column_end();
+    for (; OB_SUCC(ret) && (tmp_begin != tmp_end); tmp_begin++) {
+      column_group.reset();
+      AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*tmp_begin);
+      MEMSET(cg_name, '\0', OB_MAX_COLUMN_GROUP_NAME_LENGTH);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column should not be null", KR(ret));
+      } else if (column->alter_type_ != OB_DDL_ADD_COLUMN) { // if not add_column, skip
+      } else if (column->is_virtual_generated_column()) { // skip virtual column
+      } else if (0 >= snprintf(cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%s_%s",
+          OB_COLUMN_GROUP_NAME_PREFIX, column->get_column_name_str().ptr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to snprintf", K(ret), KPC(column));
+      // real column_id will be generated later, thus column_ids is empty here
+      } else if (OB_FAIL(build_column_group(*table_schema_, ObColumnGroupType::SINGLE_COLUMN_GROUP,
+            cg_name, column_ids, ++cur_column_group_id, column_group))) {
+        LOG_WARN("failed to build column group", K(ret), KPC(column));
+      } else if (OB_FAIL(alter_table_stmt->add_column_group(column_group))) {
+        LOG_WARN("failed to add column group", K(ret));
+      } else if (OB_FAIL(column->set_column_group_name(cg_name))) {
+        LOG_WARN("failed to set column group name", K(ret), KPC(column));
+      }
     }
   }
   return ret;

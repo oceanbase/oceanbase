@@ -195,7 +195,10 @@ ObOptColumnStat::ObOptColumnStat()
       cs_type_(CS_TYPE_INVALID),
       total_col_len_(0),
       inner_allocator_("ObOptColumnStat"),
-      allocator_(inner_allocator_)
+      allocator_(inner_allocator_),
+      cg_macro_blk_cnt_(0),
+      cg_micro_blk_cnt_(0),
+      cg_skip_rate_(1.0)
 {
   min_value_.set_null();
   max_value_.set_null();
@@ -220,7 +223,10 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
       cs_type_(CS_TYPE_INVALID),
       total_col_len_(0),
       inner_allocator_("ObOptColumnStat"),
-      allocator_(allocator)
+      allocator_(allocator),
+      cg_macro_blk_cnt_(0),
+      cg_micro_blk_cnt_(0),
+      cg_skip_rate_(1.0)
 {
   min_value_.set_null();
   max_value_.set_null();
@@ -249,6 +255,9 @@ void ObOptColumnStat::reset()
   cs_type_ = CS_TYPE_INVALID;
   total_col_len_ = 0;
   histogram_.reset();
+  cg_macro_blk_cnt_ = 0;
+  cg_micro_blk_cnt_ = 0;
+  cg_skip_rate_ = 1.0;
 }
 
 int64_t ObOptColumnStat::size() const
@@ -301,6 +310,9 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
     cs_type_ = src.cs_type_;
     llc_bitmap_size_ = src.llc_bitmap_size_;
     total_col_len_ = src.total_col_len_;
+    cg_macro_blk_cnt_ = src.cg_macro_blk_cnt_;
+    cg_micro_blk_cnt_ = src.cg_micro_blk_cnt_;
+    cg_skip_rate_ = src.cg_skip_rate_;
     if (OB_FAIL(ob_write_obj(allocator_, src.min_value_, min_value_))) {
       LOG_WARN("deep copy min_value_ failed.", K_(src.min_value), K(ret));
     } else if (OB_FAIL(ob_write_obj(allocator_, src.max_value_, max_value_))) {
@@ -335,6 +347,9 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src, char *buf, const int6
   last_analyzed_ = src.last_analyzed_;
   cs_type_ = src.cs_type_;
   total_col_len_ = src.total_col_len_;
+  cg_macro_blk_cnt_ = src.cg_macro_blk_cnt_;
+  cg_micro_blk_cnt_ = src.cg_micro_blk_cnt_;
+  cg_skip_rate_ = src.cg_skip_rate_;
   if (!src.is_valid() || nullptr == buf || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments.", K(src), KP(buf), K(size), K(ret));

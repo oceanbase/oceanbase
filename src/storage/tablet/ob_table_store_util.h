@@ -33,7 +33,7 @@ class ObSSTableArray
 {
 public:
   friend class ObTabletTableStore;
-  ObSSTableArray() : cnt_(0), sstable_array_(nullptr), is_inited_(false) {}
+  ObSSTableArray() : cnt_(0), sstable_array_(nullptr), serialize_table_type_(false), is_inited_(false) {}
   virtual ~ObSSTableArray() {}
 
   void reset();
@@ -51,16 +51,26 @@ public:
   int init(
       ObArenaAllocator &allocator,
       const ObSSTableArray &other);
+  // TODO use Arena allocator after creating SSTable by Arena Allocator
+  // Attention ! should only be called by COSSTable
+  int init_empty_array_for_cg(common::ObArenaAllocator &allocator, const int64_t count);
+  int add_tables_for_cg(common::ObArenaAllocator &allocator, const ObIArray<ObITable *> &tables);
+
   int64_t get_deep_copy_size() const;
   int deep_copy(char *dst_buf, const int64_t buf_size, int64_t &pos, ObSSTableArray &dst_array) const;
 
   int64_t get_serialize_size() const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int deserialize(
+      ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos,
+      const bool is_compat_deserialize = false);
   blocksstable::ObSSTable *operator[](const int64_t pos) const;
   blocksstable::ObSSTable *at(const int64_t pos) const;
   ObITable *get_boundary_table(const bool is_last) const;
-  int get_all_tables(ObIArray<ObITable *> &tables) const;
+  int get_all_tables(ObIArray<ObITable *> &tables, const bool need_unpack = false) const;
   int get_table(const ObITable::TableKey &table_key, ObITable *&table) const;
   int inc_macro_ref(bool &is_success) const;
   void dec_macro_ref() const;
@@ -71,7 +81,7 @@ public:
   }
   OB_INLINE int64_t count() const { return cnt_; }
   OB_INLINE bool empty() const { return 0 == cnt_; }
-  TO_STRING_KV(K_(cnt), K_(is_inited));
+  TO_STRING_KV(K_(cnt), K_(serialize_table_type), K_(is_inited));
 private:
   int inc_meta_ref_cnt(bool &inc_success) const;
   int inc_data_ref_cnt(bool &inc_success) const;
@@ -82,9 +92,23 @@ private:
       const ObIArray<ObITable *> &tables,
       const int64_t start_pos,
       const int64_t end_pos);
+  int inner_deserialize_tables(
+      ObArenaAllocator &allocator,
+      const bool serialize_table_type,
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos);
+  template <class T = blocksstable::ObSSTable>
+  int deserialize_table(
+      ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos,
+      blocksstable::ObSSTable *&sstable);
 private:
   int64_t cnt_;
   blocksstable::ObSSTable **sstable_array_;
+  bool serialize_table_type_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableArray);
@@ -108,7 +132,7 @@ public:
   int rebuild(const common::ObIArray<ObITable *> &table_array);
   int rebuild(
       const share::SCN &clog_checkpoint_scn,
-      common::ObIArray<ObITable *> &table_array);
+      const common::ObIArray<ObITable *> &table_array);
   int find(const ObITable::TableKey &table_key, ObITable *&table) const;
   int find(const share::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
   int assign(ObMemtableArray &dst_array) const;

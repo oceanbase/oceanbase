@@ -89,13 +89,13 @@ bool ObSnapshotInfo::is_valid() const
   return bret;
 }
 
-const char * ObSnapshotInfo::get_snapshot_type_str() const
+const char * ObSnapshotInfo::get_snapshot_type_str(const ObSnapShotType &snapshot_type)
 {
   const char * str = nullptr;
-  if (OB_UNLIKELY(snapshot_type_ < SNAPSHOT_FOR_MAJOR || snapshot_type_ >= MAX_SNAPSHOT_TYPE)) {
+  if (OB_UNLIKELY(snapshot_type < SNAPSHOT_FOR_MAJOR || snapshot_type >= MAX_SNAPSHOT_TYPE)) {
     str = "invalid_snapshot_type";
   } else {
-    str = ObSnapShotTypeStr[snapshot_type_];
+    str = ObSnapShotTypeStr[snapshot_type];
   }
   return str;
 }

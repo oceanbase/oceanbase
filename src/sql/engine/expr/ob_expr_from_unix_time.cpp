@@ -238,7 +238,7 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("no more memory to alloc for buf", K(ret));
       } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
-                           expr_datum, ObTimestampType,
+                           expr_datum, ObTimestampType, NUMBER_SCALE_UNKNOWN_YET,
                            get_timezone_info(session),
                            ob_time,
                            get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0, false))) {

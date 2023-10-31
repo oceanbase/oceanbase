@@ -199,6 +199,7 @@ LOG_MOD_END(SERVER)
 LOG_MOD_BEGIN(RS)
 DEFINE_LOG_SUB_MOD(LB)                  // load balance
 DEFINE_LOG_SUB_MOD(RESTORE)             // restore related
+DEFINE_LOG_SUB_MOD(COMPACTION)          // compaction related
 LOG_MOD_END(RS)
 
 // Balance submodules
@@ -728,6 +729,10 @@ LOG_MOD_END(PL)
                                                                  info_string,  ##args)
 #define _STORAGE_COMPACTION_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(STORAGE, COMPACTION, level,           \
                                                                  _fmt_,  ##args)
+#define RS_COMPACTION_LOG(level, info_string, args...) OB_SUB_MOD_LOG(RS, COMPACTION, level,       \
+                                                                 info_string,  ##args)
+#define _RS_COMPACTION_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(RS, COMPACTION, level,           \
+                                                                 _fmt_,  ##args)
 #define STORAGE_BLKMGR_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, BLKMGR, level,   \
                                                                  info_string,  ##args)
 #define _STORAGE_BLKMGR_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(STORAGE, BLKMGR, level,       \
@@ -1071,6 +1076,8 @@ LOG_MOD_END(PL)
 #define _STORAGE_REDO_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_REDO_LOG(level, ##args); }
 #define STORAGE_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_COMPACTION_LOG(level, ##args); }
 #define _STORAGE_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_COMPACTION_LOG(level, ##args); }
+#define RS_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; RS_COMPACTION_LOG(level, ##args); }
+#define _RS_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; _RS_COMPACTION_LOG(level, ##args); }
 #define STORAGE_BLKMGR_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_BLKMGR_LOG(level, ##args); }
 #define _STORAGE_BLKMGR_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_BLKMGR_LOG(level, ##args); }
 #define SQL_ENG_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_ENG_LOG(level, ##args); }

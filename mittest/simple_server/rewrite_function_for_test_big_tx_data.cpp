@@ -23,8 +23,6 @@
 #include "env/ob_simple_cluster_test_base.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/compaction/ob_partition_parallel_merge_ctx.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
 #include <iostream>
 int64_t TEST_TX_ID = 0;
 bool DUMP_BIG_TX_DATA = false;

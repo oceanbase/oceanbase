@@ -16,7 +16,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
-#include "storage/blocksstable/ob_sstable_meta_info.h"
+#include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "share/scn.h"
 
 namespace oceanbase
@@ -41,6 +41,7 @@ public:
   ~ObSSTableBasicMeta() = default;
   bool operator==(const ObSSTableBasicMeta &other) const;
   bool operator!=(const ObSSTableBasicMeta &other) const;
+  bool check_basic_meta_equality(const ObSSTableBasicMeta &other) const; // only for small sstable defragmentation
   bool is_valid() const;
   void reset();
 
@@ -63,6 +64,8 @@ public:
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
   OB_INLINE int64_t get_recycle_version() const { return recycle_version_; }
   OB_INLINE int16_t get_sstable_seq() const { return sstable_logic_seq_; }
+  OB_INLINE common::ObCompressorType get_compressor_type() const { return compressor_type_; }
+  OB_INLINE common::ObRowStoreType get_latest_row_store_type() const { return latest_row_store_type_; }
   int decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos);
 
   int set_upper_trans_version(const int64_t upper_trans_version);
@@ -214,9 +217,9 @@ public:
   OB_INLINE const ObRootBlockInfo &get_root_info() const { return data_root_info_; }
   OB_INLINE const ObSSTableMacroInfo &get_macro_info() const { return macro_info_; }
   int load_root_block_data(common::ObArenaAllocator &allocator); //TODO:@jinzhu remove me after using kv cache.
-  inline int transform_root_block_data(common::ObArenaAllocator &allocator)
+  inline int transform_root_block_extra_buf(common::ObArenaAllocator &allocator)
   {
-    return data_root_info_.transform_root_block_data(allocator);
+    return data_root_info_.transform_root_block_extra_buf(allocator);
   }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -274,8 +277,8 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObMigrationSSTableParam &param);
-  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()), K(column_default_checksums_.count()),
-               K_(column_checksums), K_(column_default_checksums), K_(table_key));
+  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()), K(column_default_checksums_.count()), K_(column_checksums),
+               K_(column_default_checksums), K_(table_key), K_(column_group_cnt), K_(co_base_type));
 private:
   static const int64_t MIGRATION_SSTABLE_PARAM_VERSION = 1;
   typedef common::ObSEArray<int64_t, common::OB_ROW_DEFAULT_COLUMNS_COUNT> ColChecksumArray;
@@ -286,6 +289,10 @@ public:
   storage::ObITable::TableKey table_key_;
   ColChecksumArray column_default_checksums_;
   bool is_small_sstable_;
+  // The following two members are used only for co sstable
+  int32_t column_group_cnt_;
+  int32_t full_column_cnt_;
+  int32_t co_base_type_;
   OB_UNIS_VERSION(MIGRATION_SSTABLE_PARAM_VERSION);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSSTableParam);
@@ -294,6 +301,7 @@ private:
 class ObSSTableMetaChecker
 {
 public:
+  // only for small sstable defragmentation
   static int check_sstable_meta_strict_equality(
       const ObSSTableMeta &old_sstable_meta,
       const ObSSTableMeta &new_sstable_meta);

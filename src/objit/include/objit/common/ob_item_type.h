@@ -1249,6 +1249,8 @@ typedef enum ObItemType
   T_INDEX_SS_HINT,
   T_INDEX_SS_ASC_HINT,
   T_INDEX_SS_DESC_HINT,
+  T_USE_COLUMN_STORE_HINT,
+  T_NO_USE_COLUMN_STORE_HINT,
   T_USE_MERGE,
   T_USE_HASH,
   T_NO_USE_HASH,
@@ -2232,6 +2234,7 @@ typedef enum ObItemType
   T_SP_DATA_ACCESS,
 
   // column group
+  T_REBUILD_COLUMN_STORE,
   T_COLUMN_GROUP,
   T_ALL_COLUMN_GROUP,
   T_SINGLE_COLUMN_GROUP,
@@ -2272,6 +2275,11 @@ typedef enum ObItemType
   T_KV_ATTRIBUTES,
   T_VALUES_TABLE_EXPRESSION,//used to values statement
   T_VALUES_ROW_LIST,//used to values statement
+
+  T_COL_SKIP_INDEX,
+  T_COL_SKIP_INDEX_LIST,
+  T_COL_SKIP_INDEX_MIN_MAX,
+  T_COL_SKIP_INDEX_SUM,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

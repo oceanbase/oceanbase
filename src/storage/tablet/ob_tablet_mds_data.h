@@ -88,7 +88,7 @@ public:
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other,
       const int64_t finish_medium_scn,
-      const ObMergeType merge_type = ObMergeType::MERGE_TYPE_MAX);
+      const compaction::ObMergeType merge_type = compaction::ObMergeType::MERGE_TYPE_MAX);
   int init_for_merge_with_full_mds_data(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other,

@@ -141,6 +141,23 @@ int ObMySQLTransaction::do_stash_query(int min_batch_cnt)
   return ret;
 }
 
+int ObMySQLTransaction::handle_trans_in_the_end(const int err_no)
+{
+  int ret = OB_SUCCESS;
+  if (is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(end(OB_SUCCESS == err_no))) {
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == err_no, K(tmp_ret));
+      ret = OB_SUCCESS == err_no ? tmp_ret : err_no;
+    } else {
+      ret = err_no;
+    }
+  } else {
+    ret = err_no;
+  }
+  return ret;
+}
+
 int ObMySQLTransaction::get_stash_query(uint64_t tenant_id, const char *table_name, ObSqlTransQueryStashDesc *&desc)
 {
   int ret = OB_SUCCESS;

@@ -85,8 +85,9 @@ int ObExprCase::calc_result_typeN(ObExprResType &type,
       for (int64_t i = 0; i < cond_type_count; ++i) {
         const ObObjType cond_type = types_stack[i].get_type();
         const ObObjTypeClass cond_tc = ob_obj_type_class(cond_type);
-        if (ObIntTC == cond_tc || ObUIntTC == cond_tc || ObNumberTC == cond_tc ||
-            ObNullTC == cond_tc) {
+        if (ObIntTC == cond_tc || ObUIntTC == cond_tc
+            || ObNumberTC == cond_tc || ObDecimalIntTC == cond_tc
+            || ObNullTC == cond_tc) {
           types_stack[i].set_calc_type(cond_type);
           types_stack[i].set_calc_collation(types_stack[i]);
         } else {
@@ -107,6 +108,9 @@ int ObExprCase::calc_result_typeN(ObExprResType &type,
           types_stack[i].set_calc_meta(types_stack[i].get_obj_meta());
         } else {
           types_stack[i].set_calc_meta(type.get_obj_meta());
+          if (ObDecimalIntType == type.get_obj_meta().get_type()) {
+            types_stack[i].set_calc_accuracy(type.get_accuracy());
+          }
         }
       }
     }

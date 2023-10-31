@@ -48,7 +48,8 @@ ObDagWarningInfo::ObDagWarningInfo() :
     gmt_create_(0),
     gmt_modified_(0),
     retry_cnt_(0),
-    hash_(0)
+    hash_(0),
+    location_()
 {
 }
 
@@ -62,6 +63,7 @@ void ObDagWarningInfo::shallow_copy(ObIDiagnoseInfo *other)
   ObDagWarningInfo *info = nullptr;
   if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObDagWarningInfo *>(other))) {
     tenant_id_ = info->tenant_id_;
+    priority_ = info->priority_;
     task_id_ = info->task_id_;
     dag_type_ = info->dag_type_;
     dag_ret_ = info->dag_ret_;
@@ -70,6 +72,7 @@ void ObDagWarningInfo::shallow_copy(ObIDiagnoseInfo *other)
     gmt_modified_ = info->gmt_modified_;
     retry_cnt_ = info->retry_cnt_;
     hash_ = info->hash_;
+    location_ = info->location_;
   }
 }
 
@@ -134,6 +137,18 @@ int ObDagWarningHistoryManager::add_dag_warning_info(share::ObIDag *dag)
         COMMON_LOG(WARN, "failed to add dag warning info", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObDagWarningHistoryManager::add_dag_warning_info(ObDagWarningInfo &input_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObDagWarningHistoryManager is not init", K(ret));
+  } else if (OB_FAIL(alloc_and_add(input_info.get_hash(), &input_info))) {
+    COMMON_LOG(WARN, "failed to add dag warning info", K(ret));
   }
   return ret;
 }

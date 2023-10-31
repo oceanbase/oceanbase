@@ -172,6 +172,25 @@ int ObCellReader::read_urowid()
   return ret;
 }
 
+int ObCellReader::read_decimal_int(ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  const uint32_t *len = NULL;
+  const int16_t *scale = NULL;
+  if (OB_FAIL(read<int16_t>(scale))) {
+    COMMON_LOG(WARN, "failed to read uint32_t", K(ret));
+  } else if (OB_FAIL(read<uint32_t>(len))) {
+    COMMON_LOG(WARN, "failed to read int16_t", K(ret));
+  } else if (OB_UNLIKELY(pos_ + *len > buf_size_)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    COMMON_LOG(WARN, "buffer not enough", K(ret), K(pos_), K(*len), K(buf_size_));
+  } else {
+    obj.set_decimal_int(*len, *scale, (ObDecimalInt *)(buf_ + pos_));
+    pos_ += *len;
+  }
+  return ret;
+}
+
 #define READ_TEXT(obj_type, object) \
   { \
     const uint32_t *len = NULL; \
@@ -560,6 +579,10 @@ int ObCellReader::parse(uint64_t *column_id)
         }
         break;
       }
+      case ObDecimalIntType: {
+        ret = read_decimal_int(obj_);
+        break;
+      }
       default:
         ret = OB_NOT_SUPPORTED;
         COMMON_LOG(WARN, "not supported type.", K(ret), "type", meta->type_);
@@ -747,6 +770,9 @@ int ObCellReader::read_cell(common::ObObj &obj)
         break;
       case ObURowIDType:
         ret = read_urowid();
+        break;
+      case ObDecimalIntType:
+        ret = read_decimal_int(obj);
         break;
       default:
         ret = OB_NOT_SUPPORTED;

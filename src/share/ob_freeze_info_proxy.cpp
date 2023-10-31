@@ -36,13 +36,13 @@ using namespace palf;
 namespace share
 {
 
-OB_SERIALIZE_MEMBER(ObSimpleFrozenStatus, frozen_scn_,
+OB_SERIALIZE_MEMBER(ObFreezeInfo, frozen_scn_,
                     schema_version_, data_version_);
 
 int ObFreezeInfoProxy::get_freeze_info(
     ObISQLClient &sql_proxy,
     const SCN &frozen_scn,
-    ObSimpleFrozenStatus &frozen_status)
+    ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!frozen_scn.is_valid())) {
@@ -88,7 +88,7 @@ int ObFreezeInfoProxy::get_freeze_info(
 
 int ObFreezeInfoProxy::get_all_freeze_info(
     ObISQLClient &sql_proxy,
-    ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
+    ObIArray<ObFreezeInfo> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -104,7 +104,7 @@ int ObFreezeInfoProxy::get_all_freeze_info(
       LOG_WARN("fail to get sql result", KR(ret), K(sql), K_(tenant_id));
     } else {
       while (OB_SUCC(ret)) {
-        ObSimpleFrozenStatus frozen_status;
+        ObFreezeInfo frozen_status;
         if (OB_FAIL(result->next())) {
           if (OB_ITER_END != ret) {
             LOG_WARN("fail to get next row", KR(ret), K_(tenant_id));
@@ -129,7 +129,7 @@ int ObFreezeInfoProxy::get_all_freeze_info(
 int ObFreezeInfoProxy::get_freeze_info_larger_or_equal_than(
     ObISQLClient &sql_proxy,
     const SCN &frozen_scn,
-    ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
+    ObIArray<ObFreezeInfo> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -146,7 +146,7 @@ int ObFreezeInfoProxy::get_freeze_info_larger_or_equal_than(
       LOG_WARN("fail to get sql result", KR(ret), K(sql), K_(tenant_id));
     } else {
       while (OB_SUCC(ret)) {
-        ObSimpleFrozenStatus frozen_status;
+        ObFreezeInfo frozen_status;
         if (OB_FAIL(result->next())) {
           if (OB_ITER_END != ret) {
             LOG_WARN("fail to get next row", KR(ret), K_(tenant_id));
@@ -253,7 +253,7 @@ int ObFreezeInfoProxy::get_max_frozen_scn_smaller_or_equal_than(
 
 int ObFreezeInfoProxy::set_freeze_info(
     ObISQLClient &sql_proxy,
-    const ObSimpleFrozenStatus &frozen_status)
+    const ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
   ObDMLSqlSplicer dml;
@@ -280,7 +280,7 @@ int ObFreezeInfoProxy::get_min_major_available_and_larger_info(
     ObISQLClient &sql_proxy,
     const SCN &frozen_scn,
     SCN &min_frozen_scn,
-    ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
+    ObIArray<ObFreezeInfo> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
   frozen_statuses.reset();
@@ -320,10 +320,10 @@ int ObFreezeInfoProxy::batch_delete(
 int ObFreezeInfoProxy::get_frozen_info_less_than(
     ObISQLClient &sql_proxy,
     const SCN &frozen_scn,
-    ObSimpleFrozenStatus &frozen_status)
+    ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObSimpleFrozenStatus> frozen_status_arr;
+  ObArray<ObFreezeInfo> frozen_status_arr;
   if (OB_FAIL(get_frozen_info_less_than(sql_proxy, frozen_scn, frozen_status_arr, false))) {
     LOG_WARN("fail to get frozen_info_less_than", KR(ret), K(frozen_scn));
   } else if (frozen_status_arr.count() != 1) {
@@ -338,7 +338,7 @@ int ObFreezeInfoProxy::get_frozen_info_less_than(
 int ObFreezeInfoProxy::get_frozen_info_less_than(
     ObISQLClient &sql_proxy,
     const SCN &frozen_scn,
-    ObIArray<ObSimpleFrozenStatus> &frozen_status_arr,
+    ObIArray<ObFreezeInfo> &frozen_status_arr,
     bool get_all)
 {
   int ret = OB_SUCCESS;
@@ -361,7 +361,7 @@ int ObFreezeInfoProxy::get_frozen_info_less_than(
         LOG_WARN("fail to get sql result", KR(ret), K(sql), K_(tenant_id));
       } else {
         while (OB_SUCC(ret)) {
-          ObSimpleFrozenStatus frozen_status;
+          ObFreezeInfo frozen_status;
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END != ret) {
               LOG_WARN("fail to get next row", KR(ret), K_(tenant_id));
@@ -386,7 +386,7 @@ int ObFreezeInfoProxy::get_frozen_info_less_than(
 
 int ObFreezeInfoProxy::get_max_freeze_info(
     ObISQLClient &sql_proxy,
-    ObSimpleFrozenStatus &frozen_status)
+    ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -420,7 +420,7 @@ int ObFreezeInfoProxy::get_min_major_available_and_larger_info_inner_(
     ObISQLClient &sql_proxy,
     const SCN &frozen_scn,
     SCN &min_frozen_scn,
-    ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
+    ObIArray<ObFreezeInfo> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!frozen_scn.is_valid())) {
@@ -440,7 +440,7 @@ int ObFreezeInfoProxy::get_min_major_available_and_larger_info_inner_(
         LOG_WARN("error unexpected, query result must not be NULL", KR(ret), K(sql), K_(tenant_id));
       } else {
         while (OB_SUCC(ret)) {
-          ObSimpleFrozenStatus frozen_status;
+          ObFreezeInfo frozen_status;
           if (OB_FAIL(result->next())) {
             if (OB_ITER_END != ret) {
               LOG_WARN("fail to get next row", KR(ret), K_(tenant_id));
@@ -466,7 +466,7 @@ int ObFreezeInfoProxy::get_min_major_available_and_larger_info_inner_(
 
 int ObFreezeInfoProxy::construct_frozen_status_(
     sqlclient::ObMySQLResult &result,
-    ObSimpleFrozenStatus &frozen_status)
+    ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
   uint64_t frozen_scn_val = OB_INVALID_SCN_VAL;

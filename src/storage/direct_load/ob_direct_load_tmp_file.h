@@ -102,11 +102,11 @@ public:
   int open(const ObDirectLoadTmpFileHandle &file_handle);
   int aio_read(char *buf, int64_t size);
   int aio_pread(char *buf, int64_t size, int64_t offset);
-  int read(char *buf, int64_t &size, int64_t timeout_ms);
-  int pread(char *buf, int64_t &size, int64_t offset, int64_t timeout_ms);
+  int read(char *buf, int64_t &size);
+  int pread(char *buf, int64_t &size, int64_t offset);
   int aio_write(char *buf, int64_t size);
-  int write(char *buf, int64_t size, int64_t timeout_ms);
-  int wait(int64_t timeout_ms);
+  int write(char *buf, int64_t size);
+  int wait();
   // for aio read to get real read size when ret = OB_ITER_END
   OB_INLINE int64_t get_data_size() { return file_io_handle_.get_data_size(); }
   static int seek(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset, int whence);

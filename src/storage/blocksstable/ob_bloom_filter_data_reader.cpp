@@ -26,7 +26,9 @@ ObBloomFilterMacroBlockReader::ObBloomFilterMacroBlockReader(const bool is_sys_r
     macro_handle_(),
     common_header_(),
     bf_macro_header_(nullptr),
-    is_sys_read_(is_sys_read)
+    is_sys_read_(is_sys_read),
+    io_allocator_("BFR_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    io_buf_(nullptr)
 {
 }
 
@@ -40,6 +42,8 @@ void ObBloomFilterMacroBlockReader::reset()
   common_header_.reset();
   bf_macro_header_ = nullptr;
   is_sys_read_ = false;
+  io_allocator_.reset();
+  io_buf_ = nullptr;
 }
 
 int ObBloomFilterMacroBlockReader::read_macro_block(
@@ -73,14 +77,22 @@ int ObBloomFilterMacroBlockReader::read_macro_block(const MacroBlockId &macro_id
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid macro block id to read bloomfilter", K(ret), K(macro_id));
   } else {
+    macro_handle_.reset();
     ObMacroBlockReadInfo macro_read_info;
     macro_read_info.macro_block_id_ = macro_id;
     macro_read_info.io_desc_.set_wait_event(is_sys_read_ ? ObWaitEventIds::DB_FILE_COMPACT_READ : ObWaitEventIds::DB_FILE_DATA_READ);
     macro_read_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
     macro_read_info.offset_ = 0;
     macro_read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    macro_handle_.reset();
-    if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle_))) {
+    if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =
+        reinterpret_cast<char*>(io_allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret));
+    } else {
+      macro_read_info.buf_ = io_buf_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle_))) {
       STORAGE_LOG(WARN, "Failed to read bloom filter macro block", K(ret));
     }
   }

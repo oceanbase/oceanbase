@@ -15,6 +15,7 @@
 #include <math.h>
 #include "sql/engine/expr/ob_expr_mod.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
+#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
@@ -54,10 +55,16 @@ int ObExprMod::calc_result_type2(ObExprResType &type,
       type.set_scale(SCALE_UNKNOWN_YET);
     } else {
       type.set_scale(MAX(scale1, scale2));
+      type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
       if (lib::is_mysql_mode() && type.is_double()) {
         type.set_precision(ObMySQLUtil::float_length(type.get_scale()));
-      } else {
-        type.set_precision(MAX(type1.get_precision(),type2.get_precision()));
+      } else if (lib::is_mysql_mode() && type.is_decimal_int()) {
+        // In mysql mode, precision of int(255) is 255, more than OB_MAX_DECIMAL_POSSIBLE_PRECISION
+        // So precision deduced just now may be larger than 81 while res type is decimal_int
+        // TODO:@xiaofeng.lby, use a more generic method to solve this problem
+        type.set_precision(MIN(type.get_precision(), OB_MAX_DECIMAL_POSSIBLE_PRECISION));
+        type1.set_calc_accuracy(type.get_accuracy());
+        type2.set_calc_accuracy(type.get_accuracy());
       }
     }
   }
@@ -452,6 +459,55 @@ int ObExprMod::mod_number(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum)
   return ret;
 }
 
+#define CALC_DECIMAL_INT_MOD(TYPE)              \
+  case sizeof(TYPE##_t): {                      \
+    const TYPE##_t &l = *(l_decint->TYPE##_v_); \
+    const TYPE##_t &r = *(r_decint->TYPE##_v_); \
+    res_val.from(l % r);                        \
+    break;                                      \
+  }
+
+int ObExprMod::mod_decimalint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *left = NULL;
+  ObDatum *right = NULL;
+  bool is_finish = false;
+  if (OB_FAIL(get_arith_operand(expr, ctx, left, right, datum, is_finish))) {
+    LOG_WARN("get_arith_operand failed", K(ret));
+  } else if (is_finish) {
+    //do nothing
+  } else {
+    const int32_t int_bytes = left->get_int_bytes();
+    const ObDecimalInt *l_decint = left->get_decimal_int();
+    const ObDecimalInt *r_decint = right->get_decimal_int();
+    if (OB_UNLIKELY(wide::str_helper::is_zero(r_decint, int_bytes))) {
+      if (CM_IS_ERROR_FOR_DIVISION_BY_ZERO(expr.extra_)) {
+        ret = OB_DIVISION_BY_ZERO;
+      } else {
+        datum.set_null();
+      }
+    } else {
+      ObDecimalIntBuilder res_val;
+      switch (int_bytes) {
+        CALC_DECIMAL_INT_MOD(int32)
+        CALC_DECIMAL_INT_MOD(int64)
+        CALC_DECIMAL_INT_MOD(int128)
+        CALC_DECIMAL_INT_MOD(int256)
+        CALC_DECIMAL_INT_MOD(int512)
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("int_bytes is unexpected", K(ret), K(int_bytes));
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        datum.set_decimal_int(res_val.get_decimal_int(), int_bytes);
+      }
+    }
+  }
+  return ret;
+}
 
 int ObExprMod::cg_expr(ObExprCGCtx &op_cg_ctx,
                        const ObRawExpr &raw_expr,
@@ -508,6 +564,10 @@ int ObExprMod::cg_expr(ObExprCGCtx &op_cg_ctx,
     case ObUNumberType:
     case ObNumberType: {
       rt_expr.eval_func_ = ObExprMod::mod_number;
+      break;
+    }
+    case ObDecimalIntType: {
+      rt_expr.eval_func_ = ObExprMod::mod_decimalint;
       break;
     }
     default: {

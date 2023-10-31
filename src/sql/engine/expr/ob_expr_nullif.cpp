@@ -82,7 +82,8 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
     type.set_collation_level(type1.get_collation_level());
     type.set_collation_type(type1.get_collation_type());
   }
-  if (ob_is_enumset_tc(type.get_type()) || ob_is_enumset_inner_tc(type.get_type())) {
+  if (OB_FAIL(ret)) {
+  } else if (ob_is_enumset_tc(type.get_type()) || ob_is_enumset_inner_tc(type.get_type())) {
     type.set_varchar();
   }
   OZ(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()));
@@ -103,21 +104,32 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
             type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
           }
         }
+        if (type1.is_decimal_int()) {
+          type1.set_calc_type(calc_type);
+        }
         // set calc type for type2 no matter whether calc_type is varchar or not, and no matther which param is enum.
         type2.set_calc_type(calc_type);
         type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (ob_is_decimal_int(cmp_type.get_calc_type())) {
+      ObAccuracy calc_acc;
+      calc_acc.precision_ = MAX(type1.get_precision(), type2.get_precision());
+      calc_acc.scale_ = MAX(type1.get_scale(), type2.get_scale());
+      cmp_type.set_calc_accuracy(calc_acc);
+    }
     if (OB_SUCC(ret)) {
       type.set_calc_meta(cmp_type.get_calc_meta());
       type.set_calc_accuracy(cmp_type.get_calc_accuracy());
+      LOG_DEBUG("se_deduce_type", K(type), K(type.get_calc_meta()), K(type.get_calc_accuracy()));
     }
   }
   return ret;
 }
 
 int ObExprNullif::set_extra_info(ObExprCGCtx &expr_cg_ctx, const ObObjType cmp_type,
-                                 const ObCollationType cmp_cs_type, const ObScale scale,
+                                 const ObCollationType cmp_cs_type,
                                  ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
@@ -137,7 +149,8 @@ int ObExprNullif::set_extra_info(ObExprCGCtx &expr_cg_ctx, const ObObjType cmp_t
   } else {
     info->cmp_meta_.type_ = cmp_type;
     info->cmp_meta_.cs_type_ = cmp_cs_type;
-    info->cmp_meta_.scale_ = scale;
+    info->cmp_meta_.scale_ = result_type_.get_calc_accuracy().get_scale();
+    info->cmp_meta_.precision_ = result_type_.get_calc_accuracy().get_precision();
     info->cm_ = cm;
     rt_expr.extra_info_ = info;
   }
@@ -152,10 +165,10 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   CK(2 == rt_expr.arg_cnt_);
   const uint32_t param_num = rt_expr.arg_cnt_;
   const ObObjMeta &cmp_meta = result_type_.get_calc_meta();
+  const ObAccuracy &calc_acc = result_type_.get_calc_accuracy();
   if (ObNullType == rt_expr.args_[0]->datum_meta_.type_) {
     OX(rt_expr.eval_func_ = eval_nullif);
-  } else if (OB_FAIL(set_extra_info(expr_cg_ctx, cmp_meta.get_type(),
-                                    cmp_meta.get_collation_type(), cmp_meta.get_scale(),
+  } else if (OB_FAIL(set_extra_info(expr_cg_ctx, cmp_meta.get_type(), cmp_meta.get_collation_type(),
                                     rt_expr))) {
     LOG_WARN("set extra info failed", K(ret));
   } else if (ob_is_enumset_inner_tc(rt_expr.args_[0]->datum_meta_.type_)) {
@@ -185,15 +198,18 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
           bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
                                 rt_expr.args_[1]->obj_meta_.has_lob_header();
           cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-                                                            rt_expr.args_[0]->datum_meta_.type_,
-                                                            rt_expr.args_[1]->datum_meta_.type_,
-                                                            rt_expr.args_[0]->datum_meta_.scale_,
-                                                            rt_expr.args_[1]->datum_meta_.scale_,
-                                                            lib::is_oracle_mode(),
-                                                            rt_expr.args_[0]->datum_meta_.cs_type_,
-                                                            has_lob_header);
+                                                          rt_expr.args_[0]->datum_meta_.type_,
+                                                          rt_expr.args_[1]->datum_meta_.type_,
+                                                          rt_expr.args_[0]->datum_meta_.scale_,
+                                                          rt_expr.args_[1]->datum_meta_.scale_,
+                                                          rt_expr.args_[0]->datum_meta_.precision_,
+                                                          rt_expr.args_[1]->datum_meta_.precision_,
+                                                          lib::is_oracle_mode(),
+                                                          rt_expr.args_[0]->datum_meta_.cs_type_,
+                                                          has_lob_header);
         }
-        if (NULL != cmp_func) {
+        // if compare type is decimal int, `cast_param` must be executed.
+        if (NULL != cmp_func && !cmp_meta.is_decimal_int()) {
           rt_expr.inner_func_cnt_ = 1;
           rt_expr.inner_functions_[0] = reinterpret_cast<void*>(cmp_func);
           DatumCastExtraInfo *info = static_cast<DatumCastExtraInfo *>(rt_expr.extra_info_);
@@ -205,6 +221,8 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                                             cmp_meta.get_type(),
                                                             cmp_meta.get_scale(),
                                                             cmp_meta.get_scale(),
+                                                            calc_acc.get_precision(),
+                                                            calc_acc.get_precision(),
                                                             lib::is_oracle_mode(),
                                                             cmp_meta.get_collation_type(),
                                                             cmp_meta.has_lob_header()))){
@@ -229,7 +247,9 @@ int ObExprNullif::cast_param(const ObExpr &src_expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const bool string_type = ob_is_string_type(dst_meta.type_);
+  const bool decimal_int_type = ob_is_decimal_int(dst_meta.type_);
   if (src_expr.datum_meta_.type_ == dst_meta.type_
+      && !decimal_int_type
       && (!string_type || src_expr.datum_meta_.cs_type_ == dst_meta.cs_type_)) {
     res_datum = src_expr.locate_expr_datum(ctx);
   } else if (OB_ISNULL(ctx.datum_caster_) && OB_FAIL(ctx.init_datum_caster())) {

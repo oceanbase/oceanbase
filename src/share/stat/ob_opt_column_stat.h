@@ -319,6 +319,15 @@ public:
 
   static ObOptColumnStat *malloc_new_column_stat(common::ObIAllocator &allocator);
 
+  int64_t get_cg_macro_blk_cnt() const { return cg_macro_blk_cnt_; }
+  void set_cg_macro_blk_cnt(int64_t num) { cg_macro_blk_cnt_ = num; }
+
+  int64_t get_cg_micro_blk_cnt() const { return cg_micro_blk_cnt_; }
+  void set_cg_micro_blk_cnt(int64_t num) { cg_micro_blk_cnt_ = num; }
+
+  double get_cg_skip_rate() const { return cg_skip_rate_; }
+  void set_cg_skip_rate(double cg_skip_rate) { cg_skip_rate_ = cg_skip_rate; }
+
   TO_STRING_KV(K_(table_id),
                K_(partition_id),
                K_(column_id),
@@ -334,7 +343,10 @@ public:
                K_(total_col_len),
                K_(llc_bitmap_size),
                K_(llc_bitmap),
-               K_(histogram));
+               K_(histogram),
+               K_(cg_macro_blk_cnt),
+               K_(cg_micro_blk_cnt),
+               K_(cg_skip_rate));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptColumnStat);
   int merge_min_max(ObObj &cur, const ObObj &other, bool is_cmp_min);
@@ -360,6 +372,9 @@ protected:
   int64_t total_col_len_;
   common::ObArenaAllocator inner_allocator_;
   common::ObIAllocator &allocator_;
+  int64_t cg_macro_blk_cnt_;
+  int64_t cg_micro_blk_cnt_;
+  double cg_skip_rate_;
 };
 
 }

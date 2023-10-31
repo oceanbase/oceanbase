@@ -149,6 +149,7 @@
 #include "observer/virtual_table/ob_all_virtual_server_compaction_progress.h"
 #include "observer/virtual_table/ob_all_virtual_server_compaction_event_history.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_progress.h"
+#include "observer/virtual_table/ob_all_virtual_tablet_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_history.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_info.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_ddl_kv_info.h"
@@ -192,7 +193,7 @@
 #include "observer/virtual_table/ob_tenant_virtual_privilege.h"
 #include "observer/virtual_table/ob_all_virtual_kvcache_store_memblock.h"
 #include "observer/virtual_table/ob_information_query_response_time.h"
-#include "observer/virtual_table/ob_all_virtual_kvcache_handle_leak_info.h"
+#include "observer/virtual_table/ob_all_virtual_storage_leak_info.h"
 #include "observer/virtual_table/ob_all_virtual_schema_memory.h"
 #include "observer/virtual_table/ob_all_virtual_schema_slot.h"
 #include "rootserver/virtual_table/ob_all_virtual_ls_replica_task_plan.h"
@@ -1345,13 +1346,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_KVCACHE_HANDLE_LEAK_INFO_TID: {
-            ObAllVirtualKVCacheHandleLeakInfo *handle_leak_info_table = nullptr;
-            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualKVCacheHandleLeakInfo, handle_leak_info_table))) {
-              SERVER_LOG(ERROR, "Fail to create __all_virtual_kvcache_handle_leak_info table", K(ret));
+          case OB_ALL_VIRTUAL_STORAGE_LEAK_INFO_TID: {
+            ObAllVirtualStorageLeakInfo *storage_leak_info_table = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualStorageLeakInfo, storage_leak_info_table))) {
+              SERVER_LOG(ERROR, "Fail to create __all_virtual_storage_leak_info table", K(ret));
             } else {
-              handle_leak_info_table->set_addr(addr_);
-              vt_iter = static_cast<ObVirtualTableIterator *>(handle_leak_info_table);
+              storage_leak_info_table->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(storage_leak_info_table);
             }
             break;
           }
@@ -2240,6 +2241,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(WARN, "failed to init event_history", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(event_history);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TABLET_STAT_TID: {
+            ObAllVirtualTabletStat *tablet_stat = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTabletStat, tablet_stat))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTabletStat construct failed", K(ret));
+            } else if (OB_FAIL(tablet_stat->init())) {
+              SERVER_LOG(WARN, "fail to init ObAllVirtualTabletStat, ", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(tablet_stat);
             }
             break;
           }

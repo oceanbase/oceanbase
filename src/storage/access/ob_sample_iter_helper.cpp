@@ -83,11 +83,7 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
           memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
         }
       } else if (table->is_sstable()) {
-        if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
-          STORAGE_LOG(WARN, "fail to get sstable meta handle", K(ret));
-        } else {
-          sstable_row_count += sst_meta_hdl.get_sstable_meta().get_row_count();
-        }
+        sstable_row_count += static_cast<ObSSTable *>(table)->get_row_count();
       }
     }
 

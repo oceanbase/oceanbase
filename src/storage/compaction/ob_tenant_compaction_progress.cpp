@@ -12,13 +12,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tenant_compaction_progress.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sstable_struct.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
@@ -45,11 +46,12 @@ void ObCompactionProgress::reset()
   status_ = ObIDag::DAG_STATUS_MAX;
   data_size_ = 0;
   unfinished_data_size_ = 0;
-  occupy_data_size_ = 0;
   original_size_ = 0;
   compressed_size_ = 0;
   start_time_ = 0;
   estimated_finish_time_ = 0;
+  start_cg_idx_ = 0;
+  end_cg_idx_ = 0;
 }
 
 bool ObTenantCompactionProgress::is_valid() const
@@ -71,7 +73,6 @@ ObTenantCompactionProgress & ObTenantCompactionProgress::operator=(const ObTenan
   status_ = other.status_;
   data_size_ = other.data_size_;
   unfinished_data_size_ = other.unfinished_data_size_;
-  occupy_data_size_ = other.occupy_data_size_;
   original_size_ = other.original_size_;
   compressed_size_ = other.compressed_size_;
   start_time_ = other.start_time_;
@@ -79,6 +80,8 @@ ObTenantCompactionProgress & ObTenantCompactionProgress::operator=(const ObTenan
   total_tablet_cnt_ = other.total_tablet_cnt_;
   unfinished_tablet_cnt_ = other.unfinished_tablet_cnt_;
   sum_time_guard_ = other.sum_time_guard_;
+  start_cg_idx_ = other.start_cg_idx_;
+  end_cg_idx_ = other.end_cg_idx_;
   return *this;
 }
 
@@ -110,7 +113,7 @@ bool ObDiagnoseTabletCompProgress::is_valid() const
   if (OB_UNLIKELY(!ObCompactionProgress::is_valid()
     || create_time_ <= 0
     || (share::ObIDag::DAG_STATUS_NODE_RUNNING == status_
-        && (start_time_ <= 0 || base_version_ <= 0 || snapshot_version_ <= 0)))) {
+        && (start_time_ <= 0 || snapshot_version_ <= 0)))) {
     bret = false;
   }
   return bret;
@@ -120,7 +123,6 @@ void ObDiagnoseTabletCompProgress::reset()
 {
   ObCompactionProgress::reset();
   is_suspect_abormal_ = false;
-  is_waiting_schedule_ = false;
   dag_id_.reset();
   create_time_ = 0;
   latest_update_ts_ = 0;
@@ -203,12 +205,7 @@ int ObTenantCompactionProgressMgr::loop_major_sstable_(
               } else if ((equal_flag && sstable->get_snapshot_version() == merge_snapshot_version)
                   || (!equal_flag && sstable->get_snapshot_version() < merge_snapshot_version)) {
                 ++cnt;
-                ObSSTableMetaHandle sst_meta_hdl;
-                if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-                  LOG_WARN("fail to get sstable meta handle", K(ret));
-                } else {
-                  size += sst_meta_hdl.get_sstable_meta().get_total_macro_block_count() * DEFAULT_MACRO_BLOCK_SIZE;
-                }
+                size += sstable->get_total_macro_block_count() * DEFAULT_MACRO_BLOCK_SIZE;
               }
             }
           } // end of while
@@ -286,7 +283,7 @@ int ObTenantCompactionProgressMgr::finish_progress_(ObTenantCompactionProgress &
   return ret;
 }
 
-int ObTenantCompactionProgressMgr::update_progress(
+int ObTenantCompactionProgressMgr::update_progress_status(
     const int64_t major_snapshot_version,
     share::ObIDag::ObDagStatus status)
 {
@@ -347,22 +344,22 @@ int ObTenantCompactionProgressMgr::update_progress(
     const int64_t major_snapshot_version,
     const int64_t total_data_size_delta,
     const int64_t scanned_data_size_delta,
-    const int64_t output_block_cnt_delta,
     const int64_t estimate_finish_time,
     const bool finish_flag,
-    const ObCompactionTimeGuard *time_guard)
+    const ObCompactionTimeGuard *time_guard,
+    const bool co_merge)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(major_snapshot_version < 0 || output_block_cnt_delta < 0)) {
+  if (OB_UNLIKELY(major_snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(major_snapshot_version), K(scanned_data_size_delta), K(output_block_cnt_delta));
+    LOG_WARN("invalid argument", K(ret), K(major_snapshot_version), K(scanned_data_size_delta));
   } else {
     int64_t pos = -1;
     SpinWLockGuard guard(lock_);
     if (OB_FAIL(get_pos_(major_snapshot_version, pos))) {
       LOG_WARN("pos is invalid", K(ret), K(pos), K(major_snapshot_version));
     } else if (share::ObIDag::DAG_STATUS_FINISH != array_[pos].status_) {
-      if (finish_flag) {
+      if (finish_flag && !co_merge) {
         if (OB_UNLIKELY(0 == array_[pos].unfinished_tablet_cnt_)) {
           if (REACH_TIME_INTERVAL(1000 * 1000)) {
             LOG_WARN("unfinished partition count is invalid", K(ret), K(array_[pos].unfinished_tablet_cnt_));
@@ -374,7 +371,6 @@ int ObTenantCompactionProgressMgr::update_progress(
 
       array_[pos].data_size_ += total_data_size_delta;
       array_[pos].unfinished_data_size_ += total_data_size_delta;
-      array_[pos].occupy_data_size_ += output_block_cnt_delta * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
       array_[pos].unfinished_data_size_ -= scanned_data_size_delta;
       if (nullptr != time_guard) {
         if (array_[pos].sum_time_guard_.is_empty()) {
@@ -416,8 +412,30 @@ int ObTenantCompactionProgressMgr::update_progress(
       if (ObPartitionMergeProgress::MAX_ESTIMATE_SPEND_TIME < array_[pos].estimated_finish_time_ - array_[pos].start_time_) {
         array_[pos].estimated_finish_time_ = array_[pos].start_time_ + ObPartitionMergeProgress::MAX_ESTIMATE_SPEND_TIME;
       }
-      LOG_DEBUG("success to update progress", K(ret), K(total_data_size_delta), K(output_block_cnt_delta),
+      LOG_DEBUG("success to update progress", K(ret), K(total_data_size_delta), K(major_snapshot_version), K(finish_flag), K(total_data_size_delta),
           K(scanned_data_size_delta), K(array_[pos]));
+    }
+  }
+  return ret;
+}
+
+int ObTenantCompactionProgressMgr::update_unfinish_tablet(const int64_t major_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(major_snapshot_version < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(major_snapshot_version));
+  } else {
+    int64_t pos = -1;
+    SpinWLockGuard guard(lock_);
+    if (OB_FAIL(get_pos_(major_snapshot_version, pos))) {
+      LOG_WARN("pos is invalid", K(ret), K(pos), K(major_snapshot_version));
+    } else if (OB_UNLIKELY(0 == array_[pos].unfinished_tablet_cnt_)) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        LOG_WARN("unfinished partition count is invalid", K(ret), K(pos), K(array_[pos].unfinished_tablet_cnt_));
+      }
+    } else {
+      array_[pos].unfinished_tablet_cnt_--;
     }
   }
   return ret;

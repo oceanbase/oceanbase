@@ -177,6 +177,17 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(ObObj &ob
       }
       break;
     }
+    case ObDecimalIntType: {
+      if (to_len + obj.get_int_bytes() > max_buf_len) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_TRACE("no enough memory to do encoding", K(ret), K(obj.get_type()),
+                  K(obj.get_int_bytes()));
+      } else if (OB_FAIL(
+                   encode_from_decint(obj.get_decimal_int(), obj.get_int_bytes(), to, to_len))) {
+        LOG_WARN("encode from decimal int failed", K(ret));
+      }
+      break;
+    }
     case ObURowIDType:
     case ObUnknownType:
     case ObTinyTextType:
@@ -370,6 +381,15 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
         } else {
           LOG_WARN("failed to encode string", K(ret));
         }
+      }
+      break;
+    }
+    case ObDecimalIntType: {
+      if (to_len + data.len_ > max_buf_len) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_TRACE("no enough memory to do encoding", K(ret), K(data.len_), K(param.type_));
+      } else if (OB_FAIL(encode_from_decint(data.get_decimal_int(), data.len_, to, to_len))) {
+        LOG_WARN("encode from decimal int failed", K(ret));
       }
       break;
     }
@@ -771,6 +791,65 @@ int ObOrderPerservingEncoder::encode_from_interval_ds(ObIntervalDSValue val,
   return OB_SUCCESS;
 }
 
+template <typename T>
+int ObOrderPerservingEncoder::encode_from_decint(const T &decint, unsigned char *to,
+                                                 int64_t &to_len)
+{
+  static_assert(wide::IsWideInteger<T>::value, "");
+  int ret = OB_SUCCESS;
+  const int item_count  = T::ITEM_COUNT;
+  int64_t high = static_cast<int64_t>(decint.items_[item_count - 1]);
+  // encode_from_int(high, to, to_len);
+  high ^= SIGN_MASK_64;
+  high = bswap_64(high);
+  MEMCPY(to, (unsigned char *)&high, sizeof(high));
+  to += sizeof(high);
+  to_len += sizeof(high);
+  for (int i = item_count - 2; i >= 0; i--) {
+    uint64_t val = bswap_64(decint.items_[i]);
+    MEMCPY(to, (unsigned char *)&val, sizeof(val));
+    to_len += sizeof(val);
+    to += sizeof(val);
+  }
+  return ret;
+}
+
+int ObOrderPerservingEncoder::encode_from_decint(const ObDecimalInt *decint, int32_t int_bytes, unsigned char *to, int64_t &to_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(decint)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid decimal int", K(ret), K(decint));
+  } else {
+    switch (int_bytes) {
+    case sizeof(int32_t): {
+      ret = encode_from_int32(*reinterpret_cast<const int32_t *>(decint), to, to_len);
+      break;
+    }
+    case sizeof(int64_t): {
+      ret = encode_from_int(*reinterpret_cast<const int64_t *>(decint), to, to_len);
+      break;
+    }
+    case sizeof(int128_t): {
+      ret = encode_from_decint(*reinterpret_cast<const int128_t *>(decint), to, to_len);
+      break;
+    }
+    case sizeof(int256_t): {
+      ret = encode_from_decint(*reinterpret_cast<const int256_t *>(decint), to, to_len);
+      break;
+    }
+    case sizeof(int512_t): {
+      ret = encode_from_decint(*reinterpret_cast<const int512_t *>(decint), to, to_len);
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected int bytes", K(ret), K(int_bytes));
+    }
+    }
+  }
+  return ret;
+}
 
 int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_len,
                                            int64_t &to_len, bool is_mem,

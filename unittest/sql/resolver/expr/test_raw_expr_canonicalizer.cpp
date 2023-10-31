@@ -18,6 +18,9 @@
 #include "sql/resolver/ob_stmt.h"
 #include "sql/ob_sql_context.h"
 #include "lib/json/ob_json_print_utils.h"
+#define private public
+#include "observer/ob_server.h"
+#undef private
 #include <fstream>
 #include <iterator>
 using namespace oceanbase::common;
@@ -78,6 +81,7 @@ void TestRawExprCanonicalizer::canon(const char* expr, const char *&canon_expr)
   ctx.stmt_ = &stmt;
   ObSQLSessionInfo session;
   ctx.session_info_ = &session;
+  OBSERVER.init_version();
   ObRawExpr *raw_expr = NULL;
   OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str), ctx, raw_expr, columns,
                                             sys_vars, &sub_query_info, aggr_exprs ,win_exprs, udf_info));

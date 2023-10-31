@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <thread>
+#define USING_LOG_PREFIX STORAGE
 
 #define USING_LOG_PREFIX STORAGE
 #define private public
@@ -23,7 +24,6 @@
 #include "storage/ob_storage_struct.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -38,10 +38,10 @@ class TestParallelMinorDag : public ::testing::Test
 {
 public:
   TestParallelMinorDag()
-    : tenant_id_(1), allocator_(ObModIds::TEST), tenant_base_(tenant_id_)
-  {}
+    : tenant_id_(1), allocator_(ObModIds::TEST), tenant_base_(tenant_id_) {}
   virtual ~TestParallelMinorDag() {}
   int prepare_merge_result(const int64_t sstable_cnt, ObGetMergeTablesResult &result);
+
   virtual void SetUp() override;
   virtual void TearDown() override;
   static void SetUpTestCase();
@@ -70,12 +70,10 @@ void TestParallelMinorDag::SetUpTestCase()
 {
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
 }
-
 void TestParallelMinorDag::TearDownTestCase()
 {
   MockTenantModuleEnv::get_instance().destroy();
 }
-
 void TestParallelMinorDag::SetUp()
 {
   ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
@@ -87,7 +85,6 @@ void TestParallelMinorDag::SetUp()
 
   MEMSET(fake_sstables_, 0, sizeof(ObSSTable*) * MAX_SSTABLE_CNT );
 }
-
 void TestParallelMinorDag::TearDown()
 {
   for (int i = 0; i < MAX_SSTABLE_CNT; ++i) {
@@ -116,7 +113,6 @@ int TestParallelMinorDag::prepare_merge_result(
   result.version_range_.multi_version_start_ = 100;
   result.merge_version_ = 0;
   result.create_snapshot_version_ = 0;
-  result.suggest_merge_type_ = MINOR_MERGE;
 
   int64_t log_ts = 1;
   for (int i = 0; OB_SUCC(ret) && i < sstable_cnt; ++i) {
@@ -165,7 +161,7 @@ void TestParallelMinorDag::check_result(
 
   ASSERT_EQ(OB_SUCCESS, prepare_merge_result(sstable_cnt, result));
   int ret = (minor_compact_trigger <= sstable_cnt) ? OB_SUCCESS : OB_NO_NEED_MERGE;
-  ASSERT_EQ(ret, ObPartitionMergePolicy::generate_parallel_minor_interval(minor_compact_trigger, result, minor_range_mgr, result_array));
+  ASSERT_EQ(ret, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, minor_compact_trigger, result, minor_range_mgr, result_array));
 
   for (int64_t i = 0; i < result_array.count(); ++i) {
     const ObGetMergeTablesResult &cur_result = result_array.at(i);
@@ -282,7 +278,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(37, 41));
 
   ASSERT_EQ(OB_SUCCESS, prepare_merge_result(sstable_cnt, result));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 2, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 2);
 
   ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 1);
@@ -297,7 +293,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(13, 19));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(37, 39));
 
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
   ASSERT_EQ(result_array.count(), 1);
 
@@ -309,7 +305,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 17));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(18, 34));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 2, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 0);
 
 
@@ -318,7 +314,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 5));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(26, 37));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(39, 40));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 2, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 2);
 
   ASSERT_EQ(result_array.at(0).scn_range_.start_scn_.get_val_for_tx(), 5);
@@ -328,17 +324,18 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   ASSERT_EQ(result_array.at(1).scn_range_.end_scn_.get_val_for_tx(), 26);
 
 
+
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 34));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
   ASSERT_EQ(result_array.count(), 0);
 
   result_array.reset();
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(1, 30));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(2, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 2, result, minor_range_mgr, result_array));
   COMMON_LOG(INFO, "generate_parallel_minor_interval", K(result_array));
   ASSERT_EQ(result_array.count(), 1);
 
@@ -350,7 +347,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(5, 25));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(35, 41));
-  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(4, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 4, result, minor_range_mgr, result_array));
   ASSERT_EQ(result_array.count(), 0);
 
 
@@ -358,7 +355,7 @@ TEST_F(TestParallelMinorDag, test_parallel_with_range_mgr)
   minor_range_mgr.reset();
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(5, 25));
   minor_range_mgr.exe_range_array_.push_back(construct_scn_range(31, 41));
-  ASSERT_EQ(OB_NO_NEED_MERGE, ObPartitionMergePolicy::generate_parallel_minor_interval(16, result, minor_range_mgr, result_array));
+  ASSERT_EQ(OB_NO_NEED_MERGE, ObPartitionMergePolicy::generate_parallel_minor_interval(MINOR_MERGE, 16, result, minor_range_mgr, result_array));
 }
 
 } // namespace unittest

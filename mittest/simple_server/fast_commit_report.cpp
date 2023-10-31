@@ -121,16 +121,19 @@ int ObMemtable::flush(share::ObLSID ls_id)
         cur_time - mt_stat_.ready_for_flush_time_ > 30 * 1000 * 1000) {
       STORAGE_LOG(WARN, "memtable can not create dag successfully for long time",
                 K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
-      compaction::ADD_SUSPECT_INFO(MINI_MERGE,
-                       ls_id, get_tablet_id(),
-                       ObSuspectInfoType::SUSPECT_MEMTABLE_CANT_CREATE_DAG,
-                       cur_time - mt_stat_.ready_for_flush_time_,
-                       mt_stat_.ready_for_flush_time_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(compaction::ADD_SUSPECT_INFO(compaction::MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE,
+                      ls_id, get_tablet_id(),
+                      ObSuspectInfoType::SUSPECT_MEMTABLE_CANT_CREATE_DAG,
+                      static_cast<int64_t>(ret),
+                      cur_time - mt_stat_.ready_for_flush_time_, mt_stat_.ready_for_flush_time_))) {
+        STORAGE_LOG(WARN, "failed to add suspect info", K(tmp_ret));
+      }
     }
     compaction::ObTabletMergeDagParam param;
     param.ls_id_ = ls_id;
     param.tablet_id_ = key_.tablet_id_;
-    param.merge_type_ = MINI_MERGE;
+    param.merge_type_ = compaction::MINI_MERGE;
     param.merge_version_ = ObVersion::MIN_VERSION;
 
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {

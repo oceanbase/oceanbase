@@ -33,12 +33,12 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY      |    |1       |18          |
-|1 |└─HASH JOIN          |    |5       |18          |
-|2 |  ├─TABLE FULL SCAN  |c   |11      |5           |
-|3 |  └─HASH JOIN        |    |4       |12          |
-|4 |    ├─TABLE FULL SCAN|b   |11      |5           |
-|5 |    └─TABLE FULL SCAN|a   |2       |5           |
+|0 |SCALAR GROUP BY      |    |1       |13          |
+|1 |└─HASH JOIN          |    |5       |13          |
+|2 |  ├─TABLE FULL SCAN  |c   |11      |3           |
+|3 |  └─HASH JOIN        |    |4       |8           |
+|4 |    ├─TABLE FULL SCAN|b   |11      |3           |
+|5 |    └─TABLE FULL SCAN|a   |2       |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -72,12 +72,12 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY      |    |1       |18          |
-|1 |└─HASH JOIN          |    |6       |18          |
-|2 |  ├─TABLE FULL SCAN  |c   |11      |5           |
-|3 |  └─HASH JOIN        |    |4       |11          |
-|4 |    ├─TABLE FULL SCAN|b   |11      |5           |
-|5 |    └─TABLE FULL SCAN|a   |2       |5           |
+|0 |SCALAR GROUP BY      |    |1       |12          |
+|1 |└─HASH JOIN          |    |6       |12          |
+|2 |  ├─TABLE FULL SCAN  |c   |11      |3           |
+|3 |  └─HASH JOIN        |    |4       |8           |
+|4 |    ├─TABLE FULL SCAN|b   |11      |3           |
+|5 |    └─TABLE FULL SCAN|a   |2       |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -112,14 +112,14 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY      |    |1       |26          |
-|1 |└─HASH JOIN          |    |8       |26          |
-|2 |  ├─HASH JOIN        |    |17      |13          |
-|3 |  │ ├─TABLE FULL SCAN|c   |11      |5           |
-|4 |  │ └─TABLE FULL SCAN|d   |11      |5           |
-|5 |  └─HASH JOIN        |    |4       |11          |
-|6 |    ├─TABLE FULL SCAN|a   |2       |5           |
-|7 |    └─TABLE FULL SCAN|b   |11      |5           |
+|0 |SCALAR GROUP BY      |    |1       |19          |
+|1 |└─HASH JOIN          |    |8       |19          |
+|2 |  ├─HASH JOIN        |    |17      |9           |
+|3 |  │ ├─TABLE FULL SCAN|c   |11      |3           |
+|4 |  │ └─TABLE FULL SCAN|d   |11      |3           |
+|5 |  └─HASH JOIN        |    |4       |7           |
+|6 |    ├─TABLE FULL SCAN|a   |2       |3           |
+|7 |    └─TABLE FULL SCAN|b   |11      |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -162,14 +162,14 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY      |    |1       |31          |
-|1 |└─HASH JOIN          |    |29      |30          |
-|2 |  ├─HASH JOIN        |    |17      |13          |
-|3 |  │ ├─TABLE FULL SCAN|c   |11      |5           |
-|4 |  │ └─TABLE FULL SCAN|d   |11      |5           |
-|5 |  └─HASH JOIN        |    |15      |12          |
-|6 |    ├─TABLE FULL SCAN|a   |11      |5           |
-|7 |    └─TABLE FULL SCAN|b   |11      |5           |
+|0 |SCALAR GROUP BY      |    |1       |24          |
+|1 |└─HASH JOIN          |    |29      |23          |
+|2 |  ├─HASH JOIN        |    |17      |9           |
+|3 |  │ ├─TABLE FULL SCAN|c   |11      |3           |
+|4 |  │ └─TABLE FULL SCAN|d   |11      |3           |
+|5 |  └─HASH JOIN        |    |15      |9           |
+|6 |    ├─TABLE FULL SCAN|a   |11      |3           |
+|7 |    └─TABLE FULL SCAN|b   |11      |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -213,14 +213,14 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SCALAR GROUP BY        |    |1       |23          |
-|1 |└─HASH JOIN            |    |1       |23          |
-|2 |  ├─TABLE FULL SCAN    |c   |11      |5           |
-|3 |  └─HASH JOIN          |    |4       |16          |
-|4 |    ├─HASH JOIN        |    |2       |10          |
-|5 |    │ ├─TABLE FULL SCAN|a   |2       |5           |
-|6 |    │ └─TABLE FULL SCAN|d   |2       |5           |
-|7 |    └─TABLE FULL SCAN  |b   |11      |5           |
+|0 |SCALAR GROUP BY        |    |1       |15          |
+|1 |└─HASH JOIN            |    |1       |15          |
+|2 |  ├─TABLE FULL SCAN    |c   |11      |3           |
+|3 |  └─HASH JOIN          |    |4       |10          |
+|4 |    ├─HASH JOIN        |    |2       |6           |
+|5 |    │ ├─TABLE FULL SCAN|a   |2       |3           |
+|6 |    │ └─TABLE FULL SCAN|d   |2       |3           |
+|7 |    └─TABLE FULL SCAN  |b   |11      |3           |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -264,12 +264,12 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY      |    |1       |21          |
-|1 |└─HASH JOIN          |    |3       |21          |
-|2 |  ├─TABLE FULL SCAN  |c   |11      |5           |
-|3 |  └─HASH JOIN        |    |15      |13          |
-|4 |    ├─TABLE FULL SCAN|d   |11      |5           |
-|5 |    └─TABLE FULL SCAN|b   |11      |5           |
+|0 |SCALAR GROUP BY      |    |1       |16          |
+|1 |└─HASH JOIN          |    |3       |16          |
+|2 |  ├─TABLE FULL SCAN  |c   |11      |3           |
+|3 |  └─HASH JOIN        |    |15      |9           |
+|4 |    ├─TABLE FULL SCAN|d   |11      |3           |
+|5 |    └─TABLE FULL SCAN|b   |11      |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -309,24 +309,24 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SCALAR GROUP BY            |    |1       |55          |
-|1 |└─HASH JOIN                |    |7       |55          |
-|2 |  ├─HASH JOIN              |    |3       |33          |
-|3 |  │ ├─HASH JOIN            |    |2       |20          |
-|4 |  │ │ ├─HASH JOIN          |    |2       |14          |
-|5 |  │ │ │ ├─TABLE FULL SCAN  |t2  |2       |5           |
-|6 |  │ │ │ └─HASH JOIN        |    |2       |10          |
-|7 |  │ │ │   ├─TABLE FULL SCAN|t1  |1       |5           |
-|8 |  │ │ │   └─TABLE FULL SCAN|t3  |2       |5           |
-|9 |  │ │ └─TABLE FULL SCAN    |t7  |11      |5           |
-|10|  │ └─HASH JOIN            |    |15      |12          |
-|11|  │   ├─TABLE FULL SCAN    |t8  |11      |5           |
-|12|  │   └─TABLE FULL SCAN    |t9  |11      |5           |
-|13|  └─HASH JOIN              |    |19      |20          |
-|14|    ├─HASH JOIN            |    |15      |12          |
-|15|    │ ├─TABLE FULL SCAN    |t4  |11      |5           |
-|16|    │ └─TABLE FULL SCAN    |t5  |11      |5           |
-|17|    └─TABLE FULL SCAN      |t6  |11      |5           |
+|0 |SCALAR GROUP BY            |    |1       |39          |
+|1 |└─HASH JOIN                |    |7       |39          |
+|2 |  ├─HASH JOIN              |    |3       |22          |
+|3 |  │ ├─HASH JOIN            |    |2       |13          |
+|4 |  │ │ ├─HASH JOIN          |    |2       |9           |
+|5 |  │ │ │ ├─TABLE FULL SCAN  |t2  |2       |3           |
+|6 |  │ │ │ └─HASH JOIN        |    |2       |6           |
+|7 |  │ │ │   ├─TABLE FULL SCAN|t1  |1       |3           |
+|8 |  │ │ │   └─TABLE FULL SCAN|t3  |2       |3           |
+|9 |  │ │ └─TABLE FULL SCAN    |t7  |11      |3           |
+|10|  │ └─HASH JOIN            |    |15      |8           |
+|11|  │   ├─TABLE FULL SCAN    |t8  |11      |3           |
+|12|  │   └─TABLE FULL SCAN    |t9  |11      |3           |
+|13|  └─HASH JOIN              |    |19      |15          |
+|14|    ├─HASH JOIN            |    |15      |8           |
+|15|    │ ├─TABLE FULL SCAN    |t4  |11      |3           |
+|16|    │ └─TABLE FULL SCAN    |t5  |11      |3           |
+|17|    └─TABLE FULL SCAN      |t6  |11      |3           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -404,25 +404,25 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SCALAR GROUP BY                    |    |1       |259         |
-|1 |└─HASH JOIN                        |    |6       |259         |
-|2 |  ├─HASH JOIN                      |    |67      |210         |
-|3 |  │ ├─HASH JOIN                    |    |19      |22          |
-|4 |  │ │ ├─HASH JOIN                  |    |15      |13          |
-|5 |  │ │ │ ├─TABLE FULL SCAN          |t1  |11      |5           |
-|6 |  │ │ │ └─TABLE FULL SCAN          |t2  |11      |5           |
-|7 |  │ │ └─TABLE FULL SCAN            |t3  |11      |5           |
-|8 |  │ └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |51          |
-|9 |  │   ├─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|10|  │   │ ├─TABLE FULL SCAN          |t4  |11      |5           |
-|11|  │   │ └─MATERIAL                 |    |11      |5           |
-|12|  │   │   └─TABLE FULL SCAN        |t5  |11      |5           |
-|13|  │   └─MATERIAL                   |    |11      |5           |
-|14|  │     └─TABLE FULL SCAN          |t6  |11      |5           |
-|15|  └─NESTED-LOOP JOIN CARTESIAN     |    |121     |13          |
-|16|    ├─TABLE FULL SCAN              |t7  |11      |5           |
-|17|    └─MATERIAL                     |    |11      |6           |
-|18|      └─TABLE FULL SCAN            |t8  |11      |5           |
+|0 |SCALAR GROUP BY                    |    |1       |236         |
+|1 |└─HASH JOIN                        |    |6       |236         |
+|2 |  ├─HASH JOIN                      |    |67      |194         |
+|3 |  │ ├─HASH JOIN                    |    |19      |17          |
+|4 |  │ │ ├─HASH JOIN                  |    |15      |9           |
+|5 |  │ │ │ ├─TABLE FULL SCAN          |t1  |11      |3           |
+|6 |  │ │ │ └─TABLE FULL SCAN          |t2  |11      |3           |
+|7 |  │ │ └─TABLE FULL SCAN            |t3  |11      |3           |
+|8 |  │ └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |40          |
+|9 |  │   ├─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|10|  │   │ ├─TABLE FULL SCAN          |t4  |11      |3           |
+|11|  │   │ └─MATERIAL                 |    |11      |3           |
+|12|  │   │   └─TABLE FULL SCAN        |t5  |11      |3           |
+|13|  │   └─MATERIAL                   |    |11      |3           |
+|14|  │     └─TABLE FULL SCAN          |t6  |11      |3           |
+|15|  └─NESTED-LOOP JOIN CARTESIAN     |    |121     |6           |
+|16|    ├─TABLE FULL SCAN              |t7  |11      |3           |
+|17|    └─MATERIAL                     |    |11      |4           |
+|18|      └─TABLE FULL SCAN            |t8  |11      |3           |
 ===================================================================
 Outputs & filters:
 -------------------------------------
@@ -494,15 +494,15 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |27          |
-|1 |└─HASH JOIN                    |    |8       |27          |
-|2 |  ├─TABLE FULL SCAN            |c   |11      |5           |
-|3 |  └─NESTED-LOOP JOIN CARTESIAN |    |40      |16          |
-|4 |    ├─TABLE FULL SCAN          |d   |11      |5           |
-|5 |    └─MATERIAL                 |    |4       |11          |
-|6 |      └─HASH JOIN              |    |4       |11          |
-|7 |        ├─TABLE FULL SCAN      |a   |2       |5           |
-|8 |        └─TABLE FULL SCAN      |b   |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |13          |
+|1 |└─HASH JOIN                    |    |8       |13          |
+|2 |  ├─TABLE FULL SCAN            |c   |11      |3           |
+|3 |  └─NESTED-LOOP JOIN CARTESIAN |    |40      |4           |
+|4 |    ├─TABLE FULL SCAN          |d   |11      |3           |
+|5 |    └─MATERIAL                 |    |4       |7           |
+|6 |      └─HASH JOIN              |    |4       |7           |
+|7 |        ├─TABLE FULL SCAN      |a   |2       |3           |
+|8 |        └─TABLE FULL SCAN      |b   |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -548,28 +548,28 @@ Query Plan
 =================================================================
 |ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SCALAR GROUP BY                  |    |1       |71          |
-|1 |└─HASH JOIN                      |    |14      |71          |
-|2 |  ├─TABLE FULL SCAN              |t2  |11      |5           |
-|3 |  └─HASH JOIN                    |    |10      |64          |
-|4 |    ├─TABLE FULL SCAN            |t1  |11      |5           |
-|5 |    └─HASH JOIN                  |    |7       |57          |
-|6 |      ├─TABLE FULL SCAN          |t3  |2       |5           |
-|7 |      └─HASH JOIN                |    |41      |48          |
-|8 |        ├─TABLE FULL SCAN        |t7  |11      |5           |
-|9 |        └─HASH JOIN              |    |32      |38          |
-|10|          ├─TABLE FULL SCAN      |t8  |11      |5           |
-|11|          └─HASH JOIN            |    |25      |29          |
-|12|            ├─TABLE FULL SCAN    |t9  |11      |5           |
-|13|            └─HASH JOIN          |    |19      |21          |
-|14|              ├─TABLE FULL SCAN  |t4  |11      |5           |
-|15|              └─HASH JOIN        |    |15      |12          |
-|16|                ├─TABLE FULL SCAN|t5  |11      |5           |
-|17|                └─TABLE FULL SCAN|t6  |11      |5           |
+|0 |SCALAR GROUP BY                  |    |1       |56          |
+|1 |└─HASH JOIN                      |    |14      |55          |
+|2 |  ├─TABLE FULL SCAN              |t2  |11      |3           |
+|3 |  └─HASH JOIN                    |    |10      |49          |
+|4 |    ├─TABLE FULL SCAN            |t1  |11      |3           |
+|5 |    └─HASH JOIN                  |    |7       |44          |
+|6 |      ├─TABLE FULL SCAN          |t3  |2       |3           |
+|7 |      └─HASH JOIN                |    |41      |38          |
+|8 |        ├─TABLE FULL SCAN        |t7  |11      |3           |
+|9 |        └─HASH JOIN              |    |32      |30          |
+|10|          ├─TABLE FULL SCAN      |t8  |11      |3           |
+|11|          └─HASH JOIN            |    |25      |22          |
+|12|            ├─TABLE FULL SCAN    |t9  |11      |3           |
+|13|            └─HASH JOIN          |    |19      |15          |
+|14|              ├─TABLE FULL SCAN  |t4  |11      |3           |
+|15|              └─HASH JOIN        |    |15      |9           |
+|16|                ├─TABLE FULL SCAN|t5  |11      |3           |
+|17|                └─TABLE FULL SCAN|t6  |11      |3           |
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.c1 + t3.c1 + t4.c2 - t5.c1 + t6.c2 - t7.c1 - t8.c2) + cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), rowset=16
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.c1 + t3.c1 + t4.c2 - t5.c1 + t6.c2 - t7.c1 - t8.c2) + cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(49, 0))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.c1 + t3.c1 + t4.c2 - t5.c1 + t6.c2 - t7.c1 - t8.c2)], [T_FUN_COUNT(t9.c1)])
   1 - output([t1.c1], [t2.c1], [t3.c1], [t7.c1], [t8.c2], [t9.c1], [t5.c1], [t4.c2], [t6.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
@@ -643,21 +643,21 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SCALAR GROUP BY                    |    |1       |209         |
-|1 |└─HASH JOIN                        |    |1       |209         |
-|2 |  ├─HASH JOIN                      |    |2       |183         |
-|3 |  │ ├─TABLE FULL SCAN              |t1  |11      |5           |
-|4 |  │ └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |51          |
-|5 |  │   ├─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|6 |  │   │ ├─TABLE FULL SCAN          |t2  |11      |5           |
-|7 |  │   │ └─MATERIAL                 |    |11      |5           |
-|8 |  │   │   └─TABLE FULL SCAN        |t3  |11      |5           |
-|9 |  │   └─MATERIAL                   |    |11      |6           |
-|10|  │     └─TABLE FULL SCAN          |t4  |11      |5           |
-|11|  └─NESTED-LOOP JOIN CARTESIAN     |    |121     |12          |
-|12|    ├─TABLE FULL SCAN              |t5  |11      |5           |
-|13|    └─MATERIAL                     |    |11      |5           |
-|14|      └─TABLE FULL SCAN            |t6  |11      |5           |
+|0 |SCALAR GROUP BY                    |    |1       |190         |
+|1 |└─HASH JOIN                        |    |1       |190         |
+|2 |  ├─HASH JOIN                      |    |2       |170         |
+|3 |  │ ├─TABLE FULL SCAN              |t1  |11      |3           |
+|4 |  │ └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |40          |
+|5 |  │   ├─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|6 |  │   │ ├─TABLE FULL SCAN          |t2  |11      |3           |
+|7 |  │   │ └─MATERIAL                 |    |11      |3           |
+|8 |  │   │   └─TABLE FULL SCAN        |t3  |11      |3           |
+|9 |  │   └─MATERIAL                   |    |11      |4           |
+|10|  │     └─TABLE FULL SCAN          |t4  |11      |3           |
+|11|  └─NESTED-LOOP JOIN CARTESIAN     |    |121     |6           |
+|12|    ├─TABLE FULL SCAN              |t5  |11      |3           |
+|13|    └─MATERIAL                     |    |11      |3           |
+|14|      └─TABLE FULL SCAN            |t6  |11      |3           |
 ===================================================================
 Outputs & filters:
 -------------------------------------
@@ -718,16 +718,16 @@ Query Plan
 =================================================================
 |ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SCALAR GROUP BY                  |    |1       |183         |
-|1 |└─HASH JOIN                      |    |2       |183         |
-|2 |  ├─TABLE FULL SCAN              |t1  |11      |5           |
-|3 |  └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |51          |
-|4 |    ├─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|5 |    │ ├─TABLE FULL SCAN          |t2  |11      |5           |
-|6 |    │ └─MATERIAL                 |    |11      |5           |
-|7 |    │   └─TABLE FULL SCAN        |t3  |11      |5           |
-|8 |    └─MATERIAL                   |    |11      |6           |
-|9 |      └─TABLE FULL SCAN          |t4  |11      |5           |
+|0 |SCALAR GROUP BY                  |    |1       |170         |
+|1 |└─HASH JOIN                      |    |2       |170         |
+|2 |  ├─TABLE FULL SCAN              |t1  |11      |3           |
+|3 |  └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |40          |
+|4 |    ├─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|5 |    │ ├─TABLE FULL SCAN          |t2  |11      |3           |
+|6 |    │ └─MATERIAL                 |    |11      |3           |
+|7 |    │   └─TABLE FULL SCAN        |t3  |11      |3           |
+|8 |    └─MATERIAL                   |    |11      |4           |
+|9 |      └─TABLE FULL SCAN          |t4  |11      |3           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -773,13 +773,13 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |33          |
-|1 |└─HASH JOIN                    |    |3       |33          |
-|2 |  ├─TABLE FULL SCAN            |t1  |11      |5           |
-|3 |  └─NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
-|4 |    ├─TABLE FULL SCAN          |t2  |11      |5           |
-|5 |    └─MATERIAL                 |    |11      |6           |
-|6 |      └─TABLE FULL SCAN        |t3  |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |24          |
+|1 |└─HASH JOIN                    |    |3       |24          |
+|2 |  ├─TABLE FULL SCAN            |t1  |11      |3           |
+|3 |  └─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|4 |    ├─TABLE FULL SCAN          |t2  |11      |3           |
+|5 |    └─MATERIAL                 |    |11      |4           |
+|6 |      └─TABLE FULL SCAN        |t3  |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -826,25 +826,25 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                             |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |SCALAR GROUP BY                      |     |1       |94          |
-|1 |└─HASH JOIN                          |     |17      |94          |
-|2 |  ├─TABLE FULL SCAN                  |a    |11      |5           |
-|3 |  └─HASH JOIN                        |     |13      |86          |
-|4 |    ├─HASH SEMI JOIN                 |     |10      |79          |
-|5 |    │ ├─TABLE FULL SCAN              |c    |11      |5           |
-|6 |    │ └─SUBPLAN SCAN                 |VIEW1|361     |42          |
-|7 |    │   └─NESTED-LOOP JOIN CARTESIAN |     |361     |41          |
-|8 |    │     ├─HASH JOIN                |     |26      |21          |
-|9 |    │     │ ├─TABLE FULL SCAN        |z    |11      |5           |
-|10|    │     │ └─HASH JOIN              |     |17      |13          |
-|11|    │     │   ├─TABLE FULL SCAN      |x    |11      |5           |
-|12|    │     │   └─TABLE FULL SCAN      |y    |11      |5           |
-|13|    │     └─MATERIAL                 |     |15      |11          |
-|14|    │       └─NESTED-LOOP JOIN       |     |15      |11          |
-|15|    │         ├─TABLE FULL SCAN      |y2   |11      |5           |
-|16|    │         └─MATERIAL             |     |11      |5           |
-|17|    │           └─TABLE FULL SCAN    |y3   |11      |5           |
-|18|    └─TABLE FULL SCAN                |b    |11      |5           |
+|0 |SCALAR GROUP BY                      |     |1       |73          |
+|1 |└─HASH JOIN                          |     |17      |73          |
+|2 |  ├─TABLE FULL SCAN                  |a    |11      |3           |
+|3 |  └─HASH JOIN                        |     |13      |67          |
+|4 |    ├─HASH SEMI JOIN                 |     |10      |61          |
+|5 |    │ ├─TABLE FULL SCAN              |c    |11      |3           |
+|6 |    │ └─SUBPLAN SCAN                 |VIEW1|361     |26          |
+|7 |    │   └─NESTED-LOOP JOIN CARTESIAN |     |361     |25          |
+|8 |    │     ├─HASH JOIN                |     |26      |16          |
+|9 |    │     │ ├─TABLE FULL SCAN        |z    |11      |3           |
+|10|    │     │ └─HASH JOIN              |     |17      |9           |
+|11|    │     │   ├─TABLE FULL SCAN      |x    |11      |3           |
+|12|    │     │   └─TABLE FULL SCAN      |y    |11      |3           |
+|13|    │     └─MATERIAL                 |     |15      |5           |
+|14|    │       └─NESTED-LOOP JOIN       |     |15      |5           |
+|15|    │         ├─TABLE FULL SCAN      |y2   |11      |3           |
+|16|    │         └─MATERIAL             |     |11      |3           |
+|17|    │           └─TABLE FULL SCAN    |y3   |11      |3           |
+|18|    └─TABLE FULL SCAN                |b    |11      |3           |
 ======================================================================
 Outputs & filters:
 -------------------------------------
@@ -922,46 +922,54 @@ union ALL
 select /* leading(t2, t1, (t4, t3, (t6, t5))) */ sum(t1.c1), max(t2.c2)+sum(t5.c1-t6.c2) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
 where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 55;
 Query Plan
-===========================================================================
-|ID|OPERATOR                           |NAME        |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION          |            |2       |160         |
-|1 |├─TEMP TABLE INSERT                |TEMP1       |43      |156         |
-|2 |│ └─HASH JOIN                      |            |43      |148         |
-|3 |│   ├─HASH JOIN                    |            |278     |57          |
-|4 |│   │ ├─HASH JOIN                  |            |20      |21          |
-|5 |│   │ │ ├─TABLE FULL SCAN          |t6          |11      |5           |
-|6 |│   │ │ └─HASH JOIN                |            |14      |13          |
-|7 |│   │ │   ├─TABLE FULL SCAN        |t5          |11      |5           |
-|8 |│   │ │   └─TABLE FULL SCAN        |t4          |11      |5           |
-|9 |│   │ └─NESTED-LOOP JOIN CARTESIAN |            |121     |12          |
-|10|│   │   ├─TABLE FULL SCAN          |t3          |11      |5           |
-|11|│   │   └─MATERIAL                 |            |11      |5           |
-|12|│   │     └─TABLE FULL SCAN        |t1          |11      |5           |
-|13|│   └─TABLE FULL SCAN              |t2          |11      |5           |
-|14|└─UNION ALL                        |            |2       |5           |
-|15|  ├─SCALAR GROUP BY                |            |1       |2           |
-|16|  │ └─TEMP TABLE ACCESS            |VIEW1(TEMP1)|36      |1           |
-|17|  └─SCALAR GROUP BY                |            |1       |3           |
-|18|    └─TEMP TABLE ACCESS            |VIEW2(TEMP1)|36      |1           |
-===========================================================================
+===================================================================
+|ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |UNION ALL                          |    |2       |132         |
+|1 |├─SCALAR GROUP BY                  |    |1       |94          |
+|2 |│ └─HASH JOIN                      |    |36      |93          |
+|3 |│   ├─HASH JOIN                    |    |231     |40          |
+|4 |│   │ ├─HASH JOIN                  |    |17      |15          |
+|5 |│   │ │ ├─TABLE FULL SCAN          |t6  |9       |3           |
+|6 |│   │ │ └─HASH JOIN                |    |13      |9           |
+|7 |│   │ │   ├─TABLE FULL SCAN        |t5  |9       |3           |
+|8 |│   │ │   └─TABLE FULL SCAN        |t4  |11      |3           |
+|9 |│   │ └─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|10|│   │   ├─TABLE FULL SCAN          |t3  |11      |3           |
+|11|│   │   └─MATERIAL                 |    |11      |3           |
+|12|│   │     └─TABLE FULL SCAN        |t1  |11      |3           |
+|13|│   └─TABLE FULL SCAN              |t2  |11      |3           |
+|14|└─SCALAR GROUP BY                  |    |1       |39          |
+|15|  └─HASH JOIN                      |    |36      |37          |
+|16|    ├─TABLE FULL SCAN              |t6  |9       |3           |
+|17|    └─HASH JOIN                    |    |27      |29          |
+|18|      ├─TABLE FULL SCAN            |t1  |11      |3           |
+|19|      └─HASH JOIN                  |    |21      |22          |
+|20|        ├─TABLE FULL SCAN          |t2  |11      |3           |
+|21|        └─HASH JOIN                |    |16      |15          |
+|22|          ├─TABLE FULL SCAN        |t3  |11      |3           |
+|23|          └─HASH JOIN              |    |13      |9           |
+|24|            ├─TABLE FULL SCAN      |t5  |9       |3           |
+|25|            └─TABLE FULL SCAN      |t4  |11      |3           |
+===================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
-  1 - output(nil), filter(nil), rowset=16
-  2 - output([t5.c2], [t2.c1], [t1.c1], [t2.c2], [t5.c1], [t6.c2]), filter(nil), rowset=16
+  1 - output([cast(T_FUN_COUNT(*), DECIMAL_INT(33, 0))], [cast(T_FUN_SUM(t2.c1), DECIMAL_INT(43, 0))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t2.c1)])
+  2 - output([t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1], [t2.c2 = t3.c1]), other_conds(nil)
-  3 - output([t5.c2], [t1.c1], [t5.c1], [t6.c2], [t3.c1]), filter(nil), rowset=16
+  3 - output([t3.c1], [t1.c1]), filter(nil), rowset=16
       equal_conds([t3.c2 = t4.c1]), other_conds(nil)
-  4 - output([t5.c2], [t5.c1], [t6.c2], [t4.c1]), filter(nil), rowset=16
+  4 - output([t4.c1]), filter(nil), rowset=16
       equal_conds([t5.c2 = t6.c1]), other_conds(nil)
-  5 - output([t6.c1], [t6.c2]), filter(nil), rowset=16
-      access([t6.c1], [t6.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
+  5 - output([t6.c1]), filter([t6.c1 != 44]), rowset=16
+      access([t6.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t6.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([t5.c2], [t5.c1], [t4.c1]), filter(nil), rowset=16
+  6 - output([t5.c2], [t4.c1]), filter(nil), rowset=16
       equal_conds([t4.c2 = t5.c1]), other_conds(nil)
-  7 - output([t5.c1], [t5.c2]), filter([t5.c2 != 44 OR t5.c2 != 55]), rowset=16
+  7 - output([t5.c1], [t5.c2]), filter([t5.c2 != 44]), rowset=16
       access([t5.c1], [t5.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t5.__pk_increment]), range(MIN ; MAX)always true
@@ -969,7 +977,7 @@ Outputs & filters:
       access([t4.c1], [t4.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t1.c1], [t3.c1], [t3.c2]), filter(nil), rowset=16
+  9 - output([t3.c1], [t3.c2], [t1.c1]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([t3.c1], [t3.c2]), filter(nil), rowset=16
       access([t3.c1], [t3.c2]), partitions(p0)
@@ -984,15 +992,42 @@ Outputs & filters:
       access([t2.c1], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
- 14 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
- 15 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0))], [T_FUN_SUM(VIEW1.t2.c1)]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(VIEW1.t2.c1)])
- 16 - output([VIEW1.t2.c1]), filter([VIEW1.t5.c2 != 44]), rowset=16
-      access([VIEW1.t5.c2], [VIEW1.t2.c1])
- 17 - output([T_FUN_SUM(VIEW2.t1.c1)], [cast(T_FUN_MAX(VIEW2.t2.c2), DECIMAL(11, 0)) + T_FUN_SUM(VIEW2.t5.c1 - VIEW2.t6.c2)]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_SUM(VIEW2.t1.c1)], [T_FUN_MAX(VIEW2.t2.c2)], [T_FUN_SUM(VIEW2.t5.c1 - VIEW2.t6.c2)])
- 18 - output([VIEW2.t1.c1], [VIEW2.t2.c2], [VIEW2.t5.c1], [VIEW2.t6.c2]), filter([VIEW2.t5.c2 != 55]), rowset=16
-      access([VIEW2.t5.c2], [VIEW2.t1.c1], [VIEW2.t2.c2], [VIEW2.t5.c1], [VIEW2.t6.c2])
+ 14 - output([T_FUN_SUM(t1.c1)], [cast(T_FUN_MAX(t2.c2), DECIMAL_INT(43, 0)) + T_FUN_SUM(t5.c1 - t6.c2)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_MAX(t2.c2)], [T_FUN_SUM(t5.c1 - t6.c2)])
+ 15 - output([t6.c2], [t1.c1], [t2.c2], [t5.c1]), filter(nil), rowset=16
+      equal_conds([t5.c2 = t6.c1]), other_conds(nil)
+ 16 - output([t6.c1], [t6.c2]), filter([t6.c1 != 55]), rowset=16
+      access([t6.c1], [t6.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.__pk_increment]), range(MIN ; MAX)always true
+ 17 - output([t1.c1], [t2.c2], [t5.c1], [t5.c2]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+ 18 - output([t1.c1]), filter(nil), rowset=16
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+ 19 - output([t2.c2], [t2.c1], [t5.c1], [t5.c2]), filter(nil), rowset=16
+      equal_conds([t2.c2 = t3.c1]), other_conds(nil)
+ 20 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 21 - output([t3.c1], [t5.c1], [t5.c2]), filter(nil), rowset=16
+      equal_conds([t3.c2 = t4.c1]), other_conds(nil)
+ 22 - output([t3.c1], [t3.c2]), filter(nil), rowset=16
+      access([t3.c1], [t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+ 23 - output([t5.c1], [t5.c2], [t4.c1]), filter(nil), rowset=16
+      equal_conds([t4.c2 = t5.c1]), other_conds(nil)
+ 24 - output([t5.c1], [t5.c2]), filter([t5.c2 != 55]), rowset=16
+      access([t5.c1], [t5.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+ 25 - output([t4.c1], [t4.c2]), filter(nil), rowset=16
+      access([t4.c1], [t4.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
 select /*+ leading(t6, (t5, t4), (t3, t1), (t2)) */ count(*), sum(t2.c1) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
 where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 44
 union ALL
@@ -1028,24 +1063,24 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |49          |
-|1 |└─HASH JOIN                  |    |1       |49          |
-|2 |  ├─HASH JOIN                |    |1       |44          |
-|3 |  │ ├─HASH JOIN              |    |1       |35          |
-|4 |  │ │ ├─TABLE FULL SCAN      |t9  |11      |5           |
-|5 |  │ │ └─HASH JOIN            |    |1       |29          |
-|6 |  │ │   ├─HASH JOIN          |    |1       |24          |
-|7 |  │ │   │ ├─HASH JOIN        |    |1       |12          |
-|8 |  │ │   │ │ ├─TABLE FULL SCAN|t8  |11      |5           |
-|9 |  │ │   │ │ └─TABLE FULL SCAN|t7  |11      |5           |
-|10|  │ │   │ └─HASH JOIN        |    |1       |12          |
-|11|  │ │   │   ├─TABLE FULL SCAN|t6  |11      |5           |
-|12|  │ │   │   └─TABLE FULL SCAN|t5  |1       |5           |
-|13|  │ │   └─TABLE FULL SCAN    |t4  |11      |5           |
-|14|  │ └─HASH JOIN              |    |1       |10          |
-|15|  │   ├─TABLE FULL SCAN      |t3  |1       |5           |
-|16|  │   └─TABLE FULL SCAN      |t1  |1       |5           |
-|17|  └─TABLE FULL SCAN          |t2  |1       |5           |
+|0 |SCALAR GROUP BY              |    |1       |33          |
+|1 |└─HASH JOIN                  |    |1       |33          |
+|2 |  ├─HASH JOIN                |    |1       |30          |
+|3 |  │ ├─HASH JOIN              |    |1       |25          |
+|4 |  │ │ ├─TABLE FULL SCAN      |t9  |11      |3           |
+|5 |  │ │ └─HASH JOIN            |    |1       |20          |
+|6 |  │ │   ├─HASH JOIN          |    |1       |17          |
+|7 |  │ │   │ ├─HASH JOIN        |    |1       |9           |
+|8 |  │ │   │ │ ├─TABLE FULL SCAN|t8  |11      |3           |
+|9 |  │ │   │ │ └─TABLE FULL SCAN|t7  |11      |3           |
+|10|  │ │   │ └─HASH JOIN        |    |1       |8           |
+|11|  │ │   │   ├─TABLE FULL SCAN|t6  |11      |3           |
+|12|  │ │   │   └─TABLE FULL SCAN|t5  |1       |3           |
+|13|  │ │   └─TABLE FULL SCAN    |t4  |11      |3           |
+|14|  │ └─HASH JOIN              |    |1       |6           |
+|15|  │   ├─TABLE FULL SCAN      |t3  |1       |3           |
+|16|  │   └─TABLE FULL SCAN      |t1  |1       |3           |
+|17|  └─TABLE FULL SCAN          |t2  |1       |3           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1136,16 +1171,16 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |33          |
-|1 |└─HASH JOIN              |    |17      |32          |
-|2 |  ├─TABLE FULL SCAN      |a   |11      |5           |
-|3 |  └─HASH JOIN            |    |19      |24          |
-|4 |    ├─SUBPLAN SCAN       |c   |11      |8           |
-|5 |    │ └─HASH DISTINCT    |    |11      |8           |
-|6 |    │   └─TABLE FULL SCAN|cc  |11      |5           |
-|7 |    └─HASH JOIN          |    |20      |12          |
-|8 |      ├─TABLE FULL SCAN  |nn2 |11      |5           |
-|9 |      └─TABLE FULL SCAN  |d   |11      |5           |
+|0 |SCALAR GROUP BY          |    |1       |26          |
+|1 |└─HASH JOIN              |    |17      |25          |
+|2 |  ├─TABLE FULL SCAN      |a   |11      |3           |
+|3 |  └─HASH JOIN            |    |19      |19          |
+|4 |    ├─SUBPLAN SCAN       |c   |11      |6           |
+|5 |    │ └─HASH DISTINCT    |    |11      |6           |
+|6 |    │   └─TABLE FULL SCAN|cc  |11      |3           |
+|7 |    └─HASH JOIN          |    |20      |9           |
+|8 |      ├─TABLE FULL SCAN  |nn2 |11      |3           |
+|9 |      └─TABLE FULL SCAN  |d   |11      |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1193,15 +1228,15 @@ Query Plan
 =================================================================
 |ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SCALAR GROUP BY                  |    |1       |40          |
-|1 |└─HASH JOIN                      |    |29      |40          |
-|2 |  ├─TABLE FULL SCAN              |a   |11      |5           |
-|3 |  └─HASH JOIN                    |    |22      |31          |
-|4 |    ├─TABLE FULL SCAN            |c   |11      |5           |
-|5 |    └─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|6 |      ├─TABLE FULL SCAN          |b   |11      |5           |
-|7 |      └─MATERIAL                 |    |11      |5           |
-|8 |        └─TABLE FULL SCAN        |d   |11      |5           |
+|0 |SCALAR GROUP BY                  |    |1       |31          |
+|1 |└─HASH JOIN                      |    |29      |30          |
+|2 |  ├─TABLE FULL SCAN              |a   |11      |3           |
+|3 |  └─HASH JOIN                    |    |22      |23          |
+|4 |    ├─TABLE FULL SCAN            |c   |11      |3           |
+|5 |    └─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|6 |      ├─TABLE FULL SCAN          |b   |11      |3           |
+|7 |      └─MATERIAL                 |    |11      |3           |
+|8 |        └─TABLE FULL SCAN        |d   |11      |3           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -1247,25 +1282,25 @@ Query Plan
 =================================================================
 |ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |SUBPLAN FILTER                   |    |1       |44          |
-|1 |├─SCALAR GROUP BY                |    |1       |5           |
-|2 |│ └─TABLE FULL SCAN              |x   |11      |5           |
-|3 |└─HASH JOIN                      |    |1       |39          |
-|4 |  ├─TABLE FULL SCAN              |a   |11      |5           |
-|5 |  └─HASH JOIN                    |    |22      |31          |
-|6 |    ├─TABLE FULL SCAN            |c   |11      |5           |
-|7 |    └─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|8 |      ├─TABLE FULL SCAN          |b   |11      |5           |
-|9 |      └─MATERIAL                 |    |11      |5           |
-|10|        └─TABLE FULL SCAN        |d   |11      |5           |
+|0 |SUBPLAN FILTER                   |    |1       |32          |
+|1 |├─SCALAR GROUP BY                |    |1       |3           |
+|2 |│ └─TABLE FULL SCAN              |x   |11      |3           |
+|3 |└─HASH JOIN                      |    |1       |29          |
+|4 |  ├─TABLE FULL SCAN              |a   |11      |3           |
+|5 |  └─HASH JOIN                    |    |22      |23          |
+|6 |    ├─TABLE FULL SCAN            |c   |11      |3           |
+|7 |    └─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|8 |      ├─TABLE FULL SCAN          |b   |11      |3           |
+|9 |      └─MATERIAL                 |    |11      |3           |
+|10|        └─TABLE FULL SCAN        |d   |11      |3           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([subquery(1)]), filter(nil), rowset=16
-      exec_params_([x.c1(:0)], [T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
-  1 - output([x.c1], [T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))])
-  2 - output([x.c1], [T_FUN_COUNT(x.c2)]), filter(nil), rowset=16
+      exec_params_([x.c1(:0)], [T_FUN_COUNT(x.c2)(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([x.c1], [T_FUN_COUNT(x.c2)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(x.c2)])
+  2 - output([x.c1], [x.c2]), filter(nil), rowset=16
       access([x.c1], [x.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
@@ -1309,21 +1344,21 @@ Query Plan
 ================================================================
 |ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SCALAR GROUP BY                |     |1       |36          |
-|1 |└─NESTED-LOOP JOIN CARTESIAN   |     |5       |36          |
-|2 |  ├─HASH JOIN                  |     |3       |31          |
-|3 |  │ ├─NESTED-LOOP JOIN         |     |2       |26          |
-|4 |  │ │ ├─SUBPLAN SCAN           |VIEW1|1       |21          |
-|5 |  │ │ │ └─SCALAR GROUP BY      |     |1       |21          |
-|6 |  │ │ │   └─HASH JOIN          |     |19      |20          |
-|7 |  │ │ │     ├─TABLE FULL SCAN  |x    |11      |5           |
-|8 |  │ │ │     └─HASH JOIN        |     |15      |13          |
-|9 |  │ │ │       ├─TABLE FULL SCAN|y    |11      |5           |
-|10|  │ │ │       └─TABLE FULL SCAN|z    |11      |5           |
-|11|  │ │ └─TABLE FULL SCAN        |t1   |11      |5           |
-|12|  │ └─TABLE FULL SCAN          |t2   |11      |5           |
-|13|  └─MATERIAL                   |     |2       |5           |
-|14|    └─TABLE FULL SCAN          |t3   |2       |5           |
+|0 |SCALAR GROUP BY                |     |1       |23          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN   |     |5       |23          |
+|2 |  ├─HASH JOIN                  |     |3       |23          |
+|3 |  │ ├─NESTED-LOOP JOIN         |     |2       |19          |
+|4 |  │ │ ├─SUBPLAN SCAN           |VIEW1|1       |15          |
+|5 |  │ │ │ └─SCALAR GROUP BY      |     |1       |15          |
+|6 |  │ │ │   └─HASH JOIN          |     |19      |15          |
+|7 |  │ │ │     ├─TABLE FULL SCAN  |x    |11      |3           |
+|8 |  │ │ │     └─HASH JOIN        |     |15      |9           |
+|9 |  │ │ │       ├─TABLE FULL SCAN|y    |11      |3           |
+|10|  │ │ │       └─TABLE FULL SCAN|z    |11      |3           |
+|11|  │ │ └─TABLE FULL SCAN        |t1   |11      |3           |
+|12|  │ └─TABLE FULL SCAN          |t2   |11      |3           |
+|13|  └─MATERIAL                   |     |2       |3           |
+|14|    └─TABLE FULL SCAN          |t3   |2       |3           |
 ================================================================
 Outputs & filters:
 -------------------------------------
@@ -1384,15 +1419,15 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |79          |
-|1 |└─HASH JOIN                    |    |239     |71          |
-|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |184     |22          |
-|3 |  │ ├─HASH JOIN                |    |17      |13          |
-|4 |  │ │ ├─TABLE FULL SCAN        |d   |11      |5           |
-|5 |  │ │ └─TABLE FULL SCAN        |c   |11      |5           |
-|6 |  │ └─MATERIAL                 |    |11      |5           |
-|7 |  │   └─TABLE FULL SCAN        |b   |11      |5           |
-|8 |  └─TABLE FULL SCAN            |a   |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |69          |
+|1 |└─HASH JOIN                    |    |239     |61          |
+|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |184     |14          |
+|3 |  │ ├─HASH JOIN                |    |17      |9           |
+|4 |  │ │ ├─TABLE FULL SCAN        |d   |11      |3           |
+|5 |  │ │ └─TABLE FULL SCAN        |c   |11      |3           |
+|6 |  │ └─MATERIAL                 |    |11      |3           |
+|7 |  │   └─TABLE FULL SCAN        |b   |11      |3           |
+|8 |  └─TABLE FULL SCAN            |a   |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1435,15 +1470,15 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |84          |
-|1 |└─HASH JOIN                    |    |239     |76          |
-|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |184     |21          |
-|3 |  │ ├─HASH JOIN                |    |17      |12          |
-|4 |  │ │ ├─TABLE FULL SCAN        |d   |11      |5           |
-|5 |  │ │ └─TABLE FULL SCAN        |c   |11      |5           |
-|6 |  │ └─MATERIAL                 |    |11      |5           |
-|7 |  │   └─TABLE FULL SCAN        |b   |11      |5           |
-|8 |  └─TABLE FULL SCAN            |a   |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |74          |
+|1 |└─HASH JOIN                    |    |239     |66          |
+|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |184     |13          |
+|3 |  │ ├─HASH JOIN                |    |17      |9           |
+|4 |  │ │ ├─TABLE FULL SCAN        |d   |11      |3           |
+|5 |  │ │ └─TABLE FULL SCAN        |c   |11      |3           |
+|6 |  │ └─MATERIAL                 |    |11      |3           |
+|7 |  │   └─TABLE FULL SCAN        |b   |11      |3           |
+|8 |  └─TABLE FULL SCAN            |a   |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1486,15 +1521,15 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |78          |
-|1 |└─HASH JOIN                    |    |239     |70          |
-|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |184     |22          |
-|3 |  │ ├─TABLE FULL SCAN          |b   |11      |5           |
-|4 |  │ └─MATERIAL                 |    |17      |13          |
-|5 |  │   └─HASH JOIN              |    |17      |12          |
-|6 |  │     ├─TABLE FULL SCAN      |c   |11      |5           |
-|7 |  │     └─TABLE FULL SCAN      |d   |11      |5           |
-|8 |  └─TABLE FULL SCAN            |a   |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |63          |
+|1 |└─HASH JOIN                    |    |239     |55          |
+|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |184     |8           |
+|3 |  │ ├─TABLE FULL SCAN          |b   |11      |3           |
+|4 |  │ └─MATERIAL                 |    |17      |9           |
+|5 |  │   └─HASH JOIN              |    |17      |9           |
+|6 |  │     ├─TABLE FULL SCAN      |c   |11      |3           |
+|7 |  │     └─TABLE FULL SCAN      |d   |11      |3           |
+|8 |  └─TABLE FULL SCAN            |a   |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1537,15 +1572,15 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |39          |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |    |239     |31          |
-|2 |  ├─HASH JOIN                |    |17      |12          |
-|3 |  │ ├─TABLE FULL SCAN        |d   |11      |5           |
-|4 |  │ └─TABLE FULL SCAN        |c   |11      |5           |
-|5 |  └─MATERIAL                 |    |15      |13          |
-|6 |    └─HASH JOIN              |    |15      |12          |
-|7 |      ├─TABLE FULL SCAN      |a   |11      |5           |
-|8 |      └─TABLE FULL SCAN      |b   |11      |5           |
+|0 |SCALAR GROUP BY              |    |1       |23          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |    |239     |15          |
+|2 |  ├─HASH JOIN                |    |17      |9           |
+|3 |  │ ├─TABLE FULL SCAN        |d   |11      |3           |
+|4 |  │ └─TABLE FULL SCAN        |c   |11      |3           |
+|5 |  └─MATERIAL                 |    |15      |10          |
+|6 |    └─HASH JOIN              |    |15      |9           |
+|7 |      ├─TABLE FULL SCAN      |a   |11      |3           |
+|8 |      └─TABLE FULL SCAN      |b   |11      |3           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1590,20 +1625,20 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |48          |
-|1 |└─HASH JOIN                  |    |10      |48          |
-|2 |  ├─HASH JOIN                |    |7       |41          |
-|3 |  │ ├─HASH JOIN              |    |5       |35          |
-|4 |  │ │ ├─HASH JOIN            |    |4       |29          |
-|5 |  │ │ │ ├─HASH JOIN          |    |19      |20          |
-|6 |  │ │ │ │ ├─HASH JOIN        |    |15      |12          |
-|7 |  │ │ │ │ │ ├─TABLE FULL SCAN|t2  |11      |5           |
-|8 |  │ │ │ │ │ └─TABLE FULL SCAN|t1  |11      |5           |
-|9 |  │ │ │ │ └─TABLE FULL SCAN  |t4  |11      |5           |
-|10|  │ │ │ └─TABLE FULL SCAN    |t3  |2       |5           |
-|11|  │ │ └─TABLE FULL SCAN      |t5  |11      |5           |
-|12|  │ └─TABLE FULL SCAN        |t6  |11      |5           |
-|13|  └─TABLE FULL SCAN          |t7  |11      |5           |
+|0 |SCALAR GROUP BY              |    |1       |36          |
+|1 |└─HASH JOIN                  |    |10      |35          |
+|2 |  ├─HASH JOIN                |    |7       |31          |
+|3 |  │ ├─HASH JOIN              |    |5       |26          |
+|4 |  │ │ ├─HASH JOIN            |    |4       |22          |
+|5 |  │ │ │ ├─HASH JOIN          |    |19      |15          |
+|6 |  │ │ │ │ ├─HASH JOIN        |    |15      |8           |
+|7 |  │ │ │ │ │ ├─TABLE FULL SCAN|t2  |11      |3           |
+|8 |  │ │ │ │ │ └─TABLE FULL SCAN|t1  |11      |3           |
+|9 |  │ │ │ │ └─TABLE FULL SCAN  |t4  |11      |3           |
+|10|  │ │ │ └─TABLE FULL SCAN    |t3  |2       |3           |
+|11|  │ │ └─TABLE FULL SCAN      |t5  |11      |3           |
+|12|  │ └─TABLE FULL SCAN        |t6  |11      |3           |
+|13|  └─TABLE FULL SCAN          |t7  |11      |3           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1667,22 +1702,22 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                             |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |SCALAR GROUP BY                      |    |1       |272         |
-|1 |└─HASH JOIN                          |    |475     |256         |
-|2 |  ├─HASH OUTER JOIN                  |    |402     |157         |
-|3 |  │ ├─NESTED-LOOP JOIN CARTESIAN     |    |310     |68          |
-|4 |  │ │ ├─HASH JOIN                    |    |22      |47          |
-|5 |  │ │ │ ├─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
-|6 |  │ │ │ │ ├─TABLE FULL SCAN          |t4  |11      |5           |
-|7 |  │ │ │ │ └─MATERIAL                 |    |11      |5           |
-|8 |  │ │ │ │   └─TABLE FULL SCAN        |t6  |11      |5           |
-|9 |  │ │ │ └─TABLE FULL SCAN            |t5  |11      |5           |
-|10|  │ │ └─MATERIAL                     |    |15      |13          |
-|11|  │ │   └─HASH OUTER JOIN            |    |15      |12          |
-|12|  │ │     ├─TABLE FULL SCAN          |t1  |11      |5           |
-|13|  │ │     └─TABLE FULL SCAN          |t2  |11      |5           |
-|14|  │ └─TABLE FULL SCAN                |t7  |11      |5           |
-|15|  └─TABLE FULL SCAN                  |t3  |10      |5           |
+|0 |SCALAR GROUP BY                      |    |1       |248         |
+|1 |└─HASH JOIN                          |    |475     |232         |
+|2 |  ├─HASH OUTER JOIN                  |    |402     |134         |
+|3 |  │ ├─NESTED-LOOP JOIN CARTESIAN     |    |310     |47          |
+|4 |  │ │ ├─HASH JOIN                    |    |22      |39          |
+|5 |  │ │ │ ├─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|6 |  │ │ │ │ ├─TABLE FULL SCAN          |t4  |11      |3           |
+|7 |  │ │ │ │ └─MATERIAL                 |    |11      |3           |
+|8 |  │ │ │ │   └─TABLE FULL SCAN        |t6  |11      |3           |
+|9 |  │ │ │ └─TABLE FULL SCAN            |t5  |11      |3           |
+|10|  │ │ └─MATERIAL                     |    |15      |10          |
+|11|  │ │   └─HASH OUTER JOIN            |    |15      |9           |
+|12|  │ │     ├─TABLE FULL SCAN          |t1  |11      |3           |
+|13|  │ │     └─TABLE FULL SCAN          |t2  |11      |3           |
+|14|  │ └─TABLE FULL SCAN                |t7  |11      |3           |
+|15|  └─TABLE FULL SCAN                  |t3  |10      |3           |
 =====================================================================
 Outputs & filters:
 -------------------------------------
@@ -1748,14 +1783,14 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SCALAR GROUP BY        |    |1       |23          |
-|1 |└─HASH JOIN            |    |1       |23          |
-|2 |  ├─TABLE FULL SCAN    |c   |11      |5           |
-|3 |  └─HASH JOIN          |    |4       |16          |
-|4 |    ├─TABLE FULL SCAN  |a   |2       |5           |
-|5 |    └─HASH JOIN        |    |5       |11          |
-|6 |      ├─TABLE FULL SCAN|d   |2       |5           |
-|7 |      └─TABLE FULL SCAN|b   |11      |5           |
+|0 |SCALAR GROUP BY        |    |1       |16          |
+|1 |└─HASH JOIN            |    |1       |16          |
+|2 |  ├─TABLE FULL SCAN    |c   |11      |3           |
+|3 |  └─HASH JOIN          |    |4       |10          |
+|4 |    ├─TABLE FULL SCAN  |a   |2       |3           |
+|5 |    └─HASH JOIN        |    |5       |7           |
+|6 |      ├─TABLE FULL SCAN|d   |2       |3           |
+|7 |      └─TABLE FULL SCAN|b   |11      |3           |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -1823,24 +1858,24 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |64          |
-|1 |└─HASH JOIN              |    |16      |63          |
-|2 |  ├─HASH JOIN            |    |7       |39          |
-|3 |  │ ├─HASH JOIN          |    |3       |17          |
-|4 |  │ │ ├─TABLE FULL SCAN  |t2  |11      |5           |
-|5 |  │ │ └─HASH JOIN        |    |2       |11          |
-|6 |  │ │   ├─TABLE FULL SCAN|t1  |11      |5           |
-|7 |  │ │   └─TABLE FULL SCAN|t3  |2       |5           |
-|8 |  │ └─HASH JOIN          |    |19      |20          |
-|9 |  │   ├─TABLE FULL SCAN  |t7  |11      |5           |
-|10|  │   └─HASH JOIN        |    |15      |12          |
-|11|  │     ├─TABLE FULL SCAN|t8  |11      |5           |
-|12|  │     └─TABLE FULL SCAN|t9  |11      |5           |
-|13|  └─HASH JOIN            |    |19      |21          |
-|14|    ├─HASH JOIN          |    |15      |12          |
-|15|    │ ├─TABLE FULL SCAN  |t4  |11      |5           |
-|16|    │ └─TABLE FULL SCAN  |t5  |11      |5           |
-|17|    └─TABLE FULL SCAN    |t6  |11      |5           |
+|0 |SCALAR GROUP BY          |    |1       |48          |
+|1 |└─HASH JOIN              |    |16      |47          |
+|2 |  ├─HASH JOIN            |    |7       |28          |
+|3 |  │ ├─HASH JOIN          |    |3       |12          |
+|4 |  │ │ ├─TABLE FULL SCAN  |t2  |11      |3           |
+|5 |  │ │ └─HASH JOIN        |    |2       |8           |
+|6 |  │ │   ├─TABLE FULL SCAN|t1  |11      |3           |
+|7 |  │ │   └─TABLE FULL SCAN|t3  |2       |3           |
+|8 |  │ └─HASH JOIN          |    |19      |14          |
+|9 |  │   ├─TABLE FULL SCAN  |t7  |11      |3           |
+|10|  │   └─HASH JOIN        |    |15      |8           |
+|11|  │     ├─TABLE FULL SCAN|t8  |11      |3           |
+|12|  │     └─TABLE FULL SCAN|t9  |11      |3           |
+|13|  └─HASH JOIN            |    |19      |16          |
+|14|    ├─HASH JOIN          |    |15      |9           |
+|15|    │ ├─TABLE FULL SCAN  |t4  |11      |3           |
+|16|    │ └─TABLE FULL SCAN  |t5  |11      |3           |
+|17|    └─TABLE FULL SCAN    |t6  |11      |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1913,28 +1948,28 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |64          |
-|1 |└─HASH JOIN                  |    |19      |64          |
-|2 |  ├─HASH JOIN                |    |14      |54          |
-|3 |  │ ├─HASH JOIN              |    |10      |46          |
-|4 |  │ │ ├─HASH JOIN            |    |7       |39          |
-|5 |  │ │ │ ├─HASH JOIN          |    |3       |17          |
-|6 |  │ │ │ │ ├─TABLE FULL SCAN  |t2  |11      |5           |
-|7 |  │ │ │ │ └─HASH JOIN        |    |2       |11          |
-|8 |  │ │ │ │   ├─TABLE FULL SCAN|t1  |11      |5           |
-|9 |  │ │ │ │   └─TABLE FULL SCAN|t3  |2       |5           |
-|10|  │ │ │ └─HASH JOIN          |    |19      |20          |
-|11|  │ │ │   ├─TABLE FULL SCAN  |t7  |11      |5           |
-|12|  │ │ │   └─HASH JOIN        |    |15      |12          |
-|13|  │ │ │     ├─TABLE FULL SCAN|t8  |11      |5           |
-|14|  │ │ │     └─TABLE FULL SCAN|t9  |11      |5           |
-|15|  │ │ └─TABLE FULL SCAN      |t6  |11      |5           |
-|16|  │ └─TABLE FULL SCAN        |t4  |11      |5           |
-|17|  └─TABLE FULL SCAN          |t5  |11      |5           |
+|0 |SCALAR GROUP BY              |    |1       |48          |
+|1 |└─HASH JOIN                  |    |19      |48          |
+|2 |  ├─HASH JOIN                |    |14      |40          |
+|3 |  │ ├─HASH JOIN              |    |10      |34          |
+|4 |  │ │ ├─HASH JOIN            |    |7       |28          |
+|5 |  │ │ │ ├─HASH JOIN          |    |3       |12          |
+|6 |  │ │ │ │ ├─TABLE FULL SCAN  |t2  |11      |3           |
+|7 |  │ │ │ │ └─HASH JOIN        |    |2       |8           |
+|8 |  │ │ │ │   ├─TABLE FULL SCAN|t1  |11      |3           |
+|9 |  │ │ │ │   └─TABLE FULL SCAN|t3  |2       |3           |
+|10|  │ │ │ └─HASH JOIN          |    |19      |14          |
+|11|  │ │ │   ├─TABLE FULL SCAN  |t7  |11      |3           |
+|12|  │ │ │   └─HASH JOIN        |    |15      |8           |
+|13|  │ │ │     ├─TABLE FULL SCAN|t8  |11      |3           |
+|14|  │ │ │     └─TABLE FULL SCAN|t9  |11      |3           |
+|15|  │ │ └─TABLE FULL SCAN      |t6  |11      |3           |
+|16|  │ └─TABLE FULL SCAN        |t4  |11      |3           |
+|17|  └─TABLE FULL SCAN          |t5  |11      |3           |
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0)) + T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(T_FUN_COUNT(*), DECIMAL_INT(55, 0)) + T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)])
   1 - output([t1.c1], [t5.c1], [t9.c1], [t4.c2], [t5.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t5.c1]), other_conds(nil)
@@ -2006,24 +2041,24 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |59          |
-|1 |└─HASH JOIN              |    |5       |59          |
-|2 |  ├─HASH JOIN            |    |2       |40          |
-|3 |  │ ├─HASH JOIN          |    |1       |19          |
-|4 |  │ │ ├─HASH JOIN        |    |15      |12          |
-|5 |  │ │ │ ├─TABLE FULL SCAN|t2  |11      |5           |
-|6 |  │ │ │ └─TABLE FULL SCAN|t1  |11      |5           |
-|7 |  │ │ └─TABLE FULL SCAN  |t3  |1       |5           |
-|8 |  │ └─HASH JOIN          |    |19      |20          |
-|9 |  │   ├─TABLE FULL SCAN  |t4  |11      |5           |
-|10|  │   └─HASH JOIN        |    |15      |12          |
-|11|  │     ├─TABLE FULL SCAN|t5  |11      |5           |
-|12|  │     └─TABLE FULL SCAN|t6  |11      |5           |
-|13|  └─HASH JOIN            |    |7       |19          |
-|14|    ├─TABLE FULL SCAN    |t8  |4       |5           |
-|15|    └─HASH JOIN          |    |15      |12          |
-|16|      ├─TABLE FULL SCAN  |t9  |11      |5           |
-|17|      └─TABLE FULL SCAN  |t7  |11      |5           |
+|0 |SCALAR GROUP BY          |    |1       |44          |
+|1 |└─HASH JOIN              |    |5       |43          |
+|2 |  ├─HASH JOIN            |    |2       |29          |
+|3 |  │ ├─HASH JOIN          |    |1       |14          |
+|4 |  │ │ ├─HASH JOIN        |    |15      |8           |
+|5 |  │ │ │ ├─TABLE FULL SCAN|t2  |11      |3           |
+|6 |  │ │ │ └─TABLE FULL SCAN|t1  |11      |3           |
+|7 |  │ │ └─TABLE FULL SCAN  |t3  |1       |3           |
+|8 |  │ └─HASH JOIN          |    |19      |14          |
+|9 |  │   ├─TABLE FULL SCAN  |t4  |11      |3           |
+|10|  │   └─HASH JOIN        |    |15      |8           |
+|11|  │     ├─TABLE FULL SCAN|t5  |11      |3           |
+|12|  │     └─TABLE FULL SCAN|t6  |11      |3           |
+|13|  └─HASH JOIN            |    |7       |13          |
+|14|    ├─TABLE FULL SCAN    |t8  |4       |3           |
+|15|    └─HASH JOIN          |    |15      |8           |
+|16|      ├─TABLE FULL SCAN  |t9  |11      |3           |
+|17|      └─TABLE FULL SCAN  |t7  |11      |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2099,24 +2134,24 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |66          |
-|1 |└─HASH JOIN              |    |16      |65          |
-|2 |  ├─HASH JOIN            |    |7       |41          |
-|3 |  │ ├─HASH JOIN          |    |3       |17          |
-|4 |  │ │ ├─TABLE FULL SCAN  |t2  |11      |5           |
-|5 |  │ │ └─HASH JOIN        |    |2       |11          |
-|6 |  │ │   ├─TABLE FULL SCAN|t1  |11      |5           |
-|7 |  │ │   └─TABLE FULL SCAN|t3  |2       |5           |
-|8 |  │ └─HASH JOIN          |    |19      |22          |
-|9 |  │   ├─HASH JOIN        |    |15      |13          |
-|10|  │   │ ├─TABLE FULL SCAN|t7  |11      |5           |
-|11|  │   │ └─TABLE FULL SCAN|t8  |11      |5           |
-|12|  │   └─TABLE FULL SCAN  |t9  |11      |5           |
-|13|  └─HASH JOIN            |    |19      |20          |
-|14|    ├─HASH JOIN          |    |15      |12          |
-|15|    │ ├─TABLE FULL SCAN  |t4  |11      |5           |
-|16|    │ └─TABLE FULL SCAN  |t5  |11      |5           |
-|17|    └─TABLE FULL SCAN    |t6  |11      |5           |
+|0 |SCALAR GROUP BY          |    |1       |50          |
+|1 |└─HASH JOIN              |    |16      |49          |
+|2 |  ├─HASH JOIN            |    |7       |30          |
+|3 |  │ ├─HASH JOIN          |    |3       |12          |
+|4 |  │ │ ├─TABLE FULL SCAN  |t2  |11      |3           |
+|5 |  │ │ └─HASH JOIN        |    |2       |8           |
+|6 |  │ │   ├─TABLE FULL SCAN|t1  |11      |3           |
+|7 |  │ │   └─TABLE FULL SCAN|t3  |2       |3           |
+|8 |  │ └─HASH JOIN          |    |19      |16          |
+|9 |  │   ├─HASH JOIN        |    |15      |9           |
+|10|  │   │ ├─TABLE FULL SCAN|t7  |11      |3           |
+|11|  │   │ └─TABLE FULL SCAN|t8  |11      |3           |
+|12|  │   └─TABLE FULL SCAN  |t9  |11      |3           |
+|13|  └─HASH JOIN            |    |19      |15          |
+|14|    ├─HASH JOIN          |    |15      |8           |
+|15|    │ ├─TABLE FULL SCAN  |t4  |11      |3           |
+|16|    │ └─TABLE FULL SCAN  |t5  |11      |3           |
+|17|    └─TABLE FULL SCAN    |t6  |11      |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2192,28 +2227,28 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SCALAR GROUP BY            |    |1       |67          |
-|1 |└─HASH JOIN                |    |17      |66          |
-|2 |  ├─HASH JOIN              |    |12      |57          |
-|3 |  │ ├─HASH JOIN            |    |9       |49          |
-|4 |  │ │ ├─HASH JOIN          |    |3       |17          |
-|5 |  │ │ │ ├─TABLE FULL SCAN  |t1  |11      |5           |
-|6 |  │ │ │ └─HASH JOIN        |    |2       |11          |
-|7 |  │ │ │   ├─TABLE FULL SCAN|t2  |11      |5           |
-|8 |  │ │ │   └─TABLE FULL SCAN|t3  |2       |5           |
-|9 |  │ │ └─HASH JOIN          |    |25      |29          |
-|10|  │ │   ├─HASH JOIN        |    |15      |12          |
-|11|  │ │   │ ├─TABLE FULL SCAN|t4  |11      |5           |
-|12|  │ │   │ └─TABLE FULL SCAN|t5  |11      |5           |
-|13|  │ │   └─HASH JOIN        |    |15      |12          |
-|14|  │ │     ├─TABLE FULL SCAN|t6  |11      |5           |
-|15|  │ │     └─TABLE FULL SCAN|t7  |11      |5           |
-|16|  │ └─TABLE FULL SCAN      |t8  |11      |5           |
-|17|  └─TABLE FULL SCAN        |t9  |11      |5           |
+|0 |SCALAR GROUP BY            |    |1       |51          |
+|1 |└─HASH JOIN                |    |17      |50          |
+|2 |  ├─HASH JOIN              |    |12      |43          |
+|3 |  │ ├─HASH JOIN            |    |9       |36          |
+|4 |  │ │ ├─HASH JOIN          |    |3       |12          |
+|5 |  │ │ │ ├─TABLE FULL SCAN  |t1  |11      |3           |
+|6 |  │ │ │ └─HASH JOIN        |    |2       |8           |
+|7 |  │ │ │   ├─TABLE FULL SCAN|t2  |11      |3           |
+|8 |  │ │ │   └─TABLE FULL SCAN|t3  |2       |3           |
+|9 |  │ │ └─HASH JOIN          |    |25      |22          |
+|10|  │ │   ├─HASH JOIN        |    |15      |9           |
+|11|  │ │   │ ├─TABLE FULL SCAN|t4  |11      |3           |
+|12|  │ │   │ └─TABLE FULL SCAN|t5  |11      |3           |
+|13|  │ │   └─HASH JOIN        |    |15      |8           |
+|14|  │ │     ├─TABLE FULL SCAN|t6  |11      |3           |
+|15|  │ │     └─TABLE FULL SCAN|t7  |11      |3           |
+|16|  │ └─TABLE FULL SCAN      |t8  |11      |3           |
+|17|  └─TABLE FULL SCAN        |t9  |11      |3           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t5.c2 + t6.c1) - cast(T_FUN_MAX(t2.c1 * t8.c2), DECIMAL(22, 0))]), filter(nil), rowset=16
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t5.c2 + t6.c1) - cast(T_FUN_MAX(t2.c1 * t8.c2), DECIMAL_INT(44, 0))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t5.c2 + t6.c1)], [T_FUN_MAX(t2.c1 * t8.c2)])
   1 - output([t1.c1], [t2.c1], [t6.c1], [t5.c2], [t8.c2]), filter(nil), rowset=16
       equal_conds([t1.c1 = t9.c1]), other_conds(nil)
@@ -2284,24 +2319,24 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |74          |
-|1 |└─HASH JOIN                    |    |16      |74          |
-|2 |  ├─HASH JOIN                  |    |11      |65          |
-|3 |  │ ├─HASH JOIN                |    |8       |58          |
-|4 |  │ │ ├─HASH JOIN              |    |6       |51          |
-|5 |  │ │ │ ├─HASH JOIN            |    |32      |38          |
-|6 |  │ │ │ │ ├─TABLE FULL SCAN    |t2  |11      |5           |
-|7 |  │ │ │ │ └─HASH JOIN          |    |25      |29          |
-|8 |  │ │ │ │   ├─HASH JOIN        |    |15      |12          |
-|9 |  │ │ │ │   │ ├─TABLE FULL SCAN|t7  |11      |5           |
-|10|  │ │ │ │   │ └─TABLE FULL SCAN|t1  |11      |5           |
-|11|  │ │ │ │   └─HASH JOIN        |    |15      |13          |
-|12|  │ │ │ │     ├─TABLE FULL SCAN|t8  |11      |5           |
-|13|  │ │ │ │     └─TABLE FULL SCAN|t9  |11      |5           |
-|14|  │ │ │ └─TABLE FULL SCAN      |t3  |2       |5           |
-|15|  │ │ └─TABLE FULL SCAN        |t6  |11      |5           |
-|16|  │ └─TABLE FULL SCAN          |t5  |11      |5           |
-|17|  └─TABLE FULL SCAN            |t4  |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |59          |
+|1 |└─HASH JOIN                    |    |16      |58          |
+|2 |  ├─HASH JOIN                  |    |11      |51          |
+|3 |  │ ├─HASH JOIN                |    |8       |45          |
+|4 |  │ │ ├─HASH JOIN              |    |6       |40          |
+|5 |  │ │ │ ├─HASH JOIN            |    |32      |29          |
+|6 |  │ │ │ │ ├─TABLE FULL SCAN    |t2  |11      |3           |
+|7 |  │ │ │ │ └─HASH JOIN          |    |25      |22          |
+|8 |  │ │ │ │   ├─HASH JOIN        |    |15      |8           |
+|9 |  │ │ │ │   │ ├─TABLE FULL SCAN|t7  |11      |3           |
+|10|  │ │ │ │   │ └─TABLE FULL SCAN|t1  |11      |3           |
+|11|  │ │ │ │   └─HASH JOIN        |    |15      |9           |
+|12|  │ │ │ │     ├─TABLE FULL SCAN|t8  |11      |3           |
+|13|  │ │ │ │     └─TABLE FULL SCAN|t9  |11      |3           |
+|14|  │ │ │ └─TABLE FULL SCAN      |t3  |2       |3           |
+|15|  │ │ └─TABLE FULL SCAN        |t6  |11      |3           |
+|16|  │ └─TABLE FULL SCAN          |t5  |11      |3           |
+|17|  └─TABLE FULL SCAN            |t4  |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -2376,16 +2411,16 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1       |73          |
-|1 |└─HASH JOIN                    |    |29      |72          |
-|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
-|3 |  │ ├─TABLE FULL SCAN          |t1  |11      |5           |
-|4 |  │ └─MATERIAL                 |    |11      |6           |
-|5 |  │   └─TABLE FULL SCAN        |t4  |11      |5           |
-|6 |  └─NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
-|7 |    ├─TABLE FULL SCAN          |t2  |11      |5           |
-|8 |    └─MATERIAL                 |    |11      |6           |
-|9 |      └─TABLE FULL SCAN        |t3  |11      |5           |
+|0 |SCALAR GROUP BY                |    |1       |59          |
+|1 |└─HASH JOIN                    |    |29      |58          |
+|2 |  ├─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|3 |  │ ├─TABLE FULL SCAN          |t1  |11      |3           |
+|4 |  │ └─MATERIAL                 |    |11      |4           |
+|5 |  │   └─TABLE FULL SCAN        |t4  |11      |3           |
+|6 |  └─NESTED-LOOP JOIN CARTESIAN |    |121     |6           |
+|7 |    ├─TABLE FULL SCAN          |t2  |11      |3           |
+|8 |    └─MATERIAL                 |    |11      |4           |
+|9 |      └─TABLE FULL SCAN        |t3  |11      |3           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -2434,22 +2469,22 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SORT                             |     |11      |26          |
-|1 |└─SUBPLAN FILTER                 |     |11      |25          |
-|2 |  ├─TABLE FULL SCAN              |x    |11      |5           |
-|3 |  └─LIMIT                        |     |1       |20          |
-|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |20          |
-|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |10          |
-|6 |      │ └─LIMIT                  |     |1       |10          |
-|7 |      │   └─HASH JOIN            |     |1       |10          |
-|8 |      │     ├─TABLE FULL SCAN    |a    |11      |5           |
-|9 |      │     └─TABLE FULL SCAN    |b    |1       |4           |
-|10|      └─MATERIAL                 |     |1       |10          |
-|11|        └─SUBPLAN SCAN           |VIEW2|1       |10          |
-|12|          └─LIMIT                |     |1       |10          |
-|13|            └─HASH JOIN          |     |1       |10          |
-|14|              ├─TABLE FULL SCAN  |c    |11      |5           |
-|15|              └─TABLE FULL SCAN  |d    |1       |4           |
+|0 |SORT                             |     |11      |11          |
+|1 |└─SUBPLAN FILTER                 |     |11      |10          |
+|2 |  ├─TABLE FULL SCAN              |x    |11      |3           |
+|3 |  └─LIMIT                        |     |1       |7           |
+|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |7           |
+|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |7           |
+|6 |      │ └─LIMIT                  |     |1       |7           |
+|7 |      │   └─HASH JOIN            |     |1       |7           |
+|8 |      │     ├─TABLE FULL SCAN    |a    |11      |3           |
+|9 |      │     └─TABLE FULL SCAN    |b    |1       |3           |
+|10|      └─MATERIAL                 |     |1       |7           |
+|11|        └─SUBPLAN SCAN           |VIEW2|1       |7           |
+|12|          └─LIMIT                |     |1       |7           |
+|13|            └─HASH JOIN          |     |1       |7           |
+|14|              ├─TABLE FULL SCAN  |c    |11      |3           |
+|15|              └─TABLE FULL SCAN  |d    |1       |3           |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2524,22 +2559,22 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SORT                             |     |11      |26          |
-|1 |└─SUBPLAN FILTER                 |     |11      |25          |
-|2 |  ├─TABLE FULL SCAN              |x    |11      |5           |
-|3 |  └─LIMIT                        |     |1       |20          |
-|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |20          |
-|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |10          |
-|6 |      │ └─LIMIT                  |     |1       |10          |
-|7 |      │   └─HASH JOIN            |     |1       |10          |
-|8 |      │     ├─TABLE FULL SCAN    |a    |11      |5           |
-|9 |      │     └─TABLE FULL SCAN    |b    |1       |4           |
-|10|      └─MATERIAL                 |     |1       |10          |
-|11|        └─SUBPLAN SCAN           |VIEW2|1       |10          |
-|12|          └─LIMIT                |     |1       |10          |
-|13|            └─HASH JOIN          |     |1       |10          |
-|14|              ├─TABLE FULL SCAN  |c    |11      |5           |
-|15|              └─TABLE FULL SCAN  |d    |1       |4           |
+|0 |SORT                             |     |11      |11          |
+|1 |└─SUBPLAN FILTER                 |     |11      |10          |
+|2 |  ├─TABLE FULL SCAN              |x    |11      |3           |
+|3 |  └─LIMIT                        |     |1       |7           |
+|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |7           |
+|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |7           |
+|6 |      │ └─LIMIT                  |     |1       |7           |
+|7 |      │   └─HASH JOIN            |     |1       |7           |
+|8 |      │     ├─TABLE FULL SCAN    |a    |11      |3           |
+|9 |      │     └─TABLE FULL SCAN    |b    |1       |3           |
+|10|      └─MATERIAL                 |     |1       |7           |
+|11|        └─SUBPLAN SCAN           |VIEW2|1       |7           |
+|12|          └─LIMIT                |     |1       |7           |
+|13|            └─HASH JOIN          |     |1       |7           |
+|14|              ├─TABLE FULL SCAN  |c    |11      |3           |
+|15|              └─TABLE FULL SCAN  |d    |1       |3           |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2614,22 +2649,22 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SORT                             |     |11      |26          |
-|1 |└─SUBPLAN FILTER                 |     |11      |25          |
-|2 |  ├─TABLE FULL SCAN              |x    |11      |5           |
-|3 |  └─LIMIT                        |     |1       |20          |
-|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |20          |
-|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |10          |
-|6 |      │ └─LIMIT                  |     |1       |10          |
-|7 |      │   └─HASH JOIN            |     |1       |10          |
-|8 |      │     ├─TABLE FULL SCAN    |a    |11      |5           |
-|9 |      │     └─TABLE FULL SCAN    |b    |1       |4           |
-|10|      └─MATERIAL                 |     |1       |10          |
-|11|        └─SUBPLAN SCAN           |VIEW2|1       |10          |
-|12|          └─LIMIT                |     |1       |10          |
-|13|            └─HASH JOIN          |     |1       |10          |
-|14|              ├─TABLE FULL SCAN  |c    |11      |5           |
-|15|              └─TABLE FULL SCAN  |d    |1       |4           |
+|0 |SORT                             |     |11      |11          |
+|1 |└─SUBPLAN FILTER                 |     |11      |10          |
+|2 |  ├─TABLE FULL SCAN              |x    |11      |3           |
+|3 |  └─LIMIT                        |     |1       |7           |
+|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |7           |
+|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |7           |
+|6 |      │ └─LIMIT                  |     |1       |7           |
+|7 |      │   └─HASH JOIN            |     |1       |7           |
+|8 |      │     ├─TABLE FULL SCAN    |a    |11      |3           |
+|9 |      │     └─TABLE FULL SCAN    |b    |1       |3           |
+|10|      └─MATERIAL                 |     |1       |7           |
+|11|        └─SUBPLAN SCAN           |VIEW2|1       |7           |
+|12|          └─LIMIT                |     |1       |7           |
+|13|            └─HASH JOIN          |     |1       |7           |
+|14|              ├─TABLE FULL SCAN  |c    |11      |3           |
+|15|              └─TABLE FULL SCAN  |d    |1       |3           |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2704,14 +2739,14 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY      |    |1       |29          |
-|1 |└─HASH JOIN          |    |2       |28          |
-|2 |  ├─HASH JOIN        |    |15      |12          |
-|3 |  │ ├─TABLE FULL SCAN|t1  |11      |5           |
-|4 |  │ └─TABLE FULL SCAN|t2  |11      |5           |
-|5 |  └─HASH JOIN        |    |20      |12          |
-|6 |    ├─TABLE FULL SCAN|t4  |11      |5           |
-|7 |    └─TABLE FULL SCAN|t5  |11      |5           |
+|0 |SCALAR GROUP BY      |    |1       |21          |
+|1 |└─HASH JOIN          |    |2       |21          |
+|2 |  ├─HASH JOIN        |    |15      |8           |
+|3 |  │ ├─TABLE FULL SCAN|t1  |11      |3           |
+|4 |  │ └─TABLE FULL SCAN|t2  |11      |3           |
+|5 |  └─HASH JOIN        |    |20      |9           |
+|6 |    ├─TABLE FULL SCAN|t4  |11      |3           |
+|7 |    └─TABLE FULL SCAN|t5  |11      |3           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -2755,11 +2790,11 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |HASH JOIN                |    |1       |12          |
-|1 |├─HASH RIGHT ANTI JOIN NA|    |1       |8           |
-|2 |│ ├─TABLE FULL SCAN      |t2  |1       |4           |
-|3 |│ └─TABLE FULL SCAN      |t1  |1       |4           |
-|4 |└─TABLE FULL SCAN        |t3  |1       |4           |
+|0 |HASH JOIN                |    |1       |7           |
+|1 |├─HASH RIGHT ANTI JOIN NA|    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN      |t2  |1       |3           |
+|3 |│ └─TABLE FULL SCAN      |t1  |1       |3           |
+|4 |└─TABLE FULL SCAN        |t3  |1       |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2784,11 +2819,11 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |HASH JOIN                |    |1       |12          |
-|1 |├─HASH RIGHT ANTI JOIN NA|    |1       |8           |
-|2 |│ ├─TABLE FULL SCAN      |t2  |1       |4           |
-|3 |│ └─TABLE FULL SCAN      |t1  |1       |4           |
-|4 |└─TABLE FULL SCAN        |t3  |1       |4           |
+|0 |HASH JOIN                |    |1       |7           |
+|1 |├─HASH RIGHT ANTI JOIN NA|    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN      |t2  |1       |3           |
+|3 |│ └─TABLE FULL SCAN      |t1  |1       |3           |
+|4 |└─TABLE FULL SCAN        |t3  |1       |3           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2813,11 +2848,11 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |HASH ANTI JOIN NA  |    |1       |13          |
-|1 |├─HASH JOIN        |    |1       |9           |
-|2 |│ ├─TABLE FULL SCAN|t3  |1       |4           |
-|3 |│ └─TABLE FULL SCAN|t1  |1       |4           |
-|4 |└─TABLE FULL SCAN  |t2  |1       |4           |
+|0 |HASH ANTI JOIN NA  |    |1       |8           |
+|1 |├─HASH JOIN        |    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN|t3  |1       |3           |
+|3 |│ └─TABLE FULL SCAN|t1  |1       |3           |
+|4 |└─TABLE FULL SCAN  |t2  |1       |3           |
 ===================================================
 Outputs & filters:
 -------------------------------------
@@ -2842,11 +2877,11 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |HASH JOIN          |    |1       |12          |
-|1 |├─HASH ANTI JOIN NA|    |1       |8           |
-|2 |│ ├─TABLE FULL SCAN|t1  |1       |4           |
-|3 |│ └─TABLE FULL SCAN|t2  |1       |4           |
-|4 |└─TABLE FULL SCAN  |t3  |1       |4           |
+|0 |HASH JOIN          |    |1       |7           |
+|1 |├─HASH ANTI JOIN NA|    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN|t1  |1       |3           |
+|3 |│ └─TABLE FULL SCAN|t2  |1       |3           |
+|4 |└─TABLE FULL SCAN  |t3  |1       |3           |
 ===================================================
 Outputs & filters:
 -------------------------------------

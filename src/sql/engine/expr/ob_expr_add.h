@@ -273,6 +273,24 @@ public:
 
   static int add_datetime_datetime(EVAL_FUNC_ARG_DECL);
   static int add_datetime_datetime_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint32(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint32_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint64(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint64_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint128(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint128_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint256(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint256_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint512(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint512_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint512_with_check(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint512_with_check_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint32_oracle(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint32_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint64_oracle(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint64_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint128_oracle(EVAL_FUNC_ARG_DECL);
+  static int add_decimalint128_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
 private:
   static ObArithFunc add_funcs_[common::ObMaxTC];

@@ -97,6 +97,16 @@ typedef void (*ser_eval_batch_function)(ObBatchEvalFuncTag &);
   OB_SFA_DATUM_NULLSAFE_GEO_CMP,                 \
   OB_SFA_EXPR_UDT_BASIC_PART1,                   \
   OB_SFA_EXPR_UDT_BASIC_PART2,                   \
+  OB_SFA_DECIMAL_INT_EXPR_EVAL,                  \
+  OB_SFA_DECIMAL_INT_EXPR_EVAL_BATCH,            \
+  OB_SFA_DECIMAL_INT_CAST_EXPR_EVAL,             \
+  OB_SFA_DECIMAL_INT_CAST_EXPR_EVAL_BATCH,       \
+  OB_SFA_DECIMAL_INT_CMP_EVAL,                   \
+  OB_SFA_DECIMAL_INT_CMP_EVAL_BATCH,             \
+  OB_SFA_DECIMAL_INT_CMP,                        \
+  OB_SFA_DECIMAL_INT_BASIC_PART1,                \
+  OB_SFA_DECIMAL_INT_BASIC_PART2,                \
+  OB_SFA_DECIMAL_INT_NULLSAFE_CMP,               \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

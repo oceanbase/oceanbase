@@ -1028,6 +1028,7 @@ int ObTransformGroupByPushdown::transform_groupby_push_down(ObSelectStmt *stmt,
   if (OB_SUCC(ret)) {
     ObSEArray<ObRawExpr *, 4> origin_aggr_exprs;
     ObSEArray<ObRawExpr *, 4> deduce_aggr_exprs;
+    ObSEArray<ObRawExpr *, 4> cast_deduce_aggr_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_aggr_item_size(); ++i) {
       ObRawExpr *deduced_expr = NULL;
       if (OB_FAIL(origin_aggr_exprs.push_back(stmt->get_aggr_item(i)))) {
@@ -1040,10 +1041,15 @@ int ObTransformGroupByPushdown::transform_groupby_push_down(ObSelectStmt *stmt,
         LOG_WARN("failed to transform aggregation expr", K(ret));
       } else if (OB_FAIL(deduce_aggr_exprs.push_back(deduced_expr))) {
         LOG_WARN("failed to push back deduced aggregation expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
+                                    *ctx_->expr_factory_, stmt->get_aggr_item(i), deduced_expr, ctx_->session_info_))) {
+        LOG_WARN("failed to add cast", K(ret));
+      } else if (OB_FAIL(cast_deduce_aggr_exprs.push_back(deduced_expr))) {
+        LOG_WARN("failed to push back deduced aggregation expr", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(stmt->replace_relation_exprs(origin_aggr_exprs, deduce_aggr_exprs))) {
+      if (OB_FAIL(stmt->replace_relation_exprs(origin_aggr_exprs, cast_deduce_aggr_exprs))) {
         LOG_WARN("failed to replace inner stmt expr", K(ret));
         // TODO link.zt seems to be useless
       } else if (OB_FAIL(ObTransformUtils::replace_exprs(origin_aggr_exprs,
@@ -1400,6 +1406,9 @@ int ObTransformGroupByPushdown::transform_aggregation_expr(ObDMLStmt &stmt,
       group_aggr->add_real_param_expr(new_aggr_expr);
       new_aggr_expr = group_aggr;
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(new_aggr_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
   }
   return ret;
 }

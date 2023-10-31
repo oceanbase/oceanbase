@@ -14,7 +14,7 @@
 #define OCEANBASE_OBSERVER_OB_TABLE_TTL_TASK_H_
 #include "share/table/ob_table_ttl_common.h"
 #include "sql/ob_sql_trans_control.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "observer/table/ob_table_context.h"
 #include "observer/table/ob_table_scan_executor.h"
 #include "share/table/ob_table.h"

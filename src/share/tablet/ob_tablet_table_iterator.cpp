@@ -26,6 +26,118 @@ namespace share
 using namespace common;
 using namespace schema;
 
+ObCompactionTabletMetaIterator::ObCompactionTabletMetaIterator()
+  : is_inited_(false),
+    first_prefetch_(true),
+    sql_proxy_(nullptr),
+    tablet_table_operator_(),
+    tenant_id_(OB_INVALID_TENANT_ID),
+    tablet_ls_pairs_(),
+    prefetch_tablet_idx_(0)
+  {}
+
+int ObCompactionTabletMetaIterator::init(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    share::ObIServerTrace &server_trace,
+    ObIArray<share::ObTabletLSPair> &tablet_ls_pairs)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObLSTabletMetaIterator init twice", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || tablet_ls_pairs.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id invalid", KR(ret), K(tenant_id), K(tablet_ls_pairs));
+  } else if (OB_FAIL(tablet_table_operator_.init(sql_proxy))) {
+    LOG_WARN("fail to init tablet table operator", KR(ret), K(tenant_id));
+    // Keep set_filter_not_exist_server before setting all the other filters,
+    // otherwise the other filters may return OB_ENTRY_NOT_EXIST error code.
+  } else if (OB_FAIL(filters_.set_filter_not_exist_server(server_trace))) {
+    LOG_WARN("fail to set not exist server filter", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(filters_.set_filter_permanent_offline(server_trace))) {
+    LOG_WARN("fail to set filter", KR(ret), K(tenant_id));
+  } else {
+    sql_proxy_ = &sql_proxy;
+    tenant_id_ = tenant_id;
+    tablet_ls_pairs_ = &tablet_ls_pairs;
+
+    if (OB_FAIL(prefetch())) { // need to prefetch a batch of tablet_info
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to prefetch", KR(ret), K_(tenant_id), K_(prefetch_tablet_idx));
+      }
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObCompactionTabletMetaIterator::reset()
+{
+  is_inited_ = false;
+  sql_proxy_ = nullptr;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  tablet_ls_pairs_ = nullptr;
+  prefetch_tablet_idx_ = -1;
+  prefetched_tablets_.reset();
+  tablet_table_operator_.reset();
+}
+
+int ObCompactionTabletMetaIterator::next(ObTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    bool find = false;
+    while (OB_SUCC(ret) && !find) {
+      if (!iter_prefetch_info_finish()) {
+        // directly get from prefetched tablet_info
+        tablet_info.reset();
+        if (OB_FAIL(tablet_info.assign(prefetched_tablets_.at(prefetch_tablet_idx_)))) {
+          LOG_WARN("fail to assign tablet_info", KR(ret), K_(prefetch_tablet_idx));
+        } else if (tablet_info.replica_count() > 0) {
+          //
+          if (OB_FAIL(tablet_info.filter(filters_))) {
+            LOG_WARN("fail to filter tablet_info", KR(ret), K(tablet_info));
+          } else {
+            find = true;
+          }
+        }
+        ++prefetch_tablet_idx_;
+      } else {
+        ret = OB_ITER_END;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCompactionTabletMetaIterator::prefetch()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tablet_ls_pairs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet ls pairs is unexpected null", K(ret), KP(tablet_ls_pairs_));
+  } else {
+    prefetch_tablet_idx_ = 0;
+    prefetched_tablets_.reuse();
+
+    if (OB_FAIL(tablet_table_operator_.batch_get(
+            tenant_id_, *tablet_ls_pairs_, prefetched_tablets_))) {
+      LOG_WARN("fail to do batch_get through tablet_table_operator", KR(ret),
+               K_(tenant_id), K_(prefetched_tablets));
+    } else {
+      LOG_INFO("finish batch get", K(ret), K(prefetched_tablets_.count()));
+    }
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////////////
+
 ObTenantTabletMetaIterator::ObTenantTabletMetaIterator()
     : is_inited_(false),
       sql_proxy_(nullptr),
@@ -69,7 +181,6 @@ int ObTenantTabletMetaIterator::init(
   }
   return ret;
 }
-
 int ObTenantTabletMetaIterator::next(ObTabletInfo &tablet_info)
 {
   int ret = OB_SUCCESS;

@@ -95,44 +95,6 @@ private:
 #include "ob_encoding_allocator.ipp"
 
 typedef ObEncodingAllocator<ObIColumnEncoder> ObEncoderAllocator;
-typedef ObEncodingAllocator<ObIColumnDecoder> ObDecoderAllocator;
-
-class ObDecoderAllocatorShell
-{
-public:
-  ObDecoderAllocatorShell():
-  allocator_(nullptr)
-  {
-    int ret = OB_SUCCESS;
-    lib::ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderAlloc");
-    if (nullptr == (allocator_ = OB_NEW(ObDecoderAllocator, attr,
-        decoder_sizes, attr))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "allocate ObDecoderAllocator failed", K(ret));
-    } else if (OB_FAIL(allocator_->init())) {
-      STORAGE_LOG(WARN, "allocator init failed", K(ret));
-      common::ob_delete(allocator_);
-    }
-  }
-  ~ObDecoderAllocatorShell()
-  {
-    if (nullptr != allocator_) {
-      common::ob_delete(allocator_);
-    }
-  }
-  ObDecoderAllocator *get_allocator()
-  {
-    return allocator_;
-  }
-private:
-  ObDecoderAllocator *allocator_;
-};
-
-OB_INLINE ObDecoderAllocator *get_decoder_allocator()
-{
-  RLOCAL_INLINE(ObDecoderAllocatorShell, allcator_shell);
-  return (&allcator_shell)->get_allocator();
-}
 
 }//end namespace blocksstable
 }//end namespace oceanbase

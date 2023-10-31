@@ -196,7 +196,7 @@ bool ObTenantFreezer::exist_ls_freezing()
 // result of others
 int ObTenantFreezer::ls_freeze_(ObLS *ls,
                                 const bool is_sync,
-                                const bool force_freeze,
+                                const bool need_rewrite_tablet_meta,
                                 const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -217,7 +217,7 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls,
       // retry condition 1
       need_retry = (!is_timeout);
       // retry condition 2, 3
-      need_retry = need_retry && ((OB_EAGAIN == ret) || (force_freeze && OB_ENTRY_EXIST == ret));
+      need_retry = need_retry && ((OB_EAGAIN == ret) || (need_rewrite_tablet_meta && OB_ENTRY_EXIST == ret));
     }
     if (need_retry) {
       ob_usleep(SLEEP_TS);
@@ -268,7 +268,7 @@ int ObTenantFreezer::ls_freeze_all_unit_(ObLS *ls, const int64_t abs_timeout_ts)
 
 int ObTenantFreezer::tablet_freeze_(ObLS *ls,
                                     const common::ObTabletID &tablet_id,
-                                    const bool force_tablet_freeze,
+                                    const bool need_rewrite_tablet_meta,
                                     const bool is_sync,
                                     const int64_t abs_timeout_ts)
 {
@@ -283,8 +283,8 @@ int ObTenantFreezer::tablet_freeze_(ObLS *ls,
   do {
     need_retry = false;
     retry_times++;
-    if (OB_SUCC(force_tablet_freeze
-                ? ls->force_tablet_freeze(tablet_id, abs_timeout_ts)
+    if (OB_SUCC(need_rewrite_tablet_meta
+                ? ls->tablet_freeze_with_rewrite_meta(tablet_id, abs_timeout_ts)
                 : ls->tablet_freeze(tablet_id, is_sync, abs_timeout_ts))) {
     } else {
       current_ts = ObTimeUtil::current_time();
@@ -391,7 +391,7 @@ int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
   ObLSHandle handle;
   ObLS *ls = nullptr;
   const bool is_sync = false;
-  const bool force_freeze = false;
+  const bool need_rewrite_tablet_meta = false;
   int64_t abs_timeout_ts = INT64_MAX;
 
   if (IS_NOT_INIT) {
@@ -405,7 +405,7 @@ int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
-  } else if (OB_FAIL(ls_freeze_(ls, is_sync, force_freeze, abs_timeout_ts))) {
+  } else if (OB_FAIL(ls_freeze_(ls, is_sync, need_rewrite_tablet_meta, abs_timeout_ts))) {
     LOG_WARN("[TenantFreezer] logstream freeze failed", KR(ret), K(ls_id));
   }
 
@@ -413,18 +413,18 @@ int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
 }
 
 int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
-                                   const bool is_force_freeze,
+                                   const bool need_rewrite_tablet_meta,
                                    const bool is_sync)
 {
   return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID),
                        tablet_id,
-                       is_force_freeze,
+                       need_rewrite_tablet_meta,
                        is_sync);
 }
 
 int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
                                    const common::ObTabletID &tablet_id,
-                                   const bool is_force_freeze,
+                                   const bool need_rewrite_tablet_meta,
                                    const bool is_sync)
 {
   int ret = OB_SUCCESS;
@@ -456,7 +456,7 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
   } else if (OB_FAIL(tablet_freeze_(ls,
                                     tablet_id,
-                                    is_force_freeze,
+                                    need_rewrite_tablet_meta,
                                     is_sync,
                                     abs_timeout_ts))) {
     LOG_WARN("[TenantFreezer] fail to freeze tablet", KR(ret), K(ls_id), K(tablet_id));

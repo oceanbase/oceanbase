@@ -344,7 +344,7 @@ int TestDmlCommon::build_table_param(
   if (OB_UNLIKELY(!table_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(table_schema));
-  } else if (OB_FAIL(table_param.convert(table_schema, output_column_ids))) {
+  } else if (OB_FAIL(table_param.convert(table_schema, output_column_ids, 0 /* disable enable_column_store */))) {
     STORAGE_LOG(WARN, "failed to convert to table param", K(ret), K(table_schema), K(output_column_ids));
   }
 

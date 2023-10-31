@@ -18,7 +18,7 @@
 #include "share/ob_ddl_common.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
@@ -216,12 +216,14 @@ ObSSTableInsertSliceWriter::ObSSTableInsertSliceWriter()
     is_index_table_(false),
     col_descs_(nullptr),
     snapshot_version_(0),
-    allocator_(lib::ObLabel("PartInsSst")),
-    lob_allocator_(lib::ObLabel("PartInsSstLob")),
+    data_desc_(true/*is_ddl*/),
+    allocator_(lib::ObLabel("PartInsSst"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    lob_allocator_(lib::ObLabel("PartInsSstLob"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     lob_cnt_(0),
     sql_mode_for_ddl_reshape_(0),
     reshape_ptr_(nullptr),
-    is_inited_(false)
+    is_inited_(false),
+    new_row_builder_()
 {
 }
 
@@ -257,19 +259,19 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
                                        slice_param.ls_id_,
                                        slice_param.tablet_id_, // TODO(shuangcan): confirm this
                                        slice_param.write_major_ ? MAJOR_MERGE : MINOR_MERGE,
-                                       slice_param.frozen_scn_.get_val_for_tx()))) {
-      LOG_WARN("fail to init data desc", KR(ret));
+                                       slice_param.frozen_scn_.get_val_for_tx(),
+                                       0/*cluster_version*/))) {
+      LOG_WARN("fail to init data desc", KR(ret), K_(data_desc));
     } else {
-      data_desc_.sstable_index_builder_ = slice_param.sstable_index_builder_;
-      data_desc_.is_ddl_ = true;
-      if (OB_FAIL(macro_block_writer_.open(data_desc_, slice_param.start_seq_,
+      data_desc_.get_desc().sstable_index_builder_ = slice_param.sstable_index_builder_;
+      if (OB_FAIL(macro_block_writer_.open(data_desc_.get_desc(), slice_param.start_seq_,
                                            &redo_log_writer_callback_))) {
         LOG_WARN("fail to open macro block writer", KR(ret), K_(data_desc),
                  K(slice_param.start_seq_));
       }
     }
     if (OB_SUCC(ret)) {
-      const ObColDescIArray &col_descs = data_desc_.get_full_stored_col_descs();
+      const ObColDescIArray &col_descs = data_desc_.get_desc().get_full_stored_col_descs();
       ObTableSchemaParam schema_param(allocator_);
       ObRelativeTable relative_table;
       // Hack to prevent row reshaping from converting empty string to null.
@@ -288,6 +290,8 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
         LOG_WARN("failed to malloc row reshape", KR(ret));
       } else if (OB_FAIL(datum_row_.init(allocator_, col_descs.count()))) {
         LOG_WARN("fail to init datum row", KR(ret), K(col_descs));
+      } else if (OB_FAIL(new_row_builder_.init(col_descs, allocator_))) {
+        LOG_WARN("Failed to init ObNewRowBuilder", K(ret), K(col_descs));
       }
     }
     if (OB_SUCC(ret)) {
@@ -295,7 +299,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
       ls_id_ = slice_param.ls_id_;
       rowkey_column_num_ = table_schema->get_rowkey_column_num();
       is_index_table_ = table_schema->is_index_table();
-      col_descs_ = &data_desc_.get_full_stored_col_descs();
+      col_descs_ = &data_desc_.get_desc().get_full_stored_col_descs();
       snapshot_version_ = slice_param.snapshot_version_;
       sql_mode_for_ddl_reshape_ = sql_mode_for_ddl_reshape;
       store_row_.flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -308,6 +312,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
 int ObSSTableInsertSliceWriter::append_row(ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
+  common::ObNewRow *new_row = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSSTableInsertSliceWriter not init", KR(ret), KP(this));
@@ -316,9 +321,9 @@ int ObSSTableInsertSliceWriter::append_row(ObDatumRow &datum_row)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(datum_row), K(col_descs_->count()));
   } else {
-    if (OB_FAIL(datum_row.prepare_new_row(*col_descs_))) {
-      LOG_WARN("fail to prepare new row", KR(ret));
-    } else if (OB_FAIL(append_row(datum_row.get_new_row()))) {
+    if (OB_FAIL(new_row_builder_.build(datum_row, new_row))) {
+      LOG_WARN("Failed to build new row", KR(ret), K(datum_row));
+    } else if (OB_FAIL(append_row(*new_row))) {
       LOG_WARN("fail to append row", KR(ret), K(datum_row));
     }
   }
@@ -606,7 +611,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
   const int64_t tenant_id = MTL_ID();
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
-  ObSimpleFrozenStatus frozen_status;
+  ObFreezeInfo frozen_status;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   ObITable::TableKey table_key;
@@ -619,7 +624,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id, schema_guard, build_param.schema_version_))) {
     LOG_WARN("get tenant schema failed", K(ret), K(build_param));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
              build_param.table_id_, table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(build_param));
   } else if (OB_ISNULL(table_schema)) {
@@ -635,7 +640,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key));
   } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(
-          *sql_proxy, snapshot_scn, frozen_status))) {
+          *GCTX.sql_proxy_, snapshot_scn, frozen_status))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("get freeze info failed", K(ret), K(build_param_));
     } else {
@@ -677,20 +682,19 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
 int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc data_desc;
+  ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
   lib::ObMutexGuard guard(mutex_);
   if (index_builder_ != nullptr) {
     LOG_INFO("index builder is already prepared");
-  } else if (OB_FAIL(data_desc.init_as_index(table_schema,
+  } else if (OB_FAIL(data_desc.init(table_schema,
                                     build_param_.ls_id_,
                                     build_param_.tablet_id_, // TODO(shuangcan): confirm this
-                                    build_param_.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
+                                    build_param_.write_major_ ? compaction::MAJOR_MERGE : compaction::MINOR_MERGE,
                                     1L /*snapshot_version*/,
                                     build_param_.data_format_version_))) {
-    LOG_WARN("fail to init data desc", K(ret));
+    LOG_WARN("failed to init data desc", K(ret));
   } else {
     void *builder_buf = nullptr;
-    data_desc.is_ddl_ = true;
 
     if (OB_ISNULL(builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -698,7 +702,9 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
     } else if (OB_ISNULL(index_builder_ = new (builder_buf) ObSSTableIndexBuilder())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to new ObSSTableIndexBuilder", K(ret));
-    } else if (OB_FAIL(index_builder_->init(data_desc))) {
+    } else if (OB_FAIL(index_builder_->init(data_desc.get_desc(),
+            nullptr, // macro block flush callback
+            ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("failed to init index builder", K(ret), K(data_desc));
     }
 

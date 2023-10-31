@@ -2060,7 +2060,7 @@ int ObDDLWaitTransEndCtx::calc_snapshot_with_gts(
   ObRootService *root_service = nullptr;
   const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
-  ObSimpleFrozenStatus frozen_status;
+  ObFreezeInfo frozen_status;
   if (OB_UNLIKELY(tenant_id == common::OB_INVALID_ID)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id));

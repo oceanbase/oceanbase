@@ -88,7 +88,6 @@ public:
   const share::schema::ColumnMap *col_map_;
   const ObColDescIArray *col_descs_;
   const common::ObIArray<uint64_t> *column_ids_;
-  ObColDescArray idx_col_descs_;
   ObStoreRow tbl_row_;
   bool is_old_row_valid_for_lob_;
 

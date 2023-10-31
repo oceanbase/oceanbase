@@ -49,6 +49,8 @@ public:
   int set_bf_cache_miss_count_threshold(const int64_t bf_cache_miss_count_threshold);
   ObDataMicroBlockCache &get_block_cache() { return user_block_cache_; }
   ObIndexMicroBlockCache &get_index_block_cache() { return index_block_cache_; }
+  ObDataMicroBlockCache &get_micro_block_cache(const bool is_data_block)
+  { return is_data_block ? user_block_cache_ : index_block_cache_; }
   ObRowCache &get_row_cache() { return user_row_cache_; }
   ObBloomFilterCache &get_bf_cache() { return bf_cache_; }
   ObFuseRowCache &get_fuse_row_cache() { return fuse_row_cache_; }

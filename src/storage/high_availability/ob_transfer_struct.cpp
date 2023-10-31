@@ -392,7 +392,7 @@ int ObTXTransferUtils::create_empty_minor_sstable(
   } else if (OB_FAIL(build_empty_minor_sstable_param_(start_scn, end_scn, table_schema,
       tablet_id, create_sstable_param))) {
     LOG_WARN("failed to build empty minor sstable param", K(ret), K(tablet_id), K(start_scn), K(end_scn));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable_for_migrate(create_sstable_param, allocator, table_handle))) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(create_sstable_param, allocator, table_handle))) {
     LOG_WARN("failed to create minor sstable", K(ret), K(create_sstable_param), K(tablet_id));
   } else {
     LOG_INFO("succeed to create empty minor sstable", K(tablet_id), K(table_handle), K(start_scn), K(end_scn));

@@ -14,12 +14,14 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
+#include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_partition_rows_merger.h"
 #include "lib/container/ob_se_array.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/test_tablet_helper.h"
-#include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "mtlenv/storage/test_merge_basic.h"
 
 namespace oceanbase
 {
@@ -42,35 +44,28 @@ void MdsAllocator::free(void *ptr) {
 template<typename T>
 int prepare_partition_merge_iter(ObMergeParameter &merge_param,
                                  common::ObIAllocator &allocator,
-                                 const ObRowStoreType row_store_type,
+                                 const ObITableReadInfo *read_info,
                                  const int iter_idx,
                                  ObPartitionMergeIter *&merge_iter)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  common::ObArray<share::schema::ObColDesc, common::ObIAllocator &> multi_version_column_ids(common::OB_MAX_COLUMN_NUMBER, allocator);
-  multi_version_column_ids.reset();
-  if(OB_FAIL(merge_param.merge_schema_->get_multi_version_column_descs(multi_version_column_ids))) {
-    STORAGE_LOG(WARN, "get multi version column descs failed", K(ret));
-  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
   } else {
-    merge_iter = new (buf) T();
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(merge_iter->init(merge_param, multi_version_column_ids,
-     row_store_type, iter_idx))) {
-    STORAGE_LOG(WARN, "failed to init merge iter", K(ret));
+    merge_iter = new (buf) T(allocator);
+    if (OB_FAIL(merge_iter->init(merge_param, iter_idx, read_info))) {
+      STORAGE_LOG(WARN, "failed to init merge iter", K(ret));
+    }
   }
   return ret;
 }
 
-class ObMajorRowsMergerTest: public ObMultiVersionSSTableTest
+class ObMajorRowsMergerTest: public TestMergeBasic
 {
 public:
-  ObMajorRowsMergerTest() : ObMultiVersionSSTableTest("test_multi_version_merge") {}
+  ObMajorRowsMergerTest() : TestMergeBasic("test_multi_version_merge") {}
   virtual ~ObMajorRowsMergerTest() {}
 
   void SetUp();
@@ -81,8 +76,7 @@ public:
                              const bool is_full_merge,
                              const ObVersionRange &trans_version_range,
                              ObTabletMergeCtx &merge_context);
-
-  ObStorageSchema table_merge_schema_;
+  ObTabletMergeExecuteDag merge_dag_;
 };
 
 void ObMajorRowsMergerTest::SetUpTestCase()
@@ -127,39 +121,15 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
                                                   const ObVersionRange &trans_version_range,
                                                   ObTabletMergeCtx &merge_context)
 {
-  bool has_lob = false;
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  merge_context.ls_handle_ = ls_handle;
-
-  ObTabletHandle tablet_handle;
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
-  merge_context.tablet_handle_ = tablet_handle;
-
-  table_merge_schema_.reset();
-  OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
-  merge_context.schema_ctx_.storage_schema_ = &table_merge_schema_;
-
-  merge_context.is_full_merge_ = is_full_merge;
-  merge_context.merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-  merge_context.param_.merge_type_ = merge_type;
-  merge_context.param_.merge_version_ = 0;
-  merge_context.param_.ls_id_ = ls_id_;
-  merge_context.param_.tablet_id_ = tablet_id_;
-  merge_context.sstable_version_range_ = trans_version_range;
-  merge_context.param_.report_ = &rs_reporter_;
-  merge_context.progressive_merge_num_ = 0;
-  const int64_t tables_count = merge_context.tables_handle_.get_count();
-  merge_context.scn_range_.start_scn_ = merge_context.tables_handle_.get_table(0)->get_start_scn();
-  merge_context.scn_range_.end_scn_ = merge_context.tables_handle_.get_table(tables_count - 1)->get_end_scn();
-  merge_context.merge_scn_ = merge_context.scn_range_.end_scn_;
-
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_merge_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder(index_desc_));
-  index_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
+  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_param_and_desc());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.assign(index_desc_.get_desc()));
+  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
+  merge_context.merge_dag_ = &merge_dag_;
 }
 
 
@@ -198,7 +168,7 @@ TEST_F(ObMajorRowsMergerTest, test_compare_func)
   prepare_one_macro(&micro_data[1], 1);
   prepare_one_macro(&micro_data[2], 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -219,7 +189,7 @@ TEST_F(ObMajorRowsMergerTest, test_compare_func)
   prepare_one_macro(micro_data2, 1);
   prepare_one_macro(&micro_data2[1], 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -228,16 +198,16 @@ TEST_F(ObMajorRowsMergerTest, test_compare_func)
   trans_version_range.base_version_ = 1;
 
   prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
-  ObMergeParameter merge_param;
-  OK(merge_param.init(merge_context, 0));
+  ObMergeParameter merge_param(merge_context.static_param_);
+  OK(merge_param.init(merge_context, 0, &allocator_));
   ObPartitionMergeIter *iter_0 = nullptr;
   ObPartitionMergeIter *iter_1 = nullptr;
-  prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, FLAT_ROW_STORE, 0, iter_0);
-  prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, FLAT_ROW_STORE, 1, iter_1);
+  const ObITableReadInfo &read_info = merge_context.tablet_handle_.get_obj()->get_rowkey_read_info();
+  prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, &read_info, 0, iter_0);
+  prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, &read_info, 1, iter_1);
   OK(iter_0->next());
   OK(iter_1->next());
 
-  const ObITableReadInfo &read_info = iter_0->get_read_info();
   int64_t cmp_ret;
   ObPartitionMergeLoserTreeItem item_0, item_1;
   item_0.iter_ = iter_0;
@@ -314,7 +284,7 @@ TEST_F(ObMajorRowsMergerTest, single)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
   prepare_data_end(handle1);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -335,7 +305,7 @@ TEST_F(ObMajorRowsMergerTest, single)
   prepare_one_macro(micro_data2, 1);
   prepare_one_macro(&micro_data2[1], 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -344,18 +314,18 @@ TEST_F(ObMajorRowsMergerTest, single)
   trans_version_range.base_version_ = 1;
 
   prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
-  ObMergeParameter merge_param;
-  OK(merge_param.init(merge_context, 0));
+  ObMergeParameter merge_param(merge_context.static_param_);
+  OK(merge_param.init(merge_context, 0, &allocator_));
   ObPartitionMergeIter *iter_0 = nullptr;
   ObPartitionMergeIter *iter_1 = nullptr;
-  OK(prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, FLAT_ROW_STORE, 0, iter_0));
-  OK(prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, FLAT_ROW_STORE, 1, iter_1));
+  const ObITableReadInfo &read_info = merge_context.tablet_handle_.get_obj()->get_rowkey_read_info();
+  OK(prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, &read_info, 0, iter_0));
+  OK(prepare_partition_merge_iter<ObPartitionMinorMacroMergeIter>(merge_param, allocator_, &read_info, 1, iter_1));
   iter_0->next();
   iter_1->next();
   ObPartitionMergeLoserTreeItem item_0, item_1;
   item_0.iter_ = iter_0; item_0.iter_idx_ = 0;
   item_1.iter_ = iter_1; item_1.iter_idx_ = 1;
-  const ObITableReadInfo &read_info = iter_0->get_read_info();
   ObPartitionMergeLoserTreeCmp cmp(read_info.get_datum_utils(), read_info.get_schema_rowkey_count());
 
   ObPartitionMajorRowsMerger merger(cmp);
@@ -426,7 +396,9 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
   prepare_data_end(handle1, storage::ObITable::MAJOR_SSTABLE);
-  merge_context.tables_handle_.add_table(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+
+
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
@@ -447,7 +419,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   prepare_one_macro(micro_data2, 1);
   //prepare_one_macro(&micro_data2[1], 1);
   prepare_data_end(handle2);
-  merge_context.tables_handle_.add_table(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
   ObVersionRange trans_version_range;
@@ -456,12 +428,13 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   trans_version_range.base_version_ = 1;
 
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
-  ObMergeParameter merge_param;
-  OK(merge_param.init(merge_context, 0));
+  ObMergeParameter merge_param(merge_context.static_param_);
+  OK(merge_param.init(merge_context, 0, &allocator_));
   ObPartitionMergeIter *iter_0 = nullptr;
   ObPartitionMergeIter *iter_1 = nullptr;
-  OK(prepare_partition_merge_iter<ObPartitionMacroMergeIter>(merge_param, allocator_, FLAT_ROW_STORE, 0, iter_0));
-  OK(prepare_partition_merge_iter<ObPartitionRowMergeIter>(merge_param, allocator_, FLAT_ROW_STORE, 1, iter_1));
+  const ObITableReadInfo &read_info = merge_context.tablet_handle_.get_obj()->get_rowkey_read_info();
+  OK(prepare_partition_merge_iter<ObPartitionMacroMergeIter>(merge_param, allocator_, &read_info, 0, iter_0));
+  OK(prepare_partition_merge_iter<ObPartitionRowMergeIter>(merge_param, allocator_, &read_info, 1, iter_1));
   OK(iter_0->next());
   OK(iter_1->next());
   const ObPartitionMergeLoserTreeItem *top;
@@ -470,7 +443,6 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   item_0.iter_idx_ = 0;
   item_1.iter_ = iter_1;
   item_1.iter_idx_ = 1;
-  const ObITableReadInfo &read_info = iter_0->get_read_info();
   ObPartitionMergeLoserTreeCmp cmp(read_info.get_datum_utils(), read_info.get_schema_rowkey_count());
   ObPartitionMajorRowsMerger merger(cmp);
 

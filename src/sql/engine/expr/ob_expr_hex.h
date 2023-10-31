@@ -38,6 +38,7 @@ private:
   // helper func
   static int get_uint64(const common::ObObj &obj, common::ObCastCtx &cast_ctx, uint64_t &out);
   static int number_uint64(const common::number::ObNumber &num_val, uint64_t &out);
+  static int decimalint_uint64(const ObDatumMeta &in_meta, const ObDatum *datum, uint64_t &out);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprHex);
 };

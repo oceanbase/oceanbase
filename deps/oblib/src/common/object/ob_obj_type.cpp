@@ -22,8 +22,16 @@ namespace oceanbase
 {
 namespace common
 {
-
 const char *ob_obj_type_str(ObObjType type)
+{
+  if (type == ObDecimalIntType) {
+    return ob_sql_type_str(ObNumberType);
+  } else {
+    return ob_sql_type_str(type);
+  }
+}
+
+const char *inner_obj_type_str(ObObjType type)
 {
   return ob_sql_type_str(type);
 }
@@ -96,6 +104,7 @@ const char *ob_sql_type_str(ObObjType type)
       "JSON",
       "GEOMETRY",
       "UDT",
+      "DECIMAL_INT",
       ""
     },
     {
@@ -151,6 +160,7 @@ const char *ob_sql_type_str(ObObjType type)
       "JSON",
       "GEOMETRY",
       "UDT",
+      "DECIMAL_INT",
       ""
     }
   };
@@ -385,6 +395,7 @@ DEF_TYPE_STR_FUNCS_PRECISION(number_float, "float", "");
 DEF_TYPE_TEXT_FUNCS_LENGTH(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
 DEF_TYPE_TEXT_FUNCS_LENGTH(json, "json", "json");
 DEF_TYPE_TEXT_FUNCS_LENGTH(geometry, "geometry", "geometry");
+DEF_TYPE_STR_FUNCS_PRECISION_SCALE(decimal_int, "decimal", "", "number");
 
 ///////////////////////////////////////////////////////////
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(null, "null", "");
@@ -434,6 +445,7 @@ DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(urowid, "urowid", "");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(json, "json", "json");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(geometry, "geometry", "geometry");
+DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(decimal_int, "decimal", "");
 
 
 int ob_empty_str(char *buff, int64_t buff_length, ObCollationType coll_type)
@@ -700,6 +712,8 @@ int ob_sql_type_str(char *buff,
     ob_lob_str,//lob
     ob_json_str,//json
     ob_geometry_str,//geometry
+    nullptr,
+    ob_decimal_int_str, //decimal int
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
@@ -783,6 +797,8 @@ int ob_sql_type_str(char *buff,
     ob_lob_str_without_accuracy,//lob
     ob_json_str_without_accuracy,//json
     ob_geometry_str_without_accuracy,//geometry
+    nullptr,
+    ob_decimal_int_str_without_accuracy,//decimal int
     ob_empty_str   // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(obSqlTypeStrWithoutAccuracyFunc) == ObMaxType + 1, "Not enough initializer");
@@ -881,6 +897,7 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "JSON",
     "GEOMETRY",
     "UDT",
+    "DECIMAL_INT",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");
@@ -980,6 +997,39 @@ int find_type(const ObIArray<common::ObString> &type_infos,
   return ret;
 }
 
+ObDecimalIntWideType get_decimalint_type(const int16_t precision)
+{
+  ObDecimalIntWideType type = DECIMAL_INT_MAX;
+  if (precision <= MAX_PRECISION_DECIMAL_INT_32) {
+    type = DECIMAL_INT_32;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_64) {
+    type = DECIMAL_INT_64;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_128) {
+    type = DECIMAL_INT_128;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_256) {
+    type = DECIMAL_INT_256;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_512) {
+    type = DECIMAL_INT_512;
+  }
+  return type;
+}
+
+int16_t get_max_decimalint_precision(const int16_t precision)
+{
+  int16_t max_precision = 0;
+  if (precision <= MAX_PRECISION_DECIMAL_INT_32) {
+    max_precision = MAX_PRECISION_DECIMAL_INT_32;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_64) {
+    max_precision = MAX_PRECISION_DECIMAL_INT_64;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_128) {
+    max_precision = MAX_PRECISION_DECIMAL_INT_128;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_256) {
+    max_precision = MAX_PRECISION_DECIMAL_INT_256;
+  } else if (precision <= MAX_PRECISION_DECIMAL_INT_512) {
+    max_precision = MAX_PRECISION_DECIMAL_INT_512;
+  }
+  return max_precision;
+}
 
 } // common
 } // oceanbase

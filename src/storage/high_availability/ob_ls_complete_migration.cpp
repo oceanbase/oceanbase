@@ -204,11 +204,10 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
   }
 
   if (OB_NOT_NULL(initial_dag) && OB_NOT_NULL(scheduler)) {
-    initial_dag->reset_children();
     if (OB_SUCCESS != (tmp_ret = (erase_dag_from_dag_net(*initial_dag)))) {
       LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_dag));
     }
-    scheduler->free_dag(*initial_dag);
+    scheduler->free_dag(*initial_dag); // contain reset_children
     initial_dag = nullptr;
   }
   return ret;
@@ -814,7 +813,7 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
         ret = OB_EAGAIN;
       }
 
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag, start_complete_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_complete_dag))) {
         LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_complete_migration_dag));
       } else {
         finish_complete_dag = nullptr;
@@ -828,12 +827,12 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
 
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_complete_dag)) {
-        scheduler->free_dag(*finish_complete_dag, start_complete_dag);
+        scheduler->free_dag(*finish_complete_dag);
         finish_complete_dag = nullptr;
       }
 
       if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_complete_dag)) {
-        scheduler->free_dag(*start_complete_dag, initial_complete_migration_dag);
+        scheduler->free_dag(*start_complete_dag);
         start_complete_dag = nullptr;
       }
 
@@ -2225,7 +2224,7 @@ int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
     }
 
     if (OB_NOT_NULL(initial_complete_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_complete_dag, finish_complete_migration_dag);
+      scheduler->free_dag(*initial_complete_dag);
       initial_complete_dag = nullptr;
     }
   }

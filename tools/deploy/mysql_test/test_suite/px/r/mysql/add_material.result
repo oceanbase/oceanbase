@@ -19,11 +19,11 @@ Query Plan
 |2 |  └─HASH JOIN                      |        |
 |3 |    ├─PART JOIN FILTER CREATE      |:RF0000 |
 |4 |    │ └─PX PARTITION ITERATOR      |        |
-|5 |    │   └─TABLE FULL SCAN          |t1      |
+|5 |    │   └─TABLE FULL SCAN          |t2      |
 |6 |    └─EXCHANGE IN DISTR            |        |
 |7 |      └─EXCHANGE OUT DISTR (PKEY)  |:EX10000|
 |8 |        └─PX BLOCK HASH JOIN-FILTER|:RF0000 |
-|9 |          └─TABLE FULL SCAN        |t2      |
+|9 |          └─TABLE FULL SCAN        |t1      |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -32,22 +32,22 @@ Outputs & filters:
       dop=3
   2 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
-  3 - output([t1.c1]), filter(nil), rowset=16
-      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c1)]
-  4 - output([t1.c1]), filter(nil), rowset=16
+  3 - output([t2.c1]), filter(nil), rowset=16
+      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t2.c1)]
+  4 - output([t2.c1]), filter(nil), rowset=16
       affinitize
-  5 - output([t1.c1]), filter(nil), rowset=16
-      access([t1.c1]), partitions(p[0-9])
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.c1]), range(MIN ; MAX)always true
-  6 - output([t2.c1]), filter(nil), rowset=16
-  7 - output([t2.c1]), filter(nil), rowset=16
-      (#keys=1, [t2.c1]), dop=3
-  8 - output([t2.c1]), filter(nil), rowset=16
-  9 - output([t2.c1]), filter(nil), rowset=16
+  5 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
+  6 - output([t1.c1]), filter(nil), rowset=16
+  7 - output([t1.c1]), filter(nil), rowset=16
+      (#keys=1, [t1.c1]), dop=3
+  8 - output([t1.c1]), filter(nil), rowset=16
+  9 - output([t1.c1]), filter(nil), rowset=16
+      access([t1.c1]), partitions(p[0-9])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
 select /*+ USE_PX parallel(3) */* from
 (select c1,count(*) over(partition by c1) c2 from
 (select c1,count(c2) c2 from t1 group by c1)c) a join

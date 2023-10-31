@@ -20,7 +20,7 @@
 #include "ob_storage_ha_struct.h"
 #include "share/ob_common_rpc_proxy.h" // ObCommonRpcProxy
 #include "observer/ob_rpc_processor_simple.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_storage_rpc.h"
 
 namespace oceanbase

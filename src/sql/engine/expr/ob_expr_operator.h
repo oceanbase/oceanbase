@@ -285,6 +285,7 @@ public:
   inline bool is_internal_for_oracle() const { return is_internal_for_oracle_; }
 
   inline const ObExprResType &get_result_type() const {return result_type_;}
+  inline ObExprResType &get_result_type() { return result_type_; }
   inline const common::ObIArray<ObFuncInputType> &get_input_types() const {return input_types_;}
   int set_input_types(const ObIExprResTypes &input_types); // convert ExprResTyp=>FuncInputType
   inline void set_result_type(const ObExprResType &type) { result_type_ = type; }
@@ -561,7 +562,9 @@ public:
   int calc_cmp_type2(ObExprResType &type,
                     const ObExprResType &type1,
                     const ObExprResType &type2,
-                    const common::ObCollationType coll_type) const;
+                    const common::ObCollationType coll_type,
+                    const bool left_is_const = false,
+                    const bool right_is_const = false) const;
 
   int calc_cmp_type3(ObExprResType &type,
                      const ObExprResType &type1,
@@ -1123,8 +1126,9 @@ public:
                               const common::ObObjType cmp_type) const;
   int get_cmp_result_type3(ObExprResType &type,
                            bool &need_no_cast,
-                           const ObExprResType *types,
+                           ObExprResType *types,
                            const int64_t param_num,
+                           const bool has_lower,
                            const sql::ObSQLSessionInfo &my_session);
 
   // vector comparison, e.g. (a,b,c) > (1,2,3)
@@ -1210,30 +1214,47 @@ public:
   static int pl_udt_compare2(CollectionPredRes &cmp_result, const common::ObObj &obj1,
                       const common::ObObj &obj2, ObExecContext &exec_ctx,
                       const common::ObCmpOp cmp_op);
-  OB_INLINE static bool can_cmp_without_cast(
-      ObExprResType type1, ObExprResType type2,
-      common::ObCmpOp cmp_op)
-  {
-    bool need_no_cast = false;
-    bool has_lob_header = type1.has_lob_header() || type2.has_lob_header();
-    //特殊处理显示调用compare(例如：c1 > c2)，此时enum/set均应该转换成string处理
-    //内部比较（order by）,enum/set不需要转换。
-    if (common::ObDatumFuncs::is_string_type(type1.get_type()) &&
-        common::ObDatumFuncs::is_string_type(type2.get_type())) {
-      // if locator v2 enabled, cannot compare string/text directly remove this comment
-      // since cannot known whether a datum has locator in compare funcs
-      need_no_cast = common::ObCharset::charset_type_by_coll(type1.get_collation_type())
-                     == common::ObCharset::charset_type_by_coll(type2.get_collation_type());
-    } else {
-      auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
-          type1.get_type(), type2.get_type(), type1.get_scale(), type2.get_scale(), cmp_op,
-          lib::is_oracle_mode(), common::CS_TYPE_MAX, has_lob_header);
-      need_no_cast = (func_ptr != nullptr);
-    }
-    return need_no_cast;
-  }
 
   static int eval_pl_udt_compare(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  // get_const_cast_mode returns cast_mode for const/calculated params when compares with decimal type column
+  // col is defined as number(10, 3)
+  // 1. col >= 12.2341  <=> col >= 12.235
+  //    col >= -12.2341 <=> col >=-12.234
+  // 2. col > 12.2341   <=> col > 12.234
+  //    col > -12.2341  <=> col > -12.235
+  // 3. col <= 12.2341  <=> col <= 12.234
+  //    col <= -12.2341 <=> col <= -12.235
+  // 4. col < 12.2341   <=> col < 12.235
+  //    col < -12.2341  <=> col < -12.234
+  // define 1 & 4 as up mode: val = val + 1 if val >= 0
+  // define 2 & 3 as down mode: val = val - 1 if val < 0
+  static ObCastMode get_const_cast_mode(const ObExprOperatorType op_type,
+                                        const bool right_const_param)
+  {
+    ObCmpOp cmp_op = get_cmp_op(op_type);
+    ObCastMode cm = CM_NONE;
+    if (cmp_op >= CO_CMP) {
+      // do nothing
+    } else if (right_const_param) {
+      if (cmp_op == CO_EQ || cmp_op == CO_NE) {
+        cm |= CM_CONST_TO_DECIMAL_INT_EQ;
+      } else if (cmp_op == CO_GT || cmp_op == CO_LE) {
+        cm |= CM_CONST_TO_DECIMAL_INT_DOWN;
+      } else if (cmp_op == CO_GE || cmp_op == CO_LT) {
+        cm |= CM_CONST_TO_DECIMAL_INT_UP;
+      }
+    } else {
+      if (cmp_op == CO_EQ || cmp_op == CO_NE) {
+        cm |= CM_CONST_TO_DECIMAL_INT_EQ;
+      } else if (cmp_op == CO_LE || cmp_op == CO_GT) {
+        cm |= CM_CONST_TO_DECIMAL_INT_UP;
+      } else if (cmp_op == CO_LT || cmp_op == CO_GE) {
+        cm |= CM_CONST_TO_DECIMAL_INT_DOWN;
+      }
+    }
+    return cm;
+  }
 
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type) {
     /*
@@ -1291,6 +1312,12 @@ public:
     return cmp_op;
   }
 
+  static bool can_cmp_without_cast(ObExprResType type1, ObExprResType type2,
+                                   common::ObCmpOp cmp_op);
+  static int deduce_decimalint_cmp_calc_type(const bool left_is_const, const bool right_is_const,
+                                             const bool need_no_cast,
+                                             const ObExprOperatorType expr_type,
+                                             ObExprResType &type1, ObExprResType &type2);
 protected:
   static bool is_int_cmp_const_str(const ObExprResType *type1,
                                    const ObExprResType *type2,
@@ -1329,17 +1356,12 @@ protected:
     return common::ObObjCmpFuncs::compare(result, obj1, obj2, cmp_ctx, cmp_op, cmp_func);
   }
 
-  static bool can_cmp_without_cast(ObExprResType type1,
-                                             ObExprResType type2,
-                                             common::ObCmpOp cmp_op,
-                                             const ObSQLSessionInfo &session);
-
-protected:
-  //only use for comparison with 2 operands(calc_result2)
-  //if cmp_op_func2_ is not NULL, that means we can compare the 2 objs directly without any casts
-  //otherwise, compare_cast is necessary.
-  //It is used for performance optimization.
-  common::obj_cmp_func cmp_op_func2_;
+    protected :
+    // only use for comparison with 2 operands(calc_result2)
+    // if cmp_op_func2_ is not NULL, that means we can compare the 2 objs directly without any casts
+    // otherwise, compare_cast is necessary.
+    // It is used for performance optimization.
+    common::obj_cmp_func cmp_op_func2_;
 };
 
 class ObSubQueryRelationalExpr : public ObExprOperator
@@ -1456,7 +1478,7 @@ protected:
 
    int get_param_types(const ObRawExpr &param,
                        const bool is_iter,
-                       common::ObIArray<common::ObObjMeta> &types) const;
+                       common::ObIArray<sql::ObExprResType> &types) const;
 
   static int setup_row(
       ObExpr **expr, ObEvalCtx &ctx, const bool is_iter, const int64_t cmp_func_cnt,
@@ -1558,8 +1580,7 @@ protected:
         is_finish = true;
       }
     }
-    SQL_LOG(DEBUG, "finish get_arith_operand", KPC(expr.args_[0]), KPC(expr.args_[1]),
-            K(result), K(is_finish));
+    SQL_LOG(DEBUG, "finish get_arith_operand", KPC(expr.args_[0]), KPC(expr.args_[1]), K(is_finish));
     return ret;
   }
 
@@ -1863,21 +1884,28 @@ protected:
   static int cg_bitwise_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
                             ObExpr &rt_expr, const BitOperator op);
   // 根据参数类型，从4个get_int/get_uint方法中选择合适的get_int64/get_uint64方法
-  static int choose_get_int_func(const common::ObObjType type, void *&out_func);
+  static int choose_get_int_func(const ObDatumMeta datum_meta, void *&out_func);
   // 从datum中获取int64/uint64, 针对number需要有round/trunc操作，针对int tc会直接获取
   // int值
-  typedef int (*GetIntFunc)(const common::ObDatum &, bool,
+  typedef int (*GetIntFunc)(const ObDatumMeta &, const common::ObDatum &, bool,
                             int64_t&, common::ObCastMode&);
-  typedef int (*GetUIntFunc)(const common::ObDatum &, bool,
+  typedef int (*GetUIntFunc)(const ObDatumMeta &, const common::ObDatum &, bool,
                              uint64_t&, common::ObCastMode&);
-  static int get_int64_from_int_tc(const common::ObDatum &datum, bool is_round,
-                                   int64_t &out, const common::ObCastMode &cast_mode);
-  static int get_uint64_from_int_tc(const common::ObDatum &datum, bool is_round,
-                                    uint64_t &out, const common::ObCastMode &cast_mode);
-  static int get_int64_from_number_type(const common::ObDatum &datum, bool is_round,
-                                    int64_t &out, const common::ObCastMode &cast_mode);
-  static int get_uint64_from_number_type(const common::ObDatum &datum, bool is_round,
-                                    uint64_t &out, const common::ObCastMode &cast_mode);
+  static int get_int64_from_int_tc(
+      const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
+      int64_t &out, const common::ObCastMode &cast_mode);
+  static int get_uint64_from_int_tc(
+      const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
+      uint64_t &out, const common::ObCastMode &cast_mode);
+  static int get_int64_from_number_type(
+      const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
+      int64_t &out, const common::ObCastMode &cast_mode);
+  static int get_uint64_from_number_type(
+      const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
+      uint64_t &out, const common::ObCastMode &cast_mode);
+  static int get_uint64_from_decimalint_type(
+      const ObDatumMeta &datum_meta, const common::ObDatum &datum, bool is_round,
+      uint64_t &out, const common::ObCastMode &cast_mode);
 };
 
 
@@ -1932,7 +1960,8 @@ protected:
                                       ObExprResType *types,
                                       int64_t param_num,
                                       const common::ObCollationType coll_type,
-                                      const common::ObLengthSemantics default_length_semantics) const;
+                                      const common::ObLengthSemantics default_length_semantics,
+                                      const bool enable_decimal_int) const;
 
 protected:
   // least should set cmp_op to CO_LT.

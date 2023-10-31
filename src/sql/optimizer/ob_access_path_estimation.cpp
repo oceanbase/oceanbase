@@ -162,10 +162,10 @@ int ObAccessPathEstimation::process_external_table_estimation(AccessPath *path)
       }
     } else {
       output_row_count = static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
-      path->query_range_row_count_ = output_row_count;
-      path->phy_query_range_row_count_ = output_row_count;
-      path->index_back_row_count_ = 0;
-      path->output_row_count_ = output_row_count;
+      path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
+      path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
+      path->est_cost_info_.index_back_row_count_ = 0;
+      path->est_cost_info_.output_row_count_ = output_row_count;
     }
   }
   return ret;
@@ -190,10 +190,10 @@ int ObAccessPathEstimation::process_vtable_default_estimation(AccessPath *path)
         output_row_count *= 100.0;
       }
     }
-    path->query_range_row_count_ = output_row_count;
-    path->phy_query_range_row_count_ = output_row_count;
-    path->index_back_row_count_ = 0;
-    path->output_row_count_ = output_row_count;
+    path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
+    path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
+    path->est_cost_info_.index_back_row_count_ = 0;
+    path->est_cost_info_.output_row_count_ = output_row_count;
   }
   return ret;
 }
@@ -212,10 +212,10 @@ int ObAccessPathEstimation::process_table_default_estimation(AccessPath *path)
   } else {
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
     est_cost_info.row_est_method_ = DEFAULT_STAT;
-    path->query_range_row_count_ = output_row_count;
-    path->phy_query_range_row_count_ = output_row_count;
-    path->index_back_row_count_ = 0;
-    path->output_row_count_ = output_row_count;
+    path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
+    path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
+    path->est_cost_info_.index_back_row_count_ = 0;
+    path->est_cost_info_.output_row_count_ = output_row_count;
     int64_t get_range_count = get_get_range_count(est_cost_info.ranges_);
     int64_t scan_range_count = get_scan_range_count(est_cost_info.ranges_);
     if (get_range_count + scan_range_count > 1) {
@@ -365,16 +365,10 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         if (OB_FAIL(path->est_records_.assign(res.est_records_))) {
           LOG_WARN("failed to assign estimation records", K(ret));
         } else if (OB_FAIL(estimate_prefix_range_rowcount(res,
-                                                          path->est_cost_info_,
-                                                          path->query_range_row_count_,
-                                                          path->phy_query_range_row_count_))) {
+                                                          path->est_cost_info_))) {
           LOG_WARN("failed to estimate prefix range rowcount", K(ret));
         } else if (OB_FAIL(fill_cost_table_scan_info(path->est_cost_info_,
-                                                     est_method,
-                                                     path->output_row_count_,
-                                                     path->query_range_row_count_,
-                                                     path->phy_query_range_row_count_,
-                                                     path->index_back_row_count_))) {
+                                                     est_method))) {
           LOG_WARN("failed to fill cost table scan info", K(ret));
         }
       }
@@ -445,11 +439,11 @@ int ObAccessPathEstimation::do_storage_estimation(ObOptimizerContext &ctx,
 
 int ObAccessPathEstimation::estimate_prefix_range_rowcount(
     const obrpc::ObEstPartResElement &result,
-    ObCostTableScanInfo &est_cost_info,
-    double &logical_row_count,
-    double &physical_row_count)
+    ObCostTableScanInfo &est_cost_info)
 {
   int ret = OB_SUCCESS;
+  double &logical_row_count = est_cost_info.logical_query_range_row_count_;
+  double &physical_row_count = est_cost_info.phy_query_range_row_count_;
   logical_row_count = 0;
   physical_row_count = 0;
   int64_t get_range_count = get_get_range_count(est_cost_info.ranges_);
@@ -485,13 +479,13 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
 }
 
 int ObAccessPathEstimation::fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info,
-                                                      const RowCountEstMethod est_method,
-                                                      double &output_row_count,
-                                                      double &logical_row_count,
-                                                      double &physical_row_count,
-                                                      double &index_back_row_count)
+                                                      const RowCountEstMethod est_method)
 {
   int ret = OB_SUCCESS;
+  double &output_row_count = est_cost_info.output_row_count_;
+  double &logical_row_count = est_cost_info.logical_query_range_row_count_;
+  double &physical_row_count = est_cost_info.phy_query_range_row_count_;
+  double &index_back_row_count = est_cost_info.index_back_row_count_;
   est_cost_info.row_est_method_ = est_method;
 
   // we have exact query ranges on a unique index,
@@ -645,8 +639,8 @@ int ObAccessPathEstimation::process_statistics_estimation(AccessPath *path)
   } else {
     ObArenaAllocator allocator;
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
-    double &logical_row_count = path->query_range_row_count_;
-    double &physical_row_count = path->phy_query_range_row_count_;
+    double &logical_row_count = est_cost_info.logical_query_range_row_count_;
+    double &physical_row_count = est_cost_info.phy_query_range_row_count_;
 
     // if (OB_FAIL(ObOptimizerUtil::classify_get_scan_ranges(est_cost_info.ranges_,
     //                                                       get_ranges,
@@ -682,11 +676,7 @@ int ObAccessPathEstimation::process_statistics_estimation(AccessPath *path)
                                                                 : RowCountEstMethod::DEFAULT_STAT;
 
     OZ (fill_cost_table_scan_info(est_cost_info,
-                                  est_method,
-                                  path->output_row_count_,
-                                  logical_row_count,
-                                  physical_row_count,
-                                  path->index_back_row_count_));
+                                  est_method));
   }
   return ret;
 }
@@ -774,10 +764,6 @@ int ObAccessPathEstimation::update_use_skip_scan(ObCostTableScanInfo &est_cost_i
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null",  K(ret), K(table_meta_info));
   } else {
-    // const static double NORMAL_CPU_TUPLE_COST = 0.02977945030613315927249275026;
-    // const static double NORMAL_TABLE_SCAN_CPU_TUPLE_COST = 0.3717749711890249146505031527;
-    // const static double NORMAL_MICRO_BLOCK_SEQ_COST = 4.12032943880540981;
-    // const static double NORMAL_MICRO_BLOCK_RND_COST = 5.45276187553;
     const double row_count = table_meta_info->table_row_count_
                              * est_cost_info.prefix_filter_sel_
                              * est_cost_info.pushdown_prefix_filter_sel_;
@@ -787,7 +773,7 @@ int ObAccessPathEstimation::update_use_skip_scan(ObCostTableScanInfo &est_cost_i
                                                 1.0);
     const double ss_row_count = est_cost_info.ss_prefix_ndv_
                                     + row_count_per_range * est_cost_info.ss_prefix_ndv_;
-    const double index_scan_cost = row_count * (NORMAL_CPU_TUPLE_COST + NORMAL_TABLE_SCAN_CPU_TUPLE_COST);
+    const double index_scan_cost = row_count * (NORMAL_CPU_TUPLE_COST);
     const double skip_scan_cost = ss_row_count * NORMAL_MICRO_BLOCK_RND_COST;
     LOG_TRACE("decide use skip scan by ndv and selectively", K(use_skip_scan), K(row_count), K(row_count_per_range),
                   K(ss_row_count), K(index_scan_cost), K(skip_scan_cost),
@@ -1710,7 +1696,6 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
         ObCostTableScanInfo &est_cost_info = paths.at(i)->est_cost_info_;
         double sample_ratio = all_filter_item->stat_handle_.stat_->get_sample_block_ratio();
         output_rowcnt = output_rowcnt != 0 ? output_rowcnt : static_cast<int64_t>(100.0 / sample_ratio);
-        paths.at(i)->set_table_row_count(est_cost_info.table_meta_info_->table_row_count_);
         bool no_add_micro_block = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
         if (!no_add_micro_block) {
           est_cost_info.table_meta_info_->micro_block_count_ = micro_block_count;
@@ -1719,8 +1704,8 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
                     (static_cast<double>(est_cost_info.index_meta_info_.index_column_count_) /
                       static_cast<double>(est_cost_info.table_meta_info_->table_column_count_));
         }
-        double &logical_row_count = paths.at(i)->query_range_row_count_;
-        double &physical_row_count = paths.at(i)->phy_query_range_row_count_;
+        double &logical_row_count = est_cost_info.logical_query_range_row_count_;
+        double &physical_row_count = est_cost_info.phy_query_range_row_count_;
         if (path_ds_result_item == NULL) {
           logical_row_count = est_cost_info.table_meta_info_->table_row_count_;
           physical_row_count = logical_row_count;
@@ -1753,16 +1738,15 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
 
           logical_row_count = std::max(logical_row_count, 1.0);
           physical_row_count = std::max(physical_row_count, 1.0);
+          est_cost_info.output_row_count_ = output_rowcnt;
           // row sampling
           double row_sample_ratio = est_cost_info.sample_info_.is_row_sample() ?
                 0.01 * est_cost_info.sample_info_.percent_ : 1.0;
-          paths.at(i)->output_row_count_ *= row_sample_ratio;
+          est_cost_info.output_row_count_ *= row_sample_ratio;
 
           if (est_cost_info.index_meta_info_.is_index_back_) {
-            paths.at(i)->index_back_row_count_ = logical_row_count;
+            est_cost_info.index_back_row_count_ = logical_row_count;
           }
-
-          paths.at(i)->output_row_count_ = output_rowcnt;
           est_cost_info.table_filter_sel_ = output_rowcnt * 1.0 / physical_row_count;
 
           if (OB_FAIL(ret)) {

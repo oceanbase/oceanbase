@@ -70,50 +70,45 @@ int ObMdsTableMergeTask::process()
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
-
+  ObTabletMergeCtx *ctx_ptr = nullptr;
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
-  ObTabletMergeCtx *ctx = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(mds_merge_dag_->prepare_merge_ctx())) {
-    LOG_WARN("failed to alloc merge ctx", K(ret));
-  } else if (OB_ISNULL(ctx = mds_merge_dag_->get_ctx())) {
+  } else if (OB_ISNULL(mds_merge_dag_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(mds_merge_dag_));
+    LOG_WARN("get unexpected null dag", K(ret));
+  } else if (OB_FAIL(mds_merge_dag_->alloc_merge_ctx())) {
+    LOG_WARN("failed to prepare merge ctx", K(ret), KPC_(mds_merge_dag));
+  } else if (OB_ISNULL(ctx_ptr = static_cast<ObTabletMergeCtx *>(mds_merge_dag_->get_ctx()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is unexpected null", KR(ret), KPC_(mds_merge_dag));
   } else {
-    ctx->start_time_ = ObTimeUtility::fast_current_time();
     int tmp_ret = OB_SUCCESS;
     ObLS *ls = nullptr;
     ObTablet *tablet = nullptr;
-    const share::ObLSID &ls_id = ctx->param_.ls_id_;
-    const common::ObTabletID &tablet_id = ctx->param_.tablet_id_;
+    ObTabletMergeCtx &ctx = *ctx_ptr;
+    ctx.static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
+    const share::ObLSID &ls_id = ctx.get_ls_id();
+    const common::ObTabletID &tablet_id = ctx.get_tablet_id();
     const share::SCN &flush_scn = mds_merge_dag_->get_flush_scn();
-    int64_t ls_rebuild_seq = -1;
-
-    if (OB_ISNULL(ls = ctx->ls_handle_.get_ls())) {
+    ctx.static_param_.scn_range_.end_scn_ = flush_scn;
+    ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();
+    if (OB_FAIL(ctx.get_ls_and_tablet())) {
+      LOG_WARN("failed to get ls and tablet", KR(ret), K(ctx));
+    } else if (OB_ISNULL(ls = ctx.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls is null", K(ret), K(ls_id), "ls_handle", ctx->ls_handle_);
+      LOG_WARN("ls is null", K(ret), K(ls_id), "ls_handle", ctx.static_param_.ls_handle_);
     } else if (ls->is_offline()) {
       ret = OB_CANCELED;
       LOG_INFO("ls offline, skip merge", K(ret), K(ctx));
-    } else if (OB_FAIL(ctx->get_merge_info().init(*ctx, flush_scn))) {
-      LOG_WARN("failed to init merge info", K(ret), K(ls_id), K(tablet_id), K(flush_scn), K(ctx));
-    } else if (FALSE_IT(ctx->time_guard_.click(ObCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE))) {
-    } else if (MDS_FAIL(ls->get_tablet(tablet_id, ctx->tablet_handle_, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-      LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_ISNULL(tablet = ctx->tablet_handle_.get_obj())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id), "tablet_handle", ctx->tablet_handle_);
-    } else if (FALSE_IT(ctx->time_guard_.click(ObCompactionTimeGuard::GET_TABLET))) {
-    } else if (FALSE_IT(ls_rebuild_seq = ls->get_rebuild_seq())) {
-    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(ls_rebuild_seq,
-                                                            tablet_id,
-                                                            mds_merge_dag_->get_mds_construct_sequence(),
-                                                            flush_scn))) {
-      LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(ls_rebuild_seq), K(flush_scn));
+    } else if (OB_FAIL(ctx.init_tablet_merge_info(false/*need_check*/))) {
+      LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id), K(tablet_id));
+    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(ctx.get_ls_rebuild_seq(), tablet_id, mds_merge_dag_->get_mds_construct_sequence(), flush_scn))) {
+      LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(ctx.get_ls_rebuild_seq()), K(flush_scn));
     } else {
-      ctx->time_guard_.click(ObCompactionTimeGuard::EXECUTE);
+      tablet = ctx.get_tablet();
+      ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
     }
 
@@ -125,9 +120,10 @@ int ObMdsTableMergeTask::process()
         ret = tmp_ret;
       }
     }
-    ctx->time_guard_.click(ObCompactionTimeGuard::DAG_FINISH);
-    set_merge_finish_time(*ctx);
-    (void)ctx->collect_running_info();
+    ctx.time_guard_click(ObStorageCompactionTimeGuard::DAG_FINISH);
+    ctx.add_sstable_merge_info(ctx.get_merge_info().get_sstable_merge_info(),
+              mds_merge_dag_->get_dag_id(), mds_merge_dag_->hash(),
+              ctx.info_collector_.time_guard_);
   }
 
   return ret;

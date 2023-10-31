@@ -128,9 +128,11 @@ public:
                                            ObIAllocator &alloc,
                                            ObObj *&new_obj);
 
-  static int shadow_truncate_string_for_opt_stats(ObObj &obj);
+  static int shadow_truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &allocator);
 
   static int64_t get_truncated_str_len(const ObString &str, const ObCollationType cs_type);
+
+  static int64_t check_text_can_reuse(const ObObj &obj, bool &can_reuse);
 
   static int get_current_opt_stats(const ObTableStatParam &param,
                                    ObIArray<ObOptTableStatHandle> &cur_tab_handles,

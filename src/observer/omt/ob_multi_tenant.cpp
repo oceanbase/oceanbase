@@ -51,6 +51,7 @@
 #include "logservice/archiveservice/ob_archive_service.h"    // ObArchiveService
 #include "logservice/data_dictionary/ob_data_dict_service.h" // ObDataDictService
 #include "ob_tenant_mtl_helper.h"
+#include "storage/blocksstable/ob_decode_resource_pool.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_access_service.h"
@@ -66,8 +67,9 @@
 #include "storage/tx/ob_unique_id_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_tenant_medium_checker.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
@@ -76,7 +78,9 @@
 #include "storage/tx/ob_id_service.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
+#include "storage/compaction/ob_compaction_tablet_diagnose.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "storage/compaction/ob_compaction_memory_pool.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tablelock/ob_table_lock_service.h"
@@ -85,11 +89,14 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
 #include "share/io/ob_io_manager.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "observer/report/ob_tenant_meta_checker.h"
+#include "observer/report/ob_tablet_table_updater.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_tenant_balance_service.h"//ObTenantBalanceService
@@ -131,6 +138,7 @@
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
+#include "storage/access/ob_empty_read_bucket.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #ifdef ERRSIM
@@ -435,16 +443,20 @@ int ObMultiTenant::init(ObAddr myaddr,
     // other mtl
     MTL_BIND2(mtl_new_default, ObArchiveService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, datadict::ObDataDictService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, ObTenantTabletScheduler::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, compaction::ObTenantTabletScheduler::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, compaction::ObTenantMediumChecker::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObTabletTableUpdater::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantDagScheduler::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantFreezeInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTxLoopWorker::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default); // ObTxLoopWorker
     MTL_BIND2(mtl_new_default, compaction::ObTenantCompactionProgressMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, compaction::ObServerCompactionEventHistory::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, storage::ObTenantTabletStatMgr::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, storage::ObTenantCompactionMemPool::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, storage::ObTenantSSTableMergeInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::ObDagWarningHistoryManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, compaction::ObScheduleSuspectInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, compaction::ObDiagnoseTabletMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObPrimaryMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -494,6 +506,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObMultiVersionGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObUDRMgr::mtl_init, nullptr, ObUDRMgr::mtl_stop, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObTenantCGReadInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObDecodeResourcePool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
 
     MTL_BIND(ObPxPools::mtl_init, ObPxPools::mtl_destroy);
     MTL_BIND(ObTenantDfc::mtl_init, ObTenantDfc::mtl_destroy);
@@ -526,6 +540,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     }
     MTL_BIND2(mtl_new_default, rootserver::ObHeartbeatService::mtl_init, nullptr, rootserver::ObHeartbeatService::mtl_stop, rootserver::ObHeartbeatService::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTTLService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObEmptyReadBucket::mtl_init, nullptr, nullptr, nullptr, ObEmptyReadBucket::mtl_destroy);
 
 #ifdef ERRSIM
     MTL_BIND2(mtl_new_default, ObTenantErrsimModuleMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

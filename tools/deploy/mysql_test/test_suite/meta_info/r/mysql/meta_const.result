@@ -167,7 +167,7 @@ cnt
 0
 select sum(cnt) from(select count(*) as cnt from tt a ) c;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					sum(cnt)	246	21	1	Y	32896	0	63
+def					sum(cnt)	246	43	1	Y	32896	0	63
 sum(cnt)
 0
 drop table if exists obright;

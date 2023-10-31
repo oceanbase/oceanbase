@@ -1142,8 +1142,9 @@ int ObRADatumStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
+    io.io_timeout_ms_ = timeout_ms;
     const uint64_t start = rdtsc();
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io, timeout_ms))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io))) {
       LOG_WARN("write to file failed", K(ret), K(io), K(timeout_ms));
     }
     if (NULL != io_observer_) {
@@ -1182,9 +1183,10 @@ int ObRADatumStore::read_file(void *buf, const int64_t size, const int64_t offse
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    io.io_timeout_ms_ = timeout_ms;
     const uint64_t start = rdtsc();
     blocksstable::ObTmpFileIOHandle handle;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, timeout_ms, handle))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, handle))) {
       LOG_WARN("read form file failed", K(ret), K(io), K(offset), K(timeout_ms));
     } else if (OB_UNLIKELY(handle.get_data_size() != size)) {
       ret = OB_INNER_STAT_ERROR;

@@ -24,6 +24,7 @@ const char *ObStoreFormat::row_store_name[MAX_ROW_STORE] =
   "flat_row_store",
   "encoding_row_store",
   "selective_encoding_row_store",
+  "cs_encoding_row_store",
 };
 
 const ObStoreFormatItem ObStoreFormat::store_format_items[OB_STORE_FORMAT_MAX] =
@@ -33,7 +34,7 @@ const ObStoreFormatItem ObStoreFormat::store_format_items[OB_STORE_FORMAT_MAX] =
   {"REDUNDANT", "ROW_FORMAT = REDUNDANT", "", FLAT_ROW_STORE},
   {"COMPACT", "ROW_FORMAT = COMPACT", "", FLAT_ROW_STORE},
   {"DYNAMIC", "ROW_FORMAT = DYNAMIC", "", ENCODING_ROW_STORE},
-  {"COMPRESSED", "ROW_FORMAT = COMPRESSED", "", ENCODING_ROW_STORE},
+  {"COMPRESSED", "ROW_FORMAT = COMPRESSED", "", CS_ENCODING_ROW_STORE},
   {"CONDENSED", "ROW_FORMAT = CONDENSED", "", SELECTIVE_ENCODING_ROW_STORE},
   {"", "", "", MAX_ROW_STORE},   //reserved for mysql furture
   {"", "", "", MAX_ROW_STORE},   //reserved for mysql furture
@@ -44,9 +45,10 @@ const ObStoreFormatItem ObStoreFormat::store_format_items[OB_STORE_FORMAT_MAX] =
   {"NOCOMPRESS", "NOCOMPRESS", "none", FLAT_ROW_STORE},
   {"BASIC", "COMPRESS BASIC", "lz4_1.0", FLAT_ROW_STORE},
   {"OLTP", "COMPRESS FOR OLTP", "zstd_1.3.8", FLAT_ROW_STORE},
-  {"QUERY", "COMPRESS FOR QUERY", "lz4_1.0", ENCODING_ROW_STORE},
-  {"ARCHIVE", "COMPRESS FOR ARCHIVE", "zstd_1.3.8", ENCODING_ROW_STORE},
+  {"QUERY", "COMPRESS FOR QUERY", "lz4_1.0", ENCODING_ROW_STORE}, // default query is high in oracle mode
+  {"ARCHIVE", "COMPRESS FOR ARCHIVE", "zstd_1.3.8", ENCODING_ROW_STORE}, // default archive is low in oracle mode
   {"QUERY LOW", "COMPRESS FOR QUERY LOW", "lz4_1.0", SELECTIVE_ENCODING_ROW_STORE},
+  {"ARCHIVE HIGH", "COMPRESS FOR ARCHIVE HIGH", "zstd_1.3.8", CS_ENCODING_ROW_STORE},
 };
 
 int ObStoreFormat::find_row_store_type(const ObString &row_store, ObRowStoreType &row_store_type)

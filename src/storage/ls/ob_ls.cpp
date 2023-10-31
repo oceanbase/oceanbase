@@ -152,8 +152,8 @@ int ObLS::init(const share::ObLSID &ls_id,
     // tx_table_.init() should after ls_table_svr.init()
     if (OB_FAIL(txs_svr->create_ls(ls_id, *this, &tx_palf_param, nullptr))) {
       LOG_WARN("create trans service failed.", K(ret), K(ls_id));
-    } else if (OB_FAIL(ls_tablet_svr_.init(this, reporter))) {
-      LOG_WARN("ls tablet service init failed.", K(ret), K(ls_id), K(reporter));
+    } else if (OB_FAIL(ls_tablet_svr_.init(this))) {
+      LOG_WARN("ls tablet service init failed.", K(ret), K(ls_id));
     } else if (OB_FAIL(tx_table_.init(this))) {
       LOG_WARN("init tx table failed",K(ret));
     } else if (OB_FAIL(checkpoint_executor_.init(this, get_log_handler()))) {
@@ -937,7 +937,7 @@ int ObLS::offline_compaction_()
 {
   int ret = OB_SUCCESS;
   if (FALSE_IT(ls_freezer_.offline())) {
-  } else if (OB_FAIL(MTL(ObTenantTabletScheduler *)->
+  } else if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)->
                      check_ls_compaction_finish(ls_meta_.ls_id_))) {
     LOG_WARN("check compaction finish failed", K(ret), K(ls_meta_));
   }
@@ -982,7 +982,7 @@ int ObLS::offline_(const int64_t start_ts)
     LOG_WARN("offline dup table ls handler failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.offline())) {
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
-  // force release memtables created by force_tablet_freeze called during major
+  // force release memtables created by tablet_freeze_with_rewrite_meta called during major
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_empty_shell_handler_.offline())) {
@@ -1452,20 +1452,32 @@ int ObLS::update_tablet_table_store(
   const int64_t read_lock = LSLOCKLOGMETA;
   const int64_t write_lock = 0;
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-  const share::ObLSID &ls_id = ls_meta_.ls_id_;
-  const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
+
+  return update_tablet_table_store_without_lock_(tablet_id, param, handle);
+}
+
+int ObLS::update_tablet_table_store_without_lock_(
+    const ObTabletID &tablet_id,
+    const ObUpdateTableStoreParam &param,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update tablet table store get invalid argument", K(ret), K(ls_id), K(tablet_id), K(param));
-  } else if (param.rebuild_seq_ != rebuild_seq) {
-    ret = OB_EAGAIN;
-    LOG_WARN("update tablet table store rebuild seq not same, need retry",
-        K(ret), K(ls_id), K(tablet_id), K(rebuild_seq), K(param));
-  } else if (OB_FAIL(ls_tablet_svr_.update_tablet_table_store(tablet_id, param, handle))) {
-    LOG_WARN("failed to update tablet table store", K(ret), K(ls_id), K(tablet_id), K(param));
+    LOG_WARN("update tablet table store get invalid argument", K(ret), K(tablet_id), K(param));
+  } else {
+    const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
+    if (param.rebuild_seq_ != rebuild_seq) {
+      ret = OB_EAGAIN;
+      LOG_WARN("update tablet table store rebuild seq not same, need retry",
+          K(ret), K(tablet_id), K(rebuild_seq), K(param));
+    } else if (OB_FAIL(ls_tablet_svr_.update_tablet_table_store(tablet_id, param, handle))) {
+      LOG_WARN("failed to update tablet table store", K(ret), K(tablet_id), K(param));
+    }
   }
   return ret;
 }
@@ -1789,7 +1801,7 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::force_tablet_freeze(const ObTabletID &tablet_id, const int64_t abs_timeout_ts)
+int ObLS::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id, const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
@@ -1807,7 +1819,7 @@ int ObLS::force_tablet_freeze(const ObTabletID &tablet_id, const int64_t abs_tim
   } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("log handler not enable replay, should not freeze", K(ret), K(tablet_id), K_(ls_meta));
-  } else if (OB_FAIL(ls_freezer_.force_tablet_freeze(tablet_id))) {
+  } else if (OB_FAIL(ls_freezer_.tablet_freeze_with_rewrite_meta(tablet_id))) {
     LOG_WARN("tablet force freeze failed", K(ret), K(tablet_id));
   } else {
     // do nothing
@@ -2118,12 +2130,16 @@ int ObLS::flush_if_need_(const bool need_flush)
   return ret;
 }
 
-int ObLS::try_update_uppder_trans_version()
+int ObLS::try_update_upper_trans_version_and_gc_sstable(
+    compaction::ObCompactionScheduleIterator &iter)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLOGMETA;
   int64_t write_lock = 0;
+  bool update_upper_trans_version = true;
+  const share::ObLSID &ls_id = get_ls_id();
+  ObMigrationStatus migration_status;
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
 
   if (IS_NOT_INIT) {
@@ -2132,38 +2148,65 @@ int ObLS::try_update_uppder_trans_version()
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else {
-    ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_ALL_COMMITED);
-    ObTabletHandle tablet_handle;
-    bool is_updated = false;
-    ObMigrationStatus migration_status;
+  } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(this));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    update_upper_trans_version = false;
+  }
 
-    if (OB_FAIL(get_migration_status(migration_status))) {
-      LOG_WARN("failed to get migration status", K(ret), KPC(this));
-    } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
-      //no need update upper trans version
-    } else if (OB_FAIL(build_tablet_iter(tablet_iter))) {
-      LOG_WARN("failed to build ls tablet iter", K(ret), KPC(this));
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  common::ObTabletID tablet_id;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(iter.get_next_tablet(tablet_handle))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("failed to get tablet", K(ret), K(tablet_handle));
+      }
+    } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+    } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+    } else if (FALSE_IT(tablet_id = tablet->get_tablet_meta().tablet_id_)) {
     } else {
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("failed to get tablet", K(ret), K(ls_meta_.ls_id_), K(tablet_handle));
+      // 1. try to update upper trans version
+      bool is_updated = false;
+      if (!update_upper_trans_version || !tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+        // no need to update upper trans version
+      } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_upper_trans_version(*this, is_updated))) {
+        LOG_WARN("failed to update upper trans version", K(tmp_ret), K(ls_id), K(tablet_id), KPC(tablet));
+      }
+
+      // 2. try to gc sstable
+      ObStorageSnapshotInfo snapshot_info;
+      bool need_remove = false;
+      if (tablet_id.is_special_merge_tablet()) {
+        // no need to gc sstable for special tablet
+      } else if (OB_TMP_FAIL(tablet->get_kept_snapshot_info(get_min_reserved_snapshot(), snapshot_info))) {
+        LOG_WARN("failed to get multi version start", K(tmp_ret), K(tablet_id));
+      } else if (OB_TMP_FAIL(tablet->check_need_remove_old_table(snapshot_info.snapshot_, need_remove))) {
+        LOG_WARN("failed to check need remove old store", K(tmp_ret), K(snapshot_info), K(tablet_id));
+      } else if (need_remove) {
+        ObArenaAllocator tmp_arena("RmOldTblTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        const ObStorageSchema *storage_schema = nullptr;
+        if (OB_TMP_FAIL(tablet->load_storage_schema(tmp_arena, storage_schema))) {
+          LOG_WARN("failed to load storage schema", K(tmp_ret), K(tablet));
+        } else {
+          ObUpdateTableStoreParam param(tablet->get_snapshot_version(), snapshot_info.snapshot_, storage_schema, get_rebuild_seq());
+          ObTabletHandle new_tablet_handle; // no use here
+          if (OB_TMP_FAIL(update_tablet_table_store_without_lock_(tablet_id, param, new_tablet_handle))) {
+            LOG_WARN("failed to update table store", K(tmp_ret), K(param), K(ls_id), K(tablet_id));
           } else {
-            ret = OB_SUCCESS;
-            break;
+            FLOG_INFO("success to remove old table in table store", K(tmp_ret), K(ls_id),
+                K(tablet_id), K(snapshot_info), KPC(tablet));
           }
-        } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid tablet handle", K(ret), K(ls_meta_.ls_id_), K(tablet_handle));
-        } else if (!tablet_handle.get_obj()->get_tablet_meta().ha_status_.is_data_status_complete()) {
-          //no need update upper trans version
-        } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_upper_trans_version(*this, is_updated))) {
-          LOG_WARN("failed to update upper trans version", K(tmp_ret), "tablet meta", tablet_handle.get_obj()->get_tablet_meta());
         }
+        ObTablet::free_storage_schema(tmp_arena, storage_schema);
       }
     }
-  }
+  } // end while
   return ret;
 }
 

@@ -6,15 +6,11 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_bloom_filter_data_reader.cpp
   blocksstable/ob_bloom_filter_data_writer.cpp
   blocksstable/ob_data_buffer.cpp
+  blocksstable/ob_decode_resource_pool.cpp
   blocksstable/ob_fuse_row_cache.cpp
   blocksstable/ob_imicro_block_reader.cpp
   blocksstable/ob_imicro_block_writer.cpp
-  blocksstable/ob_index_block_builder.cpp
   blocksstable/ob_micro_block_header.cpp
-  blocksstable/ob_index_block_macro_iterator.cpp
-  blocksstable/ob_index_block_row_scanner.cpp
-  blocksstable/ob_index_block_row_struct.cpp
-  blocksstable/ob_index_block_tree_cursor.cpp
   blocksstable/ob_macro_block.cpp
   blocksstable/ob_macro_block_bare_iterator.cpp
   blocksstable/ob_macro_block_checker.cpp
@@ -43,10 +39,8 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_sstable.cpp
   blocksstable/ob_sstable_macro_block_header.cpp
   blocksstable/ob_sstable_meta.cpp
-  blocksstable/ob_sstable_meta_info.cpp
   blocksstable/ob_logic_macro_id.cpp
   blocksstable/ob_sstable_printer.cpp
-  blocksstable/ob_sstable_sec_meta_iterator.cpp
   blocksstable/ob_storage_cache_suite.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
   blocksstable/ob_tmp_file.cpp
@@ -54,6 +48,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_tmp_file_store.cpp
   blocksstable/ob_datum_row.cpp
   blocksstable/ob_datum_rowkey.cpp
+  blocksstable/ob_data_store_desc.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_encoding
@@ -76,6 +71,7 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/ob_integer_base_diff_encoder.cpp
   blocksstable/encoding/ob_inter_column_substring_decoder.cpp
   blocksstable/encoding/ob_inter_column_substring_encoder.cpp
+  blocksstable/encoding/ob_imicro_block_decoder.cpp
   blocksstable/encoding/ob_micro_block_decoder.cpp
   blocksstable/encoding/ob_micro_block_encoder.cpp
   blocksstable/encoding/ob_multi_prefix_tree.cpp
@@ -89,6 +85,51 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/ob_string_prefix_encoder.cpp
   blocksstable/encoding/neon/ob_dict_decoder_neon.cpp
   blocksstable/encoding/neon/ob_raw_decoder_neon.cpp
+)
+
+ob_set_subtarget(ob_storage blocksstable_cs_encoding
+  blocksstable/cs_encoding/ob_column_encoding_struct.cpp
+  blocksstable/cs_encoding/ob_stream_encoding_struct.cpp
+  blocksstable/cs_encoding/ob_cs_encoding_allocator.cpp
+  blocksstable/cs_encoding/ob_cs_decoding_util.cpp
+  blocksstable/cs_encoding/ob_cs_encoding_util.cpp
+  blocksstable/cs_encoding/ob_icolumn_cs_encoder.cpp
+  blocksstable/cs_encoding/ob_dict_column_encoder.cpp
+  blocksstable/cs_encoding/ob_int_dict_column_encoder.cpp
+  blocksstable/cs_encoding/ob_str_dict_column_encoder.cpp
+  blocksstable/cs_encoding/ob_integer_column_encoder.cpp
+  blocksstable/cs_encoding/ob_string_column_encoder.cpp
+  blocksstable/cs_encoding/ob_micro_block_cs_encoder.cpp
+  blocksstable/cs_encoding/ob_column_datum_iter.cpp
+  blocksstable/cs_encoding/ob_string_stream_encoder.cpp
+  blocksstable/cs_encoding/ob_integer_stream_encoder.cpp
+  blocksstable/cs_encoding/ob_cs_micro_block_transformer.cpp
+  blocksstable/cs_encoding/ob_icolumn_cs_decoder.cpp
+  blocksstable/cs_encoding/ob_integer_column_decoder.cpp
+  blocksstable/cs_encoding/ob_string_column_decoder.cpp
+  blocksstable/cs_encoding/ob_dict_column_decoder.cpp
+  blocksstable/cs_encoding/ob_int_dict_column_decoder.cpp
+  blocksstable/cs_encoding/ob_str_dict_column_decoder.cpp
+  blocksstable/cs_encoding/ob_dict_column_decoder_neon.cpp
+  blocksstable/cs_encoding/ob_micro_block_cs_decoder.cpp
+  blocksstable/cs_encoding/ob_integer_stream_encoder.cpp
+  blocksstable/cs_encoding/ob_integer_stream_decoder.cpp
+  blocksstable/cs_encoding/ob_string_stream_encoder.cpp
+  blocksstable/cs_encoding/ob_string_stream_decoder.cpp
+)
+
+ob_set_subtarget(ob_storage blocksstable_index_block
+  blocksstable/index_block/ob_agg_row_struct.cpp
+  blocksstable/index_block/ob_index_block_aggregator.cpp
+  blocksstable/index_block/ob_index_block_builder.cpp
+  blocksstable/index_block/ob_index_block_macro_iterator.cpp
+  blocksstable/index_block/ob_index_block_row_scanner.cpp
+  blocksstable/index_block/ob_index_block_row_struct.cpp
+  blocksstable/index_block/ob_index_block_tree_cursor.cpp
+  blocksstable/index_block/ob_index_block_util.cpp
+  blocksstable/index_block/ob_skip_index_filter_executor.cpp
+  blocksstable/index_block/ob_sstable_meta_info.cpp
+  blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
 )
 
 ob_set_subtarget(ob_storage blockstore
@@ -384,6 +425,30 @@ ob_set_subtarget(ob_storage ls
   ls/ob_ls_storage_clog_handler.cpp
 )
 
+ob_set_subtarget(ob_storage column_store
+  column_store/ob_column_oriented_sstable.cpp
+  column_store/ob_co_merge_dag.cpp
+  column_store/ob_co_merge_ctx.cpp
+  column_store/ob_co_prefetcher.cpp
+  column_store/ob_co_sstable_row_getter.cpp
+  column_store/ob_co_sstable_row_multi_getter.cpp
+  column_store/ob_co_sstable_row_scanner.cpp
+  column_store/ob_co_sstable_row_multi_scanner.cpp
+  column_store/ob_co_sstable_rows_filter.cpp
+  column_store/ob_cg_bitmap.cpp
+  column_store/ob_cg_iter_param_pool.cpp
+  column_store/ob_cg_sstable_row_getter.cpp
+  column_store/ob_cg_scanner.cpp
+  column_store/ob_cg_tile_scanner.cpp
+  column_store/ob_cg_aggregated_scanner.cpp
+  column_store/ob_cg_prefetcher.cpp
+  column_store/ob_column_oriented_merger.cpp
+  column_store/ob_co_merge_writer.cpp
+  column_store/ob_virtual_cg_scanner.cpp
+  column_store/ob_column_store_util.cpp
+  column_store/ob_cg_group_by_scanner.cpp
+)
+
 ob_set_subtarget(ob_storage access
   access/ob_table_estimator.cpp
   access/ob_index_sstable_estimator.cpp
@@ -403,6 +468,7 @@ ob_set_subtarget(ob_storage access
   access/ob_aggregated_store.cpp
   access/ob_scan_merge_loser_tree.cpp
   access/ob_single_merge.cpp
+  access/ob_sstable_index_filter.cpp
   access/ob_multiple_get_merge.cpp
   access/ob_multiple_merge.cpp
   access/ob_multiple_multi_scan_merge.cpp
@@ -422,6 +488,9 @@ ob_set_subtarget(ob_storage access
   access/ob_table_access_context.cpp
   access/ob_fuse_row_cache_fetcher.cpp
   access/ob_dml_param.cpp
+  access/ob_micro_block_handle_mgr.cpp
+  access/ob_pushdown_aggregate.cpp
+  access/ob_empty_read_bucket.cpp
 )
 
 ob_set_subtarget(ob_storage ddl
@@ -453,7 +522,6 @@ ob_set_subtarget(ob_storage common
   ob_i_store.cpp
   ob_i_table.cpp
   ob_locality_manager.cpp
-  ob_micro_block_handle_mgr.cpp
   ob_partition_component_factory.cpp
   ob_partition_range_spliter.cpp
   ob_query_iterator_factory.cpp
@@ -464,8 +532,10 @@ ob_set_subtarget(ob_storage common
   ob_storage_rpc.cpp
   ob_storage_rpc.ipp
   ob_storage_schema.cpp
+  ob_storage_schema_util.cpp
   ob_storage_schema_recorder.cpp
   ob_storage_clog_recorder.cpp
+  ob_storage_leak_checker.cpp
   ob_storage_struct.cpp
   ob_storage_table_guard.cpp
   ob_storage_util.cpp
@@ -485,6 +555,8 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_meta_obj_struct.cpp
   meta_mem/ob_tablet_handle.cpp
   meta_mem/ob_tablet_map_key.cpp
+  meta_mem/ob_tablet_pointer_map.cpp
+  meta_mem/ob_tablet_pointer_handle.cpp
   meta_mem/ob_tablet_pointer.cpp
   meta_mem/ob_tenant_meta_mem_mgr.cpp
   meta_mem/ob_tenant_meta_obj_pool.cpp
@@ -502,27 +574,35 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_partition_merger.cpp
   compaction/ob_partition_merge_policy.cpp
   compaction/ob_partition_parallel_merge_ctx.cpp
-  compaction/ob_tablet_merge_ctx.cpp
   compaction/ob_tablet_merge_checker.cpp
+  compaction/ob_tablet_merge_ctx.cpp
+  compaction/ob_basic_tablet_merge_ctx.cpp
   compaction/ob_tablet_merge_task.cpp
-  compaction/ob_tx_table_merge_task.cpp
+  compaction/ob_tablet_merge_info.cpp
+  compaction/ob_compaction_dag_ranker.cpp
   compaction/ob_tenant_freeze_info_mgr.cpp
   compaction/ob_tenant_tablet_scheduler.cpp
+  compaction/ob_tenant_tablet_scheduler_task_mgr.cpp
+  compaction/ob_compaction_schedule_iterator.cpp
   compaction/ob_schedule_dag_func.cpp
   compaction/ob_extra_medium_info.cpp
   compaction/ob_medium_compaction_func.cpp
   compaction/ob_medium_compaction_mgr.cpp
   compaction/ob_medium_compaction_info.cpp
   compaction/ob_compaction_diagnose.cpp
+  compaction/ob_compaction_tablet_diagnose.cpp
   compaction/ob_compaction_suggestion.cpp
   compaction/ob_compaction_trans_cache.cpp
+  compaction/ob_tenant_medium_checker.cpp
   compaction/ob_sstable_merge_info_mgr.cpp
   compaction/ob_tenant_compaction_progress.cpp
   compaction/ob_server_compaction_event_history.cpp
   compaction/ob_compaction_util.cpp
   compaction/ob_partition_rows_merger.cpp
-  compaction/ob_storage_locality_cache.cpp
   compaction/ob_medium_list_checker.cpp
+  compaction/ob_sstable_builder.cpp
+  compaction/ob_compaction_memory_pool.cpp
+  compaction/ob_compaction_memory_context.cpp
 )
 
 ob_set_subtarget(ob_storage concurrency_control
@@ -607,7 +687,6 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_fast_heap_table_builder.cpp
   direct_load/ob_direct_load_fast_heap_table_ctx.cpp
   direct_load/ob_direct_load_insert_table_ctx.cpp
-  direct_load/ob_direct_load_io_callback.cpp
   direct_load/ob_direct_load_merge_ctx.cpp
   direct_load/ob_direct_load_merge_task_iterator.cpp
   direct_load/ob_direct_load_multiple_datum_range.cpp
@@ -686,6 +765,7 @@ target_link_libraries(ob_storage_static
 ob_set_subtarget(ob_storage_simd common
   blocksstable/encoding/ob_raw_decoder_simd.cpp
   blocksstable/encoding/ob_dict_decoder_simd.cpp
+  blocksstable/cs_encoding/ob_dict_column_decoder_simd.cpp
 )
 
 ob_server_add_target(ob_storage_simd)

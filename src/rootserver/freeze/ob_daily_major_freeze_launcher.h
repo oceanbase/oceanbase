@@ -31,18 +31,17 @@ class ObCommonRpcProxy;
 }
 namespace rootserver
 {
-class ObFreezeInfoManager;
+class ObMajorMergeInfoManager;
 // primary cluster: sys tenant, meta tenant, user tenant all have this launcher
 // standby cluster: only sys tenant, meta tenant have this launcher
 class ObDailyMajorFreezeLauncher : public ObFreezeReentrantThread
 {
 public:
-  ObDailyMajorFreezeLauncher();
+  ObDailyMajorFreezeLauncher(const uint64_t tenant_id);
   virtual ~ObDailyMajorFreezeLauncher() {}
-  int init(const uint64_t tenant_id,
-           common::ObServerConfig &config,
+  int init(common::ObServerConfig &config,
            common::ObMySQLProxy &proxy,
-           ObFreezeInfoManager &freeze_info_manager);
+           ObMajorMergeInfoManager &merge_info_manager);
 
   virtual void run3() override;
   virtual int blocking_run() { BLOCKING_RUN_IMPLEMENT(); }
@@ -66,7 +65,7 @@ private:
   bool already_launch_;
   common::ObServerConfig *config_;
   int64_t gc_freeze_info_last_timestamp_;
-  ObFreezeInfoManager *freeze_info_mgr_;
+  ObMajorMergeInfoManager *merge_info_mgr_;
   int64_t last_check_tablet_ckm_us_;
   share::SCN tablet_ckm_gc_compaction_scn_;
 

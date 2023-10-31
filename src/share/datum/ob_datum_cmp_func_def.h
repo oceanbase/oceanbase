@@ -24,6 +24,7 @@
 #include "ob_datum_util.h"
 #include "lib/json_type/ob_json_base.h" // for ObIJsonBase
 #include "lib/json_type/ob_json_bin.h" // for ObJsonBin
+#include "lib/wide_integer/ob_wide_integer.h"
 #include "share/ob_lob_access_utils.h" // for Text types
 
 namespace oceanbase
@@ -171,6 +172,32 @@ struct ObDatumTCCmp<ObNumberTC, ObNumberTC> : public ObDefined<>
   {
     cmp_ret = number::ObNumber::compare(l.get_number_desc(), l.get_number_digits(),
                                         r.get_number_desc(), r.get_number_digits());
+    return OB_SUCCESS;
+  }
+};
+
+template<>
+struct ObDatumTCCmp<ObDecimalIntTC, ObDecimalIntTC>: public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(wide::compare(l, r, cmp_ret))) {
+      COMMON_LOG(WARN, "compare error", K(ret));
+    }
+    return ret;
+  }
+};
+
+template<ObDecimalIntWideType lw, ObDecimalIntWideType rw>
+struct ObDecintCmp: public ObDefined<>
+{
+  static_assert(lw < DECIMAL_INT_MAX && rw < DECIMAL_INT_MAX, "");
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    decint_cmp_fp cmp =
+      wide::ObDecimalIntCmpSet::decint_decint_cmp_set_[(2 << (lw + 1))][(2 << (rw + 1))];
+    cmp_ret = cmp(l.get_decimal_int(), r.get_decimal_int());
     return OB_SUCCESS;
   }
 };
@@ -452,21 +479,29 @@ struct ObDatumTextCmp : public ObDefined<SupportedCollections::liner_search(CS_T
     cmp_ret = 0;
     ObString l_data;
     ObString r_data;
-    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
-    ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);
-    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
-      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
-    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
-      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
-    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
-      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
-    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
-      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+    const ObLobCommon& rlob = r.get_lob_data();
+    const ObLobCommon& llob = l.get_lob_data();
+    if (r.len_ != 0 && !rlob.is_mem_loc_ && rlob.in_row_ &&
+        l.len_ != 0 && !llob.is_mem_loc_ && llob.in_row_) {
+      cmp_ret = ObCharset::strcmpsp(CS_TYPE,
+                llob.get_inrow_data_ptr(), static_cast<int32_t>(llob.get_byte_size(l.len_)),
+                rlob.get_inrow_data_ptr(), static_cast<int32_t>(rlob.get_byte_size(r.len_)), WITH_END_SPACE);
     } else {
-      cmp_ret = ObCharset::strcmpsp(
-          CS_TYPE, l_data.ptr(), l_data.length(), r_data.ptr(), r_data.length(), WITH_END_SPACE);
-
+      common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
+      ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);
+      if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+        COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
+      } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+        COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+      } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+        COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+      } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+        COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+      } else {
+        cmp_ret = ObCharset::strcmpsp(
+            CS_TYPE, l_data.ptr(), l_data.length(), r_data.ptr(), r_data.length(), WITH_END_SPACE);
+      }
     }
     // if error occur when reading outrow lobs, the compare result is wrong.
     cmp_ret = cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0);
@@ -481,16 +516,23 @@ struct ObDatumTextStringCmp : public ObDefined<SupportedCollections::liner_searc
   {
     int ret = OB_SUCCESS;
     cmp_ret = 0;
-    ObString l_data;
-    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
-    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
-      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
-    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
-      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+    const ObLobCommon& llob = l.get_lob_data();
+    if (l.len_ != 0 && !llob.is_mem_loc_ && llob.in_row_) {
+      cmp_ret = ObCharset::strcmpsp(CS_TYPE,
+                llob.get_inrow_data_ptr(), static_cast<int32_t>(llob.get_byte_size(l.len_)),
+                r.ptr_, r.len_, WITH_END_SPACE);
     } else {
-      cmp_ret = ObCharset::strcmpsp(
-          CS_TYPE, l_data.ptr(), l_data.length(), r.ptr_, r.len_, WITH_END_SPACE);
+      ObString l_data;
+      common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
+      if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+        COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
+      } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+      } else {
+        cmp_ret = ObCharset::strcmpsp(
+            CS_TYPE, l_data.ptr(), l_data.length(), r.ptr_, r.len_, WITH_END_SPACE);
+      }
     }
     // if error occur when reading outrow lobs, the compare result is wrong.
     cmp_ret = cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0);
@@ -505,17 +547,23 @@ struct ObDatumStringTextCmp : public ObDefined<SupportedCollections::liner_searc
   {
     int ret = OB_SUCCESS;
     cmp_ret = 0;
-    ObString r_data;
-    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);  // longtext only indicates its a lob type
-    if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
-      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
-    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
-      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+    const ObLobCommon& rlob = r.get_lob_data();
+    if (r.len_ != 0 && !rlob.is_mem_loc_ && rlob.in_row_) {
+      cmp_ret = ObCharset::strcmpsp(CS_TYPE,
+                l.ptr_, l.len_,
+                rlob.get_inrow_data_ptr(), static_cast<int32_t>(rlob.get_byte_size(r.len_)), WITH_END_SPACE);
     } else {
-      cmp_ret = ObCharset::strcmpsp(
-          CS_TYPE, l.ptr_, l.len_, r_data.ptr(), r_data.length(), WITH_END_SPACE);
-
+      ObString r_data;
+      common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);  // longtext only indicates its a lob type
+      if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+        COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+      } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+        COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+      } else {
+        cmp_ret = ObCharset::strcmpsp(
+            CS_TYPE, l.ptr_, l.len_, r_data.ptr(), r_data.length(), WITH_END_SPACE);
+      }
     }
     // if error occur when reading outrow lobs, the compare result is wrong.
     cmp_ret = cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0);

@@ -959,7 +959,8 @@ int ObRARowStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io, timeout_ms))) {
+    io.io_timeout_ms_ = timeout_ms;
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io))) {
       LOG_WARN("write to file failed", K(ret), K(io), K(timeout_ms));
     }
   }
@@ -993,8 +994,9 @@ int ObRARowStore::read_file(void *buf, const int64_t size, const int64_t offset)
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
+    io.io_timeout_ms_ = timeout_ms;
     blocksstable::ObTmpFileIOHandle handle;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, timeout_ms, handle))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, handle))) {
       LOG_WARN("read form file failed", K(ret), K(io), K(offset), K(timeout_ms));
     } else if (handle.get_data_size() != size) {
       ret = OB_INNER_STAT_ERROR;

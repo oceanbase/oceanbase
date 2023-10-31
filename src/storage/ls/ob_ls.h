@@ -78,9 +78,13 @@ namespace share
 {
 class SCN;
 }
-
+namespace compaction
+{
+class ObCompactionScheduleIterator;
+}
 namespace storage
 {
+const static int64_t LS_INNER_TABLET_FROZEN_TIMESTAMP = 1;
 
 struct ObLSVTInfo
 {
@@ -366,6 +370,10 @@ private:
   int online_compaction_();
   int offline_tx_(const int64_t start_ts);
   int online_tx_();
+  int update_tablet_table_store_without_lock_(
+      const ObTabletID &tablet_id,
+      const ObUpdateTableStoreParam &param,
+      ObTabletHandle &handle);
   int offline_advance_epoch_();
   int online_advance_epoch_();
 public:
@@ -786,10 +794,10 @@ public:
   int tablet_freeze(const ObTabletID &tablet_id,
                     const bool is_sync = false,
                     const int64_t abs_timeout_ts = INT64_MAX);
-  // force freeze tablet
+  // tablet_freeze_with_rewrite_meta
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int force_tablet_freeze(const ObTabletID &tablet_id,
-                          const int64_t abs_timeout_ts = INT64_MAX);
+  int tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id,
+                                      const int64_t abs_timeout_ts = INT64_MAX);
   // batch tablet freeze
   // @param [in] tablet_ids
   // @param [in] is_sync
@@ -832,6 +840,8 @@ public:
   int build_ha_tablet_new_table_store(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
+  int try_update_upper_trans_version_and_gc_sstable(
+      compaction::ObCompactionScheduleIterator &iter);
   int build_new_tablet_from_mds_table(
       const int64_t ls_rebuild_seq,
       const common::ObTabletID &tablet_id,

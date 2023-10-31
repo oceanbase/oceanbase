@@ -96,6 +96,7 @@ private:
   int64_t io_count_;
   int64_t rt_us_;
   char *write_buf_;
+  char *read_buf_;
 };
 
 class ObIOBenchController : public lib::TGRunnable

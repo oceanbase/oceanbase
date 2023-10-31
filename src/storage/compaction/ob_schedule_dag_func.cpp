@@ -11,12 +11,12 @@
  */
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
-#include "storage/compaction/ob_schedule_dag_func.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/scheduler/ob_dag_scheduler.h"
+#include "ob_schedule_dag_func.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/compaction/ob_tx_table_merge_task.h"
+#include "storage/column_store/ob_co_merge_dag.h"
+#include "lib/oblog/ob_log_module.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 
@@ -45,6 +45,22 @@ int ObScheduleDagFunc::schedule_tx_table_merge_dag(
 {
   int ret = OB_SUCCESS;
   CREATE_DAG(ObTxTableMergeDag);
+  return ret;
+}
+
+int ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(
+    ObCOMergeDagParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(ObTenantDagScheduler*)->create_and_add_dag_net<ObCOMergeDagNet>(&param))) {
+    if (OB_TASK_EXIST != ret) {
+      LOG_WARN("failed to create dag_net", K(ret), K(param));
+    } else {
+      ret = OB_SUCCESS; // ignore OB_TASK_EXIST
+    }
+  } else {
+    FLOG_INFO("success to create co merge dag_net", K(ret), K(param));
+  }
   return ret;
 }
 

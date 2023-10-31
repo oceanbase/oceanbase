@@ -18,19 +18,26 @@ namespace oceanbase
 using namespace common;
 namespace storage
 {
-ObSSTableRowMultiScanner::~ObSSTableRowMultiScanner()
+template<typename PrefetchType>
+ObSSTableRowMultiScanner<PrefetchType>::~ObSSTableRowMultiScanner()
 {
 }
 
-void ObSSTableRowMultiScanner::reset()
+template<typename PrefetchType>
+void ObSSTableRowMultiScanner<PrefetchType>::reset()
 {
-  ObSSTableRowScanner::reset();
+  ObSSTableRowScanner<PrefetchType>::reset();
 }
 
-void ObSSTableRowMultiScanner::reuse()
+template<typename PrefetchType>
+void ObSSTableRowMultiScanner<PrefetchType>::reuse()
 {
-  ObSSTableRowScanner::reuse();
+  ObSSTableRowScanner<PrefetchType>::reuse();
 }
+
+// Explicit instantiations.
+template class ObSSTableRowMultiScanner<ObIndexTreeMultiPassPrefetcher<>>;
+template class ObSSTableRowMultiScanner<ObCOPrefetcher>;
 
 }
 }

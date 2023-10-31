@@ -2486,12 +2486,19 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   const ObSQLSessionInfo *session_info = ctx_.session_info_;
   int64_t server_collation = CS_TYPE_INVALID;
   ObCollationType nation_collation = OB_NOT_NULL(ctx_.session_info_) ? ctx_.session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
-  if (lib::is_oracle_mode() && nullptr == session_info) {
+  uint64_t tenant_data_ver = 0;
+  bool enable_decimal_int = false;
+  if (nullptr == session_info) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variables failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
+    LOG_WARN("fail to check enable decimal int", K(ret));
+  }
+
+  if (OB_FAIL(ret)) { // do nothing
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&node,
                         // stmt_type is only used in oracle mode
                         lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -2503,6 +2510,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              static_cast<ObCollationType>(server_collation),
                                              &(ctx_.parents_expr_info_),
                                              session_info->get_sql_mode(),
+                                             enable_decimal_int, // FIXME: enable decimal int
                                              nullptr != ctx_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?

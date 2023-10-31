@@ -123,8 +123,8 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
         auto expr_cnt = vectorized_exprs.count();
         for (int i = 0; i < expr_cnt; i++) {
           ObRawExpr *raw_expr = vectorized_exprs.at(i);
-          const ObObjMeta &result_meta = raw_expr->get_result_meta();
-          row_size += reserve_data_consume(result_meta.get_type()) +
+          const ObExprResType &result_type = raw_expr->get_result_type();
+          row_size += reserve_data_consume(result_type.get_type(), result_type.get_precision()) +
                       get_expr_datum_fixed_header_size();
         }
         batch_size = config_target_maxsize / row_size;
@@ -285,8 +285,22 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       rt_expr->max_length_ = raw_expr->get_result_type().get_length();
       // init obj_datum_map_
       rt_expr->obj_datum_map_ = ObDatum::get_obj_datum_map_type(result_meta.get_type());
+      if (ob_is_decimal_int(rt_expr->datum_meta_.type_)) {
+        const int16_t precision = rt_expr->datum_meta_.precision_;
+        const int16_t scale = rt_expr->datum_meta_.scale_;
+        if (precision < 0 || precision > MAX_PRECISION_DECIMAL_INT_512
+            || scale < 0 || scale > precision) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected ps meta for decimal int type", K(ret), K(precision), K(scale));
+        } else if (rt_expr->obj_datum_map_ != OBJ_DATUM_DECIMALINT) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected obj datum map", K(ret), K(rt_expr->obj_datum_map_));
+        }
+      }
     }
-    if (T_REF_COLUMN == raw_expr->get_expr_type()) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (T_REF_COLUMN == raw_expr->get_expr_type()) {
       // do nothing.
     } else {
       // init arg_cnt_
@@ -749,7 +763,8 @@ int ObStaticEngineExprCG::cg_frame_layout(const ObIArray<ObRawExpr *> &exprs,
   //init res_buf_len_
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
     ObExpr *rt_expr = get_rt_expr(*exprs.at(i));
-    uint32_t def_res_len = ObDatum::get_reserved_size(rt_expr->obj_datum_map_);
+    uint32_t def_res_len = ObDatum::get_reserved_size(rt_expr->obj_datum_map_,
+                                                      rt_expr->datum_meta_.precision_);
     if (ObDynReserveBuf::supported(rt_expr->datum_meta_.type_)) {
       if (!reserve_empty_string) {
         // 有的表达式没有设置accuracy的length，这里的max_length_就是默认的-1
@@ -1109,7 +1124,8 @@ int ObStaticEngineExprCG::cg_expr_basic_funcs(const ObIArray<ObRawExpr *> &raw_e
                                                         rt_expr->datum_meta_.cs_type_,
                                                         rt_expr->datum_meta_.scale_,
                                                         lib::is_oracle_mode(),
-                                                        rt_expr->obj_meta_.has_lob_header());
+                                                        rt_expr->obj_meta_.has_lob_header(),
+                                                        rt_expr->datum_meta_.precision_);
       CK(NULL != rt_expr->basic_funcs_);
     }
   }
@@ -1299,7 +1315,8 @@ int ObStaticEngineExprCG::calc_exprs_res_buf_len(const ObIArray<ObRawExpr *> &ra
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < raw_exprs.count(); i++) {
     ObExpr *rt_expr = get_rt_expr(*raw_exprs.at(i));
-    uint32_t def_res_len = ObDatum::get_reserved_size(rt_expr->obj_datum_map_);
+    uint32_t def_res_len = ObDatum::get_reserved_size(rt_expr->obj_datum_map_,
+                                                      rt_expr->datum_meta_.precision_);
     if (ObDynReserveBuf::supported(rt_expr->datum_meta_.type_)) {
       if (rt_expr->max_length_ > 0) {
         rt_expr->res_buf_len_ = min(def_res_len,
@@ -1725,9 +1742,9 @@ bool ObStaticEngineExprCG::is_vectorized_expr(const ObRawExpr *raw_expr) const
 
 int ObStaticEngineExprCG::compute_max_batch_size(const ObRawExpr *raw_expr)
 {
-  const ObObjMeta &result_meta = raw_expr->get_result_meta();
+  const ObExprResType &result_type = raw_expr->get_result_type();
   return (MAX_FRAME_SIZE - sizeof(ObEvalInfo)) /
-           (1 + sizeof(ObDatum) + reserve_data_consume(result_meta.get_type()));
+           (1 + sizeof(ObDatum) + reserve_data_consume(result_type.get_type(), result_type.get_precision()));
 }
 
 } // end namespace sql

@@ -18,7 +18,7 @@
 #include "logservice/ob_log_service.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -1286,6 +1286,8 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     } else if (commit_by_this_execution && OB_UNLIKELY(first_major_sstable->get_key() != table_key)) {
       ret = OB_SNAPSHOT_DISCARDED;
       LOG_WARN("ddl major sstable dropped, snapshot holding may have bug", K(ret), KPC(first_major_sstable), K(table_key), K(tablet_id), K(execution_id), K(ddl_task_id));
+    } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
+       LOG_WARN("fail to get sstable meta handle", K(ret));
     } else {
       for (int64_t retry_cnt = 10; retry_cnt > 0; retry_cnt--) { // overwrite ret
         if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(ls_id,

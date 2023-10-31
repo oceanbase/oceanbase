@@ -298,12 +298,12 @@ private:
   }
 
   // called after res_buf_len_ assigned to get the buffer size with dynamic reserved buffer.
-  int64_t reserve_data_consume(const common::ObObjType &type)
+  int64_t reserve_data_consume(const common::ObObjType &type, const int16_t prec)
   {
     const bool need_dyn_buf = ObDynReserveBuf::supported(type);
     // ObObjDatumMapType datum_map_type = ObDatum::get_obj_datum_map_type(type);
     auto res_buf_len =
-        ObDatum::get_reserved_size(ObDatum::get_obj_datum_map_type(type));
+        ObDatum::get_reserved_size(ObDatum::get_obj_datum_map_type(type), prec);
     return res_buf_len +
            +(need_dyn_buf && res_buf_len > 0 ? sizeof(ObDynReserveBuf) : 0);
   }

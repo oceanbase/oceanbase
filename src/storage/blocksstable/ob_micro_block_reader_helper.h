@@ -15,6 +15,7 @@
 
 #include "encoding/ob_micro_block_decoder.h"
 #include "ob_micro_block_reader.h"
+#include "cs_encoding/ob_micro_block_cs_decoder.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,7 @@ class ObMicroBlockReaderHelper final
 {
 public:
   ObMicroBlockReaderHelper()
-    : allocator_(nullptr), flat_reader_(nullptr), decoder_(nullptr) {}
+    : allocator_(nullptr), flat_reader_(nullptr), decoder_(nullptr), cs_decoder_(nullptr) {}
   ~ObMicroBlockReaderHelper() { reset(); }
 
   inline int init(ObIAllocator &allocator);
@@ -39,6 +40,7 @@ private:
   ObIAllocator *allocator_;
   ObMicroBlockReader *flat_reader_;
   ObMicroBlockDecoder *decoder_;
+  ObMicroBlockCSDecoder *cs_decoder_;
 };
 
 int ObMicroBlockReaderHelper::init(ObIAllocator &allocator)
@@ -64,10 +66,15 @@ void ObMicroBlockReaderHelper::reset()
       decoder_->~ObMicroBlockDecoder();
       allocator_->free(decoder_);
     }
+    if (nullptr != cs_decoder_) {
+      cs_decoder_->~ObMicroBlockCSDecoder();
+      allocator_->free(cs_decoder_);
+    }
     allocator_ = nullptr;
   }
   flat_reader_ = nullptr;
   decoder_ = nullptr;
+  cs_decoder_ = nullptr;
 }
 
 int ObMicroBlockReaderHelper::get_reader(
@@ -87,6 +94,12 @@ int ObMicroBlockReaderHelper::get_reader(
   case SELECTIVE_ENCODING_ROW_STORE: {
     if (OB_FAIL(init_reader(decoder_, reader))) {
       STORAGE_LOG(WARN, "Fail to initialize micro block decoder", K(ret));
+    }
+    break;
+  }
+  case CS_ENCODING_ROW_STORE: {
+    if (OB_FAIL(init_reader(cs_decoder_, reader))) {
+      STORAGE_LOG(WARN, "Fail to initialize micro block cs decoder", K(ret));
     }
     break;
   }

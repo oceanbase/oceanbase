@@ -93,18 +93,19 @@ struct ObMacroBlockWriteInfo final
 {
 public:
   ObMacroBlockWriteInfo()
-    : buffer_(NULL), offset_(0), size_(0), io_desc_(), io_callback_(NULL)
+    : buffer_(NULL), offset_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), io_desc_(), io_callback_(NULL)
   {}
   ~ObMacroBlockWriteInfo() = default;
   OB_INLINE bool is_valid() const
   {
-    return io_desc_.is_valid() && NULL != buffer_ && offset_ >= 0 && size_ > 0;
+    return io_desc_.is_valid() && NULL != buffer_ && offset_ >= 0 && size_ > 0 && io_timeout_ms_ > 0;
   }
-  TO_STRING_KV(KP_(buffer), K_(offset), K_(size), K_(io_desc), KP_(io_callback));
+  TO_STRING_KV(KP_(buffer), K_(offset), K_(size), K_(io_timeout_ms), K_(io_desc), KP_(io_callback));
 public:
   const char *buffer_;
   int64_t offset_;
   int64_t size_;
+  int64_t io_timeout_ms_;
   common::ObIOFlag io_desc_;
   common::ObIOCallback *io_callback_;
 };
@@ -113,20 +114,25 @@ struct ObMacroBlockReadInfo final
 {
 public:
   ObMacroBlockReadInfo()
-    : macro_block_id_(), offset_(), size_(), io_desc_(), io_callback_(NULL)
+    : macro_block_id_(), offset_(), size_(), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS),
+    io_desc_(), io_callback_(NULL), buf_(NULL)
   {}
   ~ObMacroBlockReadInfo() = default;
   OB_INLINE bool is_valid() const
   {
-    return macro_block_id_.is_valid() && offset_ >= 0 && size_ > 0 && io_desc_.is_valid();
+    return macro_block_id_.is_valid() && offset_ >= 0 && size_ > 0
+        && io_desc_.is_valid() && (nullptr != io_callback_ || nullptr != buf_);
   }
-  TO_STRING_KV(K_(offset), K_(size), K_(io_desc), KP_(io_callback), K_(macro_block_id));
+  TO_STRING_KV(K_(offset), K_(size), K_(io_timeout_ms), K_(io_desc), KP_(io_callback),
+      KP_(buf), K_(macro_block_id));
 public:
   blocksstable::MacroBlockId macro_block_id_;
   int64_t offset_;
   int64_t size_;
+  int64_t io_timeout_ms_;
   common::ObIOFlag io_desc_;
   common::ObIOCallback *io_callback_;
+  char *buf_;
 };
 
 class ObMacroBlockSeqGenerator final
@@ -231,7 +237,6 @@ private:
     int64_t ref_cnt_;
     int64_t access_time_;
     int64_t last_write_time_;
-
     BlockInfo() : ref_cnt_(0), access_time_(0), last_write_time_(INT64_MAX) {}
     void reset()
     {

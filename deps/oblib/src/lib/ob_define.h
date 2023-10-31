@@ -222,6 +222,7 @@ const int64_t OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL  = 64;
 const int64_t OB_MAX_COLUMN_NAME_LENGTH = 128; // Compatible with oracle, OB code logic is greater than Times TODO:xiyu
 const int64_t OB_MAX_COLUMN_NAME_BUF_LENGTH = OB_MAX_COLUMN_NAME_LENGTH + 1;
 const int64_t OB_MAX_COLUMN_NAMES_LENGTH = 2 * 1024;
+const int64_t OB_MAX_COLUMN_GROUP_NAME_LENGTH = 256; // need to larger than max_column_name_length
 const int64_t OB_MAX_APP_NAME_LENGTH = 128;
 const int64_t OB_MAX_OPERATOR_PROPERTY_LENGTH = 4 * 1024;
 const int64_t OB_MAX_DATA_SOURCE_NAME_LENGTH = 128;
@@ -793,6 +794,9 @@ const int64_t MAX_INFOSCHEMA_COLUMN_PRIVILEGE_LENGTH = 64;
 const int64_t MAX_COLUMN_YES_NO_LENGTH = 3;
 const int64_t MAX_COLUMN_VARCHAR_LENGTH = 262143;
 const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
+//column group
+const uint64_t DEFAULT_TYPE_COLUMN_GROUP_ID = 1; // reserve 2~999
+const uint64_t COLUMN_GROUP_START_ID = 1000;
 
 //Oracle
 const int64_t MAX_ORACLE_COMMENT_LENGTH = 4000;
@@ -1394,10 +1398,14 @@ const int64_t OB_MERGE_TYPE_STR_LENGTH = 64;
 const int64_t OB_MERGE_STATUS_STR_LENGTH = 15;
 const int64_t OB_DIAGNOSE_INFO_LENGTH = 1024;
 const int64_t OB_PARALLEL_MERGE_INFO_LENGTH = 512;
-const int64_t OB_COMPACTION_EVENT_STR_LENGTH = 256;
+const int64_t OB_COMPACTION_EVENT_STR_LENGTH = 1024;
 const int64_t OB_PART_TABLE_INFO_LENGTH = 512;
 const int64_t OB_MACRO_ID_INFO_LENGTH = 256;
+const int64_t OB_COMPACTION_COMMENT_STR_LENGTH = 1024;
 const int64_t OB_COMPACTION_INFO_LENGTH = 128;
+const int64_t OB_MERGE_LEVEL_STR_LENGTH = 64;
+const int64_t OB_MERGE_ROLE_STR_LENGTH = 64;
+const int64_t OB_MERGE_COMMENT_INNER_STR_LENGTH = 800;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;
@@ -1650,6 +1658,7 @@ const int64_t OB_MAX_BINARY_LENGTH = 255;
 const int64_t OB_MAX_VARBINARY_LENGTH = 64 * 1024L;
 const int64_t OB_MAX_EXTENDED_TYPE_INFO_LENGTH = OB_MAX_VARBINARY_LENGTH;//TODO(yts): large object
 const int64_t OB_MAX_DECIMAL_PRECISION = 65;
+const int64_t OB_MAX_DECIMAL_POSSIBLE_PRECISION = 81;
 const int64_t OB_MIN_DECIMAL_PRECISION = 1;
 const int64_t OB_MAX_DECIMAL_SCALE = 30;
 const int64_t OB_MIN_NUMBER_PRECISION = 1;          //Number in Oracle: p:[1, 38]
@@ -1677,6 +1686,7 @@ const int64_t OB_MIN_NUMBER_FLOAT_PRECISION = 1;     //Float in Oracle: p[1, 126
 const int64_t OB_MAX_NUMBER_FLOAT_PRECISION = 126;
 const double OB_PRECISION_BINARY_TO_DECIMAL_FACTOR = 0.30103;
 const double OB_PRECISION_DECIMAL_TO_BINARY_FACTOR = 3.32193;
+const int64_t OB_DECIMAL_LONGLONG_DIGITS = 22;
 
 const int64_t OB_MAX_DOUBLE_FLOAT_SCALE = 30;
 const int64_t OB_NOT_FIXED_SCALE = OB_MAX_DOUBLE_FLOAT_SCALE + 1;
@@ -1696,6 +1706,15 @@ const int64_t OB_PREALLOCATED_COL_ID_NUM = 4;
 const int64_t OB_MAX_DATE_PRECISION = 0;
 const int64_t OB_MAX_DATETIME_PRECISION = 6;
 const int64_t OB_MAX_TIMESTAMP_TZ_PRECISION = 9;
+
+// decimal int related
+const int16_t MAX_PRECISION_DECIMAL_INT_32  = 9;
+const int16_t MAX_PRECISION_DECIMAL_INT_64  = 18;
+const int16_t MAX_PRECISION_DECIMAL_INT_128 = 38;
+const int16_t MAX_PRECISION_DECIMAL_INT_256 = 76;
+const int16_t MAX_PRECISION_DECIMAL_INT_512 = 154;
+
+const int16_t MAX_SIGNED_INTEGER_PRECISION = 18;
 
 // TODO@hanhui lob handle length will be much shorter in 2.0
 const int64_t OB_MAX_LOB_INLINE_LENGTH = OB_MAX_VARCHAR_LENGTH;
@@ -1792,6 +1811,7 @@ const int64_t MAX_SSTABLE_CNT_IN_STORAGE = 64;
 const int64_t RESERVED_STORE_CNT_IN_STORAGE = 8; // Avoid mistakenly triggering minor or major freeze to cause the problem of unsuccessful merge.
 const int64_t DIAGNOSE_TABLE_CNT_IN_STORAGE = 12;
 const int64_t MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE = 7;
+const int64_t BASIC_MEMSTORE_CNT = 8;
 const int64_t MAX_MEMSTORE_CNT = 16;
 // some frozen memstores and one active memstore
 // Only limited to minor freeze, major freeze is not subject to this restriction

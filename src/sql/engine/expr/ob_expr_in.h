@@ -359,7 +359,7 @@ protected:
   //获取subquery row的type信息
   int get_param_types(const ObRawExpr &param,
                        const bool is_iter,
-                       common::ObIArray<common::ObObjMeta> &types) const;
+                       common::ObIArray<sql::ObExprResType> &types) const;
   //从subquery iter中获取row
   static int setup_row(ObExpr **expr, ObEvalCtx &ctx, const bool is_iter,
                        const int64_t cmp_func_cnt, ObSubQueryIterator *&iter, ObExpr **&row);

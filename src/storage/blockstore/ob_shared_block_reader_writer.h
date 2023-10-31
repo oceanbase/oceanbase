@@ -43,15 +43,16 @@ struct ObSharedBlockReadInfo final
 {
 public:
   ObSharedBlockReadInfo()
-    : addr_(), io_desc_(), io_callback_(nullptr)
+    : addr_(), io_desc_(), io_callback_(nullptr), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS)
   {}
   ~ObSharedBlockReadInfo() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(addr), K_(io_desc), K_(io_callback));
+  TO_STRING_KV(K_(addr), K_(io_desc), K_(io_callback), K_(io_timeout_ms));
 public:
   ObMetaDiskAddr addr_;
   common::ObIOFlag io_desc_;
   common::ObIOCallback *io_callback_;
+  int64_t io_timeout_ms_;
   DISALLOW_COPY_AND_ASSIGN(ObSharedBlockReadInfo);
 };
 
@@ -132,15 +133,16 @@ class ObSharedBlockReadHandle final
   friend class ObSharedBlockReaderWriter;
   friend class ObSharedBlockLinkIter;
 public:
-  ObSharedBlockReadHandle() = default;
-  ~ObSharedBlockReadHandle() = default;
+  ObSharedBlockReadHandle();
+  ObSharedBlockReadHandle(ObIAllocator &allocator);
+  ~ObSharedBlockReadHandle();
   ObSharedBlockReadHandle(const ObSharedBlockReadHandle &other);
   ObSharedBlockReadHandle &operator=(const ObSharedBlockReadHandle &other);
   bool is_valid() const;
   bool is_empty() const;
-  int wait(const int64_t timeout_ms = -1);
+  int wait();
   int get_data(ObIAllocator &allocator, char *&buf, int64_t &buf_len);
-  void reset() { macro_handle_.reset(); }
+  void reset();
   TO_STRING_KV(K_(macro_handle));
 public:
   static int parse_data(
@@ -155,8 +157,10 @@ private:
       const int64_t data_size,
       int64_t &header_size,
       int64_t &buf_len);
+  int alloc_io_buf(char *&buf, const int64_t &buf_size);
   int set_macro_handle(const blocksstable::ObMacroBlockHandle &macro_handle);
 private:
+  ObIAllocator *allocator_;
   blocksstable::ObMacroBlockHandle macro_handle_;
 };
 
