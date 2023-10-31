@@ -177,34 +177,24 @@ int ObInfoSchemaKvCacheTable::set_diagnose_info(ObKVCacheInst *inst, ObDiagnoseT
     SERVER_LOG(WARN, "Unexpected null cache inst config", KP(inst->status_.config_));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"user_block_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::BLOCK_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set( GLOBAL_EVENT_GET(ObStatEventIds::BLOCK_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"user_row_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::ROW_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::ROW_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"bf_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::BLOOM_FILTER_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::BLOOM_FILTER_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"fuse_row_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::FUSE_ROW_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::FUSE_ROW_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"tablet_ls_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::LOCATION_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::LOCATION_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"schema_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"schema_history_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_HISTORY_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_HISTORY_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"opt_table_stat_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::OPT_TABLE_STAT_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::OPT_TABLE_STAT_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"opt_column_stat_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::OPT_COLUMN_STAT_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::OPT_COLUMN_STAT_CACHE_HIT));
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"opt_ds_stat_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::OPT_DS_STAT_CACHE_MISS);
-    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::OPT_DS_STAT_CACHE_HIT));
   }
 
   return ret;
