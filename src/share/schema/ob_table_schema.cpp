@@ -4315,7 +4315,7 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
       } else {
         // in mysql mode
         if (!is_type_reduction &&
-           ((src_meta.is_integer_type() && dst_meta.is_integer_type())
+           (common::is_match_alter_integer_column_online_ddl_rules(src_meta, dst_meta) // smaller integer -> larger integer
            || (src_meta.is_varbinary() && dst_meta.is_blob())
            || (src_meta.is_text() && (dst_meta.is_text() || dst_meta.is_varchar()))
            || (src_meta.is_blob() && (dst_meta.is_blob() || dst_meta.is_varbinary())))) {
@@ -4414,7 +4414,8 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
   } else if (OB_FAIL(check_alter_column_in_foreign_key(src_schema, dst_schema, is_oracle_mode))) {
     LOG_WARN("failed to check alter column in foreign key", K(ret));
   } else if (!is_oracle_mode
-            && is_column_in_check_constraint(src_schema.get_column_id())) {
+            && (is_column_in_check_constraint(src_schema.get_column_id())
+              && !common::is_match_alter_integer_column_online_ddl_rules(src_schema.get_meta_type(), dst_schema.get_meta_type()))) {
   // The column contains the check constraint to prohibit modification of the type in mysql mode
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column with check constraint");
@@ -4501,8 +4502,9 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
           !src_meta.is_datetime()) ||
           src_col_type != dst_col_type) &&
           (!src_meta.is_timestamp() &&
-          (!dst_meta.is_datetime() ||
-          !dst_meta.is_datetime()))) {
+          !dst_meta.is_datetime()) &&
+          !(ob_is_integer_type(src_meta.get_type()) &&
+          ob_is_integer_type(dst_meta.get_type()))) { // if match rules has been check in check_alter_column_type()
         if (is_rowkey || src_column.is_tbl_part_key_column()) {
           is_offline = true;
         }
@@ -4511,8 +4513,8 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
         }
       }
       if (is_column_in_foreign_key(src_column.get_column_id()) ||
-         src_column.has_generated_column_deps() ||
-         src_column.is_stored_generated_column()) {
+         (src_column.has_generated_column_deps()
+         && !common::is_match_alter_integer_column_online_ddl_rules(src_meta, dst_meta))) {
         is_offline = true;
       }
       if (src_column.is_string_type() || src_column.is_enum_or_set()) {
@@ -4520,8 +4522,6 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
             src_column.get_charset_type() != dst_column.get_charset_type()) {
           is_offline = true;
         }
-      } else if (src_meta.is_unsigned() != dst_meta.is_unsigned()) {
-        is_offline = true;
       }
     }
   }
@@ -4829,8 +4829,7 @@ int ObTableSchema::check_column_can_be_altered_online(
       // support number to float in oracle mode
     } else if ((src_schema->get_data_type() == dst_schema->get_data_type()
       && src_schema->get_collation_type() == dst_schema->get_collation_type())
-      || (ob_is_integer_type(src_schema->get_data_type()) &&  // can change int to large scale
-          src_schema->get_data_type_class() == dst_schema->get_data_type_class())
+      || common::is_match_alter_integer_column_online_ddl_rules(src_schema->get_meta_type(), dst_schema->get_meta_type())
       || (src_schema->is_string_type() && dst_schema->is_string_type()
         && src_schema->get_charset_type() == dst_schema->get_charset_type()
         && src_schema->get_collation_type() == dst_schema->get_collation_type())) {
@@ -4872,8 +4871,8 @@ int ObTableSchema::check_column_can_be_altered_online(
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column to binary type");
         LOG_WARN("can not modify data to binary type", K(ret), KPC(src_schema), KPC(dst_schema));
-      } else if (ob_is_integer_type(src_schema->get_data_type())
-          && src_schema->get_data_type() > dst_schema->get_data_type()) {
+      } else if (ob_is_integer_type(src_schema->get_data_type()) && ob_is_integer_type(dst_schema->get_data_type())
+          && !common::is_match_alter_integer_column_online_ddl_rules(src_schema->get_meta_type(), dst_schema->get_meta_type())) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change int data type to small scale");
         LOG_WARN("can't not change int data type to small scale",

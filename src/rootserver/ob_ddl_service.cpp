@@ -7489,8 +7489,12 @@ int ObDDLService::check_can_alter_column_type(
     if (OB_FAIL(check_column_in_index(src_column.get_column_id(), table_schema, is_in_index))) {
       LOG_WARN("fail to check column is in index table", K(ret));
     } else if (is_in_index) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("cannot modify column in index table", K(ret));
+      if (common::is_match_alter_integer_column_online_ddl_rules(src_column.get_meta_type(), dst_column.get_meta_type())){
+        // can alter column type, do nothing
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cannot modify column in index table", K(ret));
+      }
     }
   }
   return ret;

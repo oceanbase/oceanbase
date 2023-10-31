@@ -1231,6 +1231,8 @@ inline bool ob_is_unsigned_type(ObObjType type)
           || ObUNumberType == type;
 }
 
+bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src_meta,
+                                                       const common::ObObjMeta& dst_meta);
 inline void convert_unsigned_type_to_signed(ObObjType &type)
 {
   switch(type) {
