@@ -242,7 +242,10 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_() {}
+      type_info_()
+  {
+    type_info_.set_tenant_id(MTL_ID());
+  }
   ObPLDataType(ObPLType type)
     : type_(type),
       type_from_(PL_TYPE_LOCAL),
@@ -251,7 +254,10 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_() {}
+      type_info_()
+  {
+    type_info_.set_tenant_id(MTL_ID());
+  }
   ObPLDataType(common::ObObjType type)
     : type_(PL_OBJ_TYPE),
       type_from_(PL_TYPE_LOCAL),
@@ -265,6 +271,7 @@ public:
     common::ObDataType data_type;
     data_type.set_obj_type(type);
     set_data_type(data_type);
+    type_info_.set_tenant_id(MTL_ID());
   }
   ObPLDataType(const ObPLDataType &other)
     : type_(other.type_),
