@@ -1005,7 +1005,7 @@ public:
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
-    enable_var_assign_use_das_(true),
+    enable_var_assign_use_das_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)

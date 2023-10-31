@@ -1509,14 +1509,11 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     }
   }
 
-  bool enable_var_assign_use_das = true;
+  bool enable_var_assign_use_das = false;
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo *session_info = NULL;
     if (OB_NOT_NULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-      if (tenant_config.is_valid()) {
-        enable_var_assign_use_das = tenant_config->_enable_var_assign_use_das;
-      }
+      enable_var_assign_use_das = session_info->is_var_assign_use_das_enabled();
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session info is null", K(ret));

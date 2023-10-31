@@ -5431,14 +5431,11 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
     } else {
       out_subquery_path_op = subplan_scan;
     }
-    bool enable_var_assign_use_das = true;
+    bool enable_var_assign_use_das = false;
     if (OB_SUCC(ret)) {
       ObSQLSessionInfo *session_info = NULL;
       if (OB_NOT_NULL(session_info = get_optimizer_context().get_session_info())) {
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-        if (tenant_config.is_valid()) {
-          enable_var_assign_use_das = tenant_config->_enable_var_assign_use_das;
-        }
+        enable_var_assign_use_das = session_info->is_var_assign_use_das_enabled();
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session info is null", K(ret));
