@@ -1815,14 +1815,14 @@ int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQL
   ObArray<ObObjectID> target_partition_ids;
   ObHashMap<int64_t, int64_t> part_ids_map;
   ObOptStatSqlService &stat_svr = ObOptStatManager::get_instance().get_stat_sql_service();
-  common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
+  common::ObArenaAllocator allocator(lib::ObLabel("SyncColStats"));
   ObSEArray<ObOptColumnStat *, 4> target_column_stats;
   if (column_stats.empty()) {
     LOG_INFO("column stats are empty, no need to sync", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
   } else {
     // build partition id mapping table in order to replace the old partition
     // with new partition.
-    if (OB_FAIL(part_ids_map.create(MAP_BUCKET_NUM, "RedefTask"))) {
+    if (OB_FAIL(part_ids_map.create(MAP_BUCKET_NUM, "SyncColStats"))) {
       LOG_WARN("failed to create map", K(ret));
     } else if (!data_table_schema.is_partitioned_table()) {
       if (OB_FAIL(part_ids_map.set_refactored(object_id_, target_object_id_))) {
@@ -1879,6 +1879,7 @@ int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQL
       LOG_INFO("column stats are empty, no need to sync", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
     } else if (OB_FAIL(stat_svr.update_column_stat(dst_tenant_schema_guard,
                                                    dst_tenant_id_,
+                                                   allocator,
                                                    trans,
                                                    target_column_stats,
                                                    ObTimeUtility::current_time(),

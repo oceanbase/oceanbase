@@ -32,7 +32,7 @@ public:
   int set_result(const bool is_succeed, const char *buf);
   int set_result(const int err_code, const share::ObTaskId &trace_id, const ObAddr &addr, const ObString &extra_info = ObString());
   void reset();
-  const char *get_result_str() const { return is_succeed_ ? "SUCCEESS" : "FAILED"; }
+  const char *get_result_str() const { return is_succeed_ ? "SUCCESS" : "FAILED"; }
   const char *get_comment() const { return comment_.ptr(); }
   bool is_succeed() const { return is_succeed_; }
   bool is_comment_setted() const { return !comment_.is_empty(); }

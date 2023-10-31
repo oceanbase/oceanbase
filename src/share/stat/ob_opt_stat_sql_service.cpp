@@ -476,6 +476,7 @@ int ObOptStatSqlService::update_table_stat(const uint64_t tenant_id,
 
 int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                             const uint64_t exec_tenant_id,
+                                            ObIAllocator &allocator,
                                             ObMySQLTransaction &trans,
                                             const ObIArray<ObOptColumnStat*> &column_stats,
                                             const int64_t current_time,
@@ -488,7 +489,6 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
   ObSqlString insert_histogram;
   ObSqlString delete_histogram;
   ObSqlString column_stats_sql;
-  ObArenaAllocator allocator("UpdateColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, exec_tenant_id);
   bool need_histogram = false;
   if (!inited_) {
     ret = OB_NOT_INIT;
