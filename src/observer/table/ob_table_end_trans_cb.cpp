@@ -16,10 +16,15 @@
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 ObTableAPITransCb::ObTableAPITransCb()
-    :tx_desc_(NULL),
-     ref_count_(2),
-     lock_handle_(nullptr)
-{}
+    : tx_desc_(nullptr),
+      lock_handle_(nullptr),
+      ref_count_(2)
+{
+  create_ts_ = common::ObClockGenerator::getClock();
+  if (ObCurTraceId::get_trace_id() != nullptr) {
+    trace_id_ = *ObCurTraceId::get_trace_id();
+  }
+}
 
 ObTableAPITransCb::~ObTableAPITransCb()
 {
@@ -41,10 +46,23 @@ void ObTableAPITransCb::set_lock_handle(ObHTableLockHandle *lock_handle)
   lock_handle_ = lock_handle;
 }
 
+// be called in callback() function
+void ObTableAPITransCb::check_callback_timeout()
+{
+  int ret = OB_ERR_TOO_MUCH_TIME;
+  const int64_t cur_ts = common::ObClockGenerator::getClock();
+  const int64_t cost = cur_ts - create_ts_;
+  const int64_t config_ts = GCONF.trace_log_slow_query_watermark; // default 1s
+  if (cost > config_ts) {
+    LOG_INFO("obkv trans callback cost too mush time", K(ret), K(cost), K(config_ts), K_(trace_id));
+  }
+}
+
 ////////////////////////////////////////////////////////////////
 void ObTableExecuteEndTransCb::callback(int cb_param)
 {
   int ret = OB_SUCCESS;
+  check_callback_timeout();
   if (OB_UNLIKELY(!has_set_need_rollback_)) {
     LOG_ERROR("is_need_rollback_ has not been set",
               K(has_set_need_rollback_),
@@ -102,6 +120,7 @@ int ObTableExecuteEndTransCb::assign_execute_result(ObTableOperationResult &resu
 void ObTableBatchExecuteEndTransCb::callback(int cb_param)
 {
   int ret = OB_SUCCESS;
+  check_callback_timeout();
   if (OB_UNLIKELY(!has_set_need_rollback_)) {
     LOG_ERROR("is_need_rollback_ has not been set",
               K(has_set_need_rollback_),

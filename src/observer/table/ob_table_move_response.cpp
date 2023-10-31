@@ -74,7 +74,7 @@ int ObTableMoveResponseSender::init(const uint64_t table_id,
 
       // set move pcode
       response_sender_.set_pcode(obrpc::OB_TABLE_API_MOVE);
-      LOG_DEBUG("move response init successfully", K(replica));
+      LOG_INFO("move response init successfully", K(replica));
     }
   }
 
