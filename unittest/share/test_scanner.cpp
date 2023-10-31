@@ -79,7 +79,6 @@ TEST_F(TestScanner, basic_test)
 TEST_F(TestScanner, serialization)
 {
   ObScanner scanner;
-  scanner.set_mem_size_limit(1024);
   scanner.set_affected_rows(10);
   scanner.set_last_insert_id_to_client(111);
   scanner.set_last_insert_id_session(121);
@@ -91,7 +90,7 @@ TEST_F(TestScanner, serialization)
   scanner.set_row_duplicated_count(2000);
   scanner.set_extend_info("fine,thank you, and you");
   scanner.set_is_result_accurate(false);
-  scanner.init();
+  ASSERT_EQ(OB_SUCCESS, scanner.init(1024));
 
   ObObj objs[3];
   ObNewRow row;

@@ -53,7 +53,7 @@ public:
             uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
             bool use_row_compact = true);
   virtual ~ObScanner();
-  int init();
+  int init(int64_t mem_size_limit = DEFAULT_MAX_SERIALIZE_SIZE);
 
   void reuse();
   void reset();
@@ -92,7 +92,7 @@ public:
   void set_mem_block_size(int64_t block_size) { row_store_.set_block_size(block_size); }
   int64_t get_mem_block_size() const { return row_store_.get_block_size(); }
 
-  void set_mem_size_limit(int64_t limit) { mem_size_limit_ = limit; }
+  //Do not modify the mem_size_limit during the usage of the scanner
   int64_t get_mem_size_limit() const { return mem_size_limit_; }
 
   void set_affected_rows(int64_t affacted_rows) { affected_rows_ = affacted_rows; }
