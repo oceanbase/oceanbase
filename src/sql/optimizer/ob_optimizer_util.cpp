@@ -8175,6 +8175,24 @@ int ObOptimizerUtil::expr_calculable_by_exprs(const ObRawExpr *src_expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret));
   } else if (src_expr->is_const_expr()) {
+    /**
+     * ObUserVarIdentRawExpr cannot be evaluated independently.
+     * It must be combined with either T_OP_ASSIGN or T_OP_GET_USER_VAR to make sense.
+     * ObUserVarIdentRawExpr is just the key string for these two types of user variable operations.
+     * If an expression contains ObUserVarIdentRawExpr with an assignment operation above it,
+     * then this ObUserVarIdentRawExpr is essentially not a constant.
+     *  For example:
+     *  CREATE TABLE t1(a int, b int);
+     *  SELECT DISTINCT a, b, @rownum:=@rownum+1 FROM t1;
+     *  @rownum cannot be considered a constant,
+     *  otherwise the distinct key would only consist of the (a, b) columns.
+     **/
+    if (T_USER_VARIABLE_IDENTIFIER == src_expr->get_expr_type()) {
+      const ObUserVarIdentRawExpr *var_expr = static_cast<const ObUserVarIdentRawExpr *>(src_expr);
+      if (var_expr->get_is_contain_assign() || var_expr->get_query_has_udf()) {
+        is_calculable = false;
+      }
+    }
   } else if (dst_exprs.empty()) {
     is_calculable = false;
   } else if (ObOptimizerUtil::find_item(dst_exprs, src_expr)) {
