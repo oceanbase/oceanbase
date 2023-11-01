@@ -1000,7 +1000,8 @@ int ObParser::parse(const ObString &query,
                     ParseMode parse_mode,
                     const bool is_batched_multi_stmt_split_on,
                     const bool no_throw_parser_error,
-                    const bool is_pl_inner_parse)
+                    const bool is_pl_inner_parse,
+                    const bool is_dbms_sql)
 {
   int ret = OB_SUCCESS;
 
@@ -1033,7 +1034,7 @@ int ObParser::parse(const ObString &query,
                                   || FP_NO_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
   parse_result.is_for_trigger_ = (TRIGGER_MODE == parse_mode);
   parse_result.is_dynamic_sql_ = (DYNAMIC_SQL_MODE == parse_mode);
-  parse_result.is_dbms_sql_ = (DBMS_SQL_MODE == parse_mode);
+  parse_result.is_dbms_sql_ = (DBMS_SQL_MODE == parse_mode) || is_dbms_sql;
   parse_result.is_for_udr_ = (UDR_SQL_MODE == parse_mode);
   parse_result.is_batched_multi_enabled_split_ = is_batched_multi_stmt_split_on;
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(charsets4parser_.string_collation_) ?
