@@ -11068,6 +11068,7 @@ bool ObHostnameStuct::is_in_white_list(const common::ObString &client_ip, common
       }
     }
     if (!ret_bool) {
+      ip_white_list = ip_white_list.trim();
       if (ip_white_list.empty()) {
         LOG_WARN_RET(OB_SUCCESS, "ip_white_list is emtpy, denied any client", K(client_ip), K(orig_ip_white_list));
       } else if (!ObHostnameStuct::is_wild_match(client_ip, ip_white_list)
