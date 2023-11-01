@@ -546,7 +546,8 @@ protected:
   virtual int add_storing_column(
       const common::ObString &column_name,
       bool check_column_exist = true,
-      bool is_hidden = false);
+      bool is_hidden = false,
+      bool *has_invalid_types = NULL);
   virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema)
   {
     UNUSED(table_schema);
@@ -873,6 +874,8 @@ protected:
   int check_ttl_definition(const ParseNode *node);
 
   int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
+
+  int add_new_indexkey_for_oracle_temp_table();
 
   void reset();
   int64_t block_size_;

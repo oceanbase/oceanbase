@@ -751,7 +751,8 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
  */
 int ObDDLResolver::add_storing_column(const ObString &column_name,
                                       bool check_column_exist,
-                                      bool is_hidden)
+                                      bool is_hidden,
+                                      bool *has_invalid_types)
 {
   int ret = OB_SUCCESS;
   ObString col_name;
@@ -769,19 +770,24 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
       if (NULL == (column_schema = tbl_schema.get_column_schema(column_name))) {
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), table_name_.length(), table_name_.ptr());
-      } else if (ob_is_text_tc(column_schema->get_data_type())) {
-        ret = OB_ERR_WRONG_KEY_COLUMN;
-        LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
-      } else if (ob_is_extend(column_schema->get_data_type())
-                 || ob_is_user_defined_sql_type(column_schema->get_data_type())) {
-        ret = OB_ERR_WRONG_KEY_COLUMN;
-        LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
-      } else if (ob_is_json_tc(column_schema->get_data_type())) {
-        ret = OB_ERR_JSON_USED_AS_KEY;
-        LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
-      } else if (ObTimestampTZType == column_schema->get_data_type()) {
-        ret = OB_ERR_WRONG_KEY_COLUMN;
-        LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+      } else {
+        if (ob_is_text_tc(column_schema->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+        } else if (ob_is_extend(column_schema->get_data_type())
+                  || ob_is_user_defined_sql_type(column_schema->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+        } else if (ob_is_json_tc(column_schema->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
+        } else if (ObTimestampTZType == column_schema->get_data_type()) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+        }
+        if (OB_FAIL(ret) && OB_NOT_NULL(has_invalid_types)) {
+          *has_invalid_types = true;
+        }
       }
     }
     if (OB_SUCC(ret)) {

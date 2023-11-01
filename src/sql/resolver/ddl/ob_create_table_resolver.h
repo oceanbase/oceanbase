@@ -143,6 +143,8 @@ private:
   int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
   int check_column_store_config();
 
+  int add_inner_index_for_heap_gtt();
+
 private:
   // data members
   uint64_t cur_column_id_;
