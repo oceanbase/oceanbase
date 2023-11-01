@@ -54,9 +54,9 @@ int ObExprUnistr::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-int calc_unistr(const ObString &src,
-                const ObCollationType src_cs_type,
-                const ObCollationType dst_cs_type,
+int ObExprUnistr::calc_unistr(const common::ObString &src,
+                const common::ObCollationType src_cs_type,
+                const common::ObCollationType dst_cs_type,
                 char* buf, const int64_t buf_len, int32_t &pos)
 {
   int ret = OB_SUCCESS;
