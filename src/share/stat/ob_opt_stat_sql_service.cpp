@@ -458,7 +458,7 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
   ObSqlString insert_histogram;
   ObSqlString delete_histogram;
   ObSqlString column_stats_sql;
-  ObArenaAllocator allocator(ObModIds::OB_BUFFER);
+  ObArenaAllocator allocator("UpdateColStat", OB_MALLOC_NORMAL_BLOCK_SIZE, exec_tenant_id);
   bool need_histogram = false;
   if (!inited_) {
     ret = OB_NOT_INIT;

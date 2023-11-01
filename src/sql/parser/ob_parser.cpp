@@ -1062,6 +1062,11 @@ int ObParser::parse(const ObString &query,
     }
   }
 
+  if (OB_SUCC(ret) && stmt.empty()) {
+    ret = OB_ERR_EMPTY_QUERY;
+    LOG_WARN("query is empty", K(ret));
+  }
+
   if (OB_SUCC(ret) && (parse_result.is_fp_ || parse_result.is_dynamic_sql_)) {
     int64_t new_length = parse_result.is_fp_ ? stmt.length() + 1 : stmt.length() * 2;
     char *buf = (char *)parse_malloc(new_length, parse_result.malloc_pool_);

@@ -739,8 +739,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           if ((T_FUN_SET_TO_STR != expr->get_expr_type() &&
               T_FUN_ENUM_TO_STR != expr->get_expr_type()) &&
               (T_FUN_SYS_CALC_UROWID == expr->get_expr_type() ||
-              ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
-                                    static_cast<ObColumnRefRawExpr *>(expr)->get_column_name()))) {
+               (lib::is_oracle_mode() &&
+                ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+                                                  static_cast<ObColumnRefRawExpr *>(expr)->get_column_name())))) {
             //Although the current implement of rowid does not use mock a column schema, it should
             //be as normal column when displayed externally.
             if (T_FUN_SYS_CALC_UROWID == expr->get_expr_type()) {
