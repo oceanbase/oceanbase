@@ -90,7 +90,7 @@ protected:
   int64_t next_sql_req_level_;
   static const int64_t STMT_BUF_BLOCK;
   common::sqlclient::DblinkDriverProto link_type_;
-  bool in_xa_trascaction_; // is dblink write/read remote database in xa trasaction
+  bool in_xa_trascaction_; // is dblink write/read remote database in xa transaction
   static const char * head_comment_fmt_;
   static const int64_t head_comment_length_;
   static const char *proxy_route_info_fmt_;
