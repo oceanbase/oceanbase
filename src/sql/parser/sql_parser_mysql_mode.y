@@ -381,7 +381,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> with_column_group column_group_list column_group_element
-%type <node> opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback
+%type <node> opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
@@ -6789,97 +6789,97 @@ PARTITION BY RANGE '('')'
 };
 
 hash_partition_option:
-PARTITION BY HASH '(' expr ')' subpartition_option opt_partitions %prec LOWER_PARENS
+PARTITION BY HASH '(' expr ')' partition_options %prec LOWER_PARENS
 {
   ParseNode *params = NULL;
   ParseNode *hash_func = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $5);
   make_name_node(hash_func, result->malloc_pool_, "partition_hash");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_HASH, 2, hash_func, params);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_HASH_PARTITION, 6, $$, $8, NULL, $7, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HASH_PARTITION, 6, $$, $7->children_[1], NULL, $7->children_[0], NULL, NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
-| PARTITION BY HASH '(' expr ')' subpartition_option opt_partitions opt_hash_partition_list
+| PARTITION BY HASH '(' expr ')' partition_options opt_hash_partition_list
 {
   ParseNode *params = NULL;
   ParseNode *hash_func = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $5);
   make_name_node(hash_func, result->malloc_pool_, "partition_hash");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_HASH, 2, hash_func, params);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_HASH_PARTITION, 6, $$, $8, $9, $7, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HASH_PARTITION, 6, $$, $7->children_[1], $8, $7->children_[0], NULL, NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
 ;
 
 list_partition_option:
-PARTITION BY BISON_LIST '(' expr ')' subpartition_option opt_partitions opt_list_partition_list
+PARTITION BY BISON_LIST '(' expr ')' partition_options opt_list_partition_list
 {
   ParseNode *params = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_PARTITION, 5, params, $9, $7, $8, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_PARTITION, 5, params, $8, $7->children_[0], $7->children_[1], NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
-| PARTITION BY BISON_LIST COLUMNS '(' column_name_list ')' subpartition_option opt_partitions opt_list_partition_list
+| PARTITION BY BISON_LIST COLUMNS '(' column_name_list ')' partition_options opt_list_partition_list
 {
   ParseNode *params = NULL;
   merge_nodes(params, result, T_EXPR_LIST, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, params, $10, $8, $9, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, params, $9, $8->children_[0], $8->children_[1], NULL);
   dup_expr_string($$, result, @6.first_column, @6.last_column);
 }
 ;
 
 key_partition_option:
-PARTITION BY KEY '(' column_name_list ')' subpartition_option opt_partitions %prec LOWER_PARENS
+PARTITION BY KEY '(' column_name_list ')' partition_options %prec LOWER_PARENS
 {
   ParseNode *column_name_list = NULL;
   ParseNode *hash_func = NULL;
   merge_nodes(column_name_list, result, T_EXPR_LIST, $5);
   make_name_node(hash_func, result->malloc_pool_, "partition_key");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_KEY, 2, hash_func, column_name_list);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $8, NULL, $7, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $7->children_[1], NULL, $7->children_[0], NULL, NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
-| PARTITION BY KEY '(' column_name_list ')' subpartition_option opt_partitions opt_hash_partition_list
+| PARTITION BY KEY '(' column_name_list ')' partition_options opt_hash_partition_list
 {
   ParseNode *column_name_list = NULL;
   ParseNode *hash_func = NULL;
   merge_nodes(column_name_list, result, T_EXPR_LIST, $5);
   make_name_node(hash_func, result->malloc_pool_, "partition_key");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_KEY, 2, hash_func, column_name_list);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $8, $9, $7, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $7->children_[1], $8, $7->children_[0], NULL, NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
-| PARTITION BY KEY '(' ')' subpartition_option opt_partitions %prec LOWER_PARENS
+| PARTITION BY KEY '(' ')' partition_options %prec LOWER_PARENS
 {
   ParseNode *hash_func = NULL;
   ParseNode *column_name_list = NULL;
   make_name_node(hash_func, result->malloc_pool_, "partition_key");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_KEY, 2, hash_func, column_name_list);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $7, NULL, $6, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $6->children_[1], NULL, $6->children_[0], NULL, NULL);
 }
-| PARTITION BY KEY '(' ')' subpartition_option opt_partitions opt_hash_partition_list
+| PARTITION BY KEY '(' ')' partition_options opt_hash_partition_list
 {
   ParseNode *hash_func = NULL;
   ParseNode *column_name_list = NULL;
   make_name_node(hash_func, result->malloc_pool_, "partition_key");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_KEY, 2, hash_func, column_name_list);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $7, $8, $6, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, $6->children_[1], $7, $6->children_[0], NULL, NULL);
 }
 ;
 
 range_partition_option:
-PARTITION BY RANGE '(' expr ')' subpartition_option opt_partitions opt_range_partition_list
+PARTITION BY RANGE '(' expr ')' partition_options opt_range_partition_list
 {
   ParseNode *params = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_PARTITION, 5, params, $9, $7, $8, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_PARTITION, 5, params, $8, $7->children_[0], $7->children_[1], NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
 }
-| PARTITION BY RANGE COLUMNS '(' column_name_list ')' subpartition_option opt_partitions opt_range_partition_list
+| PARTITION BY RANGE COLUMNS '(' column_name_list ')' partition_options opt_range_partition_list
 {
   ParseNode *params = NULL;
   merge_nodes(params, result, T_EXPR_LIST, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_COLUMNS_PARTITION, 5, params, $10, $8, $9, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RANGE_COLUMNS_PARTITION, 5, params, $9, $8->children_[0], $8->children_[1], NULL);
   dup_expr_string($$, result, @6.first_column, @6.last_column);
 }
 ;
@@ -6894,6 +6894,35 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
+
+partition_options :
+partition_num subpartition_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $2, $1);
+}
+| subpartition_option partition_num
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+| subpartition_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, NULL);
+}
+| partition_num
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, NULL, $1);
+}
+| /* empty */
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, NULL, NULL);
+}
+;
+
+partition_num:
+PARTITIONS INTNUM
+{
+  $$ = $2;
+}
 
 subpartition_option:
 subpartition_template_option
@@ -6965,10 +6994,6 @@ SUBPARTITION BY RANGE '(' expr ')' SUBPARTITION TEMPLATE opt_range_subpartition_
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_PART_KEY, 2, hash_func, column_name_list);
   malloc_non_terminal_node($$, result->malloc_pool_, T_KEY_PARTITION, 6, $$, NULL, $9, NULL, template_mark, NULL);
   dup_expr_string($$, result, @5.first_column, @5.last_column);
-}
-|
-{
-  $$ = NULL;
 }
 ;
 
