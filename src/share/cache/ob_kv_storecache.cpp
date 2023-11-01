@@ -231,7 +231,10 @@ int ObKVGlobalCache::init(
     cache_num_ = 0;
     stopped_ = false;
     mem_limit_getter_ = mem_limit_getter;
-    map_once_clean_num_ = min(MAX_MAP_ONCE_CLEAN_NUM, bucket_num / MAP_ONCE_CLEAN_RATIO);
+    map_once_clean_num_ = bucket_num / MAP_ONCE_CLEAN_RATIO;
+    if (map_once_clean_num_ > MAX_MAP_ONCE_CLEAN_NUM) {
+      map_once_clean_num_ = MAX(MAX_MAP_ONCE_CLEAN_NUM, map_once_clean_num_/EXPAND_MAP_ONCE_CLEAN_RATIO);
+    }
     map_once_replace_num_ = min(MAX_MAP_ONCE_REPLACE_NUM, bucket_num / MAP_ONCE_REPLACE_RATIO);
     inited_ = true;
 #ifdef ENABLE_DEBUG_LOG
