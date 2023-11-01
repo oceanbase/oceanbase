@@ -4890,7 +4890,7 @@ int ObMultiVersionSchemaService::cal_purge_table_timeout_(
     }
     if (OB_SUCC(ret)) {
       //100 tablet 2s,default 2s
-      cal_table_timeout += (part_num / 100 + part_num % 100 == 0 ? 0 : 1) * GCONF.rpc_timeout;
+      cal_table_timeout += (part_num / 100 + (part_num % 100 == 0 ? 0 : 1)) * GCONF.rpc_timeout;
     }
   }
   return ret;
