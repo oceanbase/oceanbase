@@ -136,20 +136,41 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
         }
         if (OB_SUCC(ret) && current_group_ < parent_spf_group) {
           if (new_group) {
-            //If in lookup op, we need to call get next row to init all of iter.
-            op_.get_next_row();
-          }
-          int64_t old_jump_read_group_id;
-          old_jump_read_group_id = op_.get_exec_ctx().get_das_ctx().jump_read_group_id_;
-          op_.get_exec_ctx().get_das_ctx().jump_read_group_id_ = parent_spf_group;
-          if (OB_FAIL(op_.rescan())) {
-            if(OB_ITER_END == ret) {
-              ret = OB_ERR_UNEXPECTED;
+            /**
+             * Since the initialization of the lookup Iterator is done within index_lookup.get_next_row(),
+             * when SPF enters skip scan,
+             * we need to mark the jump_read_group_id for each scan Iterator
+             * and determine the number of rows to skip based on the current group_id.
+             * The issue with the lookup process here is that when SPF performs multiple skip scans,
+             * the lookup process may not be executed at all,
+             * resulting in uninitialized lookup Iterators.
+             * As a result, when subsequent skip reads occur,
+             * the lookup Iterator will not be set with the correct jum_read_group_id.
+             * Therefore, it is necessary to ensure that get_next_row() is called at least once to
+             * initialize the lookup Iterator on the right branch.
+             **/
+            if (OB_FAIL(op_.get_next_row())) {
+              if (OB_ITER_END == ret) {
+                //ignore OB_ITER_END
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("get next row from child failed", K(ret));
+              }
             }
-            LOG_WARN("Das jump read rescan fail.", K(ret));
           }
-          op_.get_exec_ctx().get_das_ctx().jump_read_group_id_ = old_jump_read_group_id;
-          current_group_ = parent_spf_group;
+          if (OB_SUCC(ret)) {
+            int64_t old_jump_read_group_id;
+            old_jump_read_group_id = op_.get_exec_ctx().get_das_ctx().jump_read_group_id_;
+            op_.get_exec_ctx().get_das_ctx().jump_read_group_id_ = parent_spf_group;
+            if (OB_FAIL(op_.rescan())) {
+              if(OB_ITER_END == ret) {
+                ret = OB_ERR_UNEXPECTED;
+              }
+              LOG_WARN("Das jump read rescan fail.", K(ret));
+            }
+            op_.get_exec_ctx().get_das_ctx().jump_read_group_id_ = old_jump_read_group_id;
+            current_group_ = parent_spf_group;
+          }
         }
       }
     } else {
