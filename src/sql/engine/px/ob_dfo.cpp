@@ -86,7 +86,8 @@ OB_SERIALIZE_MEMBER(ObPxRpcInitTaskResponse,
 OB_SERIALIZE_MEMBER(ObPxRpcInitSqcResponse,
                     rc_,
                     reserved_thread_count_,
-                    partitions_info_);
+                    partitions_info_,
+                    sqc_order_gi_tasks_);
 OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     table_location_key_,
                     ref_table_id_,
@@ -647,6 +648,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitSqcArgs)
   }
   // can reuse cache from now on
   (const_cast<ObSqcSerializeCache &>(ser_cache_)).cache_serialized_ = ser_cache_.enable_serialize_cache_;
+  LST_DO_CODE(OB_UNIS_ENCODE, qc_order_gi_tasks_);
   LOG_TRACE("serialize sqc", K_(sqc));
   LOG_DEBUG("end trace sqc args", K(pos), K(buf_len), K(this->get_serialize_size()));
   return ret;
@@ -696,6 +698,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
     }
     // always serialize
     LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, qc_order_gi_tasks_);
   }
   return len;
 }
@@ -776,6 +779,12 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
         }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    // if version of qc is old, qc_order_gi_tasks_ will not be serialized and the value will be false.
+    qc_order_gi_tasks_ = false;
+    LST_DO_CODE(OB_UNIS_DECODE, qc_order_gi_tasks_);
+    LOG_TRACE("deserialize qc order gi tasks", K(qc_order_gi_tasks_), K(sqc_), K(this));
   }
   return ret;
 }

@@ -1230,6 +1230,7 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
         pkt.sqc_id_ = sqc.get_sqc_id();
         pkt.rc_ = resp.rc_;
         pkt.task_count_ = resp.reserved_thread_count_;
+        pkt.sqc_order_gi_tasks_ = resp.sqc_order_gi_tasks_;
         if (resp.reserved_thread_count_ < sqc.get_max_task_count()) {
           LOG_TRACE("SQC don`t have enough thread or thread auto scaling, Downgraded thread allocation",
               K(resp), K(sqc));
