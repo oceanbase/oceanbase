@@ -71,8 +71,13 @@ int ObAddr::convert_ipv4_addr(const char *ip)
 {
   int ret = OB_SUCCESS;
   in_addr in;
-
-  if (!OB_ISNULL(ip)) {
+  if (OB_ISNULL(ip)) {
+    // null ptr
+    ret = OB_INVALID_ARGUMENT;
+  } else if('\0' == *ip) {
+    // empty ip
+    ip_.v4_ = 0;
+  } else {
     MEMSET(&in, 0, sizeof (in));
     int rt = inet_pton(AF_INET, ip, &in);
     if (rt != 1) { // wrong ip or error
@@ -359,12 +364,16 @@ int ObAddr::to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
 bool ObAddr::set_ip_addr(const char *ip, const int32_t port)
 {
   bool ret = false;
-  // simply distinguish v4 & v6 with colon
-  const char *colonp = strchr(ip, ':');
-  if (nullptr != colonp) {
-    ret = set_ipv6_addr(ip, port);
+  if (OB_ISNULL(ip)) {
+    // null ptr
   } else {
-    ret = set_ipv4_addr(ip, port);
+    // simply distinguish v4 & v6 with colon
+    const char *colonp = strchr(ip, ':');
+    if (nullptr != colonp) {
+      ret = set_ipv6_addr(ip, port);
+    } else {
+      ret = set_ipv4_addr(ip, port);
+    }
   }
   return ret;
 }
@@ -376,8 +385,8 @@ bool ObAddr::set_ipv6_addr(const char *ip, const int32_t port)
     ret = false;
   } else {
     version_ = IPV6;
-    convert_ipv6_addr(ip);
     port_ = port;
+    ret = (OB_SUCCESS == convert_ipv6_addr(ip));
   }
   return ret;
 }
@@ -389,8 +398,8 @@ bool ObAddr::set_ipv4_addr(const char *ip, const int32_t port)
     ret = false;
   } else {
     version_ = IPV4;
-    convert_ipv4_addr(ip);
     port_ = port;
+    ret = (OB_SUCCESS == convert_ipv4_addr(ip));
   }
   return ret;
 }
@@ -429,24 +438,28 @@ void ObAddr::set_ipv4_server_id(const int64_t ipv4_server_id)
   port_ = static_cast<int32_t>(0x00000000ffffffff & ipv4_server_id);
 }
 
-ObAddr &ObAddr::as_mask(const int64_t mask_bits)
+bool ObAddr::as_mask(int64_t mask_bits, int32_t version)
 {
-  int64_t mask = mask_bits > 128 ? 128 : mask_bits;
-  int bytes = 0;
-
-  reset();
-  if (version_ == IPV4) {
-    ip_.v4_ = static_cast<uint32_t>(((static_cast<uint64_t>(1) << mask) - 1) << (32 - mask));
-  } else {
-    while (bytes < IPV6_LEN && mask >= 8) {
+  int ret = false;
+  const int64_t MAX_IPV4_MASK_BITS = 32;
+  const int64_t MAX_IPV6_MASK_BITS = 128;
+  version_ = static_cast<VER>(version);
+  if (OB_UNLIKELY(mask_bits < 0)) {
+  } else if (version_ == IPV4 && mask_bits <= MAX_IPV4_MASK_BITS) {
+    ip_.v4_ = static_cast<uint32_t>(((static_cast<uint64_t>(1) << mask_bits) - 1) << (32 - mask_bits));
+    ret = true;
+  } else if (version_ == IPV6 && mask_bits <= MAX_IPV6_MASK_BITS) {
+    int bytes = 0;
+    while (bytes < IPV6_LEN && mask_bits >= 8) {
       ip_.v6_[bytes++] = 0xff;
-      mask -= 8;
+      mask_bits -= 8;
     }
-    if (bytes < IPV6_LEN && mask > 0) {
-      ip_.v6_[bytes] = static_cast<uint8_t>(((static_cast<uint8_t>(1) << mask) - 1) << (8 - mask));
+    if (bytes < IPV6_LEN && mask_bits > 0) {
+      ip_.v6_[bytes] = static_cast<uint8_t>(((static_cast<uint8_t>(1) << mask_bits) - 1) << (8 - mask_bits));
     }
+    ret = true;
   }
-  return (*this);
+  return ret;
 }
 
 ObAddr &ObAddr::as_subnet(const ObAddr &mask)
@@ -523,7 +536,7 @@ uint64_t ObAddr::get_ipv6_low() const
 void ObAddr::set_max()
 {
   port_ = UINT32_MAX;
-  memset(&ip_, 1, sizeof (ip_));
+  memset(&ip_, 0xff, sizeof (ip_));
 }
 
 void ObAddr::set_port(int32_t port)

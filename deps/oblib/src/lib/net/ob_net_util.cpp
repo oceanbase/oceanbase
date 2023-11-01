@@ -11,13 +11,15 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/oblog/ob_log.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/net/ob_net_util.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+
+#include "lib/charset/ob_charset.h"
+#include "lib/oblog/ob_log.h"
+#include "lib/utility/ob_print_utils.h"
+#include "lib/net/ob_net_util.h"
 
 using namespace oceanbase::common;
 
@@ -219,5 +221,119 @@ int ObNetUtil::get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t 
   return ret;
 }
 
+int ObNetUtil::get_int_value(const ObString &str, int64_t &value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("str is empty", K(str), K(ret));
+  } else {
+    static const int32_t MAX_INT64_STORE_LEN = 31;
+    char int_buf[MAX_INT64_STORE_LEN + 1];
+    int64_t len = std::min(str.length(), MAX_INT64_STORE_LEN);
+    MEMCPY(int_buf, str.ptr(), len);
+    int_buf[len] = '\0';
+    char *end_ptr = NULL;
+    value = strtoll(int_buf, &end_ptr, 10);
+    if (('\0' != *int_buf) && ('\0' == *end_ptr)) {
+      // succ, do nothing
+    } else {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid int value", K(value), K(str), K(ret));
+    }
+  }
+  return ret;
 }
+
+bool ObNetUtil::calc_ip(const ObString &host_ip, ObAddr &addr)
+{
+  return addr.set_ip_addr(host_ip, FAKE_PORT);
 }
+
+bool ObNetUtil::calc_ip_mask(const ObString &host_name, ObAddr &host, ObAddr &mask)
+{
+  bool ret_bool = false;
+  int64_t ip_mask_int64 = 0;
+  ObString host_ip_mask = host_name;
+  ObString ip = host_ip_mask.split_on('/');
+  if (OB_UNLIKELY(host_ip_mask.empty())) {
+  } else if (calc_ip(ip, host)) {
+    if (host_ip_mask.find('.') || host_ip_mask.find(':')) {
+      ret_bool = mask.set_ip_addr(host_ip_mask, FAKE_PORT);
+    } else {
+      if (OB_SUCCESS != (get_int_value(host_ip_mask, ip_mask_int64))) {
+        // break
+      } else if (mask.as_mask(ip_mask_int64, host.get_version())) {
+        ret_bool = true;
+      }
+    }
+  }
+  return ret_bool;
+}
+
+bool ObNetUtil::is_ip_match(const ObString &client_ip, ObString host_name)
+{
+  bool ret_bool = false;
+  ObAddr client;
+  ObAddr host;
+  if (OB_UNLIKELY(host_name.empty()) || OB_UNLIKELY(client_ip.empty())) {
+    // not match
+  } else if (host_name.find('/')) {
+    ObAddr mask;
+    if (calc_ip(client_ip, client) && calc_ip_mask(host_name, host, mask) &&
+        client.get_version() == host.get_version()) {
+      ret_bool = (client.as_subnet(mask) == host.as_subnet(mask));
+    }
+  } else {
+    if (calc_ip(host_name, host) && calc_ip(client_ip, client)) {
+      ret_bool = (client == host);
+    }
+  }
+  return ret_bool;
+}
+
+bool ObNetUtil::is_wild_match(const ObString &client_ip, const ObString &host_name)
+{
+  return ObCharset::wildcmp(CS_TYPE_UTF8MB4_BIN, client_ip, host_name, 0, '_', '%');
+}
+
+bool ObNetUtil::is_match(const ObString &client_ip, const ObString &host_name)
+{
+  return ObNetUtil::is_wild_match(client_ip, host_name) || ObNetUtil::is_ip_match(client_ip, host_name);
+}
+
+bool ObNetUtil::is_in_white_list(const ObString &client_ip, ObString &orig_ip_white_list)
+{
+  bool ret_bool = false;
+  ObAddr client;
+  if (orig_ip_white_list.empty() || client_ip.empty()) {
+    LOG_WARN_RET(OB_SUCCESS, "ip_white_list or client_ip is emtpy, denied any client", K(client_ip), K(orig_ip_white_list));
+  } else if (calc_ip(client_ip, client)) {
+    const char COMMA = ',';
+    ObString ip_white_list = orig_ip_white_list;
+    while (NULL != ip_white_list.find(COMMA) && !ret_bool) {
+      ObString invited_ip = ip_white_list.split_on(COMMA).trim();
+      if (!invited_ip.empty()) {
+        if (ObNetUtil::is_match(client_ip, invited_ip)) {
+          ret_bool = true;
+        }
+        LOG_TRACE("match result", K(ret_bool), K(client_ip), K(invited_ip));
+      }
+    }
+    if (!ret_bool) {
+      ip_white_list = ip_white_list.trim();
+      if (ip_white_list.empty()) {
+        LOG_WARN_RET(OB_SUCCESS, "ip_white_list is emtpy, denied any client", K(client_ip), K(orig_ip_white_list));
+      } else if (!ObNetUtil::is_match(client_ip, ip_white_list)) {
+        LOG_WARN_RET(OB_SUCCESS, "client ip is not in ip_white_list", K(client_ip), K(orig_ip_white_list));
+      } else {
+        ret_bool = true;
+        LOG_TRACE("match result", K(ret_bool), K(client_ip), K(ip_white_list));
+      }
+    }
+  }
+  return ret_bool;
+}
+
+}  // namespace obsys
+}  // namespace oceanbase

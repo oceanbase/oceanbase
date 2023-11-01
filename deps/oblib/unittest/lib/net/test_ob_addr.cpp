@@ -34,7 +34,7 @@ TEST(OB_ADDR, TEST1)
   EXPECT_EQ(addr.get_ipv4(), 1U << 24);
   EXPECT_EQ(addr.get_port(), 1234);
 
-  EXPECT_EQ(addr.parse_from_cstring("1.0.0.1234:1234"), OB_SUCCESS);
+  EXPECT_EQ(addr.parse_from_cstring("1.0.0.1234:1234"), OB_INVALID_ARGUMENT);
   EXPECT_FALSE(addr.is_valid());
 
   ObAddr addr2;

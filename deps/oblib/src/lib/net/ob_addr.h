@@ -100,7 +100,7 @@ public:
 
   int parse_from_cstring(const char *ip_str);
   int parse_from_string(const ObString &str);
-  ObAddr &as_mask(const int64_t mask_bits);
+  bool as_mask(int64_t mask_bits, int32_t version = IPV4);
   ObAddr &as_subnet(const ObAddr &mask);
 
   int64_t hash() const;

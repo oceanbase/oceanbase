@@ -16,6 +16,7 @@
 #include "util/easy_mod_stat.h"
 #include "observer/mysql/obmp_connect.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
+#include "lib/net/ob_net_util.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/stat/ob_session_stat.h"
@@ -1089,8 +1090,7 @@ int ObMPConnect::update_login_stat_mysql(const uint64_t tenant_id,
       if (OB_ISNULL(user_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user info is null", K(tenant_id), K(user_name_), K(ret));
-      } else if (!ObHostnameStuct::is_wild_match(client_ip_, user_info->get_host_name_str())
-                 && !ObHostnameStuct::is_ip_match(client_ip_, user_info->get_host_name_str())) {
+      } else if (!obsys::ObNetUtil::is_match(client_ip_, user_info->get_host_name_str())) {
         LOG_INFO("account not matched, try next", KPC(user_info), K(client_ip_));
       } else if (OB_FAIL(update_login_stat_in_trans_mysql(tenant_id, *user_info, is_login_succ,
                                                           is_locked_tmp))) {
@@ -2026,7 +2026,7 @@ int ObMPConnect::verify_ip_white_list(const uint64_t tenant_id) const
     LOG_WARN("fail to get_sysvar_schema",  K(ret));
   } else {
     ObString var_value = sysvar->get_value();
-    if (!ObHostnameStuct::is_in_white_list(client_ip_, var_value)) {
+    if (!obsys::ObNetUtil::is_in_white_list(client_ip_, var_value)) {
       ret = OB_ERR_NO_PRIVILEGE;
       LOG_WARN("client is not invited into this tenant", K(ret));
     }

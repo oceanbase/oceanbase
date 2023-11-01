@@ -23,11 +23,7 @@ select is_serving_tenant(host_ip(), rpc_port(), 888);
 |                                             0 |
 +-----------------------------------------------+
 select is_serving_tenant('abc', rpc_port(), effective_tenant_id());
-+-------------------------------------------------------------+
-| is_serving_tenant('abc', rpc_port(), effective_tenant_id()) |
-+-------------------------------------------------------------+
-|                                                           0 |
-+-------------------------------------------------------------+
+ERROR HY000: Incorrect arguments to invalid ip or port
 select is_serving_tenant('abc', rpc_port(), 1);
 +-----------------------------------------+
 | is_serving_tenant('abc', rpc_port(), 1) |
@@ -35,9 +31,5 @@ select is_serving_tenant('abc', rpc_port(), 1);
 |                                       1 |
 +-----------------------------------------+
 select is_serving_tenant('abc', rpc_port(), 888);
-+-------------------------------------------+
-| is_serving_tenant('abc', rpc_port(), 888) |
-+-------------------------------------------+
-|                                         0 |
-+-------------------------------------------+
+ERROR HY000: Incorrect arguments to invalid ip or port
 
