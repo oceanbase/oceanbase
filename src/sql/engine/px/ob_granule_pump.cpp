@@ -660,10 +660,14 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
   }
 
   // Only when in ddl and pdml, can randomize. Specially, can not randomize when sql specifies the order
-  can_randomize = (need_start_ddl || need_start_pdml) && (!(ObGranuleUtil::asc_order(args.gi_attri_flag_) || ObGranuleUtil::desc_order(args.gi_attri_flag_)));
+  can_randomize = (need_start_ddl || need_start_pdml)
+                  && (!(ObGranuleUtil::asc_order(args.gi_attri_flag_)
+                        || ObGranuleUtil::desc_order(args.gi_attri_flag_)
+                        || ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)));
   LOG_DEBUG("scan order is ", K(ObGranuleUtil::asc_order(args.gi_attri_flag_)),
             K(ObGranuleUtil::desc_order(args.gi_attri_flag_)),
-            K(can_randomize), K(need_start_ddl), K(need_start_pdml));
+            K(ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)), K(can_randomize),
+            K(need_start_ddl), K(need_start_pdml));
   return ret;
 }
 
