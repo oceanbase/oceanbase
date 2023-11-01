@@ -13525,6 +13525,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15423: __all_tenant_scheduler_running_job
 # 15424: __all_virtual_sqlstat
 # 15425: __all_virtual_wr_sqlstat
+# def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
 # 余留位置
 
 ################################################################################
@@ -30135,6 +30136,12 @@ def_table_schema(
 #21488 V$SQLSTAT
 #21489 DBA_WR_SQLSTAT
 #21490 CDB_WR_SQLSTAT
+#21491 GV$SESS_TIME_MODEL
+#21492 V$SESS_TIME_MODEL
+#21493 GV$SYS_TIME_MODEL
+#21494 V$SYS_TIME_MODEL
+#21495 DBA_WR_SYS_TIME_MODEL
+#21496 CDB_WR_SYS_TIME_MODEL
 
 # 余留位置
 
@@ -48622,6 +48629,7 @@ def_table_schema(
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
 # 25272: DBA_OB_FORMAT_OUTLINES
 # 25273: DBA_WR_SQLSTAT
+# 25274: DBA_WR_SYS_TIME_MODEL
 # 余留位置
 
 #### End Data Dictionary View
@@ -54720,6 +54728,11 @@ def_table_schema(
 # 28201: V$OB_CGROUP_CONFIG
 # 28203: GV$SQLSTAT
 # 28204: V$SQLSTAT
+# 28205: GV$SESS_TIME_MODEL
+# 28206: V$SESS_TIME_MODEL
+# 28207: GV$SYS_TIME_MODEL
+# 28208: V$SYS_TIME_MODEL
+# 28209: V$STATNAME
 
 ################################################################################
 # Lob Table (50000, 70000)
