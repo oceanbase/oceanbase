@@ -635,14 +635,16 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     remote_iter.update_source_cb();
   }
 
+  if (OB_ITER_END == ret) {
+    // has iterated to the end of block.
+    ret = OB_SUCCESS;
+  }
+
   if (OB_SUCCESS == ret) {
     // do nothing
     if (ls_exist_in_palf && reach_max_lsn) {
       handle_when_reach_max_lsn_in_palf_(ls_id, palf_guard, fetched_log_count, frt, resp);
     }
-  } else if (OB_ITER_END == ret) {
-    // has iterated to the end of block.
-    ret = OB_SUCCESS;
   } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
     // log not exists
     int tmp_ret = OB_SUCCESS;
