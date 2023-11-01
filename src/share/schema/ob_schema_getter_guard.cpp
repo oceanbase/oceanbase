@@ -20,6 +20,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_se_array_iterator.h"
+#include "lib/net/ob_net_util.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
@@ -2769,8 +2770,7 @@ int ObSchemaGetterGuard::check_user_access(
           LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
               "user_name", login_info.user_name_,
               "client_ip_", login_info.client_ip_, KR(ret));
-        } else if (!ObHostnameStuct::is_wild_match(login_info.client_ip_, user_info->get_host_name_str())
-            && !ObHostnameStuct::is_ip_match(login_info.client_ip_, user_info->get_host_name_str())) {
+        } else if (!obsys::ObNetUtil::is_match(login_info.client_ip_, user_info->get_host_name_str())) {
           LOG_TRACE("account not matched, try next", KPC(user_info), K(login_info));
         } else {
           matched_user_info = user_info;

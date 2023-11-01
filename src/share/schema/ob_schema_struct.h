@@ -4930,23 +4930,6 @@ private:
   uint64_t grantee_id_;
 };
 
-int get_int_value(const common::ObString &str, int64_t &value);
-
-class ObHostnameStuct
-{
-public:
-  ObHostnameStuct() {}
-  ~ObHostnameStuct() {}
-  static const uint32_t FAKE_PORT = 0;
-  static const int MAX_IP_BITS = 128;
-  static int get_int_value(const common::ObString &str, int64_t &value);
-  static bool calc_ip(const common::ObString &host_ip, common::ObAddr &addr);
-  static bool calc_ip_mask(const common::ObString &host_ip_mask, common::ObAddr &mask);
-  static bool is_ip_match(const common::ObString &client_ip, common::ObString host_name);
-  static bool is_wild_match(const common::ObString &client_ip, const common::ObString &host_name);
-  static bool is_in_white_list(const common::ObString &client_ip, common::ObString &ip_white_list);
-};
-
 enum ObHintFormat
 {
   HINT_NORMAL,
