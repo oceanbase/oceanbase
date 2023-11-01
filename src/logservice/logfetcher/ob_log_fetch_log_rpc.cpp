@@ -734,6 +734,12 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
     int tmp_ret = OB_SUCCESS;
     rpc_req.mark_flying_state(false);
     if (need_dispatch_stream_task || IDLE == state_) {
+      // if need_dispatch_stream_task is true, generate_rpc_result_ must succeed, then state_ should be READY
+      // which means there is a comsumable result. In this scenario, launch_async_rpc_ may fail.
+      // So FetchStream only switch state to IDLE iff IDLE == state_
+      if (IDLE == state_) {
+        host_.switch_state(FetchStream::State::IDLE);
+      }
       if (OB_TMP_FAIL(stream_worker_->dispatch_stream_task(host_, "FailPostProcess"))) {
         LOG_ERROR_RET(tmp_ret, "dispatch stream task fail", KR(ret));
       }
