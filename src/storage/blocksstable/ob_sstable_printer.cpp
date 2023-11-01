@@ -256,7 +256,7 @@ void ObSSTablePrinter::print_cell(const ObObj &cell)
 
 void ObSSTablePrinter::print_cell(const ObStorageDatum &datum)
 {
-  P_VALUE_STR_B(to_cstring(datum));
+  P_VALUE_STR_B(datum.to_cstring(true /* for dump */));
 }
 
 void ObSSTablePrinter::print_common_header(const ObMacroBlockCommonHeader *common_header)

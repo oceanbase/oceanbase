@@ -320,9 +320,9 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE void shallow_copy_from_datum(const ObDatum &src);
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
-  OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len) const;
+  OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len, const bool for_dump = false) const;
   OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
-  OB_INLINE const char *to_cstring() const;
+  OB_INLINE const char *to_cstring(const bool for_dump = false) const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -719,7 +719,7 @@ OB_INLINE bool ObStorageDatum::operator==(const common::ObObj &other) const
   return bret;
 }
 
-OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len) const
+OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, const bool for_dump) const
 {
   int64_t pos = 0;
   if (is_ext()) {
@@ -730,14 +730,51 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len) 
     } else if (is_min()) {
       BUF_PRINTF("MIN_OBJ");
     }
-  } else {
+  } else if(!for_dump) {
     pos = to_string(buf, buf_len);
+  } else {
+    int ret = OB_SUCCESS;
+    const static int64_t STR_MAX_PRINT_LEN = 128L;
+    if (null_) {
+      J_NULL();
+    } else {
+      J_OBJ_START();
+      BUF_PRINTF("len: %d, flag: %d, null: %d", len_, flag_, null_);
+      if (len_ > 0) {
+        OB_ASSERT(NULL != ptr_);
+        const int64_t plen = std::min(static_cast<int64_t>(len_),
+            static_cast<int64_t>(STR_MAX_PRINT_LEN));
+        // print hex value
+        BUF_PRINTF(", hex: ");
+        if (OB_FAIL(hex_print(ptr_, plen, buf, buf_len, pos))) {
+          // no logging in to_string function.
+        } else {
+          // maybe ObIntTC
+          if (sizeof(int64_t) == len_) {
+            BUF_PRINTF(", int: %ld", *int_);
+            // maybe number with one digit
+            if (1 == num_->desc_.len_) {
+              BUF_PRINTF(", num_digit0: %u", num_->digits_[0]);
+            }
+          }
+          // maybe printable C string
+          int64_t idx = 0;
+          while (idx < plen && isprint(ptr_[idx])) {
+            idx++;
+          }
+          if (idx >= plen) {
+            BUF_PRINTF(", cstr: %.*s", static_cast<int>(plen), ptr_);
+          }
+        }
+      }
+      J_OBJ_END();
+    }
   }
 
   return pos;
 }
 
-OB_INLINE const char *ObStorageDatum::to_cstring() const
+OB_INLINE const char *ObStorageDatum::to_cstring(const bool for_dump) const
 {
   char *buffer = NULL;
   int64_t str_len = 0;
@@ -747,7 +784,7 @@ OB_INLINE const char *ObStorageDatum::to_cstring() const
   if (OB_ISNULL(buffer)) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    str_len = storage_to_string(buffer, buf_len -1);
+    str_len = storage_to_string(buffer, buf_len -1, for_dump);
     if (str_len >= 0 && str_len < buf_len) {
       buffer[str_len] = '\0';
     } else {
