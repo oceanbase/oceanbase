@@ -637,7 +637,7 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
         }
       }
     }
-    for (int64_t j = 0; j < interm_result_infos.count(); j++) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < interm_result_infos.count(); j++) {
       sqc_result_count.at(j) = interm_result_infos.at(j).interm_result_ids_.count();
       if (0 >= sqc_result_count.at(j)) {
         sqc_result_count.at(j) = 1;
