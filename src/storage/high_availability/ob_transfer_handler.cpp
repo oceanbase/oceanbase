@@ -1244,7 +1244,7 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
   ObTimeoutCtx timeout_ctx;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
-    const int64_t timeout = tenant_config->_transfer_start_trans_timeout * 0.8;
+    const int64_t timeout = tenant_config->_transfer_start_trans_timeout * 0.5;
     if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
       LOG_WARN("set timeout context failed", K(ret));
     }

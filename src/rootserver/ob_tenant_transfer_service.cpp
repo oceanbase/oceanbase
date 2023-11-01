@@ -585,10 +585,10 @@ int ObTenantTransferService::lock_table_and_part_(
         }
       }
 
-      // Try to limit the number of tablet_list to TABLET_COUNT_THRESHOLD_IN_A_TRANSFER.
+      // Try to limit the number of tablet_list to _transfer_task_tablet_count_threshold.
       // This is not a precise limit. In the worst case, there will be
-      // TABLET_COUNT_THRESHOLD_IN_A_TRANSFER + 128(max index number) + 2(lob tablet number) tablets in tablet_list.
-      if (OB_SUCC(ret) && tablet_ids.count() > TABLET_COUNT_THRESHOLD_IN_A_TRANSFER) {
+      // _transfer_task_tablet_count_threshold + 128(max index number) + 2(lob tablet number) tablets in tablet_list.
+      if (OB_SUCC(ret) && tablet_ids.count() >= get_tablet_count_threshold_()) {
         break;
       }
     } // end ARRAY_FOREACH
@@ -1092,7 +1092,7 @@ int ObTenantTransferService::generate_transfer_task(
     trace_id.init(GCONF.self_addr_);
     ObTransferStatus status(ObTransferStatus::INIT);
     ObTransferPartList transfer_part_list;
-    const int64_t part_count = min(PART_COUNT_IN_A_TRANSFER, part_list.count());
+    const int64_t part_count = min(get_tablet_count_threshold_(), part_list.count());
     if (OB_FAIL(transfer_part_list.reserve(part_count))) {
       LOG_WARN("reserve failed", KR(ret), K(part_count));
     } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, task_id))) {
@@ -1639,6 +1639,19 @@ int ObTenantTransferService::update_comment_for_expected_errors_(
     LOG_WARN("update comment failed", KR(ret), K_(tenant_id), K(task_id), K(actual_comment));
   }
   return ret;
+}
+
+int64_t ObTenantTransferService::get_tablet_count_threshold_() const
+{
+  const int64_t DEFAULT_TABLET_COUNT_THRESHOLD = 100;
+  int64_t tablet_count_threshold = DEFAULT_TABLET_COUNT_THRESHOLD;
+  if (is_valid_tenant_id(tenant_id_)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    tablet_count_threshold = tenant_config.is_valid()
+        ? tenant_config->_transfer_task_tablet_count_threshold
+        : DEFAULT_TABLET_COUNT_THRESHOLD;
+  }
+  return tablet_count_threshold;
 }
 
 #undef TTS_INFO
