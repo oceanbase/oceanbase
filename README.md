@@ -70,7 +70,7 @@ See also [key features](https://en.oceanbase.com/product/opensource) for more 
 
 ## 🔥 Start with all-in-one
 
-You can quickly deploy a standalone OceanBase Database to experience the following commands.
+You can quickly deploy a standalone OceanBase Database to experience with the following commands.
 
 **Note**: Linux Only
 
