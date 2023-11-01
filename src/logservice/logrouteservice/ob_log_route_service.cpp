@@ -923,6 +923,8 @@ int ObLogRouteService::update_server_list_(
     const ObLSLogInfo::LogStatRecordArray &log_stat_records = ls_log_info.get_log_stat_array();
     LSSvrList &ls_svr_list = router_value.get_ls_svr_list();
 
+    ls_svr_list.reset();
+
     ARRAY_FOREACH_N(log_stat_records, idx, count) {
       const LogStatRecord &record = log_stat_records.at(idx);
       const ObAddr &server = record.server_;
