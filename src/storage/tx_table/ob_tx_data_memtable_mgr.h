@@ -120,6 +120,7 @@ public:  // ObTxDataMemtableMgr
    */
   virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
+                              const share::SCN newest_clog_checkpoint_scn,
                               const bool for_replay=false) override;
   /**
    * @brief Get the last tx data memtable in memtable list.
