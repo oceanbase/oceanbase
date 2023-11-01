@@ -37,30 +37,14 @@ ObAllServerEventHistoryTableOperator &ObAllServerEventHistoryTableOperator::get_
   static ObAllServerEventHistoryTableOperator instance;
   return instance;
 }
-
 int ObAllServerEventHistoryTableOperator::async_delete()
 {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
-    SHARE_LOG(WARN, "not init", K(ret));
-  } else {
-    const int64_t now = ObTimeUtility::current_time();
-    ObSqlString sql;
-    const bool is_delete = true;
-    if (OB_SUCCESS == ret) {
-      const int64_t server_delete_timestap = now - GCONF.ob_event_history_recycle_interval;
-      // OB_ALL_SERVER_EVENT_HISTORY has 16 partitions
-      for (int64_t i = 0; OB_SUCCESS == ret && i < 16; ++i) {
-        sql.reset();
-        if (OB_FAIL(sql.assign_fmt("DELETE FROM %s PARTITION(p%ld) WHERE gmt_create < usec_to_time(%ld) LIMIT 1024",
-                                   share::OB_ALL_SERVER_EVENT_HISTORY_TNAME, i, server_delete_timestap))) {
-          SHARE_LOG(WARN, "assign_fmt failed", K(ret));
-        } else if (OB_FAIL(add_task(sql, is_delete))) {
-          SHARE_LOG(WARN, "add_task failed", K(sql), K(is_delete), K(ret));
-        }
-      } // end for
-    }
+    SHARE_LOG(WARN, "not init", KR(ret));
+  } else if (OB_FAIL(default_async_delete())) {
+    SHARE_LOG(WARN, "failed to default async delete", KR(ret));
   }
   return ret;
 }
