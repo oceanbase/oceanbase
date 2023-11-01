@@ -182,6 +182,10 @@ public:
   {
     return arena_.expected_wait_time(seq);
   }
+  void skip_clock(const int64_t skip_size)
+  {
+    arena_.skip_clock(skip_size);
+  }
 private:
   int64_t nway_per_group();
   int set_memstore_threshold_without_lock(uint64_t tenant_id);
