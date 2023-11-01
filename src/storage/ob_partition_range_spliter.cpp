@@ -607,9 +607,7 @@ int ObPartitionParallelRanger::split_ranges(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObPartitionParallelRanger is not init", K(ret));
-  } else if (sample_cnt_ == 0 || parallel_target_count_ == 1
-             || parallel_target_count_ > total_endkey_cnt_ + 1) {
-    // cannot afford specified parallel target count, back into single whole range
+  } else if (sample_cnt_ == 0 || parallel_target_count_ == 1) {
     if (OB_FAIL(construct_single_range(allocator,
                                        store_range_->get_start_key(),
                                        store_range_->get_end_key(),
