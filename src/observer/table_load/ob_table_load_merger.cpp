@@ -40,8 +40,8 @@ using namespace table;
 class ObTableLoadMerger::MergeTaskProcessor : public ObITableLoadTaskProcessor
 {
 public:
-  MergeTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx, ObTableLoadMerger *merger)
-    : ObITableLoadTaskProcessor(task), ctx_(ctx), merger_(merger)
+  MergeTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx, ObTableLoadMerger *merger, int64_t thread_idx)
+    : ObITableLoadTaskProcessor(task), ctx_(ctx), merger_(merger), thread_idx_(thread_idx)
   {
     ctx_->inc_ref_count();
   }
@@ -63,7 +63,7 @@ public:
           ret = OB_SUCCESS;
           break;
         }
-      } else if (OB_FAIL(merge_task->process())) {
+      } else if (OB_FAIL(merge_task->process(thread_idx_))) {
         LOG_WARN("fail to process merge task", KR(ret));
       }
       if (nullptr != merge_task) {
@@ -75,6 +75,7 @@ public:
 private:
   ObTableLoadTableCtx *const ctx_;
   ObTableLoadMerger *const merger_;
+  int64_t thread_idx_;
 };
 
 class ObTableLoadMerger::MergeTaskCallback : public ObITableLoadTaskCallback
@@ -203,10 +204,8 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.table_data_desc_ = store_ctx_->table_data_desc_;
   merge_param.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
   merge_param.col_descs_ = &(store_ctx_->ctx_->schema_.column_descs_);
-  merge_param.cmp_funcs_ = &(store_ctx_->ctx_->schema_.cmp_funcs_);
   merge_param.is_heap_table_ = store_ctx_->ctx_->schema_.is_heap_table_;
   merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
-  merge_param.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
   merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
   merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
   if (OB_FAIL(merge_ctx_.init(merge_param, store_ctx_->ls_partition_ids_,
@@ -365,58 +364,6 @@ int ObTableLoadMerger::collect_dml_stat(ObTableLoadDmlStat &dml_stats)
   return ret;
 }
 
-int ObTableLoadMerger::collect_sql_statistics(ObTableLoadSqlStatistics &sql_statistics)
-{
-  int ret = OB_SUCCESS;
-  if (store_ctx_->is_fast_heap_table_) {
-    ObDirectLoadMultiMap<ObTabletID, ObDirectLoadFastHeapTable *> tables;
-    ObArray<ObTableLoadTransStore *> trans_store_array;
-    if (OB_FAIL(tables.init())) {
-      LOG_WARN("fail to init table", KR(ret));
-    } else if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
-      LOG_WARN("fail to get trans store", KR(ret));
-    } else {
-      for (int i = 0; OB_SUCC(ret) && i < trans_store_array.count(); ++i) {
-        ObTableLoadTransStore *trans_store = trans_store_array.at(i);
-        for (int j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {
-          ObTableLoadTransStore::SessionStore * session_store =  trans_store->session_store_array_.at(j);
-          for (int k = 0 ; OB_SUCC(ret) && k < session_store->partition_table_array_.count(); ++k) {
-            ObIDirectLoadPartitionTable *table = session_store->partition_table_array_.at(k);
-            ObDirectLoadFastHeapTable *sstable = nullptr;
-            if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadFastHeapTable *>(table))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected not heap sstable", KR(ret), KPC(table));
-            } else {
-              const ObTabletID &tablet_id = sstable->get_tablet_id();
-              if (OB_FAIL(tables.add(tablet_id, sstable))) {
-                LOG_WARN("fail to add tables", KR(ret), KPC(sstable));
-              }
-            }
-          }
-        }
-      }
-      for (int i = 0; OB_SUCC(ret) && i < merge_ctx_.get_tablet_merge_ctxs().count(); ++i) {
-        ObDirectLoadTabletMergeCtx *tablet_ctx = merge_ctx_.get_tablet_merge_ctxs().at(i);
-        ObArray<ObDirectLoadFastHeapTable *> heap_table_array ;
-        if (OB_FAIL(tables.get(tablet_ctx->get_tablet_id(), heap_table_array))) {
-          LOG_WARN("get heap sstable failed", KR(ret));
-        } else if (OB_FAIL(tablet_ctx->collect_sql_statistics(heap_table_array, sql_statistics))) {
-          LOG_WARN("fail to collect sql statics", KR(ret));
-        }
-      }
-    }
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < merge_ctx_.get_tablet_merge_ctxs().count(); ++i) {
-      ObDirectLoadTabletMergeCtx *tablet_ctx = merge_ctx_.get_tablet_merge_ctxs().at(i);
-      ObArray<ObDirectLoadFastHeapTable *> heap_table_array ;
-      if (OB_FAIL(tablet_ctx->collect_sql_statistics(heap_table_array, sql_statistics))) {
-        LOG_WARN("fail to collect sql statics", KR(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadMerger::start_merge()
 {
   int ret = OB_SUCCESS;
@@ -429,7 +376,7 @@ int ObTableLoadMerger::start_merge()
       LOG_WARN("fail to alloc task", KR(ret));
     }
     // 2. 设置processor
-    else if (OB_FAIL(task->set_processor<MergeTaskProcessor>(ctx, this))) {
+    else if (OB_FAIL(task->set_processor<MergeTaskProcessor>(ctx, this, thread_idx))) {
       LOG_WARN("fail to set merge task processor", KR(ret));
     }
     // 3. 设置callback

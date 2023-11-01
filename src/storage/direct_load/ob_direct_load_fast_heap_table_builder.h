@@ -39,20 +39,19 @@ public:
   ObDirectLoadFastHeapTableBuildParam();
   ~ObDirectLoadFastHeapTableBuildParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(snapshot_version), K_(table_data_desc), KP_(datum_utils),
-               KP_(col_descs), KP_(cmp_funcs), KP_(insert_table_ctx), KP_(fast_heap_table_ctx),
-               KP_(dml_row_handler), K_(online_opt_stat_gather));
+  TO_STRING_KV(K_(tablet_id), K_(snapshot_version), K_(thread_idx), K_(table_data_desc),
+               KP_(datum_utils), KP_(col_descs), KP_(insert_table_ctx), KP_(fast_heap_table_ctx),
+               KP_(dml_row_handler));
 public:
   common::ObTabletID tablet_id_;
   int64_t snapshot_version_;
+  int64_t thread_idx_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
-  const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadFastHeapTableContext *fast_heap_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
-  bool online_opt_stat_gather_;
 };
 
 class ObDirectLoadFastHeapTableBuilder : public ObIDirectLoadPartitionTableBuilder
@@ -70,8 +69,6 @@ public:
   int get_tables(common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
                  common::ObIAllocator &allocator) override;
 private:
-  int init_sql_statistics();
-  int collect_obj(const blocksstable::ObDatumRow &datum_row);
   int init_sstable_slice_ctx();
   int switch_sstable_slice();
 private:
@@ -82,7 +79,6 @@ private:
   ObSSTableInsertSliceWriter *slice_writer_;
   ObDirectLoadFastHeapTableTabletWriteCtx write_ctx_;
   blocksstable::ObDatumRow datum_row_;
-  common::ObArray<ObOptOSGColumnStat *> column_stat_array_;
   int64_t row_count_;
   bool is_closed_;
   bool is_inited_;

@@ -71,7 +71,7 @@ protected:
 private:
   int create_table_ctx();
   int do_begin();
-
+  int check_need_online_gather(const uint64_t tenant_id, bool &online_opt_stat_gather);
 private:
   ObTableLoadClientTask *client_task_;
   ObTableLoadTableCtx *table_ctx_;

@@ -28,6 +28,7 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/ob_share_util.h"
 #include "share/stat/ob_incremental_stat_estimator.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -628,7 +629,7 @@ int ObTableLoadCoordinator::add_check_merge_result_task()
  * commit
  */
 
-int ObTableLoadCoordinator::commit_peers()
+int ObTableLoadCoordinator::commit_peers(table::ObTableLoadSqlStatistics &sql_statistics)
 {
   int ret = OB_SUCCESS;
   ObTableLoadArray<ObAddr> all_addr_array;
@@ -646,7 +647,7 @@ int ObTableLoadCoordinator::commit_peers()
         ObTableLoadStore store(ctx_);
         if (OB_FAIL(store.init())) {
           LOG_WARN("fail to init store", KR(ret));
-        } else if (OB_FAIL(store.commit(res.result_info_))) {
+        } else if (OB_FAIL(store.commit(res.result_info_, res.sql_statistics_))) {
           LOG_WARN("fail to commit store", KR(ret));
         }
       } else { // 远端, 发送rpc
@@ -657,6 +658,9 @@ int ObTableLoadCoordinator::commit_peers()
         ATOMIC_AAF(&coordinator_ctx_->result_info_.deleted_, res.result_info_.deleted_);
         ATOMIC_AAF(&coordinator_ctx_->result_info_.skipped_, res.result_info_.skipped_);
         ATOMIC_AAF(&coordinator_ctx_->result_info_.warnings_, res.result_info_.warnings_);
+        if (OB_FAIL(sql_statistics.merge(res.sql_statistics_))) {
+          LOG_WARN("fail to add result sql stats", KR(ret), K(addr), K(res));
+        }
       }
     }
   }
@@ -693,12 +697,10 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
     ObTableLoadSqlStatistics sql_statistics;
     if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
-    } else if (OB_FAIL(commit_peers())) {
+    } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
     } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
-    } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(
-                 drive_sql_stat(coordinator_ctx_->exec_ctx_->get_exec_ctx()))) {
+    } else if (param_.online_opt_stat_gather_ && OB_FAIL(write_sql_stat(sql_statistics))) {
       LOG_WARN("fail to drive sql stat", KR(ret));
     } else if (OB_FAIL(commit_redef_table())) {
       LOG_WARN("fail to commit redef table", KR(ret));
@@ -725,12 +727,10 @@ int ObTableLoadCoordinator::px_commit_data()
     ObTableLoadSqlStatistics sql_statistics;
     if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check coordinator status", KR(ret));
-    } else if (OB_FAIL(commit_peers())) {
+    } else if (OB_FAIL(commit_peers(sql_statistics))) {
       LOG_WARN("fail to commit peers", KR(ret));
     } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
-    } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(
-                 drive_sql_stat(coordinator_ctx_->exec_ctx_->get_exec_ctx()))) {
+    } else if (param_.online_opt_stat_gather_ && OB_FAIL(write_sql_stat(sql_statistics))) {
       LOG_WARN("fail to drive sql stat", KR(ret));
     }
   }
@@ -758,32 +758,28 @@ int ObTableLoadCoordinator::px_commit_ddl()
   return ret;
 }
 
-int ObTableLoadCoordinator::drive_sql_stat(ObExecContext *ctx)
+int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statistics)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
+  ObSEArray<ObOptColumnStat *, 64> global_column_stats;
+  ObSEArray<ObOptTableStat *, 64> global_table_stats;
   ObSchemaGetterGuard schema_guard;
-  ObSchemaGetterGuard *tmp_schema_guard = nullptr;
   const ObTableSchema *table_schema = nullptr;
-  if (OB_UNLIKELY(nullptr == ctx)) {
+  if (OB_UNLIKELY(sql_statistics.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KPC(ctx));
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
+    LOG_WARN("invalid args", KR(ret), K(sql_statistics));
+  }  else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
                                                          table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    tmp_schema_guard = ctx->get_virtual_table_ctx().schema_guard_;
-    ctx->get_sql_ctx()->schema_guard_ = &schema_guard;
-    ctx->get_das_ctx().set_sql_ctx(ctx->get_sql_ctx());
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObIncrementalStatEstimator::derive_global_stat_by_direct_load(
-               *ctx, table_id))) {
-      LOG_WARN("fail to drive global stat by direct load", KR(ret));
-    }
-    ctx->get_sql_ctx()->schema_guard_ = tmp_schema_guard;
-    ctx->get_das_ctx().set_sql_ctx(ctx->get_sql_ctx());
+  } else if (OB_FAIL(sql_statistics.get_col_stat_array(global_column_stats))) {
+    LOG_WARN("failed to get column stat array");
+  } else if (OB_FAIL(sql_statistics.get_table_stat_array(global_table_stats))) {
+    LOG_WARN("failed to get table stat array");
+  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(&schema_guard, ctx_->session_info_, GCTX.sql_proxy_, global_table_stats, global_column_stats))) {
+    LOG_WARN("failed to batch write stats", K(ret), K(sql_statistics.table_stat_array_),
+          K(sql_statistics.col_stat_array_));
   }
   return ret;
 }

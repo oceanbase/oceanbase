@@ -41,26 +41,18 @@ class ObDirectLoadPartitionMergeTask : public common::ObDLinkBase<ObDirectLoadPa
 public:
   ObDirectLoadPartitionMergeTask();
   virtual ~ObDirectLoadPartitionMergeTask();
-  int process();
-  const common::ObIArray<ObOptOSGColumnStat*> &get_column_stat_array() const
-  {
-    return column_stat_array_;
-  }
+  int process(int64_t thread_idx);
   int64_t get_row_count() const { return affected_rows_; }
   void stop();
   TO_STRING_KV(KPC_(merge_param), KPC_(merge_ctx), K_(parallel_idx));
 protected:
   virtual int construct_row_iter(common::ObIAllocator &allocator,
                                  ObIStoreRowIterator *&row_iter) = 0;
-private:
-  int init_sql_statistics();
-  int collect_obj(const blocksstable::ObDatumRow &datum_row);
 protected:
   const ObDirectLoadMergeParam *merge_param_;
   ObDirectLoadTabletMergeCtx *merge_ctx_;
   int64_t parallel_idx_;
   int64_t affected_rows_;
-  common::ObArray<ObOptOSGColumnStat*> column_stat_array_;
   common::ObArenaAllocator allocator_;
   bool is_stop_;
   bool is_inited_;

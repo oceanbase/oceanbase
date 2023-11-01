@@ -23,6 +23,7 @@
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase
 {
@@ -33,6 +34,7 @@ using namespace omt;
 using namespace share::schema;
 using namespace sql;
 using namespace table;
+using namespace common;
 
 // begin
 ObTableDirectLoadBeginExecutor::ObTableDirectLoadBeginExecutor(
@@ -207,11 +209,49 @@ int ObTableDirectLoadBeginExecutor::process()
   return ret;
 }
 
+int ObTableDirectLoadBeginExecutor::check_need_online_gather(const uint64_t tenant_id, bool &online_opt_stat_gather)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql.assign_fmt("SELECT value FROM %s WHERE (zone, name, schema_version) in (select zone, name, max(schema_version) FROM %s"
+      " group by zone, name) and name = '%s'",
+          OB_ALL_SYS_VARIABLE_HISTORY_TNAME, OB_ALL_SYS_VARIABLE_HISTORY_TNAME, OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD))) {
+        LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql), K(tenant_id));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", KR(ret), K(sql), K(tenant_id));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next row", KR(ret), K(tenant_id));
+            }
+          } else {
+            ObString data;
+            EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", data);
+            if(0 == strcmp(data.ptr(), "1")) {
+              online_opt_stat_gather = true;
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  return ret;
+}
+
 int ObTableDirectLoadBeginExecutor::create_table_ctx()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = client_task_->tenant_id_;
   const uint64_t table_id = client_task_->table_id_;
+  bool online_opt_stat_gather = false;
   ObTableLoadDDLParam ddl_param;
   ObTableLoadParam param;
   // start redef table
@@ -240,6 +280,8 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
     ObTenant *tenant = nullptr;
     if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
       LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(check_need_online_gather(tenant_id, online_opt_stat_gather))) {
+      LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
     } else {
       param.tenant_id_ = tenant_id;
       param.table_id_ = table_id;
@@ -250,7 +292,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
       param.column_count_ = client_task_->column_names_.count();
       param.need_sort_ = true;
       param.px_mode_ = false;
-      param.online_opt_stat_gather_ = false;
+      param.online_opt_stat_gather_ = online_opt_stat_gather;
       param.dup_action_ = arg_.dup_action_;
       if (OB_FAIL(param.normalize())) {
         LOG_WARN("fail to normalize param", KR(ret));

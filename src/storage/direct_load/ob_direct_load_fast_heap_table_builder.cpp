@@ -34,13 +34,12 @@ using namespace share;
 
 ObDirectLoadFastHeapTableBuildParam::ObDirectLoadFastHeapTableBuildParam()
   : snapshot_version_(0),
+    thread_idx_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
-    cmp_funcs_(nullptr),
     insert_table_ctx_(nullptr),
     fast_heap_table_ctx_(nullptr),
-    dml_row_handler_(nullptr),
-    online_opt_stat_gather_(false)
+    dml_row_handler_(nullptr)
 {
 }
 
@@ -50,8 +49,8 @@ ObDirectLoadFastHeapTableBuildParam::~ObDirectLoadFastHeapTableBuildParam()
 
 bool ObDirectLoadFastHeapTableBuildParam::is_valid() const
 {
-  return tablet_id_.is_valid() && snapshot_version_ > 0 && table_data_desc_.is_valid() &&
-         nullptr != col_descs_ && nullptr != cmp_funcs_ && nullptr != insert_table_ctx_ &&
+  return tablet_id_.is_valid() && snapshot_version_ > 0 && thread_idx_ >= 0 &&
+         table_data_desc_.is_valid() && nullptr != col_descs_ && nullptr != insert_table_ctx_ &&
          nullptr != fast_heap_table_ctx_ && nullptr != dml_row_handler_ && nullptr != datum_utils_;
 }
 
@@ -77,56 +76,6 @@ ObDirectLoadFastHeapTableBuilder::~ObDirectLoadFastHeapTableBuilder()
     slice_writer_allocator_.free(slice_writer_);
     slice_writer_ = nullptr;
   }
-  for (int64_t i = 0; i < column_stat_array_.count(); ++i) {
-    ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-    col_stat->~ObOptOSGColumnStat();
-    allocator_.free(col_stat);
-    col_stat = nullptr;
-  }
-}
-
-int ObDirectLoadFastHeapTableBuilder::init_sql_statistics()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_.table_data_desc_.column_count_; ++i) {
-    ObOptOSGColumnStat *new_osg_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_);
-    if (OB_ISNULL(new_osg_col_stat)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate col stat");
-    } else if (OB_FAIL(column_stat_array_.push_back(new_osg_col_stat))) {
-      LOG_WARN("fail to push back", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (new_osg_col_stat != nullptr) {
-        new_osg_col_stat->~ObOptOSGColumnStat();
-        allocator_.free(new_osg_col_stat);
-        new_osg_col_stat = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadFastHeapTableBuilder::collect_obj(const ObDatumRow &datum_row)
-{
-  int ret = OB_SUCCESS;
-  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_.table_data_desc_.column_count_; i++) {
-    const ObStorageDatum &datum =
-      datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
-    const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i + 1).get_cmp_func();
-    const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
-    ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-    bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
-    if (col_stat != nullptr && is_valid) {
-      if (OB_FAIL(col_stat->update_column_stat_info(&datum,
-                                                    col_desc.col_type_,
-                                                    cmp_func.cmp_func_))) {
-        LOG_WARN("failed to update column stat info");
-      }
-    }
-  }
-  return ret;
 }
 
 int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildParam &param)
@@ -142,9 +91,7 @@ int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildP
     param_ = param;
     allocator_.set_tenant_id(MTL_ID());
     slice_writer_allocator_.set_tenant_id(MTL_ID());
-    if (param_.online_opt_stat_gather_ && OB_FAIL(init_sql_statistics())) {
-      LOG_WARN("fail to inner init sql statistics", KR(ret));
-    } else if (OB_FAIL(param_.fast_heap_table_ctx_->get_tablet_context(
+    if (OB_FAIL(param_.fast_heap_table_ctx_->get_tablet_context(
                  param_.tablet_id_, fast_heap_table_tablet_ctx_))) {
       LOG_WARN("fail to get tablet context", KR(ret));
     } else if (OB_FAIL(init_sstable_slice_ctx())) {
@@ -234,7 +181,7 @@ int ObDirectLoadFastHeapTableBuilder::append_row(const ObTabletID &tablet_id,
       }
       if (OB_FAIL(slice_writer_->append_row(datum_row_))) {
         LOG_WARN("fail to append row", KR(ret));
-      } else if (param_.online_opt_stat_gather_ && OB_FAIL(collect_obj(datum_row_))) {
+      } else if (param_.insert_table_ctx_->collect_obj(param_.thread_idx_ ,datum_row_)) {
         LOG_WARN("fail to collect", KR(ret));
       } else {
         ++row_count_;
@@ -262,6 +209,7 @@ int ObDirectLoadFastHeapTableBuilder::close()
     if (OB_FAIL(slice_writer_->close())) {
       LOG_WARN("fail to close sstable slice writer", KR(ret));
     } else {
+      param_.insert_table_ctx_->inc_row_count(row_count_);
       is_closed_ = true;
     }
   }
@@ -282,7 +230,6 @@ int ObDirectLoadFastHeapTableBuilder::get_tables(
     ObDirectLoadFastHeapTableCreateParam create_param;
     create_param.tablet_id_ = param_.tablet_id_;
     create_param.row_count_ = row_count_;
-    create_param.column_stat_array_ = &column_stat_array_;
     ObDirectLoadFastHeapTable *fast_heap_table = nullptr;
     if (OB_ISNULL(fast_heap_table = OB_NEWx(ObDirectLoadFastHeapTable, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

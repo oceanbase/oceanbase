@@ -21,7 +21,6 @@
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 
-
 namespace oceanbase
 {
 namespace storage
@@ -29,6 +28,7 @@ namespace storage
 using namespace common;
 using namespace blocksstable;
 using namespace share;
+using namespace table;
 
 /**
  * ObDirectLoadPartitionMergeTask
@@ -48,16 +48,9 @@ ObDirectLoadPartitionMergeTask::ObDirectLoadPartitionMergeTask()
 
 ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
 {
-  for (int64_t i = 0; i < column_stat_array_.count(); ++i) {
-    ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-    if (col_stat != nullptr) {
-       col_stat->~ObOptOSGColumnStat();
-       col_stat = nullptr;
-    }
-  }
 }
 
-int ObDirectLoadPartitionMergeTask::process()
+int ObDirectLoadPartitionMergeTask::process(int64_t thread_idx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -70,9 +63,7 @@ int ObDirectLoadPartitionMergeTask::process()
     ObSSTableInsertSliceWriter *writer = nullptr;
     ObMacroDataSeq block_start_seq;
     block_start_seq.set_parallel_degree(parallel_idx_);
-    if (merge_param_->online_opt_stat_gather_ && OB_FAIL(init_sql_statistics())) {
-      LOG_WARN("fail to init sql statistics", KR(ret));
-    } else if (OB_FAIL(construct_row_iter(allocator_, row_iter))) {
+    if (OB_FAIL(construct_row_iter(allocator_, row_iter))) {
       LOG_WARN("fail to construct row iter", KR(ret));
     } else if (OB_FAIL(merge_param_->insert_table_ctx_->construct_sstable_slice_writer(
                  target_tablet_id, block_start_seq, writer, allocator_))) {
@@ -94,7 +85,7 @@ int ObDirectLoadPartitionMergeTask::process()
           }
         } else if (OB_FAIL(writer->append_row(*const_cast<ObDatumRow *>(datum_row)))) {
           LOG_WARN("fail to append row", KR(ret), KPC(datum_row));
-        } else if (merge_param_->online_opt_stat_gather_ && OB_FAIL(collect_obj(*datum_row))) {
+        } else if (OB_FAIL(merge_param_->insert_table_ctx_->collect_obj(thread_idx, *datum_row))) {
           LOG_WARN("fail to collect statistics", KR(ret));
         } else {
           ++affected_rows_;
@@ -103,6 +94,8 @@ int ObDirectLoadPartitionMergeTask::process()
       if (OB_SUCC(ret)) {
         if (OB_FAIL(writer->close())) {
           LOG_WARN("fail to close writer", KR(ret));
+        } else {
+          merge_param_->insert_table_ctx_->inc_row_count(affected_rows_);
         }
       }
       LOG_INFO("add sstable slice end", KR(ret), K(target_tablet_id), K(tablet_id),
@@ -125,74 +118,6 @@ int ObDirectLoadPartitionMergeTask::process()
       } else if (is_ready &&
                  OB_FAIL(merge_param_->insert_table_ctx_->notify_tablet_finish(target_tablet_id))) {
         LOG_WARN("fail to notify tablet finish", KR(ret), K(target_tablet_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadPartitionMergeTask::init_sql_statistics()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret)&& i < merge_param_->table_data_desc_.column_count_; ++i) {
-    ObOptOSGColumnStat *col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_);
-    if (OB_ISNULL(col_stat)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate buffer", KR(ret));
-    } else if (OB_FAIL(column_stat_array_.push_back(col_stat))){
-      LOG_WARN("fail to push back", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (col_stat != nullptr) {
-        col_stat->~ObOptOSGColumnStat();
-        allocator_.free(col_stat);
-        col_stat = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
-{
-  int ret = OB_SUCCESS;
-  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  if (merge_param_->is_heap_table_ ) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < merge_param_->table_data_desc_.column_count_; i++) {
-      const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
-      const ObColDesc &col_desc = merge_param_->col_descs_->at(i + 1);
-      const ObCmpFunc &cmp_func = merge_param_->cmp_funcs_->at(i + 1).get_cmp_func();
-      ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
-      if (col_stat != nullptr && is_valid) {
-        if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
-          LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
-        }
-      }
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < merge_param_->rowkey_column_num_; i++) {
-      const ObStorageDatum &datum = datum_row.storage_datums_[i];
-      const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
-      const ObCmpFunc &cmp_func = merge_param_->cmp_funcs_->at(i).get_cmp_func();
-      ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
-      if (col_stat != nullptr && is_valid) {
-        if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
-          LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
-        }
-      }
-    }
-    for (int64_t i = merge_param_->rowkey_column_num_; OB_SUCC(ret) && i < merge_param_->table_data_desc_.column_count_; i++) {
-      const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt];
-      const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
-      const ObCmpFunc &cmp_func = merge_param_->cmp_funcs_->at(i).get_cmp_func();
-      ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
-      if (col_stat != nullptr && is_valid) {
-        if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
-          LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
-        }
       }
     }
   }
