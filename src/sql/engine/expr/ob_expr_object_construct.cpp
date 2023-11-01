@@ -116,8 +116,8 @@ int ObExprObjectConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
 int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
 {
   int ret = OB_SUCCESS;
-  auto session = ctx.exec_ctx_.get_my_session();
-  auto &exec_ctx = ctx.exec_ctx_;
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObExecContext &exec_ctx = ctx.exec_ctx_;
   ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
   pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
   pl::ObPLResolveCtx resolve_ctx(alloc,
