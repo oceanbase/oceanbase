@@ -41,6 +41,7 @@ storage_unittest(test_ob_trans_rpc)
 storage_unittest(test_ob_tx_msg)
 storage_unittest(test_ob_id_meta)
 storage_unittest(test_ob_standby_read)
+storage_unittest(test_ob_trans_tlog)
 add_subdirectory(it)
 
 storage_unittest(test_dup_table_lease)
