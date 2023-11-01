@@ -96,8 +96,8 @@ int ObWeakReadService::get_server_version(const uint64_t tenant_id, SCN &version
 
   if (OB_SUCC(ret) && !version.is_valid()) {
     int old_ret = ret;
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get server version succ, but version is not valid snapshot version", K(ret), K(old_ret),
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("get server version succ, but version is not valid snapshot version", K(ret), K(old_ret),
         K(tenant_id), K(version));
   }
   LOG_DEBUG("[WRS] get_server_version", K(ret), K(tenant_id), K(version));
