@@ -3240,7 +3240,9 @@ int ObPartTransCtx::submit_commit_log_()
     if (local_tx &&
         multi_source_data.count() == 0 &&
         // 512B
-        mt_ctx_.get_pending_log_size() < ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE / 4) {
+        ((mt_ctx_.get_pending_log_size() < ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE / 4) ||
+         // for corner case test
+         IS_CORNER(10000))) {
       suggested_buf_size = ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE;
     }
     if (OB_FAIL(log_block.init(replay_hint, log_block_header, suggested_buf_size))) {

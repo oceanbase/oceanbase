@@ -1111,13 +1111,8 @@ int ObTxLogBlock::init(const int64_t replay_hint,
                        const int64_t suggested_buf_size)
 {
   int ret = OB_SUCCESS;
-  int64_t buf_size = suggested_buf_size;
-  // for corner test
-  if (IS_CORNER(10000)) {
-    if (suggested_buf_size > ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE) {
-      buf_size = ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE;
-    }
-  }
+  // accept the suggested buffer size
+  const int64_t buf_size = suggested_buf_size;
   if (OB_NOT_NULL(replay_buf_) || !block_header.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(replay_hint), K(*this), K(block_header));
