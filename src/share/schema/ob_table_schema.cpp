@@ -6458,17 +6458,6 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 external_file_format_,
                 external_file_pattern_);
   }
-  // serialize column group
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(serialize_column_groups(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize column groups", K_(column_group_cnt));
-    } else {
-      LST_DO_CODE(OB_UNIS_ENCODE,
-                  is_column_store_supported_,
-                  max_used_column_group_id_);
-    }
-  }
-  }();
 
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(ttl_definition_);
@@ -6482,6 +6471,19 @@ OB_DEF_SERIALIZE(ObTableSchema)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 name_generated_type_);
   }
+
+  // serialize column group
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialize_column_groups(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize column groups", K_(column_group_cnt));
+    } else {
+      LST_DO_CODE(OB_UNIS_ENCODE,
+                  is_column_store_supported_,
+                  max_used_column_group_id_);
+    }
+  }
+  }();
+
   return ret;
 }
 
@@ -6881,17 +6883,6 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(deserialize_column_groups(buf, data_len, pos))) {
-      LOG_WARN("fail to deserialize column_groups", KR(ret), K(data_len), K(pos));
-    } else {
-      LST_DO_CODE(OB_UNIS_DECODE,
-                  is_column_store_supported_,
-                  max_used_column_group_id_);
-    }
-  }
-  }();
-
-  if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(ttl_definition);
     if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(ttl_definition, ttl_definition_))) {
       LOG_WARN("deep_copy_str failed", K(ret), K(ttl_definition));
@@ -6908,6 +6899,18 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     LST_DO_CODE(OB_UNIS_DECODE,
                 name_generated_type_);
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(deserialize_column_groups(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize column_groups", KR(ret), K(data_len), K(pos));
+    } else {
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  is_column_store_supported_,
+                  max_used_column_group_id_);
+    }
+  }
+  }();
+
   return ret;
 }
 
