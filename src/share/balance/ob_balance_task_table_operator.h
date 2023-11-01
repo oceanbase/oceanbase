@@ -452,6 +452,17 @@ public:
       const uint64_t tenant_id,
       const ObLSID &src_ls,
       ObLSID &dest_ls);
+  /*
+   * @description: load all task which has transfer task
+   * @param[in] tenant_id : user_tenant_id
+   * @param[out] balance_task_array : get all task which has transfer task
+   * @param[in] client: sql client or trans
+   * @return OB_SUCCESS if success, otherwise failed
+   * */
+  static int load_need_transfer_task(const uint64_t tenant_id,
+                                       ObBalanceTaskIArray &task_array,
+                                       ObISQLClient &client);
+
 };
 #undef IS_BALANCE_TASK
 }

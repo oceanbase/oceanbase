@@ -516,15 +516,45 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
     } else {
       bool is_finish = false;
       ObBalanceTaskHelper ls_balance_task;
+      ObBalanceTaskArray balance_task_array;
+      share::ObAllTenantInfo cur_tenant_info;
       while (!THIS_WORKER.is_timeout() && OB_SUCC(ret) && !is_finish) {
         if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
                 *sql_proxy_, ls_balance_task))) {
         } else if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
-          is_finish = true;
-        } else if (OB_SUCC(ret)) {
+          balance_task_array.reset();
+          /*
+             __all_balance_task_helper表被清空不代表没有transfer任务，例子：
+             租户A是主库，发起了一轮负载均衡，balance_task表里进入transfer状态但是没有结束的时候切换成备库。
+             租户B是备库，在切成主库的时候会在回放到最新的时候，把TRANSFER_BEGIN的给清理掉。
+             如果租户B作为主库的时候也执行了几轮transfer任务但是还是没有结束掉balance_task表的transfer状态。
+             这个时候租户A在切成主库的时候是没有办法判断自己是否有transfer的发生。
+             为了解决这个问题，我们去读取了__all_balance_task表，如果这个表中有处于transfer状态的任务，则一定要等回放到最新。
+             同时这里也有一个问题：可读点会不会特别落后，我们从两个方面论述A租户可读点不会有问题
+             1. 如果可以清理__all_balance_task_helper表，则可读点一定越过了表中的记录,即使B新开启了一轮负载均衡任务，那也不会有问题
+             2. 单纯的经过主切备，可读点会推高越过最新的GTS，所以肯定可以读到最新的transfer任务*/
+          if (OB_FAIL(ObBalanceTaskTableOperator::load_need_transfer_task(
+                  tenant_id_, balance_task_array, *sql_proxy_))) {
+            LOG_WARN("failed to load need transfer task", KR(ret), K(tenant_id_));
+          } else if (0 == balance_task_array.count()) {
+            is_finish = true;
+            LOG_INFO("balance task finish", K(tenant_id_));
+          } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                  tenant_id_, sql_proxy_, false, cur_tenant_info))) {
+            LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
+          } else if (cur_tenant_info.get_sync_scn() == cur_tenant_info.get_standby_scn()) {
+            is_finish = true;
+            LOG_INFO("has transfer task, and repaly to newest", KR(ret), K(cur_tenant_info));
+          }
+        } else if (OB_FAIL(ret)) {
+          LOG_WARN("failed to pop task", KR(ret), K(tenant_id_));
+        }
+
+        if (OB_SUCC(ret) && !is_finish) {
           usleep(100L * 1000L);
-          LOG_INFO("has balance task not finish", K(ls_balance_task));
+          LOG_INFO("has balance task not finish", K(ls_balance_task),
+              K(balance_task_array), K(cur_tenant_info));
         }
       }
       if (OB_SUCC(ret)) {
