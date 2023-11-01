@@ -733,8 +733,11 @@ int ObTransformSimplifyExpr::do_check_like_condition(ObRawExpr *&expr,
                                                           *ctx_->allocator_))) {
         LOG_WARN("failed to calc const or calculable expr", K(ret));
       } else if (got_result) {
+        //can't replace if pattern have wildcard or default escape character
         ObString val = result.get_string();
-        can_replace = OB_ISNULL(val.find('_')) && OB_ISNULL(val.find('%'));
+        can_replace = OB_ISNULL(val.find('_'))
+                      && OB_ISNULL(val.find('%'))
+                      && OB_ISNULL(val.find('\\'));
       } else {}
     }
     if (OB_SUCC(ret) && can_replace) {

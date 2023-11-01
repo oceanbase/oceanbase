@@ -4220,7 +4220,8 @@ int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &i
         is_match = false;
       } else if (!pattern_val.empty()) {
         is_match = OB_ISNULL(pattern_val.find('%')) &&
-                  OB_ISNULL(pattern_val.find('_'));
+                  OB_ISNULL(pattern_val.find('_')) &&
+                  OB_ISNULL(pattern_val.find('\\'));
       } else {
         is_match = true;
       }
