@@ -120,6 +120,7 @@ public:
   int64_t frozen_version_;
   common::SampleInfo sample_info_;
   ObTabletTableIterator tablet_iter_;
+  DISALLOW_COPY_AND_ASSIGN(ObGetTableParam);
 };
 
 } // namespace storage

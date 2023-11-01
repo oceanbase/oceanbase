@@ -2663,20 +2663,24 @@ int ObLSTabletService::insert_rows(
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
         const ObRelativeTable &data_table = run_ctx.relative_table_;
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
           ObStoreRow reserved_row;
-          if (row_count <= 0) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("row_count should be greater than 0", K(ret));
-          } else if (!rows_info.is_inited()) {
-            const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
-            if(OB_FAIL(rows_info.init(data_table, ctx, rowkey_read_info))) {
+          // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+          // outside the while loop.
+          if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+            tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+            rows_info.reset();
+            if (OB_FAIL(rows_info.init(data_table, ctx, tmp_handle.get_obj()->get_rowkey_read_info()))) {
               LOG_WARN("Failed to init rows info", K(ret), K(data_table));
             }
           }
           if (OB_FAIL(ret)) {
+          } else if (row_count <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("row_count should be greater than 0", K(ret));
           } else if (1 == row_count) {
             tbl_rows = &reserved_row;
             tbl_rows[0].flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -2918,6 +2922,7 @@ int ObLSTabletService::update_rows(
     const ObRelativeTable &relative_table = run_ctx.relative_table_;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, &updated_column_ids, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
+    } else if (FALSE_IT(tablet_handle.reset())) {
     } else if (FALSE_IT(timeguard.click("Prepare"))) {
     } else if (OB_UNLIKELY(!relative_table.is_valid())) {
       ret = OB_ERR_SYS;
@@ -2946,10 +2951,16 @@ int ObLSTabletService::update_rows(
     }
 
     int64_t cur_time = 0;
+    ObTabletHandle tmp_handle;
     while (OB_SUCC(ret)
         && OB_SUCC(get_next_row_from_iter(row_iter, old_tbl_row, true))
         && OB_SUCC(get_next_row_from_iter(row_iter, new_tbl_row, false))) {
       LOG_DEBUG("get_dml_update_row", KP(row_iter), K(old_tbl_row), K(new_tbl_row));
+      // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+      // outside the while loop.
+      if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+        tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+      }
       bool duplicate = false;
       ++got_row_count;
       cur_time = ObClockGenerator::getClock();
@@ -2957,7 +2968,7 @@ int ObLSTabletService::update_rows(
         //checking timeout cost too much, so check every 512 rows
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
-      } else if (OB_FAIL(update_row_to_tablet(tablet_handle,
+      } else if (OB_FAIL(update_row_to_tablet(tmp_handle,
                                               run_ctx,
                                               rowkey_change,
                                               update_idx,
@@ -2990,10 +3001,16 @@ int ObLSTabletService::update_rows(
         timeguard.click("AllocNew");
         new_tbl_row.row_val_.cells_ = new(ptr1) ObObj[num]();
         ObRowStore::Iterator row_iter2 = row_store.begin();
+        ObTabletHandle tmp_handle;
         // when total_quantity_log is true, we should iterate new_tbl_row and old_tbl_row, and
         // dispose these two rows together, otherwise, when total_quantity_log is false,
         // row_iter2 doesn't contain old rows, and old_tbl_row is a dummy param in process_new_row
         while (OB_SUCC(ret) && OB_SUCC(row_iter2.get_next_row(new_tbl_row.row_val_))) {
+          // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+          // outside the while loop.
+          if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+            tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+          }
           int64_t data_tbl_rowkey_len = relative_table.get_rowkey_column_num();
           bool tbl_rowkey_change = false;
           if (OB_FAIL(row_iter2.get_next_row(old_tbl_row.row_val_))) {
@@ -3005,7 +3022,7 @@ int ObLSTabletService::update_rows(
                                                                         tbl_rowkey_change))) {
             LOG_WARN("check data table rowkey change failed", K(ret), K(old_tbl_row),
                 K(new_tbl_row), K(data_tbl_rowkey_len));
-          } else if (OB_FAIL(process_new_row(tablet_handle,
+          } else if (OB_FAIL(process_new_row(tmp_handle,
                                              run_ctx,
                                              update_idx,
                                              old_tbl_row,
@@ -3080,17 +3097,24 @@ int ObLSTabletService::put_rows(
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      tablet_handle.reset();
       tbl_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
     }
 
     int64_t cur_time = 0;
+    ObTabletHandle tmp_handle;
     while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
+      // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+      // outside the while loop.
+      if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+        tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+      }
       cur_time = ObClockGenerator::getClock();
       tbl_row.row_val_ = *row;
       if (cur_time > dml_param.timeout_) {
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout", K(ret), K(cur_time), K(dml_param));
-      } else if (OB_FAIL(insert_row_to_tablet(tablet_handle, run_ctx, tbl_row))) {
+      } else if (OB_FAIL(insert_row_to_tablet(tmp_handle, run_ctx, tbl_row))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
           LOG_WARN("failed to write row", K(ret));
         }
@@ -3145,10 +3169,18 @@ int ObLSTabletService::delete_rows(
     ObNewRow *row = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
+    } else {
+      tablet_handle.reset();
     }
     // delete table rows
     int64_t cur_time = 0;
+    ObTabletHandle tmp_handle;
     while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
+      // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+      // outside the while loop.
+      if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+        tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+      }
       cur_time = ObClockGenerator::getClock();
       if (cur_time > run_ctx.dml_param_.timeout_) {
         ret = OB_TIMEOUT;
@@ -3156,7 +3188,7 @@ int ObLSTabletService::delete_rows(
       } else if (OB_ISNULL(row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get next row from iterator failed", KP(row), K(ret));
-      } else if (OB_FAIL(delete_row_in_tablet(tablet_handle, run_ctx, *row))) {
+      } else if (OB_FAIL(delete_row_in_tablet(tmp_handle, run_ctx, *row))) {
         LOG_WARN("fail to delete row", K(ret), K(row));
       } else {
         ++afct_num;
@@ -3215,6 +3247,7 @@ int ObLSTabletService::lock_rows(
     ObNewRow *row = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(nullptr, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
+    } else if (FALSE_IT(tablet_handle.reset())) {
     } else if (FALSE_IT(timeguard.click("Prepare"))) {
     } else if (OB_FAIL(run_ctx.relative_table_.get_rowkey_column_ids(col_desc))) {
       LOG_WARN("Fail to get column desc", K(ret));
@@ -3225,7 +3258,13 @@ int ObLSTabletService::lock_rows(
       run_ctx.column_ids_ = &column_ids;
       ctx.mvcc_acc_ctx_.abs_lock_timeout_ =
         ObTablet::get_lock_wait_timeout(abs_lock_timeout, dml_param.timeout_);
+      ObTabletHandle tmp_handle;
       while (OB_SUCCESS == ret && OB_SUCC(row_iter->get_next_row(row))) {
+        // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
+        // outside the while loop.
+        if (tmp_handle.get_obj() != run_ctx.relative_table_.tablet_iter_.get_tablet_handle().get_obj()) {
+          tmp_handle = run_ctx.relative_table_.tablet_iter_.get_tablet_handle();
+        }
         ObRelativeTable &relative_table = run_ctx.relative_table_;
         bool is_exists = true;
         if (ObTimeUtility::current_time() > dml_param.timeout_) {
@@ -3233,13 +3272,13 @@ int ObLSTabletService::lock_rows(
           int64_t cur_time = ObClockGenerator::getClock();
           LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
         } else if (GCONF.enable_defensive_check()
-            && OB_FAIL(check_old_row_legitimacy(tablet_handle, run_ctx, *row))) {
+            && OB_FAIL(check_old_row_legitimacy(tmp_handle, run_ctx, *row))) {
           LOG_WARN("check row legitimacy failed", K(ret), KPC(row));
         } else if (GCONF.enable_defensive_check()
             && OB_FAIL(check_new_row_nullable_value(col_desc, relative_table, *row))) {
           LOG_WARN("check lock row nullable failed", K(ret));
         } else if (FALSE_IT(timeguard.click("Check"))) {
-        } else if (OB_FAIL(tablet_handle.get_obj()->lock_row(run_ctx.relative_table_, ctx, *row))) {
+        } else if (OB_FAIL(tmp_handle.get_obj()->lock_row(run_ctx.relative_table_, ctx, *row))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
             LOG_WARN("failed to lock row", K(*row), K(ret));
           }

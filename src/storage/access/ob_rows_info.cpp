@@ -34,6 +34,13 @@ ObRowsInfo::ExistHelper::~ExistHelper()
 {
 }
 
+void ObRowsInfo::ExistHelper::reset()
+{
+  table_iter_param_.reset();
+  table_access_context_.reset();
+  is_inited_ = false;
+}
+
 int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
                                   ObStoreCtx &store_ctx,
                                   const ObITableReadInfo &rowkey_read_info,
@@ -96,6 +103,26 @@ ObRowsInfo::ObRowsInfo()
 
 ObRowsInfo::~ObRowsInfo()
 {
+}
+
+void ObRowsInfo::reset()
+{
+  exist_helper_.reset();
+  min_key_.set_max_rowkey();
+  rows_ = nullptr;
+  delete_count_ = 0;
+  rowkey_column_num_ = 0;
+  rows_ = nullptr;
+  datum_utils_ = nullptr;
+  tablet_id_.reset();
+  permutation_.reset();
+  rowkeys_.reset();
+  scan_mem_allocator_.reset();
+  key_allocator_.reset();
+  delete_count_ = 0;
+  error_code_ = 0;
+  conflict_rowkey_idx_ = -1;
+  is_inited_ = false;
 }
 
 int ObRowsInfo::init(

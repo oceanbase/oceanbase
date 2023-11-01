@@ -34,9 +34,9 @@ public:
 public:
   int open(const blocksstable::ObDatumRange &range);
   virtual int init(
-    const ObTableAccessParam &param,
+    ObTableAccessParam &param,
     ObTableAccessContext &context,
-    const ObGetTableParam &get_table_param);
+    ObGetTableParam &get_table_param);
   virtual void reset() override;
   virtual void reuse() override;
   inline void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }

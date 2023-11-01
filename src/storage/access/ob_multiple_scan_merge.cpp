@@ -65,9 +65,9 @@ int ObMultipleScanMerge::open(const ObDatumRange &range)
 }
 
 int ObMultipleScanMerge::init(
-  const ObTableAccessParam &param,
+  ObTableAccessParam &param,
   ObTableAccessContext &context,
-  const ObGetTableParam &get_table_param)
+  ObGetTableParam &get_table_param)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMultipleMerge::init(param, context, get_table_param))) {

@@ -271,8 +271,8 @@ TEST_F(TestTableScanPureDataTable, table_scan_pure_data_table)
 int main(int argc, char **argv)
 {
   system("rm -f test_table_scan_pure_data_table.log*");
+  OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_table_scan_pure_data_table.log", true);
-  OB_LOGGER.set_log_level(OB_LOG_LEVEL_INFO);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -44,13 +44,13 @@ public:
   ObMultipleMerge();
   virtual ~ObMultipleMerge();
   virtual int init(
-      const ObTableAccessParam &param,
+      ObTableAccessParam &param,
       ObTableAccessContext &context,
-      const ObGetTableParam &get_table_param);
+      ObGetTableParam &get_table_param);
   virtual int switch_param(
-      const ObTableAccessParam &param,
+      ObTableAccessParam &param,
       ObTableAccessContext &context,
-      const ObGetTableParam &get_table_param);
+      ObGetTableParam &get_table_param);
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset();
@@ -122,7 +122,7 @@ private:
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
-  const ObTableAccessParam *access_param_;
+  ObTableAccessParam *access_param_;
   ObTableAccessContext *access_ctx_;
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
   blocksstable::ObDatumRow cur_row_;
@@ -139,7 +139,7 @@ protected:
   bool need_output_row_with_nop_; // for sampling increment data
   bool inited_;
   int64_t range_idx_delta_;
-  ObGetTableParam get_table_param_;
+  ObGetTableParam *get_table_param_;
   bool read_memtable_only_;
   ObBlockRowStore *block_row_store_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
@@ -159,7 +159,7 @@ private:
 OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
 {
   int ret = OB_SUCCESS;
-  need_refresh = get_table_param_.tablet_iter_.table_iter()->check_store_expire();
+  need_refresh = get_table_param_->tablet_iter_.table_iter()->check_store_expire();
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
   if (OB_FAIL(ret)) {

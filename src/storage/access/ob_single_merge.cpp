@@ -41,11 +41,11 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMultipleMerge::open())) {
     STORAGE_LOG(WARN, "Fail to open ObMultipleMerge, ", K(ret));
-  } else if (OB_UNLIKELY(!get_table_param_.is_valid())) {
+  } else if (OB_ISNULL(get_table_param_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSingleMerge has not been inited", K(ret), K_(get_table_param));
   } else {
-    const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.get_tablet()->get_tablet_meta();
+    const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
     if (!full_row_.is_valid()) {
       if (OB_FAIL(full_row_.init(*access_ctx_->stmt_allocator_, access_param_->get_max_out_col_cnt()))) {
         STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
@@ -245,7 +245,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     ObITable *table = tables_.at(0);
     bool have_uncommited_row = false;
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
-    const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.get_tablet()->get_tablet_meta();
+    const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
                                        access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_) &&
