@@ -174,8 +174,12 @@ double ObServerConfig::get_sys_tenant_default_min_cpu()
     int64_t cpu_count = get_cpu_count();
     if (cpu_count < 8) {
       min_cpu = 1;
-    } else {
+    } else if (cpu_count < 16) {
       min_cpu = 2;
+    } else if (cpu_count < 32) {
+      min_cpu = 3;
+    } else {
+      min_cpu = 4;
     }
   }
   return min_cpu;
@@ -188,8 +192,12 @@ double ObServerConfig::get_sys_tenant_default_max_cpu()
     int64_t cpu_count = get_cpu_count();
     if (cpu_count < 8) {
       max_cpu = 1;
-    } else {
+    } else if (cpu_count < 16) {
       max_cpu = 2;
+    } else if (cpu_count < 32) {
+      max_cpu = 3;
+    } else {
+      max_cpu = 4;
     }
   }
   return max_cpu;
