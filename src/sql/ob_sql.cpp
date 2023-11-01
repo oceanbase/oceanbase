@@ -1503,6 +1503,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
     context.is_from_pl_ = true;
     context.is_dynamic_sql_ = is_dynamic_sql;
     context.is_prepare_protocol_ = is_prepare_protocol;
+    context.spm_ctx_.bl_key_.db_id_ = session.get_database_id();
     context.disable_privilege_check_ = OB_SYS_TENANT_ID == session.get_priv_tenant_id()
                                           ? PRIV_CHECK_FLAG_DISABLE
                                           : PRIV_CHECK_FLAG_IN_PL;
