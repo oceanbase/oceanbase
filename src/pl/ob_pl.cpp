@@ -1559,7 +1559,9 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
         }
         CK (OB_NOT_NULL(trans_ctx.params_));
         for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
-          OZ (trans_ctx.params_->push_back(params.at(i)));
+          ObObjParam obj = params.at(i);
+          OZ (deep_copy_obj(ctx.get_allocator(), params.at(i), obj));
+          OZ (trans_ctx.params_->push_back(obj));
         }
       }
     }
@@ -1638,10 +1640,11 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(block));
   if (OB_SUCC(ret)) {
+    ObArenaAllocator paramerter_alloc;
     ObString sql(static_cast<int64_t>(block->str_len_), block->str_value_);
     ObString pc_key;
     ParseResult parse_result;
-    ObPLParser pl_parser(allocator,
+    ObPLParser pl_parser(paramerter_alloc,
                       ctx.get_my_session()->get_charsets4parser(),
                       ctx.get_my_session()->get_sql_mode());
     OZ (pl_parser.fast_parse(sql, parse_result));
@@ -1649,7 +1652,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       PlTransformTreeCtx trans_ctx;
       ParseNode *block_node = NULL;
       memset(&trans_ctx, 0, sizeof(PlTransformTreeCtx));
-      trans_ctx.allocator_ = &allocator;
+      trans_ctx.allocator_ = &paramerter_alloc;
       trans_ctx.raw_sql_ = sql;
       trans_ctx.raw_anonymous_off_ = block->pl_str_off_;
       trans_ctx.params_ = &params;
