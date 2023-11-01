@@ -6357,6 +6357,7 @@ def_table_schema(
 # 491 : __all_routine_privilege_history
 # 492 : __wr_sqlstat
 # 493 : __all_ncomp_dll
+# 494 : __all_aux_stat
 #
 # 余留位置
 ################################################################################
@@ -13111,6 +13112,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12444: __all_virtual_routine_privilege_history
 # 12445: __all_virtual_sqlstat
 # 12446: __all_virtual_wr_sqlstat
+# 12447 : __all_virtual_aux_stat
 # 余留位置
 #
 
@@ -13526,6 +13528,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15424: __all_virtual_sqlstat
 # 15425: __all_virtual_wr_sqlstat
 # def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
+# 15427: __all_virtual_aux_stat
 # 余留位置
 
 ################################################################################
@@ -30142,6 +30145,8 @@ def_table_schema(
 #21494 V$SYS_TIME_MODEL
 #21495 DBA_WR_SYS_TIME_MODEL
 #21496 CDB_WR_SYS_TIME_MODEL
+#21497 DBA_OB_AUX_STATISTICS
+#21498 CDB_OB_AUX_STATISTICS
 
 # 余留位置
 
@@ -54733,6 +54738,7 @@ def_table_schema(
 # 28207: GV$SYS_TIME_MODEL
 # 28208: V$SYS_TIME_MODEL
 # 28209: V$STATNAME
+# 28210: DBA_OB_AUX_STATISTICS
 
 ################################################################################
 # Lob Table (50000, 70000)
