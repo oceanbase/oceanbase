@@ -22,7 +22,7 @@ const char *OB_STORAGE_ACCESS_TYPES_STR[] = {"reader", "overwriter", "appender",
 ObObjectDevice::ObObjectDevice()
   : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK)
 {
-  auto attr = SET_USE_500("ObjectDevice");
+  ObMemAttr attr = SET_USE_500("ObjectDevice");
   reader_ctx_pool_.set_attr(attr);
   appender_ctx_pool_.set_attr(attr);
   overwriter_ctx_pool_.set_attr(attr);
