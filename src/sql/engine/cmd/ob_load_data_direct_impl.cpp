@@ -2141,6 +2141,9 @@ int ObLoadDataDirectImpl::init_execute_context()
     execute_ctx_.job_stat_ = direct_loader_.get_job_stat();
     execute_ctx_.logger_ = &logger_;
   }
+  if (OB_SUCC(ret)) {
+    ctx_->get_table_direct_insert_ctx().set_is_direct(true);
+  }
   return ret;
 }
 

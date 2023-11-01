@@ -60,16 +60,12 @@ void ObTableLoadService::ObCheckTenantTask::runTimerTask()
     LOG_WARN("ObTableLoadService::ObCheckTenantTask not init", KR(ret), KP(this));
   } else {
     LOG_DEBUG("table load check tenant", K(tenant_id_));
-    ObTenant *tenant = nullptr;
-    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id_, tenant))) {
-      LOG_WARN("fail to get tenant", KR(ret), K(tenant_id_));
-    } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                           tenant->get_unit_status())) {
-      LOG_DEBUG("tenant unit status not normal, clear", K(tenant_id_), KPC(tenant));
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check_tenant", KR(ret));
       // abort all client task
       service_.abort_all_client_task();
       // fail all current tasks
-      service_.fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
+      service_.fail_all_ctx(ret);
     }
   }
 }
@@ -372,6 +368,9 @@ int ObTableLoadService::mtl_init(ObTableLoadService *&service)
   return ret;
 }
 
+
+
+
 int ObTableLoadService::check_tenant()
 {
   int ret = OB_SUCCESS;
@@ -379,8 +378,13 @@ int ObTableLoadService::check_tenant()
   ObTenant *tenant = nullptr;
   if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_MARK_DELETING
+    || tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER
+    || tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+    ret = OB_EAGAIN;
+    LOG_WARN("unit is migrate out, should retry direct load", KR(ret), K(tenant->get_unit_status()));
   } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                         tenant->get_unit_status())) {
+                         tenant->get_unit_status() && ObUnitInfoGetter::ObUnitStatus::UNIT_MIGRATE_OUT != tenant->get_unit_status())) {
     ret = OB_ERR_UNEXPECTED_UNIT_STATUS;
     LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
   }
