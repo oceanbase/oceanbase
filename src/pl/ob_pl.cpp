@@ -1709,6 +1709,8 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
 
   OZ (ObPLContext::valid_execute_context(ctx));
 
+  OX (is_forbid_anony_parameter = is_forbid_anony_parameter || ctx.get_my_session()->is_pl_debug_on());
+
   OX (param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(),
                          ObModIds::OB_PL_TEMP,
                          ObCtxIds::DEFAULT_CTX_ID));
