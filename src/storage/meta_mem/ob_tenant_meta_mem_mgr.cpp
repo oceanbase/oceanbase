@@ -1989,29 +1989,32 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(bool &is_released, const cha
 int ObTenantMetaMemMgr::dump_tablet_info()
 {
   int ret = OB_SUCCESS;
-  common::ObFunction<int(common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *>&)> func =
-      [](common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *> &entry) {
-    const ObTabletMapKey &key = entry.first;
-    FLOG_INFO("dump tablet in map", K(key));
-    return OB_SUCCESS;
-  };
+  TabletMapDumpOperator op;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
-  } else if (OB_FAIL(tablet_map_.for_each_value_store(func))) {
+  } else if (OB_FAIL(tablet_map_.for_each_value_store(op))) {
     LOG_WARN("fail to traverse tablet map", K(ret));
   } else {
     SpinWLockGuard guard(wash_lock_);
     for (ObMetaObjBufferNode *node = normal_tablet_header_.get_first();
          node != normal_tablet_header_.get_header(); node = node->get_next()) {
-      FLOG_INFO("dump normal tablet buffer", KP(ObMetaObjBufferHelper::get_obj_buffer(node)), KP(node));
+      FLOG_INFO("dump normal tablet buffer", "buffer", static_cast<const void*>(ObMetaObjBufferHelper::get_obj_buffer(node)), KP(node));
     }
     for (ObMetaObjBufferNode *node = large_tablet_header_.get_first();
          node != large_tablet_header_.get_header(); node = node->get_next()) {
-      FLOG_INFO("dump large tablet buffer", KP(ObMetaObjBufferHelper::get_obj_buffer(node)), KP(node));
+      FLOG_INFO("dump large tablet buffer", "buffer", static_cast<const void*>(ObMetaObjBufferHelper::get_obj_buffer(node)), KP(node));
     }
   }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::TabletMapDumpOperator::operator()(common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *> &entry)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletMapKey &key = entry.first;
+  FLOG_INFO("dump tablet in map", K(key));
   return ret;
 }
 

@@ -181,6 +181,20 @@ public:
              const char *buf,
              const int64_t len,
              const transaction::ObMulSourceDataNotifyArg &notify_arg);
+private:
+  class ReadMdsFunctor
+  {
+  public:
+    ReadMdsFunctor(ObTabletCreateDeleteMdsUserData &user_data);
+    int operator()(const ObTabletCreateDeleteMdsUserData &data);
+  private:
+    ObTabletCreateDeleteMdsUserData &user_data_;
+  };
+  class DummyReadMdsFunctor
+  {
+  public:
+    int operator()(const ObTabletCreateDeleteMdsUserData &) { return common::OB_SUCCESS; }
+  };
 };
 
 template<typename Arg, typename Helper>

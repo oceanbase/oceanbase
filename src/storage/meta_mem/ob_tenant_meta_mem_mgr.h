@@ -395,7 +395,11 @@ private:
     ObITable::TableKey table_key_;
     ObTableHandleV2 sstable_handle_;
   };
-
+  class TabletMapDumpOperator
+  {
+  public:
+    int operator()(common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *> &entry);
+  };
 private:
   friend class ObT3mTabletMapIterator;
   friend class TableGCTask;

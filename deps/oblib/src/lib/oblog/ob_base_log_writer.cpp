@@ -194,7 +194,7 @@ int ObBaseLogWriter::append_log(ObIBaseLogItem &log_item, const uint64_t timeout
   } else {
     int64_t abs_time = ObTimeUtility::current_time() + timeout_us;
     while (OB_SUCC(ret)) {
-      auto key = log_write_cond_->get_key();
+      const uint32_t key = log_write_cond_->get_key();
       int64_t push_idx = ATOMIC_LOAD(&log_item_push_idx_);
       int64_t pop_idx = ATOMIC_LOAD(&log_item_pop_idx_);
       if (push_idx - pop_idx < max_buffer_item_cnt_) {
@@ -263,7 +263,7 @@ void ObBaseLogWriter::do_flush_log()
 {
   int64_t process_item_cnt = 0;
   int64_t item_cnt = 0;
-  auto key = log_flush_cond_->get_key();
+  const uint32_t key = log_flush_cond_->get_key();
   if (!need_flush()) {
     log_flush_cond_->wait(key, log_cfg_.group_commit_max_wait_us_);
   }

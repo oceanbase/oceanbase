@@ -27,6 +27,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_id_set.h"
 #include "storage/tablet/ob_tablet_persister.h"
@@ -52,6 +53,20 @@ namespace oceanbase
 {
 namespace storage
 {
+ObTabletCreateDeleteHelper::ReadMdsFunctor::ReadMdsFunctor(ObTabletCreateDeleteMdsUserData &user_data)
+  : user_data_(user_data)
+{
+}
+
+int ObTabletCreateDeleteHelper::ReadMdsFunctor::operator()(const ObTabletCreateDeleteMdsUserData &data)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(user_data_.assign(data))) {
+    LOG_WARN("failed to copy", K(ret));
+  }
+  return ret;
+}
+
 int ObTabletCreateDeleteHelper::get_tablet(
     const ObTabletMapKey &key,
     ObTabletHandle &handle,
@@ -141,18 +156,10 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
   ObTabletCreateDeleteMdsUserData user_data;
   bool is_committed = false;
 
-  auto func = [&user_data](const ObTabletCreateDeleteMdsUserData &data) -> int {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(user_data.assign(data))) {
-      LOG_WARN("failed to copy", K(ret));
-    }
-    return ret;
-  };
-
   if (OB_UNLIKELY(tablet.is_empty_shell())) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (OB_FAIL(tablet.get_latest<ObTabletCreateDeleteMdsUserData>(func, is_committed, 0))) {
+  } else if (OB_FAIL(tablet.get_latest<ObTabletCreateDeleteMdsUserData>(ReadMdsFunctor(user_data), is_committed, 0))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
@@ -255,10 +262,6 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
   share::SCN read_snapshot;
 
-  auto func = [](const ObTabletCreateDeleteMdsUserData &) -> int {
-    return OB_SUCCESS;
-  };
-
   if (OB_UNLIKELY(ObTabletStatus::NORMAL != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
@@ -271,7 +274,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
   } else if (OB_FAIL(tablet.get_snapshot<ObTabletCreateDeleteMdsUserData>(
-      func, read_snapshot, 0/*read_seq*/, timeout_us))) {
+      DummyReadMdsFunctor(), read_snapshot, 0/*read_seq*/, timeout_us))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
