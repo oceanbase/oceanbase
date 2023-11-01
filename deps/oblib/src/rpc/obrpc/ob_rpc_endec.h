@@ -24,7 +24,7 @@ namespace obrpc
 extern int64_t get_max_rpc_packet_size();
 class ObRpcProxy;
 int64_t calc_extra_payload_size();
-int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t pos);
+int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t &pos);
 int init_packet(ObRpcProxy& proxy, ObRpcPacket& pkt, ObRpcPacketCode pcode, const ObRpcOpts &opts,
                 const bool unneed_response);
 common::ObCompressorType get_proxy_compressor_type(ObRpcProxy& proxy);
@@ -46,7 +46,9 @@ template <typename T>
   int ret = common::OB_SUCCESS;
   ObRpcPacket pkt;
   const int64_t header_sz = pkt.get_header_size();
-  int64_t payload_sz = calc_extra_payload_size() + common::serialization::encoded_length(args);
+  int64_t extra_payload_size = calc_extra_payload_size();
+  int64_t args_len = common::serialization::encoded_length(args);
+  int64_t payload_sz = extra_payload_size + args_len;
   const int64_t reserve_bytes_for_pnio = 0;
   char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
   char* payload_buf = header_buf + header_sz;
@@ -62,8 +64,13 @@ template <typename T>
   } else if (OB_FAIL(common::serialization::encode(
                          payload_buf, payload_sz, pos, args))) {
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload_sz), K(ret));
+  } else if (OB_UNLIKELY(args_len < pos)) {
+    ret = OB_ERR_UNEXPECTED;
+    RPC_OBRPC_LOG(ERROR, "arg encoded length greater than arg length", K(ret), K(payload_sz),
+                  K(args_len), K(extra_payload_size), K(pos), K(pcode));
   } else if (OB_FAIL(fill_extra_payload(pkt, payload_buf, payload_sz, pos))) {
-    RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload_sz));
+    RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload_sz), K(args_len),
+                  K(extra_payload_size), K(pcode));
   } else {
     const common::ObCompressorType &compressor_type = get_proxy_compressor_type(proxy);
     bool need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type);

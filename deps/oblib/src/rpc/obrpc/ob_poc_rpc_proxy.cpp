@@ -106,6 +106,10 @@ int ObAsyncRespCallback::create(ObRpcMemPool& pool, UAsyncCB* ucb, ObAsyncRespCa
 int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_time = ObTimeUtility::current_time();
+  int64_t after_decode_time = 0;
+  int64_t after_process_time = 0;
+  ObRpcPacketCode pcode = OB_INVALID_RPC_CODE;
   ObRpcPacket* ret_pkt = NULL;
   if (buf != NULL && sz > easy_head_size) {
     sz = sz - easy_head_size;
@@ -118,6 +122,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     // do nothing
   } else {
     bool cb_cloned = ucb_->get_cloned();
+    pcode = ucb_->get_pcode();
     if (0 != io_err) {
       ucb_->set_error(io_err);
       if (OB_SUCCESS != ucb_->on_error(io_err)) {
@@ -138,10 +143,13 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
       ucb_->on_invalid();
       RPC_LOG(WARN, "ucb.decode fail", K(ret));
     } else {
+      after_decode_time = ObTimeUtility::current_time();
       int tmp_ret = OB_SUCCESS;
+      pcode = ret_pkt->get_pcode();
       if (OB_SUCCESS != (tmp_ret = ucb_->process())) {
         RPC_LOG(WARN, "ucb.process fail", K(tmp_ret));
       }
+      after_process_time = ObTimeUtility::current_time();
     }
     if (cb_cloned) {
       ucb_->~AsyncCB();
@@ -149,6 +157,15 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   }
   pool_.destroy();
   ObCurTraceId::reset();
+  const int64_t cur_time = ObTimeUtility::current_time();
+  const int64_t total_time = cur_time  - start_time;
+  const int64_t decode_time = after_decode_time - start_time;
+  const int64_t process_time = after_process_time - after_decode_time;
+  const int64_t session_destroy_time = cur_time - after_process_time;
+  if (total_time > OB_EASY_HANDLER_COST_TIME) {
+    RPC_LOG(WARN, "async_cb handler cost too much time", K(total_time), K(decode_time),
+        K(process_time), K(session_destroy_time), K(ret), K(pcode));
+  }
   return ret;
 }
 
