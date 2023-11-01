@@ -37,7 +37,7 @@ ObRsReentrantThread::~ObRsReentrantThread()
 
 void ObRsReentrantThread::update_last_run_timestamp() 
 {
-  auto time = ObTimeUtility::current_time();
+  int64_t time = ObTimeUtility::current_time();
   IGNORE_RETURN lib::Thread::update_loop_ts(time);
   if (ATOMIC_LOAD(&last_run_timestamp_) != -1) {
     ATOMIC_STORE(&last_run_timestamp_, time);

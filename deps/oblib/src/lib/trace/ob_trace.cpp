@@ -53,67 +53,64 @@ thread_local ObTrace* ObTrace::save_buffer = nullptr;
 
 void flush_trace()
 {
-  auto& trace = *OBTRACE;
-  auto& current_span = trace.current_span_;
+  ObTrace& trace = *OBTRACE;
+  common::ObDList<ObSpanCtx>& current_span = trace.current_span_;
   if (trace.is_inited() && !current_span.is_empty()) {
-    auto func = [&] {
-      auto* span = current_span.get_first();
-      ::oceanbase::trace::ObSpanCtx* next = nullptr;
-      while (current_span.get_header() != span) {
-        auto* next = span->get_next();
-        if (nullptr != span->tags_ || 0 != span->end_ts_) {
-          int64_t pos = 0;
-          thread_local char buf[MAX_TRACE_LOG_SIZE];
-          int ret = OB_SUCCESS;
-          auto* tag = span->tags_;
-          bool first = true;
-          INIT_SPAN(span);
-          while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
-            if (pos + 10 >= MAX_TRACE_LOG_SIZE) {
-              ret = OB_BUF_NOT_ENOUGH;
-            } else {
-              buf[pos++] = ',';
-              if (first) {
-                strcpy(buf + pos, "\"tags\":[");
-                pos += 8;
-                first = false;
-              }
-              ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
-              tag = tag->next_;
+    ObSpanCtx* span = current_span.get_first();
+    ObSpanCtx* next = nullptr;
+    while (current_span.get_header() != span) {
+      ObSpanCtx* next = span->get_next();
+      if (nullptr != span->tags_ || 0 != span->end_ts_) {
+        int64_t pos = 0;
+        thread_local char buf[MAX_TRACE_LOG_SIZE];
+        int ret = OB_SUCCESS;
+        ObTagCtxBase* tag = span->tags_;
+        bool first = true;
+        INIT_SPAN(span);
+        while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
+          if (pos + 10 >= MAX_TRACE_LOG_SIZE) {
+            ret = OB_BUF_NOT_ENOUGH;
+          } else {
+            buf[pos++] = ',';
+            if (first) {
+              strcpy(buf + pos, "\"tags\":[");
+              pos += 8;
+              first = false;
             }
+            ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
+            tag = tag->next_;
           }
-          if (0 != pos) {
-            if (pos + 1 < MAX_TRACE_LOG_SIZE) {
-              buf[pos++] = ']';
-              buf[pos++] = 0;
-            } else {
-              buf[MAX_TRACE_LOG_SIZE - 2] = ']';
-              buf[MAX_TRACE_LOG_SIZE - 1] = 0;
-            }
-          }
-          INIT_SPAN(span->source_span_);
-          _FLT_LOG(INFO,
-                        TRACE_PATTERN "%s}",
-                        UUID_TOSTRING(trace.get_trace_id()),
-                        __span_type_mapper[span->span_type_],
-                        UUID_TOSTRING(span->span_id_),
-                        span->start_ts_,
-                        span->end_ts_,
-                        UUID_TOSTRING(OB_ISNULL(span->source_span_) ? OBTRACE->get_root_span_id() : span->source_span_->span_id_),
-                        span->is_follow_ ? "true" : "false",
-                        buf);
-          buf[0] = '\0';
-          IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
-          if (0 != span->end_ts_) {
-            current_span.remove(span);
-            trace.freed_span_.add_first(span);
-          }
-          span->tags_ = nullptr;
         }
-        span = next;
+        if (0 != pos) {
+          if (pos + 1 < MAX_TRACE_LOG_SIZE) {
+            buf[pos++] = ']';
+            buf[pos++] = 0;
+          } else {
+            buf[MAX_TRACE_LOG_SIZE - 2] = ']';
+            buf[MAX_TRACE_LOG_SIZE - 1] = 0;
+          }
+        }
+        INIT_SPAN(span->source_span_);
+        _FLT_LOG(INFO,
+                      TRACE_PATTERN "%s}",
+                      UUID_TOSTRING(trace.get_trace_id()),
+                      __span_type_mapper[span->span_type_],
+                      UUID_TOSTRING(span->span_id_),
+                      span->start_ts_,
+                      span->end_ts_,
+                      UUID_TOSTRING(OB_ISNULL(span->source_span_) ? OBTRACE->get_root_span_id() : span->source_span_->span_id_),
+                      span->is_follow_ ? "true" : "false",
+                      buf);
+        buf[0] = '\0';
+        IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
+        if (0 != span->end_ts_) {
+          current_span.remove(span);
+          trace.freed_span_.add_first(span);
+        }
+        span->tags_ = nullptr;
       }
-    };
-    func();
+      span = next;
+    }
     trace.offset_ = trace.buffer_size_ / 2;
   }
 }
@@ -136,7 +133,7 @@ UUID UUID::gen()
 UUID::UUID(const char* uuid)
 {
   high_ = low_ = 0;
-  for (auto i = 0; i < 18; ++i) {
+  for (int i = 0; i < 18; ++i) {
     if (8 == i || 13 == i) {
       continue;
     } else if (uuid[i] >= '0' && uuid[i] <= '9') {
@@ -149,7 +146,7 @@ UUID::UUID(const char* uuid)
       return;
     }
   }
-  for (auto i = 19; i < 36; ++i) {
+  for (int i = 19; i < 36; ++i) {
     if (23 == i) {
       continue;
     } else if (uuid[i] >= '0' && uuid[i] <= '9') {
@@ -240,9 +237,9 @@ int to_string_and_strip(const char* str, const int64_t length, char* buf, const 
   char from[] = "\"\n\r\\\t";
   const char* to[] = { "\\\"", "\\n", "\\r", "\\\\", " "};
   buf[pos++] = '\"';
-  for (auto j = 0; j < length && str[j]; ++j) {
+  for (int j = 0; j < length && str[j]; ++j) {
     bool conv = false;
-    for (auto i = 0; i < sizeof(from) - 1; ++i) {
+    for (int i = 0; i < sizeof(from) - 1; ++i) {
       if (from[i] == str[j]) {
         for (const char* toc = to[i]; *toc; ++toc) {
           if (pos < buf_len) {
@@ -368,7 +365,7 @@ ObTrace::ObTrace(int64_t buffer_size)
     policy_(0),
     seq_(0)
 {
-  for (auto i = 0; i < (offset_ / sizeof(ObSpanCtx)); ++i) {
+  for (int i = 0; i < (offset_ / sizeof(ObSpanCtx)); ++i) {
     IGNORE_RETURN freed_span_.add_last(new(data_ + i * sizeof(ObSpanCtx)) ObSpanCtx);
   }
 }
@@ -475,9 +472,9 @@ void ObTrace::reset_span()
   #endif
   // remove all end span
   if (is_inited() && !current_span_.is_empty()) {
-    auto* span = current_span_.get_first();
+    ObSpanCtx* span = current_span_.get_first();
     while (current_span_.get_header() != span) {
-      auto* next = span->get_next();
+      ObSpanCtx* next = span->get_next();
       if (0 != span->end_ts_) {
         current_span_.remove(span);
         freed_span_.add_first(span);
@@ -492,9 +489,9 @@ void ObTrace::reset_span()
 int ObTrace::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
 {
   int ret = OB_SUCCESS;
-  auto* span = const_cast<ObTrace*>(this)->last_active_span_;
+  ObSpanCtx* span = const_cast<ObTrace*>(this)->last_active_span_;
   INIT_SPAN(span);
-  auto& span_id = span == nullptr ? root_span_id_ : span->span_id_;
+  const UUID& span_id = span == nullptr ? root_span_id_ : span->span_id_;
   if (OB_FAIL(trace_id_.serialize(buf, buf_len, pos))) {
     // LOG_WARN("serialize failed", K(ret), K(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(span_id.serialize(buf, buf_len, pos))) {
@@ -557,7 +554,7 @@ void ObTrace::dump_span()
   char buf[buf_len];
   int64_t pos = 0;
   int ret = OB_SUCCESS;
-  auto* span = current_span_.get_first();
+  ObSpanCtx* span = current_span_.get_first();
   IGNORE_RETURN databuff_printf(buf, buf_len, pos, "active_span: ");
   while (OB_SUCC(ret) && current_span_.get_header() != span) {
     if (0 == span->end_ts_) {

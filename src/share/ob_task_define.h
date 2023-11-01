@@ -41,7 +41,7 @@ toUType(E enumerator) noexcept
 // Not support change log rate percentage of each task dynamically.
 class ObTaskController {
   using RateLimiter = lib::ObRateLimiter;
-  static constexpr auto MAX_TASK_ID = toUType(ObTaskType::MAX);
+  static constexpr int MAX_TASK_ID = toUType(ObTaskType::MAX);
   static constexpr int64_t LOG_RATE_LIMIT = 10 << 20;
 
 public:
