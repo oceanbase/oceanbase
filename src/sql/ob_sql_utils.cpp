@@ -4473,6 +4473,21 @@ bool ObSQLUtils::is_nested_sql(ObExecContext *cur_ctx)
   return is_pl_nested_sql(cur_ctx) || is_fk_nested_sql(cur_ctx);
 }
 
+bool ObSQLUtils::is_in_autonomous_block(ObExecContext *cur_ctx)
+{
+  bool bret = false;
+  pl::ObPLContext *pl_context = nullptr;
+  if (cur_ctx != nullptr) {
+    pl_context = cur_ctx->get_pl_stack_ctx();
+    for (; !bret && pl_context != nullptr; pl_context = pl_context->get_parent_stack_ctx()) {
+      if (pl_context->in_autonomous()) {
+        bret = true;
+      }
+    }
+  }
+  return bret;
+}
+
 bool ObSQLUtils::is_select_from_dual(ObExecContext &ctx)
 {
   bool bret = false;

@@ -581,6 +581,7 @@ public:
   static bool is_fk_nested_sql(ObExecContext *cur_ctx);
   static bool is_iter_uncommitted_row(ObExecContext *cur_ctx);
   static bool is_nested_sql(ObExecContext *cur_ctx);
+  static bool is_in_autonomous_block(ObExecContext *cur_ctx);
   static bool is_select_from_dual(ObExecContext &ctx);
 
   static int get_obj_from_ext_obj(const ObObjParam &ext_obj, int64_t pos, ObObj *&obj);
