@@ -349,6 +349,7 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
               compaction::ObMediumCompactionInfo medium_info;
               ObMultiSourceData::ObIMultiSourceDataUnitList dst_list;
               if (OB_SUCC(mt->get_multi_source_data_unit_list(&medium_info, dst_list, allocator_))) {
+                MEMSET(compaction_info_buf_, '\0', sizeof(compaction_info_buf_));
                 int k = 0;
                 DLIST_FOREACH_X(info, dst_list, OB_SUCC(ret)) {
                   common::databuff_printf(
