@@ -247,6 +247,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_aggregation_pushdown",
   "ob_enable_index_direct_select",
   "ob_enable_jit",
+  "ob_enable_pl_cache",
   "ob_enable_plan_cache",
   "ob_enable_rich_error_msg",
   "ob_enable_show_trace",
@@ -489,6 +490,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN,
   SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT,
   SYS_VAR_OB_ENABLE_JIT,
+  SYS_VAR_OB_ENABLE_PL_CACHE,
   SYS_VAR_OB_ENABLE_PLAN_CACHE,
   SYS_VAR_OB_ENABLE_RICH_ERROR_MSG,
   SYS_VAR_OB_ENABLE_SHOW_TRACE,
@@ -845,7 +847,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "automatic_sp_privileges",
   "privilege_features_enable",
   "_priv_control",
-  "_enable_mysql_pl_priv_check"
+  "_enable_mysql_pl_priv_check",
+  "ob_enable_pl_cache"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1253,6 +1256,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarPrivilegeFeaturesEnable)
         + sizeof(ObSysVarPrivControl)
         + sizeof(ObSysVarEnableMysqlPlPrivCheck)
+        + sizeof(ObSysVarObEnablePlCache)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3410,6 +3414,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableMysqlPlPrivCheck));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePlCache", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_CACHE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePlCache));
       }
     }
 
@@ -6048,6 +6061,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableMysqlPlPrivCheck())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnableMysqlPlPrivCheck", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_PL_CACHE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnablePlCache)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnablePlCache)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlCache())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnablePlCache", K(ret));
       }
       break;
     }

@@ -3375,13 +3375,26 @@ static struct VarsInit{
     ObSysVars[238].alias_ = "OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK" ;
     }();
 
+    [&] (){
+      ObSysVars[239].default_value_ = "1" ;
+      ObSysVars[239].info_ = "whether use pl cache in session" ;
+      ObSysVars[239].name_ = "ob_enable_pl_cache" ;
+      ObSysVars[239].data_type_ = ObIntType ;
+      ObSysVars[239].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[239].id_ = SYS_VAR_OB_ENABLE_PL_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_CACHE] = 239 ;
+      ObSysVars[239].base_value_ = "1" ;
+    ObSysVars[239].alias_ = "OB_SV_ENABLE_PL_CACHE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 239;
+static int64_t var_amount = 240;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -255,6 +255,7 @@ namespace share
   static const char* const OB_SV_PRIVILEGE_FEATURES_ENABLE = "privilege_features_enable";
   static const char* const OB_SV__PRIV_CONTROL = "_priv_control";
   static const char* const OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK = "_enable_mysql_pl_priv_check";
+  static const char* const OB_SV_ENABLE_PL_CACHE = "ob_enable_pl_cache";
 
 }
 }
