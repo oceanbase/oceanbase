@@ -15404,7 +15404,10 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
               if (is_recover_restore_table) {
                 if (OB_FAIL(new_index_schema.set_encryption_str(hidden_table_schema.get_encryption_str()))) {
                   LOG_WARN("set encryption str failed", K(ret), K(hidden_table_schema.get_encryption_str()));
+                } else if (OB_FAIL(new_index_schema.set_encrypt_key(hidden_table_schema.get_encrypt_key()))) {
+                  LOG_WARN("set encrypt key failed", K(ret), K(hidden_table_schema.get_encrypt_key()));
                 } else {
+                  new_index_schema.set_master_key_id(hidden_table_schema.get_master_key_id());
                   new_index_schema.set_tablespace_id(hidden_table_schema.get_tablespace_id());
                 }
               }
