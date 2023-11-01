@@ -30,11 +30,13 @@ public:
   
   static int resolve_grant_user(
       const ParseNode *grant_user,
+      ObSQLSessionInfo *session_info,
       ObString &user_name,
       ObString &host_name);
 
   static int resolve_grantee_clause(
       const ParseNode *grantee_clause,
+      ObSQLSessionInfo *session_info,
       ObIArray<ObString> &user_name_array,
       ObIArray<ObString> &host_name_array);
 

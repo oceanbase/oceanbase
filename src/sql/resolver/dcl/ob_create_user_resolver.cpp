@@ -93,7 +93,8 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
         if (OB_ISNULL(user_pass)) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("The child of parseNode should not be NULL", K(ret), K(i));
-        } else if (4 != user_pass->num_child_) {
+        } else if (OB_UNLIKELY(lib::is_oracle_mode() && 4 != user_pass->num_child_) ||
+                   OB_UNLIKELY(lib::is_mysql_mode() && 5 != user_pass->num_child_ )) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("sql_parser parse user_identification error", K(ret));
         } else if (OB_ISNULL(user_pass->children_[0])) {
@@ -117,35 +118,50 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
             host_name.assign_ptr(user_pass->children_[3]->str_value_,
                                  static_cast<int32_t>(user_pass->children_[3]->str_len_));
           }
-          if (lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
+          if (OB_SUCC(ret) && lib::is_mysql_mode() && NULL != user_pass->children_[4]) {
+            /* here code is to mock a auth plugin check. */
+            ObString auth_plugin(static_cast<int32_t>(user_pass->children_[4]->str_len_),
+                                  user_pass->children_[4]->str_value_);
+            ObString default_auth_plugin;
+            if (OB_FAIL(session_info_->get_sys_variable(SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                        default_auth_plugin))) {
+              LOG_WARN("fail to get block encryption variable", K(ret));
+            } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+              ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+              LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
+            } else {/* do nothing */}
+          }
+          if (OB_SUCC(ret) && lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "create user with hostname");
             LOG_WARN("create user should not use hostname in oracle mode", K(ret));
           }
           ObString password;
           ObString need_enc_str = ObString::make_string("NO");
-          if (user_name.empty()) {
-            ret = OB_CANNOT_USER;
-            LOG_WARN("user name is empty", K(ret));
-            ObString create_user = ObString::make_string("CREATE USER");
-            LOG_USER_ERROR(OB_CANNOT_USER, create_user.length(), create_user.ptr(), host_name.length(), host_name.ptr());
-          } else if (OB_ISNULL(user_pass->children_[1])) {
-            password = ObString::make_string("");
-            //no enc
-          } else if (OB_ISNULL(user_pass->children_[2])) {
-            ret = OB_ERR_PARSE_SQL;
-            LOG_WARN("Child 2 of user_pass should not be NULL here", K(ret));
-          } else {
-            password.assign_ptr(user_pass->children_[1]->str_value_,
-                                static_cast<int32_t>(user_pass->children_[1]->str_len_));
-            bool need_enc = (1 == user_pass->children_[2]->value_);
-            if (need_enc) {
-              need_enc_str = ObString::make_string("YES");
-            } else {
+          if (OB_SUCC(ret)) {
+            if (user_name.empty()) {
+              ret = OB_CANNOT_USER;
+              LOG_WARN("user name is empty", K(ret));
+              ObString create_user = ObString::make_string("CREATE USER");
+              LOG_USER_ERROR(OB_CANNOT_USER, create_user.length(), create_user.ptr(), host_name.length(), host_name.ptr());
+            } else if (OB_ISNULL(user_pass->children_[1])) {
+              password = ObString::make_string("");
               //no enc
-              if (!ObSetPasswordResolver::is_valid_mysql41_passwd(password)) {
-                ret = OB_ERR_PASSWORD_FORMAT;
-                LOG_WARN("Wrong password format", K(user_name), K(password), K(ret));
+            } else if (OB_ISNULL(user_pass->children_[2])) {
+              ret = OB_ERR_PARSE_SQL;
+              LOG_WARN("Child 2 of user_pass should not be NULL here", K(ret));
+            } else {
+              password.assign_ptr(user_pass->children_[1]->str_value_,
+                                  static_cast<int32_t>(user_pass->children_[1]->str_len_));
+              bool need_enc = (1 == user_pass->children_[2]->value_);
+              if (need_enc) {
+                need_enc_str = ObString::make_string("YES");
+              } else {
+                //no enc
+                if (!ObSetPasswordResolver::is_valid_mysql41_passwd(password)) {
+                  ret = OB_ERR_PASSWORD_FORMAT;
+                  LOG_WARN("Wrong password format", K(user_name), K(password), K(ret));
+                }
               }
             }
           }
