@@ -2839,18 +2839,18 @@ Outputs & filters:
   0 - output([T_FUN_SUM(xy_t1.c1)], [T_FUN_SUM(xy_t1.c2)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_SUM(xy_t1.c1)], [T_FUN_SUM(xy_t1.c2)])
   1 - output([xy_t1.c2], [xy_t1.c1]), filter([(T_OP_NOT_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))]), rowset=256
-      exec_params_([xy_t1.c2(:0)], [xy_t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([xy_t1.c2(:0)], [xy_t1.c2(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   2 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c2], [xy_t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
   3 - output([1]), filter(nil), rowset=256
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t3.c2], [xy_t3.c1], [xy_t3.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
       range_cond([xy_t3.c2 = :0])
   4 - output([1]), filter(nil), rowset=256
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
       range_cond([xy_t2.c2 = :1])
@@ -4357,13 +4357,13 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), rowset=16
-      exec_params_([xy_t2.c1(:0)], [xy_t2.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([xy_t2.c1(:0)], [xy_t2.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c3], [xy_t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([1]), filter([xy_t1.c3 < :1]), rowset=16
-      access([xy_t1.c3]), partitions(p0)
+      access([GROUP_ID], [xy_t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true, 
       range_cond([xy_t1.c1 = :0])
@@ -4503,13 +4503,13 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t2.c1], [xy_t2.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), rowset=16
-      exec_params_([xy_t2.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([xy_t2.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([xy_t2.c1], [xy_t2.c2]), filter(nil), rowset=16
       access([xy_t2.c1], [xy_t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.c1]), range(MIN ; MAX)always true
   2 - output([1]), filter([xy_t1.c1 > xy_t1.c2]), rowset=16
-      access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
+      access([GROUP_ID], [xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([xy_t1.c1]), range(MIN ; MAX)always true, 
       range_cond([xy_t1.c1 = :0])
