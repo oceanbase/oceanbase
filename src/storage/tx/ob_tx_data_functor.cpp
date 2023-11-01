@@ -388,8 +388,16 @@ int LockForReadFunctor::check_clog_disk_full_()
     MTL(logservice::coordinator::ObFailureDetector *);
 
   if (NULL != detector && detector->is_clog_disk_has_fatal_error()) {
-    ret = detector->is_clog_disk_has_full_error()? OB_SERVER_OUTOF_DISK_SPACE: OB_CLOG_DISK_HANG;
-    TRANS_LOG(ERROR, "unexpected io error", K(ret), KPC(this));
+    if (detector->is_clog_disk_has_full_error()) {
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      TRANS_LOG(ERROR, "disk full error", K(ret), KPC(this));
+    } else if (detector->is_clog_disk_has_hang_error()) {
+      ret = OB_CLOG_DISK_HANG;
+      TRANS_LOG(ERROR, "disk hang error", K(ret), KPC(this));
+    } else {
+      ret = OB_IO_ERROR;
+      TRANS_LOG(ERROR, "unexpected io error", K(ret), KPC(this));
+    }
   }
 
   return ret;
