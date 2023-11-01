@@ -35,7 +35,7 @@ void ObTxMDSCache::destroy()
   while (!mds_list_.empty()) {
     mds_list_.pop_front(tmp_node);
     if (nullptr != tmp_node.data_.ptr()) {
-      share::mtl_free(tmp_node.data_.ptr());
+      MultiTxDataFactory::free(tmp_node.data_.ptr());
     }
     tmp_node.get_buffer_ctx_node().destroy_ctx();
   }
@@ -84,7 +84,7 @@ int ObTxMDSCache::rollback_last_mds_node()
     TRANS_LOG(WARN, "pop back last node failed", K(ret));
   } else {
     TRANS_LOG(INFO, "rollback the last mds node", K(ret), K(buf_node), KPC(this));
-    share::mtl_free(buf_node.get_ptr());
+    MultiTxDataFactory::free(buf_node.get_ptr());
     buf_node.get_buffer_ctx_node().destroy_ctx();
   }
 

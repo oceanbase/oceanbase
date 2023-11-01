@@ -24,6 +24,7 @@
 #include "storage/tx/ob_gts_rpc.h"
 #include "storage/tx/ob_gti_rpc.h"
 #include "storage/tx/ob_trans_end_trans_callback.h"
+#include "storage/tx/ob_leak_checker.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase
@@ -266,6 +267,24 @@ MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRequestRpc, ObModIds::OB_GTS_REQU
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRpcProxy, ObModIds::OB_GTI_RPC_PROXY)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRequestRpc, ObModIds::OB_GTI_REQUEST_RPC)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObTxCommitCallbackTask, ObModIds::OB_END_TRANS_CB_TASK)
+
+void *MultiTxDataFactory::alloc(const int64_t len, const uint64_t arg1, const uint64_t arg2)
+{
+  const char *mod_name = "MultiTxData";
+  void *ptr = mtl_malloc(len, mod_name);
+  if (NULL != ptr) {
+    ObLeakChecker::reg((uint64_t)ptr, arg1, arg2, mod_name);
+  }
+  return ptr;
+}
+
+void MultiTxDataFactory::free(void *ptr)
+{
+  if (NULL != ptr) {
+    ObLeakChecker::unreg((uint64_t)ptr);
+    mtl_free(ptr);
+  }
+}
 
 } // transaction
 } // oceanbase

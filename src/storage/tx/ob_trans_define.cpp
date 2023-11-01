@@ -745,7 +745,7 @@ void ObTxExecInfo::destroy()
   for (int64_t i = 0; i < multi_data_source_.count(); ++i) {
     ObTxBufferNode &node = multi_data_source_.at(i);
     if (nullptr != node.data_.ptr()) {
-      share::mtl_free(node.data_.ptr());
+      MultiTxDataFactory::free(node.data_.ptr());
       node.buffer_ctx_node_.destroy_ctx();
     }
   }
