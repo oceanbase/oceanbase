@@ -982,8 +982,8 @@ int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema
     column_group.version_ = ObStorageColumnGroupSchema::COLUMN_GRUOP_SCHEMA_VERSION;
     column_group.type_ = ALL_COLUMN_GROUP;
     column_group.schema_column_cnt_ = store_column_cnt_;
-    column_group.rowkey_column_cnt_ = get_rowkey_column_num();
-    column_group.schema_rowkey_column_cnt_ = column_group.rowkey_column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    column_group.rowkey_column_cnt_ = get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    column_group.schema_rowkey_column_cnt_ = get_rowkey_column_num();
     column_group.column_cnt_ = column_group.schema_column_cnt_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     column_group.column_idxs_ = nullptr;
     column_group.block_size_ = block_size_;
