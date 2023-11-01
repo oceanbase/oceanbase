@@ -6297,7 +6297,7 @@ def_table_schema(
 # 482 : __all_tablet_reorganize_history
 # 483 : __all_storage_ha_error_diagnose
 # 484 : __all_storage_ha_perf_diagnose
-
+# 494 : __all_index_usage_info
 #
 # 余留位置
 ################################################################################
@@ -29944,6 +29944,7 @@ def_table_schema(
 #21479 GV$OB_CGROUP_CONFIG
 #21480 V$OB_CGROUP_CONFIG
 #21485 DBA_OB_FORMAT_OUTLINES
+#21497 DBA_OB_INDEX_USAGE
 
 # 余留位置
 
