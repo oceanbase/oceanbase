@@ -1693,7 +1693,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
                                       ObItemType cmp_type,
                                       const ObExprResType &result_type,
                                       ObKeyPart *&out_key_part,
-                                      const ObDataTypeCastParams &dtc_params)
+                                      const ObDataTypeCastParams &dtc_params,
+                                      bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || (OB_ISNULL(escape_expr) && T_OP_LIKE == cmp_type)) {
@@ -1821,7 +1822,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           }
         }
         if (OB_SUCC(ret) && out_key_part->is_normal_key() && !out_key_part->is_question_mark()) {
-          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, contain_row_))) {
+          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
             LOG_WARN("cast keypart value type failed", K(ret));
           } else {
             // do nothing
@@ -1970,28 +1971,37 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
     for (int i = 0; OB_SUCC(ret) && !b_flag && i < num; ++i) {
       res_type.set_calc_meta(result_type.get_row_calc_cmp_types().at(i));
       tmp_key_part = NULL;
-      if (OB_FAIL(check_null_param_compare_in_row(l_row->get_param_expr(i),
-                                                  r_row->get_param_expr(i),
+      bool is_bound_modified = false;
+      const ObRawExpr *l_expr = l_row->get_param_expr(i);
+      const ObRawExpr *r_expr = r_row->get_param_expr(i);
+      if (OB_FAIL(check_null_param_compare_in_row(l_expr,
+                                                  r_expr,
                                                   tmp_key_part))) {
         LOG_WARN("failed to check null param compare in row", K(ret));
       } else if (tmp_key_part == NULL &&
-                 OB_FAIL(get_basic_query_range(l_row->get_param_expr(i),
-                                               r_row->get_param_expr(i),
+                 OB_FAIL(get_basic_query_range(l_expr,
+                                               r_expr,
                                                NULL,
                                                i < num - 1 ? c_type : cmp_type,
                                                res_type,
                                                tmp_key_part,
-                                               dtc_params))) {
+                                               dtc_params,
+                                               is_bound_modified))) {
         LOG_WARN("Get basic query key part failed", K(ret), K(*l_row), K(*r_row), K(c_type));
-      } else if (T_OP_ROW == l_row->get_param_expr(i)->get_expr_type()
-                 || T_OP_ROW == r_row->get_param_expr(i)->get_expr_type()) {
+      } else if (OB_ISNULL(tmp_key_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (T_OP_ROW == l_expr->get_expr_type()
+                 || T_OP_ROW == r_expr->get_expr_type()) {
         // ((a,b),(c,d)) = (((1,2),(2,3)),((1,2),(2,3)))
         row_is_precise = false;
       } else if (OB_ISNULL(tmp_key_part)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (tmp_key_part->is_always_false()) {
-        out_key_part = tmp_key_part;
+        if (i == 0) {
+          out_key_part = tmp_key_part;
+        }
         b_flag = true;
       } else if (T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) {
         row_is_precise = (row_is_precise && query_range_ctx_->cur_expr_is_precise_);
@@ -2017,7 +2027,14 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
           out_key_part = tmp_key_part;
         }
         row_tail = tmp_key_part;
-        normal_key_cnt += (tmp_key_part->is_always_true() ? 0 : 1);
+        normal_key_cnt += 1;
+        const ObRawExpr *const_expr = l_expr->is_const_expr() ? l_expr : r_expr;
+        if (OB_FAIL(check_row_bound(tmp_key_part, dtc_params, const_expr, is_bound_modified))) {
+          LOG_WARN("failed to check bound modified");
+        } else if (is_bound_modified) {
+          b_flag = true;
+          row_is_precise = false;
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -2041,6 +2058,34 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
   return ret;
 }
 
+int ObQueryRange::check_row_bound(ObKeyPart *key_part,
+                              const ObDataTypeCastParams &dtc_params,
+                              const ObRawExpr *const_expr,
+                              bool &is_bound_modified)
+{
+  int ret = OB_SUCCESS;
+  ObObj const_val;
+  bool is_valid = false;
+  int64_t cmp = 0;
+  if (OB_ISNULL(key_part) || OB_ISNULL(query_range_ctx_) || OB_ISNULL(const_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(key_part), K(query_range_ctx_), K(const_expr));
+  } else if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+    LOG_WARN("failed to calculate val", K(ret), K(*const_expr), K(const_val), K(is_valid));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, key_part->pos_,
+                                                const_val, cmp))) {
+    LOG_WARN("failed to cast value", K(ret));
+  } else if (cmp != 0 || ob_obj_type_class(const_expr->get_data_type()) !=
+                         ob_obj_type_class(key_part->pos_.column_type_.get_type())) {
+    is_bound_modified = true;
+  }
+  LOG_TRACE("succeed to check bound",
+            K(is_bound_modified), K(cmp), K(is_valid), K(*key_part), K(*const_expr), K(const_val));
+  return ret;
+}
+
 // Get range from basic compare expression, like 'col >= 30', 'row(c1, c2) > row(1, 2)'
 //  if this compare expression is not kinds of that we can use,
 //  return alway true key part, because it may be in OR expression
@@ -2060,7 +2105,8 @@ int ObQueryRange::get_basic_query_range(const ObRawExpr *l_expr,
                                         ObItemType cmp_type,
                                         const ObExprResType &result_type,
                                         ObKeyPart *&out_key_part,
-                                        const ObDataTypeCastParams &dtc_params)
+                                        const ObDataTypeCastParams &dtc_params,
+                                        bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   out_key_part = NULL;
@@ -2097,7 +2143,7 @@ int ObQueryRange::get_basic_query_range(const ObRawExpr *l_expr,
       } else if ((l_expr->has_flag(IS_COLUMN) && r_expr->is_const_expr())
                 || (l_expr->is_const_expr() && r_expr->has_flag(IS_COLUMN) && T_OP_LIKE != cmp_type)) {
         if (OB_FAIL(get_column_key_part(l_expr, r_expr, escape_expr, cmp_type,
-                                        result_type, out_key_part, dtc_params))) {//column
+                                        result_type, out_key_part, dtc_params, is_bound_modified))) {//column
           LOG_WARN("get column key part failed.", K(ret));
         }
       } else if ((l_expr->has_flag(IS_ROWID) && r_expr->is_const_expr())
@@ -2382,13 +2428,15 @@ int ObQueryRange::pre_extract_basic_cmp(const ObRawExpr *node,
         }
       }
       //因为我们只处理某些特殊的表达式，对于一些复杂表达式即使是精确的，也不对其做优化，所以先将flag初始化为false
+      bool dummy_is_bound_modified = false;
       if (OB_FAIL(get_basic_query_range(multi_expr->get_param_expr(0),
                                         right_expr,
                                         escape_expr,
                                         node->get_expr_type(),
                                         node->get_result_type(),
                                         out_key_part,
-                                        dtc_params))) {
+                                        dtc_params,
+                                        dummy_is_bound_modified))) {
         LOG_WARN("Get basic query key part failed", K(ret));
       }
     }
@@ -2418,13 +2466,15 @@ int ObQueryRange::pre_extract_ne_op(const ObOpRawExpr *t_expr,
       for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
         query_range_ctx_->cur_expr_is_precise_ = false;
         ObKeyPart *tmp = NULL;
+        bool dummy_is_bound_modified = false;
         if (OB_FAIL(get_basic_query_range(l_expr,
                                           r_expr,
                                           NULL,
                                           i == 0 ? T_OP_LT : T_OP_GT,
                                           t_expr->get_result_type(),
                                           tmp,
-                                          dtc_params))) {
+                                          dtc_params,
+                                          dummy_is_bound_modified))) {
           LOG_WARN("Get basic query range failed", K(ret));
         } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
           LOG_WARN("push back failed", K(ret));
@@ -2456,6 +2506,7 @@ int ObQueryRange::pre_extract_is_op(const ObOpRawExpr *b_expr,
     LOG_WARN("expr is null.", K(b_expr), K_(query_range_ctx));
   } else if (ObNullType == b_expr->get_param_expr(1)->get_result_type().get_type()) {
     //pk is null will be extracted
+    bool dummy_is_bound_modified = false;
     if (2 != b_expr->get_param_count()) {//binary op expr
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("b_expr must has 2 arguments", K(ret));
@@ -2465,7 +2516,8 @@ int ObQueryRange::pre_extract_is_op(const ObOpRawExpr *b_expr,
                                              T_OP_NSEQ,
                                              b_expr->get_result_type(),
                                              out_key_part,
-                                             dtc_params))) {
+                                             dtc_params,
+                                             dummy_is_bound_modified))) {
       LOG_WARN("Get basic query key part failed", K(ret));
     }
   } else {
@@ -2493,13 +2545,15 @@ int ObQueryRange::pre_extract_btw_op(const ObOpRawExpr *t_expr,
     for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
       const ObRawExpr *r_expr = t_expr->get_param_expr(i + 1);
       ObKeyPart *tmp = NULL;
+      bool dummy_is_bound_modified = false;
       if (OB_FAIL(get_basic_query_range(l_expr,
                                         r_expr,
                                         NULL,
                                         i == 0 ? T_OP_GE : T_OP_LE,
                                         t_expr->get_result_type(),
                                         tmp,
-                                        dtc_params))) {
+                                        dtc_params,
+                                        dummy_is_bound_modified))) {
         LOG_WARN("Get basic query range failed", K(ret));
       } else if (OB_FAIL(add_and_item(key_part_list, tmp))) {
         LOG_WARN("push back failed", K(ret));
@@ -2538,13 +2592,15 @@ int ObQueryRange::pre_extract_not_btw_op(const ObOpRawExpr *t_expr,
       query_range_ctx_->cur_expr_is_precise_ = false;
       const ObRawExpr *r_expr = t_expr->get_param_expr(i + 1);
       ObKeyPart *tmp = NULL;
+      bool dummy_is_bound_modified = false;
       if (OB_FAIL(get_basic_query_range(l_expr,
                                         r_expr,
                                         NULL,
                                         i == 0 ? T_OP_LT : T_OP_GT,
                                         t_expr->get_result_type(),
                                         tmp,
-                                        dtc_params))) {
+                                        dtc_params,
+                                        dummy_is_bound_modified))) {
         LOG_WARN("Get basic query range failed", K(ret));
       } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
         LOG_WARN("push back failed", K(ret));
@@ -2595,6 +2651,7 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
     for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
       ObKeyPart *tmp = NULL;
       ObExprResType res_type(alloc);
+      bool dummy_is_bound_modified = false;
       if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
         LOG_WARN("get in expr element result type failed", K(ret), K(i));
       } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
@@ -2603,7 +2660,8 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
                                                 T_OP_EQ,
                                                 res_type,
                                                 tmp,
-                                                dtc_params))) {
+                                                dtc_params,
+                                                dummy_is_bound_modified))) {
         LOG_WARN("Get basic query range failed", K(ret));
       } else if (OB_ISNULL(tmp) || NULL != tmp->or_next_) {
         ret = OB_ERR_UNEXPECTED;
@@ -2668,6 +2726,7 @@ int ObQueryRange::pre_extract_complex_in_op(const ObOpRawExpr *b_expr,
     for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
       ObKeyPart *tmp = NULL;
       ObExprResType res_type(alloc);
+      bool dummy_is_bound_modified = false;
       if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
         LOG_WARN("get in expr element result type failed", K(ret), K(i));
       } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
@@ -2676,7 +2735,8 @@ int ObQueryRange::pre_extract_complex_in_op(const ObOpRawExpr *b_expr,
                                                 T_OP_EQ,
                                                 res_type,
                                                 tmp,
-                                                dtc_params))) {
+                                                dtc_params,
+                                                dummy_is_bound_modified))) {
         LOG_WARN("Get basic query range failed", K(ret));
       } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
         LOG_WARN("push back failed", K(ret));
@@ -3355,13 +3415,15 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < 2; ++j) {
         query_range_ctx_->cur_expr_is_precise_ = false;
+        bool dummy_is_bound_modified = false;
         if (OB_FAIL(get_basic_query_range(l_expr,
                                           r_expr->get_param_expr(i),
                                           NULL,
                                           j == 0 ? T_OP_LT : T_OP_GT,
                                           res_type,
                                           tmp,
-                                          dtc_params))) {
+                                          dtc_params,
+                                          dummy_is_bound_modified))) {
           LOG_WARN("Get basic query range failed", K(ret));
         } else if (OB_FAIL(add_or_item(or_array, tmp))) {
           LOG_WARN("push back failed", K(ret));
@@ -5093,14 +5155,16 @@ int ObQueryRange::link_or_graphs(ObKeyPartList &storage, ObKeyPart  *&out_key_pa
 // Replace unknown value in item_next_ list,
 // and intersect them.
 
-int ObQueryRange::definite_key_part(ObKeyPart *key_part, ObExecContext &exec_ctx, const ObDataTypeCastParams &dtc_params)
+int ObQueryRange::definite_key_part(ObKeyPart *key_part, ObExecContext &exec_ctx,
+                                    const ObDataTypeCastParams &dtc_params,
+                                    bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   if (NULL != key_part) {
     for (ObKeyPart *cur = key_part;
          OB_SUCC(ret) && NULL != cur;
          cur = cur->item_next_) {
-      if (OB_FAIL(replace_unknown_value(cur, exec_ctx, dtc_params))) {
+      if (OB_FAIL(replace_unknown_value(cur, exec_ctx, dtc_params, is_bound_modified))) {
         LOG_WARN("Replace unknown value failed", K(ret));
       } else if (cur->is_always_false()) { // set key_part false
         key_part->normal_keypart_ = cur->normal_keypart_;
@@ -5220,8 +5284,9 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
         ObKeyPart *new_tmp = cur;
         ObKeyPart *and_next = cur->and_next_;
         cur = cur->get_next();
+        bool is_bound_modified = false;
         // replace undefinited value
-        if (OB_FAIL(definite_key_part(new_tmp, *exec_ctx, dtc_params))) {
+        if (OB_FAIL(definite_key_part(new_tmp, *exec_ctx, dtc_params, is_bound_modified))) {
           LOG_WARN("Fill unknown value failed", K(ret));
         } else if (new_tmp != old_tmp) {
           old_tmp->replace_by(new_tmp);
@@ -5249,7 +5314,10 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
             }
           } else {
             // handle the rest of the graph recursively
-            if (NULL != and_next) {
+            if (contain_row_ && is_bound_modified) {
+              and_next = NULL;
+              new_tmp->and_next_ = NULL;
+            } else if (NULL != and_next) {
               // recursively process following and key part
               ObKeyPartList sub_or_list;
               if (OB_FAIL(split_or(and_next, sub_or_list))) {
@@ -5613,11 +5681,15 @@ int ObQueryRange::definite_in_range_graph(ObExecContext &exec_ctx,
   int ret = OB_SUCCESS;
   int64_t cnt = 0;
   for (ObKeyPart *cur_part = root; OB_SUCC(ret) && cur_part != NULL; cur_part = cur_part->or_next_) {
+    bool is_bound_modified = false;
     if (++cnt % 1000 == 0 && OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("check status fail", K(ret));
-    } else if (OB_FAIL(definite_key_part(cur_part, exec_ctx, dtc_params))) {
+    } else if (OB_FAIL(definite_key_part(cur_part, exec_ctx, dtc_params, is_bound_modified))) {
       LOG_WARN("definite key part failed", K(ret));
     } else {
+      if (contain_row_ && is_bound_modified) {
+        cur_part->and_next_ = NULL;
+      }
       //如果graph中某个节点不是严格的等值条件，那么这个节点是一个scan key，需要做or合并
       //如果有恒false条件，也需要走到or去做去除处理
       if (!cur_part->is_equal_condition()) {
@@ -6717,6 +6789,7 @@ OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
   } else if (!is_get_range) {
     all_single_value_ranges = false;
   }
+  LOG_TRACE("get range success", K(ret), K(table_graph_.is_precise_get_), K(ranges));
   return ret;
 }
 
@@ -7127,7 +7200,9 @@ OB_NOINLINE int ObQueryRange::final_extract_query_range(ObExecContext &exec_ctx,
 }
 #undef FINAL_EXTRACT
 
-int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx, const ObDataTypeCastParams &dtc_params)
+int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx,
+                                        const ObDataTypeCastParams &dtc_params,
+                                        bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   bool is_inconsistent_rowid = false;
@@ -7248,7 +7323,7 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
   if (OB_SUCC(ret)) {
     if (root->is_phy_rowid_key_part() || root->is_in_key()) {
       ////physical rowid no need cast, it's will be transformed in table scan phase.
-    } else if (OB_FAIL(root->cast_value_type(dtc_params, contain_row_))) {
+    } else if (OB_FAIL(root->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
       LOG_WARN("cast value type failed", K(ret));
     }
   }
