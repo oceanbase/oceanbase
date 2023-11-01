@@ -81,7 +81,6 @@ ObKVStoreMemBlock::ObKVStoreMemBlock(char *buffer, const int64_t size)
 
 ObKVStoreMemBlock::~ObKVStoreMemBlock()
 {
-  reuse();
 }
 
 void ObKVStoreMemBlock::reuse()
