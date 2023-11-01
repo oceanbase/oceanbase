@@ -5437,7 +5437,20 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_RECYCLEBIN:
     case stmt::T_SHOW_RESTORE_PREVIEW:
     case stmt::T_SHOW_TENANT:
-    case stmt::T_SHOW_SEQUENCES: {
+    case stmt::T_SHOW_SEQUENCES:
+    case stmt::T_SHOW_STATUS:
+    case stmt::T_SHOW_CREATE_TENANT:
+    case stmt::T_SHOW_TRACE:
+    case stmt::T_SHOW_ENGINES:
+    case stmt::T_SHOW_PRIVILEGES:
+    case stmt::T_SHOW_CREATE_PROCEDURE:
+    case stmt::T_SHOW_CREATE_FUNCTION:
+    case stmt::T_SHOW_PROCEDURE_STATUS:
+    case stmt::T_SHOW_FUNCTION_STATUS:
+    case stmt::T_SHOW_CREATE_TABLEGROUP:
+    case stmt::T_SHOW_CREATE_TRIGGER:
+    case stmt::T_SHOW_QUERY_RESPONSE_TIME:
+    case stmt::T_SHOW_TRIGGERS: {
       if (0 == prepare_result.into_exprs_.count()) {
         if (func.is_function() || in_tg) {
           ret = OB_ER_SP_NO_RETSET;
