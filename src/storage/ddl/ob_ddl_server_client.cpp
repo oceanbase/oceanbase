@@ -400,19 +400,14 @@ int ObDDLServerClient::check_need_stop(const uint64_t tenant_id)
   bool is_tenant_dropped = false;
   bool is_tenant_standby = false;
   if (OB_FAIL(ret)) {
-  } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id, is_tenant_dropped))) {
-    LOG_WARN("check if tenant has been droopped failed", K(tmp_ret), K(tenant_id));
-  } else if (is_tenant_dropped) {
-    ret = OB_TENANT_HAS_BEEN_DROPPED;
-    LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_TMP_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
-    LOG_WARN("check is standby tenant failed", K(tmp_ret), K(tenant_id));
-  } else if (is_tenant_standby) {
-    ret = OB_STANDBY_READ_ONLY;
-    LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
+  } else if (OB_TMP_FAIL(ObDDLUtil::check_tenant_status_normal(GCTX.sql_proxy_, tenant_id))) {
+    if (OB_TENANT_HAS_BEEN_DROPPED == tmp_ret) {
+      ret = OB_TENANT_HAS_BEEN_DROPPED;
+      LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
+    } else if (OB_STANDBY_READ_ONLY == tmp_ret) {
+      ret = OB_STANDBY_READ_ONLY;
+      LOG_WARN("tenant is standby now, stop wait", K(ret), K(tenant_id));
+    }
   }
 
   if (OB_FAIL(ret)) {
