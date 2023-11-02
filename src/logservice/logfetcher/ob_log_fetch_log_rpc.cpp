@@ -768,6 +768,7 @@ const char *FetchLogARpc::print_state(State state)
   return str;
 }
 
+ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_REQ_FAIL)
 int FetchLogARpc::alloc_rpc_request_(const ObLSID &ls_id,
     const int64_t rpc_timeout,
     RpcRequest *&req)
@@ -780,6 +781,8 @@ int FetchLogARpc::alloc_rpc_request_(const ObLSID &ls_id,
   if (OB_UNLIKELY(! ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid ls_id", KR(ret), K(ls_id));
+  } else if (OB_FAIL(ALLOC_FETCH_LOG_ARPC_REQ_FAIL)) {
+    LOG_ERROR("ALLOC_FETCH_LOG_ARPC_REQ_FAIL");
   } else if (OB_ISNULL(buf = ob_malloc(size, attr))) {
     LOG_ERROR("allocate memory for RpcRequest fail", K(size));
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1133,13 +1136,14 @@ int FetchLogARpc::analyze_result_(RpcRequest &rpc_req,
 }
 
 ///////////////////////////// FetchLogARpc::RpcCB /////////////////////////
-
+ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_CB_FAIL);
 rpc::frame::ObReqTransport::AsyncCB *FetchLogARpc::RpcCB::clone(const rpc::frame::SPAlloc &alloc) const
 {
   void *buf = NULL;
   RpcCB *cb = NULL;
-
-  if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
+  if (OB_SUCCESS != ALLOC_FETCH_LOG_ARPC_CB_FAIL) {
+    LOG_ERROR_RET(ALLOC_FETCH_LOG_ARPC_CB_FAIL, "ALLOC_FETCH_LOG_ARPC_CB_FAIL");
+  } else if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
     LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
   } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
     LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
@@ -1158,7 +1162,7 @@ int FetchLogARpc::RpcCB::process()
   const common::ObAddr &svr = RpcCBBase::dst_;
 
   if (OB_FAIL(do_process_(rcode, &result))) {
-    LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
+    LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
   }
   // Aone:
   // Note: Active destructe response after asynchronous RPC processing
@@ -1178,7 +1182,7 @@ void FetchLogARpc::RpcCB::on_timeout()
       to_cstring(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr), K_(host));
+    LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
   }
 }
 
@@ -1195,7 +1199,7 @@ void FetchLogARpc::RpcCB::on_invalid()
       to_cstring(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr), K_(host));
+    LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
   }
 }
 
@@ -1206,7 +1210,7 @@ int FetchLogARpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLS
   FetchLogARpc &rpc_host = rpc_req.host_;
 
   if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
-    LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode), K(rpc_req));
+    LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode));
   } else {
     // success
   }
@@ -1430,11 +1434,13 @@ void FetchLogARpcResultPool::print_stat()
       used_count, alloc_count, free_count, fixed_count, dynamic_count, cached_total_count);
 }
 
+ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_RESULT_FAIL)
 int FetchLogARpcResultPool::alloc(FetchLogARpcResult *&result)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(ALLOC_FETCH_LOG_ARPC_RESULT_FAIL)) {
   } else {
     ret = pool_.alloc(result);
   }
