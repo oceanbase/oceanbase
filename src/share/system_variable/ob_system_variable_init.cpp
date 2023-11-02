@@ -3318,13 +3318,26 @@ static struct VarsInit{
     ObSysVars[234].alias_ = "OB_SV_LC_TIME_NAMES" ;
     }();
 
+    [&] (){
+      ObSysVars[235].default_value_ = "1" ;
+      ObSysVars[235].info_ = "whether use pl cache in session" ;
+      ObSysVars[235].name_ = "ob_enable_pl_cache" ;
+      ObSysVars[235].data_type_ = ObIntType ;
+      ObSysVars[235].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[235].id_ = SYS_VAR_OB_ENABLE_PL_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_CACHE] = 235 ;
+      ObSysVars[235].base_value_ = "1" ;
+    ObSysVars[235].alias_ = "OB_SV_ENABLE_PL_CACHE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 235;
+static int64_t var_amount = 236;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

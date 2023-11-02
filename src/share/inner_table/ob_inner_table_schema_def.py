@@ -6297,6 +6297,7 @@ def_table_schema(
 # 482 : __all_tablet_reorganize_history
 # 483 : __all_storage_ha_error_diagnose
 # 484 : __all_storage_ha_perf_diagnose
+# 493 : __all_ncomp_dll
 # 494 : __all_index_usage_info
 #
 # 余留位置
@@ -55307,6 +55308,8 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_kv_ttl_task_history'])
+
+# 101098 : placeholder for index of __all_ncomp_dll
 
 ################################################################################
 # Oracle Agent table Index

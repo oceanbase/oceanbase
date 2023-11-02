@@ -3348,5 +3348,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_enable_pl_cache": {
+    "id": 10157,
+    "name": "ob_enable_pl_cache",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "whether use pl cache in session",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "publish_version": "422",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
