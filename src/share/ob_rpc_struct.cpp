@@ -3829,11 +3829,11 @@ DEF_TO_STRING(ObSwitchLeaderArg)
 OB_SERIALIZE_MEMBER(ObSwitchLeaderArg, ls_id_, role_, tenant_id_, dest_server_);
 
 OB_SERIALIZE_MEMBER(ObLSTabletPair, ls_id_, tablet_id_);
-OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedArg, tenant_id_, schema_version_, need_wait_trans_end_, tablets_);
+OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedArg, tenant_id_, schema_version_, need_wait_trans_end_, tablets_, ddl_task_id_);
 
 bool ObCheckSchemaVersionElapsedArg::is_valid() const
 {
-  bool bret = OB_INVALID_ID != tenant_id_ && schema_version_ > 0 && !tablets_.empty();
+  bool bret = OB_INVALID_ID != tenant_id_ && schema_version_ > 0 && !tablets_.empty() && ddl_task_id_ >= 0;
   for (int64_t i = 0; bret && i < tablets_.count(); ++i) {
     bret = tablets_.at(i).is_valid();
   }
@@ -3846,11 +3846,12 @@ void ObCheckSchemaVersionElapsedArg::reuse()
   schema_version_ = 0;
   need_wait_trans_end_ = true;
   tablets_.reuse();
+  ddl_task_id_ = 0;
 }
 
 bool ObCheckModifyTimeElapsedArg::is_valid() const
 {
-  bool bret = OB_INVALID_ID != tenant_id_ && sstable_exist_ts_ > 0;
+  bool bret = OB_INVALID_ID != tenant_id_ && sstable_exist_ts_ > 0 && ddl_task_id_ >= 0;
   for (int64_t i = 0; bret && i < tablets_.count(); ++i) {
     bret = tablets_.at(i).is_valid();
   }
@@ -3876,9 +3877,10 @@ void ObCheckModifyTimeElapsedArg::reuse()
   tenant_id_ = OB_INVALID_ID;
   sstable_exist_ts_ = 0;
   tablets_.reuse();
+  ddl_task_id_ = 0;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedArg, tenant_id_, sstable_exist_ts_, tablets_);
+OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedArg, tenant_id_, sstable_exist_ts_, tablets_, ddl_task_id_);
 
 bool ObCheckSchemaVersionElapsedResult::is_valid() const
 {

@@ -4421,16 +4421,17 @@ struct ObCheckSchemaVersionElapsedArg final
   OB_UNIS_VERSION(1);
 public:
   ObCheckSchemaVersionElapsedArg()
-    : tenant_id_(), schema_version_(0), need_wait_trans_end_(true)
+    : tenant_id_(), schema_version_(0), need_wait_trans_end_(true), ddl_task_id_(0)
   {}
   bool is_valid() const;
   void reuse();
-  TO_STRING_KV(K_(tenant_id), K_(schema_version), K_(need_wait_trans_end), K_(tablets));
+  TO_STRING_KV(K_(tenant_id), K_(schema_version), K_(need_wait_trans_end), K_(tablets), K_(ddl_task_id));
 
   uint64_t tenant_id_;
   int64_t schema_version_;
   bool need_wait_trans_end_;
   ObSEArray<ObLSTabletPair, 10> tablets_;
+  int64_t ddl_task_id_;
 };
 
 struct ObDDLCheckTabletMergeStatusArg final
@@ -4464,13 +4465,14 @@ struct ObCheckModifyTimeElapsedArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckModifyTimeElapsedArg() : tenant_id_(OB_INVALID_ID), sstable_exist_ts_(0) {}
+  ObCheckModifyTimeElapsedArg() : tenant_id_(OB_INVALID_ID), sstable_exist_ts_(0), ddl_task_id_(0) {}
   bool is_valid() const;
   void reuse();
-  TO_STRING_KV(K_(tenant_id), K_(sstable_exist_ts), K_(tablets));
+  TO_STRING_KV(K_(tenant_id), K_(sstable_exist_ts), K_(tablets), K_(ddl_task_id));
   uint64_t tenant_id_;
   int64_t sstable_exist_ts_;
   ObSEArray<ObLSTabletPair, 10> tablets_;
+  int64_t ddl_task_id_;
 };
 
 struct ObCheckTransElapsedResult final

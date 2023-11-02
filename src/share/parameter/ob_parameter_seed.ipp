@@ -984,6 +984,16 @@ DEF_CAP(px_task_size, OB_CLUSTER_PARAMETER, "2M", "[2M,)", "to be removed",
 DEF_INT(_max_elr_dependent_trx_count, OB_CLUSTER_PARAMETER, "0", "[0,)", "max elr dependent transaction count",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+ERRSIM_DEF_INT_LIST(errsim_ddl_sim_point_random_control, OB_TENANT_PARAMETER, "",
+        "the ddl sim point param in errsim mode, once set successfully, no more modifications"
+        "format like: seed; point_count_per_task",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT_LIST(errsim_ddl_sim_point_fixed_list, OB_TENANT_PARAMETER, "",
+        "the fixed ddl sim point list in errsim mode, "
+        "format like: point_id_1; point_id_2; point_id_3",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 ERRSIM_DEF_INT(errsim_max_backup_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "max backup retry count in errsim mode"
         "Range: [0,) in integer",
@@ -1061,6 +1071,11 @@ ERRSIM_DEF_TIME(trigger_auto_backup_delete_interval, OB_CLUSTER_PARAMETER, "1h",
 ERRSIM_DEF_INT(errsim_max_restore_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "max restore retry count in errsim mode"
         "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_TIME(errsim_ddl_major_delay_time, OB_CLUSTER_PARAMETER, "1800s", "[0s,3600s]",
+        "ddl create major sstable delay time in errsim mode, Range [0s,3600s]. "
+        "The default value is 120s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 #ifdef TRANS_MODULE_TEST
