@@ -5168,6 +5168,10 @@ int ObQueryRange::definite_key_part(ObKeyPart *key_part, ObExecContext &exec_ctx
       if (OB_FAIL(replace_unknown_value(cur, exec_ctx, dtc_params, is_bound_modified))) {
         LOG_WARN("Replace unknown value failed", K(ret));
       } else if (cur->is_always_false()) { // set key_part false
+        if (key_part->is_in_key()) {
+          key_part->id_ = cur->id_;
+          key_part->pos_ = cur->pos_;
+        }
         key_part->normal_keypart_ = cur->normal_keypart_;
         key_part->key_type_ = T_NORMAL_KEY;
         // key_part = cur; cause bug ->
