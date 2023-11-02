@@ -490,6 +490,9 @@ public:
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
 
+  static int check_tenant_status_normal(
+      ObISQLClient *proxy,
+      const uint64_t check_tenant_id);
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
