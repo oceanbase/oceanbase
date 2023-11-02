@@ -60,6 +60,7 @@ int MockInsertRowsLSTabletService::prepare_dml_running_ctx(
     } else if (NULL != column_ids && OB_FAIL(run_ctx.prepare_column_info(*column_ids))) {
       LOG_WARN("fail to get column descriptions and column map", K(ret), K(*column_ids));
     } else {
+      relative_table.tablet_iter_.set_tablet_handle(tablet_handle);
       store_ctx.table_version_ = dml_param.schema_version_;
       run_ctx.column_ids_ = column_ids;
     }
