@@ -6358,6 +6358,8 @@ def_table_schema(
 # 492 : __wr_sqlstat
 # 493 : __all_ncomp_dll
 # 494 : __all_aux_stat
+# 495 : __all_index_usage_info
+
 #
 # 余留位置
 ################################################################################
@@ -30147,6 +30149,7 @@ def_table_schema(
 #21496 CDB_WR_SYS_TIME_MODEL
 #21497 DBA_OB_AUX_STATISTICS
 #21498 CDB_OB_AUX_STATISTICS
+#21499 DBA_OB_INDEX_USAGE
 
 # 余留位置
 
