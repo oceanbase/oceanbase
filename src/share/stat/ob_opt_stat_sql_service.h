@@ -90,7 +90,8 @@ public:
                        ObIArray<ObOptKeyColumnStat> &key_col_stats);
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
-                        ObIArray<ObOptKeyColumnStat> &key_col_stats);
+                        ObIArray<ObOptKeyColumnStat> &key_col_stats,
+                        bool is_accross_tenant_query = false);
 
   int update_table_stat(const uint64_t tenant_id,
                         const ObOptTableStat *tab_stat,
@@ -103,6 +104,7 @@ public:
                         const bool is_history_stat = false);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t exec_tenant_id,
+                         ObIAllocator &allocator,
                          ObMySQLTransaction &trans,
                          const common::ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,

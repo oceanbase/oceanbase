@@ -1484,11 +1484,7 @@ bool ObDDLRedefinitionTask::check_need_sync_stats() {
 int ObDDLRedefinitionTask::sync_stats_info()
 {
   int ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (check_need_sync_stats()) {
+  if (check_need_sync_stats()) {
     ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
     ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
     ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
@@ -1499,7 +1495,6 @@ int ObDDLRedefinitionTask::sync_stats_info()
     ObTimeoutCtx timeout_ctx;
     int64_t timeout = 0;
     const int64_t start_time = ObTimeUtility::current_time();
-    bool need_sync_history = check_need_sync_stats_history();
     if (OB_FAIL(ObDDLUtil::get_tenant_schema_guard(tenant_id_, dst_tenant_id_,
         hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
         src_tenant_schema_guard, dst_tenant_schema_guard))) {
@@ -1517,22 +1512,18 @@ int ObDDLRedefinitionTask::sync_stats_info()
       LOG_WARN("set timeout ctx failed", K(ret));
     } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
       LOG_WARN("set timeout failed", K(ret));
-    } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
-      LOG_WARN("fail to start transaction", K(ret));
-    } else if (OB_FAIL(sync_table_level_stats_info(trans, *data_table_schema, need_sync_history))) {
-      LOG_WARN("fail to sync table level stats", K(ret));
-    } else if (DDL_ALTER_PARTITION_BY != task_type_
-               && OB_FAIL(sync_partition_level_stats_info(trans,
-                                                          *data_table_schema,
-                                                          *new_table_schema,
-                                                          need_sync_history))) {
-      LOG_WARN("fail to sync partition level stats", K(ret));
-    } else if (OB_FAIL(sync_column_level_stats_info(trans,
-                                                    *data_table_schema,
-                                                    *new_table_schema,
-                                                    *src_tenant_schema_guard,
-                                                    need_sync_history))) {
-      LOG_WARN("fail to sync column level stats", K(ret));
+    } else if (tenant_id_ == dst_tenant_id_
+               && OB_FAIL(sync_stats_info_in_same_tenant(trans,
+                                                         src_tenant_schema_guard,
+                                                         *data_table_schema,
+                                                         *new_table_schema))) {
+      LOG_WARN("fail to sync stat in same tenant", K(ret));
+    } else if (tenant_id_ != dst_tenant_id_
+               && OB_FAIL(sync_stats_info_accross_tenant(trans,
+                                                         dst_tenant_schema_guard,
+                                                         *data_table_schema,
+                                                         *new_table_schema))) {
+      LOG_WARN("fail to sync stat accross tenant", K(ret));
     }
 
     if (trans.is_started()) {
@@ -1550,6 +1541,353 @@ int ObDDLRedefinitionTask::sync_stats_info()
     const int64_t end_time = ObTimeUtility::current_time();
     LOG_INFO("sync table stat finished", "cost_time", end_time - start_time);
   }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::sync_stats_info_in_same_tenant(common::ObMySQLTransaction &trans,
+                                                          ObSchemaGetterGuard *src_tenant_schema_guard,
+                                                          const ObTableSchema &data_table_schema,
+                                                          const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObRootService *root_service = GCTX.root_service_;
+  bool need_sync_history = check_need_sync_stats_history();
+
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
+    LOG_WARN("fail to start transaction", K(ret));
+  } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, need_sync_history))) {
+    LOG_WARN("fail to sync table level stats", K(ret));
+  } else if (DDL_ALTER_PARTITION_BY != task_type_
+              && OB_FAIL(sync_partition_level_stats_info(trans,
+                                                        data_table_schema,
+                                                        new_table_schema,
+                                                        need_sync_history))) {
+    LOG_WARN("fail to sync partition level stats", K(ret));
+  } else if (OB_FAIL(sync_column_level_stats_info(trans,
+                                                  data_table_schema,
+                                                  new_table_schema,
+                                                  *src_tenant_schema_guard,
+                                                  need_sync_history))) {
+    LOG_WARN("fail to sync column level stats", K(ret));
+  }
+
+  return ret;
+}
+
+int ObDDLRedefinitionTask::sync_stats_info_accross_tenant(common::ObMySQLTransaction &trans,
+                                                          ObSchemaGetterGuard *dst_tenant_schema_guard,
+                                                          const ObTableSchema &data_table_schema,
+                                                          const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObOptTableStat, 4> src_part_stats;
+  ObSEArray<ObOptKeyColumnStat, 4> src_column_stats;
+  common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
+  ObRootService *root_service = GCTX.root_service_;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(get_src_part_stats(data_table_schema, src_part_stats))) {
+    LOG_WARN("fail to get src part stats", K(ret));
+  } else if (OB_FAIL(get_src_column_stats(data_table_schema, allocator, src_column_stats))) {
+    LOG_WARN("fail to get src column stats", K(ret));
+  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
+    LOG_WARN("fail to start transaction", K(ret));
+  } else if (OB_FAIL(sync_part_stats_info_accross_tenant(trans,
+                                                         data_table_schema,
+                                                         new_table_schema,
+                                                         src_part_stats))) {
+    LOG_WARN("fail to sync partition stats", K(ret));
+  } else if (OB_FAIL(sync_column_stats_info_accross_tenant(trans,
+                                                           dst_tenant_schema_guard,
+                                                           data_table_schema,
+                                                           new_table_schema,
+                                                           src_column_stats))) {
+    LOG_WARN("fail to sync column table level stat", K(ret));
+  } else {
+    LOG_INFO("succeed to sync accross tenant stat", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
+  }
+
+  return ret;
+}
+
+int ObDDLRedefinitionTask::get_src_part_stats(const ObTableSchema &data_table_schema,
+                                              ObIArray<ObOptTableStat> &part_stats)
+{
+  int ret = OB_SUCCESS;
+  ObOptTableStat::Key key;
+  ObOptStatSqlService &stat_svr = ObOptStatManager::get_instance().get_stat_sql_service();
+  key.tenant_id_ = tenant_id_;
+  key.table_id_ = object_id_;
+  if (!data_table_schema.is_partitioned_table()) {
+    key.partition_id_ = object_id_;
+  } else {
+    key.partition_id_ = -1;
+  }
+
+  // fetch_table_stat return both the table-level and partition-level stats.
+  if (FAILEDx(stat_svr.fetch_table_stat(tenant_id_, key, part_stats))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get table stat", K(ret), K_(tenant_id), K(key));
+    } else {
+      // no part stat
+      ret = OB_SUCCESS;
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLRedefinitionTask::get_src_column_stats(const ObTableSchema &data_table_schema,
+                                                ObIAllocator &allocator,
+                                                ObIArray<ObOptKeyColumnStat> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> partition_ids;
+  ObArray<uint64_t> column_ids;
+  ObArray<ObObjectID> object_ids;
+  ObOptStatSqlService &stat_svr = ObOptStatManager::get_instance().get_stat_sql_service();
+
+  if (!data_table_schema.is_partitioned_table()) {
+    if (OB_FAIL(partition_ids.push_back(object_id_))) {
+      LOG_WARN("failed to push back partition id", K(ret));
+    }
+  } else if (OB_FAIL(partition_ids.push_back(-1))) {
+    LOG_WARN("failed to push back partition id", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&data_table_schema, object_ids))) {
+    LOG_WARN("fail to get all tablet and object ids", K(ret));
+  } else {
+    ARRAY_FOREACH(object_ids, i) {
+      if (OB_FAIL(partition_ids.push_back(object_ids.at(i)))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+  }
+
+  ObTableSchema::const_column_iterator iter = data_table_schema.column_begin();
+  ObTableSchema::const_column_iterator iter_end = data_table_schema.column_end();
+
+  for (; OB_SUCC(ret) && iter != iter_end; iter++) {
+    const ObColumnSchemaV2 *col = *iter;
+    if (OB_ISNULL(col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col is NULL", K(ret));
+    } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
+      // bypass hidden column
+    } else if (col->is_udt_hidden_column()) {
+      // bypass udt hidden column
+    } else if (OB_FAIL(column_ids.push_back(col->get_column_id()))) {
+      LOG_WARN("failed to push back column id", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < column_ids.count(); j++) {
+      void *buf1 = NULL;
+      void *buf2 = NULL;
+      if (OB_ISNULL(buf1 = allocator.alloc(sizeof(ObOptColumnStat::Key)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc column stat key", K(ret));
+      } else if (OB_ISNULL(buf2 = allocator.alloc(sizeof(ObOptColumnStat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc column stat", K(ret));
+      } else {
+        ObOptColumnStat::Key *key = new (buf1) ObOptColumnStat::Key(tenant_id_,
+                                                                    object_id_,
+                                                                    partition_ids.at(i),
+                                                                    column_ids.at(j));
+        ObOptColumnStat *stat = new (buf2) ObOptColumnStat();
+        stat->set_table_id(key->table_id_);
+        stat->set_partition_id(key->partition_id_);
+        stat->set_column_id(key->column_id_);
+
+        ObOptKeyColumnStat key_col_stat;
+        key_col_stat.key_ = key;
+        key_col_stat.stat_ = stat;
+        if (OB_FAIL(column_stats.push_back(key_col_stat))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+  }
+
+  if (FAILEDx(stat_svr.fetch_column_stat(tenant_id_,
+                                         allocator,
+                                         column_stats,
+                                         true /* accross tenant query */))) {
+    LOG_WARN("failed to get column stat", K(ret), K_(tenant_id), K_(object_id));
+  }
+
+  return ret;
+}
+
+int ObDDLRedefinitionTask::sync_part_stats_info_accross_tenant(common::ObMySQLTransaction &trans,
+                                                               const ObTableSchema &data_table_schema,
+                                                               const ObTableSchema &new_table_schema,
+                                                               const ObIArray<ObOptTableStat> &part_stats)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObObjectID> src_partition_ids;
+  ObArray<ObObjectID> target_partition_ids;
+  ObHashMap<int64_t, int64_t> part_ids_map;
+  ObOptStatSqlService &stat_svr = ObOptStatManager::get_instance().get_stat_sql_service();
+  common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
+  ObSEArray<ObOptTableStat *, 4> target_part_stats;
+  if (part_stats.empty()) {
+    LOG_INFO("partition stats are empty, no need to sync", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
+  } else {
+    // build partition id mapping table in order to replace the old partition
+    // with new partition.
+    if (OB_FAIL(part_ids_map.create(MAP_BUCKET_NUM, "RedefTask"))) {
+      LOG_WARN("failed to create map", K(ret));
+    } else if (!data_table_schema.is_partitioned_table()) {
+      if (OB_FAIL(part_ids_map.set_refactored(object_id_, target_object_id_))) {
+        LOG_WARN("failed to insert map", K(ret));
+      }
+    } else if (OB_FAIL(part_ids_map.set_refactored(-1, -1))) {
+      LOG_WARN("failed to insert map", K(ret));
+    } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&data_table_schema, src_partition_ids))) {
+      LOG_WARN("fail to get all tablet and object ids", K(ret));
+    } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&new_table_schema, target_partition_ids))) {
+      LOG_WARN("fail to get all tablet and object ids", K(ret));
+    } else {
+      ARRAY_FOREACH(src_partition_ids, i) {
+        const int64_t src_partition_id = src_partition_ids.at(i);
+        const int64_t target_partition_id = target_partition_ids.at(i);
+        if (OB_FAIL(part_ids_map.set_refactored(src_partition_id, target_partition_id))) {
+          LOG_WARN("failed to insert map", K(ret));
+        }
+      }
+    }
+
+    // replace with new partition id.
+    ARRAY_FOREACH(part_stats, i) {
+      const ObOptTableStat &part_stat = part_stats.at(i);
+      ObOptTableStat *target_part_stat = NULL;
+      char *buf = NULL;
+      if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(part_stat.size())))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc part stat", K(ret));
+      } else if (OB_FAIL(part_stat.deep_copy(buf, part_stat.size(), target_part_stat))) {
+        LOG_WARN("failed to copy partition stat", K(ret));
+      } else {
+        const int64_t src_partition_id = part_stat.get_partition_id();
+        int64_t target_partition_id = 0;
+        target_part_stat->set_table_id(target_object_id_);
+        target_part_stat->set_last_analyzed(0);
+        if (OB_FAIL(part_ids_map.get_refactored(src_partition_id, target_partition_id))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("target partition not found", K(ret), K_(dst_tenant_id), K_(target_object_id), K(src_partition_id));
+          } else {
+            LOG_WARN("failed to get part_ids_map", K(ret));
+          }
+        } else if (FALSE_IT(target_part_stat->set_partition_id(target_partition_id))) {
+        } else if (OB_FAIL(target_part_stats.push_back(target_part_stat))) {
+          LOG_WARN("failed to push back partition stat", K(ret));
+        }
+      }
+    }
+
+    if (FAILEDx(stat_svr.update_table_stat(dst_tenant_id_,
+                                          trans,
+                                          target_part_stats,
+                                          ObTimeUtility::current_time(),
+                                          new_table_schema.is_index_table()))) {
+      LOG_WARN("failed to update partition stats", K(ret), K_(dst_tenant_id), K_(target_object_id));
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQLTransaction &trans,
+                                                                 share::schema::ObSchemaGetterGuard *dst_tenant_schema_guard,
+                                                                 const ObTableSchema &data_table_schema,
+                                                                 const ObTableSchema &new_table_schema,
+                                                                 const ObIArray<ObOptKeyColumnStat> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObObjectID> src_partition_ids;
+  ObArray<ObObjectID> target_partition_ids;
+  ObHashMap<int64_t, int64_t> part_ids_map;
+  ObOptStatSqlService &stat_svr = ObOptStatManager::get_instance().get_stat_sql_service();
+  common::ObArenaAllocator allocator(lib::ObLabel("SyncColStats"));
+  ObSEArray<ObOptColumnStat *, 4> target_column_stats;
+  if (column_stats.empty()) {
+    LOG_INFO("column stats are empty, no need to sync", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
+  } else {
+    // build partition id mapping table in order to replace the old partition
+    // with new partition.
+    if (OB_FAIL(part_ids_map.create(MAP_BUCKET_NUM, "SyncColStats"))) {
+      LOG_WARN("failed to create map", K(ret));
+    } else if (!data_table_schema.is_partitioned_table()) {
+      if (OB_FAIL(part_ids_map.set_refactored(object_id_, target_object_id_))) {
+        LOG_WARN("failed to insert map", K(ret));
+      }
+    } else if (OB_FAIL(part_ids_map.set_refactored(-1, -1))) {
+      LOG_WARN("failed to insert map", K(ret));
+    } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&data_table_schema, src_partition_ids))) {
+      LOG_WARN("fail to get all tablet and object ids", K(ret));
+    } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&new_table_schema, target_partition_ids))) {
+      LOG_WARN("fail to get all tablet and object ids", K(ret));
+    } else {
+      ARRAY_FOREACH(src_partition_ids, i) {
+        const int64_t src_partition_id = src_partition_ids.at(i);
+        const int64_t target_partition_id = target_partition_ids.at(i);
+        if (OB_FAIL(part_ids_map.set_refactored(src_partition_id, target_partition_id))) {
+          LOG_WARN("failed to insert map", K(ret));
+        }
+      }
+    }
+
+    // replace with new partition id.
+    ARRAY_FOREACH(column_stats, i) {
+      const ObOptColumnStat *col_stat = column_stats.at(i).stat_;
+      ObOptColumnStat *target_col_stat = NULL;
+      if (OB_ISNULL(col_stat)) {
+        // ignore empty column stat
+      } else if (OB_ISNULL(target_col_stat = OB_NEWx(ObOptColumnStat, &allocator, allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create column stat", K(ret));
+      } else if (OB_FAIL(target_col_stat->deep_copy(*col_stat))) {
+        LOG_WARN("failed to deep copy", K(ret));
+      } else {
+        const int64_t src_partition_id = col_stat->get_partition_id();
+        int64_t target_partition_id = 0;
+        target_col_stat->set_table_id(target_object_id_);
+        target_col_stat->set_last_analyzed(0);
+        if (OB_FAIL(part_ids_map.get_refactored(src_partition_id, target_partition_id))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("target partition not found", K(ret), K_(dst_tenant_id), K_(target_object_id), K(src_partition_id));
+          } else {
+            LOG_WARN("failed to get part_ids_map", K(ret));
+          }
+        } else if (FALSE_IT(target_col_stat->set_partition_id(target_partition_id))) {
+        } else if (OB_FAIL(target_column_stats.push_back(target_col_stat))) {
+          LOG_WARN("failed to push back column stat", K(ret));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (target_column_stats.empty()) {
+      LOG_INFO("column stats are empty, no need to sync", K_(tenant_id), K_(dst_tenant_id), K_(object_id), K_(target_object_id));
+    } else if (OB_FAIL(stat_svr.update_column_stat(dst_tenant_schema_guard,
+                                                   dst_tenant_id_,
+                                                   allocator,
+                                                   trans,
+                                                   target_column_stats,
+                                                   ObTimeUtility::current_time(),
+                                                   false /* need update histogram table */))) {
+      LOG_WARN("failed to update column stats", K(ret), K_(dst_tenant_id), K_(target_object_id));
+    }
+  }
+
   return ret;
 }
 
