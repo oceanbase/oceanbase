@@ -244,12 +244,12 @@ int ObDynamicSamplePieceMsgCtx::alloc_piece_msg_ctx(const ObDynamicSamplePieceMs
     LOG_WARN("spec is NULL", K(ret), K(pkt.op_id_));
   } else {
     if (PHY_PX_DIST_TRANSMIT == op_kit->spec_->type_) {
-      auto spec = static_cast<const ObPxDistTransmitSpec *>(op_kit->spec_);
+      const ObPxDistTransmitSpec *spec = static_cast<const ObPxDistTransmitSpec *>(op_kit->spec_);
       sort_def.exprs_ = &spec->dist_exprs_;
       sort_def.collations_ = &spec->sort_collations_;
       sort_def.cmp_funs_ = &spec->sort_cmp_funs_;
     } else if (PHY_PX_REPART_TRANSMIT == op_kit->spec_->type_) {
-      auto spec = static_cast<const ObPxRepartTransmitSpec *>(op_kit->spec_);
+      const ObPxRepartTransmitSpec *spec = static_cast<const ObPxRepartTransmitSpec *>(op_kit->spec_);
       sort_def.exprs_ = &spec->dist_exprs_;
       sort_def.collations_ = &spec->sort_collations_;
       sort_def.cmp_funs_ = &spec->sort_cmp_funs_;
