@@ -5949,6 +5949,8 @@ int ObTablet::pull_ddl_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kv
         }
       }
     }
+    LOG_INFO("pull ddl memtables", K(ret), K(ddl_kvs_handle), K(ddl_checkpoint_scn),
+        K(ddl_kv_count), "ddl_kv", ObArrayWrap<ObITable *>(ddl_kvs_addr, ddl_kv_count));
   }
   if (ddl_kv_count == 0) {
     // In the above for loop, ddl_kvs_addr's assignment can be skipped (e.g. ddl_kv->is_closed()).
