@@ -27,6 +27,7 @@ template <typename T>
 class ObRemoteBaseExecuteP : public obrpc::ObRpcProcessor<T>
 {
 public:
+  static const int64_t DEFAULT_MAX_REMOTE_EXEC_PACKET_LENGTH = (1 << 22) - (1 << 13); //2MB - 8K
   ObRemoteBaseExecuteP(const observer::ObGlobalContext &gctx, bool is_execute_remote_plan = false)
     : obrpc::ObRpcProcessor<T>(),
       gctx_(gctx),
