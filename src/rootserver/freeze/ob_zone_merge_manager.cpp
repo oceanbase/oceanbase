@@ -359,8 +359,9 @@ int ObZoneMergeManagerBase::finish_zone_merge(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(zone), K_(tenant_id),
              K(new_last_merged_scn), K(new_all_merged_scn));
-  } else if ((new_last_merged_scn != zone_merge_infos_[idx].broadcast_scn())
-             || (new_last_merged_scn <= zone_merge_infos_[idx].last_merged_scn())) {
+  } else if (new_last_merged_scn > zone_merge_infos_[idx].broadcast_scn()) {
+    // do nothing, this zone may not execute current round major
+  } else if (new_last_merged_scn <= zone_merge_infos_[idx].last_merged_scn()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid merged_scn", KR(ret), K(zone), K_(tenant_id),
               K(new_last_merged_scn), K(new_all_merged_scn),
@@ -402,7 +403,8 @@ int ObZoneMergeManagerBase::finish_zone_merge(
     }
   }
 
-  LOG_INFO("finish zone merge", KR(ret), K_(tenant_id), K(zone), K(new_last_merged_scn), K(new_all_merged_scn));
+  LOG_INFO("finish zone merge", KR(ret), K_(tenant_id), K(zone), K(new_last_merged_scn), K(new_all_merged_scn),
+    "zone_merge_info", zone_merge_infos_[idx]);
   return ret;
 }
 
