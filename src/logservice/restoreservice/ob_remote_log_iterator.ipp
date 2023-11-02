@@ -269,6 +269,11 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
     }
   } while (OB_SUCCESS == ret && ! done);
 
+  if (OB_NEED_RETRY == ret) {
+    ret = OB_ITER_END;
+    CLOG_LOG(WARN, "read data from archive not atomic, rewrite ret_code", KPC(this));
+  }
+
   if (OB_FAIL(ret) && OB_ITER_END != ret && ! is_io_error(ret)) {
     mark_source_error_(ret);
   }
@@ -282,7 +287,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 template<class LogEntryType>
 bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code) const
 {
-  return OB_BUF_NOT_ENOUGH == ret_code || OB_NEED_RETRY == ret_code;
+  return OB_BUF_NOT_ENOUGH == ret_code;
 }
 
 template<class LogEntryType>

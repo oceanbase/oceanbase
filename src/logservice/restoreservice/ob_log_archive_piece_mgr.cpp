@@ -497,7 +497,9 @@ int ObLogArchivePieceContext::get_piece_(const SCN &scn,
 {
   int ret = OB_SUCCESS;
   bool done = false;
-  while (OB_SUCC(ret) && ! done) {
+  int64_t times = 0;
+  const int64_t MAX_RETRY_TIMES = 100;
+  while (OB_SUCC(ret) && ! done && times < MAX_RETRY_TIMES) {
     if (OB_FAIL(switch_round_if_need_(scn, lsn))) {
       CLOG_LOG(WARN, "switch round if need failed", K(ret), KPC(this));
     } else if (OB_FAIL(switch_piece_if_need_(file_id, scn, lsn))) {
@@ -506,15 +508,23 @@ int ObLogArchivePieceContext::get_piece_(const SCN &scn,
       ret = get_(lsn, file_id, dest_id, round_id, piece_id, offset, max_lsn, done, to_newest);
     }
 
-    // 由于场景复杂, 为避免遗漏场景导致无法跳出循环, 每次重试sleep 100ms
+    // 由于场景复杂, 为避免遗漏场景导致无法跳出循环, 每次重试sleep 1ms
     if (! done) {
-      ob_usleep(100 * 1000L);
+      ob_usleep(1000L);
     }
 
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
       CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "get piece cost too much time", K(scn), K(lsn), KPC(this));
     }
+
+    times++;
   }
+
+  if (OB_SUCC(ret) && ! done && times == MAX_RETRY_TIMES) {
+    ret = OB_ERR_TOO_MUCH_TIME;
+    CLOG_LOG(ERROR, "retry too much times", K(times), KPC(this));
+  }
+
   return ret;
 }
 
