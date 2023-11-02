@@ -972,7 +972,7 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
     ObTablet *tablet = nullptr;
     common::ObArenaAllocator tmp_allocator; // for storage schema
     const ObStorageSchema *storage_schema_ptr = nullptr;
-    if (OB_FAIL(ls_->get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
+    if (OB_FAIL(ls_->ha_get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
       LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
       ret = OB_ERR_UNEXPECTED;

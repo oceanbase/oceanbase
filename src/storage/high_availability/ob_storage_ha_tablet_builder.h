@@ -325,6 +325,13 @@ public:
       ObTablet *tablet,
       bool &is_exist);
 private:
+  // TODO(@DanLing) tmp interface, remove after column_store_ddl branch merged.
+  static int build_tablet_for_ddl_kv_(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id,
+      const ObTablesHandleArray &major_tables,
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
   static int build_tablet_for_row_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,

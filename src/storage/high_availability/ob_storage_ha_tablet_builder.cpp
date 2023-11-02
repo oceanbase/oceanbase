@@ -2300,11 +2300,14 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(
     LOG_WARN("get invalid argument", K(ret), KP(ls), K(tablet_id), K(storage_schema));
   } else if (!storage_schema.is_row_store()) {
     if (NULL == major_tables.get_table(0) || !major_tables.get_table(0)->is_column_store_sstable()) {
-      // column store tablet was created by ddl kv / load directly, which has a major sstable
+      /*
+       * the following code is a temp solution to deal with the column store table that created by ddl kv / load directly
+       * in this scene, ddl kv will create major sstable rather than co sstable even the table schema is column store
+       */
       // TODO(@DanLing) tmp code, should removed when column_store_ddl branch merged
-      if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls,
-          tablet_id, major_tables, storage_schema, medium_info_list))) {
-        LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id), KPC(ls));
+      if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_ddl_kv_(ls,
+        tablet_id, major_tables, storage_schema, medium_info_list))) {
+        LOG_WARN("failed to build tablet with ddl major tables", K(ret), K(tablet_id), KPC(ls));
       }
     } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_column_store_(ls,
         tablet_id, major_tables, storage_schema, medium_info_list))) {
@@ -2313,6 +2316,92 @@ int ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls,
       tablet_id, major_tables, storage_schema, medium_info_list))) {
     LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id), KPC(ls));
+  }
+  return ret;
+}
+
+int ObStorageHATabletBuilderUtil::build_tablet_for_ddl_kv_(
+    ObLS *ls,
+    const common::ObTabletID &tablet_id,
+    const ObTablesHandleArray &major_tables,
+    const ObStorageSchema &storage_schema,
+    const compaction::ObMediumCompactionInfoList &medium_info_list)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  int64_t multi_version_start = 0;
+  int64_t transfer_seq = 0;
+
+  if (major_tables.empty()) {
+    // do nothing
+  } else if (1 == major_tables.get_count()) {
+    // only exist one major table
+    if (OB_FAIL(ObStorageHATabletBuilderUtil::build_tablet_for_row_store_(ls,
+        tablet_id, major_tables, storage_schema, medium_info_list))) {
+      LOG_WARN("failed to build tablet with major tables", K(ret), K(tablet_id), KPC(ls));
+    }
+  } else if (OB_ISNULL(ls) || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build tablet with major tables get invalid argument", K(ret), KP(ls), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_(tablet_id, ls, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
+  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+  } else if (FALSE_IT(transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (OB_FAIL(calc_multi_version_start_with_major_(major_tables, tablet, multi_version_start))) {
+    LOG_WARN("failed to calc multi version start with major", K(ret), KPC(tablet));
+  } else {
+    // [MAJOR, CO_1, CG_1_1, CG_1_2, ..., CO_N, CG_N_1, CG_N_2]
+    ObTablesHandleArray column_store_tables;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < major_tables.get_count(); ++i) {
+      ObITable *table_ptr = major_tables.get_table(i);
+      ObTableHandleV2 table_handle;
+      if (OB_UNLIKELY(nullptr == table_ptr || !table_ptr->is_major_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected table", K(ret), K(tablet_id), K(major_tables), K(storage_schema));
+      } else if (0 == i) {
+        if (OB_UNLIKELY(table_ptr->is_column_store_sstable())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("first table must be major sstable in ddl kv situation", K(ret), K(tablet_id), KPC(table_ptr), K(storage_schema));
+        }
+        continue;
+      } else if (OB_FAIL(major_tables.get_table(i, table_handle))) {
+        LOG_WARN("failed to get table handle", K(ret), K(i), KPC(table_ptr));
+      } else if (OB_UNLIKELY(!table_ptr->is_column_store_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("remain table must be column store sstable in ddl kv situation", K(ret), K(tablet_id), KPC(table_ptr), K(storage_schema));
+      } else if (OB_FAIL(column_store_tables.add_table(table_handle))) {
+        LOG_WARN("failed to add table handle", K(ret));
+      }
+    } // end for
+
+    if (OB_FAIL(ret)) {
+    } else if (column_store_tables.get_count() != major_tables.get_count() - 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected tables", K(ret), K(tablet_id), K(column_store_tables));
+    }
+
+    // deal with major table
+    if (OB_SUCC(ret)) {
+       ObTableHandleV2 major_table_handle;
+      if (OB_FAIL(major_tables.get_table(0, major_table_handle))) {
+        LOG_WARN("failed to get tables", K(ret));
+      } else if (OB_FAIL(inner_update_tablet_table_store_with_major_(multi_version_start, major_table_handle, ls, tablet, storage_schema, transfer_seq))) {
+        LOG_WARN("failed to update tablet table store", K(ret), K(tablet_id), K(major_table_handle));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> cs_tables;
+      int64_t co_table_cnt = 0;
+      if (OB_FAIL(get_column_store_tables_(column_store_tables, cs_tables, co_table_cnt))) {
+        LOG_WARN("failed to get column store tables", K(ret));
+      } else if (OB_FAIL(build_tablet_with_co_tables_( //we should assemble flattened cg sstables when updating tablet due to allocator
+          ls, tablet, storage_schema, multi_version_start, co_table_cnt, column_store_tables, cs_tables))) {
+        LOG_WARN("failed to build tablet with column store tables", K(ret));
+      }
+    }
   }
   return ret;
 }
