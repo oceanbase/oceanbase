@@ -140,7 +140,7 @@ int ObTableScanRange::init(const ObSimpleBatch &simple_batch, ObIAllocator &allo
     STORAGE_LOG(WARN, "Failed to init ranges", K(ret));
   }
   if (OB_SUCC(ret)) {
-    status_ = SCAN;
+    status_ = ranges_.empty() ? EMPTY : SCAN;
     is_inited_ = true;
     STORAGE_LOG(DEBUG, "Succ to init table scan range", K(*this), K(simple_batch));
   }
