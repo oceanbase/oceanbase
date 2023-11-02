@@ -3723,21 +3723,25 @@ int ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID &l
   int ret = OB_SUCCESS;
   exist = false;
   ObMutexGuard dag_net_guard(dag_net_map_lock_);
-  ObIDagNet *head = blocking_dag_net_list_.get_header();
-  ObIDagNet *cur = head->get_next();
   int64_t cancel_dag_cnt = 0;
-  while (nullptr != cur && head != cur) {
-    if (cur->is_co_dag_net()) {
-      compaction::ObCOMergeDagNet *co_dag_net = static_cast<compaction::ObCOMergeDagNet*>(cur);
+  ObIDagNet *cur_dag_net = nullptr;
+  DagNetMap::iterator iter = dag_net_map_.begin();
+  for (; OB_SUCC(ret) && iter != dag_net_map_.end(); ++iter) {
+    if (OB_ISNULL(cur_dag_net = iter->second)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag net is unepxected null", K(ret), KP(cur_dag_net));
+    } else if (cur_dag_net->is_co_dag_net()) {
+      compaction::ObCOMergeDagNet *co_dag_net = static_cast<compaction::ObCOMergeDagNet*>(cur_dag_net);
       if (ls_id == co_dag_net->get_dag_param().ls_id_) {
-        cur->set_cancel();
+        cur_dag_net->set_cancel();
         ++cancel_dag_cnt;
         exist = true;
       }
     }
-    cur = cur->get_next();
   } // end of while
-  LOG_INFO("success to cancel dag net", KR(ret), K(ls_id), K(cancel_dag_cnt), K(exist));
+  if (OB_SUCC(ret)) {
+    LOG_INFO("success to cancel dag net", KR(ret), K(ls_id), K(cancel_dag_cnt), K(exist));
+  }
   return ret;
 }
 /***************************************ObTenantDagScheduler impl********************************************/
