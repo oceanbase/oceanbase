@@ -1444,7 +1444,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     rls_policy_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     rls_group_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    name_generated_type_(GENERATED_TYPE_UNKNOWN)
+    name_generated_type_(GENERATED_TYPE_UNKNOWN),
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
 {
   reset();
 }
@@ -1518,6 +1519,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       compressor_type_ = src_schema.compressor_type_;
       table_flags_ = src_schema.table_flags_;
       name_generated_type_ = src_schema.name_generated_type_;
+      lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
@@ -3329,6 +3331,7 @@ void ObTableSchema::reset()
   ttl_definition_.reset();
   kv_attributes_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
+  lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
 
   is_column_store_supported_ = false;
   max_used_column_group_id_ = COLUMN_GROUP_START_ID;
@@ -6200,6 +6203,7 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(aux_lob_meta_tid),
     K_(aux_lob_piece_tid),
     K_(name_generated_type),
+    K_(lob_inrow_threshold),
     K_(is_column_store_supported),
     K_(max_used_column_group_id),
     K_(column_group_cnt),
@@ -6471,6 +6475,8 @@ OB_DEF_SERIALIZE(ObTableSchema)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 name_generated_type_);
   }
+
+  OB_UNIS_ENCODE(lob_inrow_threshold_);
 
   // serialize column group
   if (OB_SUCC(ret)) {
@@ -6900,6 +6906,8 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                 name_generated_type_);
   }
 
+  OB_UNIS_DECODE(lob_inrow_threshold_);
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(deserialize_column_groups(buf, data_len, pos))) {
       LOG_WARN("fail to deserialize column_groups", KR(ret), K(data_len), K(pos));
@@ -7051,6 +7059,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(ttl_definition_);
   OB_UNIS_ADD_LEN(kv_attributes_);
   OB_UNIS_ADD_LEN(name_generated_type_);
+  OB_UNIS_ADD_LEN(lob_inrow_threshold_);
 
   // get column group size
   len += serialization::encoded_length_vi64(column_group_cnt_);

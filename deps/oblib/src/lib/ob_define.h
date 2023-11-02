@@ -1726,6 +1726,10 @@ const int64_t OB_MAX_LONGTEXT_LENGTH = 512 * 1024 * 1024L - 1; // 2^29-1,for dat
 const int64_t OB_MAX_MEDIUMTEXT_LENGTH_OLD = 256 * 1024L;  // for compatibility
 const int64_t OB_MAX_LONGTEXT_LENGTH_OLD = 512 * 1024L;  // for compatibility
 
+const int64_t OB_MIN_LOB_INROW_THRESHOLD = 0; // 0 means disable inrow lob
+const int64_t OB_MAX_LOB_INROW_THRESHOLD = OB_MAX_USER_ROW_LENGTH; // 1.5M
+const int64_t OB_DEFAULT_LOB_INROW_THRESHOLD = 4096; // 4K
+
 const int64_t OB_MAX_CAST_CHAR_VARCHAR_LENGTH = 512;
 const int64_t OB_MAX_CAST_CHAR_TEXT_LENGTH = 16383;
 const int64_t OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH = 4194303;

@@ -3388,13 +3388,27 @@ static struct VarsInit{
     ObSysVars[239].alias_ = "OB_SV_ENABLE_PL_CACHE" ;
     }();
 
+    [&] (){
+      ObSysVars[240].default_value_ = "4096" ;
+      ObSysVars[240].info_ = "default lob inrow threshold config" ;
+      ObSysVars[240].name_ = "ob_default_lob_inrow_threshold" ;
+      ObSysVars[240].data_type_ = ObIntType ;
+      ObSysVars[240].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE;
+      ObSysVars[240].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold" ;
+      ObSysVars[240].id_ = SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD] = 240 ;
+      ObSysVars[240].base_value_ = "4096" ;
+      ObSysVars[240].alias_ = "OB_SV_DEFAULT_LOB_INROW_THRESHOLD" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 240;
+static int64_t var_amount = 241;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
