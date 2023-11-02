@@ -6359,7 +6359,8 @@ def_table_schema(
 # 493 : __all_ncomp_dll
 # 494 : __all_aux_stat
 # 495 : __all_index_usage_info
-
+# 496 : __all_detect_lock_info
+# 497 : __all_client_to_server_session_info
 #
 # 余留位置
 ################################################################################
@@ -13115,6 +13116,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12445: __all_virtual_sqlstat
 # 12446: __all_virtual_wr_sqlstat
 # 12447 : __all_virtual_aux_stat
+# 12448: __all_virtual_detect_lock_info
+# 12449: __all_virtual_client_to_server_session_info
+#
 # 余留位置
 #
 
@@ -55548,6 +55552,7 @@ def_sys_index_table(
 # 101096 : placeholder for index of __all_mview_refresh_stats
 # 101097 : placeholder for index of __all_mview_refresh_stats
 # 101098 : placeholder for index of __all_ncomp_dll
+# 101099 : placeholder for index of __all_client_to_server_session_info
 
 ################################################################################
 # Oracle Agent table Index
