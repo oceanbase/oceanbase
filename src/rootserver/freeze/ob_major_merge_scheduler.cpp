@@ -487,15 +487,12 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
 
   ObAllZoneMergeProgress all_progress;
   SCN global_broadcast_scn;
-  ObSimpleFrozenStatus frozen_status;
   DEBUG_SYNC(RS_VALIDATE_CHECKSUM);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (OB_FAIL(zone_merge_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get_global_broadcast_scn", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(freeze_info_mgr_->get_freeze_info(global_broadcast_scn, frozen_status))) {
-    LOG_WARN("fail to get freeze info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
   } else if (OB_FAIL(progress_checker_.check_merge_progress(stop_, global_broadcast_scn,
                      all_progress, expected_epoch))) {
     LOG_WARN("fail to check merge status", KR(ret), K_(tenant_id), K(global_broadcast_scn), K(expected_epoch));

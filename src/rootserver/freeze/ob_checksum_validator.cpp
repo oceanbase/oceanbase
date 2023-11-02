@@ -1116,16 +1116,29 @@ int ObCrossClusterTabletChecksumValidator::check_if_all_tablet_checksum_exist(
     const SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
-  bool is_exist = false;
-  if (is_all_tablet_checksum_exist_) {
-    // do nothing
-  } else if (OB_FAIL(ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist(*sql_proxy_,
-                     tenant_id_, frozen_scn, is_exist))) {
-    LOG_WARN("fail to check is first tablet in first ls exist", KR(ret), K_(tenant_id), K(frozen_scn));
-  } else {
-    // update is_all_tablet_checksum_exist_ according to the result of
-    // ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist
-    is_all_tablet_checksum_exist_ = is_exist;
+  // check only once every 10 seconds
+  if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {  // 10s
+    bool is_sync = false;
+    ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
+    ObArray<uint64_t> frozen_scn_vals;
+    if (is_all_tablet_checksum_exist_) {
+      // do nothing
+    } else if (OB_FAIL(freeze_info_proxy.get_frozen_scn_larger_or_equal_than(
+                      *sql_proxy_, frozen_scn, frozen_scn_vals))) {
+      LOG_WARN("fail to get frozen scn", KR(ret), K_(tenant_id), K(frozen_scn));
+    } else if (OB_UNLIKELY(frozen_scn_vals.count() <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no larger frozen scn exists", KR(ret), K_(tenant_id), K(frozen_scn));
+    } else if (OB_FAIL(ObTabletChecksumOperator::is_all_tablet_checksum_sync(*sql_proxy_,
+                      tenant_id_, frozen_scn_vals, is_sync))) {
+      LOG_WARN("fail to check is first tablet in first ls exist", KR(ret), K_(tenant_id), K(frozen_scn));
+    } else {
+      // update is_all_tablet_checksum_exist_ according to the result of
+      // ObTabletChecksumOperator::is_all_tablet_checksum_sync
+      is_all_tablet_checksum_exist_ = is_sync;
+      LOG_INFO("succ to check if all tablet checksum exist", K_(tenant_id), K(frozen_scn),
+               K_(is_all_tablet_checksum_exist));
+    }
   }
   return ret;
 }

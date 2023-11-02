@@ -1813,5 +1813,53 @@ int ObTabletReplicaChecksumOperator::get_hex_column_meta(
   return ret;
 }
 
+int ObTabletReplicaChecksumOperator::is_higher_ver_tablet_rep_ckm_exist(
+    const uint64_t tenant_id,
+    const SCN &compaction_scn,
+    const uint64_t tablet_id,
+    common::ObISQLClient &sql_proxy,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !compaction_scn.is_valid() || (tablet_id <= 0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(compaction_scn), K(tablet_id));
+  } else {
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    ObSqlString sql;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = nullptr;
+      uint64_t compaction_scn_val = compaction_scn.get_val_for_inner_table_field();
+      if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS cnt FROM %s WHERE tenant_id = '%lu' AND "
+            "tablet_id = %lu AND compaction_scn > %lu", OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME,
+            tenant_id, tablet_id, compaction_scn_val))) {
+        LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(sql_proxy.read(res, meta_tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(meta_tenant_id), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", KR(ret), K(meta_tenant_id), K(tenant_id), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("get next result failed", KR(ret), K(meta_tenant_id), K(tenant_id), K(sql));
+      } else {
+        int64_t cnt = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", cnt, int64_t);
+        if (OB_SUCC(ret)) {
+          if (cnt >= 1) {
+            is_exist = true;
+          } else if (0 == cnt) {
+            is_exist = false;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected count", KR(ret), K(meta_tenant_id), K(tenant_id), K(sql), K(cnt));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 } // share
 } // oceanbase

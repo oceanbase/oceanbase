@@ -193,6 +193,13 @@ public:
       common::ObIAllocator &allocator,
       common::ObString &column_meta_hex_str);
 
+  static int is_higher_ver_tablet_rep_ckm_exist(
+      const uint64_t tenant_id,
+      const SCN &compaction_scn,
+      const uint64_t tablet_id,
+      common::ObISQLClient &sql_proxy,
+      bool &is_exist);
+
 private:
   static int batch_insert_or_update_with_trans_(
       const uint64_t tenant_id,
