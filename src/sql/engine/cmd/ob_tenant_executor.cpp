@@ -342,7 +342,7 @@ int check_sys_var_options(ObExecContext &ctx,
             if (OB_FAIL(ObVariableSetExecutor::check_and_convert_sys_var(ctx, set_var, *sys_var, value_obj, out_obj, is_set_stmt))) {
               LOG_WARN("fail to check_and_convert_sys_var", K(cur_node), K(*sys_var), K(value_obj), K(ret));
             } else if (FALSE_IT(value_obj = out_obj)) {
-            } else if (OB_FAIL(ObVariableSetExecutor::cast_value(ctx, cur_node, fake_tenant_id, *expr_ctx.calc_buf_,
+            } else if (OB_FAIL(ObVariableSetExecutor::cast_value(ctx, cur_node, fake_tenant_id, ctx.get_allocator(),
                                           *sys_var, value_obj, out_obj))) {
               LOG_WARN("fail to cast value", K(cur_node), K(*sys_var), K(value_obj), K(ret));
             } else if (FALSE_IT(value_obj = out_obj)) {
