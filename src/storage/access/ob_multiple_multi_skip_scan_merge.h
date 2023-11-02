@@ -23,9 +23,9 @@ public:
   ObMultipleMultiSkipScanMerge();
   virtual ~ObMultipleMultiSkipScanMerge();
   virtual int init(
-      const ObTableAccessParam &param,
+      ObTableAccessParam &param,
       ObTableAccessContext &context,
-      const ObGetTableParam &get_table_param) override;
+      ObGetTableParam &get_table_param) override;
   virtual void reset() override;
   virtual void reuse() override;
   int open(

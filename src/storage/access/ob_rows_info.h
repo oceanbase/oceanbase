@@ -24,8 +24,9 @@ struct ObRowsInfo
 {
 public:
   typedef common::ObReserveArenaAllocator<1024> ObStorageReserveAllocator;
-  explicit ObRowsInfo();
+  ObRowsInfo();
   ~ObRowsInfo();
+  void reset();
   OB_INLINE bool is_valid() const
   {
     return is_inited_ && exist_helper_.is_valid() && delete_count_ >= 0
@@ -43,13 +44,14 @@ public:
   int refine_rowkeys();
   int clear_found_rowkey(const int64_t rowkey_idx);
   void reuse_scan_mem_allocator() { scan_mem_allocator_.reuse(); }
-  bool is_inited() const { return is_inited_; }
   OB_INLINE bool all_rows_found() { return delete_count_ == rowkeys_.count(); }
   TO_STRING_KV(K_(rowkeys), K_(min_key), K_(table_id), K_(delete_count), K_(exist_helper));
 public:
-  struct ExistHelper final {
+  struct ExistHelper final
+  {
     ExistHelper();
     ~ExistHelper();
+    void reset();
     int init(
         const ObRelativeTable &table,
         ObStoreCtx &store_ctx,
@@ -60,6 +62,7 @@ public:
     ObTableIterParam table_iter_param_;
     ObTableAccessContext table_access_context_;
     bool is_inited_;
+    DISALLOW_COPY_AND_ASSIGN(ExistHelper);
   };
 private:
   struct RowsCompare {

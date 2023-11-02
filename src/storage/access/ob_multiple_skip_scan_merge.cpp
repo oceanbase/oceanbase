@@ -39,9 +39,9 @@ ObMultipleSkipScanMerge::~ObMultipleSkipScanMerge()
 }
 
 int ObMultipleSkipScanMerge::init(
-    const ObTableAccessParam &param,
+    ObTableAccessParam &param,
     ObTableAccessContext &context,
-    const ObGetTableParam &get_table_param)
+    ObGetTableParam &get_table_param)
 {
   int ret = OB_SUCCESS;
   context.range_allocator_ = &range_allocator_;
