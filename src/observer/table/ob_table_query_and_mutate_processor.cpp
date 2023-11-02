@@ -409,7 +409,7 @@ int ObTableQueryAndMutateP::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&ro
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
-  } else if (OB_FAIL(row_iter.get_next_row(row))) {
+  } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx_.get_allocator()))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next row", K(ret));
     } else {

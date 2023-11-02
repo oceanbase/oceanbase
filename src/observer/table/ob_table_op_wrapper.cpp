@@ -185,7 +185,7 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
     LOG_WARN("fail to create scan executor", K(ret));
   } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
     LOG_WARN("fail to open scan row iterator", K(ret));
-  } else if (OB_FAIL(row_iter.get_next_row(row))) {
+  } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx.get_allocator()))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get next row", K(ret));
     }
