@@ -17,6 +17,23 @@
 namespace oceanbase {
 using namespace storage;
 namespace blocksstable {
+void ObMacroBlockDesc::reuse()
+{
+  macro_block_id_.reset();
+  if (nullptr != macro_meta_) {
+    macro_meta_->reset();
+  }
+  range_.reset();
+  start_row_offset_ = 0;
+  row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
+  schema_version_ = 0;
+  snapshot_version_ = 0;
+  max_merged_trans_version_ = 0;
+  row_count_ = 0;
+  row_count_delta_ = 0;
+  contain_uncommitted_row_ = false;
+  is_deleted_ = false;
+}
 
 ObIndexBlockMacroIterator::ObIndexBlockMacroIterator()
   : sstable_(nullptr), iter_range_(nullptr),
@@ -278,6 +295,7 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
 int ObIndexBlockMacroIterator::get_next_macro_block(ObMacroBlockDesc &block_desc)
 {
   int ret = OB_SUCCESS;
+  block_desc.reuse();
   const ObIndexBlockRowHeader *idx_row_header = nullptr;
   const ObIndexBlockRowParser *idx_row_parser = nullptr;
   if (IS_NOT_INIT) {

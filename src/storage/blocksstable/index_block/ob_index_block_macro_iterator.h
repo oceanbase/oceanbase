@@ -56,6 +56,7 @@ struct ObMacroBlockDesc
     return OB_NOT_NULL(macro_meta_) && macro_meta_->is_valid();
   }
   OB_INLINE void reset() { new (this) ObMacroBlockDesc(); }
+  void reuse();
   TO_STRING_KV(K_(macro_block_id), KP_(macro_meta), K_(range),
               K_(start_row_offset), K_(row_store_type), K_(schema_version),
               K_(snapshot_version), K_(max_merged_trans_version), K_(row_count),
