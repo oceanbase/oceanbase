@@ -164,8 +164,8 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     LOG_WARN("not support", K(ret));
 #else
   pl::ObPLCollection *coll = NULL;
-  auto session = ctx.exec_ctx_.get_my_session();
-  auto &exec_ctx = ctx.exec_ctx_;
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObExecContext &exec_ctx = ctx.exec_ctx_;
   const ExtraInfo *info = static_cast<const ExtraInfo *>(expr.extra_info_);
   CK(NULL != info);
   // check types
