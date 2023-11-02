@@ -396,12 +396,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
         result_bitmap.reuse();
       }
     } else {
-      auto uint_diff_cmp = [&] (const uint64_t &l, const uint64_t &r) -> int
-      {
-        return l == r
-            ? 0
-            : (l < r ? -1 : 1);
-      };
+      #define UINT_DIFF_CMP(l, r) ( l == r ? 0 : (l < r ? -1 : 1) )
       uint8_t cell_len = header_->length_;
       int64_t data_offset = 0;
       bool null_value_contained = result_bitmap.popcnt() > 0;
@@ -439,7 +434,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
                 col_data, data_offset + row_id * cell_len, cell_len, delta_value))) {
               LOG_WARN("Failed to get bit packing value", K(ret), K_(header));
           } else {
-            if (get_cmp_ret(uint_diff_cmp(delta_value, param_delta_value))) {
+            if (get_cmp_ret(UINT_DIFF_CMP(delta_value, param_delta_value))) {
               if (OB_FAIL(result_bitmap.set(offset))) {
                 LOG_WARN("Failed to set result bitmap",
                     K(ret), K(offset), K(filter));
@@ -460,7 +455,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
             }
           } else {
             MEMCPY(&delta_value, col_data + data_offset + row_id * cell_len, cell_len);
-            if (get_cmp_ret(uint_diff_cmp(delta_value, param_delta_value))) {
+            if (get_cmp_ret(UINT_DIFF_CMP(delta_value, param_delta_value))) {
               if (OB_FAIL(result_bitmap.set(offset))) {
                 LOG_WARN("Failed to set result bitmap",
                     K(ret), K(offset), K(filter));
@@ -469,6 +464,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
           }
         }
       }
+      #undef UINT_DIFF_CMP
     }
   }
   return ret;

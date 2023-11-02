@@ -536,7 +536,7 @@ void ObSSTablePrinter::print_store_row(
       ObMemAttr mem_attr;
       mem_attr.label_ = "TX_DATA_TABLE";
       void *p = op_alloc(ObSliceAlloc);
-      auto slice_allocator = new (p) ObSliceAlloc(storage::TX_DATA_SLICE_SIZE, mem_attr);
+      common::ObSliceAlloc *slice_allocator = new (p) ObSliceAlloc(storage::TX_DATA_SLICE_SIZE, mem_attr);
 
       ObTxData tx_data;
       tx_data.tx_id_ = tx_id;

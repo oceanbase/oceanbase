@@ -236,6 +236,54 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap,
       Operator const &eval) const;
+private:
+  class ObRawDecoderFilterCmpFunc
+  {
+  public:
+    ObRawDecoderFilterCmpFunc(
+        const ObDatumCmpFuncType &type_cmp_func,
+        const ObGetFilterCmpRetFunc &get_cmp_ret)
+      : type_cmp_func_(type_cmp_func), get_cmp_ret_(get_cmp_ret) {}
+    ~ObRawDecoderFilterCmpFunc() = default;
+    int operator()(
+        const ObObjMeta &obj_meta,
+        const ObDatum &cur_datum,
+        const sql::ObWhiteFilterExecutor &filter,
+        bool &result) const;
+  private:
+    const ObDatumCmpFuncType &type_cmp_func_;
+    const ObGetFilterCmpRetFunc &get_cmp_ret_;
+  };
+  class ObRawDecoderFilterBetweenFunc
+  {
+  public:
+    ObRawDecoderFilterBetweenFunc(const ObDatumCmpFuncType &type_cmp_func) : type_cmp_func_(type_cmp_func)
+    {
+      get_le_cmp_ret_ = get_filter_cmp_ret_func(sql::WHITE_OP_LE);
+      get_ge_cmp_ret_ = get_filter_cmp_ret_func(sql::WHITE_OP_GE);
+    }
+    ~ObRawDecoderFilterBetweenFunc() = default;
+    int operator()(
+        const ObObjMeta &obj_meta,
+        const ObDatum &cur_datum,
+        const sql::ObWhiteFilterExecutor &filter,
+        bool &result) const;
+  private:
+    const ObDatumCmpFuncType &type_cmp_func_;
+    ObGetFilterCmpRetFunc get_le_cmp_ret_;
+    ObGetFilterCmpRetFunc get_ge_cmp_ret_;
+  };
+  class ObRawDecoderFilterInFunc
+  {
+  public:
+    ObRawDecoderFilterInFunc() {}
+    ~ObRawDecoderFilterInFunc() = default;
+    int operator()(
+        const ObObjMeta &obj_meta,
+        const ObDatum &cur_datum,
+        const sql::ObWhiteFilterExecutor &filter,
+        bool &result) const;
+  };
 
 private:
   ObObjTypeStoreClass store_class_;

@@ -756,18 +756,7 @@ int ObRawDecoder::comparison_operator(
   } else {
     ObDatumCmpFuncType type_cmp_func = filter.cmp_func_;
     ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(filter.get_op_type());
-    auto eval = [&]
-    (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const sql::ObWhiteFilterExecutor &filter, bool &result)
-    {
-      int tmp_ret = OB_SUCCESS;
-      int cmp_res = 0;
-      if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(0), cmp_res))) {
-        LOG_WARN("Failed to compare datum", K(tmp_ret), K(cur_datum), K(filter.get_datums().at(0)));
-      } else {
-        result = get_cmp_ret(cmp_res);
-      }
-      return tmp_ret;
-    };
+    ObRawDecoderFilterCmpFunc eval(type_cmp_func, get_cmp_ret);
 
     if (OB_FAIL(traverse_all_data(parent, col_ctx, row_index, filter, pd_filter_info, result_bitmap, eval))) {
       LOG_WARN("Failed to traverse all data and evaluate operator", K(ret));
@@ -942,23 +931,7 @@ int ObRawDecoder::bt_operator(
         K(ret), K(pd_filter_info), K(result_bitmap.size()), K(filter));
   } else {
     ObDatumCmpFuncType type_cmp_func = filter.cmp_func_;
-    ObGetFilterCmpRetFunc get_le_cmp_ret = get_filter_cmp_ret_func(sql::WHITE_OP_LE);
-    ObGetFilterCmpRetFunc get_ge_cmp_ret = get_filter_cmp_ret_func(sql::WHITE_OP_GE);
-    auto eval = [&]
-    (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const sql::ObWhiteFilterExecutor &filter, bool &result)
-    {
-      int tmp_ret = OB_SUCCESS;
-      int left_cmp_res = 0;
-      int right_cmp_res = 0;
-      if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(0), left_cmp_res))) {
-        LOG_WARN("Failed to compare datum", K(tmp_ret), K(cur_datum), K(filter.get_datums().at(0)));
-      } else if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(1), right_cmp_res))) {
-        LOG_WARN("Failed to compare datum", K(tmp_ret), K(cur_datum), K(filter.get_datums().at(1)));
-      } else {
-        result = get_ge_cmp_ret(left_cmp_res) && get_le_cmp_ret(right_cmp_res);
-      }
-      return tmp_ret;
-    };
+    ObRawDecoderFilterBetweenFunc eval(type_cmp_func);
     if (OB_FAIL(traverse_all_data(parent, col_ctx, row_index, filter, pd_filter_info, result_bitmap, eval))) {
       LOG_WARN("Failed to traverse all data in micro block", K(ret));
     }
@@ -983,18 +956,7 @@ int ObRawDecoder::in_operator(
     LOG_WARN("Pushdown in operator: Invalid arguments",
         K(ret), K(pd_filter_info), K(result_bitmap.size()), K(filter));
   } else {
-    auto eval = [&]
-    (const ObObjMeta &obj_meta, const ObDatum &cur_datum, const sql::ObWhiteFilterExecutor &filter, bool &result)
-    {
-      int tmp_ret = OB_SUCCESS;
-      ObObj cur_obj;
-      if (OB_TMP_FAIL(cur_datum.to_obj(cur_obj, obj_meta))) {
-        LOG_WARN("convert datum to obj failed", K(tmp_ret), K(cur_datum), K(obj_meta));
-      } else if (OB_TMP_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-        LOG_WARN("Failed to check obj in hashset", K(tmp_ret), K(cur_obj));
-      }
-      return tmp_ret;
-    };
+    ObRawDecoderFilterInFunc eval;
     if (OB_FAIL(traverse_all_data(parent, col_ctx, row_index, filter, pd_filter_info, result_bitmap, eval))) {
       LOG_WARN("Failed to traverse all data in micro block", K(ret));
     }
@@ -1117,6 +1079,57 @@ int ObRawDecoder::traverse_all_data(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRawDecoder::ObRawDecoderFilterCmpFunc::operator()(
+    const ObObjMeta &obj_meta,
+    const ObDatum &cur_datum,
+    const sql::ObWhiteFilterExecutor &filter,
+    bool &result) const
+{
+  int ret = OB_SUCCESS;
+  int cmp_res = 0;
+  if (OB_FAIL(type_cmp_func_(cur_datum, filter.get_datums().at(0), cmp_res))) {
+    LOG_WARN("Failed to compare datum", K(ret), K(cur_datum), K(filter.get_datums().at(0)));
+  } else {
+    result = get_cmp_ret_(cmp_res);
+  }
+  return ret;
+}
+
+int ObRawDecoder::ObRawDecoderFilterBetweenFunc::operator()(
+    const ObObjMeta &obj_meta,
+    const ObDatum &cur_datum,
+    const sql::ObWhiteFilterExecutor &filter,
+    bool &result) const
+{
+  int ret = OB_SUCCESS;
+  int left_cmp_res = 0;
+  int right_cmp_res = 0;
+  if (OB_FAIL(type_cmp_func_(cur_datum, filter.get_datums().at(0), left_cmp_res))) {
+    LOG_WARN("Failed to compare datum", K(ret), K(cur_datum), K(filter.get_datums().at(0)));
+  } else if (OB_FAIL(type_cmp_func_(cur_datum, filter.get_datums().at(1), right_cmp_res))) {
+    LOG_WARN("Failed to compare datum", K(ret), K(cur_datum), K(filter.get_datums().at(1)));
+  } else {
+    result = get_ge_cmp_ret_(left_cmp_res) && get_le_cmp_ret_(right_cmp_res);
+  }
+  return ret;
+}
+
+int ObRawDecoder::ObRawDecoderFilterInFunc::operator()(
+    const ObObjMeta &obj_meta,
+    const ObDatum &cur_datum,
+    const sql::ObWhiteFilterExecutor &filter,
+    bool &result) const
+{
+  int ret = OB_SUCCESS;
+  ObObj cur_obj;
+  if (OB_FAIL(cur_datum.to_obj(cur_obj, obj_meta))) {
+    LOG_WARN("convert datum to obj failed", K(ret), K(cur_datum), K(obj_meta));
+  } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
+    LOG_WARN("Failed to check obj in hashset", K(ret), K(cur_obj));
   }
   return ret;
 }
