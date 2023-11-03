@@ -85,8 +85,8 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_OB_NCHAR,     0, 0},                               /* ObNCharType */
   {EMySQLFieldType::MYSQL_TYPE_OB_UROWID,    0, 0},
   {EMySQLFieldType::MYSQL_TYPE_ORA_BLOB,       0, 0},                       /* ObLobType */
-  {EMySQLFieldType::MYSQL_TYPE_JSON,       BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObJsonType */
-  {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObGeometryType */
+  {EMySQLFieldType::MYSQL_TYPE_JSON,       BLOB_FLAG | BINARY_FLAG, 0}, /* ObJsonType */
+  {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | BINARY_FLAG, 0}, /* ObGeometryType */
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
   {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL, 0, 0},                           /* ObDecimalIntType */
   /* ObMaxType */
