@@ -1,0 +1,22 @@
+name: Farm
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  farm:
+    name: Farm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v3
+      - name: action by obfarm
+        uses: ./.github/obfarm/
+        id: farm
+        with:
+          pipeline_id: ${{ github.run_id }}
+          project: ${{ github.repository }}
+
