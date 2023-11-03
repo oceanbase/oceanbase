@@ -521,8 +521,10 @@ public:
 
   void set_tenant_role(const share::ObTenantRole::Role tenant_role_value)
   {
+    if (get_tenant_role() != tenant_role_value) {
+      SHARE_LOG(INFO, "set tenant role", K(tenant_role_value), K(tenant_role_value_));
+    }
     (void)ATOMIC_STORE(&tenant_role_value_, tenant_role_value);
-    return ;
   }
 
   share::ObTenantRole::Role get_tenant_role() const
@@ -539,7 +541,7 @@ public:
   {
     share::ObTenantRole::Role tenant_role = get_tenant_role();
     return share::is_primary_tenant(tenant_role)
-           or share::is_invalid_tenant(tenant_role);
+           || share::is_invalid_tenant(tenant_role);
   }
 
   bool is_restore_tenant()
