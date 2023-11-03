@@ -70,6 +70,27 @@ public:
   int get_clog_disk_used_size(const uint64_t tenant_id, int64_t &used_size) const;
 
 private:
+  class ObReportResultGetter final
+  {
+  public:
+    explicit ObReportResultGetter(ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> &result_arr)
+      : result_arr_(result_arr)
+    {}
+    ~ObReportResultGetter() = default;
+    int operator()(const hash::HashMapPair<ObDiskUsageReportKey, int64_t> &pair)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(result_arr_.push_back(pair))) {
+        STORAGE_LOG(WARN, "failed to push back pair", K(ret));
+      }
+      return ret;
+    }
+  private:
+    ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> &result_arr_;
+    DISALLOW_COPY_AND_ASSIGN(ObReportResultGetter);
+  };
+
+private:
   int report_tenant_disk_usage(const char *svr_ip, const int32_t svr_port, const int64_t seq_num);
   int refresh_tenant_disk_usage();
 

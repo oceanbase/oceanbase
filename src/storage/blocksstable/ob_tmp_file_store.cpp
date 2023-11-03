@@ -743,7 +743,7 @@ ObTmpTenantMacroBlockManager::~ObTmpTenantMacroBlockManager()
 int ObTmpTenantMacroBlockManager::init(common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  auto attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MAP);
+  ObMemAttr attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has been inited", K(ret));
@@ -1564,7 +1564,7 @@ ObTmpFileStore::~ObTmpFileStore()
 int ObTmpFileStore::init()
 {
   int ret = OB_SUCCESS;
-  auto attr = SET_USE_500(ObModIds::OB_TMP_FILE_STORE_MAP);
+  ObMemAttr attr = SET_USE_500(ObModIds::OB_TMP_FILE_STORE_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));

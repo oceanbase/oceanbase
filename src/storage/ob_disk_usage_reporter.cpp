@@ -154,20 +154,10 @@ int ObDiskUsageReportTask::report_tenant_disk_usage(const char *svr_ip,
   // to reduce the locking time of the result_map_,
   // copy the value to array and then update the usage table,
   ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> result_arr;
-  ObFunction<int(const hash::HashMapPair<ObDiskUsageReportKey, int64_t> &pair)> copy_result =
-      [&result_arr](const hash::HashMapPair<ObDiskUsageReportKey, int64_t> &pair) {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(result_arr.push_back(pair))) {
-      STORAGE_LOG(WARN, "failed to push back pair", K(ret));
-    }
-    return ret;
-  };
+  ObReportResultGetter copy_result(result_arr);
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (!copy_result.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "copy_func invalid", K(ret));
   } else if (OB_FAIL(result_map_.foreach_refactored(copy_result))) {
     STORAGE_LOG(WARN, "fail to copy result", K(ret));
   }
