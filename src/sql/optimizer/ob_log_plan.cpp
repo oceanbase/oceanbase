@@ -13674,13 +13674,14 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperat
                  log_op_def::LOG_TABLE_SCAN != child_ops.at(i)->get_type() &&
                  log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type()) {
         bool is_plan_root = child_ops.at(i)->is_plan_root();
+        ObLogicalOperator *orig_op = child_ops.at(i);
         child_ops.at(i)->set_is_plan_root(false);
         if (OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
           LOG_WARN("failed to allocate materialize as top", K(ret));
         } else if (is_plan_root) {
           child_ops.at(i)->mark_is_plan_root();
           child_ops.at(i)->get_plan()->set_plan_root(child_ops.at(i));
-          if (OB_FAIL(child_ops.at(i)->set_plan_root_output_exprs())) {
+          if (OB_FAIL(child_ops.at(i)->get_output_exprs().assign(orig_op->get_output_exprs()))) {
             LOG_WARN("failed to set plan root output", K(ret));
           }
         }
