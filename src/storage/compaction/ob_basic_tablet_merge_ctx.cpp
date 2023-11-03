@@ -221,6 +221,7 @@ int ObStaticMergeParam::cal_major_merge_param()
       "col_cnt_in_schema", full_stored_col_cnt,
       K(sstable_meta_hdl), KPC(this));
   } else {
+    read_base_version_ = base_table->get_snapshot_version();
     if (1 == schema_->get_progressive_merge_num() || is_rebuild_column_store_) {
       is_full_merge_ = true;
     } else {

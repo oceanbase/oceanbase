@@ -8228,9 +8228,9 @@ enum ObColumnGroupType : uint8_t
 };
 
 const char *const OB_COLUMN_GROUP_NAME_PREFIX = "__cg";
-const char *const OB_ROWKEY_COLUMN_GROUP_NAME = "__cg_rowkey";
-const char *const OB_DEFAULT_COLUMN_GROUP_NAME = "__cg_default";
-const char *const OB_ALL_COLUMN_GROUP_NAME = "__cg_all";
+const char *const OB_ROWKEY_COLUMN_GROUP_NAME = "__co_rowkey";
+const char *const OB_DEFAULT_COLUMN_GROUP_NAME = "__co_default";
+const char *const OB_ALL_COLUMN_GROUP_NAME = "__co_all";
 
 class ObColumnGroupSchemaHashWrapper
 {
