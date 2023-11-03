@@ -353,6 +353,15 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
 
     LOG_INFO("handle fetch stream task failed, need to reschedule", KR(ret), K(task));
     int tmp_ret = OB_SUCCESS;
+    // Switch the state of FetchStream to IDLE unconditionally, which means rpc request and rpc results would
+    // be discarded.
+    // 1. discard_request and handle_rpc_response are mutually exclusive.
+    // 2. if discard_request executes before handle_rpc_response, then handle_rpc_response would abort.
+    // 3. if handle_rpc_response executes discard_request, even if handle_rpc_response fails, it wouldn't
+    //   retry in handle_rpc_response, because LSWorker fails here and the state of FetchLogArpc couldn't be IDLE.
+    // 4. the retry mechanism relys on that if LSWorker consume all the result and need to exit, the exit process
+    //   couldn't fail, otherwise the same FetchStream would be scheduled multiple times.
+    task->switch_state(FetchStream::State::IDLE);
     if (OB_TMP_FAIL(hibernate_stream_task(*task, "HandleTaskErr"))) {
       LOG_ERROR_RET(tmp_ret, "hibernate_stream_task on handle task failure", K(task), KPC(task));
     }
