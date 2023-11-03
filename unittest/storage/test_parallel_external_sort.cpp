@@ -11,10 +11,11 @@
  */
 
 #include <gtest/gtest.h>
-#define private public
-#include "storage/ob_parallel_external_sort.h"
-#undef private
 #include <algorithm>
+
+#define private public
+
+#include "storage/ob_parallel_external_sort.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_vector.h"
 #include "lib/lock/ob_mutex.h"
@@ -199,6 +200,7 @@ void TestParallelExternalSort::TearDown()
 {
   allocator_.reuse();
   ObTmpFileManager::get_instance().destroy();
+  ObTmpPageCache::get_instance().allocator_.is_inited_ = false;
   TestDataFilePrepare::TearDown();
   destroy_tenant_mgr();
 }
