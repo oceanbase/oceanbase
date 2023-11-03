@@ -541,7 +541,7 @@ private:
   int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
       storage::ObTabletHandle &tablet_handle, ObITabletMetaBackupReader *&reader);
   int get_next_macro_block_data_(ObMultiMacroBlockBackupReader *reader, blocksstable::ObBufferReader &buffer_reader,
-      blocksstable::ObLogicMacroBlockId &logic_id);
+      blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator);
   int check_macro_block_data_(const blocksstable::ObBufferReader &data);
   int write_macro_block_data_(const blocksstable::ObBufferReader &data, const blocksstable::ObLogicMacroBlockId &logic_id,
       ObBackupMacroBlockIndex &macro_index);

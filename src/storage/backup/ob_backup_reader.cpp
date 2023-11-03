@@ -198,7 +198,7 @@ ObIMacroBlockBackupReader::~ObIMacroBlockBackupReader()
 
 ObMacroBlockBackupReader::ObMacroBlockBackupReader()
     : ObIMacroBlockBackupReader(), is_data_ready_(false), result_code_(), macro_handle_(),
-      buffer_reader_(), io_allocator_("BUR_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      buffer_reader_()
 {}
 
 ObMacroBlockBackupReader::~ObMacroBlockBackupReader()
@@ -225,13 +225,13 @@ int ObMacroBlockBackupReader::init(const ObBackupMacroBlockId &macro_id)
 }
 
 int ObMacroBlockBackupReader::get_macro_block_data(
-    blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(process_())) {
+  } else if (OB_FAIL(process_(io_allocator))) {
     LOG_WARN("failed to process", K(ret));
   } else if (OB_FAIL(result_code_)) {
     LOG_WARN("error happened during fetch macro block", K(ret));
@@ -254,18 +254,20 @@ void ObMacroBlockBackupReader::reset()
   block_info_.reset();
 }
 
-int ObMacroBlockBackupReader::process_()
+int ObMacroBlockBackupReader::process_(ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObMacroBlockReadInfo read_info;
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-  io_allocator_.reuse();
   if (is_data_ready_) {
     LOG_INFO("macro data is ready, no need fetch", K(ret));
   } else if (OB_FAIL(get_macro_read_info_(logic_id_, read_info))) {
     LOG_WARN("failed to get macro block read info", K(ret), K(logic_id_));
+  } else if (OB_ISNULL(io_allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("io allocator is null", K(ret));
   } else if (OB_ISNULL(read_info.buf_ =
-      reinterpret_cast<char*>(io_allocator_.alloc(read_info.size_)))) {
+      reinterpret_cast<char*>(io_allocator->alloc(read_info.size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
   } else {
@@ -386,7 +388,7 @@ int ObMultiMacroBlockBackupReader::init(const uint64_t tenant_id,
 }
 
 int ObMultiMacroBlockBackupReader::get_next_macro_block(
-    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -395,7 +397,7 @@ int ObMultiMacroBlockBackupReader::get_next_macro_block(
   } else if (reader_idx_ >= readers_.count()) {
     ret = OB_ITER_END;
     LOG_DEBUG("multi macro block backup reader get end", K(ret));
-  } else if (OB_FAIL(fetch_macro_block_with_retry_(data, logic_id))) {
+  } else if (OB_FAIL(fetch_macro_block_with_retry_(data, logic_id, io_allocator))) {
     LOG_WARN("failed to fetch macro block with retry", K(ret));
   } else {
     ++reader_idx_;
@@ -456,7 +458,7 @@ int ObMultiMacroBlockBackupReader::prepare_macro_block_reader_(const int64_t idx
 }
 
 int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
-    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t retry_times = 0;
@@ -464,7 +466,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
     if (retry_times >= 1) {
       LOG_WARN("retry get macro block", K(retry_times));
     }
-    if (OB_FAIL(fetch_macro_block_(data, logic_id))) {
+    if (OB_FAIL(fetch_macro_block_(data, logic_id, io_allocator))) {
       LOG_WARN("failed to fetch macro block", K(ret), K(retry_times));
     }
 #ifdef ERRSIM
@@ -489,7 +491,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
 }
 
 int ObMultiMacroBlockBackupReader::fetch_macro_block_(
-    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   const int64_t idx = reader_idx_;
@@ -499,7 +501,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_(
     LOG_WARN("get invalid args", K(ret), K(idx));
   } else if (OB_FAIL(prepare_macro_block_reader_(idx))) {
     LOG_WARN("failed to prepare macro block reader", K(ret));
-  } else if (OB_FAIL(readers_.at(idx)->get_macro_block_data(data, logic_id))) {
+  } else if (OB_FAIL(readers_.at(idx)->get_macro_block_data(data, logic_id, io_allocator))) {
     LOG_WARN("failed to get macro block data", K(ret), K(idx), K(readers_.count()));
   }
   return ret;

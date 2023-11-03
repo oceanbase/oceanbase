@@ -2697,6 +2697,7 @@ int ObLSBackupDataTask::do_backup_macro_block_data_()
   int ret = OB_SUCCESS;
   ObArray<ObBackupMacroBlockId> macro_list;
   ObMultiMacroBlockBackupReader *reader = NULL;
+  ObArenaAllocator io_allocator("BUR_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
@@ -2709,6 +2710,7 @@ int ObLSBackupDataTask::do_backup_macro_block_data_()
   } else {
     LOG_INFO("start backup macro block data", K(macro_list));
     while (OB_SUCC(ret)) {
+      io_allocator.reuse();
       ObBufferReader buffer_reader;
       ObLogicMacroBlockId logic_id;
       ObBackupMacroBlockIndex macro_index;
@@ -2720,7 +2722,7 @@ int ObLSBackupDataTask::do_backup_macro_block_data_()
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_next_macro_block_data_(reader, buffer_reader, logic_id))) {
+      } else if (OB_FAIL(get_next_macro_block_data_(reader, buffer_reader, logic_id, &io_allocator))) {
         if (OB_ITER_END == ret) {
           LOG_INFO("iterator meet end", K(logic_id));
           ret = OB_SUCCESS;
@@ -3072,13 +3074,13 @@ int ObLSBackupDataTask::prepare_tablet_meta_reader_(const common::ObTabletID &ta
 }
 
 int ObLSBackupDataTask::get_next_macro_block_data_(
-    ObMultiMacroBlockBackupReader *reader, ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id)
+    ObMultiMacroBlockBackupReader *reader, ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id, ObIAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(reader)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret));
-  } else if (OB_FAIL(reader->get_next_macro_block(buffer_reader, logic_id))) {
+  } else if (OB_FAIL(reader->get_next_macro_block(buffer_reader, logic_id, io_allocator))) {
     if (OB_ITER_END == ret) {
       // do nothing
     } else {
