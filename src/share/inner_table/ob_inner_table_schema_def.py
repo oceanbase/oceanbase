@@ -13121,7 +13121,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12447 : __all_virtual_aux_stat
 # 12448: __all_virtual_detect_lock_info
 # 12449: __all_virtual_client_to_server_session_info
-#
+# 12450: __all_virtual_sys_variable_default_value
 # 余留位置
 #
 
@@ -13538,6 +13538,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15425: __all_virtual_wr_sqlstat
 # def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
 # 15427: __all_virtual_aux_stat
+# 15428: __all_virtual_sys_variable
+# 15429: __all_virtual_sys_variable_default_value
 # 余留位置
 
 ################################################################################
@@ -30157,7 +30159,7 @@ def_table_schema(
 #21497 DBA_OB_AUX_STATISTICS
 #21498 CDB_OB_AUX_STATISTICS
 #21499 DBA_OB_INDEX_USAGE
-
+#21500 DBA_OB_SYS_VARIABLES
 # 余留位置
 
 ################################################################################
@@ -54749,6 +54751,8 @@ def_table_schema(
 # 28208: V$SYS_TIME_MODEL
 # 28209: V$STATNAME
 # 28210: DBA_OB_AUX_STATISTICS
+# 28211: DBA_OB_SYS_VARIABLES
+
 
 ################################################################################
 # Lob Table (50000, 70000)
