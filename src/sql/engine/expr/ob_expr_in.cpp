@@ -254,10 +254,10 @@ int ObExprInHashMap<T>::set_refactored(const Row<T> &row)
     for (int i = 0; OB_SUCC(ret)
                     && ObExprInHashMap<T>::HASH_CMP_TRUE != exist
                     && i < arr_ptr->count(); ++i) {
-      if (OB_FAIL(row.compare_with_null((*arr_ptr)[i],
-                                         meta_.cmp_funcs_,
-                                         meta_.row_dimension_,
-                                         exist))) {
+      if (OB_FAIL((*arr_ptr)[i].compare_with_null(row,
+                                                  meta_.cmp_funcs_,
+                                                  meta_.row_dimension_,
+                                                  exist))) {
         LOG_WARN("compare with null failed", K(ret));
       }
     }
@@ -281,10 +281,10 @@ int ObExprInHashMap<T>::exist_refactored(const Row<T> &row, int &exist_ret)
   } else {
     int exist = ObExprInHashMap<T>::HASH_CMP_FALSE;
     for (int i=0; 0 != exist_ret && i < arr_ptr->count(); ++i) {
-      if (OB_FAIL(row.compare_with_null((*arr_ptr)[i],
-                                         meta_.cmp_funcs_,
-                                         meta_.row_dimension_,
-                                         exist))) {
+      if (OB_FAIL((*arr_ptr)[i].compare_with_null(row,
+                                                  meta_.cmp_funcs_,
+                                                  meta_.row_dimension_,
+                                                  exist))) {
         LOG_WARN("compare with null failed", K(ret));
       } else if (ObExprInHashMap<T>::HASH_CMP_UNKNOWN == exist
                  || ObExprInHashMap<T>::HASH_CMP_TRUE == exist) {
