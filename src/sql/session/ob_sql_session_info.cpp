@@ -530,6 +530,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
                       ->close_all(*this))) {
         LOG_WARN("failed to close all piece", K(ret));
       }
+      static_cast<observer::ObPieceCache*>(piece_cache_)->~ObPieceCache();
       get_session_allocator().free(piece_cache_);
       piece_cache_ = NULL;
     }
@@ -2494,6 +2495,7 @@ void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
       piece_cache_ = new (buf) observer::ObPieceCache();
       if (OB_SUCCESS != (static_cast<observer::ObPieceCache*>(piece_cache_))->init(
                             get_effective_tenant_id())) {
+        static_cast<observer::ObPieceCache*>(piece_cache_)->~ObPieceCache();
         get_session_allocator().free(piece_cache_);
         piece_cache_ = NULL;
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "init piece cache fail");
