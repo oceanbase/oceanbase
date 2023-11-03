@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
+#include "lib/allocator/ob_fifo_allocator.h"
 #include "storage/blocksstable/ob_tmp_file.h"
 #include "storage/blocksstable/ob_tmp_file_store.h"
 #include "storage/blocksstable/ob_tmp_file_cache.h"
@@ -1713,6 +1714,86 @@ TEST_F(TestTmpFile, test_page_buddy)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(alloced_page_nums, page_nums);
   ASSERT_EQ(false, page_buddy_4.is_empty());
+}
+
+TEST_F(TestTmpFile, test_page_io_info_unrelease)
+{
+  int ret = OB_SUCCESS;
+
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  common::ObFIFOAllocator *fifo_allocator = &(store_handle.get_tenant_store()->io_allocator_);
+
+  // case 1: never call inner_process
+  {
+    int64_t begin_used = fifo_allocator->used();
+    {
+      ObTmpPageCache::ObTmpMultiPageIOCallback callback;
+      callback.allocator_ = fifo_allocator;
+      callback.cache_ = &(ObTmpPageCache::get_instance());
+      callback.page_io_infos_.assign(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>());
+
+      char *tmp_buf;
+      int64_t tmp_buf_size;
+      int64_t tmp_aligned_offset;
+      ASSERT_EQ(callback.alloc_io_buf(tmp_buf, tmp_buf_size, tmp_aligned_offset), OB_SUCCESS);
+      int64_t after_alloc_io_buf_used = fifo_allocator->used();
+      ASSERT_EQ(after_alloc_io_buf_used, begin_used + tmp_buf_size + DIO_READ_ALIGN_SIZE);
+
+      int64_t after_process_pos = fifo_allocator->used();
+      ASSERT_EQ(after_process_pos, begin_used + tmp_buf_size + DIO_READ_ALIGN_SIZE);
+      ASSERT_EQ(after_alloc_io_buf_used, after_process_pos);
+    }
+    ASSERT_EQ(begin_used, fifo_allocator->used());
+  }
+
+  // case 2: call inner_process with true is_success
+  {
+    int64_t begin_used = fifo_allocator->used();
+    {
+      ObTmpPageCache::ObTmpMultiPageIOCallback callback;
+      callback.allocator_ = fifo_allocator;
+      callback.cache_ = &(ObTmpPageCache::get_instance());
+      callback.page_io_infos_.assign(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>());
+
+      char *tmp_buf;
+      int64_t tmp_buf_size;
+      int64_t tmp_aligned_offset;
+      ASSERT_EQ(callback.alloc_io_buf(tmp_buf, tmp_buf_size, tmp_aligned_offset), OB_SUCCESS);
+      int64_t after_alloc_io_buf_used = fifo_allocator->used();
+      ASSERT_EQ(after_alloc_io_buf_used, begin_used + tmp_buf_size + DIO_READ_ALIGN_SIZE);
+
+      ASSERT_EQ(callback.inner_process(true), OB_SUCCESS);
+      int64_t after_process_pos = fifo_allocator->used();
+      ASSERT_EQ(after_process_pos, begin_used + tmp_buf_size + DIO_READ_ALIGN_SIZE);
+      ASSERT_EQ(after_alloc_io_buf_used, after_process_pos);
+    }
+    ASSERT_EQ(begin_used, fifo_allocator->used());
+  }
+
+  // case 3: call inner_process with false is_success
+  {
+    int64_t begin_used = fifo_allocator->used();
+    {
+      ObTmpPageCache::ObTmpMultiPageIOCallback callback;
+      callback.allocator_ = fifo_allocator;
+      callback.cache_ = &(ObTmpPageCache::get_instance());
+      callback.page_io_infos_.assign(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>());
+
+      char *tmp_buf;
+      int64_t tmp_buf_size;
+      int64_t tmp_aligned_offset;
+      ASSERT_EQ(callback.alloc_io_buf(tmp_buf, tmp_buf_size, tmp_aligned_offset), OB_SUCCESS);
+      int64_t after_alloc_io_buf_used = fifo_allocator->used();
+      ASSERT_EQ(after_alloc_io_buf_used, begin_used + tmp_buf_size + DIO_READ_ALIGN_SIZE);
+
+      ASSERT_EQ(callback.inner_process(false), OB_SUCCESS);
+      int64_t after_process_pos = fifo_allocator->used();
+      ASSERT_EQ(after_process_pos, begin_used + tmp_buf_size + DIO_READ_ALIGN_SIZE);
+      ASSERT_EQ(after_alloc_io_buf_used, after_process_pos);
+    }
+    ASSERT_EQ(begin_used, fifo_allocator->used());
+  }
 }
 
 TEST_F(TestTmpFile, test_tmp_file_sync)
