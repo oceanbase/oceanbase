@@ -73,6 +73,8 @@ const char *ObPrivMgr::priv_names_[] = {
     "REPLICATION CLIENT",
     "DROP DATABASE LINK",
     "CREATE DATABASE LINK",
+    "ALTER ROUTINE",
+    "CREATE ROUTINE",
 };
 
 ObPrivMgr::ObPrivMgr()

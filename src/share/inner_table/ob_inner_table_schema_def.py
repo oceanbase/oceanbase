@@ -417,6 +417,7 @@ all_user_def = dict(
       ('priv_repl_client', 'int', 'false', '0'),
       ('priv_drop_database_link', 'int', 'false', '0'),
       ('priv_create_database_link', 'int', 'false', '0'),
+      ('priv_others', 'int', 'false', '0'),
     ],
 )
 
@@ -574,6 +575,7 @@ all_database_privilege_def = dict(
       ('priv_index', 'int', 'false', '0'),
       ('priv_create_view', 'int', 'false', '0'),
       ('priv_show_view', 'int', 'false', '0'),
+      ('priv_others', 'int', 'false', '0'),
     ],
 )
 

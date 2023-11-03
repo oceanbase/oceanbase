@@ -4636,6 +4636,7 @@ enum ObPrivLevel
   OB_PRIV_DB_ACCESS_LEVEL,
   OB_PRIV_SYS_ORACLE_LEVEL,   /* oracle-mode system privilege */
   OB_PRIV_OBJ_ORACLE_LEVEL,   /* oracle-mode object privilege */
+  OB_PRIV_ROUTINE_LEVEL,
   OB_PRIV_MAX_LEVEL,
 };
 
