@@ -227,7 +227,7 @@ int ObTabletDDLKvMgr::ddl_commit(ObTablet &tablet, const SCN &start_scn, const S
             "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
       }
     } else {
-      LOG_INFO("schedule ddl commit task success", K(start_scn), K(commit_scn), K(*this));
+      LOG_INFO("schedule ddl commit task success", K(start_scn), K(commit_scn), K(*this), "ddl_event_info", ObDDLEventInfo());
     }
   }
   return ret;
@@ -243,7 +243,7 @@ int ObTabletDDLKvMgr::schedule_ddl_dump_task(ObTablet &tablet, const SCN &start_
   param.is_commit_ = false;
   param.start_scn_ = start_scn;
   param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
-  LOG_INFO("schedule ddl dump task", K(param));
+  LOG_INFO("schedule ddl dump task", K(param), "ddl_event_info", ObDDLEventInfo());
   if (OB_UNLIKELY(tablet.get_tablet_meta().tablet_id_ != tablet_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id mismatched", K(ret), K(tablet), KPC(this));
@@ -300,6 +300,15 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(ObTablet &tablet, const SCN &start
       }
     } else {
       ret = OB_EAGAIN; // until major sstable is ready
+#ifdef ERRSIM
+      if (GCONF.errsim_ddl_major_delay_time.get() > 0) {
+        ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+        if (commit_scn_.is_valid_and_not_min()) {
+          ret = OB_SUCCESS;
+          FLOG_INFO("assume ddl success for delay schedule ddl merge task", K(ret), KPC(this));
+        }
+      }
+#endif
     }
   }
   return ret;
@@ -327,7 +336,11 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(ObTablet &tablet, const SCN &start_
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(schedule_ddl_merge_task(tablet, start_scn, commit_scn))) {
         if (OB_EAGAIN == ret) {
+#ifdef ERRSIM
+          ob_usleep(1000L * 1000L); // 1s
+#else
           ob_usleep(100L); // 100us.
+#endif
           ret = OB_SUCCESS; // retry
         } else {
           LOG_WARN("commit ddl log failed", K(ret), K(start_scn), K(commit_scn), K(ls_id_), K(tablet_id_));
@@ -352,7 +365,11 @@ int ObTabletDDLKvMgr::get_ddl_major_merge_param(ObTablet &tablet, ObDDLTableMerg
     LOG_WARN("failed to get ddl kv mgr", K(ret));
   } else if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
     LOG_WARN("failed to rdlock", K(ret), KPC(this));
-  } else if (can_schedule_major_compaction_nolock(tablet.get_tablet_meta())) {
+  } else if (can_schedule_major_compaction_nolock(tablet.get_tablet_meta())
+#ifdef ERRSIM
+    && ObTimeUtility::current_time() - get_commit_scn(tablet.get_tablet_meta()).convert_to_ts() > GCONF.errsim_ddl_major_delay_time
+#endif
+      ) {
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
     param.rec_scn_ = get_commit_scn(tablet.get_tablet_meta());

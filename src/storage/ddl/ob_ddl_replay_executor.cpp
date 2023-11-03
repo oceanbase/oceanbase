@@ -143,7 +143,7 @@ int ObDDLStartReplayExecutor::do_replay_(ObTabletHandle &handle)
   } else {
     LOG_INFO("succeed to replay ddl start log", K(ret), KPC_(log), K_(scn));
   }
-  LOG_INFO("finish replay ddl start log", K(ret), K(need_replay), KPC_(log), K_(scn));
+  LOG_INFO("finish replay ddl start log", K(ret), K(need_replay), KPC_(log), K_(scn), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -224,7 +224,7 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &handle)
       }
     }
   }
-  LOG_INFO("finish replay ddl redo log", K(ret), K(need_replay), KPC_(log));
+  LOG_INFO("finish replay ddl redo log", K(ret), K(need_replay), KPC_(log), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -285,7 +285,7 @@ int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &handle) //TODO(jianyun
   } else {
     LOG_INFO("replay ddl commit log success", K(ret), KPC_(log), K_(scn));
   }
-  LOG_INFO("finish replay ddl commit log", K(ret), K(need_replay), K_(scn), KPC_(log));
+  LOG_INFO("finish replay ddl commit log", K(ret), K(need_replay), K_(scn), KPC_(log), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

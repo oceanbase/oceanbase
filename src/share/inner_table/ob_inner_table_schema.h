@@ -634,6 +634,8 @@ public:
   static int all_virtual_io_benchmark_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_io_quota_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_server_compaction_event_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ddl_sim_point_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ddl_sim_point_stat_schema(share::schema::ObTableSchema &table_schema);
   static int session_variables_schema(share::schema::ObTableSchema &table_schema);
   static int global_status_schema(share::schema::ObTableSchema &table_schema);
   static int session_status_schema(share::schema::ObTableSchema &table_schema);
@@ -3054,6 +3056,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_io_benchmark_schema,
   ObInnerTableSchema::all_virtual_io_quota_schema,
   ObInnerTableSchema::all_virtual_server_compaction_event_history_schema,
+  ObInnerTableSchema::all_virtual_ddl_sim_point_schema,
+  ObInnerTableSchema::all_virtual_ddl_sim_point_stat_schema,
   ObInnerTableSchema::session_variables_schema,
   ObInnerTableSchema::global_status_schema,
   ObInnerTableSchema::session_status_schema,
@@ -8964,6 +8968,7 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_IO_CALIBRATION_STATUS_TID,
   OB_ALL_VIRTUAL_IO_BENCHMARK_TID,
   OB_ALL_VIRTUAL_IO_QUOTA_TID,
+  OB_ALL_VIRTUAL_DDL_SIM_POINT_STAT_TID,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_ALLOCATOR_INFO_TID,
   OB_ALL_VIRTUAL_BAD_BLOCK_TABLE_TID,
   OB_ALL_VIRTUAL_TABLET_STORE_STAT_TID,
@@ -11525,11 +11530,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 257;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 738;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 740;
 const int64_t OB_SYS_VIEW_COUNT = 786;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1786;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1788;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1789;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1791;
 
 } // end namespace share
 } // end namespace oceanbase

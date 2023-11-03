@@ -273,6 +273,9 @@ int ObTenantTabletScheduler::init()
       schedule_batch_size = tenant_config->compaction_schedule_tablet_batch_cnt;
     }
   } // end of ObTenantConfigGuard
+#ifdef ERRSIM
+  schedule_interval = 1000L * 1000L; // 1s
+#endif
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantTabletScheduler has inited", K(ret));
