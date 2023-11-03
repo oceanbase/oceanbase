@@ -410,6 +410,7 @@ int ObForeignKeyChecker::build_primary_table_range(const ObIArray<ObForeignKeyCo
     bool need_extra_cast = false;
     const ObPrecision dst_prec = dst_obj_meta.is_decimal_int() ?
         dst_obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
+    ObObjMeta to_obj_meta = col_obj_meta;
     if (rowkey_index < 0 || rowkey_index >= rowkey_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid woekey index to build scan range", K(ret), K(rowkey_index));
@@ -419,7 +420,8 @@ int ObForeignKeyChecker::build_primary_table_range(const ObIArray<ObForeignKeyCo
       LOG_WARN("failed to perform foreign key column type check", K(ret), K(i));
     } else if (OB_FAIL(column_expr->eval(eval_ctx_, col_datum))) {
       LOG_WARN("evaluate expr failed", K(ret), K(i));
-    } else if (OB_FAIL(col_datum->to_obj(tmp_obj, col_obj_meta, obj_datum_map))) {
+    } else if (!need_extra_cast && FALSE_IT(to_obj_meta = dst_obj_meta)) {
+    } else if (OB_FAIL(col_datum->to_obj(tmp_obj, to_obj_meta, obj_datum_map))) {
       LOG_WARN("convert datum to obj failed", K(ret), K(i));
     } else if (need_extra_cast) {
       ObCastMode cm = CM_NONE | CM_CONST_TO_DECIMAL_INT_EQ;
@@ -497,6 +499,7 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
       bool need_extra_cast = false;
       const ObPrecision dst_prec = dst_obj_meta.is_decimal_int() ?
         dst_obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
+      ObObjMeta to_obj_meta = col_obj_meta;
       if (rowkey_index < 0 || rowkey_index >= fk_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid woekey index to build scan range", K(ret), K(rowkey_index));
@@ -506,7 +509,8 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
         LOG_WARN("failed to perform foreign key column type check", K(ret), K(i));
       } else if (OB_FAIL(column_expr->eval(eval_ctx_, col_datum))) {
         LOG_WARN("evaluate expr failed", K(ret), K(i));
-      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, col_obj_meta, obj_datum_map))) {
+      } else if (!need_extra_cast && FALSE_IT(to_obj_meta = dst_obj_meta)) {
+      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, to_obj_meta, obj_datum_map))) {
         LOG_WARN("convert datum to obj failed", K(ret), K(i));
       } else if (need_extra_cast) {
         ObCastMode cm = CM_NONE | CM_CONST_TO_DECIMAL_INT_EQ;
@@ -596,6 +600,7 @@ int ObForeignKeyChecker::build_index_table_range_need_shadow_column(const ObIArr
       bool need_extra_cast = false;
       const ObPrecision dst_prec = dst_obj_meta.is_decimal_int() ?
         dst_obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
+      ObObjMeta to_obj_meta = col_obj_meta;
       if (rowkey_index < 0 || rowkey_index >= fk_cnt) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid woekey index to build scan range", K(ret), K(rowkey_index));
@@ -605,7 +610,8 @@ int ObForeignKeyChecker::build_index_table_range_need_shadow_column(const ObIArr
         LOG_WARN("failed to perform foreign key column type check", K(ret), K(i));
       } else if (OB_FAIL(column_expr->eval(eval_ctx_, col_datum))) {
         LOG_WARN("evaluate expr failed", K(ret), K(i));
-      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, col_obj_meta, obj_datum_map))) {
+      } else if (!need_extra_cast && FALSE_IT(to_obj_meta = dst_obj_meta)) {
+      } else if (OB_FAIL(col_datum->to_obj(tmp_obj, to_obj_meta, obj_datum_map))) {
         LOG_WARN("convert datum to obj failed", K(ret), K(i));
       } else if (need_extra_cast) {
         ObCastMode cm = CM_NONE | CM_CONST_TO_DECIMAL_INT_EQ;
