@@ -205,6 +205,8 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
       LOG_WARN("Failed to rescan reuse", K(ret));
     } else if (OB_FAIL(table_scan_range_.init(*scan_param_))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
+    } else if (OB_FAIL(rescan_for_iter())) {
+      STORAGE_LOG(WARN, "Failed to switch param for iter", K(ret), K(*this));
     } else if (OB_FAIL(open_iter())) {
       STORAGE_LOG(WARN, "fail to open iter", K(ret));
     } else {
@@ -278,6 +280,31 @@ int ObTableScanIterator::switch_param(ObTableScanParam &scan_param, const ObTabl
     }
   }
   STORAGE_LOG(TRACE, "switch param", K(ret), K(scan_param));
+  return ret;
+}
+
+int ObTableScanIterator::rescan_for_iter()
+{
+#define RESET_NOT_REFRESHED_ITER(refreshed_iter, iter) \
+  if (refreshed_iter != (void*)iter) {                 \
+    reset_scan_iter(iter);                             \
+  }                                                    \
+
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(nullptr == get_table_param_.refreshed_merge_)) {
+    // do nothing
+  } else {
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, single_merge_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, get_merge_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, scan_merge_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, multi_scan_merge_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, skip_scan_merge_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, memtable_row_sample_iterator_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, row_sample_iterator_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, block_sample_iterator_);
+    get_table_param_.refreshed_merge_ = nullptr;
+  }
+#undef RESET_NOT_REFRESHED_ITER
   return ret;
 }
 

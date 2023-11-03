@@ -75,6 +75,7 @@ private:
   template<typename T> void reset_scan_iter(T *&iter);
   int switch_scan_param(ObMultipleMerge &iter);
   void reuse_row_iters();
+  int rescan_for_iter();
   int switch_param_for_iter();
   int open_iter();
 
