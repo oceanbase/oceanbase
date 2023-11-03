@@ -136,6 +136,8 @@ private:
       VPColumnIdHashSet &vp_column_id_set,
       const bool is_auxiliary_part);
 
+  int add_inner_index_for_heap_gtt();
+
 private:
   // data members
   uint64_t cur_column_id_;
