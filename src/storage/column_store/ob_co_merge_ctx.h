@@ -104,6 +104,8 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int inner_loop_prepare_index_tree(
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx);
+  virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result) override
+  { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat));
 

@@ -92,7 +92,8 @@ struct ObTabletMajorMergeCtx : public ObTabletMergeCtx
   DEFAULT_CONSTRUCTOR(ObTabletMajorMergeCtx, ObTabletMergeCtx);
 protected:
   virtual int prepare_schema() override;
-  virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result) override;
+  virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result) override
+  { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   virtual int cal_merge_param() override { return static_param_.cal_major_merge_param(); }
 };
 

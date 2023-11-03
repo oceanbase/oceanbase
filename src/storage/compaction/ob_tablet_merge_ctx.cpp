@@ -423,40 +423,5 @@ int ObTabletMajorMergeCtx::prepare_schema()
   return ret;
 }
 
-int ObTabletMajorMergeCtx::try_swap_tablet(
-  ObGetMergeTablesResult &get_merge_table_result)
-{
-  int ret = OB_SUCCESS;
-  // check need swap tablet when compaction
-  if (OB_UNLIKELY(!is_major_or_meta_merge_type(get_merge_type()))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("other merge type not support swap tablet", KR(ret), "param", get_dag_param());
-  } else if (OB_UNLIKELY(!get_tablet()->get_tablet_meta().ha_status_.is_data_status_complete())) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("ha status is not allowed major", KR(ret), KPC(this));
-  } else {
-    ObTablesHandleArray &tables_handle = get_merge_table_result.handle_;
-    int64_t row_count = 0;
-    int64_t macro_count = 0;
-    const ObSSTable *sstable = nullptr;
-    for (int64_t i = 0; i < tables_handle.get_count(); ++i) {
-      sstable = static_cast<const ObSSTable*>(tables_handle.get_table(i));
-      row_count += sstable->get_row_count();
-      macro_count += sstable->get_data_macro_block_count();
-    } // end of for
-    if (need_swap_tablet(*get_tablet(), row_count, macro_count)) {
-      tables_handle.reset(); // clear tables array
-      if (OB_FAIL(swap_tablet())) {
-        LOG_WARN("failed to get alloc tablet handle", KR(ret));
-      } else if (OB_FAIL(get_merge_tables(get_merge_table_result))) {
-        if (OB_NO_NEED_MERGE != ret) {
-          LOG_WARN("failed to get merge tables", KR(ret), KPC(this));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 } // namespace compaction
 } // namespace oceanbase
