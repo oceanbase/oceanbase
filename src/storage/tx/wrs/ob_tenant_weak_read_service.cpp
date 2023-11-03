@@ -208,7 +208,9 @@ int ObTenantWeakReadService::get_cluster_version_internal_(SCN &version,
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(cluster_service_.get_cluster_version(version))) {
-    LOG_WARN("get weak read cluster version fail", KR(ret), K(version), K(tenant_id_));
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      LOG_WARN("get weak read cluster version fail", KR(ret), K(version), K(tenant_id_));
+    }
     if (OB_NEED_RETRY == ret) {
       // self may be WRS Leader while not ready, need retry
     } else if (OB_NOT_IN_SERVICE == ret || OB_NOT_MASTER == ret) {
