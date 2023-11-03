@@ -585,9 +585,16 @@ public:
                                                    ObSchemaChecker &schema_checker,
                                                    const common::ObIArray<common::ObString> &parent_columns,
                                                    const common::ObSArray<obrpc::ObCreateIndexArg> &index_arg_list,
+                                                   const bool is_oracle_mode,
                                                    share::schema::ObConstraintType &ref_cst_type,
                                                    uint64_t &ref_cst_id,
                                                    bool &is_match);
+  static int check_self_reference_fk_columns_satisfy(
+        const obrpc::ObCreateForeignKeyArg &arg);
+  static int check_foreign_key_set_null_satisfy(
+        const obrpc::ObCreateForeignKeyArg &arg,
+        const share::schema::ObTableSchema &child_table_schema,
+        const bool is_mysql_compat_mode);
   static int check_match_columns(const common::ObIArray<ObString> &parent_columns,
                                  const common::ObIArray<ObString> &key_columns,
                                  bool &is_match);
@@ -605,10 +612,11 @@ public:
                                     const ObIArray<ObString> &input_index_columns_name,
                                     bool &is_match);
   static int check_foreign_key_columns_type(
+      const bool is_mysql_compat_mode,
       const share::schema::ObTableSchema &child_table_schema,
       const share::schema::ObTableSchema &parent_table_schema,
-      common::ObIArray<common::ObString> &child_columns,
-      common::ObIArray<common::ObString> &parent_columns,
+      const common::ObIArray<common::ObString> &child_columns,
+      const common::ObIArray<common::ObString> &parent_columns,
       const share::schema::ObColumnSchemaV2 *column = NULL);
   static int get_columns_name_from_index_table_schema(const share::schema::ObTableSchema &index_table_schema,
                                                       ObIArray<ObString> &index_columns_name);

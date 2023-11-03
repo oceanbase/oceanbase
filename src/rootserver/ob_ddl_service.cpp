@@ -4882,6 +4882,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(
           if (OB_FAIL(rebuild_triggers_on_hidden_table(orig_table_schema,
                                                        hidden_table_schema,
                                                        schema_guard,
+                                                       schema_guard,
                                                        ddl_operator,
                                                        trans))) {
             LOG_WARN("fail to create triggers on hidden table", K(ret));
@@ -6218,7 +6219,7 @@ int ObDDLService::check_fk_columns_type_for_replacing_mock_fk_parent_table(
     const ObMockFKParentTableSchema *&mock_parent_table_schema)
 {
   int ret = OB_SUCCESS;
-
+  bool is_oracle_mode = false;
   if (OB_ISNULL(mock_parent_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mock_parent_table_schema is not exist", K(ret));
@@ -6235,6 +6236,8 @@ int ObDDLService::check_fk_columns_type_for_replacing_mock_fk_parent_table(
         } else if (OB_ISNULL(child_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("parent table schema is null", K(ret));
+        } else if (OB_FAIL(child_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+          LOG_WARN("check if oracle compat mode failed", K(ret));
         } else {
           // prepare params for check_foreign_key_columns_type
           ObArray<ObString> child_columns;
@@ -6262,6 +6265,7 @@ int ObDDLService::check_fk_columns_type_for_replacing_mock_fk_parent_table(
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObResolverUtils::check_foreign_key_columns_type(
+              !is_oracle_mode/*is_mysql_compat_mode*/,
               *child_table_schema,
               real_parent_table_schema,
               child_columns,
@@ -16011,7 +16015,8 @@ int ObDDLService::rebuild_hidden_table_constraints_in_trans(ObAlterTableArg &alt
 int ObDDLService::rebuild_triggers_on_hidden_table(
                   const ObTableSchema &orig_table_schema,
                   const ObTableSchema &hidden_table_schema,
-                  ObSchemaGetterGuard &schema_guard,
+                  ObSchemaGetterGuard &src_tenant_schema_guard,
+                  ObSchemaGetterGuard &dst_tenant_schema_guard,
                   ObDDLOperator &ddl_operator,
                   ObMySQLTransaction &trans)
 {
@@ -16019,24 +16024,37 @@ int ObDDLService::rebuild_triggers_on_hidden_table(
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else {
-    const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+    const uint64_t src_tenant_id = orig_table_schema.get_tenant_id();
+    const uint64_t dst_tenant_id = hidden_table_schema.get_tenant_id();
+    const bool is_across_tenant = src_tenant_id != dst_tenant_id;
     const ObIArray<uint64_t> &trigger_list = orig_table_schema.get_trigger_list();
     const ObTriggerInfo *trigger_info = NULL;
     ObTriggerInfo new_trigger_info;
     ObErrorInfo error_info;
     for (int i = 0; OB_SUCC(ret) && i < trigger_list.count(); i++) {
-      OZ (schema_guard.get_trigger_info(tenant_id, trigger_list.at(i), trigger_info));
+      const ObTriggerInfo *check_exist_trigger = nullptr;
+      OZ (src_tenant_schema_guard.get_trigger_info(src_tenant_id, trigger_list.at(i), trigger_info));
       OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list.at(i));
-      OZ (new_trigger_info.assign(*trigger_info));
-      OX (new_trigger_info.set_base_object_id(hidden_table_schema.get_table_id()));
-      OX (new_trigger_info.set_trigger_id(OB_INVALID_ID));
-      OX (new_trigger_info.set_tenant_id(hidden_table_schema.get_tenant_id()));
-      OZ (ddl_operator.drop_trigger(*trigger_info, trans,
-      nullptr, false/*is_update_table_schema_version*/));
-      if (OB_SUCC(ret)) {
-        ObSEArray<ObDependencyInfo, 1> dep_infos;
-        OZ (ddl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
-        nullptr, false/*is_update_table_schema_version*/));
+      OZ (dst_tenant_schema_guard.get_trigger_info(dst_tenant_id, hidden_table_schema.get_database_id(),
+          trigger_info->get_trigger_name(), check_exist_trigger));
+      if (nullptr != check_exist_trigger && is_across_tenant) {
+        LOG_INFO("duplicated trigger name, ignore to rebuild", K(dst_tenant_id), "db_id", hidden_table_schema.get_database_id(), KPC(trigger_info));
+      } else {
+        OZ (new_trigger_info.assign(*trigger_info));
+        OX (new_trigger_info.set_base_object_id(hidden_table_schema.get_table_id()));
+        OX (new_trigger_info.set_trigger_id(OB_INVALID_ID));
+        OX (new_trigger_info.set_tenant_id(dst_tenant_id));
+        OX (new_trigger_info.set_database_id(hidden_table_schema.get_database_id()));
+        if (!is_across_tenant) {
+          // triiger under source tenant will be dropped when drop tenant.
+          OZ (ddl_operator.drop_trigger(*trigger_info, trans,
+            nullptr, false/*is_update_table_schema_version*/));
+        }
+        if (OB_SUCC(ret)) {
+          ObSEArray<ObDependencyInfo, 1> dep_infos;
+          OZ (ddl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
+          nullptr, false/*is_update_table_schema_version*/));
+        }
       }
     }
   }
@@ -16274,21 +16292,26 @@ int ObDDLService::convert_hidden_table_column_ids_by_orig_column_ids(
 
 // remove invalid foreign key, caused by drop column and drop fk.
 int ObDDLService::get_rebuild_foreign_key_infos(
-                  const ObAlterTableArg &alter_table_arg,
-                  const ObTableSchema &orig_table_schema,
-                  const bool rebuild_child_table_fk,
-                  ObArray<ObForeignKeyInfo> &rebuild_fk_infos)
+    const ObAlterTableArg &alter_table_arg,
+    share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard &dst_tenant_schema_guard,
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &hidden_table_schema,
+    const bool rebuild_child_table_fk,
+    ObIArray<ObForeignKeyInfo> &original_fk_infos,
+    ObIArray<ObForeignKeyInfo> &rebuild_fk_infos)
 {
   int ret = OB_SUCCESS;
+  original_fk_infos.reset();
   rebuild_fk_infos.reset();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else {
     const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
-    const ObIArray<ObForeignKeyInfo> &orig_fk_infos = orig_table_schema.get_foreign_key_infos();
-    for (int64_t i = 0; OB_SUCC(ret) && i < orig_fk_infos.count(); i++) {
+    const ObIArray<ObForeignKeyInfo> &all_fk_infos = orig_table_schema.get_foreign_key_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_fk_infos.count(); i++) {
       bool need_rebuild = true;
-      ObForeignKeyInfo new_fk_info = orig_fk_infos.at(i);
+      ObForeignKeyInfo new_fk_info = all_fk_infos.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && need_rebuild && j < index_arg_list.size(); j++) {
         ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(j));
         if (OB_ISNULL(index_arg)) {
@@ -16303,6 +16326,8 @@ int ObDDLService::get_rebuild_foreign_key_infos(
       }
       if (OB_SUCC(ret) && need_rebuild) {
         const int64_t orig_table_id = orig_table_schema.get_table_id();
+        const uint64_t src_tenant_id = orig_table_schema.get_tenant_id();
+        const uint64_t dst_tenant_id = alter_table_arg.exec_tenant_id_;
         if (new_fk_info.child_table_id_ != orig_table_id && new_fk_info.parent_table_id_ == orig_table_id) {
           need_rebuild = rebuild_child_table_fk;
         } else if (new_fk_info.child_table_id_ == orig_table_id) {
@@ -16311,12 +16336,27 @@ int ObDDLService::get_rebuild_foreign_key_infos(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected fk", K(ret), K(new_fk_info), K(orig_table_id));
         }
-      }
-      if (OB_SUCC(ret) && need_rebuild) {
-        if (OB_FAIL(rebuild_fk_infos.push_back(new_fk_info))) {
-          LOG_WARN("fail to push back fk infos that need to rebuild", K(ret));
+        if (OB_SUCC(ret) && need_rebuild && (src_tenant_id != dst_tenant_id)) {
+          // replace foreign key info for recover restore table ddl task.
+          const bool is_recover_child_table = new_fk_info.child_table_id_ == orig_table_id; // child table or self-reference table.
+          if (OB_FAIL(check_and_replace_fk_info_on_demand(
+                src_tenant_schema_guard,
+                dst_tenant_schema_guard,
+                hidden_table_schema,
+                is_recover_child_table,
+                new_fk_info))) {
+            LOG_INFO("check and replace fk info on demand failed, ignore to rebuild", K(ret));
+            need_rebuild = false;
+            ret = OB_SUCCESS; // override error code is expected, ignore to rebuild it.
+          }
         }
       }
+      if (OB_FAIL(ret) || !need_rebuild) {
+      } else if (OB_FAIL(original_fk_infos.push_back(all_fk_infos.at(i)))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (OB_FAIL(rebuild_fk_infos.push_back(new_fk_info))) {
+        LOG_WARN("fail to push back fk infos that need to rebuild", K(ret));
+      } else {/* do nothing. */}
     }
   }
   return ret;
@@ -16327,13 +16367,15 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
                   const ObTableSchema &orig_table_schema,
                   const ObTableSchema &hidden_table_schema,
                   const bool rebuild_child_table_fk,
-                  ObSchemaGetterGuard &schema_guard,
+                  ObSchemaGetterGuard &src_tenant_schema_guard,
+                  ObSchemaGetterGuard &dst_tenant_schema_guard,
                   ObMySQLTransaction &trans,
                   ObSArray<uint64_t> &cst_ids)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
   ObTableSchema inc_table_schema;
+  ObArray<ObForeignKeyInfo> original_fk_infos;
   ObArray<ObForeignKeyInfo> rebuild_fk_infos;
   ObColumnNameMap col_name_map;
   common::hash::ObHashMap<ObString, uint64_t> new_index_table_map;
@@ -16350,15 +16392,19 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
   } else if (OB_FAIL(new_index_table_map.create(16, "HashBucIdxTabMa"))) {
     LOG_WARN("failed to add create ObHashMap", K(ret));
   } else if (OB_FAIL(build_hidden_index_table_map(hidden_table_schema,
-                                                  schema_guard,
+                                                  dst_tenant_schema_guard,
                                                   new_index_table_map))) {
     LOG_WARN("failed to build hidden index table map", K(ret));
   } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to check if oralce compat mode", K(ret));
   } else if (OB_FAIL(get_rebuild_foreign_key_infos(alter_table_arg,
-                                                  orig_table_schema,
-                                                  rebuild_child_table_fk,
-                                                  rebuild_fk_infos))) {
+                                                   src_tenant_schema_guard,
+                                                   dst_tenant_schema_guard,
+                                                   orig_table_schema,
+                                                   hidden_table_schema,
+                                                   rebuild_child_table_fk,
+                                                   original_fk_infos,
+                                                   rebuild_fk_infos))) {
     LOG_WARN("fail to get fk infos that need to rebuild", K(ret));
   } else if (OB_FAIL(inc_table_schema.set_foreign_key_infos(rebuild_fk_infos))) {
     LOG_WARN("fail to set fk infos", K(ret));
@@ -16368,10 +16414,12 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
     ObIArray<ObForeignKeyInfo> &foreign_key_infos = inc_table_schema.get_foreign_key_infos();
     for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
       ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
+      const ObForeignKeyInfo &original_fk_info = original_fk_infos.at(i);
       const uint64_t origin_fk_id = foreign_key_info.foreign_key_id_;
       foreign_key_info.foreign_key_id_ = OB_INVALID_ID;
+
       // add depend table id
-      if (foreign_key_info.parent_table_id_ != orig_table_schema.get_table_id()) {
+      if (original_fk_info.parent_table_id_ != orig_table_schema.get_table_id()) {
         if (!foreign_key_info.is_parent_table_mock_) {
           if (OB_FAIL(inc_table_schema.add_depend_table_id(foreign_key_info.parent_table_id_))) {
             LOG_WARN("fail to add depend table id", K(ret));
@@ -16381,13 +16429,13 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (foreign_key_info.child_table_id_ != orig_table_schema.get_table_id()
+      } else if (original_fk_info.child_table_id_ != orig_table_schema.get_table_id()
               && OB_FAIL(inc_table_schema.add_depend_table_id(foreign_key_info.child_table_id_))) {
         LOG_WARN("fail to add depend table id", K(ret));
       } else if (OB_FAIL(schema_service->fetch_new_constraint_id(
                  tenant_id, foreign_key_info.foreign_key_id_))) {
         LOG_WARN("failed to fetch new foreign key id", K(ret), K(tenant_id));
-      } else if (foreign_key_info.parent_table_id_ == orig_table_schema.get_table_id()) {
+      } else if (original_fk_info.parent_table_id_ == orig_table_schema.get_table_id()) {
         // update referenced constraint id
         if (CONSTRAINT_TYPE_PRIMARY_KEY == foreign_key_info.ref_cst_type_) {
           if (is_oracle_mode) {
@@ -16405,7 +16453,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
           const ObSimpleTableSchemaV2 *orig_index_table_schema = NULL;
           ObString new_index_table_name;
           uint64_t new_ref_cst_id = OB_INVALID_ID;
-          if (OB_FAIL(schema_guard.get_simple_table_schema(
+          if (OB_FAIL(dst_tenant_schema_guard.get_simple_table_schema(
               tenant_id, foreign_key_info.ref_cst_id_, orig_index_table_schema))) {
             LOG_WARN("get_table_schema failed", K(tenant_id), "table id", foreign_key_info.ref_cst_id_, K(ret));
           } else if (OB_ISNULL(orig_index_table_schema)) {
@@ -16428,10 +16476,9 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
         }
       }
       if (OB_SUCC(ret)) {
-        if (orig_table_schema.is_parent_table()
-          && foreign_key_info.parent_table_id_ == orig_table_schema.get_table_id()) {
+        if (original_fk_info.parent_table_id_ == orig_table_schema.get_table_id()) {
           // self-dependent
-          if (foreign_key_info.child_table_id_ == foreign_key_info.parent_table_id_) {
+          if (original_fk_info.child_table_id_ == original_fk_info.parent_table_id_) {
             foreign_key_info.parent_table_id_ = hidden_table_schema.get_table_id();
             foreign_key_info.child_table_id_ = hidden_table_schema.get_table_id();
             if (OB_FAIL(convert_hidden_table_column_ids_by_orig_column_ids(orig_table_schema, hidden_table_schema, col_name_map, foreign_key_info.parent_column_ids_))) {
@@ -16518,6 +16565,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key_in_trans(ObAlterTableArg &alt
                                                         *orig_table_schema,
                                                         *hidden_table_schema,
                                                         false/*rebuild_child_table_fk*/,
+                                                        *src_tenant_schema_guard,
                                                         *dst_tenant_schema_guard,
                                                         trans,
                                                         cst_ids))) {
@@ -16843,7 +16891,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           *hidden_table_schema, schema_guard, trans))) {
         LOG_WARN("failed to drop origin table fk", K(ret));
       } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
-          *orig_table_schema, *hidden_table_schema, true/*rebuild_child_table_fk*/, schema_guard, trans, fk_cst_ids))) {
+          *orig_table_schema, *hidden_table_schema, true/*rebuild_child_table_fk*/, schema_guard, schema_guard, trans, fk_cst_ids))) {
         LOG_WARN("failed to rebuild hidden table fk", K(ret));
       } else if (OB_FAIL(check_hidden_table_constraint_exist(hidden_table_schema,
                                                             orig_table_schema,
@@ -16853,6 +16901,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
         if (OB_SUCC(ret) && alter_table_arg.need_rebuild_trigger_) {
           if (OB_FAIL(rebuild_triggers_on_hidden_table(*orig_table_schema,
                                                       *hidden_table_schema,
+                                                      schema_guard,
                                                       schema_guard,
                                                       ddl_operator,
                                                       trans))) {
@@ -17073,18 +17122,195 @@ int ObDDLService::check_and_replace_dup_constraint_name_on_demand(
   return ret;
 }
 
+int ObDDLService::check_and_replace_fk_info_on_demand(
+    ObSchemaGetterGuard &src_tenant_schema_guard,
+    ObSchemaGetterGuard &dst_tenant_schema_guard,
+    const ObTableSchema &hidden_table_schema,
+    const bool is_recover_child_table,
+    ObForeignKeyInfo &new_fk_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_cst_name_exist = false;
+  const uint64_t src_tenant_id = src_tenant_schema_guard.get_tenant_id();
+  const uint64_t dst_tenant_id = dst_tenant_schema_guard.get_tenant_id();
+  const ObTableSchema *src_parent_schema = nullptr;
+  const ObTableSchema *src_child_schema = nullptr;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (OB_UNLIKELY(src_tenant_id == dst_tenant_id
+      || OB_INVALID_TENANT_ID == src_tenant_id
+      || OB_INVALID_TENANT_ID == dst_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(src_tenant_id), K(dst_tenant_id));
+  } else if (OB_FAIL(src_tenant_schema_guard.get_table_schema(src_tenant_id, new_fk_info.parent_table_id_, src_parent_schema))) {
+    LOG_WARN("get child schema failed", K(ret), K(src_tenant_id), K(new_fk_info));
+  } else if (OB_ISNULL(src_parent_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("associated parent schema does not exist", K(ret), K(new_fk_info));
+  } else if (OB_FAIL(src_tenant_schema_guard.get_table_schema(src_tenant_id, new_fk_info.child_table_id_, src_child_schema))) {
+    LOG_WARN("get child schema failed", K(ret), K(src_tenant_id), K(new_fk_info));
+  } else if (OB_ISNULL(src_child_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("associated parent schema does not exist", K(ret), K(new_fk_info));
+  } else if (src_parent_schema->get_database_id() != src_child_schema->get_database_id()) {
+    ret = OB_ERR_CANNOT_ADD_FOREIGN;
+    LOG_INFO("child and parent schems are not under same db space, ignore to rebuild", K(ret), K(new_fk_info));
+  } else if (new_fk_info.is_parent_table_mock_) {
+    ret = OB_ERR_CANNOT_ADD_FOREIGN;
+    LOG_INFO("mock fk, ignore to rebuild", K(ret), K(new_fk_info));
+  } else if (is_recover_child_table &&
+    OB_FAIL(check_constraint_name_is_exist(dst_tenant_schema_guard,
+      hidden_table_schema, new_fk_info.foreign_key_name_, true/*is_foreign_key*/, is_cst_name_exist))) {
+    LOG_WARN("check cst name exist failed", K(ret), K(new_fk_info));
+  } else if (is_cst_name_exist) {
+    ret = OB_ERR_CANNOT_ADD_FOREIGN;
+    LOG_INFO("fk name exist, ignore to rebuild", K(ret), K(new_fk_info));
+  } else {
+    // step 1. to find parent table if recover child table now, to find child table if recover parent table now.
+    const uint64_t dst_db_id = hidden_table_schema.get_database_id();
+    const ObDatabaseSchema *dst_db_schema = nullptr;
+    const ObTableSchema *dst_parent_schema = is_recover_child_table ? nullptr : &hidden_table_schema;
+    const ObTableSchema *dst_child_schema = is_recover_child_table ? &hidden_table_schema : nullptr;
+    const ObString &to_find_schema_name = is_recover_child_table ? src_parent_schema->get_table_name_str() : src_child_schema->get_table_name_str();
+    const ObTableSchema *to_find_schema = nullptr;
+    if (OB_FAIL(dst_tenant_schema_guard.get_database_schema(dst_tenant_id, dst_db_id, dst_db_schema))) {
+      LOG_WARN("get database schema failed", K(ret), K(dst_tenant_id), K(dst_db_id));
+    } else if (OB_ISNULL(dst_db_schema)) {
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_WARN("database is invalid", K(ret), K(dst_tenant_id), K(dst_db_id));
+    } else if (new_fk_info.parent_table_id_ == new_fk_info.child_table_id_) {
+      // self reference foreign key.
+      // remap table will make table name change, keep self-reference attribute.
+      dst_parent_schema = &hidden_table_schema;
+    } else if (OB_FAIL(dst_tenant_schema_guard.get_table_schema(dst_tenant_id, dst_db_id,
+        to_find_schema_name, false/*is_index*/, to_find_schema, false/*is_hidden*/))) {
+      LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id), K(dst_db_id), K(to_find_schema_name));
+    } else if (OB_ISNULL(to_find_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("associated parent/child schema does not exist", K(ret), K(dst_tenant_id), K(dst_db_id), K(to_find_schema_name));
+    } else {
+      dst_parent_schema = is_recover_child_table ? to_find_schema : dst_parent_schema;
+      dst_child_schema  = is_recover_child_table ? dst_child_schema : to_find_schema;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(nullptr == dst_parent_schema || nullptr == dst_child_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr schema", K(ret), K(is_recover_child_table),
+        K(dst_db_id), K(to_find_schema_name), KP(dst_parent_schema), KP(dst_child_schema));
+    } else {
+      // step 2. to check whether the fk info is valid under the destination tenant space.
+      new_fk_info.parent_table_id_ = dst_parent_schema->get_table_id();
+      new_fk_info.child_table_id_  = dst_child_schema->get_table_id();
+      obrpc::ObCreateForeignKeyArg create_fk_arg;
+      ObSchemaChecker schema_checker;
+      create_fk_arg.parent_database_      = dst_db_schema->get_database_name_str();
+      create_fk_arg.parent_table_         = dst_parent_schema->get_table_name_str();
+      create_fk_arg.foreign_key_name_     = new_fk_info.foreign_key_name_;
+      create_fk_arg.is_parent_table_mock_ = new_fk_info.is_parent_table_mock_;
+      create_fk_arg.update_action_        = new_fk_info.update_action_;
+      create_fk_arg.delete_action_        = new_fk_info.delete_action_;
+      ARRAY_FOREACH (new_fk_info.parent_column_ids_, idx) {
+        const ObColumnSchemaV2 *col = nullptr;
+        const uint64_t column_id = new_fk_info.parent_column_ids_.at(idx);
+        if (OB_ISNULL(col = dst_parent_schema->get_column_schema(column_id))) {
+          ret = OB_ERR_BAD_TABLE;
+          LOG_WARN("bad table", K(ret), K(dst_tenant_id), "table_id", dst_parent_schema->get_table_id(), K(column_id));
+        } else if (OB_FAIL(create_fk_arg.parent_columns_.push_back(col->get_column_name_str()))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
+      ARRAY_FOREACH (new_fk_info.child_column_ids_, idx) {
+        const ObColumnSchemaV2 *col = nullptr;
+        const uint64_t column_id = new_fk_info.child_column_ids_.at(idx);
+        if (OB_ISNULL(col = dst_child_schema->get_column_schema(column_id))) {
+          ret = OB_ERR_BAD_TABLE;
+          LOG_WARN("bad table", K(ret), K(dst_tenant_id), "table_id", dst_child_schema->get_table_id(), K(column_id));
+        } else if (OB_FAIL(create_fk_arg.child_columns_.push_back(col->get_column_name_str()))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
+      if (FAILEDx(schema_checker.init(dst_tenant_schema_guard))) {
+        LOG_WARN("init schema checker failed", K(ret));
+      } else if (OB_FAIL(check_rebuild_foreign_key_satisfy(create_fk_arg, *dst_parent_schema, *dst_child_schema,
+          schema_checker, new_fk_info.ref_cst_type_))) {
+        LOG_WARN("check rebuild foreign key satisfy failed", K(ret), K(create_fk_arg));
+      } else {
+        // used to fetch unique index schema when reference to unique column.
+        new_fk_info.ref_cst_id_ = create_fk_arg.ref_cst_id_;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_rebuild_foreign_key_satisfy(
+    obrpc::ObCreateForeignKeyArg &create_fk_arg,
+    const ObTableSchema &parent_table_schema,
+    const ObTableSchema &child_table_schema,
+    sql::ObSchemaChecker &schema_checker,
+    const ObConstraintType &expected_cst_type)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  bool is_matched = false;
+  const bool is_self_reference = (&parent_table_schema == &child_table_schema);
+  ObSArray<ObCreateIndexArg> index_arg_list;
+  if (OB_UNLIKELY(!parent_table_schema.is_valid() || !child_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(create_fk_arg), K(parent_table_schema), K(child_table_schema));
+  } else if (OB_UNLIKELY(create_fk_arg.is_parent_table_mock_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to recover mock foreign key", K(ret), K(create_fk_arg));
+  } else if (OB_UNLIKELY(!parent_table_schema.is_user_table() || !child_table_schema.is_user_table())) {
+    ret = OB_ERR_CANNOT_ADD_FOREIGN;
+    LOG_WARN("foreign key cannot be based on non-user table", K(ret), "parent_table_is_user_table", parent_table_schema.is_user_table(),
+        "child_table_is_user_table", child_table_schema.is_user_table());
+  } else if (OB_FAIL(child_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check if oracle compat mode failed", K(ret));
+  } else if (is_self_reference &&
+      OB_FAIL(ObResolverUtils::check_self_reference_fk_columns_satisfy(create_fk_arg))) {
+    LOG_WARN("check self reference foreign key columns satisfy failed", K(ret), K(create_fk_arg));
+  } else if (OB_FAIL(ObResolverUtils::check_foreign_key_columns_type(!is_oracle_mode/*is_mysql_compat_mode*/,
+                                                                     child_table_schema,
+                                                                     parent_table_schema,
+                                                                     create_fk_arg.child_columns_,
+                                                                     create_fk_arg.parent_columns_,
+                                                                     nullptr))) {
+    LOG_WARN("Failed to check_foreign_key_columns_type", K(ret));
+  } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_uk_pk_column(
+      parent_table_schema, schema_checker, create_fk_arg.parent_columns_, index_arg_list/*without initialization is expected*/,
+      is_oracle_mode, create_fk_arg.ref_cst_type_, create_fk_arg.ref_cst_id_, is_matched))) {
+    LOG_WARN("Failed to check reference columns in parent table");
+  } else if (!is_matched || expected_cst_type != create_fk_arg.ref_cst_type_) {
+    if (!is_oracle_mode) {
+      ret = OB_ERR_CANNOT_ADD_FOREIGN;
+      LOG_WARN("reference to pk or uk in parent table failed or cst type mismatched", K(ret),
+          K(expected_cst_type), "real_cst_type", create_fk_arg.ref_cst_type_);
+    } else { // oracle mode
+      ret = OB_ERR_NO_MATCHING_UK_PK_FOR_COL_LIST;
+      LOG_WARN("reference to pk or uk in parent table failed or cst type mismatched", K(ret),
+          K(expected_cst_type), "real_cst_type", create_fk_arg.ref_cst_type_);
+    }
+  } else if (OB_FAIL(ObResolverUtils::check_foreign_key_set_null_satisfy(create_fk_arg, child_table_schema, !is_oracle_mode))) {
+    LOG_WARN("check fk set null satisfy failed", K(ret), K(create_fk_arg), K(is_oracle_mode));
+  }
+  return ret;
+}
+
 int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(lib::ObLabel("RebuildCST"));
   ObDDLSQLTransaction trans(schema_service_);
+  ObSArray<uint64_t> unused_cst_ids;
   const uint64_t src_tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
   const uint64_t dst_tenant_id = alter_table_arg.exec_tenant_id_;
-  const int64_t hidden_table_id = alter_table_arg.hidden_table_id_;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else {
     bool is_oracle_mode = false;
+    const ObTableSchema *orig_table_schema = nullptr;
     const ObTableSchema *hidden_table_schema = nullptr;
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
@@ -17098,11 +17324,13 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
         hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
         src_tenant_schema_guard, dst_tenant_schema_guard))) {
       LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(src_tenant_id), K(dst_tenant_id));
-    } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dst_tenant_id, hidden_table_id, hidden_table_schema))) {
-      LOG_WARN("fail to get hidden table schema", K(ret), K(hidden_table_id));
-    } else if (OB_ISNULL(hidden_table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("failed to get orig table schema", K(ret), K(dst_tenant_id), K(hidden_table_id));
+    } else if (OB_FAIL(get_orig_and_hidden_table_schema(alter_table_arg,
+                                                        *src_tenant_schema_guard,
+                                                        *dst_tenant_schema_guard,
+                                                        alter_table_arg.alter_table_schema_,
+                                                        orig_table_schema,
+                                                        hidden_table_schema))) {
+      LOG_WARN("failed to get orig and hidden table schema", K(ret));
     } else if (!hidden_table_schema->is_offline_ddl_table()) {
       ret = OB_NO_NEED_UPDATE;
       LOG_WARN("already swapped", K(ret));
@@ -17152,6 +17380,12 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           } else if (OB_FAIL(check_and_replace_dup_constraint_name_on_demand(is_oracle_mode,
               *dst_tenant_schema_guard, tmp_schema, allocator, ddl_operator, trans))) {
             LOG_WARN("check dup and replace cst name failed", K(ret));
+          } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
+              *orig_table_schema, *hidden_table_schema, true/*rebuild_child_table_fk*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, trans, unused_cst_ids))) {
+            LOG_WARN("failed to rebuild hidden table fk", K(ret));
+          } else if (OB_FAIL(rebuild_triggers_on_hidden_table(*orig_table_schema, *hidden_table_schema,
+              *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, trans))) {
+            LOG_WARN("rebuild triggers failed", K(ret));
           } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_schema, trans, OB_DDL_ALTER_TABLE/*operation_type*/, nullptr/*ddl_stmt_str*/))) {
             LOG_WARN("failed to update data table schema attribute", K(ret));
           } else {
@@ -17201,7 +17435,6 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
     ObDDLSQLTransaction trans(schema_service_);
     bool is_oracle_mode = false;
     bool to_recyclebin = false;
-    const ObTableSchema *orig_table_schema = NULL;
     const ObTableSchema *hidden_table_schema = NULL;
     ObTableSchema new_hidden_table_schema;
     ObSchemaGetterGuard schema_guard;
@@ -17213,13 +17446,11 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to start trans, ", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(get_orig_and_hidden_table_schema(alter_table_arg,
-                                                        schema_guard,
-                                                        schema_guard,
-                                                        alter_table_schema,
-                                                        orig_table_schema,
-                                                        hidden_table_schema))) {
-      LOG_WARN("failed to get orig and hidden table schema", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, alter_table_arg.hidden_table_id_, hidden_table_schema))) {
+      LOG_WARN("get schema failed", K(ret), K(tenant_id), "tid", alter_table_arg.hidden_table_id_);
+    } else if (OB_ISNULL(hidden_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(tenant_id), "tid", alter_table_arg.hidden_table_id_);
     } else if (OB_FAIL(hidden_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oralce compat mode", K(ret));
     } else if (OB_FAIL(new_hidden_table_schema.assign(*hidden_table_schema))) {

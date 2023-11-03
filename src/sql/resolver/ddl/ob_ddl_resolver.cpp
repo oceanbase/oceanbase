@@ -8310,17 +8310,8 @@ int ObDDLResolver::check_foreign_key_reference(
         is_self_reference = true;
         parent_table_schema = child_table_schema;
         // 如果属于自引用，则参考列必须都不同
-        ObSEArray<ObString, 8> &parent_columns = arg.parent_columns_;
-        ObSEArray<ObString, 8> &child_columns = arg.child_columns_;
-        bool is_conflicted = false;
-        for (int64_t i = 0; OB_SUCC(ret) && !is_conflicted && i < parent_columns.count(); ++i) {
-          for (int64_t j = 0; OB_SUCC(ret) && !is_conflicted && j < child_columns.count(); ++j) {
-            if (0 == parent_columns.at(i).compare(child_columns.at(j))) {
-              is_conflicted = true;
-              ret = OB_ERR_CANNOT_ADD_FOREIGN;
-              LOG_WARN("cannot support that parent column is in child column list", K(ret));
-            }
-          }
+        if (OB_FAIL(ObResolverUtils::check_self_reference_fk_columns_satisfy(arg))) {
+          LOG_WARN("check self reference foreign key columns satisfy failed", K(ret), K(arg));
         }
       } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
                          database_name, parent_table_name, false, parent_table_schema))) {
@@ -8398,6 +8389,7 @@ int ObDDLResolver::check_foreign_key_reference(
         ObSEArray<ObString, 8> &child_columns = arg.child_columns_;
         ObSEArray<ObString, 8> &parent_columns = arg.parent_columns_;
         if (OB_FAIL(ObResolverUtils::check_foreign_key_columns_type(
+                    lib::is_mysql_mode(),
                     *child_table_schema,
                     *parent_table_schema,
                     child_columns,
@@ -8415,7 +8407,7 @@ int ObDDLResolver::check_foreign_key_reference(
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_uk_pk_column(
-              *parent_table_schema, *schema_checker_, parent_columns, index_arg_list,
+              *parent_table_schema, *schema_checker_, parent_columns, index_arg_list, !lib::is_mysql_mode()/*is_oracle_mode*/,
               arg.ref_cst_type_, arg.ref_cst_id_, is_matched))) {
             LOG_WARN("Failed to check reference columns in parent table");
           } else if (!is_matched) {
@@ -8446,32 +8438,9 @@ int ObDDLResolver::check_foreign_key_reference(
         }
       }
     }
-    if (OB_SUCC(ret) && (arg.delete_action_ == ACTION_SET_NULL || arg.update_action_ == ACTION_SET_NULL)) {
-      // To compatible with oracle and mysql, check if set null ref action is valid
-      // More detail can be found in:
-      for (int64_t i = 0; OB_SUCC(ret) && i < arg.child_columns_.count(); ++i) {
-        const ObString &fk_col_name = arg.child_columns_.at(i);
-        const ObColumnSchemaV2 *fk_col_schema = child_table_schema->get_column_schema(fk_col_name);
-        if (OB_ISNULL(fk_col_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("foreign key column schema is null", K(ret), K(i));
-        } else if (fk_col_schema->is_generated_column()) {
-          ret = OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN;
-          LOG_WARN("foreign key column is generated column", K(ret), K(i), K(fk_col_name));
-        } else if (!fk_col_schema->is_nullable() && lib::is_mysql_mode()) {
-          ret = OB_ERR_FK_COLUMN_NOT_NULL;
-          LOG_USER_ERROR(OB_ERR_FK_COLUMN_NOT_NULL, to_cstring(fk_col_name), to_cstring(arg.foreign_key_name_));
-        } else if (lib::is_mysql_mode() ) {
-          // check if fk column is base column of virtual generated column in MySQL mode
-          const uint64_t fk_col_id = fk_col_schema->get_column_id();
-          bool is_stored_base_col = false;
-          if (OB_FAIL(child_table_schema->check_is_stored_generated_column_base_column(fk_col_id, is_stored_base_col))) {
-            LOG_WARN("failed to check foreign key column is virtual generated column base column", K(ret), K(i));
-          } else if (is_stored_base_col) {
-            ret = OB_ERR_CANNOT_ADD_FOREIGN;
-            LOG_WARN("foreign key column is the base column of stored generated column in mysql mode", K(ret), K(i), K(fk_col_name));
-          }
-        }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObResolverUtils::check_foreign_key_set_null_satisfy(arg, *child_table_schema, lib::is_mysql_mode()))) {
+        LOG_WARN("check fk set null satisfy failed", K(ret), K(arg), "is_mysql_mode", lib::is_mysql_mode());
       }
     }
   }

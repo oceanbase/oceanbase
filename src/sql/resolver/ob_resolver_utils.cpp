@@ -6183,6 +6183,7 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
                                                            ObSchemaChecker &schema_checker,
                                                            const ObIArray<ObString> &parent_columns,
                                                            const ObSArray<ObCreateIndexArg> &index_arg_list,
+                                                           const bool is_oracle_mode,
                                                            share::schema::ObConstraintType &ref_cst_type,
                                                            uint64_t &ref_cst_id,
                                                            bool &is_match)
@@ -6218,7 +6219,7 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
     } else if (is_match) {
       // 不需要再对 uk 列进行配对检查，因为 parent columns 已经和父表的主键列相匹配
       ref_cst_type = CONSTRAINT_TYPE_PRIMARY_KEY;
-      if (is_oracle_mode()) {
+      if (is_oracle_mode) {
         for (ObTableSchema::const_constraint_iterator iter = parent_table_schema.constraint_begin(); iter != parent_table_schema.constraint_end(); ++iter) {
           if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
             ref_cst_id = (*iter)->get_constraint_id();
@@ -6292,6 +6293,64 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
               ref_cst_id = index_table_schema->get_table_id();
             }
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_self_reference_fk_columns_satisfy(
+    const obrpc::ObCreateForeignKeyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (arg.parent_columns_.empty() || arg.child_columns_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg.parent_columns_), K(arg.child_columns_));
+  } else {
+    // 如果属于自引用，则参考列必须都不同
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.parent_columns_.count(); ++i) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < arg.child_columns_.count(); ++j) {
+        if (0 == arg.parent_columns_.at(i).compare(arg.child_columns_.at(j))) {
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
+          LOG_WARN("cannot support that parent column is in child column list", K(ret), K(arg));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_foreign_key_set_null_satisfy(
+    const obrpc::ObCreateForeignKeyArg &arg,
+    const share::schema::ObTableSchema &child_table_schema,
+    const bool is_mysql_compat_mode)
+{
+  int ret = OB_SUCCESS;
+  if (arg.delete_action_ == ACTION_SET_NULL || arg.update_action_ == ACTION_SET_NULL) {
+    // To compatible with oracle and mysql, check if set null ref action is valid
+    // More detail can be found in:
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.child_columns_.count(); ++i) {
+      const ObString &fk_col_name = arg.child_columns_.at(i);
+      const ObColumnSchemaV2 *fk_col_schema = child_table_schema.get_column_schema(fk_col_name);
+      if (OB_ISNULL(fk_col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("foreign key column schema is null", K(ret), K(i));
+      } else if (fk_col_schema->is_generated_column()) {
+        ret = OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN;
+        LOG_WARN("foreign key column is generated column", K(ret), K(i), K(fk_col_name));
+      } else if (!fk_col_schema->is_nullable() && is_mysql_compat_mode) {
+        ret = OB_ERR_FK_COLUMN_NOT_NULL;
+        LOG_USER_ERROR(OB_ERR_FK_COLUMN_NOT_NULL, to_cstring(fk_col_name), to_cstring(arg.foreign_key_name_));
+      } else if (is_mysql_compat_mode) {
+        // check if fk column is base column of virtual generated column in MySQL mode
+        const uint64_t fk_col_id = fk_col_schema->get_column_id();
+        bool is_stored_base_col = false;
+        if (OB_FAIL(child_table_schema.check_is_stored_generated_column_base_column(fk_col_id, is_stored_base_col))) {
+          LOG_WARN("failed to check foreign key column is virtual generated column base column", K(ret), K(i));
+        } else if (is_stored_base_col) {
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
+          LOG_WARN("foreign key column is the base column of stored generated column in mysql mode", K(ret), K(i), K(fk_col_name));
         }
       }
     }
@@ -6578,10 +6637,11 @@ int ObResolverUtils::check_pk_idx_duplicate(const ObTableSchema &table_schema,
 // @param [in] parent_columns       父表外键列各个列的列名
 
 // @return oceanbase error code defined in lib/ob_errno.def
-int ObResolverUtils::check_foreign_key_columns_type(const ObTableSchema &child_table_schema,
+int ObResolverUtils::check_foreign_key_columns_type(const bool is_mysql_compat_mode,
+                                                    const ObTableSchema &child_table_schema,
                                                     const ObTableSchema &parent_table_schema,
-                                                    ObIArray<ObString> &child_columns,
-                                                    ObIArray<ObString> &parent_columns,
+                                                    const ObIArray<ObString> &child_columns,
+                                                    const ObIArray<ObString> &parent_columns,
                                                     const share::schema::ObColumnSchemaV2 *column)
 {
   int ret = OB_SUCCESS;
@@ -6624,8 +6684,8 @@ int ObResolverUtils::check_foreign_key_columns_type(const ObTableSchema &child_t
           LOG_WARN("The collation types are different", K(ret),
               K(child_col->get_collation_type()),
               K(parent_col->get_collation_type()));
-        } else if (lib::is_mysql_mode()
-                   && (child_col->get_data_length() < parent_col->get_data_length())) {
+        } else if (is_mysql_compat_mode &&
+                   (child_col->get_data_length() < parent_col->get_data_length())) {
           ret = OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK;
           LOG_USER_ERROR(OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK,
               child_col->get_column_name_str().length(),

@@ -527,15 +527,30 @@ public:
       const ObTableSchema &hidden_data_schema,
       const ObString &target_data_table_name,
       ObTableSchema &new_index_schema);
-    int check_and_replace_dup_constraint_name_on_demand(
+  int check_and_replace_dup_constraint_name_on_demand(
       const bool is_oracle_mode,
       ObSchemaGetterGuard &tenant_schema_guard,
       ObTableSchema &hidden_data_schema,
       common::ObIAllocator &allocator,
       ObDDLOperator &ddl_operator,
       ObDDLSQLTransaction &trans);
-
-
+  // The rule to recover foreign key,
+  // 1. child table and parent table in the same database/user;
+  // 2. child table and parent table all exist.
+  // 3. child table and parent table in the destination tenant space satisfy the foreign-key built rule.
+  int check_and_replace_fk_info_on_demand(
+      ObSchemaGetterGuard &src_tenant_schema_guard,
+      ObSchemaGetterGuard &dst_tenant_schema_guard,
+      const ObTableSchema &hidden_table_schema,
+      const bool is_recover_child_table,
+      ObForeignKeyInfo &new_fk_info);
+  // To check whether to recover the foreign key by checking columns matched, PK/Unique matched, etc.
+  int check_rebuild_foreign_key_satisfy(
+      obrpc::ObCreateForeignKeyArg &create_fk_arg,
+      const ObTableSchema &parent_table_schema,
+      const ObTableSchema &child_table_schema,
+      sql::ObSchemaChecker &schema_checker,
+      const ObConstraintType &expected_cst_type);
   /**
    * This function is called by the DDL RESTORE TABLE TASK.
    * This task will create a hidden table, but will not be associated with the original table,
@@ -1405,7 +1420,8 @@ private:
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObSchemaGetterGuard &src_tenant_schema_guard,
+      ObSchemaGetterGuard &dst_tenant_schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans);
   int drop_child_table_fk(
@@ -1545,15 +1561,20 @@ private:
       common::hash::ObHashMap<common::ObString, uint64_t> &new_index_table_map);
   int get_rebuild_foreign_key_infos(
       const obrpc::ObAlterTableArg &alter_table_arg,
+      share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
+      share::schema::ObSchemaGetterGuard &dst_tenant_schema_guard,
       const ObTableSchema &orig_table_schema,
+      const ObTableSchema &hidden_table_schema,
       const bool rebuild_child_table_fk,
-      ObArray<ObForeignKeyInfo> &rebuild_fk_infos);
+      ObIArray<ObForeignKeyInfo> &original_fk_infos,
+      ObIArray<ObForeignKeyInfo> &rebuild_fk_infos);
   int rebuild_hidden_table_foreign_key(
       obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       const bool rebuild_child_table_fk,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
+      share::schema::ObSchemaGetterGuard &dst_tenant_schema_guard,
       common::ObMySQLTransaction &trans,
       common::ObSArray<uint64_t> &cst_ids);
   int get_hidden_table_column_id_by_orig_column_id(

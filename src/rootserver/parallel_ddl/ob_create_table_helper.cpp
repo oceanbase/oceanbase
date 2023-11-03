@@ -1742,8 +1742,11 @@ int ObCreateTableHelper::check_fk_columns_type_for_replacing_mock_fk_parent_tabl
     const ObMockFKParentTableSchema &mock_parent_table_schema)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(parent_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check if oracle compat mode failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < mock_parent_table_schema.get_foreign_key_infos().count(); ++i) {
     const ObTableSchema *child_table_schema = NULL;
@@ -1780,6 +1783,7 @@ int ObCreateTableHelper::check_fk_columns_type_for_replacing_mock_fk_parent_tabl
         }
       } // end for
       if (FAILEDx(sql::ObResolverUtils::check_foreign_key_columns_type(
+          !is_oracle_mode/*is_mysql_compat_mode*/,
           *child_table_schema,
           parent_table_schema,
           child_columns,
