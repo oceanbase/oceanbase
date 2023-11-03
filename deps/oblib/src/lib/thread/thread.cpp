@@ -120,9 +120,13 @@ int Thread::start()
 
 void Thread::stop()
 {
+  bool stack_addr_flag = true;
+#ifndef OB_USE_ASAN
+  stack_addr_flag = (stack_addr_ != NULL);
+#endif
 #ifdef ERRSIM
   if (!stop_
-      && stack_addr_ != NULL
+      && stack_addr_flag
       && 0 != (OB_E(EventTable::EN_THREAD_HANG) 0)) {
     int tid_offset = 720;
     int tid = *(pid_t*)((char*)pth_ + tid_offset);

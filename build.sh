@@ -215,6 +215,9 @@ function build
       xsanity)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_SANITY=ON
         ;;
+      xerrsim_sanity)
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ERRSIM=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_SANITY=ON
+        ;;
       *)
         BUILD_ARGS=(debug "${BUILD_ARGS[@]}")
         build
