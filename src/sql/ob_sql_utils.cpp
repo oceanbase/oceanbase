@@ -2853,8 +2853,13 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
                                                             candi_locality))) {
         LOG_WARN("fail to get server locality", K(all_server_arr), K(candi_addr), K(ret));
       } else if (OB_UNLIKELY(!candi_locality.is_init())) {
-        // not find
-        // do nothing
+        //maybe the locality cache hasn't been flushed yet, we just trust it.
+        if (local_addr == candi_addr) {
+          selected_addr = candi_addr;
+          need_continue = false;
+        } else if (OB_FAIL(other_region_addr.push_back(candi_addr))) {
+          LOG_WARN("failed to push back other region candidate address", K(ret));
+        } else {/*do nothing*/}
       } else if (!candi_locality.is_active()
                  || ObServerStatus::OB_SERVER_ACTIVE != candi_locality.get_server_status()
                  || 0 == candi_locality.get_start_service_time()

@@ -78,7 +78,8 @@ OB_DEF_SERIALIZE(ObAggrInfo)
               strict_json_,
               absent_on_null_,
               returning_type_,
-              with_unique_keys_
+              with_unique_keys_,
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ENCODE(*dll_udf_);
@@ -116,7 +117,8 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
               strict_json_,
               absent_on_null_,
               returning_type_,
-              with_unique_keys_
+              with_unique_keys_,
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     CK(NULL != alloc_);
@@ -163,7 +165,8 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
               strict_json_,
               absent_on_null_,
               returning_type_,
-              with_unique_keys_
+              with_unique_keys_,
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ADD_LEN(*dll_udf_);
