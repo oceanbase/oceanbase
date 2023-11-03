@@ -34,7 +34,7 @@
     </a>
 </p>
 
-English | [中文版](README_CN.md)
+English | [中文版](README_CN.md) | [日本語](README_JA.md)
 
 **OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. The OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. The OceanBase Database is not dependent on specific hardware architectures.
 
