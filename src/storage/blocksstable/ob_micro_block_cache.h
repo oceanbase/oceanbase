@@ -28,6 +28,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObIMicroBlockIOCallback;
 class ObMicroBlockCacheKey : public common::ObIKVCacheKey
 {
 public:
@@ -122,7 +123,7 @@ struct ObMultiBlockIOParam
   void reset();
   bool is_valid() const;
   inline void get_io_range(int64_t &offset, int64_t &size) const;
-  inline int get_block_des_info(ObMicroBlockDesMeta &des_meta) const;
+  inline int get_block_des_info(ObIMicroBlockIOCallback &des_meta) const;
   TO_STRING_KV(KPC(micro_index_infos_), K_(start_index), K_(block_count));
   common::ObIArray<ObMicroIndexInfo> *micro_index_infos_;
   int64_t start_index_;
@@ -158,6 +159,7 @@ public:
   virtual ~ObIMicroBlockIOCallback();
   virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size);
   virtual ObIAllocator *get_allocator() { return allocator_; }
+  void set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header);
 protected:
   friend class ObIMicroBlockCache;
   friend class ObDataMicroBlockCache;

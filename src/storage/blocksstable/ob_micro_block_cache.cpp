@@ -278,7 +278,7 @@ void ObMultiBlockIOParam::get_io_range(int64_t &offset, int64_t &size) const
   }
 }
 
-int ObMultiBlockIOParam::get_block_des_info(ObMicroBlockDesMeta &des_meta) const
+int ObMultiBlockIOParam::get_block_des_info(ObIMicroBlockIOCallback &io_callback) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -286,11 +286,7 @@ int ObMultiBlockIOParam::get_block_des_info(ObMicroBlockDesMeta &des_meta) const
     LOG_WARN("Invalid multi block io parameter", K(ret), K(*this));
   } else {
     ObMicroIndexInfo &start_info = micro_index_infos_->at(start_index_);
-    des_meta.compressor_type_ = start_info.row_header_->get_compressor_type();
-    des_meta.encrypt_id_ = start_info.row_header_->get_encrypt_id();
-    des_meta.master_key_id_ = start_info.row_header_->get_master_key_id();
-    des_meta.encrypt_key_ = start_info.row_header_->get_encrypt_key();
-    des_meta.row_store_type_ = start_info.row_header_->get_row_store_type();
+    io_callback.set_micro_des_meta(start_info.row_header_);
   }
   return ret;
 }
@@ -319,6 +315,7 @@ ObIMicroBlockIOCallback::ObIMicroBlockIOCallback()
     use_block_cache_(true)
 {
   MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
+  block_des_meta_.encrypt_key_ = encrypt_key_;
   static_assert(sizeof(*this) <= CALLBACK_BUF_SIZE, "IOCallback buf size not enough");
 }
 
@@ -329,6 +326,16 @@ ObIMicroBlockIOCallback::~ObIMicroBlockIOCallback()
     data_buffer_ = nullptr;
   }
   allocator_ = nullptr;
+}
+
+void ObIMicroBlockIOCallback::set_micro_des_meta(const ObIndexBlockRowHeader *idx_row_header)
+{
+  OB_ASSERT(nullptr != idx_row_header);
+  block_des_meta_.compressor_type_ = idx_row_header->get_compressor_type();
+  block_des_meta_.encrypt_id_ = idx_row_header->get_encrypt_id();
+  block_des_meta_.master_key_id_ = idx_row_header->get_master_key_id();
+  block_des_meta_.row_store_type_ = idx_row_header->get_row_store_type();
+  MEMCPY(encrypt_key_, idx_row_header->get_encrypt_key(), share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
 
 int ObIMicroBlockIOCallback::alloc_data_buf(const char *io_data_buffer, const int64_t data_size)
@@ -815,11 +822,7 @@ int ObIMicroBlockCache::prefetch(
     callback.tenant_id_ = tenant_id;
     callback.block_id_ = macro_id;
     callback.offset_ = idx_row.get_block_offset();
-    callback.block_des_meta_.compressor_type_ = idx_row_header->get_compressor_type();
-    callback.block_des_meta_.encrypt_id_ = idx_row_header->get_encrypt_id();
-    callback.block_des_meta_.master_key_id_ = idx_row_header->get_master_key_id();
-    callback.block_des_meta_.encrypt_key_ = idx_row_header->get_encrypt_key();
-    callback.block_des_meta_.row_store_type_ = idx_row.get_row_store_type();
+    callback.set_micro_des_meta(idx_row_header);
     // fill read info
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
@@ -850,7 +853,7 @@ int ObIMicroBlockCache::prefetch(
   int ret = OB_SUCCESS;
   int64_t offset = 0;
   int64_t size = 0;
-  if (OB_FAIL(io_param.get_block_des_info(callback.block_des_meta_))) {
+  if (OB_FAIL(io_param.get_block_des_info(callback))) {
     LOG_WARN("Fail to get meta data for deserializing block data", K(ret), K(io_param));
   } else {
     // fill callback
