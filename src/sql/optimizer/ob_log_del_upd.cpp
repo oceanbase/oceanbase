@@ -469,6 +469,7 @@ int ObLogDelUpd::generate_pdml_partition_id_expr()
   } else if (OB_FAIL(ObLogicalOperator::generate_pseudo_partition_id_expr(partition_id_expr))) {
     LOG_WARN("fail allocate part id expr", K(table_id), K(ret));
   } else if (OB_FAIL(find_pdml_part_id_producer(*this,
+                                                index_dml_infos_.at(0)->loc_table_id_,
                                                 index_dml_infos_.at(0)->ref_table_id_,
                                                 producer))) {
     LOG_WARN("find pdml partition id expr producer failed", K(ret));
@@ -490,7 +491,8 @@ int ObLogDelUpd::generate_pdml_partition_id_expr()
 }
 
 int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
-                                            const uint64_t tid,
+                                            const uint64_t loc_tid,
+                                            const uint64_t ref_tid,
                                             ObLogicalOperator *&producer)
 {
   int ret = OB_SUCCESS;
@@ -499,7 +501,8 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
   if (OB_SUCC(ret)) {
     if (op.get_type() == log_op_def::LOG_EXCHANGE) {
       ObLogExchange &log_ex = static_cast<ObLogExchange &>(op);
-      if (log_ex.is_producer() && log_ex.get_repartition_ref_table_id() == tid) {
+      if (log_ex.is_producer() && log_ex.get_repartition_ref_table_id() == ref_tid
+          && log_ex.get_repartition_table_id() == loc_tid) {
         producer = &op;
       }
     } else if (op.get_type() == log_op_def::LOG_TABLE_SCAN) {
@@ -523,8 +526,8 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
       // join，那么就在insert算子上分配一个GI算子，目前先使用在subplan上分配EX算子的方式实现
 
       ObLogTableScan &tsc = static_cast<ObLogTableScan &>(op);
-      if (tid
-          == (tsc.get_is_index_global() ? tsc.get_index_table_id() : tsc.get_ref_table_id())) {
+      if (loc_tid == tsc.get_table_id() &&
+          ref_tid == (tsc.get_is_index_global() ? tsc.get_index_table_id() : tsc.get_ref_table_id())) {
         producer = &op;
       }
     }
@@ -542,10 +545,10 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
                    first_child == i) {
           continue;
         }
-        if (OB_FAIL(find_pdml_part_id_producer(*op.get_child(i), tid, producer))) {
+        if (OB_FAIL(find_pdml_part_id_producer(*op.get_child(i), loc_tid, ref_tid, producer))) {
           LOG_WARN("find pdml part id producer failed", K(ret));
         }
-      } else if (OB_FAIL(find_pdml_part_id_producer(*op.get_child(i), tid, producer))) {
+      } else if (OB_FAIL(find_pdml_part_id_producer(*op.get_child(i), loc_tid, ref_tid, producer))) {
         LOG_WARN("find pdml part id producer failed", K(ret));
       }
     }
