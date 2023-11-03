@@ -15,6 +15,9 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_ls_member_list_service.h"
 #include "storage/high_availability/ob_storage_ha_src_provider.h"
+#include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/tablet/ob_tablet.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -249,6 +252,7 @@ int ObLSMemberListService::get_leader_config_version_and_transfer_scn_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_TRANSFER_STANDBY_CHECK_TRANSFER_SCN);
 int ObLSMemberListService::get_config_version_and_transfer_scn_(
     const bool need_get_config_version,
     const common::ObAddr &addr,
@@ -275,6 +279,16 @@ int ObLSMemberListService::get_config_version_and_transfer_scn_(
                                                                       transfer_scn))) {
     STORAGE_LOG(WARN, "failed to get config version and transfer scn", K(ret), KPC(ls_));
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TRANSFER_STANDBY_CHECK_TRANSFER_SCN ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake a very large transfer scn", K(ret));
+      transfer_scn = SCN::plus(transfer_scn, 1000000000000);
+      ret = OB_SUCCESS;
+    }
+  }
+#endif
   return ret;
 }
 
@@ -382,6 +396,9 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::Log
         STORAGE_LOG(WARN, "failed to get config version and transfer scn", K(ret), K(addr));
       } else if (OB_FAIL(check_ls_transfer_scn_(transfer_scn, check_pass))) {
         STORAGE_LOG(WARN, "failed to check ls transfer scn", K(ret), K(transfer_scn));
+      } else if (!check_pass) {
+        STORAGE_LOG(WARN, "standby check transfer scn not pass", K(ret), K(transfer_scn));
+        continue;
       } else {
         if (addr == leader_addr) {
           if (!config_version.is_valid()) {
@@ -399,6 +416,13 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::Log
       if (check_pass_count < (addr_list.count() / 2 + 1)) {
         ret = OB_LS_TRANSFER_SCN_TOO_SMALL;
         STORAGE_LOG(WARN, "transfer scn compare do not reach majority", K(ret), K(addr_list));
+#ifdef ERRSIM
+        SERVER_EVENT_ADD("storage_ha", "standby_check_transfer_scn_too_small",
+                         "tenant_id", ls_->get_tenant_id(),
+                         "ls_id", ls_->get_ls_id().id(),
+                         "member_list_count", addr_list.count(),
+                         "check_pass_count", check_pass_count);
+#endif
       } else {
         STORAGE_LOG(INFO, "passed transfer scn check for standby", K(ret), K(addr_list), K(check_pass_count));
       }
