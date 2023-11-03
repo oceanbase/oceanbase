@@ -1737,7 +1737,9 @@ int ObDMLStmt::formalize_stmt_expr_reference()
       } else { /*do nothing*/ }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(remove_useless_sharable_expr())) {
+      if (is_select_stmt() && OB_FAIL(static_cast<ObSelectStmt*>(this)->maintain_scala_group_by_ref())) {
+        LOG_WARN("failed to meantain scala group by", K(ret));
+      } else if (OB_FAIL(remove_useless_sharable_expr())) {
         LOG_WARN("failed to remove useless sharable expr", K(ret));
       } else if (OB_FAIL(check_pseudo_column_valid())) {
         LOG_WARN("failed to check pseudo column", K(ret));

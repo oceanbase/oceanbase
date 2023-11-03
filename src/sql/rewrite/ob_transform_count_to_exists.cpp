@@ -434,6 +434,7 @@ int ObTransformCountToExists::do_transform(ObDMLStmt *stmt,
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FALSE_IT(subquery->get_select_items().reuse())) {
+        } else if (OB_FALSE_IT(subquery->get_aggr_items().reuse())) {
         } else if (OB_FAIL(ObTransformUtils::create_dummy_select_item(*subquery, ctx_))) {
           LOG_WARN("failed to create dummy select item", K(ret));
         } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(),
