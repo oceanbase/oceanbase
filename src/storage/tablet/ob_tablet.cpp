@@ -155,7 +155,7 @@ ObTablet::~ObTablet()
 
 void ObTablet::reset()
 {
-  FLOG_INFO("reset tablet", KP(this), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_, K(lbt()));
+  LOG_DEBUG("reset tablet", KP(this), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_, K(lbt()));
 
   reset_memtable();
   reset_ddl_memtables();
