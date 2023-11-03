@@ -5453,22 +5453,35 @@ int ObCreateUDTArg::assign(const ObCreateUDTArg &other)
   } else {
     db_name_ = other.db_name_;
     is_or_replace_ = other.is_or_replace_;
+    is_force_ = other.is_force_;
+    exist_valid_udt_ = other.exist_valid_udt_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObCreateUDTArg, ObDDLArg), udt_info_, db_name_, is_or_replace_,
-                                                error_info_,
-                                                public_routine_infos_,
-                                                dependency_infos_);
+OB_SERIALIZE_MEMBER((ObCreateUDTArg, ObDDLArg),
+                    udt_info_,
+                    db_name_,
+                    is_or_replace_,
+                    error_info_,
+                    public_routine_infos_,
+                    dependency_infos_,
+                    is_force_,
+                    exist_valid_udt_);
 
 bool ObDropUDTArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && !db_name_.empty() && !udt_name_.empty();
 }
 
-OB_SERIALIZE_MEMBER((ObDropUDTArg, ObDDLArg), tenant_id_, db_name_,
-                     udt_name_, if_exist_, is_type_body_, force_or_validate_);
+OB_SERIALIZE_MEMBER((ObDropUDTArg, ObDDLArg),
+                    tenant_id_,
+                    db_name_,
+                    udt_name_,
+                    if_exist_,
+                    is_type_body_,
+                    force_or_validate_,
+                    exist_valid_udt_);
 
 OB_SERIALIZE_MEMBER(ObCancelTaskArg, task_id_);
 

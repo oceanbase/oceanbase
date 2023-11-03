@@ -6424,7 +6424,13 @@ struct ObCreateUDTArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateUDTArg(): udt_info_(), db_name_(), is_or_replace_(false), error_info_() {}
+  ObCreateUDTArg()
+    : udt_info_(),
+      db_name_(),
+      is_or_replace_(false),
+      error_info_(),
+      is_force_(true),
+      exist_valid_udt_(false) {}
   virtual ~ObCreateUDTArg() {}
   bool is_valid() const;
   int assign(const ObCreateUDTArg &other);
@@ -6433,7 +6439,9 @@ public:
                K_(is_or_replace),
                K_(error_info),
                K_(public_routine_infos),
-               K_(dependency_infos));
+               K_(dependency_infos),
+               K_(is_force),
+               K_(exist_valid_udt));
 
   share::schema::ObUDTTypeInfo udt_info_;
   common::ObString db_name_;
@@ -6441,6 +6449,8 @@ public:
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<share::schema::ObRoutineInfo> public_routine_infos_;
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+  bool is_force_;
+  bool exist_valid_udt_;
 };
 
 struct ObDropUDTArg : public ObDDLArg
@@ -6453,12 +6463,18 @@ public:
       udt_name_(),
       if_exist_(false),
       is_type_body_(false),
-      force_or_validate_(0) {}
+      force_or_validate_(1), // default force for backward compatibility
+      exist_valid_udt_(false) {}
   virtual ~ObDropUDTArg() {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
-  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(udt_name),
-               K_(if_exist), K_(is_type_body), K_(force_or_validate));
+  TO_STRING_KV(K_(tenant_id),
+               K_(db_name),
+               K_(udt_name),
+               K_(if_exist),
+               K_(is_type_body),
+               K_(force_or_validate),
+               K_(exist_valid_udt));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
@@ -6466,6 +6482,7 @@ public:
   bool if_exist_;
   bool is_type_body_;
   int64_t force_or_validate_;
+  bool exist_valid_udt_;
 };
 
 struct ObCancelTaskArg : public ObServerZoneArg
