@@ -131,6 +131,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
+  "_enable_storage_cardinality_estimation",
   "_force_order_preserve_set",
   "_force_parallel_ddl_dop",
   "_force_parallel_dml_dop",
@@ -375,6 +376,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
+  SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION,
   SYS_VAR__FORCE_ORDER_PRESERVE_SET,
   SYS_VAR__FORCE_PARALLEL_DDL_DOP,
   SYS_VAR__FORCE_PARALLEL_DML_DOP,
@@ -851,7 +853,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_priv_control",
   "_enable_mysql_pl_priv_check",
   "ob_enable_pl_cache",
-  "ob_default_lob_inrow_threshold"
+  "ob_default_lob_inrow_threshold",
+  "_enable_storage_cardinality_estimation"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1260,7 +1263,8 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarPrivControl)
         + sizeof(ObSysVarEnableMysqlPlPrivCheck)
         + sizeof(ObSysVarObEnablePlCache)
-        + sizeof(ObSysVarDefaultLobInrowThreshold)
+        + sizeof(ObSysVarObDefaultLobInrowThreshold)
+        + sizeof(ObSysVarEnableStorageCardinalityEstimation)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3430,12 +3434,21 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultLobInrowThreshold())) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObDefaultLobInrowThreshold())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarDefaultLobInrowThreshold", K(ret));
+        LOG_ERROR("fail to new ObSysVarObDefaultLobInrowThreshold", K(ret));
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultLobInrowThreshold));
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObDefaultLobInrowThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableStorageCardinalityEstimation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableStorageCardinalityEstimation", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableStorageCardinalityEstimation));
       }
     }
 
@@ -6090,12 +6103,23 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
     }
     case SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD: {
       void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDefaultLobInrowThreshold)))) {
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObDefaultLobInrowThreshold)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDefaultLobInrowThreshold)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultLobInrowThreshold())) {
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObDefaultLobInrowThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObDefaultLobInrowThreshold())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarDefaultLobInrowThreshold", K(ret));
+        LOG_ERROR("fail to new ObSysVarObDefaultLobInrowThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableStorageCardinalityEstimation)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableStorageCardinalityEstimation)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableStorageCardinalityEstimation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableStorageCardinalityEstimation", K(ret));
       }
       break;
     }

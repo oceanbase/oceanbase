@@ -257,6 +257,7 @@ namespace share
   static const char* const OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK = "_enable_mysql_pl_priv_check";
   static const char* const OB_SV_ENABLE_PL_CACHE = "ob_enable_pl_cache";
   static const char* const OB_SV_DEFAULT_LOB_INROW_THRESHOLD = "ob_default_lob_inrow_threshold";
+  static const char* const OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION = "_enable_storage_cardinality_estimation";
 
 }
 }

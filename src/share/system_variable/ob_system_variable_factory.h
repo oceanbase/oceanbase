@@ -1733,14 +1733,21 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PL_CACHE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(239); }
 };
-
-class ObSysVarDefaultLobInrowThreshold : public ObIntSysVar
+class ObSysVarObDefaultLobInrowThreshold : public ObIntSysVar
 {
 public:
-  ObSysVarDefaultLobInrowThreshold() : ObIntSysVar(ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold, NULL, NULL, NULL, NULL) {}
+  ObSysVarObDefaultLobInrowThreshold() : ObIntSysVar(ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(240); }
 };
+class ObSysVarEnableStorageCardinalityEstimation : public ObBoolSysVar
+{
+public:
+  ObSysVarEnableStorageCardinalityEstimation() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(241); }
+};
+
 
 class ObSysVarFactory
 {
@@ -1760,7 +1767,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 144;
+  const static int64_t OB_SYS_VARS_COUNT = 145;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 
