@@ -3360,8 +3360,10 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
       PALF_LOG(WARN, "group_entry_header check_integrity failed", K(ret), K_(palf_id), K_(self));
     } else if (!leader_can_submit_larger_log_(group_entry_header.get_log_id())) {
       ret = OB_EAGAIN;
-      PALF_LOG(WARN, "sw is full, cannot receive larger log", K(ret), K_(palf_id), K_(self), K(group_entry_header),
-          "start_id", get_start_id(), K(lsn));
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "sw is full, cannot receive larger log", K(ret), K_(palf_id), K_(self), K(group_entry_header),
+           "start_id", get_start_id(), K(lsn));
+      }
     } else if ((log_id = group_entry_header.get_log_id()) < get_start_id()) {
       PALF_LOG(WARN, "this log has slided out, no need receive", K(ret), K_(palf_id), K_(self),
           K(group_entry_header), "start_id", get_start_id());

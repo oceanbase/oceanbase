@@ -3153,7 +3153,9 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
               "current proposal_id", state_mgr_.get_proposal_id(),
               "mode_mgr can_raw_write", mode_mgr_.can_raw_write(), K(opts));
         } else if (OB_FAIL(sw_.submit_group_log(lsn, buf, buf_len))) {
-          PALF_LOG(WARN, "submit_group_log failed", K(ret), K_(palf_id), K_(self), KP(buf), K(buf_len));
+          if (OB_EAGAIN != ret) {
+            PALF_LOG(WARN, "submit_group_log failed", K(ret), K_(palf_id), K_(self), KP(buf), K(buf_len));
+          }
         } else {
           PALF_LOG(TRACE, "submit_group_log success", K(ret), K_(palf_id), K_(self), K(buf_len), K(lsn));
         }
