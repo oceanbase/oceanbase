@@ -119,7 +119,7 @@ class LocalClient(SafeStdio):
 
 class MySQLClient(SafeStdio):
     @staticmethod
-    def connect(server, user="root", password="", database="oceanbase", stdio=None):
+    def connect(server, user="root", password="", database="", stdio=None):
         ip = server.get_conf("ip_addr")
         port = server.get_conf("mysql_port")
         name = server.get_conf("server_name")

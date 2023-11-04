@@ -19,6 +19,7 @@ target_link_libraries(instance_observer PUBLIC oceanbase ${LINK_MALLOC_HOOK})
 add_custom_command(
   TARGET instance_observer 
   POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${INSTANCE_INSTALL_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:instance_observer> ${INSTANCE_INSTALL_DIR}
 )
 
