@@ -599,6 +599,23 @@ int ObMySQLConnection::execute_write(const char *sql, int64_t &affected_rows)
   return ret;
 }
 
+int ObMySQLConnection::execute_write(ObMySQLPreparedStatement &stmt, int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not established. call connect first", K(ret));
+  } else if (OB_UNLIKELY(ConnStatus::PENDING == conn_status_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("async result is not ready. the connection is not usable now.", K(ret));
+  } else if (OB_FAIL(stmt.execute_update(affected_rows))) {
+    LOG_WARN("stmtement execute update failed", K(ret));
+  } else {
+    LOG_DEBUG("get write result", K(affected_rows), K(ret));
+  }
+  return ret;
+}
+
 int ObMySQLConnection::execute_write_async(ObMySQLPreparedStatement &stmt)
 {
   int ret = OB_SUCCESS;

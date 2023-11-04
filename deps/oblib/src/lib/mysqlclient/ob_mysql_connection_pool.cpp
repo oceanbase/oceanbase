@@ -840,7 +840,8 @@ int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param
     LOG_WARN("fail to acquire dblink", K(ret), K(dblink_id));
   } else if (OB_FAIL(try_connect_dblink(dblink_conn, sql_request_level, async))) {
     LOG_WARN("fail to try connect dblink", K(ret), K(dblink_id));
-    int release_ret = release_dblink(dblink_conn, sessid);
+    const bool succ = false;
+    int release_ret = release_dblink(dblink_conn, succ, sessid);
     if (release_ret != OB_SUCCESS) {
       LOG_WARN("fail to release dblink conn", K(release_ret), K(dblink_id));
     }
@@ -849,16 +850,14 @@ int ObMySQLConnectionPool::acquire_dblink(uint64_t dblink_id, const dblink_param
   return ret;
 }
 
-int ObMySQLConnectionPool::release_dblink(ObMySQLConnection *dblink_conn, uint32_t sessid)
+int ObMySQLConnectionPool::release_dblink(ObMySQLConnection *dblink_conn, const bool succ, uint32_t sessid)
 {
   int ret = OB_SUCCESS;
-  if (NULL != dblink_conn) {
-    if (OB_ISNULL(dblink_conn)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ObMySQLConnectionPool only release ObMySQLConnection", K(ret));
-    } else if (OB_FAIL(release_dblink(dblink_conn, sessid))) {
-      LOG_WARN("release connection failed", K(ret));
-    }
+  if (OB_ISNULL(dblink_conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot release nullptr dblink connection", K(ret));
+  } else if (OB_FAIL(release(dblink_conn, succ, sessid))) {
+    LOG_WARN("release connection failed", K(ret));
   }
   return ret;
 }

@@ -186,7 +186,7 @@ public:
                      uint32_t sessid = 0, int64_t
                      sql_request_level = 0, bool async = false);
   virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0) override { return OB_NOT_SUPPORTED; }
-  int release_dblink(ObMySQLConnection *dblink_conn, uint32_t sessid = 0);
+  int release_dblink(ObMySQLConnection *dblink_conn, const bool succ, uint32_t sessid = 0);
   virtual int do_acquire_dblink(uint64_t dblink_id,
                                 const dblink_param_ctx &param_ctx,
                                 ObISQLConnection *&dblink_conn,

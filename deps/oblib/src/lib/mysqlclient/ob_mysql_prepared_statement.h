@@ -61,7 +61,7 @@ public:
    *  - commit
    *  - insert into t values (v1,v2),(v3,v4)
    */
-  int execute_update();
+  int execute_update(int64_t &affected_rows);
   int execute_update_async();
 
   /*

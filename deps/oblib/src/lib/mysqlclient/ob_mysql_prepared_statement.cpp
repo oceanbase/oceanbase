@@ -116,7 +116,7 @@ int ObMySQLPreparedStatement::close()
   return ret;
 }
 
-int ObMySQLPreparedStatement::execute_update()
+int ObMySQLPreparedStatement::execute_update(int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt_)) {
@@ -127,6 +127,8 @@ int ObMySQLPreparedStatement::execute_update()
   } else if (0 != mysql_stmt_execute(stmt_)) {
     ret = -mysql_stmt_errno(stmt_);
     LOG_WARN("fail to execute stmt", "info", mysql_stmt_error(stmt_), K(ret));
+  } else {
+    affected_rows = mysql_stmt_affected_rows(stmt_);
   }
   return ret;
 }
