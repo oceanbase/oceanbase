@@ -640,8 +640,13 @@ int ret = OB_SUCCESS;
         if (rs->last_write_ts_ > 0) {
           _LOG_INFO("dest has not been accessed by the upper layer for a long time, addr: %s, last_access_time_=%ld", addr_to_string(rs->svr_addr_), rs->last_access_ts_);
           ATOMIC_STORE(&rs->last_write_ts_, 0);
+          rs->in_black_ = 0;
+          destroy_client(rs->c_);
         }
         continue;
+      } else if (0 == rs->last_write_ts_) {
+        rs->last_read_ts_ = get_usec();
+        _LOG_INFO("dest added, start to send keepalive data, addr : %s", addr_to_string(rs->svr_addr_));
       }
       if (dump_status) {
         _LOG_INFO("dump dest keepalive data states, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld, in_black_=%d",
