@@ -765,7 +765,7 @@ int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &
       LOG_WARN("fail to push back pair", K(ret), K(pair));
     }
   } else {
-  // TODO(chongrong.th): when log archive support compression, remove this in 4.3
+  // TODO(zeyong): when log archive support compression, remove this in 4.3
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("compression not support value", K(ret), K(value));
   }
