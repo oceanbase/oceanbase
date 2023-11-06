@@ -13,9 +13,11 @@
 #ifndef OCEANBASE_STORAGE_OB_STORAGE_META_CACHE_H_
 #define OCEANBASE_STORAGE_OB_STORAGE_META_CACHE_H_
 
+#include "lib/literals/ob_literals.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/blockstore/ob_shared_block_reader_writer.h"
+#include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 
 namespace oceanbase
 {
@@ -35,6 +37,7 @@ namespace storage
 
 class ObTablet;
 class ObTabletTableStore;
+class ObTabletBindingMdsUserData;
 class ObStorageMetaCache;
 class ObStorageMetaValueHandle;
 
@@ -69,11 +72,12 @@ class ObStorageMetaValue final : public common::ObIKVCacheValue
 public:
   enum MetaType : uint16_t
   {
-    SSTABLE        = 0,
-    CO_SSTABLE     = 1,
-    TABLE_STORE    = 2,
-    AUTO_INC_SEQ   = 3,
-    MAX            = 4,
+    SSTABLE         = 0,
+    CO_SSTABLE      = 1,
+    TABLE_STORE     = 2,
+    AUTO_INC_SEQ    = 3,
+    AUX_TABLET_INFO = 4,
+    MAX             = 5,
   };
 public:
   ObStorageMetaValue();
@@ -85,6 +89,7 @@ public:
   int get_sstable(blocksstable::ObSSTable *&sstable) const;
   int get_table_store(const ObTabletTableStore *&store) const;
   int get_autoinc_seq(const share::ObTabletAutoincSeq *&seq) const;
+  int get_aux_tablet_info(const ObTabletBindingMdsUserData *&aux_tablet_info) const;
   bool is_valid() const;
   void reset()
   {
@@ -118,6 +123,12 @@ public:
       const char *buf,
       const int64_t size,
       const ObTablet *tablet);
+  static int process_aux_tablet_info(
+      ObStorageMetaValueHandle &handle,
+      const ObStorageMetaKey &key,
+      const char *buf,
+      const int64_t size,
+      const ObTablet *tablet);
   TO_STRING_KV(K_(type), KP_(obj));
 public:
   typedef int (*StorageMetaProcessor)(
@@ -137,6 +148,12 @@ public:
 private:
   template <typename T>
   static int bypass_process_storage_meta(
+      const MetaType type,
+      common::ObSafeArenaAllocator &allocator,
+      ObStorageMetaValueHandle &handle,
+      const char *buf,
+      const int64_t size);
+  static int bypass_process_storage_meta_for_aux_tablet_info(
       const MetaType type,
       common::ObSafeArenaAllocator &allocator,
       ObStorageMetaValueHandle &handle,
@@ -290,8 +307,8 @@ int ObStorageMetaValue::bypass_process_storage_meta(
   ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "ProcMetaVaule"));
   int64_t pos = 0;
   T t;
-  char *buff = nullptr;
-  ObTimeGuard time_guard("bypass_process", 10000); //10ms
+  char *buffer = nullptr;
+  ObTimeGuard time_guard("bypass_process", 10_ms);
   if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0 || !handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(size), K(handle));
@@ -300,19 +317,16 @@ int ObStorageMetaValue::bypass_process_storage_meta(
   } else {
     time_guard.click("deserialize");
     ObIStorageMetaObj *tiny_meta = nullptr;
-    const int64_t buff_pos = sizeof(ObStorageMetaValue);
-    const int64_t buff_size = sizeof(ObStorageMetaValue) + t.get_deep_copy_size();
-    if (OB_ISNULL(buff = static_cast<char *>(allocator.alloc(buff_size)))) {
+    const int64_t buffer_pos = sizeof(ObStorageMetaValue);
+    const int64_t buffer_size = sizeof(ObStorageMetaValue) + t.get_deep_copy_size();
+    if (OB_ISNULL(buffer = static_cast<char *>(allocator.alloc(buffer_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buff_size));
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buffer_size));
+    } else if (OB_FAIL(t.deep_copy(buffer + buffer_pos, t.get_deep_copy_size(), tiny_meta))) {
+      STORAGE_LOG(WARN, "fail to deserialize T", K(ret), KP(buf), K(size));
     } else {
-      if (OB_FAIL(t.deep_copy(buff + buff_pos, t.get_deep_copy_size(), tiny_meta))) {
-        STORAGE_LOG(WARN, "fail to deserialize sstable", K(ret), KP(buf), K(size));
-      } else {
-        time_guard.click("deep_copy");
-        handle.get_cache_value()->value_ = new (buff) ObStorageMetaValue(type, tiny_meta);
-        time_guard.click("new_metaValue");
-      }
+      time_guard.click("deep_copy");
+      handle.get_cache_value()->value_ = new (buffer) ObStorageMetaValue(type, tiny_meta);
     }
   }
   return ret;

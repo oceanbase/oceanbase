@@ -17,12 +17,11 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/statistic_event/ob_stat_event.h"
 #include "share/io/ob_io_struct.h"
+#include "share/ob_tablet_autoincrement_param.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/tablet/ob_tablet.h"
-#include "share/ob_tablet_autoincrement_param.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
@@ -115,6 +114,7 @@ ObStorageMetaValue::StorageMetaProcessor ObStorageMetaValue::processor[ObStorage
       ObStorageMetaValue::process_co_sstable,
       ObStorageMetaValue::process_table_store,
       ObStorageMetaValue::process_autoinc_seq,
+      ObStorageMetaValue::process_aux_tablet_info
   };
 
 ObStorageMetaValue::StorageMetaBypassProcessor ObStorageMetaValue::bypass_processor[MetaType::MAX]
@@ -122,6 +122,7 @@ ObStorageMetaValue::StorageMetaBypassProcessor ObStorageMetaValue::bypass_proces
       ObStorageMetaValue::bypass_process_storage_meta<storage::ObCOSSTableV2>,
       nullptr, // not support bypass process table store.
       ObStorageMetaValue::bypass_process_storage_meta<share::ObTabletAutoincSeq>,
+      ObStorageMetaValue::bypass_process_storage_meta_for_aux_tablet_info
   };
 
 
@@ -243,6 +244,21 @@ int ObStorageMetaValue::get_autoinc_seq(const share::ObTabletAutoincSeq *&seq) c
     LOG_WARN("not auto inc seq", K(ret), K(type_));
   } else {
     seq = static_cast<share::ObTabletAutoincSeq *>(obj_);
+  }
+  return ret;
+}
+
+int ObStorageMetaValue::get_aux_tablet_info(const ObTabletBindingMdsUserData *&aux_tablet_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(obj_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(MetaType::AUX_TABLET_INFO != type_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("not aux tablet info", K(ret), K(type_));
+  } else {
+    aux_tablet_info = static_cast<ObTabletBindingMdsUserData *>(obj_);
   }
   return ret;
 }
@@ -397,6 +413,98 @@ int ObStorageMetaValue::process_autoinc_seq(
   }
   if (OB_NOT_NULL(tiny_meta)) {
     tiny_meta->~ObIStorageMetaObj();
+  }
+  return ret;
+}
+
+int ObStorageMetaValue::process_aux_tablet_info(
+    ObStorageMetaValueHandle &handle,
+    const ObStorageMetaKey &key,
+    const char *buf,
+    const int64_t size,
+    const ObTablet *tablet)
+{
+  UNUSED(tablet);
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "AuxTabletInfo"));
+  mds::MdsDumpKV dump_kv;
+  ObTabletBindingMdsUserData aux_tablet_info;
+  ObIStorageMetaObj *tiny_meta = nullptr;
+  int64_t pos = 0;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0 || !handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(size), K(handle));
+  } else if (OB_FAIL(dump_kv.deserialize(allocator, buf, size, pos))) {
+    LOG_WARN("fail to deserialize mds dump kv", K(ret), KP(buf), K(size));
+  } else {
+    pos = 0; // reset pos
+    char *tmp_buf = nullptr;
+    const common::ObString &str = dump_kv.v_.user_data_;
+    if (OB_FAIL(aux_tablet_info.deserialize(str.ptr(), str.length(), pos))) {
+      LOG_WARN("fail to deserialize aux tablet info", K(ret), K(str));
+    } else if (OB_ISNULL(tmp_buf = static_cast<char *>(allocator.alloc(aux_tablet_info.get_deep_copy_size())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate buffer", K(ret), "deep_copy_size", aux_tablet_info.get_deep_copy_size());
+    } else if (OB_FAIL(aux_tablet_info.deep_copy(tmp_buf, aux_tablet_info.get_deep_copy_size(), tiny_meta))) {
+      LOG_WARN("fail to deep copy auto inc seq", K(ret), KP(tmp_buf), K(aux_tablet_info));
+    } else {
+      ObStorageMetaCacheValue *cache_value = handle.get_cache_value();
+      ObStorageMetaValue value(MetaType::AUX_TABLET_INFO, tiny_meta);
+      if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().put_and_fetch(key, value, cache_value->value_, cache_value->cache_handle_))) {
+        LOG_WARN("fail to put and fetch value into storage meta cache", K(ret), K(key), K(value), K(cache_value));
+      }
+    }
+  }
+  if (OB_NOT_NULL(tiny_meta)) {
+    tiny_meta->~ObIStorageMetaObj();
+  }
+
+  return ret;
+}
+
+
+int ObStorageMetaValue::bypass_process_storage_meta_for_aux_tablet_info(
+    const MetaType type,
+    common::ObSafeArenaAllocator &allocator,
+    ObStorageMetaValueHandle &handle,
+    const char *buf,
+    const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "ProcMetaVaule"));
+  int64_t pos = 0;
+  mds::MdsDumpKV dump_kv;
+  char *buffer = nullptr;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0 || !handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(size), K(handle));
+  } else if (OB_UNLIKELY(type != ObStorageMetaValue::AUX_TABLET_INFO)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid meta type", K(ret), K(type));
+  } else if (OB_FAIL(dump_kv.deserialize(tmp_allocator, buf, size, pos))) {
+    STORAGE_LOG(WARN, "fail to deserialize ", K(ret), KP(buf), K(size));
+  } else {
+    pos = 0;
+    ObTabletBindingMdsUserData aux_tablet_info;
+    const common::ObString &str = dump_kv.v_.user_data_;
+    if (OB_FAIL(aux_tablet_info.deserialize(str.ptr(), str.length(), pos))) {
+      STORAGE_LOG(WARN, "fail to deserialize aux tablet info", K(ret), K(str));
+    } else {
+      ObIStorageMetaObj *tiny_meta = nullptr;
+      const int64_t buffer_pos = sizeof(ObStorageMetaValue);
+      const int64_t buffer_size = sizeof(ObStorageMetaValue) + aux_tablet_info.get_deep_copy_size();
+      if (OB_ISNULL(buffer = static_cast<char *>(allocator.alloc(buffer_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buffer_size));
+      } else {
+        if (OB_FAIL(aux_tablet_info.deep_copy(buffer + buffer_pos, aux_tablet_info.get_deep_copy_size(), tiny_meta))) {
+          STORAGE_LOG(WARN, "fail to deserialize aux tablet info", K(ret), KP(buf), K(size));
+        } else {
+          handle.get_cache_value()->value_ = new (buffer) ObStorageMetaValue(type, tiny_meta);
+        }
+      }
+    }
   }
   return ret;
 }

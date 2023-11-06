@@ -511,16 +511,16 @@ public:
   // tablet mds data read interface
   int get_tablet_status_uncommitted_mds_dump_kv(
       common::ObIAllocator &allocator,
-      const mds::MdsDumpKV *&kv);
+      mds::MdsDumpKV *&kv);
   int get_tablet_status_committed_mds_dump_kv(
       common::ObIAllocator &allocator,
-      const mds::MdsDumpKV *&kv);
+      mds::MdsDumpKV *&kv);
   int get_aux_tablet_info_uncommitted_mds_dump_kv(
       common::ObIAllocator &allocator,
-      const mds::MdsDumpKV *&kv);
+      mds::MdsDumpKV *&kv);
   int get_aux_tablet_info_committed_mds_dump_kv(
       common::ObIAllocator &allocator,
-      const mds::MdsDumpKV *&kv);
+      mds::MdsDumpKV *&kv);
   int get_auto_inc_seq_mds_dump_kv(
       common::ObIAllocator &allocator,
       mds::MdsDumpKV *&kv);
