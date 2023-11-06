@@ -508,7 +508,8 @@ int ObMPBase::check_and_refresh_schema(uint64_t login_tenant_id,
 
 int ObMPBase::response_row(ObSQLSessionInfo &session,
                            common::ObNewRow &row,
-                           const ColumnsFieldIArray *fields)
+                           const ColumnsFieldIArray *fields,
+                           bool is_packed)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -525,7 +526,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       ObCharsetType charset_type = CHARSET_INVALID;
       ObCharsetType ncharset_type = CHARSET_INVALID;
       // need at ps mode
-      if (value.get_type() != fields->at(i).type_.get_type()) {
+      if (!is_packed && value.get_type() != fields->at(i).type_.get_type()) {
         ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
         if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
                                           cast_ctx,
@@ -536,6 +537,8 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (is_packed) {
+        // do nothing
       } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
       } else if (OB_FAIL(session.get_ncharacter_set_connection(ncharset_type))) {
@@ -579,7 +582,9 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
       ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields);
+      sm_row.set_packed(is_packed);
       obmysql::OMPKRow rp(sm_row);
+      rp.set_is_packed(is_packed);
       if (OB_FAIL(response_packet(rp, &session))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("response packet fail", K(ret));
