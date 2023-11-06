@@ -1643,7 +1643,7 @@ int PalfHandleImpl::disable_vote(const bool need_check_log_missing)
       } else if (state_mgr_.is_leader_active() &&
           (1 == replica_num || AccessMode::APPEND == access_mode)) {
         ret = OB_ERR_UNEXPECTED;
-        PALF_LOG(ERROR, "can not disable_vote in leader", KPC(this),
+        PALF_LOG(WARN, "can not disable_vote in leader", KPC(this),
             K(memberlist), K(replica_num), K(access_mode));
       } else if (!state_mgr_.is_allow_vote()) {
         PALF_LOG(INFO, "vote has already been disabled", KPC(this));
