@@ -265,7 +265,8 @@ void ObTenantTabletTTLMgr::check_ttl_tenant_state()
     if (tenant_finish) {
       // all task already in cancel or runing status
       if (local_tenant_task_.state_ == OB_TTL_TASK_CANCEL || local_tenant_task_.state_ == OB_TTL_TASK_RUNNING) {
-        local_tenant_task_.is_finished_ = true;
+        local_tenant_task_.reuse();
+        FLOG_INFO("local ls ttl task is finished", K_(local_tenant_task), KPC_(ls));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected tenant ttl state", KR(ret), K(local_tenant_task_.state_));
@@ -273,10 +274,6 @@ void ObTenantTabletTTLMgr::check_ttl_tenant_state()
     }
   }
 
-  if (OB_SUCC(ret) && local_tenant_task_.is_finished_) {
-    FLOG_INFO("local ls ttl task is finished", K_(local_tenant_task), KPC_(ls));
-    local_tenant_task_.reuse();
-  }
 
   LOG_DEBUG("check ttl tenant dirty", K(local_tenant_task_.is_dirty_), K(local_tenant_task_.state_), KR(ret), K_(tenant_id));
 }
@@ -1313,6 +1310,9 @@ int ObTenantTabletTTLMgr::reload_tenant_task()
     LOG_WARN("not init", KR(ret));
   } else if (is_paused_) {
     // do nothing, not leader
+    if (!local_tenant_task_.is_finished_) {
+      local_tenant_task_.reuse();
+    }
   } else if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id_, *sql_proxy_, tenant_task))) {
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
