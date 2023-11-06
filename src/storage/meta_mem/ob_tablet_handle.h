@@ -103,10 +103,10 @@ private:
   ObTabletHandle *transfer_src_handle_;
 };
 
-struct ObGetTableParam
+struct ObGetTableParam final
 {
 public:
-  ObGetTableParam() : frozen_version_(-1), sample_info_(), tablet_iter_() {}
+  ObGetTableParam() : frozen_version_(-1), sample_info_(), tablet_iter_(), refreshed_merge_(nullptr) {}
   ~ObGetTableParam() { reset(); }
   bool is_valid() const { return tablet_iter_.is_valid(); }
   void reset()
@@ -114,12 +114,17 @@ public:
     frozen_version_ = -1;
     sample_info_.reset();
     tablet_iter_.reset();
+    refreshed_merge_ = nullptr;
   }
   TO_STRING_KV(K_(frozen_version), K_(sample_info), K_(tablet_iter));
 public:
   int64_t frozen_version_;
   common::SampleInfo sample_info_;
   ObTabletTableIterator tablet_iter_;
+
+  // when tablet has been refreshed, to notify other ObMultipleMerge in ObTableScanIterator re-inited
+  // before rescan.
+  void *refreshed_merge_;
   DISALLOW_COPY_AND_ASSIGN(ObGetTableParam);
 };
 

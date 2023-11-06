@@ -1267,6 +1267,7 @@ int ObMultipleMerge::refresh_tablet_iter()
         false/*allow_not_ready*/))) {
       LOG_WARN("failed to refresh tablet iterator", K(ret), K_(get_table_param), KP_(access_param));
     } else {
+      get_table_param_->refreshed_merge_ = this;
       access_param_->iter_param_.rowkey_read_info_ =
         &(get_table_param_->tablet_iter_.get_tablet_handle().get_obj()->get_rowkey_read_info());
     }
