@@ -6366,6 +6366,8 @@ def_table_schema(
 # 495 : __all_index_usage_info
 # 496 : __all_detect_lock_info
 # 497 : __all_client_to_server_session_info
+# 498 :__all_transfer_partition_task
+# 499 :__all_transfer_partition_task_history
 #
 # 余留位置
 ################################################################################
@@ -13124,6 +13126,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12448: __all_virtual_detect_lock_info
 # 12449: __all_virtual_client_to_server_session_info
 # 12450: __all_virtual_sys_variable_default_value
+# 12451: __all_virtual_transfer_partition_task
+# 12452: __all_virtual_transfer_partition_task_history
 # 余留位置
 #
 
@@ -13542,6 +13546,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15427: __all_virtual_aux_stat
 # 15428: __all_virtual_sys_variable
 # 15429: __all_virtual_sys_variable_default_value
+# 15430: __all_transfer_partition_task
+# 15431: __all_transfer_partition_task_history
 # 余留位置
 
 ################################################################################
@@ -30162,6 +30168,10 @@ def_table_schema(
 #21498 CDB_OB_AUX_STATISTICS
 #21499 DBA_OB_INDEX_USAGE
 #21500 DBA_OB_SYS_VARIABLES
+#21501 DBA_OB_TRANSFER_PARTITION_TASKS
+#21502 CDB_OB_TRANSFER_PARTITION_TASKS
+#21503 DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
+#21504 CDB_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 余留位置
 
 ################################################################################
@@ -48649,6 +48659,8 @@ def_table_schema(
 # 25272: DBA_OB_FORMAT_OUTLINES
 # 25273: DBA_WR_SQLSTAT
 # 25274: DBA_WR_SYS_TIME_MODEL
+# 25275: DBA_OB_TRANSFER_PARTITION_TASKS
+# 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 余留位置
 
 #### End Data Dictionary View
@@ -55562,6 +55574,7 @@ def_sys_index_table(
 # 101097 : placeholder for index of __all_mview_refresh_stats
 # 101098 : placeholder for index of __all_ncomp_dll
 # 101099 : placeholder for index of __all_client_to_server_session_info
+# 101100: placeholder for index of __all_transfer_partition_task
 
 ################################################################################
 # Oracle Agent table Index
