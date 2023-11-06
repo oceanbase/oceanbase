@@ -57,11 +57,12 @@ struct TenantConfigInfo {
 
   TenantConfigInfo() : TenantConfigInfo(common::OB_INVALID_TENANT_ID) {}
   TenantConfigInfo(uint64_t tenant_id) : tenant_id_(tenant_id),
-    name_(), value_(), info_(), section_(),
+    name_(), data_type_(), value_(), info_(), section_(),
     scope_(), source_(), edit_level_() {}
   virtual ~TenantConfigInfo() {}
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   int set_name(const char *name) { return name_.assign(name); }
+  int set_data_type(const char *data_type) { return data_type_.assign(data_type); }
   int set_value(const char *value) { return value_.assign(value); }
   int set_info(const char *info) { return info_.assign(info); }
   int set_section(const char *section) { return section_.assign(section); }
@@ -73,6 +74,7 @@ struct TenantConfigInfo {
 
   uint64_t tenant_id_;
   ConfigString name_;
+  ConfigString data_type_;
   ConfigString value_;
   ConfigString info_;
   ConfigString section_;

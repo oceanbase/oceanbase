@@ -50,6 +50,21 @@ enum ObConfigItemType{
   OB_CONF_ITEM_TYPE_MODE = 12,
 };
 
+static const char *const DATA_TYPE_UNKNOWN = "UNKNOWN";
+static const char *const DATA_TYPE_BOOL = "BOOL";
+static const char *const DATA_TYPE_INT = "INT";
+static const char *const DATA_TYPE_DOUBLE = "DOUBLE";
+static const char *const DATA_TYPE_STRING = "STRING";
+static const char *const DATA_TYPE_INTEGRAL = "INTEGRAL";
+static const char *const DATA_TYPE_STRLIST = "STR_LIST";
+static const char *const DATA_TYPE_INTLIST = "INT_LIST";
+static const char *const DATA_TYPE_TIME = "TIME";
+static const char *const DATA_TYPE_MOMENT = "MOMENT";
+static const char *const DATA_TYPE_CAPACITY = "CAPACITY";
+static const char *const DATA_TYPE_LOGARCHIVEOPT = "LOGARCHIVEOPT";
+static const char *const DATA_TYPE_VERSION = "VERSION";
+static const char *const DATA_TYPE_MODE = "MODE";
+
 enum class ObConfigRangeOpts {
   OB_CONF_RANGE_NONE,
   OB_CONF_RANGE_GREATER_THAN,
@@ -198,6 +213,7 @@ public:
   const char *scope() const { return attr_.get_scope(); }
   const char *source() const { return attr_.get_source(); }
   const char *edit_level() const { return attr_.get_edit_level(); }
+  const char *data_type() const;
   /*obs启动首次读库设置该值*/
   void initial_value_set() { initial_value_set_ = true; }
   bool is_initial_value_set() const { return initial_value_set_; }
@@ -636,6 +652,10 @@ public:
     return is_valid;
   }
 
+  virtual ObConfigItemType get_config_item_type() const {
+    return ObConfigItemType::OB_CONF_ITEM_TYPE_CAPACITY;
+  }
+
 protected:
   int64_t parse(const char *str, bool &valid) const;
   const char *value_ptr() const override
@@ -691,6 +711,9 @@ public:
                    const ObParameterAttr attr = ObParameterAttr());
   virtual ~ObConfigTimeItem() {}
   ObConfigTimeItem &operator = (int64_t value);
+  virtual ObConfigItemType get_config_item_type() const {
+    return ObConfigItemType::OB_CONF_ITEM_TYPE_TIME;
+  }
 
 protected:
   int64_t parse(const char *str, bool &valid) const;
@@ -746,6 +769,9 @@ public:
                   const ObParameterAttr attr = ObParameterAttr());
   virtual ~ObConfigIntItem() {}
   ObConfigIntItem &operator = (int64_t value);
+  virtual ObConfigItemType get_config_item_type() const {
+    return ObConfigItemType::OB_CONF_ITEM_TYPE_INT;
+  }
 
 protected:
   int64_t parse(const char *str, bool &valid) const;

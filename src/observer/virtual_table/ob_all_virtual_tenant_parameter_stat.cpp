@@ -264,7 +264,9 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
             break;
           }
           case DATA_TYPE: {
-            cells[i].set_null();
+            cells[i].set_varchar(iter->second->data_type());
+            cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
           case VALUE: {

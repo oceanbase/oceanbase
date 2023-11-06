@@ -111,7 +111,9 @@ int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow *&row)
             break;
           }
         case DATA_TYPE: {
-            cells[i].set_null();
+            cells[i].set_varchar(sys_iter_->second->data_type());
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
         case VALUE: {
@@ -214,7 +216,9 @@ int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow *&r
             break;
           }
         case DATA_TYPE: {
-            cells[i].set_null();
+            cells[i].set_varchar(tenant_iter_->second->data_type());
+            cells[i].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
         case VALUE: {

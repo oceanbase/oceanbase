@@ -58,6 +58,8 @@ int TenantConfigInfo::assign(const TenantConfigInfo &rhs)
   tenant_id_ = rhs.tenant_id_;
   if (OB_FAIL(name_.assign(rhs.name_))) {
     LOG_WARN("assign name fail", K_(name), K(ret));
+  } else if (OB_FAIL(data_type_.assign(rhs.data_type_))) {
+    LOG_WARN("assign data_type fail", K_(data_type), K(ret));
   } else if (OB_FAIL(value_.assign(rhs.value_))) {
     LOG_WARN("assign value fail", K_(value), K(ret));
   } else if (OB_FAIL(info_.assign(rhs.info_))) {
@@ -524,6 +526,8 @@ int ObTenantConfigMgr::get_all_tenant_config_info(common::ObArray<TenantConfigIn
       }
       if (FAILEDx(config_info.set_name(iter->first.str()))) {
         LOG_WARN("set name fail", K(iter->first.str()), K(ret));
+      } else if (OB_FAIL(config_info.set_data_type(iter->second->data_type()))) {
+        LOG_WARN("set data_type fail", K(iter->second->data_type()), K(ret));
       } else if (OB_FAIL(config_info.set_info(iter->second->info()))) {
         LOG_WARN("set info fail", K(iter->second->info()), K(ret));
       } else if (OB_FAIL(config_info.set_section(iter->second->section()))) {
