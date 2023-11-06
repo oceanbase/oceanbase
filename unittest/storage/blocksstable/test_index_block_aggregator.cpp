@@ -158,22 +158,21 @@ void TestIndexBlockAggregator::update_min_max_row(const ObDatumRow &row)
     if (!curr_datum.is_null()) {
       ObStorageDatum &min_datum = min_row_.storage_datums_[i];
       ObStorageDatum &max_datum = max_row_.storage_datums_[i];
-      int min_cmp_ret = 0;
-      int max_cmp_ret = 0;
-      ObStorageDatumCmpFunc cmp_func;
-      get_cmp_func(col_descs_.at(i), cmp_func);
-      ASSERT_EQ(OB_SUCCESS, cmp_func.compare(curr_datum, min_datum, min_cmp_ret));
-      ASSERT_EQ(OB_SUCCESS, cmp_func.compare(curr_datum, max_datum, max_cmp_ret));
-      if (min_cmp_ret < 0) {
-        min_datum.deep_copy(curr_datum, allocator_);
-        if (min_datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) {
-          min_datum.len_ = ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH;
+      if (curr_datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) {
+        min_datum.set_null();
+        max_datum.set_null();
+      } else {
+        int min_cmp_ret = 0;
+        int max_cmp_ret = 0;
+        ObStorageDatumCmpFunc cmp_func;
+        get_cmp_func(col_descs_.at(i), cmp_func);
+        ASSERT_EQ(OB_SUCCESS, cmp_func.compare(curr_datum, min_datum, min_cmp_ret));
+        ASSERT_EQ(OB_SUCCESS, cmp_func.compare(curr_datum, max_datum, max_cmp_ret));
+        if (min_cmp_ret < 0) {
+          min_datum.deep_copy(curr_datum, allocator_);
         }
-      }
-      if (max_cmp_ret > 0) {
-        max_datum.deep_copy(curr_datum, allocator_);
-        if (max_datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) {
-          max_datum.len_ = ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH;
+        if (max_cmp_ret > 0) {
+          max_datum.deep_copy(curr_datum, allocator_);
         }
       }
     } else {
@@ -191,6 +190,9 @@ void TestIndexBlockAggregator::validate_agg_row(
     bool is_nop_column = is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs);
     if (is_nop_column) {
       ASSERT_TRUE(datum_row.storage_datums_[i].is_nop());
+    } else if (datum_row.storage_datums_[i].is_nop() || datum_row.storage_datums_[i].is_null()) { // skip for not aggregate data
+      ASSERT_TRUE(min_row_.storage_datums_[col_idx].is_null());
+      ASSERT_TRUE(max_row_.storage_datums_[col_idx].is_null());
     } else {
       ObStorageDatumCmpFunc cmp_func;
       get_cmp_func(col_descs_.at(col_idx), cmp_func);

@@ -37,6 +37,12 @@ public:
   void set_not_aggregate() { can_aggregate_ = false; }
 protected:
   static int copy_agg_datum(const ObDatum &src, ObDatum &dst);
+  static bool need_set_not_aggregate(const ObObjType type, const ObDatum &datum)
+  {
+    // exceeds maximum length or contain out row column, can not keep aggregate
+    return (!datum.is_null() && datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) ||
+           (is_lob_storage(type) && !datum.is_null() && !datum.get_lob_data().in_row_);
+  }
 protected:
   bool can_aggregate_;
 };

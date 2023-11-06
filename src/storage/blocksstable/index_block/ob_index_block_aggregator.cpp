@@ -24,15 +24,15 @@ namespace blocksstable
 int ObIColAggregator::copy_agg_datum(const ObDatum &src, ObDatum &dst)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(src.is_outrow()) || OB_ISNULL(dst.ptr_)) {
+  if (OB_UNLIKELY(src.is_outrow())|| OB_ISNULL(dst.ptr_) ||
+      OB_UNLIKELY(!src.is_null() && src.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH) ) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected agg datum for copy", K(ret), K(src), K(dst));
   } else if (src.is_null()) {
     dst.set_null();
   } else {
-    const int64_t copy_len = MIN(ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH, src.len_);
-    dst.pack_ = copy_len;
-    MEMCPY(const_cast<char *>(dst.ptr_), src.ptr_, copy_len);
+    dst.pack_ = src.len_;
+    MEMCPY(const_cast<char *>(dst.ptr_), src.ptr_, src.len_);
   }
   return ret;
 }
@@ -130,8 +130,7 @@ int ObColMaxAggregator::eval(const ObStorageDatum &datum, const bool is_data)
     LOG_WARN("Not init", K(ret));
   } else if (!can_aggregate_ || datum.is_nop()) {
     // Skip
-  } else if (is_lob_storage(obj_type_) && !datum.is_null() && !datum.get_lob_data().in_row_){
-    // contain out row column, can not keep aggregate
+  } else if (need_set_not_aggregate(obj_type_, datum)){
     set_not_aggregate();
   } else {
     int cmp_res = 0;
@@ -202,8 +201,7 @@ int ObColMinAggregator::eval(const ObStorageDatum &datum, const bool is_data)
     LOG_WARN("Not init", K(ret));
   } else if (!can_aggregate_ || datum.is_nop()) {
     // Skip
-  } else if (is_lob_storage(obj_type_) && !datum.is_null() && !datum.get_lob_data().in_row_){
-    // contain out row column, can not keep aggregate
+  } else if (need_set_not_aggregate(obj_type_, datum)){
     set_not_aggregate();
   } else {
     int cmp_res = 0;
