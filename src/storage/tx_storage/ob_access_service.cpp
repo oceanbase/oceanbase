@@ -750,7 +750,7 @@ int ObAccessService::put_rows(
     if (OB_SUCC(ret)) {
       int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
                                               tablet_id,
-                                              ObOptDmlStatType::TABLET_OPT_UPDATE_STAT,
+                                              ObOptDmlStatType::TABLET_OPT_INSERT_STAT,
                                               affected_rows);
     }
   }

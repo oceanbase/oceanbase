@@ -207,10 +207,10 @@ int ObStatLlcBitmap::decode(ObObj &obj)
   ObString llc_bitmap_buf;
   if (OB_ISNULL(col_stat_) ||
       OB_ISNULL(col_stat_->get_llc_bitmap()) ||
-      OB_UNLIKELY(!obj.is_varchar())) {
+      OB_UNLIKELY(!obj.is_varchar() && !obj.is_varbinary())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(col_stat_), K(obj));
-  } else if (OB_FAIL(obj.get_varchar(llc_bitmap_buf))) {
+  } else if (OB_FAIL(obj.get_string(llc_bitmap_buf))) {
     LOG_WARN("failed to get varchar", K(ret));
   } else if (OB_UNLIKELY(llc_bitmap_buf.length() > col_stat_->get_llc_bitmap_size())) {
     ret = OB_ERR_UNEXPECTED;
@@ -227,6 +227,7 @@ bool ObStatTopKHist::is_needed() const
 {
   return NULL != col_param_ &&
          col_param_->need_basic_stat() &&
+         !col_param_->is_no_need_histogram() &&
          col_param_->bucket_num_ > 1;
 }
 

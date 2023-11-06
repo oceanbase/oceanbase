@@ -352,6 +352,7 @@ int ObDbmsStats::gather_table_index_stats(ObExecContext &ctx,
     ObTableStatParam index_param;
     index_param.assign_common_property(data_param);
     const share::schema::ObTableSchema *index_schema = NULL;
+    bool is_valid_index = true;
     if (OB_FAIL(parse_table_part_info(ctx, stat_table, index_param))) {
       LOG_WARN("failed to parse table part info", K(ret));
     } else if (OB_ISNULL(schema_guard) ||
@@ -361,10 +362,12 @@ int ObDbmsStats::gather_table_index_stats(ObExecContext &ctx,
                 OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get index schema", K(ret), K(stat_table));
+    } else if (!index_schema->is_normal_index() && !index_schema->is_unique_index()) {
+      is_valid_index = false;
     } else if (index_schema->is_global_index_table()) {
       index_param.is_global_index_ = true;
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && is_valid_index) {
       index_param.is_index_stat_ = true;
       index_param.global_stat_param_ = data_param.global_stat_param_;
       index_param.part_stat_param_.assign_without_part_type(data_param.part_stat_param_);
@@ -435,6 +438,8 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
                  OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get index schema", K(ret), K(stat_table));
+      } else if (!index_schema->is_normal_index() && !index_schema->is_unique_index()) {
+        is_fast_gather = false;
       //glboal index can't reuse the partition data in fast gather index
       } else if (index_schema->is_global_index_table()) {
         index_param.is_global_index_ = true;
@@ -3274,6 +3279,11 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
         if (ObColumnStatParam::is_valid_avglen_type(col->get_meta_type().get_type())) {
           col_param.set_need_avg_len();
         }
+        //check can gather hist type, for longtext type, we disable gather hist
+        if (ob_obj_type_class(col->get_meta_type().get_type()) == ColumnTypeClass::ObTextTC &&
+            col->get_meta_type().get_type() != ObTinyTextType) {
+          col_param.set_no_need_histogram();
+        }
       }
       if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
         col_param.set_is_index_column();
@@ -3738,6 +3748,10 @@ int ObDbmsStats::parse_index_table_info(ObExecContext &ctx,
                                     K(index_name));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(data_table_param.db_name_),
                                       to_cstring(index_name));
+  } else if (!index_schema->is_normal_index() && !index_schema->is_unique_index()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support index tpye", K(ret), K(index_schema->get_index_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "gather non-normal index stats");
   } else {
     param.tab_name_ = index_name;
     param.db_name_ = data_table_param.db_name_;

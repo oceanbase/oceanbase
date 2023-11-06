@@ -230,6 +230,7 @@ int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &sch
   if (!is_sys_table(table_id) ||
       ObSysTableChecker::is_sys_table_index_tid(table_id) ||
       is_sys_lob_table(table_id) ||
+      table_id == share::OB_ALL_CORE_TABLE_TID ||//circular dependency,
       table_id == share::OB_ALL_TABLE_STAT_TID ||
       table_id == share::OB_ALL_COLUMN_STAT_TID ||
       table_id == share::OB_ALL_HISTOGRAM_STAT_TID ||
