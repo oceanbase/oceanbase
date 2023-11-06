@@ -496,6 +496,7 @@ public:
       const int64_t nested_size = OB_DEFAULT_MACRO_BLOCK_SIZE,
       const int64_t nested_offset = 0);
   int init_meta_iter(ObMacroMetaIter &iter);
+  bool is_inited() const { return is_inited_; }
   TO_STRING_KV(K(roots_.count()));
 public:
   static bool check_version_for_small_sstable(const ObDataStoreDesc &index_desc);

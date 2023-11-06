@@ -101,6 +101,11 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     const share::ObDagId &dag_id,
     const ObCompactionTimeGuard &time_guard);
   int schedule_minor_errsim(bool &schedule_minor) const;
+  // only used for ObCOMergeBatchExeDag
+  bool is_cg_merge_infos_valid(
+    const uint32_t start_cg_idx,
+    const uint32_t end_cg_idx,
+    const bool check_info_ready) const;
   int inner_loop_prepare_index_tree(
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx);

@@ -1,12 +1,15 @@
-//COpyright (c) 2022 OceanBase
-// OceanBase is licensed under Mulan PubL v2.
-// You can use this software according to the terms and conditions of the Mulan PubL v2.
-// You may obtain a copy of Mulan PubL v2 at:
-//          http://license.coscl.org.cn/MulanPubL-2.0
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-// See the Mulan PubL v2 for more details.
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/column_store/ob_column_oriented_merger.h"
@@ -406,6 +409,7 @@ int ObCOMergeScheduleTask::process()
  */
 ObCOMergeBatchExeDag::ObCOMergeBatchExeDag()
  : ObCOMergeDag(ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE),
+   alloc_merge_info_lock_(),
    start_cg_idx_(0),
    end_cg_idx_(0),
    retry_create_task_(false),
@@ -478,9 +482,6 @@ int ObCOMergeBatchExeDag::create_first_task()
   } else if (OB_UNLIKELY(!ctx->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("co merge ctx is not ready", K(ret), KPC(ctx));
-  } else if (FALSE_IT(SET_MEM_CTX(ctx->mem_ctx_))) {
-  } else if (OB_FAIL(ctx->prepare_index_builder(start_cg_idx_, end_cg_idx_, retry_create_task_))) {
-    STORAGE_LOG(WARN, "failed to prepare index builder ", K(ret), K(start_cg_idx_), K(end_cg_idx_));
   } else if (OB_FAIL(create_task(nullptr/*parent*/, execute_task, 0/*task_idx*/, *ctx, *dag_net))) {
     LOG_WARN("fail to create merge task", K(ret), KPC(dag_net));
   } else if (OB_ISNULL(execute_task)) {
@@ -686,26 +687,12 @@ int ObCOMergeBatchExeTask::init(
   } else if (OB_UNLIKELY(idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("idx is invalid", K(ret), K(idx));
-  } else if (FALSE_IT(allocator_.bind_mem_ctx(ctx.mem_ctx_))) {
   } else {
-    ObCOMergeBatchExeDag *merge_dag = static_cast<ObCOMergeBatchExeDag*>(dag_);
-    void *buf = nullptr;
-    if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCOMerger)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "failed to alloc memory for major merger", K(ret));
-    } else {
-      merger_ = new (buf) ObCOMerger(allocator_, ctx.static_param_,
-        merge_dag->get_start_cg_idx(), merge_dag->get_end_cg_idx(), ctx.static_param_.is_rebuild_column_store_);
-      if (ctx.static_param_.is_rebuild_column_store_) {
-        FLOG_INFO("rebuild column store data", K(ret), K(ctx.get_tablet_id()));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      idx_ = idx;
-      ctx_ = &ctx;
-      dag_net_ = &dag_net;
-      is_inited_ = true;
-    }
+    allocator_.bind_mem_ctx(ctx.mem_ctx_);
+    idx_ = idx;
+    ctx_ = &ctx;
+    dag_net_ = &dag_net;
+    is_inited_ = true;
   }
   return ret;
 }
@@ -713,24 +700,51 @@ int ObCOMergeBatchExeTask::init(
 int ObCOMergeBatchExeTask::process()
 {
   int ret = OB_SUCCESS;
+  ObCOMergeBatchExeDag *exe_dag = static_cast<ObCOMergeBatchExeDag*>(dag_);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("task is not inited", K(ret), K_(is_inited));
-  } else if (OB_ISNULL(merger_)) {
-    ret = OB_ERR_SYS;
-    STORAGE_LOG(WARN, "Unexpected null partition merger", K(ret));
+  } else if (OB_UNLIKELY(nullptr == ctx_ || nullptr == dag_net_ || nullptr != merger_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected exe task", K(ret), K(ctx_), K(dag_net_), KPC(merger_));
+  } else if (FALSE_IT(SET_MEM_CTX(ctx_->mem_ctx_))) {
   } else {
+    ObSpinLockGuard lock_guard(exe_dag->alloc_merge_info_lock_);
+    if (ctx_->is_cg_merge_infos_valid(exe_dag->get_start_cg_idx(), exe_dag->get_end_cg_idx(), true/*check info ready*/)) {
+      // do nothing
+    } else if (OB_FAIL(ctx_->prepare_index_builder(exe_dag->get_start_cg_idx(),
+                                                   exe_dag->get_end_cg_idx(),
+                                                   exe_dag->get_retry_create_task()))) {
+      STORAGE_LOG(WARN, "failed to prepare index builder ", K(ret), KPC(exe_dag));
+    }
+  }
+
+  void *buf = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCOMerger)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory for major merger", K(ret));
+  } else {
+    merger_ = new (buf) ObCOMerger(allocator_,
+                                   ctx_->static_param_,
+                                   exe_dag->get_start_cg_idx(),
+                                   exe_dag->get_end_cg_idx(),
+                                   ctx_->static_param_.is_rebuild_column_store_);
+    if (ctx_->static_param_.is_rebuild_column_store_) {
+      FLOG_INFO("rebuild column store data", K(ret), K(ctx_->get_tablet_id()));
+    }
+
     merge_start();
     if (OB_FAIL(merger_->merge_partition(*ctx_, idx_))) {
       STORAGE_LOG(WARN, "failed to merge partition", K(ret));
     } else {
       FLOG_INFO("merge macro blocks ok", K(idx_), "task", *this, KPC(dag_));
     }
+    if (nullptr != merger_) {
+      merger_->reset();
+    }
   }
-  if (nullptr != merger_) {
-    merger_->reset();
-  }
-
   return ret;
 }
 
@@ -1185,8 +1199,7 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
     }
   }
   // refine merge_batch_size_ with tenant memory
-  const bool enable_adaptive_merge_schedule = false; // TODO(@DanLing) impl tenant config
-  if (OB_SUCC(ret) && enable_adaptive_merge_schedule) {
+  if (OB_SUCC(ret) && MTL(ObTenantTabletScheduler *)->enable_adaptive_merge_schedule()) {
     try_update_merge_batch_size(co_merge_ctx_->array_count_);
   }
 

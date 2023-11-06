@@ -1,18 +1,22 @@
-//COpyright (c) 2022 OceanBase
-// OceanBase is licensed under Mulan PubL v2.
-// You can use this software according to the terms and conditions of the Mulan PubL v2.
-// You may obtain a copy of Mulan PubL v2 at:
-//          http://license.coscl.org.cn/MulanPubL-2.0
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-// See the Mulan PubL v2 for more details.
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #ifndef OB_STORAGE_COLUMN_STORE_CO_MERGE_DAG_H_
 #define OB_STORAGE_COLUMN_STORE_CO_MERGE_DAG_H_
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/column_store/ob_co_merge_ctx.h"
+#include "lib/lock/ob_spin_lock.h"
 
 namespace oceanbase
 {
@@ -138,6 +142,7 @@ public:
   virtual int diagnose_compaction_info(compaction::ObDiagnoseTabletCompProgress &progress) override;
   uint32_t get_start_cg_idx() const { return start_cg_idx_; }
   uint32_t get_end_cg_idx() const { return end_cg_idx_; }
+  bool get_retry_create_task() const { return retry_create_task_; }
   ObCompactionTimeGuard &get_time_guard() { return time_guard_; }
   OB_INLINE void dag_time_guard_click(const uint16_t event)
   {
@@ -149,9 +154,11 @@ public:
   int create_sstable_after_merge();
 
   INHERIT_TO_STRING_KV("ObTabletMergeDag", ObTabletMergeDag, K_(dag_net_id), K_(start_cg_idx),
-      K_(end_cg_idx));
+      K_(end_cg_idx), K_(retry_create_task));
 private:
   int prepare_merge_progress();
+public:
+  common::ObSpinLock alloc_merge_info_lock_; // alloc && check cg_merge_infos
 private:
   share::ObDagId dag_net_id_;
   uint32_t start_cg_idx_;
@@ -173,7 +180,7 @@ public:
 protected:
   virtual int process() override;
 private:
-  virtual void merge_start();
+  void merge_start();
 private:
   bool is_inited_;
   int64_t idx_;

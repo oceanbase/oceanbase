@@ -211,7 +211,7 @@ int ObCOTabletMergeCtx::prepare_index_builder(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema is invalid", K(ret), K_(static_param));
   } else if (FALSE_IT(batch_cg_count = end_cg_idx - start_cg_idx)) {
-  } else if (reuse_merge_info) {
+  } else if (reuse_merge_info && is_cg_merge_infos_valid(start_cg_idx, end_cg_idx, false/*check_info_ready*/)) {
     // reuse old merge info
   } else if (FALSE_IT(alloc_size = batch_cg_count * sizeof(ObTabletMergeInfo))) {
   } else if (OB_ISNULL(buf = mem_ctx_.local_alloc(alloc_size))) {
@@ -239,6 +239,31 @@ int ObCOTabletMergeCtx::prepare_index_builder(
     }
   }
   return ret;
+}
+
+bool ObCOTabletMergeCtx::is_cg_merge_infos_valid(
+    const uint32_t start_cg_idx,
+    const uint32_t end_cg_idx,
+    const bool check_info_ready) const
+{
+  bool bret = true;
+
+  if (OB_NOT_NULL(cg_merge_info_array_)) {
+    ObTabletMergeInfo *info_ptr = nullptr;
+    for (int64_t i = start_cg_idx; bret && i < end_cg_idx; ++i) {
+      if (OB_ISNULL(info_ptr = cg_merge_info_array_[i])) {
+        bret = false;
+      } else if (!check_info_ready) {
+        // do nothing
+      } else if (nullptr == info_ptr->get_index_builder()
+             || !info_ptr->get_index_builder()->is_inited()) {
+        bret = false;
+      }
+    }
+  } else {
+    bret = false;
+  }
+  return bret;
 }
 
 int ObCOTabletMergeCtx::inner_loop_prepare_index_tree(
