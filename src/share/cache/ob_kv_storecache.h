@@ -239,6 +239,7 @@ private:
   static const int64_t MAP_ONCE_CLEAN_RATIO = 50;  // 50 * 0.2 = 10s
   static const int64_t MAP_ONCE_REPLACE_RATIO = 100;  // 100 * 0.2 = 20s
   static const int64_t MAX_MAP_ONCE_CLEAN_NUM = 200000;  // 200K
+  static const int64_t EXPAND_MAP_ONCE_CLEAN_RATIO = 10;
   static const int64_t MAX_MAP_ONCE_REPLACE_NUM = 100000;  // 100K
   static const int64_t TIMER_SCHEDULE_INTERVAL_US = 800 * 1000;
   static const int64_t WORKING_SET_LIMIT_PERCENTAGE = 5;
