@@ -798,6 +798,8 @@ private:
   };
 
 private:
+  int process_prepare_ser_err_test_();
+
   int lose_dup_tablet_(const common::ObTabletID &tablet_id);
   int discover_dup_tablet_(const common::ObTabletID &tablet_id, const int64_t refresh_time);
   int collect_confirmed_dup_tablet_(const share::SCN &max_replayed_scn);
