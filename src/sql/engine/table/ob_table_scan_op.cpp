@@ -923,10 +923,12 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
     int64_t schema_version = task_exec_ctx.get_query_tenant_begin_schema_version();
     das_rtdef.tenant_schema_version_ = schema_version;
   }
-  if (OB_SUCC(ret) && MY_SPEC.ref_table_id_ == das_ctdef.ref_table_id_) {
-    //only data table scan need to set flashback query info
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(tsc_ctdef.flashback_item_.set_flashback_query_info(eval_ctx_, das_rtdef))) {
       LOG_WARN("failed to set flashback query snapshot version", K(ret));
+    } else if (MY_SPEC.ref_table_id_ != das_ctdef.ref_table_id_) {
+      //only data table scan need to set row scn flag
+      das_rtdef.need_scn_ = false;
     }
   }
   if (OB_SUCC(ret)) {
