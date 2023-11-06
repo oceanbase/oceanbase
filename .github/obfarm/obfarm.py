@@ -117,13 +117,13 @@ def request(method, url, params=None, payload=None, timeout=10, data=None, witho
                 msg = response.json()["msg"]
             except:
                 msg = response.text
-            print("[ERROR] 错误信息:{}".format(msg))
+            print("[ERROR] MSG:{}".format(msg))
             exit(1)
         return response
     except Exception:
         import traceback
         traceback.print_exc()
-        print("请求失败，出现异常，请联系管理人员处理")
+        print("Please contact the management personnel for assistance !")
         if not without_check_status:
             exit(1)
 
@@ -196,7 +196,7 @@ def main(pipeline_id, project, timeout):
 if __name__ == "__main__":
     print(sys.argv)
     if len(sys.argv) < 4:
-        print("缺失相关参数")
+        print("Missing relevant parameters !")
         OUTPUT.update({"success": -1})
         sys.exit(1)
     main(sys.argv[1], sys.argv[2], sys.argv[3])
