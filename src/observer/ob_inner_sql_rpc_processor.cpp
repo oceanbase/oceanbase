@@ -294,6 +294,7 @@ int ObInnerSqlRpcP::process()
     sqlclient::ObISQLConnection *conn = NULL;
     observer::ObInnerSQLConnection *inner_conn = NULL;
     observer::ObResourceInnerSQLConnectionPool *pool = gctx_.res_inner_conn_pool_;
+    transmit_result.set_tenant_id(transmit_arg.get_tenant_id());
     common::ObScanner &scanner = transmit_result.get_scanner();
     scanner.get_row_store().set_use_compact(false);
     scanner.get_datum_store().set_dumped(false); // just for serializing
