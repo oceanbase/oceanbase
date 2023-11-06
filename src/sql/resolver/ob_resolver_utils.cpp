@@ -6687,7 +6687,8 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       bool &contain_select_stmt)
+                                       bool &contain_select_stmt,
+                                       ObSchemaObjVersion &return_value_version)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -6726,6 +6727,22 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
         contain_select_stmt = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
+      ObArenaAllocator alloc;
+      ObPLDataType param_type;
+      ObRoutineParam *param = nullptr;
+      common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+      CK (routine_info->get_routine_params().count() > 0);
+      OX (param = routine_info->get_routine_params().at(0));
+      CK (OB_NOT_NULL(sql_proxy));
+      OZ (pl::ObPLDataType::transform_from_iparam(param,
+                                                  schema_guard,
+                                                  session_info,
+                                                  alloc,
+                                                  *sql_proxy,
+                                                  param_type,
+                                                  &return_value_version));
     }
   }
   return ret;

@@ -11164,6 +11164,7 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
       LOG_WARN("failed to get database id", K(ret));
     } else {
       bool exist = false;
+      ObSchemaObjVersion return_value_version;
       uint64_t object_db_id = OB_INVALID_ID;
       ObSynonymChecker synonym_checker;
       ObString object_name;
@@ -11204,8 +11205,13 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
       OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
                                               *params_.schema_checker_->get_schema_guard(),
                                               *expr,
-                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
+                                              stmt_->get_query_ctx()->udf_has_select_stmt_,
+                                              return_value_version));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
+      if (OB_SUCC(ret) && return_value_version.is_valid()) {
+        OZ (stmt->add_global_dependency_table(return_value_version));
+        OZ (stmt->add_ref_obj_version(view_ref_id_, database_id, ObObjectType::VIEW, return_value_version, *allocator_));
+      }
       if (OB_SUCC(ret) &&
           udf_expr->get_result_type().is_ext() &&
           (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||

@@ -289,7 +289,8 @@ public:
   static int set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                ObRawExpr &expr,
-                               bool &contain_select_stmt);
+                               bool &contain_select_stmt,
+                               ObSchemaObjVersion &return_value_version);
 
   static int resolve_external_symbol(common::ObIAllocator &allocator,
                                      sql::ObRawExprFactory &expr_factory,
