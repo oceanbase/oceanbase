@@ -141,13 +141,16 @@ def monitor_tasks(oss_proxy: OssProxy, github_pipeline_id, timeout):
 
         time.sleep(1)
         if task_data is not None:
-            print("there is the output url: {}".format("http://dev-farm-ce.oceanbase-dev.com/farm2/ci/?id={}".format(task_data["task_id"])))
             task_status = int(task_data["status"])
             if task_status <= TaskStatusEnum.fail.value:
                 print(TaskStatusEnum._value2member_map_[task_status])
+                print("there is the output url: {}".format(
+                    "http://dev-farm-ce.oceanbase-dev.com/farm2/ci/?id={}".format(task_data["task_id"])))
                 return False
             elif task_status >= TaskStatusEnum.success.value:
                 print(TaskStatusEnum._value2member_map_[task_status])
+                print("there is the output url: {}".format(
+                    "http://dev-farm-ce.oceanbase-dev.com/farm2/ci/?id={}".format(task_data["task_id"])))
                 return True
 
         time.sleep(5)
