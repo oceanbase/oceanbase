@@ -231,8 +231,12 @@ int ObPLCompiler::compile(
                lib::is_oracle_mode()) {
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), stmt_id);
-        if (OB_FAIL(cg.init())) {
+        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
+        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
+        // check session status after get lock
+        if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
+          LOG_WARN("query or session is killed after get PL jit lock", K(ret));
+        } else if (OB_FAIL(cg.init())) {
           LOG_WARN("failed to init code generator", K(ret));
         } else if (OB_FAIL(cg.generate(func))) {
           LOG_WARN("failed to code generate for stmt", K(ret));
@@ -467,7 +471,10 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
-        if (OB_FAIL(cg.init())) {
+        // check session status after get lock
+        if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
+          LOG_WARN("query or session is killed after get PL jit lock", K(ret));
+        } else if (OB_FAIL(cg.init())) {
           LOG_WARN("failed to init code generator", K(ret));
         } else if (OB_FAIL(cg.generate(func))) {
           LOG_WARN("failed to code generate for stmt", K(ret));
@@ -776,6 +783,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                       package_ast, package_info.is_for_trigger()));
 
   ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+  // check session status after get lock
+  if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
+    LOG_WARN("query or session is killed after get PL jit lock", K(ret));
+  }
+
   if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
     HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {

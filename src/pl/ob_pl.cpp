@@ -2142,9 +2142,14 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     // not in cache, compile it and add to cache
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
       ParseNode root_node;
-      ObBucketHashWLockGuard guard(codegen_lock_, stmt_id);
-      // check cache again after get lock
-      if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
+      uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(sql.ptr(), sql.length(), 0);
+      ObBucketHashWLockGuard guard(codegen_lock_, lock_idx);
+      // check session status after get lock
+      if (OB_FAIL(check_session_alive(*ctx.get_my_session()))) {
+        LOG_WARN("query or session is killed after get PL codegen lock", K(ret));
+
+        // check cache again after get lock
+      } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
         LOG_INFO("get pl function by sql failed, will ignore this error",
                  K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
         ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
@@ -2251,8 +2256,12 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       bool need_update_schema = false;
       {
         ObBucketHashWLockGuard guard(codegen_lock_, routine_id);
-        // check again after get lock.
-        if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
+        // check session status after get lock
+        if (OB_FAIL(check_session_alive(*ctx.get_my_session()))){
+          LOG_WARN("query or session is killed after get PL codegen lock", K(ret));
+
+          // check pl cache again after get lock.
+        } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
           LOG_INFO("get pl function from plan cache failed",
                    K(ret), K(pc_ctx.key_), K(package_id), K(routine_id));
           ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
@@ -4376,5 +4385,17 @@ int ObPLINS::get_not_null(const ObPLDataType &pl_type,
   return ret;
 }
 
+int ObPL::check_session_alive(const ObBasicSessionInfo &session) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(session.is_query_killed())) {
+    ret = OB_ERR_QUERY_INTERRUPTED;
+    LOG_WARN("query is killed", K(ret));
+  } else if (OB_UNLIKELY(session.is_zombie())) {
+    ret = OB_ERR_SESSION_INTERRUPTED;
+    LOG_WARN("session is killed", K(ret));
+  }
+  return ret;
 }
+
+} // namespace pl
 }

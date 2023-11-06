@@ -1205,6 +1205,8 @@ public:
 
   ObBucketLock& get_jit_lock() { return jit_lock_; }
 
+  static int check_session_alive(const ObBasicSessionInfo &session);
+
 private:
   common::ObMySQLProxy *sql_proxy_;
   ObPLPackageManager package_manager_;
