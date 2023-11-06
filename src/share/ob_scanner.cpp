@@ -120,7 +120,7 @@ void ObScanner::reuse()
   fb_info_.reset();
 }
 
-int ObScanner::init()
+int ObScanner::init(int64_t mem_size_limit /*= DEFAULT_MAX_SERIALIZE_SIZE*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -137,6 +137,7 @@ int ObScanner::init()
 //    } else {
 //      is_inited_ = true;
 //    }
+    mem_size_limit_ = mem_size_limit;
     is_inited_ = true;
   }
   return ret;
@@ -171,7 +172,19 @@ int ObScanner::add_row(const ObNewRow &row)
     LOG_WARN("fail to add_row to row store.", K(ret));
   } else if (row_store_.get_data_size() > mem_size_limit_) {
     LOG_WARN("row store data size", "rowstore_data_size", row_store_.get_data_size(), K_(mem_size_limit), K(ret));
-    if (OB_FAIL(row_store_.rollback_last_row())) {
+    if (row_store_.get_row_count() == 1 && row_store_.get_data_size() <= DEFAULT_MAX_SERIALIZE_SIZE) {
+      /**
+       * The default size of ObScanner is 64MB.
+       * Previously, when using ObScanner as an RPC transport carrier,
+       * the default limit of 64MB was used.
+       * Now, with remote execution, the unit of RPC packets has been changed to 2MB.
+       * This may cause previously oversized rows (greater than 2MB) to be unable to be written.
+       * Therefore, an additional processing is added in the "add_row" function to ensure that
+       * the row length is within 64MB.
+       * This allows the row to be written even if it exceeds the memory limit.
+       * */
+      LOG_INFO("add a large row, exceeds the memory limit", "row_len", row_store_.get_data_size(), K_(mem_size_limit));
+    } else if (OB_FAIL(row_store_.rollback_last_row())) {
       LOG_WARN("fail to rollback last row", K(ret));
     } else {
       ret = OB_SIZE_OVERFLOW;
@@ -187,7 +200,21 @@ int ObScanner::try_add_row(const common::ObIArray<sql::ObExpr *> &exprs,
   int ret = OB_SUCCESS;
   row_added = false;
   if (OB_FAIL(datum_store_.try_add_row(exprs, ctx, mem_size_limit_, row_added))) {
-    LOG_WARN("fail to add_row to row store.", K(ret));
+    LOG_WARN("fail to add_row to chunk datum store.", K(ret));
+  } else if (!row_added && datum_store_.get_row_cnt() <= 0) {
+    /**
+     * The default size of ObScanner is 64MB.
+     * Previously, when using ObScanner as an RPC transport carrier,
+     * the default limit of 64MB was used.
+     * Now, with remote execution, the unit of RPC packets has been changed to 2MB.
+     * This may cause previously oversized rows (greater than 2MB) to be unable to be written.
+     * Therefore, an additional processing is added in the "add_row" function to ensure that
+     * the row length is within 64MB.
+     * This allows the row to be written even if it exceeds the memory limit.
+     * */
+    if (OB_FAIL(datum_store_.try_add_row(exprs, ctx, DEFAULT_MAX_SERIALIZE_SIZE, row_added))) {
+      LOG_WARN("try to add row to chunk datum store failed", K(ret));
+    }
   }
 
   return ret;
