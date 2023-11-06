@@ -63,7 +63,11 @@ private:
   void sys_process_(share::ObRecoverTableJob &job);
   int check_target_tenant_version_(share::ObRecoverTableJob &job);
   int sys_prepare_(share::ObRecoverTableJob &job);
-  int insert_user_job_(const share::ObRecoverTableJob &job, share::ObRecoverTablePersistHelper &helper);
+  int lock_recover_table_(const uint64_t tenant_id, ObMySQLTransaction &trans);
+  int insert_user_job_(
+      const share::ObRecoverTableJob &job,
+      ObMySQLTransaction &trans,
+      share::ObRecoverTablePersistHelper &helper);
   int recovering_(share::ObRecoverTableJob &job);
   int sys_finish_(const share::ObRecoverTableJob &job);
   int drop_aux_tenant_(const share::ObRecoverTableJob &job);
@@ -73,6 +77,7 @@ private:
   int restore_aux_tenant_(share::ObRecoverTableJob &job);
   int check_aux_tenant_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int active_aux_tenant_(share::ObRecoverTableJob &job);
+  int ban_multi_version_recycling_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int failover_to_primary_(share::ObRecoverTableJob &job, const uint64_t aux_tenant_id);
   int check_tenant_compatibility(
       share::schema::ObSchemaGetterGuard &aux_tenant_guard,
