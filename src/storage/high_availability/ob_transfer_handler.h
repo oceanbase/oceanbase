@@ -260,6 +260,10 @@ private:
       palf::LogConfigVersion &config_version);
   int check_config_version_(
       const palf::LogConfigVersion &config_version);
+  int check_task_exist_(
+      const ObTransferStatus &status,
+      const bool find_by_src_ls,
+      bool &task_exist) const;
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
