@@ -1,6 +1,14 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <>
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -1974,12 +1982,9 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // need_sort_
   if (OB_SUCC(ret)) {
-    int64_t append = 0;
     int64_t enable_direct = 0;
     int64_t hint_need_sort = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
-      LOG_WARN("fail to get value of APPEND", K(ret));
-    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
       LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
     } else if (OB_FAIL(hint.get_value(ObLoadDataHint::NEED_SORT, hint_need_sort))) {
       LOG_WARN("fail to get value of NEED_SORT", KR(ret), K(hint));
@@ -2004,8 +2009,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // online_opt_stat_gather_
   if (OB_SUCC(ret)) {
-    int64_t append = 0;
-    int64_t gather_optimizer_statistics = 0 ;
+    int64_t no_gather_optimizer_statistics = 0 ;
     ObSQLSessionInfo *session = nullptr;
     ObObj obj;
     if (OB_ISNULL(session = ctx_->get_my_session())) {
@@ -2013,11 +2017,9 @@ int ObLoadDataDirectImpl::init_execute_param()
       LOG_WARN("session is null", KR(ret));
     } else if (OB_FAIL(session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, obj))) {
       LOG_WARN("fail to get sys variable", K(ret));
-    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
+    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::NO_GATHER_OPTIMIZER_STATISTICS, no_gather_optimizer_statistics))) {
       LOG_WARN("fail to get value of APPEND", K(ret));
-    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::GATHER_OPTIMIZER_STATISTICS, gather_optimizer_statistics))) {
-      LOG_WARN("fail to get value of APPEND", K(ret));
-    } else if (((append != 0) || (gather_optimizer_statistics != 0)) && obj.get_bool()) {
+    } else if ((no_gather_optimizer_statistics == 0) && obj.get_bool()) {
       execute_param_.online_opt_stat_gather_  = true;
     } else {
       execute_param_.online_opt_stat_gather_ = false;
@@ -2025,19 +2027,11 @@ int ObLoadDataDirectImpl::init_execute_param()
   }
   // max_error_rows_
   if (OB_SUCC(ret)) {
-    int64_t append = 0;
-    int64_t enable_direct = 0;
     int64_t hint_error_rows = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::APPEND, append))) {
-      LOG_WARN("fail to get value of APPEND", K(ret));
-    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
-      LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
-    } else if (OB_FAIL(hint.get_value(ObLoadDataHint::ERROR_ROWS, hint_error_rows))) {
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::ERROR_ROWS, hint_error_rows))) {
       LOG_WARN("fail to get value of ERROR_ROWS", KR(ret), K(hint));
-    } else if (enable_direct != 0) {
-      execute_param_.max_error_rows_ = hint_error_rows;
     } else {
-      execute_param_.max_error_rows_ = 0;
+      execute_param_.max_error_rows_ = hint_error_rows;
     }
   }
   // data_access_param_

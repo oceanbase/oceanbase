@@ -51,8 +51,7 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(table_id), K_(target_table_id), K_(rowkey_column_num), K_(store_column_count),
                K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), KP_(col_descs),
-               KP_(cmp_funcs), K_(is_heap_table), K_(is_fast_heap_table),
-               K_(online_opt_stat_gather), KP_(insert_table_ctx), KP_(dml_row_handler));
+               K_(is_heap_table), K_(is_fast_heap_table), KP_(insert_table_ctx), KP_(dml_row_handler));
 public:
   uint64_t table_id_;
   uint64_t target_table_id_;
@@ -62,10 +61,8 @@ public:
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
-  const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   bool is_heap_table_;
   bool is_fast_heap_table_;
-  bool online_opt_stat_gather_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
@@ -109,8 +106,6 @@ public:
   int build_aggregate_merge_task_for_multiple_heap_table(
     const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
   int inc_finish_count(bool &is_ready);
-  int collect_sql_statistics(
-    const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, table::ObTableLoadSqlStatistics &sql_statistics);
   int collect_dml_stat(const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array,
                        table::ObTableLoadDmlStat &dml_stats);
   const ObDirectLoadMergeParam &get_param() const { return param_; }
@@ -120,7 +115,7 @@ public:
   {
     return task_array_;
   }
-  TO_STRING_KV(K_(param), K_(target_partition_id), K_(tablet_id), K_(target_tablet_id));
+  TO_STRING_KV(K_(param), K_(tablet_id), K_(target_tablet_id));
 private:
   int init_sstable_array(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array);
   int init_multiple_sstable_array(
@@ -148,7 +143,6 @@ private:
 private:
   common::ObArenaAllocator allocator_;
   ObDirectLoadMergeParam param_;
-  uint64_t target_partition_id_;
   common::ObTabletID tablet_id_;
   common::ObTabletID target_tablet_id_;
   ObDirectLoadOriginTable origin_table_;

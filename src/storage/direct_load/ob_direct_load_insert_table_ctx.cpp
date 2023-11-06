@@ -13,6 +13,10 @@
 
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx.h"
+#include "share/stat/ob_opt_table_stat.h"
+#include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_stat_item.h"
+#include "observer/table_load/ob_table_load_schema.h"
 
 namespace oceanbase
 {
@@ -20,13 +24,26 @@ namespace storage
 {
 using namespace common;
 using namespace table;
+using namespace sql;
+using namespace observer;
 
 /**
  * ObDirectLoadInsertTableParam
  */
 
 ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
-  : table_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), execution_id_(0), ddl_task_id_(0)
+  : table_id_(OB_INVALID_ID),
+    dest_table_id_(OB_INVALID_ID),
+    schema_version_(0),
+    snapshot_version_(0),
+    execution_id_(0),
+    ddl_task_id_(0),
+    data_version_(0),
+    session_cnt_(0),
+    rowkey_column_count_(0),
+    column_count_(0),
+    online_opt_stat_gather_(false),
+    is_heap_table_(false)
 {
 }
 
@@ -36,16 +53,25 @@ ObDirectLoadInsertTableParam::~ObDirectLoadInsertTableParam()
 
 bool ObDirectLoadInsertTableParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && schema_version_ >= 0 && snapshot_version_ >= 0 &&
-         ls_partition_ids_.count() > 0;
+  return OB_INVALID_ID != table_id_ && OB_INVALID_ID != dest_table_id_ && schema_version_ >= 0 &&
+         snapshot_version_ >= 0 && ls_partition_ids_.count() > 0;
 }
 
 int ObDirectLoadInsertTableParam::assign(const ObDirectLoadInsertTableParam &other)
 {
   int ret = OB_SUCCESS;
   table_id_ = other.table_id_;
+  dest_table_id_ = other.dest_table_id_;
   schema_version_ = other.schema_version_;
   snapshot_version_ = other.snapshot_version_;
+  data_version_ = other.data_version_;
+  session_cnt_ = other.session_cnt_;
+  rowkey_column_count_ = other.rowkey_column_count_;
+  column_count_ = other.column_count_;
+  online_opt_stat_gather_ = other.online_opt_stat_gather_;
+  is_heap_table_ = other.is_heap_table_;
+  col_descs_ = other.col_descs_;
+  cmp_funcs_ = other.cmp_funcs_;
   if (OB_FAIL(ls_partition_ids_.assign(other.ls_partition_ids_))) {
     LOG_WARN("fail to assign ls tablet ids", KR(ret));
   }
@@ -57,7 +83,7 @@ int ObDirectLoadInsertTableParam::assign(const ObDirectLoadInsertTableParam &oth
  */
 
 ObDirectLoadInsertTableContext::ObDirectLoadInsertTableContext()
-  : tablet_finish_count_(0), is_inited_(false)
+  : allocator_("TLD_SqlStat"), tablet_finish_count_(0), table_row_count_(0), is_inited_(false)
 {
 }
 
@@ -76,6 +102,12 @@ void ObDirectLoadInsertTableContext::reset()
     }
     ddl_ctrl_.context_id_ = 0;
   }
+  for (int64_t i = 0; i < session_sql_ctx_array_.count(); ++i) {
+    ObTableLoadSqlStatistics *sql_statistics = session_sql_ctx_array_.at(i);
+    sql_statistics->~ObTableLoadSqlStatistics();
+    allocator_.free(sql_statistics);
+  }
+  session_sql_ctx_array_.reset();
   is_inited_ = false;
 }
 
@@ -112,11 +144,170 @@ int ObDirectLoadInsertTableContext::init(const ObDirectLoadInsertTableParam &par
     } else if (OB_FAIL(sstable_insert_mgr.create_table_context(table_insert_param,
                                                                ddl_ctrl_.context_id_))) {
       LOG_WARN("fail to create table context", KR(ret), K(table_insert_param));
+    } else if (param_.online_opt_stat_gather_ && OB_FAIL(init_sql_statistics())) {
+      LOG_WARN("fail to init sql statistics", KR(ret));
     } else {
       is_inited_ = true;
     }
     if (OB_FAIL(ret)) {
       reset();
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::init_sql_statistics()
+{
+  int ret = OB_SUCCESS;
+  ObOptTableStat *table_stat = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_.session_cnt_; ++i) {
+    ObTableLoadSqlStatistics *sql_statistics = nullptr;
+    ObOptTableStat *table_stat = nullptr;
+    if (OB_ISNULL(sql_statistics = OB_NEWx(ObTableLoadSqlStatistics, (&allocator_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObTableLoadSqlStatistics", KR(ret));
+    } else if (OB_FAIL(sql_statistics->allocate_table_stat(table_stat))) {
+      LOG_WARN("fail to allocate table stat", KR(ret));
+    } else if (OB_FAIL(session_sql_ctx_array_.push_back(sql_statistics))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_.column_count_; ++j) {
+        ObOptOSGColumnStat *osg_col_stat = nullptr;
+        if (OB_FAIL(sql_statistics->allocate_col_stat(osg_col_stat))) {
+          LOG_WARN("fail to allocate col stat", KR(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != sql_statistics) {
+        sql_statistics->~ObTableLoadSqlStatistics();
+        allocator_.free(sql_statistics);
+        sql_statistics = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::collect_sql_statistics(ObTableLoadSqlStatistics &sql_statistics)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadTabletMergeCtx not init", KR(ret), KP(this));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, param_.dest_table_id_,
+                                                         schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(param_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret));
+  } else {
+    sql_statistics.reset();
+    int64_t table_row_cnt = table_row_count_;
+    int64_t table_avg_len = 0;
+    int64_t col_cnt = param_.column_count_;
+    uint64_t partition_id = -1;
+    ObOptTableStat *table_stat = nullptr;
+    StatLevel stat_level = TABLE_LEVEL;
+    if (table_schema->get_part_level() == PARTITION_LEVEL_ZERO) {
+      partition_id = param_.dest_table_id_;
+    }
+    if (OB_FAIL(sql_statistics.allocate_table_stat(table_stat))) {
+      LOG_WARN("fail to allocate table stat", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+        int64_t col_id = param_.is_heap_table_ ? i + 1 : i;
+        ObOptOSGColumnStat *osg_col_stat = nullptr;
+        if (OB_FAIL(sql_statistics.allocate_col_stat(osg_col_stat))) {
+          LOG_WARN("fail to allocate table stat", KR(ret));
+        }
+        // scan session_sql_ctx_array
+        for (int64_t j = 0; OB_SUCC(ret) && j < session_sql_ctx_array_.count(); ++j) {
+          ObOptOSGColumnStat *tmp_col_stat =
+            session_sql_ctx_array_.at(j)->get_col_stat_array().at(i);
+          if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
+            LOG_WARN("fail to merge column stat", KR(ret));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          osg_col_stat->col_stat_->calc_avg_len();
+          table_avg_len += osg_col_stat->col_stat_->get_avg_len();
+          osg_col_stat->col_stat_->set_table_id(param_.dest_table_id_);
+          osg_col_stat->col_stat_->set_partition_id(partition_id);
+          osg_col_stat->col_stat_->set_stat_level(stat_level);
+          osg_col_stat->col_stat_->set_column_id(param_.col_descs_->at(col_id).col_id_);
+          osg_col_stat->col_stat_->set_num_distinct(
+            ObGlobalNdvEval::get_ndv_from_llc(osg_col_stat->col_stat_->get_llc_bitmap()));
+          if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
+            LOG_WARN("failed to set min max datum to obj", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        table_stat->set_table_id(param_.dest_table_id_);
+        table_stat->set_partition_id(partition_id);
+        table_stat->set_object_type(stat_level);
+        table_stat->set_row_count(table_row_cnt);
+        table_stat->set_avg_row_size(table_avg_len);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::collect_obj(int64_t thread_idx, const ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  if (param_.online_opt_stat_gather_) {
+    if (OB_UNLIKELY(thread_idx >= session_sql_ctx_array_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected thread idx", KR(ret), K(thread_idx), K(session_sql_ctx_array_.count()));
+    } else {
+      ObTableLoadSqlStatistics *sql_stat = session_sql_ctx_array_.at(thread_idx);
+      if (param_.is_heap_table_ ) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; i++) {
+          const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
+          const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
+          const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i + 1).get_cmp_func();
+          ObOptOSGColumnStat *col_stat = sql_stat->get_col_stat_array().at(i);
+          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+          if (col_stat != nullptr && is_valid) {
+            if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
+              LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
+            }
+          }
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < param_.rowkey_column_count_; i++) {
+          const ObStorageDatum &datum = datum_row.storage_datums_[i];
+          const ObColDesc &col_desc = param_.col_descs_->at(i);
+          const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+          ObOptOSGColumnStat *col_stat = sql_stat->get_col_stat_array().at(i);
+          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+          if (col_stat != nullptr && is_valid) {
+            if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
+              LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
+            }
+          }
+        }
+        for (int64_t i = param_.rowkey_column_count_; OB_SUCC(ret) && i < param_.column_count_; i++) {
+          const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt];
+          const ObColDesc &col_desc = param_.col_descs_->at(i);
+          const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+          ObOptOSGColumnStat *col_stat = session_sql_ctx_array_.at(thread_idx)->get_col_stat_array().at(i);
+          bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+          if (col_stat != nullptr && is_valid) {
+            if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
+              LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -200,7 +391,7 @@ int ObDirectLoadInsertTableContext::notify_tablet_finish(const ObTabletID &table
   return ret;
 }
 
-int ObDirectLoadInsertTableContext::commit()
+int ObDirectLoadInsertTableContext::commit(ObTableLoadSqlStatistics &sql_statistics)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -214,8 +405,9 @@ int ObDirectLoadInsertTableContext::commit()
     ObSSTableInsertManager &sstable_insert_mgr = ObSSTableInsertManager::get_instance();
     if (OB_FAIL(sstable_insert_mgr.finish_table_context(ddl_ctrl_.context_id_, true))) {
       LOG_WARN("fail to finish table context", KR(ret), K_(ddl_ctrl));
-    } else {
-      ddl_ctrl_.context_id_ = 0;
+    } else if (FALSE_IT(ddl_ctrl_.context_id_ = 0)) {
+    } else if (param_.online_opt_stat_gather_ && OB_FAIL(collect_sql_statistics(sql_statistics))) {
+      LOG_WARN("fail to collect sql stats", KR(ret));
     }
   }
   return ret;

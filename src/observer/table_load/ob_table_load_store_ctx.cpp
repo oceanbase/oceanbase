@@ -83,11 +83,19 @@ int ObTableLoadStoreCtx::init(
   } else {
     ObDirectLoadInsertTableParam insert_table_param;
     insert_table_param.table_id_ = ctx_->param_.table_id_;
+    insert_table_param.dest_table_id_= ctx_->ddl_param_.dest_table_id_;
     insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
     insert_table_param.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
     insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
     insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
     insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
+    insert_table_param.session_cnt_ = ctx_->param_.session_count_;
+    insert_table_param.rowkey_column_count_ = (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
+    insert_table_param.column_count_ = ctx_->param_.column_count_;
+    insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
+    insert_table_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
+    insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
+    insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
       const ObTableLoadPartitionId &part_tablet_id = partition_id_array[i].part_tablet_id_;
