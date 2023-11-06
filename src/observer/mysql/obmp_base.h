@@ -122,7 +122,8 @@ protected:
       sql::ObSQLSessionInfo *session);
   int response_row(sql::ObSQLSessionInfo &session,
                    common::ObNewRow &row,
-                   const ColumnsFieldIArray *fields);
+                   const ColumnsFieldIArray *fields,
+                   bool is_packed);
   int process_extra_info(sql::ObSQLSessionInfo &session, const obmysql::ObMySQLRawPacket &pkt,
                                 bool &need_response_error);
 protected:

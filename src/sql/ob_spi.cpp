@@ -3938,6 +3938,12 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                   cursor.get_dbms_entity()->get_arena_allocator(),
                   spi_result.get_result_set()->get_field_columns(),
                   cursor.get_field_columns()));
+            if (OB_SUCC(ret)) {
+              if (OB_NOT_NULL(spi_result.get_result_set()) && OB_NOT_NULL(spi_result.get_result_set()->get_physical_plan())) {
+                ObPhysicalPlan *plan = spi_result.get_result_set()->get_physical_plan();
+                cursor.set_packed(plan->is_packed());
+              }
+            }
             OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
             if (OB_FAIL(ret)) {
               int cli_ret = OB_SUCCESS;

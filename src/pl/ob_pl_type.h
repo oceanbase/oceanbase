@@ -857,6 +857,7 @@ public:
     first_row_.reset();
     last_row_.reset();
     is_need_check_snapshot_ = false;
+    is_packed_ = false;
   }
 
   void reset()
@@ -1002,6 +1003,9 @@ public:
                           uint64_t mem_limit,
                           bool is_local_for_update = false);
 
+  inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
+  inline bool is_packed() { return is_packed_; }
+
   TO_STRING_KV(K_(id),
                K_(is_explicit),
                K_(for_update),
@@ -1026,7 +1030,8 @@ public:
                K_(is_scrollable),
                K_(snapshot),
                K_(is_need_check_snapshot),
-               K_(last_execute_time));
+               K_(last_execute_time),
+               K_(is_packed));
 
 protected:
   int64_t id_;            // Cursor ID
@@ -1058,6 +1063,7 @@ protected:
   bool is_need_check_snapshot_;
   int64_t last_execute_time_; // 记录上一次cursor操作的时间点
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
+  bool is_packed_;
 };
 
 class ObPLGetCursorAttrInfo
