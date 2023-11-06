@@ -179,8 +179,8 @@ int ObDBMSSchedTableOperator::update_for_end(
       OZ (dml1.add_column("state", "COMPLETED"));
       OZ (dml1.add_column("enabled", job_info.enabled_));
     }
-    CK (job_info.this_date_ > 0);
-    OX (job_info.total_ += (now - job_info.this_date_));
+    CK (job_info.this_date_ > 0 || !errmsg.empty());
+    OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     OZ (dml1.add_gmt_modified(now));
     OZ (dml1.add_pk_column("tenant_id",
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
@@ -558,8 +558,11 @@ int ObDBMSSchedTableOperator::calc_execute_at(
       execute_at = now;
       delay = 0;
     } else {
+      int tmp_ret = OB_SUCCESS;
       LOG_WARN("job maybe missed, ignore it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"));
+      if (OB_SUCCESS != (tmp_ret = update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"))) {
+        LOG_WARN("update for end failed for missed job", K(tmp_ret));
+      }
       delay = -1;
     }
   } else {
