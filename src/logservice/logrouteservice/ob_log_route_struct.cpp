@@ -75,6 +75,7 @@ bool ObLSRouterValue::need_switch_server(
 {
   bool bool_ret = false;
 
+  ObByteLockGuard guard(lock_);
   bool_ret = ls_svr_list_.need_switch_server(router_key, next_lsn, blacklist_, cur_svr);
 
   return bool_ret;
