@@ -408,11 +408,12 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
   } else if (0 > (pret = snprintf(base_dir, MAX_PATH_SIZE, "%s/%ld", log_dir_, palf_id))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprinf failed", K(pret), K(palf_id));
-  } else if (OB_FAIL(create_directory(base_dir))) {
-    PALF_LOG(WARN, "prepare_directory_for_creating_ls failed!!!", K(ret), K(palf_id));
+  // Note:: order is vital, allocate memory may be fail
   } else if (NULL == (palf_handle_impl = PalfHandleImplFactory::alloc())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "alloc palf_handle_impl failed", K(ret));
+  } else if (OB_FAIL(create_directory(base_dir))) {
+    PALF_LOG(WARN, "prepare_directory_for_creating_ls failed!!!", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type,
       &fetch_log_engine_, base_dir, log_alloc_mgr_, log_block_pool_, &log_rpc_,
       log_io_worker_wrapper_.get_log_io_worker(palf_id), this, self_, &election_timer_, palf_epoch))) {
