@@ -4939,7 +4939,8 @@ OB_SERIALIZE_MEMBER((ObUpdateIndexStatusArg, ObDDLArg),
                     index_table_id_,
                     status_,
                     convert_status_,
-                    in_offline_ddl_white_list_);
+                    in_offline_ddl_white_list_,
+		    data_table_id_);
 
 OB_SERIALIZE_MEMBER(ObMergeFinishArg, server_, frozen_version_);
 
