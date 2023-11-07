@@ -573,7 +573,7 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
     schema::ObSchemaGetterGuard guard;
     schema::ObTenantStatus status;
     if (!restore_history_info.is_restore_success()) {
-      ret = OB_LS_RESTORE_FAILED;  // TODO(chongrong.th) adjust error code to restore tenant failed later.
+      ret = OB_LS_RESTORE_FAILED;  // TODO(zeyong) adjust error code to restore tenant failed later.
       LOG_WARN("[RECOVER_TABLE]restore aux tenant failed", K(ret), K(restore_history_info), K(job));
       job.get_result().set_result(false, restore_history_info.comment_);
     } else if (OB_FAIL(check_aux_tenant_(job, aux_tenant_id))) {
