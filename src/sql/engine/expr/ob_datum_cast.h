@@ -70,7 +70,6 @@ int ob_datum_to_ob_time_with_date(const common::ObDatum &datum,
                                   const common::ObTimeZoneInfo* tz_info,
                                   common::ObTime& ob_time,
                                   const int64_t cur_ts_value,
-                                  const bool is_dayofmonth,
                                   const ObDateSqlMode date_sql_mode,
                                   const bool has_lob_header);
 int ob_datum_to_ob_time_without_date(const common::ObDatum &datum,

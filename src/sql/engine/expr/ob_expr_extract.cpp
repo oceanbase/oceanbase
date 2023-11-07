@@ -104,7 +104,7 @@ inline int obj_to_time<ObObj, true>(const ObObj &date, ObObjType type,
 {
   UNUSED(type);
   UNUSED(has_lob_header);
-  return  ob_obj_to_ob_time_with_date(date, tz_info, ob_time, cur_ts_value, false, date_sql_mode);
+  return  ob_obj_to_ob_time_with_date(date, tz_info, ob_time, cur_ts_value, date_sql_mode);
 }
 template <>
 inline int obj_to_time<ObObj, false>(const ObObj &date, ObObjType type,
@@ -127,7 +127,7 @@ inline int obj_to_time<ObDatum, true>(const ObDatum &date, ObObjType type,
                                               bool has_lob_header)
 {
   return  ob_datum_to_ob_time_with_date(
-          date, type, tz_info, ob_time, cur_ts_value, false, date_sql_mode, has_lob_header);
+          date, type, tz_info, ob_time, cur_ts_value, date_sql_mode, has_lob_header);
 }
 template <>
 inline int obj_to_time<ObDatum, false>(const ObDatum &date, ObObjType type,

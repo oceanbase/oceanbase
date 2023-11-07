@@ -12660,7 +12660,6 @@ int ob_obj_to_ob_time_with_date(const ObObj& obj,
                                 const ObTimeZoneInfo* tz_info,
                                 ObTime& ob_time,
                                 const int64_t cur_ts_value,
-                                bool is_dayofmonth /* = false */,
                                 const ObDateSqlMode date_sql_mode /* = 0 */)
 {
   int ret = OB_SUCCESS;
@@ -12668,8 +12667,7 @@ int ob_obj_to_ob_time_with_date(const ObObj& obj,
     case ObIntTC:
       // fallthrough.
     case ObUIntTC: {
-      ret = ObTimeConverter::int_to_ob_time_with_date(obj.get_int(), ob_time, is_dayofmonth,
-                                                      date_sql_mode);
+      ret = ObTimeConverter::int_to_ob_time_with_date(obj.get_int(), ob_time, date_sql_mode);
       break;
     }
     case ObOTimestampTC: {
@@ -12704,14 +12702,14 @@ int ob_obj_to_ob_time_with_date(const ObObj& obj,
       if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&lob_allocator, obj, val))) {
         LOG_WARN("fail to get real data.", K(ret), K(val));
       } else if (OB_FAIL(ObTimeConverter::str_to_ob_time_with_date(val, ob_time,
-                         NULL, is_dayofmonth, date_sql_mode))) {
-        LOG_WARN("str to time failed", K(ret), K(val), K(is_dayofmonth));
+                         NULL, date_sql_mode))) {
+        LOG_WARN("str to time failed", K(ret), K(val), K(date_sql_mode.allow_incomplete_dates_));
       }
       break;
     }
     case ObStringTC: {
       ret = ObTimeConverter::str_to_ob_time_with_date(
-          obj.get_string(), ob_time, NULL, is_dayofmonth, date_sql_mode);
+          obj.get_string(), ob_time, NULL, date_sql_mode);
       break;
     }
     case ObLobTC: {
@@ -12720,7 +12718,7 @@ int ob_obj_to_ob_time_with_date(const ObObj& obj,
         STORAGE_LOG(WARN, "Failed to get payload from lob locator", K(ret), K(obj));
       } else {
         ret = ObTimeConverter::str_to_ob_time_with_date(
-            payload, ob_time, NULL, is_dayofmonth, date_sql_mode);
+            payload, ob_time, NULL, date_sql_mode);
       }
       break;
     }
@@ -12735,8 +12733,7 @@ int ob_obj_to_ob_time_with_date(const ObObj& obj,
         ret = OB_INVALID_DATE_FORMAT;
         LOG_WARN("invalid date format", K(ret), K(num));
       } else {
-        ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, is_dayofmonth,
-                                                        date_sql_mode);
+        ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, date_sql_mode);
       }
       break;
     }

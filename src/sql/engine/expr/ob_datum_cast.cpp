@@ -12085,7 +12085,6 @@ int string_collation_check(const bool is_strict_mode,
 int ob_datum_to_ob_time_with_date(const ObDatum &datum, const ObObjType type,
                                   const ObTimeZoneInfo* tz_info, ObTime& ob_time,
                                   const int64_t cur_ts_value,
-                                  const bool is_dayofmonth,
                                   const ObDateSqlMode date_sql_mode,
                                   const bool has_lob_header)
 {
@@ -12094,8 +12093,7 @@ int ob_datum_to_ob_time_with_date(const ObDatum &datum, const ObObjType type,
     case ObIntTC:
       // fallthrough.
     case ObUIntTC: {
-      ret = ObTimeConverter::int_to_ob_time_with_date(datum.get_int(), ob_time,
-                                                      is_dayofmonth, date_sql_mode);
+      ret = ObTimeConverter::int_to_ob_time_with_date(datum.get_int(), ob_time, date_sql_mode);
       break;
     }
     case ObOTimestampTC: {
@@ -12137,8 +12135,7 @@ int ob_datum_to_ob_time_with_date(const ObDatum &datum, const ObObjType type,
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(&lob_allocator, type, CS_TYPE_BINARY, has_lob_header, str))) {
         LOG_WARN("fail to get real string data", K(ret), K(datum));
       } else {
-        ret = ObTimeConverter::str_to_ob_time_with_date(str, ob_time, &res_scale,
-          is_dayofmonth, date_sql_mode);
+        ret = ObTimeConverter::str_to_ob_time_with_date(str, ob_time, &res_scale, date_sql_mode);
       }
       break;
     }
@@ -12153,8 +12150,7 @@ int ob_datum_to_ob_time_with_date(const ObDatum &datum, const ObObjType type,
         ret = OB_INVALID_DATE_FORMAT;
         LOG_WARN("invalid date format", K(ret), K(num));
       } else {
-        ret = ObTimeConverter::int_to_ob_time_with_date(
-              int_part, ob_time, is_dayofmonth, date_sql_mode);
+        ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, date_sql_mode);
         if (OB_SUCC(ret)) {
           ob_time.parts_[DT_USEC] = (dec_part + 500) / 1000;
         }

@@ -240,10 +240,11 @@ static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_
     const ObString &fmt_str = fmt_datum->get_string();
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(session), false);
     ObDateSqlMode date_sql_mode;
-    const bool no_zero_in_date = is_no_zero_in_date(session->get_sql_mode());
+    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(session->get_sql_mode());
+    date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(session->get_sql_mode());
     if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
     } else if (OB_FAIL(ObTimeConverter::str_to_datetime_format(date_str, fmt_str, cvrt_ctx, res_int,
-                                                        NULL, no_zero_in_date, date_sql_mode))) {
+                                                               NULL, date_sql_mode))) {
       int tmp_ret = ret;
       ObCastMode def_cast_mode = CM_NONE;
       if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session,
