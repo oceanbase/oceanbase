@@ -6368,6 +6368,7 @@ def_table_schema(
 # 497 : __all_client_to_server_session_info
 # 498 :__all_transfer_partition_task
 # 499 :__all_transfer_partition_task_history
+# 500 : __all_tenant_snapshot_create_job
 #
 # 余留位置
 ################################################################################
@@ -13128,6 +13129,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12450: __all_virtual_sys_variable_default_value
 # 12451: __all_virtual_transfer_partition_task
 # 12452: __all_virtual_transfer_partition_task_history
+# 12453: __all_virtual_tenant_snapshot_create_job
+
 # 余留位置
 #
 
