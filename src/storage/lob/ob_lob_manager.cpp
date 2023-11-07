@@ -393,7 +393,7 @@ int ObLobManager::get_ls_leader(ObLobAccessParam& param, const uint64_t tenant_i
           }
         }
       } else {
-        LOG_INFO("get ls leader", K(tenant_id), K(ls_id), K(leader), K(cluster_id));
+        LOG_DEBUG("get ls leader", K(tenant_id), K(ls_id), K(leader), K(cluster_id));
       }
     } while (OB_LS_LOCATION_NOT_EXIST == ret && renew_count < max_renew_count);
 
@@ -763,12 +763,46 @@ int ObLobManager::query(
   return ret;
 }
 
+int ObLobManager::equal(ObLobLocatorV2& lob_left,
+                        ObLobLocatorV2& lob_right,
+                        ObLobCompareParams& cmp_params,
+                        bool& result)
+{
+  INIT_SUCC(ret);
+  int64_t old_len = 0;
+  int64_t new_len = 0;
+  int64_t cmp_res = 0;
+  if (OB_FAIL(lob_left.get_lob_data_byte_len(old_len))) {
+    LOG_WARN("fail to get old byte len", K(ret), K(lob_left));
+  } else if (OB_FAIL(lob_right.get_lob_data_byte_len(new_len))) {
+    LOG_WARN("fail to get new byte len", K(ret), K(lob_right));
+  } else if (new_len != old_len) {
+    result = false;
+  } else if (lob_left.has_inrow_data() && lob_right.has_inrow_data()) {
+    // do both inrow check
+    ObString left_str;
+    ObString right_str;
+    if (OB_FAIL(lob_left.get_inrow_data(left_str))) {
+      LOG_WARN("fail to get old inrow data", K(ret), K(lob_left));
+    } else if (OB_FAIL(lob_right.get_inrow_data(right_str))) {
+      LOG_WARN("fail to get new inrow data", K(ret), K(lob_left));
+    } else {
+      result = (0 == MEMCMP(left_str.ptr(), right_str.ptr(), left_str.length()));
+    }
+  } else if (OB_FAIL(compare(lob_left, lob_right, cmp_params, cmp_res))) {
+    LOG_WARN("fail to compare lob", K(ret), K(lob_left), K(lob_right));
+  } else {
+    result = (0 == cmp_res);
+  }
+  return ret;
+}
+
 int ObLobManager::compare(ObLobLocatorV2& lob_left,
                           ObLobLocatorV2& lob_right,
                           ObLobCompareParams& cmp_params,
                           int64_t& result) {
   INIT_SUCC(ret);
-  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   ObLobManager *lob_mngr = MTL(ObLobManager*);
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -817,15 +851,18 @@ int ObLobManager::compare(ObLobAccessParam& param_left,
   } else if (OB_FAIL(query(param_right, iter_right))) {
     LOG_WARN("query param right by iter failed.", K(ret), K(param_right));
   } else {
-    uint64_t read_buff_size = ObLobManager::LOB_READ_BUFFER_LEN;
+    uint64_t read_buff_size = OB_MALLOC_MIDDLE_BLOCK_SIZE; // 64KB
     char *read_buff = nullptr;
     char *charset_convert_buff_ptr = nullptr;
-    uint64_t charset_convert_buff_size = read_buff_size * ObCharset::CharConvertFactorNum;
+    bool need_convert_charset = (collation_left != CS_TYPE_BINARY);
+    uint64_t charset_convert_buff_size = need_convert_charset ?
+                                         0 : read_buff_size * ObCharset::CharConvertFactorNum;
 
     if (OB_ISNULL((read_buff = static_cast<char*>(tmp_allocator->alloc(read_buff_size * 2))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc read buffer failed.", K(ret), K(read_buff_size));
-    } else if (OB_ISNULL((charset_convert_buff_ptr = static_cast<char*>(tmp_allocator->alloc(charset_convert_buff_size))))) {
+    } else if (need_convert_charset &&
+               OB_ISNULL((charset_convert_buff_ptr = static_cast<char*>(tmp_allocator->alloc(charset_convert_buff_size))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc charset convert buffer failed.", K(ret), K(charset_convert_buff_size));
     } else {
@@ -863,7 +900,7 @@ int ObLobManager::compare(ObLobAccessParam& param_left,
             } else {
               ret = OB_SUCCESS;
             }
-          } else {
+          } else if (need_convert_charset) {
             // convert right lob to left charset if necessary
             if(OB_FAIL(ObExprUtil::convert_string_collation(
                                   read_buffer_right, collation_right,
@@ -873,6 +910,8 @@ int ObLobManager::compare(ObLobAccessParam& param_left,
                           K(read_buffer_right), K(collation_right),
                           K(convert_buffer_right), K(cmp_collation));
             }
+          } else {
+            convert_buffer_right.assign_ptr(read_buffer_right.ptr(), read_buffer_right.length());
           }
         }
         if (OB_SUCC(ret)) {
