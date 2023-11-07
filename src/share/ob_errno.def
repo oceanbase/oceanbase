@@ -1838,6 +1838,7 @@ DEFINE_ERROR(OB_TRANSFER_WAIT_TRANSACTION_END_TIMEOUT, -7119, -1, "HY000", "tran
 DEFINE_ERROR(OB_TABLET_GC_LOCK_CONFLICT, -7120, -1, "HY000", "tablet GC lock conflict");
 DEFINE_ERROR(OB_SEQUENCE_NOT_MATCH, -7121, -1, "HY000", "compare sequence not match");
 DEFINE_ERROR(OB_SEQUENCE_TOO_SMALL, -7122, -1, "HY000", "compare sequence too small");
+DEFINE_ERROR(OB_TRANSFER_CANNOT_START, -7123, -1, "HY000", "transfer cannot start");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
