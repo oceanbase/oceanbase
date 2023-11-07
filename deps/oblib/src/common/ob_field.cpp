@@ -358,11 +358,7 @@ int ObField::get_field_mb_length(const ObObjType type,
         if (OB_FAIL(common::ObCharset::get_mbmaxlen_by_coll(charsetnr, mbmaxlen))) {
           LOG_WARN("fail to get mbmaxlen", K(charsetnr), K(ret));
         } else {
-          if (lib::is_mysql_mode() && (type == ObLongTextType || type == ObJsonType || type == ObGeometryType)) {
-            // issue: 52728955, 52735855, 52731784, 52734963, 52729976
-            // compat mysql .net driver 5.7, longblob, json, gis length is max u32
-            length = UINT32_MAX;
-          } else if (lib::is_mysql_mode() && tc == ObTextTC) {
+          if (lib::is_mysql_mode() && tc == ObTextTC) {
             // compat mysql-jdbc 8.x for judge text type by length
             length = static_cast<uint32_t>(ObAccuracy::MAX_ACCURACY[type].get_length() - 1);
           } else {

@@ -1716,7 +1716,15 @@ void ObResultSet::replace_lob_type(const ObSQLSessionInfo &session,
       }
     }
     LOG_TRACE("init field", K(is_use_lob_locator), K(field), K(mfield.type_));
-  } else {
+  } else { // mysql mode
+    // issue: 52728955, 52735855, 52731784, 52734963, 52729976
+    // compat mysql .net driver 5.7, longblob, json, gis length is max u32
+    if (mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_LONG_BLOB
+        || mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_JSON
+        || mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY) {
+      mfield.length_ = UINT32_MAX;
+    }
+
     if (mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_TINY_BLOB ||
         mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_MEDIUM_BLOB ||
         mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_LONG_BLOB) {
