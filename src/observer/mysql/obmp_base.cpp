@@ -524,6 +524,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row.get_count(); ++i) {
       ObObj &value = tmp_row.get_cell(i);
       ObCharsetType charset_type = CHARSET_INVALID;
+      ObCharsetType ncharset_type = CHARSET_INVALID;
       // need at ps mode
       if (!is_packed && value.get_type() != fields->at(i).type_.get_type()) {
         ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
@@ -540,7 +541,15 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
         // do nothing
       } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
+      } else if (OB_FAIL(session.get_ncharacter_set_connection(ncharset_type))) {
+        LOG_WARN("fail to get result charset", K(ret));
       } else {
+        if (lib::is_oracle_mode()
+            && (value.is_nchar() || value.is_nvarchar2())
+            && ncharset_type != CHARSET_INVALID
+            && ncharset_type != CHARSET_BINARY) {
+          charset_type = ncharset_type;
+        }
         if (ob_is_string_tc(value.get_type())
             && CS_TYPE_INVALID != value.get_collation_type()
             && OB_FAIL(value.convert_string_value_charset(charset_type, allocator))) {

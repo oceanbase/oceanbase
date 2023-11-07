@@ -2630,6 +2630,8 @@ int ObSysVarToStrFuncs::to_str_charset(ObIAllocator &allocator,
   } else if (OB_FAIL(sys_var.get_value().get_int(coll_type_int64))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid value", K(ret), K(sys_var), K(sys_var.get_value()));
+  } else if (coll_type_int64 == 0) {
+    result_str = ObString("");
   } else if (OB_UNLIKELY(false == ObCharset::is_valid_collation(coll_type_int64))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid collation", K(ret), K(coll_type_int64), K(sys_var));

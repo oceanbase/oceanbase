@@ -3306,16 +3306,21 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "en_US" ;
-      ObSysVars[234].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
-      ObSysVars[234].name_ = "lc_time_names" ;
-      ObSysVars[234].data_type_ = ObVarcharType ;
-      ObSysVars[234].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[234].id_ = SYS_VAR_LC_TIME_NAMES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 234 ;
-      ObSysVars[234].base_value_ = "en_US" ;
-    ObSysVars[234].alias_ = "OB_SV_LC_TIME_NAMES" ;
+      ObSysVars[234].default_value_ = "0" ;
+      ObSysVars[234].info_ = "The national character set which should be translated to response nstring data" ;
+      ObSysVars[234].name_ = "ncharacter_set_connection" ;
+      ObSysVars[234].data_type_ = ObIntType ;
+      ObSysVars[234].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_charset" ;
+      ObSysVars[234].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NULLABLE ;
+      ObSysVars[234].base_class_ = "ObCharsetSysVar" ;
+      ObSysVars[234].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_charset" ;
+      ObSysVars[234].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_charset" ;
+      ObSysVars[234].id_ = SYS_VAR_NCHARACTER_SET_CONNECTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NCHARACTER_SET_CONNECTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NCHARACTER_SET_CONNECTION] = 234 ;
+      ObSysVars[234].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
+      ObSysVars[234].base_value_ = "0" ;
+    ObSysVars[234].alias_ = "OB_SV_NCHARACTER_SET_CONNECTION" ;
     }();
 
     [&] (){
@@ -3331,13 +3336,26 @@ static struct VarsInit{
     ObSysVars[235].alias_ = "OB_SV_ENABLE_PL_CACHE" ;
     }();
 
+    [&] (){
+      ObSysVars[236].default_value_ = "en_US" ;
+      ObSysVars[236].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
+      ObSysVars[236].name_ = "lc_time_names" ;
+      ObSysVars[236].data_type_ = ObVarcharType ;
+      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[236].id_ = SYS_VAR_LC_TIME_NAMES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 236 ;
+      ObSysVars[236].base_value_ = "en_US" ;
+    ObSysVars[236].alias_ = "OB_SV_LC_TIME_NAMES" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 236;
+static int64_t var_amount = 237;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

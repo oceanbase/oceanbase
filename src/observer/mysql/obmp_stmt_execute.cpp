@@ -714,6 +714,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
 {
   int ret = OB_SUCCESS;
   ObCharsetType charset = CHARSET_INVALID;
+  ObCharsetType ncharset = CHARSET_INVALID;
   ObCollationType cs_conn = CS_TYPE_INVALID;
   ObCollationType cs_server = CS_TYPE_INVALID;
   if (OB_ISNULL(session)) {
@@ -724,6 +725,8 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
   } else if (OB_FAIL(session->get_collation_connection(cs_conn))) {
     LOG_WARN("get charset for client failed", K(ret));
   } else if (OB_FAIL(session->get_collation_server(cs_server))) {
+    LOG_WARN("get charset for client failed", K(ret));
+  } else if (OB_FAIL(session->get_ncharacter_set_connection(ncharset))) {
     LOG_WARN("get charset for client failed", K(ret));
   }
   // Step5: decode value
@@ -739,6 +742,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
     if (OB_FAIL(parse_param_value(alloc,
                                          param_type,
                                          charset,
+                                         ncharset,
                                          is_oracle_mode() ? cs_server : cs_conn,
                                          session->get_nls_collation_nation(),
                                          pos,
@@ -2124,6 +2128,7 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
 int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                              const uint32_t type,
                                              const ObCharsetType charset,
+                                             const ObCharsetType ncharset,
                                              const ObCollationType cs_type,
                                              const ObCollationType ncs_type,
                                              const char *& data,
@@ -2258,6 +2263,12 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
       ObString dst;
       uint64_t length = 0;
       ObCollationType cur_cs_type = ObCharset::get_default_collation(charset);
+      ObCollationType cur_ncs_type = ObCollationType::CS_TYPE_INVALID;
+      if (ncharset == ObCharsetType::CHARSET_INVALID || ncharset == ObCharsetType::CHARSET_BINARY) {
+        cur_ncs_type = ObCharset::get_default_collation(charset);
+      } else {
+        cur_ncs_type = ObCharset::get_default_collation(ncharset);
+      }
       if (OB_FAIL(ObMySQLUtil::get_length(data, length))) {
         LOG_ERROR("decode varchar param value failed", K(ret));
       } else {
@@ -2271,7 +2282,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
           LOG_WARN("input param len is over size", K(ret), K(length));
         } else if (MYSQL_TYPE_OB_NVARCHAR2 == type
                   || MYSQL_TYPE_OB_NCHAR == type) {
-          OZ(copy_or_convert_str(allocator, cur_cs_type, ncs_type, str, dst));
+          OZ(copy_or_convert_str(allocator, cur_ncs_type, ncs_type, str, dst));
           if (OB_SUCC(ret)) {
             MYSQL_TYPE_OB_NVARCHAR2 == type ? param.set_nvarchar2(dst)
                                             : param.set_nchar(dst);
@@ -2469,6 +2480,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
 int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
                                        const uint32_t type,
                                        const ObCharsetType charset,
+                                       const ObCharsetType ncharset,
                                        const ObCollationType cs_type,
                                        const ObCollationType ncs_type,
                                        const char *&data,
@@ -2512,7 +2524,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
       }
     } else {
       bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
-      if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
+      if (OB_FAIL(parse_basic_param_value(allocator, type, charset, ncharset, cs_type, ncs_type,
                                           data, tz_info, param, false, &analysis_checker_, is_unsigned))) {
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
@@ -2608,7 +2620,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         } else {
           const char* src = tmp;
           bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
-          if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
+          if (OB_FAIL(parse_basic_param_value(allocator, type, charset, ncharset, cs_type, ncs_type,
                                               src, tz_info, param, false, NULL ,is_unsigned))) {
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {
