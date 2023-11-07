@@ -6369,6 +6369,7 @@ def_table_schema(
 # 498 :__all_transfer_partition_task
 # 499 :__all_transfer_partition_task_history
 # 500 : __all_tenant_snapshot_create_job
+# 501 : __wr_sqltext
 #
 # 余留位置
 ################################################################################
@@ -13130,7 +13131,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12451: __all_virtual_transfer_partition_task
 # 12452: __all_virtual_transfer_partition_task_history
 # 12453: __all_virtual_tenant_snapshot_create_job
-
+# 12454: __all_virtual_wr_sqltext
 # 余留位置
 #
 
@@ -13551,6 +13552,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15429: __all_virtual_sys_variable_default_value
 # 15430: __all_transfer_partition_task
 # 15431: __all_transfer_partition_task_history
+# 15432: __all_virtual_wr_sqltext
 # 余留位置
 
 ################################################################################
@@ -30175,6 +30177,8 @@ def_table_schema(
 #21502 CDB_OB_TRANSFER_PARTITION_TASKS
 #21503 DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 #21504 CDB_OB_TRANSFER_PARTITION_TASK_HISTORY
+#21505 DBA_WR_SQLTEXT
+#21506 CDB_WR_SQLTEXT
 # 余留位置
 
 ################################################################################
@@ -48664,6 +48668,7 @@ def_table_schema(
 # 25274: DBA_WR_SYS_TIME_MODEL
 # 25275: DBA_OB_TRANSFER_PARTITION_TASKS
 # 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
+# 25277: DBA_WR_SQLTEXT
 # 余留位置
 
 #### End Data Dictionary View
