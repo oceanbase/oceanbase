@@ -936,7 +936,9 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
   } else if (OB_FAIL(allocator_.init(BLOCK_SIZE, ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id, get_memory_limit(tenant_id)))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
-  } else if (OB_FAIL(io_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, ObModIds::OB_TMP_PAGE_CACHE, tenant_id, IO_LIMIT))) {
+  } else if (OB_FAIL(io_allocator_.init(lib::ObMallocAllocator::get_instance(),
+                                     OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                     ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
@@ -979,7 +981,7 @@ void ObTmpTenantFileStore::destroy()
     page_cache_ = NULL;
   }
   allocator_.destroy();
-  io_allocator_.destroy();
+  io_allocator_.reset();
   is_inited_ = false;
   STORAGE_LOG(INFO, "cache num when destroy",
               K(ATOMIC_LOAD(&page_cache_num_)), K(ATOMIC_LOAD(&block_cache_num_)));

@@ -294,7 +294,7 @@ private:
   ObTmpPageCache *page_cache_;
   common::SpinRWLock lock_;
   common::ObConcurrentFIFOAllocator allocator_;
-  common::ObConcurrentFIFOAllocator io_allocator_;
+  common::ObFIFOAllocator io_allocator_;
   ObTmpTenantMacroBlockManager tmp_block_manager_;
   ObTmpTenantMemBlockManager tmp_mem_block_manager_;
 
