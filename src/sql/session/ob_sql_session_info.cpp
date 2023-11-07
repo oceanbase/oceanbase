@@ -512,6 +512,18 @@ bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
   return bret;
 }
 
+int ObSQLSessionInfo::is_enable_range_extraction_for_not_in(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enabled = tenant_config->_enable_range_extraction_for_not_in;
+  }
+  return ret;
+}
+
 bool ObSQLSessionInfo::is_var_assign_use_das_enabled() const
 {
   bool bret = true;
