@@ -1238,8 +1238,10 @@ int ObMultipleMerge::refresh_table_on_demand()
     } else if (nullptr != block_row_store_) {
       block_row_store_->reuse();
     }
-    STORAGE_LOG(INFO, "table need to be refresh", "table_id", access_param_->iter_param_.table_id_,
-        K(*access_param_), K(curr_scan_index_), K(scan_state_));
+    if (OB_SUCC(ret)) {
+      STORAGE_LOG(INFO, "table need to be refresh", "table_id", access_param_->iter_param_.table_id_,
+          K(*access_param_), K(curr_scan_index_), K(scan_state_));
+    }
   }
   return ret;
 }
