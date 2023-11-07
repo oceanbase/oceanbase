@@ -510,7 +510,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
           ++cur;
           cursor->set_current_position(cur);
           is_fetched = true;
-          if (OB_FAIL(response_row(session, row, &cursor->get_field_columns()))) {
+          if (OB_FAIL(response_row(session, row, &cursor->get_field_columns(), cursor->is_packed()))) {
             LOG_WARN("response row fail at line: ", K(ret), K(row_num));
           } else {
             ++row_num;
@@ -965,7 +965,7 @@ int ObMPStmtPrexecute::response_arraybinding_rows(sql::ObSQLSessionInfo &session
     arraybinding_row_->get_cell(0).set_int(is_pl ? curr_sql_idx_ : affect_rows);
     arraybinding_row_->get_cell(1).set_int(0);
     arraybinding_row_->get_cell(2).set_null();
-    if (OB_FAIL(response_row(session, *arraybinding_row_, arraybinding_columns_))) {
+    if (OB_FAIL(response_row(session, *arraybinding_row_, arraybinding_columns_, false))) {
       LOG_WARN("fail to response fail row to client", K(ret));
     }
   }
@@ -982,7 +982,7 @@ int ObMPStmtPrexecute::response_fail_result(sql::ObSQLSessionInfo &session, int 
     arraybinding_row_->get_cell(i).set_null();
   }
   arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_varchar(ob_oracle_strerror(err_ret));
-  if (OB_FAIL(response_row(session, *arraybinding_row_, arraybinding_columns_))) {
+  if (OB_FAIL(response_row(session, *arraybinding_row_, arraybinding_columns_, false))) {
     LOG_WARN("fail to response fail row to client", K(ret));
   }
   return ret;
@@ -996,6 +996,7 @@ int ObMPStmtPrexecute::response_returning_rows(ObSQLSessionInfo &session,
   MYSQL_PROTOCOL_TYPE protocol_type = BINARY;
   const ObNewRow *result_row = NULL;
   const common::ColumnsFieldIArray *fields = result.get_field_columns();
+  bool is_packed = result.get_physical_plan() ? result.get_physical_plan()->is_packed() : false;
   if (OB_ISNULL(fields) || NULL == arraybinding_row_ || arraybinding_row_->get_count() < 3) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fields is null", K(ret), KP(fields));
@@ -1012,7 +1013,7 @@ int ObMPStmtPrexecute::response_returning_rows(ObSQLSessionInfo &session,
         arraybinding_row_->get_cell(i+2) = value;
       }
       arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_null();
-      if (OB_SUCCESS != (response_ret = response_row(session, *arraybinding_row_, arraybinding_columns_))) {
+      if (OB_SUCCESS != (response_ret = response_row(session, *arraybinding_row_, arraybinding_columns_, is_packed))) {
         LOG_WARN("fail to response row to client", K(response_ret));
       }
     }
@@ -1031,7 +1032,7 @@ int ObMPStmtPrexecute::response_returning_rows(ObSQLSessionInfo &session,
       }
       arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_varchar(ob_oracle_strerror(ret));
       LOG_DEBUG("error occured before send arraybinding_row_", KPC(arraybinding_row_));
-      if (OB_SUCCESS != (response_ret = response_row(session, *arraybinding_row_, arraybinding_columns_))) {
+      if (OB_SUCCESS != (response_ret = response_row(session, *arraybinding_row_, arraybinding_columns_, false))) {
         LOG_WARN("fail to response row to client", K(response_ret));
       }
       if (is_save_exception_) {
