@@ -7992,7 +7992,7 @@ int ObInnerTableSchema::all_virtual_table_history_schema(ObTableSchema &table_sc
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       lob_inrow_threshold_default,
       lob_inrow_threshold_default); //default_value
