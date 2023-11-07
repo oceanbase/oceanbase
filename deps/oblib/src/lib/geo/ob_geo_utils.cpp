@@ -650,6 +650,23 @@ int ObGeoTypeUtil::get_bo_from_wkb(const ObString &wkb, ObGeoWkbByteOrder &bo)
   return ret;
 }
 
+int ObGeoTypeUtil::add_geo_version(ObIAllocator &allocator, const ObString &src, ObString &res_wkb)
+{
+  int ret = OB_SUCCESS;
+  uint64_t res_size = src.length() + WKB_VERSION_SIZE;
+  char *res_buf = reinterpret_cast<char *>(allocator.alloc(res_size));
+  if (OB_ISNULL(res_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(ret), K(res_size));
+  } else {
+    MEMCPY(res_buf, src.ptr(), WKB_GEO_SRID_SIZE);
+    *(res_buf + WKB_GEO_SRID_SIZE) = ENCODE_GEO_VERSION(GEO_VESION_1);
+    MEMCPY(res_buf + WKB_OFFSET, src.ptr() + WKB_GEO_SRID_SIZE, src.length() - WKB_GEO_SRID_SIZE);
+    res_wkb.assign_ptr(res_buf, res_size);
+  }
+  return ret;
+}
+
 int ObGeoTypeUtil::to_wkb(ObIAllocator &allocator,
                           ObGeometry &geo,
                           const ObSrsItem *srs_item,

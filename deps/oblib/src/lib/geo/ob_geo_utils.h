@@ -119,6 +119,7 @@ public:
                                       ObS2Cellids &cellids,
                                       ObString &mbr_val);
   static int get_wkb_from_swkb(const ObString &swkb, ObString &wkb, uint32_t &offset);
+  static int add_geo_version(ObIAllocator &allocator, const ObString &src, ObString &res_wkb);
 private:
   template<typename PT, typename LN, typename PY, typename MPT, typename MLN, typename MPY, typename GC>
   static int create_geo_bin_by_type(ObIAllocator &allocator,

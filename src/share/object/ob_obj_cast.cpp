@@ -6322,8 +6322,13 @@ static int string_geometry(const ObObjType expect_type, ObObjCastParams &params,
     } else if (OB_FAIL(common_build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
       LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
     } else if (ObGeoType::GEOMETRY == dst_geo_type) {
-      out.set_string(expect_type, in_str.ptr(), in_str.length());
-      SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, in_str.length());
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::add_geo_version(temp_allocator, in_str, res_wkb))) {
+        LOG_WARN("fail to add version", K(ret), K(dst_geo_type));
+      } else {
+        out.set_string(expect_type, res_wkb.ptr(), res_wkb.length());
+        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_wkb.length());
+      }
     } else if (OB_FAIL(geometry_geometry(expect_type, params, in, out, cast_mode))) {
       LOG_WARN("fail to cast geometry", K(ret), K(dst_geo_type));
     }
@@ -9089,14 +9094,21 @@ static int geom_copy_string(ObObjCastParams &params,
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
-  int64_t len = src.length() - WKB_VERSION_SIZE;
-  if (OB_LIKELY(len > 0)) {
+  int64_t len = src.length();
+  uint8_t offset = WKB_GEO_SRID_SIZE;
+  if (OB_LIKELY(len > WKB_OFFSET)) {
+    uint8_t version = (*(src.ptr() + WKB_GEO_SRID_SIZE));
+    if (IS_GEO_VERSION(version)) {
+      // version exist
+      len -= WKB_VERSION_SIZE;
+      offset += WKB_VERSION_SIZE;
+    }
     if (is_lob_storage(expect_type)) {
       bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
       sql::ObTextStringObObjResult str_result(expect_type, &params, &obj, has_lob_header);
       if (OB_FAIL(str_result.init(len))) {
       } else if (OB_FAIL(str_result.append(src.ptr(), WKB_GEO_SRID_SIZE))) {
-      } else if (OB_FAIL(str_result.append(src.ptr() + WKB_OFFSET, len - WKB_GEO_SRID_SIZE))) {
+      } else if (OB_FAIL(str_result.append(src.ptr() + offset, len - WKB_GEO_SRID_SIZE))) {
       } else {
         str_result.set_result();
       }
@@ -9105,7 +9117,7 @@ static int geom_copy_string(ObObjCastParams &params,
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
         MEMMOVE(buf, src.ptr(), WKB_GEO_SRID_SIZE);
-        MEMMOVE(buf + WKB_GEO_SRID_SIZE, src.ptr() + WKB_OFFSET, len - WKB_GEO_SRID_SIZE);
+        MEMMOVE(buf + WKB_GEO_SRID_SIZE, src.ptr() + offset, len - WKB_GEO_SRID_SIZE);
         if (ob_is_raw(expect_type)) {
           obj.set_raw(buf, static_cast<int32_t>(len));
         } else {

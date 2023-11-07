@@ -1223,7 +1223,14 @@ int ObMySQLUtil::geometry_cell_str(char *buf, const int64_t len, const ObString 
       ret = OB_SIZE_OVERFLOW;
     }
   } else {
-    length = val.length() - WKB_VERSION_SIZE;
+    uint8_t version = (*(val.ptr() + WKB_GEO_SRID_SIZE));
+    uint8_t offset = WKB_GEO_SRID_SIZE;
+    if (IS_GEO_VERSION(version)) {
+      // version exist
+      length = val.length() - WKB_VERSION_SIZE;
+      offset += WKB_VERSION_SIZE;
+    }
+
     if (OB_LIKELY(length < len - pos)) {
       int64_t pos_bk = pos;
       if (OB_FAIL(ObMySQLUtil::store_length(buf, len, length, pos))) {
@@ -1232,7 +1239,7 @@ int ObMySQLUtil::geometry_cell_str(char *buf, const int64_t len, const ObString 
         if (OB_LIKELY(length <= len - pos)) {
           MEMCPY(buf + pos, val.ptr(), WKB_GEO_SRID_SIZE); // srid
           pos += WKB_GEO_SRID_SIZE;
-          MEMCPY(buf + pos, val.ptr() + WKB_OFFSET, length - WKB_GEO_SRID_SIZE);
+          MEMCPY(buf + pos, val.ptr() + offset, length - WKB_GEO_SRID_SIZE);
           pos += (length - WKB_GEO_SRID_SIZE);
         } else {
           pos = pos_bk;
