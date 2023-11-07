@@ -5937,7 +5937,14 @@ int ObAlterTableResolver::resolve_column_group()
             cg_name, column_ids, ++cur_column_group_id, column_group))) {
         LOG_WARN("failed to build column group", K(ret), KPC(column));
       } else if (OB_FAIL(alter_table_stmt->add_column_group(column_group))) {
-        LOG_WARN("failed to add column group", K(ret));
+        // only used for duplicate column in sql
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_ERR_COLUMN_DUPLICATE;
+          LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column->get_column_name_str().length(), column->get_column_name_str().ptr());
+          LOG_WARN("duplicate column name", K(ret), K(column));
+        } else {
+          LOG_WARN("failed to add column group", K(ret));
+        }
       } else if (OB_FAIL(column->set_column_group_name(cg_name))) {
         LOG_WARN("failed to set column group name", K(ret), KPC(column));
       }
