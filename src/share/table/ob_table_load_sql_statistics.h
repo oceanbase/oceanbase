@@ -34,14 +34,16 @@ public:
   }
   int allocate_table_stat(ObOptTableStat *&table_stat);
   int allocate_col_stat(ObOptOSGColumnStat *&col_stat);
-  int add(const ObTableLoadSqlStatistics& other);
+  int merge(const ObTableLoadSqlStatistics& other);
   int get_table_stat_array(ObIArray<ObOptTableStat*> &table_stat_array) const;
   int get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array) const;
   int persistence_col_stats();
+  ObIArray<ObOptTableStat*> & get_table_stat_array() {return table_stat_array_; }
+  ObIArray<ObOptOSGColumnStat*> & get_col_stat_array() {return col_stat_array_; }
   TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
 public:
-  common::ObSEArray<ObOptTableStat *, 64, common::ModulePageAllocator, true> table_stat_array_;
-  common::ObSEArray<ObOptOSGColumnStat *, 64, common::ModulePageAllocator, true> col_stat_array_;
+  common::ObArray<ObOptTableStat *> table_stat_array_;
+  common::ObArray<ObOptOSGColumnStat *> col_stat_array_;
   common::ObArenaAllocator allocator_;
 };
 

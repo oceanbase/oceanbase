@@ -21,6 +21,7 @@ namespace table
 
 void ObTableLoadSqlStatistics::reset()
 {
+  int ret = OB_SUCCESS;
   for (int64_t i = 0; i < col_stat_array_.count(); ++i) {
     ObOptOSGColumnStat *col_stat = col_stat_array_.at(i);
     if (col_stat != nullptr) {
@@ -82,53 +83,73 @@ int ObTableLoadSqlStatistics::allocate_col_stat(ObOptOSGColumnStat *&col_stat)
   return ret;
 }
 
-int ObTableLoadSqlStatistics::add(const ObTableLoadSqlStatistics& other)
+int ObTableLoadSqlStatistics::merge(const ObTableLoadSqlStatistics& other)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret)&& i < other.table_stat_array_.count(); ++i) {
-    ObOptTableStat *table_stat = other.table_stat_array_.at(i);
-    if (table_stat != nullptr) {
-      ObOptTableStat *copied_table_stat = nullptr;
-      int64_t size = table_stat->size();
-      char *new_buf = nullptr;
-      if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(size)))) {
+  if (is_empty()) {
+    for (int64_t i = 0; OB_SUCC(ret)&& i < other.table_stat_array_.count(); ++i) {
+      ObOptTableStat *table_stat = other.table_stat_array_.at(i);
+      if (table_stat != nullptr) {
+        ObOptTableStat *copied_table_stat = nullptr;
+        int64_t size = table_stat->size();
+        char *new_buf = nullptr;
+        if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          OB_LOG(WARN, "fail to allocate buffer", KR(ret), K(size));
+        } else if (OB_FAIL(table_stat->deep_copy(new_buf, size, copied_table_stat))) {
+          OB_LOG(WARN, "fail to copy table stat", KR(ret));
+        } else if (OB_FAIL(table_stat_array_.push_back(copied_table_stat))) {
+          OB_LOG(WARN, "fail to add table stat", KR(ret));
+        }
+        if (OB_FAIL(ret)) {
+          if (copied_table_stat != nullptr) {
+            copied_table_stat->~ObOptTableStat();
+            copied_table_stat = nullptr;
+          }
+          if(new_buf != nullptr) {
+            allocator_.free(new_buf);
+            new_buf = nullptr;
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret)&& i < other.col_stat_array_.count(); ++i) {
+      ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
+      ObOptOSGColumnStat *copied_col_stat = nullptr;
+      if (OB_ISNULL(col_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "get unexpected null");
+      } else if (OB_ISNULL(copied_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to allocate buffer", KR(ret), K(size));
-      } else if (OB_FAIL(table_stat->deep_copy(new_buf, size, copied_table_stat))) {
-        OB_LOG(WARN, "fail to copy table stat", KR(ret));
-      } else if (OB_FAIL(table_stat_array_.push_back(copied_table_stat))) {
-        OB_LOG(WARN, "fail to add table stat", KR(ret));
+        OB_LOG(WARN, "failed to create new col stat");
+      } else if (OB_FAIL(copied_col_stat->deep_copy(*col_stat))) {
+        OB_LOG(WARN, "fail to copy col stat", KR(ret));
+      } else if (OB_FAIL(col_stat_array_.push_back(copied_col_stat))) {
+        OB_LOG(WARN, "fail to add col stat", KR(ret));
       }
       if (OB_FAIL(ret)) {
-        if (copied_table_stat != nullptr) {
-          copied_table_stat->~ObOptTableStat();
-          copied_table_stat = nullptr;
-        }
-        if(new_buf != nullptr) {
-          allocator_.free(new_buf);
-          new_buf = nullptr;
+        if (copied_col_stat != nullptr) {
+          copied_col_stat->~ObOptOSGColumnStat();
+          copied_col_stat = nullptr;
         }
       }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret)&& i < other.col_stat_array_.count(); ++i) {
-    ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
-    ObOptOSGColumnStat *copied_col_stat = nullptr;
-    if (OB_ISNULL(col_stat)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "get unexpected null");
-    } else if (OB_ISNULL(copied_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "failed to create new col stat");
-    } else if (OB_FAIL(copied_col_stat->deep_copy(*col_stat))) {
-      OB_LOG(WARN, "fail to copy col stat", KR(ret));
-    } else if (OB_FAIL(col_stat_array_.push_back(copied_col_stat))) {
-      OB_LOG(WARN, "fail to add col stat", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret)&& i < other.table_stat_array_.count(); ++i) {
+      ObOptTableStat *table_stat = other.table_stat_array_.at(i);
+      if (OB_FAIL(table_stat_array_.at(i)->merge_table_stat(*table_stat))) {
+        OB_LOG(WARN, "failed to merge table stat");
+      }
     }
-    if (OB_FAIL(ret)) {
-      if (copied_col_stat != nullptr) {
-        copied_col_stat->~ObOptOSGColumnStat();
-        copied_col_stat = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret)&& i < other.col_stat_array_.count(); ++i) {
+      ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
+      if (OB_ISNULL(col_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "get unexpected null");
+      }
+      // ObOptOSGColumnStat的序列化结果只序列化里面的ObOptColumnStat, 需要调用ObOptColumnStat的merge函数
+      else if (OB_FAIL(col_stat_array_.at(i)->col_stat_->merge_column_stat(*col_stat->col_stat_))) {
+        OB_LOG(WARN, "failed to merge col stat");
       }
     }
   }
