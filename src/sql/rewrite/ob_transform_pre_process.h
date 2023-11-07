@@ -276,6 +276,8 @@ struct DistinctObjMeta
 
   int transform_update_only_merge_into(ObDMLStmt* stmt);
 
+  int check_can_transform_insert_only_merge_into(const ObMergeStmt *merge_stmt, bool &is_valid);
+
   int create_source_view_for_merge_into(ObMergeStmt *merge_stmt, TableItem *&view_table);
 	/*
 	 * following functions are used for temporary and se table
