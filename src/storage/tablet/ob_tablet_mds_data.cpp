@@ -1172,7 +1172,7 @@ int ObTabletMdsData::load_aux_tablet_info(
     const mds::MdsDumpKV *dump_kv = complex_addr.ptr_;
     const common::ObString &str = dump_kv->v_.user_data_;
     int64_t pos = 0;
-    if (!dump_kv->is_valid() || !str.empty()) {
+    if (!dump_kv->is_valid() || str.empty()) {
       ObTabletObjLoadHelper::free(allocator, ptr);
       ptr = nullptr;
       LOG_INFO("read empty aux tablet info", K(ret), K(complex_addr));
