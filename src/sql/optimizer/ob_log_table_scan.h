@@ -463,8 +463,10 @@ public:
   int generate_ddl_output_column_ids();
   int replace_gen_col_op_exprs(ObRawExprReplacer &replacer);
   int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
-                                             ObIArray<ObRawExpr*> &scan_pushdown_filters,
-                                             ObIArray<ObRawExpr*> &lookup_pushdown_filters);
+                               ObIArray<ObRawExpr*> &scan_pushdown_filters,
+                               ObIArray<ObRawExpr*> &lookup_pushdown_filters,
+                               bool ignore_pd_filter = false);
+  int has_nonpushdown_filter(bool &has_npd_filter);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
   int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
                                       uint64_t scan_table_id);

@@ -6709,9 +6709,16 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
     LOG_WARN("get unexpected null", K(ret), K(top));
   } else if (log_op_def::LOG_TABLE_SCAN == top->get_type()) {
     ObLogTableScan *scan_op = static_cast<ObLogTableScan*>(top);
-    if (scan_op->get_index_back() ||
-        scan_op->is_sample_scan()) {
-      // can not push down
+    bool has_npd_filter = false; //has non-pushdown filter
+    if (OB_FAIL(scan_op->has_nonpushdown_filter(has_npd_filter))) {
+      LOG_WARN("check whether hash non-pushdown filter failed", K(ret));
+    } else if (scan_op->get_index_back() ||
+               scan_op->is_sample_scan() ||
+               has_npd_filter) {
+      //aggr func cannot be pushed down to the storage layer in these scenarios:
+      //1. TSC has index lookup
+      //2. TSC is sample scan operator
+      //3. TSC contains filters that cannot be pushed down to the storage
     } else if (OB_FAIL(scan_op->get_pushdown_aggr_exprs().assign(aggr_items))) {
       LOG_WARN("failed to assign group exprs", K(ret));
     }
@@ -8600,17 +8607,12 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
     ObRawExpr *new_limit_expr = NULL;
     ObRawExpr *new_offset_expr = NULL;
 
-    bool contain_udf = false;
-    common::ObIArray<ObRawExpr *> &filters = table_scan->get_filter_exprs();
-    for(int i = 0; OB_SUCC(ret) && !contain_udf && i < filters.count(); i++) {
-      if(OB_ISNULL(filters.at(i))) {
-        //do nothing
-      } else if(filters.at(i)->has_flag(ObExprInfoFlag::CNT_PL_UDF)) {
-        contain_udf = true;
-      }
-    }
-
-    if (OB_SUCC(ret) && !contain_udf && !is_virtual_table(table_scan->get_ref_table_id()) &&
+    bool has_npd_filter = false; //has non-pushdown filter
+    //if TSC contains filters that cannot be pushdown to the storage
+    //the limit clause cannot be pushed down either.
+    if (OB_FAIL(table_scan->has_nonpushdown_filter(has_npd_filter))) {
+      LOG_WARN("check whether has non-pushdown filter failed", K(ret));
+    } else if (!has_npd_filter && !is_virtual_table(table_scan->get_ref_table_id()) &&
         table_scan->get_table_type() != schema::EXTERNAL_TABLE &&
         !(OB_INVALID_ID != table_scan->get_dblink_id() && NULL != offset_expr) &&
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
