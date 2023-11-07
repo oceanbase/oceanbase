@@ -43,6 +43,7 @@ void ObSSTableRowGetter::reuse()
   ObStoreRowIterator::reuse();
   is_opened_ = false;
   has_fetched_ = false;
+  sstable_ = nullptr;
   prefetcher_.reuse();
   read_handle_.reset();
 }

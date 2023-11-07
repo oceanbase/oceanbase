@@ -120,6 +120,8 @@ void ObCGScanner::reuse()
   if (nullptr != micro_scanner_) {
     micro_scanner_->reuse();
   }
+  sstable_ = nullptr;
+  table_wrapper_.reset();
   query_index_range_.reset();
   prefetcher_.reuse();
   is_new_range_ = false;

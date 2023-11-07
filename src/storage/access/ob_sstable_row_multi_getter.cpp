@@ -36,6 +36,7 @@ void ObSSTableRowMultiGetter::reuse()
 {
   ObStoreRowIterator::reuse();
   is_opened_ = false;
+  sstable_ = nullptr;
   prefetcher_.reuse();
 }
 

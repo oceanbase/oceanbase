@@ -39,6 +39,8 @@ void ObCGGetter::reset()
 void ObCGGetter::reuse()
 {
   is_inited_ = false;
+  sstable_ = nullptr;
+  table_wrapper_.reset();
   is_same_data_block_ = false;
   prefetcher_.reuse();
 }
@@ -85,8 +87,9 @@ int ObCGGetter::init(
       } else {
         ObMicroBlockDataHandle &micro_handle = prefetcher_.get_last_data_handle();
         is_same_data_block_ =
-            micro_handle.in_block_state() &&
+            nullptr != sstable_ &&
             sstable->get_key() == sstable_->get_key() &&
+            micro_handle.in_block_state() &&
             0 == read_handle_.index_block_info_.get_row_range().compare(idx_key.datums_[0].get_int()) &&
             micro_handle.match(
                 read_handle_.index_block_info_.get_macro_id(),
@@ -190,6 +193,7 @@ void ObCGSSTableRowGetter::reuse()
 {
   is_inited_ = false;
   row_.reuse();
+  co_sstable_ = nullptr;
   ObStoreRowIterator::reuse();
 }
 

@@ -187,6 +187,7 @@ void ObCOSSTableRowsFilter::reuse()
   prepared_ = false;
   subtree_filter_iter_to_locate_ = 0;
   subtree_filter_iter_to_filter_ = 0;
+  co_sstable_ = nullptr;
 }
 
 int ObCOSSTableRowsFilter::apply(const ObCSRange &range)

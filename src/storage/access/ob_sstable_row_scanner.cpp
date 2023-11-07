@@ -49,6 +49,7 @@ void ObSSTableRowScanner<PrefetchType>::reuse()
   ObStoreRowIterator::reuse();
   is_opened_ = false;
   cur_range_idx_ = -1;
+  sstable_ = nullptr;
   if (nullptr != micro_scanner_) {
     micro_scanner_->reuse();
   }

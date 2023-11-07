@@ -1680,7 +1680,7 @@ TEMP_DEF_BOOL(v4.3, enable_table_with_cg, OB_TENANT_PARAMETER, "False",
 TEMP_DEF_INT(v4.3, encoding_test_seed, OB_CLUSTER_PARAMETER, "0", "[0,)"
             "The seed is used to test encoding algorithm. The default is 0, indicating that it is not test, the production environment must keep the default value",
               ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_table_without_all_cg, OB_TENANT_PARAMETER, "False",
+TEMP_DEF_BOOL(v4.3, enable_table_without_all_cg, OB_TENANT_PARAMETER, "True",
               "enables creating table without all column_group. The default value is False.",
               ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
