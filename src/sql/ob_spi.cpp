@@ -1770,7 +1770,8 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
 int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
                                       const ObString ps_sql,
                                       stmt::StmtType stmt_type,
-                                      ObDbmsCursorInfo &cursor)
+                                      ObDbmsCursorInfo &cursor,
+                                      bool is_dbms_sql)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
@@ -1793,6 +1794,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
   HEAP_VAR(ObSPIResultSet, spi_result) {
     OZ (spi_result.init(*session));
     OZ (spi_result.start_nested_stmt_if_need(ctx, sql_stmt, static_cast<stmt::StmtType>(stmt_type), cursor.is_for_update()));
+    OX (spi_result.get_sql_ctx().is_dbms_sql_ = is_dbms_sql);
     if (OB_SUCC(ret)) {
       int64_t row_count = 0;
       ObQueryRetryCtrl retry_ctrl;
@@ -3374,7 +3376,8 @@ int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
 }
 
 int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
-                                    ObDbmsCursorInfo &cursor)
+                                    ObDbmsCursorInfo &cursor,
+                                    bool is_dbms_sql)
 {
   int ret = OB_SUCCESS;
   // ObString &sql_stmt = cursor.get_sql_stmt();
@@ -3390,7 +3393,7 @@ int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
       || cursor.get_into_names().count() > 0) { // NOTICE: DML Returning also use cursor impl.
     OZ (dbms_cursor_open(pl_ctx, cursor, ps_sql, stmt_type, for_update, hidden_rowid), cursor);
   } else {
-    OZ (dbms_cursor_execute(pl_ctx, ps_sql, stmt_type, cursor), cursor);
+    OZ (dbms_cursor_execute(pl_ctx, ps_sql, stmt_type, cursor, is_dbms_sql), cursor);
     OX (cursor.set_affected_rows(pl_ctx->exec_ctx_->get_my_session()->get_affected_rows()));
   }
   return ret;

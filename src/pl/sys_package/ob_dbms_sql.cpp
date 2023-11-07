@@ -1142,7 +1142,7 @@ int ObPLDbmsSql::do_execute(ObExecContext &exec_ctx,
   ObPLExecCtx pl_ctx(cursor.get_allocator(), &exec_ctx, &params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   OZ (cursor.expand_params());
-  OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor));
+  OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor, true));
   if (OB_SUCC(ret) && cursor.get_into_names().count() > 0) { // DML Returning
     OZ (do_fetch(exec_ctx, params, result, cursor));
   } else {
