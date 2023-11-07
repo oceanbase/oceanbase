@@ -312,18 +312,21 @@ int ObDMLService::check_lob_column_changed(ObEvalCtx &eval_ctx,
     bool new_set_has_lob_header = new_expr.obj_meta_.has_lob_header() && new_str.length() > 0;
     ObLobLocatorV2 old_lob(old_str, old_set_has_lob_header);
     ObLobLocatorV2 new_lob(new_str, new_set_has_lob_header);
-    ObLobCompareParams cmp_params;
-    // binary compare ignore charset
-    cmp_params.collation_left_ = CS_TYPE_BINARY;
-    cmp_params.collation_right_ = CS_TYPE_BINARY;
-    cmp_params.offset_left_ = 0;
-    cmp_params.offset_right_ = 0;
-    cmp_params.compare_len_ = UINT64_MAX;
-    cmp_params.timeout_ = timeout;
-    cmp_params.tx_desc_ = eval_ctx.exec_ctx_.get_my_session()->get_tx_desc();
-    if(old_set_has_lob_header && new_set_has_lob_header) {
-      if(OB_FAIL(lob_mngr->compare(old_lob, new_lob, cmp_params, result))) {
+    if (old_set_has_lob_header && new_set_has_lob_header) {
+      bool is_equal = false;
+      ObLobCompareParams cmp_params;
+      // binary compare ignore charset
+      cmp_params.collation_left_ = CS_TYPE_BINARY;
+      cmp_params.collation_right_ = CS_TYPE_BINARY;
+      cmp_params.offset_left_ = 0;
+      cmp_params.offset_right_ = 0;
+      cmp_params.compare_len_ = UINT64_MAX;
+      cmp_params.timeout_ = timeout;
+      cmp_params.tx_desc_ = eval_ctx.exec_ctx_.get_my_session()->get_tx_desc();
+      if(OB_FAIL(lob_mngr->equal(old_lob, new_lob, cmp_params, is_equal))) {
         LOG_WARN("fail to compare lob", K(ret), K(old_lob), K(new_lob));
+      } else {
+        result = is_equal ? 0 : 1;
       }
     } else {
       result = ObDatum::binary_equal(old_datum, new_datum) ? 0 : 1;

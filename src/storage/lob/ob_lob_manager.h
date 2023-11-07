@@ -223,7 +223,10 @@ public:
               ObLobLocatorV2& lob_right,
               ObLobCompareParams& cmp_params,
               int64_t& result);
-
+  int equal(ObLobLocatorV2& lob_left,
+            ObLobLocatorV2& lob_right,
+            ObLobCompareParams& cmp_params,
+            bool& result);
   // int insert(const common::ObTabletID &tablet_id, ObObj *obj, uint64_t offset, char *data, uint64_t len);
   // int erase(const common::ObTabletID &tablet_id, ObObj *obj, uint64_t offset, uint64_t len);
   int get_real_data(ObLobAccessParam& param,
