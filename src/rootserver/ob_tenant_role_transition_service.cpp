@@ -502,17 +502,27 @@ int ObTenantRoleTransitionService::get_tenant_ref_scn_(const share::SCN &sync_sc
 int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
 {
   int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else {
+    uint64_t meta_compat_version = 0;
+    uint64_t user_compat_version = 0;
+
     ObGlobalStatProxy global_proxy(*sql_proxy_, gen_meta_tenant_id(tenant_id_));
-    if (OB_FAIL(global_proxy.get_current_data_version(compat_version))) {
+    ObGlobalStatProxy user_global_proxy(*sql_proxy_, tenant_id_);
+    if (OB_FAIL(global_proxy.get_current_data_version(meta_compat_version))) {
       LOG_WARN("failed to get current data version", KR(ret), K(tenant_id_));
-    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+    } else if (meta_compat_version < DATA_VERSION_4_2_0_0) {
       //if tenant version is less than 4200, no need check
       //Regardless of the data_version change and switchover concurrency scenario
+      LOG_INFO("data version is smaller than 4200, no need check", K(meta_compat_version));
+    } else if (OB_FAIL(user_global_proxy.get_current_data_version(user_compat_version))) {
+      LOG_WARN("failed to get current data version", KR(ret), K(tenant_id_));
+    } else if (user_compat_version < DATA_VERSION_4_2_0_0) {
+      //if tenant version is less than 4200, no need check
+      //Ignore the situation where the accurate version is not obtained because the readable_scn is behind.
+      LOG_INFO("data version is smaller than 4200, no need check", K(user_compat_version));
     } else {
       bool is_finish = false;
       ObBalanceTaskHelper ls_balance_task;
