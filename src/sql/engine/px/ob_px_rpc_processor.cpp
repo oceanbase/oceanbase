@@ -73,11 +73,15 @@ int ObInitSqcP::process()
    */
   if (OB_NOT_NULL(sqc_handler)) {
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
-    SET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
-    unregister_interrupt_ = true;
+    if (OB_FAIL(SET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_))) {
+      LOG_WARN("sqc failed to SET_INTERRUPTABLE");
+    } else {
+      unregister_interrupt_ = true;
+    }
   }
 
-  if (OB_ISNULL(sqc_handler)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sqc_handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Sqc handler can't be nullptr", K(ret));
   } else if (OB_FAIL(sqc_handler->init_env())) {
@@ -408,15 +412,19 @@ int ObInitFastSqcP::process()
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     arg.sqc_.set_task_count(1);
     ObPxInterruptGuard px_int_guard(arg.sqc_.get_interrupt_id().px_interrupt_id_);
-    lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
-        lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
-    sqc_handler->set_tenant_id(session->get_effective_tenant_id());
-    LOG_TRACE("process dfo",
-              K(arg),
-              K(session->get_compatibility_mode()),
-              K(sqc_handler->get_reserved_px_thread_count()));
-    if (OB_FAIL(startup_normal_sqc(*sqc_handler))) {
-      LOG_WARN("fail to startup normal sqc", K(ret));
+    if (OB_FAIL(px_int_guard.get_interrupt_reg_ret())) {
+      LOG_WARN("fast sqc failed to SET_INTERRUPTABLE");
+    } else {
+      lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
+      lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+      sqc_handler->set_tenant_id(session->get_effective_tenant_id());
+      LOG_TRACE("process dfo",
+                K(arg),
+                K(session->get_compatibility_mode()),
+                K(sqc_handler->get_reserved_px_thread_count()));
+      if (OB_FAIL(startup_normal_sqc(*sqc_handler))) {
+        LOG_WARN("fail to startup normal sqc", K(ret));
+      }
     }
   }
 

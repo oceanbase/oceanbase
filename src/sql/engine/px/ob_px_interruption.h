@@ -55,8 +55,10 @@ class ObPxInterruptGuard
 public:
   ObPxInterruptGuard(const common::ObInterruptibleTaskID &interrupt_id_);
   ~ObPxInterruptGuard();
+  int get_interrupt_reg_ret() { return interrupt_reg_ret_; }
 private:
   common::ObInterruptibleTaskID interrupt_id_;
+  int interrupt_reg_ret_;
 };
 
 

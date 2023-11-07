@@ -1,2 +1,1 @@
-##ob_unittest(test_interrupt_system.cpp)
-
+ob_unittest(test_interrupt_system)
