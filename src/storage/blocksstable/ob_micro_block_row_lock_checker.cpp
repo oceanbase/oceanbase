@@ -233,7 +233,9 @@ int ObMicroBlockRowLockMultiChecker::inner_get_next_row(
     ObStoreRowLockState *&lock_state)
 {
   int ret = OB_SUCCESS;
-  if (OB_ITER_END == end_of_block() || rows_info_->is_row_skipped(rowkey_current_idx_ - 1)) {
+  if (rowkey_current_idx_ == rowkey_end_idx_) {
+    ret = OB_ITER_END;
+  } else if (OB_ITER_END == end_of_block() || rows_info_->is_row_skipped(rowkey_current_idx_ - 1)) {
     if (OB_FAIL(seek_forward())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to seek forward to next row", K(ret), K_(check_exist));
@@ -285,14 +287,14 @@ int ObMicroBlockRowLockMultiChecker::check_row(
         need_stop = true;
         LOG_WARN("Find lock conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked));
+                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
       } else if (lock_state.trans_version_ > snapshot_version_) {
         rows_info_->set_conflict_rowkey(rowkey_idx);
         rows_info_->set_error_code(OB_TRANSACTION_SET_VIOLATION);
         need_stop = true;
         LOG_WARN("Find tsv conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked));
+                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
       } else {
         rows_info_->set_row_lock_checked(rowkey_idx, check_exist_);
       }
@@ -307,7 +309,7 @@ int ObMicroBlockRowLockMultiChecker::check_row(
         need_stop = true;
         LOG_WARN("Find duplication in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked));
+                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
       } else {
         rows_info_->set_row_checked(rowkey_idx);
       }
@@ -326,7 +328,7 @@ void ObMicroBlockRowLockMultiChecker::check_row_in_major_sstable(bool &need_stop
     need_stop = true;
     LOG_WARN_RET(OB_SUCCESS, "Find duplication in major sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt),
-                 K_(current), K_(start), K_(last));
+                 K_(current), K_(start), K_(last), K_(macro_id));
   } else {
     rows_info_->set_row_checked(rowkey_idx);
   }
@@ -356,7 +358,10 @@ int ObMicroBlockRowLockMultiChecker::seek_forward()
       int64_t row_idx = 0;
       bool is_equal = false;
       if (begin_idx >= row_count) {
-        ret = OB_ITER_END;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected state in ObMicroBlockRowLockMultiChecker", K(begin_idx), K(row_count), K(rowkey),
+                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(current), K_(start), K_(last),
+                 K_(macro_id));
       } else if (OB_FAIL(micro_block_reader->find_bound(rowkey, true, begin_idx, row_idx, is_equal))) {
         LOG_WARN("Failed to find bound", K(ret), K(begin_idx), K(rowkey), K_(current), K_(start), K_(last),
                  K_(rowkey_current_idx), K(need_search_duplicate_row));
