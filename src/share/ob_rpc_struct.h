@@ -3310,12 +3310,12 @@ struct ObChangeLSAccessModeRes
   OB_UNIS_VERSION(1);
 public:
   ObChangeLSAccessModeRes(): tenant_id_(OB_INVALID_TENANT_ID),
-                              ls_id_(), ret_(common::OB_SUCCESS) {}
+                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0), change_access_mode_cost_(0) {}
   ~ObChangeLSAccessModeRes() {}
   bool is_valid() const;
-  int init(uint64_t tenant_id, const share::ObLSID& ls_id, int ret);
+  int init(uint64_t tenant_id, const share::ObLSID& ls_id, const int result, const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost);
   int assign(const ObChangeLSAccessModeRes &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ret));
+  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost), K_(change_access_mode_cost));
   int get_result() const
   {
     return ret_;
@@ -3328,12 +3328,16 @@ public:
   {
     return ls_id_;
   }
+  int64_t get_wait_sync_scn_cost() const { return wait_sync_scn_cost_; }
+  int64_t get_change_access_mode_cost() const { return change_access_mode_cost_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObChangeLSAccessModeRes);
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   int ret_;
+  int64_t wait_sync_scn_cost_;
+  int64_t change_access_mode_cost_;
 };
 
 struct ObNotifySwitchLeaderArg
