@@ -221,6 +221,8 @@ int ObTenantMajorFreeze::suspend_merge()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
+    // in case of observer start or restart, before the MajorMergeScheduler background thread
+    // successfully update freeze_service_epoch, the epoch in memory is equal to -1.
     if (-1 == expected_epoch) {
       ret = OB_EAGAIN;
       LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
@@ -244,6 +246,8 @@ int ObTenantMajorFreeze::resume_merge()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
+    // in case of observer start or restart, before the MajorMergeScheduler background thread
+    // successfully update freeze_service_epoch, the epoch in memory is equal to -1.
     if (-1 == expected_epoch) {
       ret = OB_EAGAIN;
       LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
@@ -268,6 +272,8 @@ int ObTenantMajorFreeze::clear_merge_error()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
+    // in case of observer start or restart, before the MajorMergeScheduler background thread
+    // successfully update freeze_service_epoch, the epoch in memory is equal to -1.
     if (-1 == expected_epoch) {
       ret = OB_EAGAIN;
       LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
