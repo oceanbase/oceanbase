@@ -382,7 +382,7 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
         *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_replayed_scn);
     int64_t rpc_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < ob_member_list.count(); ++i) {
-      const auto member = ob_member_list.at(i);
+      const common::ObAddr &member = ob_member_list.at(i);
 
       bool alive = true;
       int64_t trace_time = 0;
