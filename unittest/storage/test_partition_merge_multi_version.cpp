@@ -1900,6 +1900,181 @@ TEST_F(TestMultiVersionMerge, test_nop_pos_check_with_del_row)
   }
 }
 
+TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_magic_row)
+{
+  GCONF._enable_sparse_row = false;
+  ObMemtableCtxFactory mem_ctx;
+  ObSSTableMergeCtx merge_context;
+  const int64_t rowkey_cnt = TEST_ROWKEY_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  storage::ObTablesHandle tables_handle;
+  ObSSTable sstable1;
+  const char *macro_data[2];
+  macro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                  "1        var1   MIN   0       NOP      6       EXIST   U       trans_id_1\n";
+
+  macro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "1        var1   MAGIC MAGIC   NOP     NOP     EXIST   LM\n"
+                  "2        var2   -26   0       7       NOP     EXIST   CLF\n";
+
+  prepare_data_start(sstable1, macro_data, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data, 1);
+  prepare_one_macro(&macro_data[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable1);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable1));
+
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObSSTable sstable2;
+  const char *macro_data2[2];
+  macro_data2[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                   "1        var1  MIN     0       8       NOP    EXIST   LU                  trans_id_2\n";
+
+  macro_data2[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "3        var3  -46     0      18       NOP    EXIST   L\n";
+
+  prepare_data_start(sstable2, macro_data2, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data2, 1);
+  prepare_one_macro(&macro_data2[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable2);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable2));
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  int ret = OB_SUCCESS;
+  test_trans_part_ctx_.clear_all();
+  if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 29))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  } else if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 49))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  }
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(tables_handle, MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObExtStoreRange range;
+
+  const char *result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
+                        "1        var1  -49     0      8         6      EXIST   C\n"
+                        "1        var1  -29     0      NOP       6      EXIST   CL\n"
+                        "2        var2  -26     0      7         NOP    EXIST   CLF\n"
+                        "3        var3  -46     0      18        NOP    EXIST   CL\n";
+
+  // minor mrege
+
+  ObMacroBlockBuilder builder;
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergeUtil::merge_partition(&mem_ctx, merge_context, builder, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  res_iter.reset();
+  range.get_range().set_whole_range();
+  prepare_query_param(trans_version_range);
+  context_.query_flag_.is_sstable_cut_ = true;
+  ASSERT_EQ(OB_SUCCESS, range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  if (OB_NOT_NULL(merged_sstable)) {
+    context_.read_out_type_ = FLAT_ROW_STORE;
+    ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(param_, context_, range, scanner));
+    ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+    ASSERT_TRUE(res_iter.equals(*scanner, true));
+    scanner->~ObStoreRowIterator();
+  } else {
+    STORAGE_LOG(ERROR, "merged_sstable is null");
+  }
+}
+
+TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_magic_row2)
+{
+  GCONF._enable_sparse_row = false;
+  ObMemtableCtxFactory mem_ctx;
+  ObSSTableMergeCtx merge_context;
+  const int64_t rowkey_cnt = TEST_ROWKEY_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  storage::ObTablesHandle tables_handle;
+  ObSSTable sstable1;
+  const char *macro_data[2];
+  macro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                  "1        var1  MIN     0       8       NOP    EXIST    U                  trans_id_1\n"
+                  "1        var1  -17     0       9       5      EXIST    CF                 trans_id_0\n"
+                  "1        var1  -12     0       9       NOP    EXIST    L                  trans_id_0\n";
+
+  macro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "3        var3  -16     0      18       NOP    EXIST   L\n";
+
+  prepare_data_start(sstable1, macro_data, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data, 1);
+  prepare_one_macro(&macro_data[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable1);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable1));
+
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObSSTable sstable2;
+  const char *macro_data2[2];
+  macro_data2[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                   "1        var1   MIN   0       NOP      6       EXIST   U       trans_id_2\n";
+
+  macro_data2[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "1        var1   MAGIC MAGIC   NOP     NOP     EXIST   LM\n"
+                   "2        var2   -26   0       7       NOP     EXIST   CLF\n";
+
+  prepare_data_start(sstable2, macro_data2, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data2, 1);
+  prepare_one_macro(&macro_data2[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable2);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable2));
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  int ret = OB_SUCCESS;
+  test_trans_part_ctx_.clear_all();
+  if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 29))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  } else if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 49))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  }
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 18;
+  trans_version_range.base_version_ = 18;
+
+  prepare_merge_context(tables_handle, MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObExtStoreRange range;
+
+  const char *result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
+                        "1        var1  -49     0      8         6      EXIST   C\n"
+                        "1        var1  -29     0      8         5      EXIST   C\n"
+                        "1        var1  -17     0      9         5      EXIST   CL\n"
+                        "2        var2  -26     0      7         NOP    EXIST   CLF\n"
+                        "3        var3  -16     0      18        NOP    EXIST   CL\n";
+
+  // minor mrege
+
+  ObMacroBlockBuilder builder;
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergeUtil::merge_partition(&mem_ctx, merge_context, builder, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  res_iter.reset();
+  range.get_range().set_whole_range();
+  prepare_query_param(trans_version_range);
+  context_.query_flag_.is_sstable_cut_ = true;
+  ASSERT_EQ(OB_SUCCESS, range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  if (OB_NOT_NULL(merged_sstable)) {
+    context_.read_out_type_ = FLAT_ROW_STORE;
+    ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(param_, context_, range, scanner));
+    ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+    ASSERT_TRUE(res_iter.equals(*scanner, true));
+    scanner->~ObStoreRowIterator();
+  } else {
+    STORAGE_LOG(ERROR, "merged_sstable is null");
+  }
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 
