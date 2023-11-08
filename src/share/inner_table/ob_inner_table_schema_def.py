@@ -55466,7 +55466,6 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_kv_ttl_task_history'])
 
-# 101098 : placeholder for index of __all_ncomp_dll
 
 ################################################################################
 # Oracle Agent table Index
