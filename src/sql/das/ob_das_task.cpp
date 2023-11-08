@@ -82,6 +82,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   OB_UNIS_ENCODE(user_id_);
   OB_UNIS_ENCODE(session_id_);
   OB_UNIS_ENCODE(plan_id_);
+  OB_UNIS_ENCODE(plan_hash_);
   return ret;
 }
 
@@ -175,6 +176,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   OB_UNIS_DECODE(user_id_);
   OB_UNIS_DECODE(session_id_);
   OB_UNIS_DECODE(plan_id_);
+  OB_UNIS_DECODE(plan_hash_);
   return ret;
 }
 
@@ -213,6 +215,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   OB_UNIS_ADD_LEN(user_id_);
   OB_UNIS_ADD_LEN(session_id_);
   OB_UNIS_ADD_LEN(plan_id_);
+  OB_UNIS_ADD_LEN(plan_hash_);
   return len;
 }
 
