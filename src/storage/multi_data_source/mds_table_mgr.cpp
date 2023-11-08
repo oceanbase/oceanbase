@@ -163,24 +163,27 @@ int ObMdsTableMgr::first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn, ObIAr
   return ret;
 }
 
-int ObMdsTableMgr::second_scan_to_do_flush_(share::SCN do_flush_limit_scn)
+bool  ObMdsTableMgr::ObFlushOp::operator()(const common::ObTabletID &tablet_id, MdsTableBase *&mds_table) const
+{
+  int tmp_ret = OB_SUCCESS;
+  if (mds_table->is_switched_to_empty_shell()) {
+    MDS_LOG_RET(INFO, ret, "skip empty shell tablet mds_table flush", K(tablet_id), K(scan_mds_table_cnt_));
+  } else if (checkpoint::INVALID_TRACE_ID != trace_id_
+      && FALSE_IT(mds_table->set_trace_id(trace_id_))) {
+  } else if (OB_TMP_FAIL(mds_table->flush(do_flush_limit_scn_))) {
+    MDS_LOG_RET(WARN, ret, "flush mds table failed", KR(tmp_ret), K(tablet_id), K(scan_mds_table_cnt_));
+  } else {
+    ++scan_mds_table_cnt_;
+  }
+  return true;// true means iterating the next mds table
+}
+int ObMdsTableMgr::second_scan_to_do_flush_(share::SCN do_flush_limit_scn, int64_t trace_id)
 {
   MDS_TG(10_s);
   int ret = OB_SUCCESS;
   int64_t scan_mds_table_cnt = 0;
-  auto flush_op = [do_flush_limit_scn, &scan_mds_table_cnt](const common::ObTabletID &tablet_id,
-                                                            MdsTableBase *&mds_table) {
-    int tmp_ret = OB_SUCCESS;
-    if (mds_table->is_switched_to_empty_shell()) {
-      MDS_LOG_RET(INFO, ret, "skip empty shell tablet mds_table flush", K(tablet_id), K(scan_mds_table_cnt));
-    } else if (OB_TMP_FAIL(mds_table->flush(do_flush_limit_scn))) {
-      MDS_LOG_RET(WARN, ret, "flush mds table failed", KR(tmp_ret), K(tablet_id), K(scan_mds_table_cnt));
-    } else {
-      ++scan_mds_table_cnt;
-    }
-    return true;// true means iterating the next mds table
-  };
-  if (OB_FAIL(mds_table_map_.for_each(flush_op))) {
+  ObMdsTableMgr::ObFlushOp op = ObMdsTableMgr::ObFlushOp(trace_id, do_flush_limit_scn, scan_mds_table_cnt);
+  if (OB_FAIL(mds_table_map_.for_each(op))) {
     MDS_LOG(WARN, "fail to do map for_each", KR(ret), K(*this), K(scan_mds_table_cnt), K(do_flush_limit_scn));
   } else {
     MDS_LOG(INFO, "success to do second scan to do flush", KR(ret), K(*this), K(scan_mds_table_cnt), K(do_flush_limit_scn));
@@ -188,7 +191,7 @@ int ObMdsTableMgr::second_scan_to_do_flush_(share::SCN do_flush_limit_scn)
   return ret;
 }
 
-int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
+int ObMdsTableMgr::flush(SCN recycle_scn, const int64_t trace_id, bool need_freeze)
 {
   #define PRINT_WRAPPER KR(ret), K(ls_->get_ls_id()), K(recycle_scn), K(need_freeze), K(min_rec_scn),\
                         K(max_consequent_callbacked_scn), K(*this)
@@ -231,7 +234,7 @@ int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
       MDS_LOG_FREEZE(INFO, "freezing_scn decline to max_consequent_callbacked_scn");
     }
     if (min_rec_scn <= freezing_scn_) {
-      if (MDS_FAIL(second_scan_to_do_flush_(freezing_scn_))) {
+      if (MDS_FAIL(second_scan_to_do_flush_(freezing_scn_, trace_id))) {
         MDS_LOG_FREEZE(WARN, "fail to do flush");
       } else {
         MDS_LOG_FREEZE(INFO, "success to do flush");

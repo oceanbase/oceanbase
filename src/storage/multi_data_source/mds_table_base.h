@@ -21,6 +21,7 @@
 #include "storage/multi_data_source/mds_table_mgr.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
 #include "storage/multi_data_source/runtime_utility/list_helper.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -102,8 +103,12 @@ public:
   rec_scn_(share::SCN::max_scn()),
   total_node_cnt_(0),
   construct_sequence_(0),
-  lock_() { construct_sequence_ = ObMdsGlobalSequencer::generate_senquence(); }
-  virtual ~MdsTableBase() {}
+  lock_(),
+  trace_id_(checkpoint::INVALID_TRACE_ID) { construct_sequence_ = ObMdsGlobalSequencer::generate_senquence(); }
+  virtual ~MdsTableBase()
+  {
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_memtable, trace_id_, tablet_id_);
+  }
   int init(const ObTabletID tablet_id,
            const share::ObLSID ls_id,
            ObTabletPointer *pointer,
@@ -170,6 +175,8 @@ public:
   bool is_switched_to_empty_shell() const;
   bool is_removed_from_t3m() const;
   int64_t get_removed_from_t3m_ts() const;
+  int64_t get_trace_id() const { return trace_id_; }
+  void set_trace_id(int64_t trace_id) { trace_id_ = trace_id; }
   VIRTUAL_TO_STRING_KV(KP(this));
 protected:
   void inc_valid_node_cnt();
@@ -226,6 +233,9 @@ protected:
                                 tablet_id_);
       observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
     }
+
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, trace_id_, tablet_id_, rec_scn_, rec_scn_, flushing_scn_);
+
   }
   template <int N>
   void report_on_flush_event_(const char (&event_str)[N],
@@ -249,6 +259,8 @@ protected:
                                 tablet_id_);
       observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
     }
+
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, trace_id_, tablet_id_);
   }
   void report_recycle_event_(share::SCN recycle_scn,
                              const char *file = __builtin_FILE(),
@@ -304,6 +316,8 @@ protected:
   int64_t construct_sequence_;// To filter invalid dump DAG
   MdsTableMgrHandle mgr_handle_;
   mutable MdsLock lock_;
+  // a round checkpoint identifier for checkpoint diagnose
+  int64_t trace_id_;
 };
 
 bool check_node_scn_beflow_flush(const MdsNode &node, const share::SCN &flush_scn);

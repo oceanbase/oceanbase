@@ -24,6 +24,7 @@
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -513,11 +514,21 @@ int ObLSTxService::flush(SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool has_gen_diagnose_trace = false;
   RLockGuard guard(rwlock_);
+  int64_t trace_id = INVALID_TRACE_ID;
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     // only flush the common_checkpoint that whose clog need recycle
-    if (OB_NOT_NULL(common_checkpoints_[i]) && recycle_scn >= common_checkpoints_[i]->get_rec_scn()) {
-      if (OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(recycle_scn))) {
+    if (OB_NOT_NULL(common_checkpoints_[i])
+        && !common_checkpoints_[i]->is_flushing()
+        && recycle_scn >= common_checkpoints_[i]->get_rec_scn()) {
+      if (!has_gen_diagnose_trace) {
+        has_gen_diagnose_trace = true;
+        MTL(ObCheckpointDiagnoseMgr*)->acquire_trace_id(ls_id_, trace_id);
+      }
+      TRANS_LOG(INFO, "common_checkpoints flush", K(trace_id), K(ls_id_), K(has_gen_diagnose_trace), K(common_checkpoints_[i]));
+      //MTL(ObCheckpointDiagnoseMgr*)->update_start_time(trace_id, i);
+      if (OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(recycle_scn, trace_id))) {
         TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), K(common_checkpoints_[i]));
       }
     }
@@ -628,7 +639,7 @@ int ObLSTxService::traversal_flush()
   RLockGuard guard(rwlock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i]) &&
-        OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(SCN::max_scn(), false))) {
+        OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(SCN::max_scn(), checkpoint::INVALID_TRACE_ID, false))) {
       TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), KP(common_checkpoints_[i]));
     }
   }

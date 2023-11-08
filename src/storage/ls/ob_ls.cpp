@@ -1717,7 +1717,7 @@ int ObLS::replay_get_tablet(
   return ret;
 }
 
-int ObLS::logstream_freeze(const bool is_sync, const int64_t abs_timeout_ts)
+int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1738,7 +1738,7 @@ int ObLS::logstream_freeze(const bool is_sync, const int64_t abs_timeout_ts)
     } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
       ret = OB_NOT_RUNNING;
       LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.logstream_freeze(&result))) {
+    } else if (OB_FAIL(ls_freezer_.logstream_freeze(trace_id, &result))) {
       LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
     } else {
       // do nothing
@@ -1815,9 +1815,10 @@ int ObLS::force_tablet_freeze(const ObTabletID &tablet_id, const int64_t abs_tim
   return ret;
 }
 
-int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
-                              const bool is_sync,
-                              const int64_t abs_timeout_ts)
+int ObLS::batch_tablet_freeze(const int64_t trace_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const bool is_sync,
+    const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1838,7 +1839,7 @@ int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
     } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
       ret = OB_NOT_RUNNING;
       LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(tablet_ids, &result))) {
+    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(trace_id, tablet_ids, &result))) {
       LOG_WARN("batch tablet freeze failed", K(ret));
     } else {
       // do nothing

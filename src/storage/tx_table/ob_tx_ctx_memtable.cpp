@@ -15,6 +15,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -45,6 +46,7 @@ void ObTxCtxMemtable::reset()
   ObITable::reset();
   is_frozen_ = false;
   is_inited_ = false;
+  reset_trace_id();
 }
 
 int ObTxCtxMemtable::init(const ObITable::TableKey &table_key,
@@ -209,7 +211,7 @@ bool ObTxCtxMemtable::is_active_memtable() const
   return !ATOMIC_LOAD(&is_frozen_);
 }
 
-int ObTxCtxMemtable::flush(SCN recycle_scn, bool need_freeze)
+int ObTxCtxMemtable::flush(SCN recycle_scn, const int64_t trace_id, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(flush_lock_);
@@ -243,6 +245,7 @@ int ObTxCtxMemtable::flush(SCN recycle_scn, bool need_freeze)
           TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
       }
     } else {
+      REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, trace_id, get_tablet_id(), get_rec_scn(), get_start_scn(), get_end_scn());
       TRANS_LOG(INFO, "tx ctx memtable flush successfully", KPC(this), K(ls_id_));
     }
   }

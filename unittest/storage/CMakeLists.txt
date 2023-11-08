@@ -59,6 +59,7 @@ storage_unittest(test_mds_table_handle multi_data_source/test_mds_table_handle.c
 storage_unittest(test_fixed_size_block_allocator)
 storage_unittest(test_dag_warning_history)
 storage_unittest(test_storage_schema)
+storage_unittest(test_checkpoint_diagnose checkpoint/test_checkpoint_diagnose.cpp)
 #storage_unittest(test_storage_schema_mgr)
 #storage_unittest(test_create_tablet_memtable test_create_tablet_memtable.cpp)
 storage_unittest(test_tenant_meta_obj_pool test_tenant_meta_obj_pool.cpp)

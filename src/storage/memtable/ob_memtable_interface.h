@@ -23,6 +23,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -143,10 +144,14 @@ struct ObMergePriorityInfo
 class ObIMemtable: public storage::ObITable
 {
 public:
-  ObIMemtable() : ls_id_(), snapshot_version_(share::SCN::max_scn())
+  ObIMemtable()
+    : ls_id_(),
+      snapshot_version_(share::SCN::max_scn()),
+      trace_id_(checkpoint::INVALID_TRACE_ID)
   {}
   virtual ~ObIMemtable() {}
   virtual share::ObLSID &get_ls_id() { return ls_id_;}
+  virtual ObTabletID get_tablet_id() const = 0;
   virtual int get(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -219,9 +224,25 @@ public:
   {
     return false;
   }
+
+  virtual int64_t dec_ref()
+  {
+    int64_t ref_cnt = ObITable::dec_ref();
+    checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*);
+    if (0 == ref_cnt) {
+      REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, trace_id_, get_tablet_id())
+    }
+    return ref_cnt;
+  }
+
+  void set_trace_id(const int64_t trace_id) { ATOMIC_STORE(&trace_id_, trace_id); }
+  void reset_trace_id() { ATOMIC_STORE(&trace_id_, checkpoint::INVALID_TRACE_ID); }
+  int64_t get_trace_id() const { return ATOMIC_LOAD(&trace_id_); }
 protected:
   share::ObLSID ls_id_;
   share::SCN snapshot_version_;
+  // a round tablet freeze identifier for checkpoint diagnose
+  int64_t trace_id_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

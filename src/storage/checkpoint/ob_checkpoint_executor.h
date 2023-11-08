@@ -72,6 +72,9 @@ public:
 
   // calculate clog checkpoint and update in ls_meta
   int update_clog_checkpoint();
+  void add_server_event_history_for_update_clog_checkpoint(
+      const SCN &checkpoint_scn,
+      const char *service_type);
 
   // the service will flush and advance checkpoint
   // after flush, checkpoint_scn will be equal or greater than recycle_scn
@@ -91,6 +94,7 @@ public:
 
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
+  static const int64_t ADD_SERVER_HISTORY_INTERVAL = 10 * 60 * 1000 * 1000; // 10 min
 
   ObLS *ls_;
   logservice::ObILogHandler *loghandler_;
@@ -105,6 +109,9 @@ private:
   RWLock rwlock_for_update_clog_checkpoint_;
 
   bool update_checkpoint_enabled_;
+
+  int64_t update_clog_checkpoint_times_;
+  int64_t last_add_server_history_time_;
 };
 
 }  // namespace checkpoint

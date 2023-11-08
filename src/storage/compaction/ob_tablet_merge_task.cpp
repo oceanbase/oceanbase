@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "ob_tenant_compaction_progress.h"
 #include "ob_compaction_diagnose.h"
 #include "ob_compaction_suggestion.h"
@@ -42,6 +43,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "src/storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -1159,6 +1161,41 @@ int ObTabletMergeFinishTask::create_sstable_after_merge()
   return ret;
 }
 
+int ObTabletMergeFinishTask::report_checkpoint_diagnose_info(ObTabletMergeCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObITable *table = nullptr;
+  for (int64_t i = 0; i < ctx.tables_handle_.get_count() && OB_SUCC(ret); i++) {
+    if (OB_ISNULL(table = ctx.tables_handle_.get_table(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(ctx.tables_handle_), KP(table));
+    } else if (OB_UNLIKELY(!table->is_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is not memtable", K(ret), K(ctx.tables_handle_), KPC(table));
+    } else if (OB_UNLIKELY(!table->is_frozen_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is not frozen memtable", K(ret), K(ctx.tables_handle_), KPC(table));
+    } else {
+      const ObSSTableMergeInfo &sstable_merge_info = ctx.get_merge_info().get_sstable_merge_info();
+      if (table->is_data_memtable()) {
+        ObMemtable *memtable = nullptr;
+        memtable = static_cast<ObMemtable*>(table);
+        memtable->report_checkpoint_diagnose_info(ObMemtable::UpdateMergeInfoForMemtable(
+              sstable_merge_info.merge_start_time_, sstable_merge_info.merge_finish_time_,
+              sstable_merge_info.occupy_size_, sstable_merge_info.concurrent_cnt_));
+      } else {
+        ObIMemtable *memtable = nullptr;
+        memtable = static_cast<ObIMemtable*>(table);
+        if (checkpoint::INVALID_TRACE_ID != memtable->get_trace_id()) {
+          checkpoint::ObCheckpointDiagnoseParam param(memtable->get_trace_id(), memtable->get_tablet_id(), memtable);
+          MTL(checkpoint::ObCheckpointDiagnoseMgr*)->update_merge_info_for_checkpoint_unit(param);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletMergeFinishTask::process()
 {
   int ret = OB_SUCCESS;
@@ -1220,10 +1257,21 @@ int ObTabletMergeFinishTask::process()
     } else {
       ctx->time_guard_.click(ObCompactionTimeGuard::DAG_FINISH);
       (void)ctx->collect_running_info();
+      // Add merge event for tenant freezer diagnose
+      MTL(ObTenantFreezer *)->add_merge_event(
+        ctx->param_.merge_type_,
+        ctx->time_guard_.get_total_time());
       // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
       FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx->get_merge_info(),
           K(ctx->merged_sstable_), "compat_mode", merge_dag_->get_compat_mode(), K(ctx->time_guard_));
     }
+  }
+
+
+  if (OB_FAIL(ret)) {
+  } else if (is_mini_merge(ctx->param_.merge_type_)
+      && OB_TMP_FAIL(report_checkpoint_diagnose_info(*ctx))) {
+    LOG_WARN("failed to report_checkpoint_diagnose_info", K(tmp_ret), KPC(ctx));
   }
 
   return ret;

@@ -182,7 +182,7 @@ void ObLSBeforeRestartTest::minor_freeze_tx_ctx_table()
         = dynamic_cast<ObTxCtxMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
             ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
             ->common_checkpoints_[ObCommonCheckpointType::TX_CTX_MEMTABLE_TYPE]);
-      ASSERT_EQ(OB_SUCCESS, tx_ctx_memtable->flush(share::SCN::max_scn()));
+      ASSERT_EQ(OB_SUCCESS, tx_ctx_memtable->flush(share::SCN::max_scn(), 0));
       int retry_time = 0;
       while (tx_ctx_memtable->is_frozen_memtable()) {
         usleep(1000 * 1000);

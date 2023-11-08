@@ -947,6 +947,10 @@ public:
   static int all_virtual_import_table_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_import_table_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_data_activity_metrics_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_checkpoint_diagnose_memtable_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_checkpoint_diagnose_checkpoint_unit_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_checkpoint_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -3369,6 +3373,10 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_import_table_job_history_schema,
   ObInnerTableSchema::all_virtual_import_table_task_schema,
   ObInnerTableSchema::all_virtual_import_table_task_history_schema,
+  ObInnerTableSchema::all_virtual_data_activity_metrics_schema,
+  ObInnerTableSchema::all_virtual_checkpoint_diagnose_memtable_info_schema,
+  ObInnerTableSchema::all_virtual_checkpoint_diagnose_checkpoint_unit_info_schema,
+  ObInnerTableSchema::all_virtual_checkpoint_diagnose_info_schema,
   ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
   ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema,
@@ -5047,6 +5055,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY_TID,
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_TID,
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -7356,6 +7367,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY_TNAME,
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_TNAME,
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_TNAME,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TNAME,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TNAME,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -9081,6 +9095,9 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_TID,
   OB_ALL_VIRTUAL_PX_P2P_DATAHUB_TID,
   OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -11530,11 +11547,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 257;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 740;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 744;
 const int64_t OB_SYS_VIEW_COUNT = 786;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1788;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1792;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1791;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1795;
 
 } // end namespace share
 } // end namespace oceanbase

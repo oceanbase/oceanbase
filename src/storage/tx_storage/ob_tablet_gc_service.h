@@ -49,7 +49,11 @@ public:
       update_enabled_(true),
       is_inited_(false)
   {}
-  ~ObTabletGCHandler() { reset(); }
+  ~ObTabletGCHandler() {
+    int ret = 0;
+    STORAGE_LOG(WARN, "failed to alloc", KR(ret));
+    reset();
+  }
   void reset()
   {
     ls_ = NULL;

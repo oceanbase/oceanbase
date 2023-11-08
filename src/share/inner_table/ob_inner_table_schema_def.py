@@ -13026,14 +13026,132 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True))
 # 12428: __all_virtual_import_stmt_exec_history
 
-# 12429: __all_virtual_data_activity_metrics
+def_table_schema(
+  owner = 'handora.qc',
+  table_name = '__all_virtual_data_activity_metrics',
+  table_id = '12429',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('activity_timestamp', 'timestamp'),
+  ],
+
+  normal_columns = [
+  ('modification_size', 'int'),
+  ('freeze_times', 'int'),
+  ('mini_merge_cost', 'int'),
+  ('mini_merge_times', 'int'),
+  ('minor_merge_cost', 'int'),
+  ('minor_merge_times', 'int'),
+  ('major_merge_cost', 'int'),
+  ('major_merge_times', 'int'),
+  ]
+)
 
 # 12430: __all_virtual_column_group_mapping
 # 12431: __all_virtual_column_group_history
 # 12432: __all_virtual_column_gorup_mapping_history
 # 12433: __all_virtual_storage_ha_error_diagnose
 # 12434: __all_virtual_storage_ha_perf_diagnose
+# 12435: __all_virtual_clone_job
+# 12436: __all_virtual_clone_job_history
+def_table_schema(
+  owner = 'zk250686',
+  table_name    = '__all_virtual_checkpoint_diagnose_memtable_info',
+  table_id      = '12437',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('trace_id', 'int'),
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('checkpoint_thread_name', 'varchar:OB_THREAD_NAME_BUF_LEN'),
+    ('checkpoint_start_time', 'timestamp'),
+    ('tablet_id', 'int'),
+    ('ptr', 'varchar:128'),
+    ('start_scn', 'uint'),
+    ('end_scn', 'uint'),
+    ('rec_scn', 'uint'),
+    ('create_flush_dag_time', 'timestamp'),
+    ('merge_finish_time', 'timestamp'),
+    ('release_time', 'timestamp'),
+    ('frozen_finish_time', 'timestamp'),
+    ('merge_start_time', 'timestamp'),
+    ('start_gc_time', 'timestamp'),
+    ('memtable_occupy_size', 'int'),
+    ('occupy_size', 'int'),
+    ('concurrent_cnt', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name    = '__all_virtual_checkpoint_diagnose_checkpoint_unit_info',
+  table_id      = '12438',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('trace_id', 'int'),
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('checkpoint_thread_name', 'varchar:OB_THREAD_NAME_BUF_LEN'),
+    ('checkpoint_start_time', 'timestamp'),
+    ('tablet_id', 'int'),
+    ('ptr', 'varchar:128'),
+    ('start_scn', 'uint'),
+    ('end_scn', 'uint'),
+    ('rec_scn', 'uint'),
+    ('create_flush_dag_time', 'timestamp'),
+    ('merge_finish_time', 'timestamp'),
+    ('start_gc_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name    = '__all_virtual_checkpoint_diagnose_info',
+  table_id      = '12439',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('trace_id', 'int'),
+    ('freeze_clock', 'uint32'),
+    ('checkpoint_thread_name', 'varchar:OB_THREAD_NAME_BUF_LEN'),
+    ('checkpoint_start_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+# 12440: __all_virtual_wr_system_event
+# 12441: __all_virtual_wr_event_name
+# 12442: __all_tenant_scheduler_running_job
 #
+
 # 余留位置
 #
 

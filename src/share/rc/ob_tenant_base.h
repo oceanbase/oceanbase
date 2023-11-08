@@ -80,6 +80,7 @@ class ObTenantMdsService;
   namespace checkpoint {
     class ObCheckPointService;
     class ObTabletGCService;
+    class ObCheckpointDiagnoseMgr;
   }
   class ObLobManager;
   class ObTransferService;
@@ -316,7 +317,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
-      table::ObTableApiSessPoolMgr*                \
+      table::ObTableApiSessPoolMgr*,                \
+      storage::checkpoint::ObCheckpointDiagnoseMgr* \
   )
 
 
