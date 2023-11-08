@@ -1,7 +1,10 @@
 FROM openanolis/anolisos
 
-# docker build --build-arg VERSION={VERSION} .
+# docker build --build-arg --build-arg LOCAL_RPM="oceanbase-ce-4.3.0.0-1.alios7.aarch64.rpm" --build-arg LOCAL_LIB_RPM="oceanbase-ce-libs-4.3.0.0-1.alios7.aarch64.rpm" -t observer .
+
 ARG VERSION
+ARG LOCAL_RPM
+ARG LOCAL_LIB_RPM
 
 RUN yum install -y yum-utils && \
     yum-config-manager --add-repo https://mirrors.aliyun.com/oceanbase/OceanBase.repo && \
@@ -12,12 +15,18 @@ RUN yum install -y yum-utils && \
 
 RUN mkdir -p /root/pkg && \
     cd /root/pkg && \
-    yum install -y --downloadonly --downloaddir=. oceanbase-ce-${VERSION}.el7 oceanbase-ce-libs-${VERSION}.el7 obagent && \
-    rm -rf /usr/obd/mirror/remote/* && \
+    if [ "${LOCAL_RPM}" != "" ]; then \
+    yum install -y --downloadonly --downloaddir=. obagent; \
+    else \
+    yum install -y --downloadonly --downloaddir=. oceanbase-ce-${VERSION}.el7 oceanbase-ce-libs-${VERSION}.el7 obagent; \
+    fi && \
     yum clean all
 
+COPY ${LOCAL_RPM} /root/pkg
+COPY ${LOCAL_LIB_RPM} /root/pkg
 COPY boot /root/boot/
 ENV PATH /root/boot:$PATH
+ENV LD_LIBRARY_PATH /root/ob/lib:$LD_LIBRARY_PATH
 
 WORKDIR /root
 CMD _boot
