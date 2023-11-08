@@ -55580,9 +55580,8 @@ def_sys_index_table(
 # 101095 : placeholder for index of __all_mview_refresh_run_stats
 # 101096 : placeholder for index of __all_mview_refresh_stats
 # 101097 : placeholder for index of __all_mview_refresh_stats
-# 101098 : placeholder for index of __all_ncomp_dll
+# 101098 : placeholder for index of __all_transfer_partition_task
 # 101099 : placeholder for index of __all_client_to_server_session_info
-# 101100: placeholder for index of __all_transfer_partition_task
 
 ################################################################################
 # Oracle Agent table Index
