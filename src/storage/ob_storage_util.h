@@ -201,7 +201,11 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
 {
   common::ObDatumCmpFuncType cmp_func = nullptr;
   bool is_oracle_mode = lib::is_oracle_mode();
-  if (col_obj_type.get_type_class() != param_obj_type.get_type_class()) {
+  // if compare lob with non-lob, should use get_nullsafe_cmp_func to get cmp_func
+  // especially tinytext, beacause tinytext does not have lob header, but it's type class is TextTC.
+  bool not_both_lob_storage = col_obj_type.is_lob_storage() ^ param_obj_type.is_lob_storage();
+
+  if (col_obj_type.get_type_class() != param_obj_type.get_type_class() || not_both_lob_storage) {
     cmp_func = ObDatumFuncs::get_nullsafe_cmp_func(
         col_obj_type.get_type(),
         param_obj_type.get_type(),
