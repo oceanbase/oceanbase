@@ -3209,6 +3209,18 @@ inline void obj_batch_checksum<ObDecimalIntType>(const ObObj &obj, ObBatchChecks
   bc.fill(obj.get_decimal_int(), val_len);
 }
 
+template<typename T, typename P>
+struct ObjHashCalculator<ObDecimalIntType, T, P>
+{
+  static int calc_hash_value(const P &params, const uint64_t hash, uint64_t &result)
+  {
+    const ObDecimalInt *decint = params.get_decimal_int();
+    int32_t int_bytes = params.get_int_bytes();
+    result = T::hash(decint, int_bytes, hash);
+    return OB_SUCCESS;
+  }
+};
+
 template <>
 inline int obj_murmurhash<ObDecimalIntType>(const ObObj &obj, const uint64_t hash,
                                                  uint64_t &result)
@@ -3235,17 +3247,6 @@ inline uint64_t obj_crc64_v3<ObDecimalIntType>(const ObObj &obj, const uint64_t 
   return result;
 }
 
-template<typename T, typename P>
-struct ObjHashCalculator<ObDecimalIntType, T, P>
-{
-  static int calc_hash_value(const P &params, const uint64_t hash, uint64_t &result)
-  {
-    const ObDecimalInt *decint = params.get_decimal_int();
-    int32_t int_bytes = params.get_int_bytes();
-    result = T::hash(decint, int_bytes, hash);
-    return OB_SUCCESS;
-  }
-};
 // ObUserDefinedSQLType = 49
 // An UDT is stored as it's leaf type columns, the root type column will not appear in storage now,
 // and will be atmost a few bytes in the feature.
