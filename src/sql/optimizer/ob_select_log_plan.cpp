@@ -7346,9 +7346,11 @@ int ObSelectLogPlan::if_column_store_plan_need_late_materialization(ObLogSort *c
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> temp_exprs;
+  ObSEArray<ObRawExpr*, 4> temp_col_exprs;
   ObSEArray<ObRawExpr*, 4> table_keys;
   const ObDMLStmt *stmt = NULL;
   used_column_ids.reuse();
+  need = true;
   // check whether index key cover filter exprs, sort exprs and part exprs
   if (OB_ISNULL(table_scan) || OB_ISNULL(child_sort) ||
       OB_ISNULL(stmt=get_stmt())) {
@@ -7370,6 +7372,21 @@ int ObSelectLogPlan::if_column_store_plan_need_late_materialization(ObLogSort *c
   } else if (NULL != table_scan->get_pre_query_range() &&
               OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(temp_exprs, temp_col_exprs))) {
+    LOG_WARN("extract column exprs failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < temp_col_exprs.count(); ++i) {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(temp_col_exprs.at(i));
+      if (OB_ISNULL(col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (col_expr->is_virtual_generated_column()
+                 && OB_FAIL(temp_exprs.push_back(col_expr->get_dependant_expr()))) {
+        LOG_WARN("push back depend expr failed", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret) || !need) {
   } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(temp_exprs, used_column_ids))) {
     LOG_WARN("failed to extract column ids", K(ret));
   } else {
