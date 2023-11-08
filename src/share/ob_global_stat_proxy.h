@@ -82,6 +82,9 @@ public:
 
   virtual int get_snapshot_info(int64_t &snapshot_gc_scn,
                                 int64_t &gc_schema_version);
+  static int select_snapshot_gc_scn_for_update_nowait(common::ObISQLClient &sql_client,
+                                               const uint64_t tenant_id,
+                                               SCN &snapshot_gc_scn);
   static int select_snapshot_gc_scn_for_update(common::ObISQLClient &sql_client,
                                                const uint64_t tenant_id,
                                                SCN &snapshot_gc_scn);
@@ -107,7 +110,7 @@ private:
   static int inner_get_snapshot_gc_scn_(common::ObISQLClient &sql_client,
                                         const uint64_t tenant_id,
                                         SCN &snapshot_gc_scn,
-                                        const bool is_for_update);
+                                        const char *for_update_str);
   int update(const ObGlobalStatItem::ItemList &list, const bool is_incremental = false);
   int get(ObGlobalStatItem::ItemList &list, bool for_update = false);
 
