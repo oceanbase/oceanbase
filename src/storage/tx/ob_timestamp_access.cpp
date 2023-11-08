@@ -35,12 +35,11 @@ int ObTimestampAccess::handle_request(const ObGtsRequest &request, obrpc::ObGtsR
   return ret;
 }
 
-int ObTimestampAccess::get_number(const int64_t base_id, int64_t &gts)
+int ObTimestampAccess::get_number(int64_t &gts)
 {
   int ret = OB_SUCCESS;
   if (GTS_LEADER == service_type_) {
-    int64_t unused_id = 0;
-    ret = MTL(ObTimestampService *)->get_number(1, base_id, gts, unused_id);
+    ret = MTL(ObTimestampService *)->get_timestamp(gts);
   } else if (STS_LEADER == service_type_) {
     ret = MTL(ObStandbyTimestampService *)->get_number(gts);
   } else {
