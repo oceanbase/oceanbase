@@ -485,7 +485,8 @@ public:
       next_column_name_(),
       prev_column_name_(),
       is_first_(false),
-      column_group_name_()
+      column_group_name_(),
+      is_set_comment_(false)
   {}
 
   explicit AlterColumnSchema(common::ObIAllocator *allocator)
@@ -503,7 +504,8 @@ public:
       next_column_name_(),
       prev_column_name_(),
       is_first_(false),
-      column_group_name_()
+      column_group_name_(),
+      is_set_comment_(false)
   {}
   AlterColumnSchema &operator=(const AlterColumnSchema &alter_column_schema);
   int assign(const ObColumnSchemaV2 &other);
@@ -535,7 +537,7 @@ public:
   common::ObString prev_column_name_;
   bool is_first_;
   common::ObString column_group_name_;
-
+  bool is_set_comment_;
   DECLARE_VIRTUAL_TO_STRING;
 };
 
