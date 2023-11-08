@@ -352,6 +352,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
   int ret = OB_SUCCESS;
   uint64_t delta_value = 0;
   uint64_t param_delta_value = 0;
+  common::ObObjMeta filter_val_meta;
   if (OB_UNLIKELY(pd_filter_info.count_ != result_bitmap.size()
                           || NULL == col_data
                           || filter.get_datums().count() != 1)) {
@@ -363,6 +364,8 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
     // Can't compare by uint directly, support this later with float point number compare later
     ret = OB_NOT_SUPPORTED;
     LOG_DEBUG("Double/Float with INT_DIFF encoding, back to retro path", K(col_ctx));
+  } else if (OB_FAIL(filter.get_filter_node().get_filter_val_meta(filter_val_meta))) {
+    LOG_WARN("Fail to find datum meta", K(ret), K(filter));
   } else {
     const ObDatum &ref_datum = filter.get_datums().at(0);
     ObStorageDatum base_datum;
@@ -401,17 +404,17 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
       int64_t data_offset = 0;
       bool null_value_contained = result_bitmap.popcnt() > 0;
       bool exist_parent_filter = nullptr != parent;
-      const ObObjType &obj_type = col_ctx.obj_meta_.get_type();
+      const ObObjType &ref_obj_type = filter_val_meta.get_type();
       if (col_ctx.has_extend_value()) {
         data_offset = col_ctx.micro_block_header_->row_count_
             * col_ctx.micro_block_header_->extend_value_bit_;
       }
       if (ObIntSC == column_sc) {
-        if (OB_FAIL(get_delta<int64_t>(obj_type, ref_datum, param_delta_value))) {
+        if (OB_FAIL(get_delta<int64_t>(ref_obj_type, ref_datum, param_delta_value))) {
           LOG_WARN("Failed to get delta value", K(ret), K(ref_datum));
         }
       } else if (ObUIntSC == column_sc) {
-        if (OB_FAIL(get_delta<uint64_t>(obj_type, ref_datum, param_delta_value))) {
+        if (OB_FAIL(get_delta<uint64_t>(ref_obj_type, ref_datum, param_delta_value))) {
           LOG_WARN("Failed to get delta value", K(ret), K(ref_datum));
         }
       } else {
