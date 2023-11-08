@@ -358,7 +358,7 @@ struct ObDatumRow
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDatumRow();
+  ObDatumRow(const uint64_t tenant_id = MTL_ID());
   ~ObDatumRow();
   int init(common::ObIAllocator &allocator, const int64_t capacity, char *trans_info_ptr = nullptr);
   int init(const int64_t capacity);

@@ -343,7 +343,7 @@ int MutatorRow::parse_columns_(
 {
   int ret = OB_SUCCESS;
   blocksstable::ObRowReader row_reader;
-  blocksstable::ObDatumRow datum_row;
+  blocksstable::ObDatumRow datum_row(tenant_id);
   // warpper cols for udt column values
   ObCDCUdtValueMap udt_value_map(allocator_, tb_schema_info, cols);
 
@@ -752,7 +752,7 @@ int MutatorRow::parse_columns_(
 {
   int ret = OB_SUCCESS;
   blocksstable::ObRowReader row_reader;
-  blocksstable::ObDatumRow datum_row;
+  blocksstable::ObDatumRow datum_row(OB_SERVER_TENANT_ID);
   const ObArray<share::schema::ObColDesc> &col_des_array = inner_table_schema.get_cols_des_array();
   const share::schema::ObTableSchema &table_schema = inner_table_schema.get_table_schema();
 

@@ -201,7 +201,7 @@ int ObTenantCompactionMemPool::mtl_init(ObTenantCompactionMemPool* &mem_pool)
   } else if (OB_ISNULL(malloc_allocator = ObMallocAllocator::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null malloc allocator, cannnot reserve memory for mini compaction", K(ret), K(tenant_id));
-  } else if (OB_FAIL(malloc_allocator->set_tenant_ctx_idle(tenant_id, ObCtxIds::MERGE_RESERVE_CTX_ID, RESERVE_MEM_SIZE, true/*reserve*/))) {
+  } else if (OB_FAIL(malloc_allocator->set_tenant_ctx_idle(tenant_id, ObCtxIds::MERGE_RESERVE_CTX_ID, RESERVE_MEM_SIZE, !MTL_IS_MINI_MODE()/*reserve*/))) {
     LOG_WARN("failed to reserve memory for mini compaction", K(ret));
   } else {
     mem_pool->reserve_mode_signal_ = 1;
