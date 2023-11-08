@@ -620,6 +620,7 @@ int ObTransformQueryPushDown::check_select_item_subquery(ObSelectStmt &select_st
   int ret = OB_SUCCESS;
   can_be = true;
   ObSEArray<ObRawExpr*, 4> column_exprs_from_subquery;
+  ObSEArray<ObQueryRefRawExpr*, 4> query_ref_exprs;
   ObRawExpr *expr = NULL;
   TableItem *table = NULL;
   ObSqlBitSet<> table_set;
@@ -628,12 +629,25 @@ int ObTransformQueryPushDown::check_select_item_subquery(ObSelectStmt &select_st
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect select stmt", K(ret), K(select_stmt.get_from_item_size()), K(table));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < view.get_select_item_size(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && can_be && i < view.get_select_item_size(); ++i) {
     if (OB_ISNULL(expr = view.get_select_item(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else if (!expr->has_flag(CNT_SUB_QUERY)) {
       /* do nothing */
+    } else if (expr->has_flag(IS_WITH_ANY) || expr->has_flag(IS_WITH_ALL) ||
+               expr->get_expr_type() == T_OP_EXISTS || expr->get_expr_type() == T_OP_NOT_EXISTS) {
+      /*
+      * Disable query pushdown when a select item of view is `any/all/exists subquery` form.
+      * As for the query below, after pushing down, v.c2 will be used for both projection and filtering,
+      * which may result in an incorrect stmt status in the subsequent rewrite loop.
+      * e.g. select * from
+      * (select t1.c1, (exists(select 1 from t2 where (t1.c1 = t2.c1))) as c2 from t1) v
+      * where v.c2 is true;
+      */
+      can_be = false;
+    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(expr, query_ref_exprs, true))) {
+      LOG_WARN("failed to extract query ref exprs", K(ret));
     } else if (OB_ISNULL(expr = select_stmt.get_column_expr_by_id(table->table_id_,
                                                                   i + OB_APP_MIN_COLUMN_ID))) {
       /* do nothing */
@@ -641,7 +655,24 @@ int ObTransformQueryPushDown::check_select_item_subquery(ObSelectStmt &select_st
       LOG_WARN("failed to push back column expr", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
+
+  // check query ref exprs of view's select items
+  if (OB_FAIL(ret) || !can_be) {
+    /* do nothing */
+  } else if (query_ref_exprs.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < query_ref_exprs.count(); i++) {
+      ObQueryRefRawExpr* query_ref = NULL;
+      if (OB_ISNULL(query_ref = query_ref_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null pointer", K(ret));
+      } else if (query_ref->is_set() || query_ref->get_output_column() != 1) {
+        can_be = false;
+      }
+    }
+  }
+
+  // check query ref exprs of upper select stmt
+  if (OB_FAIL(ret) || !can_be) {
   } else if (column_exprs_from_subquery.empty()) {
     /* do nothing */
   } else if (OB_FAIL(select_stmt.get_table_rel_ids(*table, table_set))) {
