@@ -3415,13 +3415,27 @@ static struct VarsInit{
     ObSysVars[241].alias_ = "OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION" ;
     }();
 
+    [&] (){
+      ObSysVars[242].default_value_ = "en_US" ;
+      ObSysVars[242].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
+      ObSysVars[242].name_ = "lc_time_names" ;
+      ObSysVars[242].data_type_ = ObVarcharType ;
+      ObSysVars[242].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[242].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
+      ObSysVars[242].id_ = SYS_VAR_LC_TIME_NAMES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 242 ;
+      ObSysVars[242].base_value_ = "en_US" ;
+    ObSysVars[242].alias_ = "OB_SV_LC_TIME_NAMES" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 242;
+static int64_t var_amount = 243;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

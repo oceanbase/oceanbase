@@ -2393,6 +2393,18 @@ int ObSysVarOnCheckFuncs::check_session_readonly(ObExecContext &ctx,
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_locale_type_is_valid(
+    sql::ObExecContext &ctx,
+    const ObSetVar &set_var,
+    const ObBasicSysVar &sys_var,
+    const common::ObObj &in_val,
+    common::ObObj &out_val)
+{
+  int ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "lc_time_names");
+  return ret;
+}
+
 int ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings(sql::ObExecContext &ctx,
                                                  const ObSetVar &set_var,
                                                  const ObBasicSysVar &sys_var,
