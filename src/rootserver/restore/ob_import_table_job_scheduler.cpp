@@ -706,12 +706,15 @@ int ObImportTableTaskScheduler::construct_import_table_arg_(obrpc::ObRecoverRest
       LOG_WARN("fail to get tenant system variable", K(ret));
     } else if (OB_ISNULL(data_format_schema) || OB_ISNULL(nls_timestamp_format) || OB_ISNULL(nls_timestamp_tz_format)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("var schema must not be null", K(ret));
+      LOG_WARN("var schema must not be null", K(ret), KP(data_format_schema), KP(nls_timestamp_format), KP(nls_timestamp_tz_format));
+    } else if (OB_FAIL(ob_write_string(arg.allocator_, data_format_schema->get_value(), arg.nls_formats_[ObNLSFormatEnum::NLS_DATE]))) {
+      LOG_WARN("deep copy failed", K(ret), K(data_format_schema->get_value()));
+    } else if (OB_FAIL(ob_write_string(arg.allocator_, nls_timestamp_format->get_value(), arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP]))) {
+      LOG_WARN("deep copy failed", K(ret), K(nls_timestamp_format->get_value()));
+    } else if (OB_FAIL(ob_write_string(arg.allocator_, nls_timestamp_tz_format->get_value(), arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ]))) {
+      LOG_WARN("deep copy failed", K(ret), K(nls_timestamp_tz_format->get_value()));
     } else {
       arg.tz_info_ =  arg.tz_info_wrap_.get_tz_info_offset();
-      arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = data_format_schema->get_value();
-      arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format->get_value();
-      arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format->get_value();
     }
   }
   return ret;
