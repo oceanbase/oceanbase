@@ -1190,6 +1190,9 @@ int ObMultipleMerge::refresh_table_on_demand()
     STORAGE_LOG(WARN, "ObMultipleMerge has not been inited", K(ret));
   } else if (ScanState::NONE == scan_state_) {
     STORAGE_LOG(DEBUG, "skip refresh table");
+  } else if (get_table_param_->sample_info_.is_block_sample()) {
+    // TODO : @yuanzhe refactor block sample for table refresh
+    STORAGE_LOG(DEBUG, "skip refresh table for block sample");
   } else if (OB_FAIL(check_need_refresh_table(need_refresh))) {
     STORAGE_LOG(WARN, "fail to check need refresh table", K(ret));
   } else if (need_refresh) {
