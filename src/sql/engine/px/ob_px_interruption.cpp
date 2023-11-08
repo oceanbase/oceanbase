@@ -25,12 +25,14 @@ OB_SERIALIZE_MEMBER(ObPxInterruptID, query_interrupt_id_, px_interrupt_id_);
 ObPxInterruptGuard::ObPxInterruptGuard(const ObInterruptibleTaskID &interrupt_id)
 {
   interrupt_id_ = interrupt_id;
-  SET_INTERRUPTABLE(interrupt_id_);
+  interrupt_reg_ret_ = SET_INTERRUPTABLE(interrupt_id_);
 }
 
 ObPxInterruptGuard::~ObPxInterruptGuard()
 {
-  UNSET_INTERRUPTABLE(interrupt_id_);
+  if (OB_SUCCESS == interrupt_reg_ret_) {
+    UNSET_INTERRUPTABLE(interrupt_id_);
+  }
 }
 
 int ObInterruptUtil::broadcast_px(ObIArray<ObDfo *> &dfos, int int_code)
