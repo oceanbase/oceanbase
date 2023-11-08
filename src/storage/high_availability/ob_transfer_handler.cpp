@@ -1771,9 +1771,8 @@ bool ObTransferHandler::can_retry_(
     bool_ret = true;
     retry_count_++;
   } else if (ObTransferStatus::START == task_info.status_) {
-    int64_t tmp_retry_count = retry_count_;
-    if (ObTransferUtils::is_need_retry_error(result, tmp_retry_count) && retry_count_ < max_transfer_start_retry_count) {
-      retry_count_ = tmp_retry_count;
+    if (ObTransferUtils::is_need_retry_error(result) && retry_count_ < max_transfer_start_retry_count) {
+      retry_count_++;
       bool_ret = true;
     } else {
       bool_ret = false;
@@ -2227,6 +2226,11 @@ int ObTransferHandler::check_config_version_(
   return ret;
 }
 
+// Only src ls could work when task status is START or ABORT.
+// Conversely dest ls work when task status is DOING.
+// The benefit of above is that the src ls leader can make controlling medium compaction a local execution,
+// which is more controllable.
+// The ABORT status will change to FAILED status in src ls work time.
 int ObTransferHandler::check_task_exist_(
     const ObTransferStatus &status, const bool find_by_src_ls, bool &task_exist) const
 {
