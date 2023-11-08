@@ -204,7 +204,7 @@ int ObSnapshotTableProxy::batch_add_snapshot(
     info.snapshot_scn_ = snapshot_scn;
     info.schema_version_ = schema_version;
     info.comment_ = comment;
-    if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(trans, tenant_id, snapshot_gc_scn))) {
+    if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update_nowait(trans, tenant_id, snapshot_gc_scn))) {
       LOG_WARN("fail to select gc timstamp for update", KR(ret), K(info), K(tenant_id));
     }
     while (OB_SUCC(ret) && report_idx < tablet_id_array.count()) {

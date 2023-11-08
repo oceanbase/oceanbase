@@ -3395,7 +3395,7 @@ int ObDDLTaskRecordOperator::select_for_update(
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT status, execution_id FROM %s WHERE task_id = %lu FOR UPDATE",
+      if (OB_FAIL(sql_string.assign_fmt("SELECT status, execution_id FROM %s WHERE task_id = %lu FOR UPDATE NOWAIT",
           OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
         LOG_WARN("assign sql string failed", K(ret), K(task_id), K(tenant_id));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
