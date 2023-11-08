@@ -35,7 +35,7 @@ int build_tenant_errsim_moulde(
   if (OB_INVALID_ID == tmp_tenant_id || config_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build tenant module get invalid argument", K(ret), K(tmp_tenant_id), K(config_version));
-  } else if (is_virtual_tenant_id(tmp_tenant_id)) {
+  } else if (is_virtual_tenant_id(tmp_tenant_id) || OB_INVALID_TENANT_ID == tmp_tenant_id) {
     //do nothing
   } else {
     MTL_SWITCH(tmp_tenant_id) {
@@ -61,7 +61,7 @@ bool is_errsim_module(
   if (OB_INVALID_ID == tmp_tenant_id || !ObErrsimModuleTypeHelper::is_valid(type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("is errsim module get invalid argument", K(ret), K(tenant_id), K(tmp_tenant_id), K(type));
-  } else if (is_virtual_tenant_id(tmp_tenant_id)) {
+  } else if (is_virtual_tenant_id(tmp_tenant_id) || OB_INVALID_TENANT_ID == tmp_tenant_id) {
     b_ret = false;
   } else if (ObErrsimModuleType::ERRSIM_MODULE_NONE == type) {
     b_ret = false;
@@ -89,7 +89,7 @@ int add_tenant_errsim_event(
   if (OB_INVALID_ID == tmp_tenant_id || !event.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("is errsim module get invalid argument", K(ret), K(tmp_tenant_id), K(event));
-  } else if (is_virtual_tenant_id(tmp_tenant_id)) {
+  } else if (is_virtual_tenant_id(tmp_tenant_id) || OB_INVALID_TENANT_ID == tmp_tenant_id) {
     //do nothing
   } else {
     MTL_SWITCH(tmp_tenant_id) {

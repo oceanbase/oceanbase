@@ -1194,6 +1194,8 @@ ObCopySSTableMacroRangeInfo::ObCopySSTableMacroRangeInfo()
   : copy_table_key_(),
     copy_macro_range_array_()
 {
+  lib::ObMemAttr attr(MTL_ID(), "MacroRangeInfo");
+  copy_macro_range_array_.set_attr(attr);
 }
 
 ObCopySSTableMacroRangeInfo::~ObCopySSTableMacroRangeInfo()
