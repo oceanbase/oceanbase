@@ -40,6 +40,7 @@ namespace common
 static const int OSS_OBJECT_NOT_EXIST = 404;
 static const int OSS_PERMISSION_DENIED = 403;
 static const int OSS_OBJECT_PWRITE_OFFSET_NOT_MATH = 409;
+static const int OSS_LIMIT_EXCEEDED = 503;
 static const int MD5_STR_LENGTH = 32;//md5 buffer length
 static const char OSS_META_MD5[] = "x-oss-meta-md5";
 const static int64_t AOS_TABLE_INIT_SIZE = 1;

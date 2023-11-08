@@ -222,6 +222,11 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
     break;
      }
 
+    case OSS_LIMIT_EXCEEDED: {
+        ob_errcode = OB_IO_LIMIT;
+    break;
+     }
+
     default: {
         ob_errcode = OB_OSS_ERROR;
      }
@@ -1924,11 +1929,16 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
           OB_LOG(WARN, "oss object must be appendable", K(ret), KCSTRING(object_type));
         } else {
           char *next_append_position = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
-          position = aos_atoi64(next_append_position);
-          if (0 > position) {
-            ObString tmp_position_string(next_append_position);
+          if (OB_ISNULL(next_append_position)) {
             ret = OB_OSS_ERROR;
-            OB_LOG(WARN, "invalid append position", K(ret), K(position), K(tmp_position_string));
+            OB_LOG(WARN, "next_append_position is not found", K(ret), K_(bucket), K_(object));
+          } else {
+            position = aos_atoi64(next_append_position);
+            if (0 > position) {
+              ObString tmp_position_string(next_append_position);
+              ret = OB_OSS_ERROR;
+              OB_LOG(WARN, "invalid append position", K(ret), K(position), K(tmp_position_string));
+            }
           }
         }
       }
@@ -1962,8 +1972,12 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
               if(OB_NOT_NULL(aos_ret = oss_head_object(oss_option_, &bucket, &object, headers3, &resp_headers))) {
                 if ((0 != aos_status_is_ok(aos_ret))) {
                   char *append_pos_str = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
-                  int64_t cur_pos = aos_atoi64(append_pos_str);
-                  OB_LOG(WARN, "after append fail, we got the object meta", K(cur_pos));
+                  if (OB_ISNULL(append_pos_str)) {
+                    OB_LOG(WARN, "after append fail, current append pos is not found");
+                  } else {
+                    int64_t cur_pos = aos_atoi64(append_pos_str);
+                    OB_LOG(WARN, "after append fail, we got the object meta", K(cur_pos));
+                  }
                 }
               }
             }
