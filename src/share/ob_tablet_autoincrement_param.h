@@ -171,8 +171,8 @@ public:
   virtual int deep_copy(
       char *dst_buf,
       const int64_t buf_size,
-      storage::ObIStorageMetaObj *&value) const;
-  virtual int64_t get_deep_copy_size() const { return sizeof(ObTabletAutoincSeq) + sizeof(ObTabletAutoincInterval) * intervals_count_; }
+      storage::ObIStorageMetaObj *&value) const override;
+  virtual int64_t get_deep_copy_size() const override { return sizeof(ObTabletAutoincSeq) + sizeof(ObTabletAutoincInterval) * intervals_count_; }
   virtual void reset() override;
   virtual bool is_valid() const override;
   virtual inline int64_t get_data_size() const override { return get_deep_copy_size(); }

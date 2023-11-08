@@ -129,7 +129,7 @@ int ObTabletFullMemoryMdsData::read_mds_dump_kv(
     mds::MdsDumpKV &dump_kv)
 {
   int ret = OB_SUCCESS;
-  const mds::MdsDumpKV *ptr = nullptr;
+  mds::MdsDumpKV *ptr = nullptr;
 
   if (OB_UNLIKELY(!mds_dump_kv_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -143,7 +143,7 @@ int ObTabletFullMemoryMdsData::read_mds_dump_kv(
     LOG_WARN("failed to copy mds dump kv", K(ret));
   }
 
-  ObTabletMdsData::free_mds_dump_kv(allocator, ptr);
+  ObTabletObjLoadHelper::free(allocator, ptr);
 
   return ret;
 }
@@ -154,7 +154,7 @@ int ObTabletFullMemoryMdsData::read_medium_info_list(
     ObTabletDumpedMediumInfo &medium_info_list)
 {
   int ret = OB_SUCCESS;
-  const ObTabletDumpedMediumInfo *ptr = nullptr;
+  ObTabletDumpedMediumInfo *ptr = nullptr;
 
   if (OB_UNLIKELY(!medium_info_list_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -167,7 +167,7 @@ int ObTabletFullMemoryMdsData::read_medium_info_list(
     LOG_WARN("failed to copy medium info list", K(ret));
   }
 
-  ObTabletMdsData::free_medium_info_list(allocator, ptr);
+  ObTabletObjLoadHelper::free(allocator, ptr);
 
   return ret;
 }
@@ -178,7 +178,7 @@ int ObTabletFullMemoryMdsData::read_auto_inc_seq(
     share::ObTabletAutoincSeq &auto_inc_seq)
 {
   int ret = OB_SUCCESS;
-  const share::ObTabletAutoincSeq *ptr = nullptr;
+  share::ObTabletAutoincSeq *ptr = nullptr;
 
   if (OB_FAIL(ObTabletMdsData::load_auto_inc_seq(allocator, auto_inc_seq_addr, ptr))) {
     LOG_WARN("failed to load auto inc seq", K(ret), K(auto_inc_seq_addr));

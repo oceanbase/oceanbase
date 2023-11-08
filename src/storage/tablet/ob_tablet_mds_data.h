@@ -112,30 +112,24 @@ public:
                K_(extra_medium_info),
                K_(medium_info_list),
                K_(auto_inc_seq),
-               K_(tablet_status_cache),
-               K_(aux_tablet_info_cache));
+               K_(tablet_status_cache));
 public:
   static int load_mds_dump_kv(
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-      const mds::MdsDumpKV *&kv);
+      mds::MdsDumpKV *&kv);
   static int load_medium_info_list(
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
-      const ObTabletDumpedMediumInfo *&medium_info_list);
+      ObTabletDumpedMediumInfo *&medium_info_list);
   static int load_auto_inc_seq(
       common::ObIAllocator &allocator,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
-      const share::ObTabletAutoincSeq *&auto_inc_seq);
-  static void free_mds_dump_kv(
+      share::ObTabletAutoincSeq *&auto_inc_seq);
+  static int load_aux_tablet_info(
       common::ObIAllocator &allocator,
-      const mds::MdsDumpKV *kv);
-  static void free_auto_inc_seq(
-      common::ObIAllocator &allocator,
-      const share::ObTabletAutoincSeq *auto_inc_seq);
-  static void free_medium_info_list(
-      common::ObIAllocator &allocator,
-      const ObTabletDumpedMediumInfo *medium_info_list);
+      const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
+      ObTabletBindingMdsUserData *&aux_tablet_info);
   static int build_tablet_status(
       common::ObArenaAllocator &allocator,
       const ObTabletTxMultiSourceDataUnit &tx_data,
@@ -246,8 +240,7 @@ public:
   ObTabletComplexAddr<ObTabletDumpedMediumInfo> medium_info_list_;
 
   ObTabletComplexAddr<share::ObTabletAutoincSeq> auto_inc_seq_;
-  ObTabletCreateDeleteMdsUserData tablet_status_cache_;
-  ObTabletBindingMdsUserData aux_tablet_info_cache_;
+  ObTabletCreateDeleteMdsUserData tablet_status_cache_; // redundant data for tablet status
 };
 
 template <typename T>

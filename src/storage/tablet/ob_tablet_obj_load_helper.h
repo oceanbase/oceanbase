@@ -35,6 +35,9 @@ public:
   template <typename T>
   static int alloc_and_new(common::ObIAllocator &allocator, T *&ptr);
 
+  template <typename T>
+  static void free(common::ObIAllocator &allocator, T *&ptr);
+
   static int read_from_addr(
     common::ObArenaAllocator &allocator,
     const ObMetaDiskAddr &meta_addr,
@@ -56,6 +59,16 @@ int ObTabletObjLoadHelper::alloc_and_new(common::ObIAllocator &allocator, T *&pt
   }
 
   return ret;
+}
+
+template <typename T>
+void ObTabletObjLoadHelper::free(common::ObIAllocator &allocator, T *&ptr)
+{
+  if (nullptr != ptr) {
+    ptr->~T();
+    allocator.free(ptr);
+    ptr = nullptr;
+  }
 }
 } // namespace storage
 } // namespace oceanbase

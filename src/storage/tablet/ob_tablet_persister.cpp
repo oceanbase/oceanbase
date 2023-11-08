@@ -41,7 +41,6 @@ ObTabletTransformArg::ObTabletTransformArg()
     medium_info_list_addr_(),
     auto_inc_seq_addr_(),
     tablet_status_cache_(),
-    aux_tablet_info_cache_(),
     ddl_kvs_(nullptr),
     ddl_kv_count_(0),
     memtable_count_(0)
@@ -69,7 +68,6 @@ void ObTabletTransformArg::reset()
   medium_info_list_addr_.reset();
   auto_inc_seq_addr_.reset();
   tablet_status_cache_.reset();
-  aux_tablet_info_cache_.reset();
   ddl_kvs_ = nullptr;
   ddl_kv_count_ = 0;
   for (int64_t i = 0; i < MAX_MEMSTORE_CNT; ++i) {
@@ -158,8 +156,6 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     LOG_WARN("old tablet isn't valid, don't allow to degrade tablet memory", K(ret), K(tablet));
   } else if (CLICK_FAIL(arg.tablet_status_cache_.assign(tablet.mds_data_.tablet_status_cache_))) {
     LOG_WARN("fail to assign tablet status cache", K(ret), K(tablet));
-  } else if (CLICK_FAIL(arg.aux_tablet_info_cache_.assign(tablet.mds_data_.aux_tablet_info_cache_))) {
-    LOG_WARN("fail to assign aux tablet info cache", K(ret), K(tablet));
   } else if (CLICK_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
     LOG_WARN("fail to assign tablet meta", K(ret), K(tablet));
   } else if (CLICK_FAIL(tablet.fetch_autoinc_seq(auto_inc_seq))) {
@@ -209,8 +205,6 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
 
   if (CLICK_FAIL(arg.tablet_status_cache_.assign(tablet.mds_data_.tablet_status_cache_))) {
     LOG_WARN("fail to assign tablet status cache", K(ret), K(tablet));
-  } else if (CLICK_FAIL(arg.aux_tablet_info_cache_.assign(tablet.mds_data_.aux_tablet_info_cache_))) {
-    LOG_WARN("fail to assign aux tablet info cache", K(ret), K(tablet));
   } else if (CLICK_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
     LOG_WARN("fail to assign tablet meta", K(ret), K(tablet));
   } else if (FALSE_IT(arg.rowkey_read_info_ptr_ = tablet.rowkey_read_info_)) {
@@ -406,9 +400,7 @@ int ObTabletPersister::convert_arg_to_tablet(
   } else if (OB_FAIL(tablet.tablet_meta_.assign(arg.tablet_meta_))) {
     LOG_WARN("fail to assign tablet meta", K(ret), K(arg.tablet_meta_));
   } else if (OB_FAIL(tablet.mds_data_.tablet_status_cache_.assign(arg.tablet_status_cache_))) {
-    LOG_WARN("fail to assign tablet status cache", K(ret), K(arg.aux_tablet_info_cache_));
-  } else if (OB_FAIL(tablet.mds_data_.aux_tablet_info_cache_.assign(arg.aux_tablet_info_cache_))) {
-    LOG_WARN("fail to assign aux tablet info cache", K(ret), K(arg.aux_tablet_info_cache_));
+    LOG_WARN("fail to assign tablet status cache", K(ret), K(arg.tablet_status_cache_));
   } else if (OB_FAIL(tablet.assign_memtables(arg.memtables_, arg.memtable_count_))) {
     LOG_WARN("fail to assign memtables", K(ret), KP(arg.memtables_), K(arg.memtable_count_));
   } else {
@@ -695,7 +687,7 @@ int ObTabletPersister::load_dump_kv_and_fill_write_info(
     ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
-  const mds::MdsDumpKV *kv = nullptr;
+  mds::MdsDumpKV *kv = nullptr;
 
   if (OB_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, complex_addr, kv))) {
     LOG_WARN("fail to load mds dump kv", K(ret), K(complex_addr));
@@ -708,7 +700,7 @@ int ObTabletPersister::load_dump_kv_and_fill_write_info(
     }
   }
 
-  ObTabletMdsData::free_mds_dump_kv(allocator, kv);
+  ObTabletObjLoadHelper::free(allocator, kv);
 
   return ret;
 }
@@ -720,7 +712,7 @@ int ObTabletPersister::load_medium_info_list_and_write(
     ObMetaDiskAddr &addr)
 {
   int ret = OB_SUCCESS;
-  const ObTabletDumpedMediumInfo *medium_info_list = nullptr;
+  ObTabletDumpedMediumInfo *medium_info_list = nullptr;
 
   if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, complex_addr, medium_info_list))) {
     LOG_WARN("fail to load medium info list", K(ret), K(complex_addr));
@@ -732,7 +724,7 @@ int ObTabletPersister::load_medium_info_list_and_write(
     }
   }
 
-  ObTabletMdsData::free_medium_info_list(allocator, medium_info_list);
+  ObTabletObjLoadHelper::free(allocator, medium_info_list);
 
   return ret;
 }
@@ -913,7 +905,7 @@ int ObTabletPersister::load_auto_inc_seq_and_write_info(
 {
   int ret = OB_SUCCESS;
   auto_inc_seq = nullptr;
-  const share::ObTabletAutoincSeq *ptr = nullptr;
+  share::ObTabletAutoincSeq *ptr = nullptr;
 
   if (OB_UNLIKELY(!complex_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -929,7 +921,7 @@ int ObTabletPersister::load_auto_inc_seq_and_write_info(
   }
 
   if (OB_FAIL(ret)) {
-    ObTabletMdsData::free_auto_inc_seq(allocator, ptr);
+    ObTabletObjLoadHelper::free(allocator, ptr);
   }
 
   return ret;
