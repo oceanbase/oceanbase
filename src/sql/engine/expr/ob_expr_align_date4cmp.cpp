@@ -295,7 +295,8 @@ int ObExprAlignDate4Cmp::integer_to_ob_time(const int64_t &date,
     // If it fails, it means the value is not convertible to time.
     date_sql_mode.allow_invalid_dates_ = true;
     date_sql_mode.no_zero_date_ = false;
-    if (OB_FAIL(ObTimeConverter::int_to_ob_time_with_date(date, ob_time, true, date_sql_mode))) {
+    date_sql_mode.allow_incomplete_dates_ = true;
+    if (OB_FAIL(ObTimeConverter::int_to_ob_time_with_date(date, ob_time, date_sql_mode))) {
       date_arg_type = NON_DATE;
       ret = OB_SUCCESS;
     } else {
@@ -364,7 +365,8 @@ int ObExprAlignDate4Cmp::str_to_ob_time(const ObString &date, DateArgType &date_
   ObDateSqlMode date_sql_mode;
   date_sql_mode.allow_invalid_dates_ = true;
   date_sql_mode.no_zero_date_ = false;
-  if (OB_FAIL(ObTimeConverter::str_to_ob_time_with_date(date, ob_time, NULL, true, date_sql_mode))) {
+  date_sql_mode.allow_incomplete_dates_ = true;
+  if (OB_FAIL(ObTimeConverter::str_to_ob_time_with_date(date, ob_time, NULL, date_sql_mode))) {
     date_arg_type = NON_DATE;
     ret = OB_SUCCESS;
   } else {

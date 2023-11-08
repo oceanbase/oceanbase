@@ -309,8 +309,7 @@ typedef int (*ObCastEnumOrSetFunc)(const ObExpectType &expect_type, ObObjCastPar
 bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_type,
                     const ObObjType expect_type, const ObCollationType expect_cs_type);
 int ob_obj_to_ob_time_with_date(const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time,
-                                const int64_t cur_ts_value, bool is_dayofmonth = false,
-                                const ObDateSqlMode date_sql_mode = 0);
+                                const int64_t cur_ts_value, const ObDateSqlMode date_sql_mode = 0);
 int ob_obj_to_ob_time_without_date(const ObObj &obj, const ObTimeZoneInfo *tz_info, ObTime &ob_time);
 
 

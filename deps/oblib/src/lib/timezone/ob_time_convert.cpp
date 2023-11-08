@@ -318,7 +318,7 @@ int ObTimeConverter::int_to_datetime(int64_t int_part, int64_t dec_part,
     if (cvrt_ctx.is_timestamp_) {
       local_date_sql_mode.allow_invalid_dates_ = false;
     }
-    if (OB_FAIL(int_to_ob_time_with_date(int_part, ob_time, false, local_date_sql_mode))) {
+    if (OB_FAIL(int_to_ob_time_with_date(int_part, ob_time, local_date_sql_mode))) {
       LOG_WARN("failed to convert integer to datetime", K(ret));
     } else if (OB_FAIL(ob_time_to_datetime(ob_time, cvrt_ctx, value))) {
       LOG_WARN("failed to convert datetime to seconds", K(ret));
@@ -336,10 +336,10 @@ int ObTimeConverter::int_to_date(int64_t int64, int32_t &value, const ObDateSqlM
 {
   int ret = OB_SUCCESS;
   if (0 == int64) {
-      value = ZERO_DATE;
-    } else {
+    value = ZERO_DATE;
+  } else {
     ObTime ob_time(DT_TYPE_DATE);
-    if (OB_FAIL(int_to_ob_time_with_date(int64, ob_time, false, date_sql_mode))) {
+    if (OB_FAIL(int_to_ob_time_with_date(int64, ob_time, date_sql_mode))) {
       LOG_WARN("failed to convert integer to date", K(ret));
     } else {
       value = ob_time.parts_[DT_DATE]; //value = int32_min when all parts are zero
@@ -393,7 +393,7 @@ int ObTimeConverter::str_to_datetime(const ObString &str, const ObTimeConvertCtx
   if (cvrt_ctx.is_timestamp_) {
     local_date_sql_mode.allow_invalid_dates_ = false;
   }
-  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, scale, false, local_date_sql_mode, cvrt_ctx.need_truncate_))) {
+  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, scale, local_date_sql_mode, cvrt_ctx.need_truncate_))) {
     LOG_WARN("failed to convert string to datetime", K(ret));
   } else if (!cvrt_ctx.is_timestamp_ && ob_time.is_tz_name_valid_) {
     //only enable time zone data type can has tz name and tz addr
@@ -802,8 +802,7 @@ int ObTimeConverter::ob_time_to_utc(const ObObjType obj_type, const ObTimeConver
 
 int ObTimeConverter::str_to_datetime_format(const ObString &str, const ObString &fmt,
                                             const ObTimeConvertCtx &cvrt_ctx, int64_t &value,
-                                            int16_t *scale, const bool no_zero_in_date,
-                                            const ObDateSqlMode date_sql_mode)
+                                            int16_t *scale, const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
@@ -811,8 +810,7 @@ int ObTimeConverter::str_to_datetime_format(const ObString &str, const ObString 
   if (cvrt_ctx.is_timestamp_) {
     local_date_sql_mode.allow_invalid_dates_ = false;
   }
-  if (OB_FAIL(str_to_ob_time_format(str, fmt, ob_time, scale, no_zero_in_date,
-                                    local_date_sql_mode))) {
+  if (OB_FAIL(str_to_ob_time_format(str, fmt, ob_time, scale, local_date_sql_mode))) {
     LOG_WARN("failed to convert string to datetime", K(ret));
   } else if (OB_FAIL(ob_time_to_datetime(ob_time, cvrt_ctx, value))) {
     LOG_WARN("failed to convert datetime to seconds", K(ret));
@@ -825,7 +823,7 @@ int ObTimeConverter::str_to_date(const ObString &str, int32_t &value,
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATE);
-  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, NULL, false, date_sql_mode))) {
+  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, NULL, date_sql_mode))) {
     LOG_WARN("failed to convert string to date", K(ret));
   } else {
     value = ob_time.parts_[DT_DATE];
@@ -1498,7 +1496,7 @@ int ObTimeConverter::int_to_week(int64_t int64, int64_t mode, int32_t &value)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
-  if (OB_FAIL(int_to_ob_time_with_date(int64, ob_time, false, 0))) {
+  if (OB_FAIL(int_to_ob_time_with_date(int64, ob_time, 0))) {
     LOG_WARN("failed to convert integer to datetime", K(ret));
   } else {
     value = ob_time_to_week(ob_time, WEEK_MODE[mode % WEEK_MODE_CNT]);
@@ -1619,7 +1617,7 @@ int ObTimeConverter::date_adjust(const ObString &base_str, const ObString &inter
     }
   } else {
     ObTime base_time;
-    if (OB_FAIL(str_to_ob_time_with_date(base_str, base_time, NULL, false, 0))) {
+    if (OB_FAIL(str_to_ob_time_with_date(base_str, base_time, NULL, 0))) {
       LOG_WARN("failed to convert string to ob time", K(ret));
     } else if (OB_FAIL(merge_date_interval(base_time, interval_str, unit_type, value, is_add, 0))) {
       LOG_WARN("failed to merge date and interval", K(ret));
@@ -1699,7 +1697,7 @@ int ObTimeConverter::merge_date_interval(/*const*/ ObTime &base_time, const ObSt
     }
     res_time.parts_[DT_DATE] = ob_time_to_date(res_time);
     ObTimeConvertCtx cvrt_ctx(NULL, false);
-    if (OB_FAIL(validate_datetime(res_time, false, date_sql_mode))) {
+    if (OB_FAIL(validate_datetime(res_time, date_sql_mode))) {
       LOG_WARN("invalid datetime", K(ret));
     } else if (OB_FAIL(ob_time_to_datetime(res_time, cvrt_ctx, value))) {
       LOG_WARN("failed to convert ob time to datetime", K(ret));
@@ -1711,12 +1709,13 @@ int ObTimeConverter::merge_date_interval(/*const*/ ObTime &base_time, const ObSt
 ////////////////////////////////
 // int / uint / string -> ObTime / ObInterval <- datetime / date / time.
 
-int ObTimeConverter::int_to_ob_time_with_date(int64_t int64, ObTime &ob_time, bool is_dayofmonth,
+int ObTimeConverter::int_to_ob_time_with_date(int64_t int64, ObTime &ob_time,
                                               const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
   int32_t *parts = ob_time.parts_;
-  if (is_dayofmonth && 0 == int64) {
+  int64_t origin_val = int64;
+  if (date_sql_mode.allow_incomplete_dates_ && 0 == int64) {
     parts[DT_SEC]  = 0;
     parts[DT_MIN]  = 0;
     parts[DT_HOUR] = 0;
@@ -1744,11 +1743,14 @@ int ObTimeConverter::int_to_ob_time_with_date(int64_t int64, ObTime &ob_time, bo
     LOG_WARN("datetime integer is out of range", K(ret), K(int64));
   }
   if (OB_SUCC(ret)) {
-    apply_date_year2_rule(parts[0]);
-    if (OB_FAIL(validate_datetime(ob_time, is_dayofmonth, date_sql_mode))) {
-      LOG_WARN("datetime is invalid or out of range", K(ret), K(int64));
-    } else if (ZERO_DATE != parts[DT_DATE]) {
-      parts[DT_DATE] = ob_time_to_date(ob_time);
+    if(0 == origin_val) {
+    } else {
+      apply_date_year2_rule(parts[0]);
+      if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
+        LOG_WARN("datetime is invalid or out of range", K(ret), K(int64));
+      } else if (ZERO_DATE != parts[DT_DATE]) {
+        parts[DT_DATE] = ob_time_to_date(ob_time);
+      }
     }
   }
   return ret;
@@ -1791,7 +1793,7 @@ int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob
     parts[DT_MON]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
     parts[DT_YEAR] = static_cast<int32_t>(time_second % power_of_10[4]);
     apply_date_year2_rule(parts[DT_YEAR]);
-    if (OB_FAIL(validate_datetime(ob_time, false, 0))) {
+    if (OB_FAIL(validate_datetime(ob_time, 0))) {
       LOG_WARN("datetime is invalid or out of range", K(ret), K(time_second), K(nano_second));
     } else if (ZERO_DATE != parts[DT_DATE]) {
       parts[DT_DATE] = ob_time_to_date(ob_time);
@@ -1970,10 +1972,9 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
 }
 
 //dayofmonth函数需要容忍月、日为0的错误
-int ObTimeConverter::str_to_ob_time_with_date(
-    const ObString &str, ObTime &ob_time, int16_t *scale,
-    const bool is_dayofmonth, const ObDateSqlMode date_sql_mode,
-    const bool &need_truncate)
+int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_time, int16_t *scale,
+                                              const ObDateSqlMode date_sql_mode,
+                                              const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)) {
@@ -1983,7 +1984,7 @@ int ObTimeConverter::str_to_ob_time_with_date(
     ObTimeDigits digits[DATETIME_PART_CNT];
     if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time, need_truncate))) {
       LOG_WARN("failed to get digits", K(ret), K(str));
-    } else if (OB_FAIL(validate_datetime(ob_time, is_dayofmonth, date_sql_mode))) {
+    } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
       // OK, it seems like a valid format, now we need check its value.
       LOG_WARN("datetime is invalid or out of range",
                K(ret), K(str), K(ob_time), K(date_sql_mode), KCSTRING(lbt()));
@@ -2058,7 +2059,9 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
       bool has_done = false;
       // maybe it is an whole datetime string.
       if (end - first_digit >= 12) {
-        ret = str_to_ob_time_with_date(str, ob_time, scale, true, 0);
+        ObDateSqlMode date_sql_mode;
+        date_sql_mode.allow_incomplete_dates_ = true;
+        ret = str_to_ob_time_with_date(str, ob_time, scale, date_sql_mode);
         if ((DT_TYPE_NONE & ob_time.mode_) || OB_INVALID_DATE_FORMAT == ret) {
           ob_time.mode_ &= (~DT_TYPE_NONE);
           for (int i = 0; i < DATETIME_PART_CNT; ++i) {
@@ -2143,19 +2146,20 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
               if (NULL != scale) {
                 *scale = static_cast<int16_t>(MIN(digits.len_, 6));
               }
-              // '2:59:59.9999999' ---> '03:00:00.000000'
-              const int64_t *part_max = DT_PART_BASE;
-              for (int i = DATETIME_PART_CNT - 1; OB_SUCC(ret) && i > DATE_PART_CNT; i--) {
-                if (ob_time.parts_[i] == part_max[i]) {
-                  ob_time.parts_[i] = 0;
-                  ob_time.parts_[i - 1]++;
-                }
-              }
             }
           }
         }
         if (OB_SUCC(ret) && OB_FAIL(validate_time(ob_time))) {
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
+        } else {
+          // '2:59:59.9999999' ---> '03:00:00.000000'
+          const int64_t *part_max = DT_PART_BASE;
+          for (int i = DATETIME_PART_CNT - 1; OB_SUCC(ret) && i > DATE_PART_CNT; i--) {
+            if (ob_time.parts_[i] == part_max[i]) {
+              ob_time.parts_[i] = 0;
+              ob_time.parts_[i - 1]++;
+            }
+          }
         }
       }
     }
@@ -2174,7 +2178,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
   }
 
 int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &fmt,
-  ObTime &ob_time, int16_t *scale, const bool no_zero_in_date, const ObDateSqlMode date_sql_mode)
+  ObTime &ob_time, int16_t *scale, const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
 //  bool is_minus = false;
@@ -2440,11 +2444,11 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
         } 
       } else {
-        if (OB_FAIL(validate_datetime(ob_time, !no_zero_in_date, date_sql_mode))) {
+        if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
           LOG_WARN("datetime is invalid or out of range", K(ret), K(str), K(ob_time));
         } else if (ZERO_DATE != ob_time.parts_[DT_DATE]) {
           if (OB_UNLIKELY(0 == ob_time.parts_[DT_MON] && 0 != ob_time.parts_[DT_YEAR]
-                          && !no_zero_in_date)) {
+                          && !date_sql_mode.no_zero_in_date_)) {
             ob_time.parts_[DT_YEAR]--;
             ob_time.parts_[DT_MON] = 12;
           }
@@ -5148,8 +5152,7 @@ int32_t ObTimeConverter::ob_time_to_week(const ObTime &ob_time, ObDTMode mode, i
 // below are other utility functions:
 
 //dayofmonth函数需要容忍月、日为0的错误
-int ObTimeConverter::validate_datetime(ObTime &ob_time, const bool is_dayofmonth,
-                                       const ObDateSqlMode date_sql_mode)
+int ObTimeConverter::validate_datetime(ObTime &ob_time, const ObDateSqlMode date_sql_mode)
 {
   const int32_t *parts = ob_time.parts_;
   int ret = OB_SUCCESS;
@@ -5158,7 +5161,7 @@ int ObTimeConverter::validate_datetime(ObTime &ob_time, const bool is_dayofmonth
       && 0 == parts[DT_MIN] && 0 == parts[DT_SEC] && 0 == parts[DT_USEC]) {
     ret = OB_INVALID_DATE_VALUE;
   } else if (!HAS_TYPE_ORACLE(ob_time.mode_)
-      && !is_dayofmonth
+      && !date_sql_mode.allow_incomplete_dates_
       && OB_UNLIKELY(0 == parts[DT_MON] && 0 == parts[DT_MDAY])) {
     if (!(0 == parts[DT_YEAR] && 0 == parts[DT_HOUR] && 0 == parts[DT_MIN]
         && 0 == parts[DT_SEC] && 0 == parts[DT_USEC])) {
@@ -5170,7 +5173,7 @@ int ObTimeConverter::validate_datetime(ObTime &ob_time, const bool is_dayofmonth
     const int64_t *part_min = (HAS_TYPE_ORACLE(ob_time.mode_) ? TZ_PART_MIN : DT_PART_MIN);
     const int64_t *part_max = (HAS_TYPE_ORACLE(ob_time.mode_) ? TZ_PART_MAX : DT_PART_MAX);
     for (int i = 0; OB_SUCC(ret) && i < DATETIME_PART_CNT; ++i) {
-      if (is_dayofmonth && (DT_MON == i || DT_MDAY == i) && 0 == parts[i]) {
+      if (date_sql_mode.allow_incomplete_dates_ && (DT_MON == i || DT_MDAY == i) && 0 == parts[i]) {
         /* do nothing */
       } else if (!(part_min[i] <= parts[i] && parts[i] <= part_max[i])) {
         ret = OB_INVALID_DATE_VALUE;
@@ -5178,7 +5181,7 @@ int ObTimeConverter::validate_datetime(ObTime &ob_time, const bool is_dayofmonth
     }
     if (OB_SUCC(ret)) {
       int is_leap = IS_LEAP_YEAR(parts[DT_YEAR]);
-      if (is_dayofmonth && (0 == parts[DT_MDAY] || (0 == parts[DT_MON] && parts[DT_MDAY] <= 31))) {
+      if (date_sql_mode.allow_incomplete_dates_ && (0 == parts[DT_MDAY] || (0 == parts[DT_MON] && parts[DT_MDAY] <= 31))) {
         /* do nothing */
       } else if (parts[DT_MDAY] > 31
            || (!date_sql_mode.allow_invalid_dates_
@@ -6061,7 +6064,6 @@ int ObTimeConverter::otimestamp_add_nsecond(const ObOTimestampData ori_value,
 int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_datetime_value,
                                                 int64_t &result_date_value,
                                                 const ObObjType dest_type,
-                                                const bool is_dayofmonth,
                                                 const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
@@ -6079,8 +6081,7 @@ int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_datetime_valu
 
     if (is_oracle_mode && OB_FAIL(validate_basic_part_of_ob_time_oracle(ob_time))) {
       LOG_WARN("failed to validate ob_time", K(ret), K(ob_time));
-    } else if (!is_oracle_mode && OB_FAIL(validate_datetime(ob_time, is_dayofmonth,
-               date_sql_mode))) {
+    } else if (!is_oracle_mode && OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
       LOG_WARN("failed to validate ob_time", K(ret), K(ob_time));
     } else {
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);

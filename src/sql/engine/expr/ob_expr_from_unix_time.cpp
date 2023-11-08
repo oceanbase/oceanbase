@@ -241,7 +241,7 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
                            expr_datum, ObTimestampType,
                            get_timezone_info(session),
                            ob_time,
-                           get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0, false))) {
+                           get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0, false))) {
         LOG_WARN("failed to cast datum to obtime with date", K(ret));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(
                                             ob_time,

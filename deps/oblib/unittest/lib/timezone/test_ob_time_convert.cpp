@@ -2215,7 +2215,7 @@ TEST(ObTimeConvertTest, date_adjust)
     memset(&ob_time, 0, sizeof(ob_time)); \
     ob_time.mode_ = mode; \
     if (DT_TYPE_DATE & mode) { \
-      EXPECT_EQ(OB_SUCCESS, ObTimeConverter::int_to_ob_time_with_date(int_val, ob_time, false, 0)); \
+      EXPECT_EQ(OB_SUCCESS, ObTimeConverter::int_to_ob_time_with_date(int_val, ob_time, 0)); \
     } else { \
       EXPECT_EQ(OB_SUCCESS, ObTimeConverter::int_to_ob_time_without_date(int_val, ob_time)); \
     } \
@@ -2227,7 +2227,7 @@ TEST(ObTimeConvertTest, date_adjust)
     memset(&ob_time, 0, sizeof(ob_time)); \
     ob_time.mode_ = mode; \
     if (DT_TYPE_DATE & mode) { \
-      EXPECT_NE(OB_SUCCESS, ObTimeConverter::int_to_ob_time_with_date(int_val, ob_time, false, 0)); \
+      EXPECT_NE(OB_SUCCESS, ObTimeConverter::int_to_ob_time_with_date(int_val, ob_time, 0)); \
     } else { \
       EXPECT_NE(OB_SUCCESS, ObTimeConverter::int_to_ob_time_without_date(int_val, ob_time)); \
     } \

@@ -175,19 +175,27 @@ struct ObDateSqlMode {
     struct {
       uint64_t allow_invalid_dates_:1;
       uint64_t no_zero_date_:1;
-      uint64_t reserved_:30;
+      uint64_t no_zero_in_date_:1;
+      // For dayofmonth, year, month, day allow incomplete dates such as '2001-11-00', and not
+      // affected by sqlmode NO_ZERO_IN_DATE, you can learn more from the below link by searching
+      // the key words "SELECT DAYOFMONTH('2001-11-00'), MONTH('2005-00-00');"
+      // https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
+      uint64_t allow_incomplete_dates_:1;
+      uint64_t reserved_:28;
     };
   };
   ObDateSqlMode() : date_sql_mode_(0) {};
   ObDateSqlMode(const int64_t date_sql_mode) {
     allow_invalid_dates_ = date_sql_mode & (1ULL << 0);
     no_zero_date_ = date_sql_mode & (1ULL << 1);
+    // no_zero_in_date_ = date_sql_mode & (1ULL << 2);
   };
   void init(const ObSQLMode sql_mode) {
     allow_invalid_dates_ = (bool)(SMO_ALLOW_INVALID_DATES & sql_mode);
     no_zero_date_ = (bool)(SMO_NO_ZERO_DATE & sql_mode);
+    no_zero_in_date_ = (bool)(SMO_NO_ZERO_IN_DATE & sql_mode);
   }
-  TO_STRING_KV(K_(allow_invalid_dates), K_(no_zero_date));
+  TO_STRING_KV(K_(allow_invalid_dates), K_(no_zero_date), K_(allow_incomplete_dates), K_(no_zero_in_date));
 };
 
 class ObIntervalParts
@@ -374,8 +382,7 @@ public:
   static int str_to_date_oracle(const ObString &str, const ObTimeConvertCtx &cvrt_ctx, ObDateTime &value);
   static int str_to_datetime_format(const ObString &str, const ObString &fmt,
                                     const ObTimeConvertCtx &cvrt_ctx, int64_t &value,
-                                    int16_t *scale, const bool no_zero_in_date,
-                                    const ObDateSqlMode date_sql_mode);
+                                    int16_t *scale, const ObDateSqlMode date_sql_mode);
   static int str_to_otimestamp(const ObString &str, const ObTimeConvertCtx &cvrt_ctx,
                                const ObObjType target_type, ObOTimestampData &value,
                                ObScale &scale);
@@ -472,24 +479,26 @@ public:
                               const int32_t fractional_second, int64_t &result_date_value);
   static int otimestamp_add_nmonth(const ObObjType type, const ObOTimestampData ori_value, const ObTimeZoneInfo *tz_info,
                                    const int64_t nmonth, ObOTimestampData &result_value);
-  static int otimestamp_add_nsecond(const ObOTimestampData ori_value, const int64_t nsecond, const int32_t fractional_second, ObOTimestampData &result_value);
+  static int otimestamp_add_nsecond(const ObOTimestampData ori_value, const int64_t nsecond,
+                                    const int32_t fractional_second,
+                                    ObOTimestampData &result_value);
   static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t &result_date_value,
-                                         const ObObjType dest_type,  const bool is_dayofmonth,
+                                         const ObObjType dest_type,
                                          const ObDateSqlMode date_sql_mode);
   static int calc_next_date_of_the_wday(const int64_t ori_date_value, const ObString &wday_name, const int64_t week_count, int64_t &result_date_value);
   static int calc_days_and_months_between_dates(const int64_t date_value1, const int64_t date_value2, int64_t &months_diff, int64_t &rest_utc_diff);
 
 public:
   // int / string -> ObTime / ObInterval <- datetime(timestamp) / date / time / year.
-  static int int_to_ob_time_with_date(int64_t int64, ObTime &ob_time, bool is_dayofmonth,
+  static int int_to_ob_time_with_date(int64_t int64, ObTime &ob_time,
                                       const ObDateSqlMode date_sql_mode);
   static int int_to_ob_time_without_date(int64_t time_second, ObTime &ob_time, int64_t nano_second = 0);
   static int str_to_ob_time_with_date(const ObString &str, ObTime &ob_time, int16_t *scale,
-                                      const bool is_dayofmonth, const ObDateSqlMode date_sql_mode, const bool &need_truncate = false);
+                                      const ObDateSqlMode date_sql_mode,
+                                      const bool &need_truncate = false);
   static int str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale = NULL, const bool &need_truncate = false);
   static int str_to_ob_time_format(const ObString &str, const ObString &fmt, ObTime &ob_time,
-                                   int16_t *scale, const bool no_zero_in_date,
-                                   const ObDateSqlMode date_sql_mode);
+                                   int16_t *scale, const ObDateSqlMode date_sql_mode);
   static int str_to_ob_time_oracle_dfm(const ObString &str, const ObTimeConvertCtx &cvrt_ctx,
                                        const ObObjType target_type, ObTime &ob_time, ObScale &scale);
   static int str_to_ob_time_by_dfm_elems(const ObString &str,
@@ -636,8 +645,8 @@ public:
   }
   */
 public:
-  static int validate_datetime(ObTime &ob_time, const bool is_dayofmonth,
-                               const ObDateSqlMode date_sql_mode);
+  static int validate_datetime(ObTime &ob_time, const ObDateSqlMode date_sql_mode);
+
 private:
   // date add / sub / diff.
   static int merge_date_interval(int64_t base_value, const ObString &interval_str,
