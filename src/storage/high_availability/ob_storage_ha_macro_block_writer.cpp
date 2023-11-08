@@ -133,15 +133,8 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
         break;
       }
       if (OB_FAIL(dag_yield())) {
-        if (OB_CANCELED == ret) {
-          STORAGE_LOG(INFO, "Cancel this task since the whole dag is canceled", K(ret));
-          break;
-        } else {
-          STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
-        }
-      }
-
-      if (OB_FAIL(reader_->get_next_macro_block(header, data))) {
+        STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
+      } else if (OB_FAIL(reader_->get_next_macro_block(header, data))) {
         if (OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "failed to get next macro block", K(ret));
         } else {

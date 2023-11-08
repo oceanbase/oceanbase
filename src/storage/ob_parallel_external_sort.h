@@ -1253,14 +1253,8 @@ int ObExternalSortRound<T, Compare>::do_one_run(
 
     while (OB_SUCC(ret)) {
       if (OB_FAIL(share::dag_yield())) {
-        if (OB_CANCELED == ret) {
-          STORAGE_LOG(INFO, "Cancel this task since the whole dag is canceled", K(ret));
-          break;
-        } else {
-          STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
-        }
-      }
-      if (OB_FAIL(merger_.get_next_item(item))) {
+        STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
+      } else if (OB_FAIL(merger_.get_next_item(item))) {
         if (common::OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "fail to get next item", K(ret));
         } else {

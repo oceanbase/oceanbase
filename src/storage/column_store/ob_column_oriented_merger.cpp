@@ -410,7 +410,23 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
     bool need_replay_mergelog = true;
     bool need_move_row_iter = false;
     while (OB_SUCC(ret) && !merge_helper_->is_iter_end()) {
-      if (need_replay_mergelog == false) {
+      if (OB_FAIL(share::dag_yield())) {
+        STORAGE_LOG(WARN, "fail to yield co merge dag", KR(ret));
+      }
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_COMPACTION_CO_MERGE_PARTITION_LONG_TIME) ret;
+        if (OB_FAIL(ret)) {
+          if (REACH_TENANT_TIME_INTERVAL(ObPartitionMergeProgress::UPDATE_INTERVAL)) {
+            LOG_INFO("ERRSIM EN_COMPACTION_CO_MERGE_PARTITION_LONG_TIME", K(ret));
+          }
+          ret = OB_SUCCESS;
+          continue;
+        }
+      }
+#endif
+      if (OB_FAIL(ret)) {
+      } else if (need_replay_mergelog == false) {
         //reuse result_row
       } else if (OB_FAIL(merge_helper_->find_rowkey_minimum_iters(minimum_iters))) {
         STORAGE_LOG(WARN, "failed to find_rowkey_minimum_iters", K(ret), KPC(merge_helper_));

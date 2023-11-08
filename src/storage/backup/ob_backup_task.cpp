@@ -163,12 +163,7 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
         }
         ob_usleep(CHECK_TIME_INTERVAL);
         if (OB_FAIL(share::dag_yield())) {
-          if (OB_CANCELED == ret) {
-            LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
-            break;
-          } else {
-            LOG_WARN("Invalid return value for dag_yield", K(ret));
-          }
+          LOG_WARN("fail to yield dag", KR(ret));
         }
       }
     } while (OB_SUCC(ret));
@@ -5047,12 +5042,7 @@ int ObLSBackupComplementLogTask::wait_piece_frozen_(const share::ObTenantArchive
       LOG_INFO("wait piece frozen", K(piece));
       ob_usleep(CHECK_TIME_INTERVAL);
       if (OB_FAIL(share::dag_yield())) {
-        if (OB_CANCELED == ret) {
-          LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
-          break;
-        } else {
-          LOG_WARN("Invalid return value for dag_yield", K(ret));
-        }
+        LOG_WARN("fail to yield dag", KR(ret));
       }
     }
   } while (OB_SUCC(ret));

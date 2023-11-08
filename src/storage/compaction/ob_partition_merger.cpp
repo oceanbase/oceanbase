@@ -685,14 +685,8 @@ int ObPartitionMajorMerger::merge_partition(
         macro_block_count = merge_info_.macro_block_count_;
         ctx.mem_ctx_.mem_click();
         if (OB_FAIL(share::dag_yield())) {
-          if (OB_CANCELED == ret) {
-            STORAGE_LOG(WARN, "Cancel this task since the whole dag is canceled", K(ret));
-            break;
-          } else {
-            STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
-          }
-        }
-        if (OB_UNLIKELY(!MTL(ObTenantTabletScheduler *)->could_major_merge_start())) {
+          STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
+        } else if (OB_UNLIKELY(!MTL(ObTenantTabletScheduler *)->could_major_merge_start())) {
           ret = OB_CANCELED;
           STORAGE_LOG(WARN, "Major merge has been paused", K(ret));
           CTX_SET_DIAGNOSE_LOCATION(ctx);
@@ -1044,15 +1038,8 @@ int ObPartitionMinorMerger::merge_partition(
       macro_block_count = merge_info_.macro_block_count_;
       ctx.mem_ctx_.mem_click();
       if (OB_FAIL(share::dag_yield())) {
-        if (OB_CANCELED == ret) {
-          STORAGE_LOG(WARN, "Cancel this task since the whole dag is canceled", K(ret));
-          break;
-        } else {
-          STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
-        }
-      }
-      //find minimum merge iter
-      if (merge_helper_->is_iter_end()) {
+        STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
+      } else if (merge_helper_->is_iter_end()) { //find minimum merge iter
         ret = OB_ITER_END;
       } else if (OB_FAIL(merge_helper_->find_rowkey_minimum_iters(rowkey_minimum_iters))) {
         STORAGE_LOG(WARN, "Failed to find minimum iters", K(ret), KPC(merge_helper_));

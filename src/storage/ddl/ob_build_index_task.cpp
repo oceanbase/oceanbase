@@ -129,12 +129,7 @@ int ObUniqueIndexChecker::calc_column_checksum(
           column_checksum.at(i) += row->storage_datums_[i].checksum(0);
         }
         if (OB_FAIL(dag_yield())) {
-          if (OB_CANCELED == ret) {
-            STORAGE_LOG(INFO, "Cancel this task since the whole dag is canceled", K(ret));
-            break;
-          } else {
-            STORAGE_LOG(WARN, "Invalid return value for dag_yield", K(ret));
-          }
+          STORAGE_LOG(WARN, "fail to yield dag", KR(ret));
         }
       }
     }
@@ -566,12 +561,8 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
         LOG_WARN("fail to generate index ddl error message", K(ret), K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));
         ob_usleep(RETRY_INTERVAL);
         if (OB_FAIL(dag_yield())) {
-          if (OB_CANCELED == ret) {
-            LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
-            break;
-          } else {
-            LOG_WARN("Invalid return value for dag_yield", K(ret));
-          }
+          LOG_WARN("fail to yield dag", KR(ret));
+          keep_report_err_msg = false;
         }
       } else {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
@@ -616,12 +607,7 @@ int ObUniqueIndexChecker::wait_trans_end(ObIDag *dag)
           ret = OB_SUCCESS;
           ob_usleep(RETRY_INTERVAL);
           if (OB_FAIL(dag_yield())) {
-            if (OB_CANCELED == ret) {
-              LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
-              break;
-            } else {
-              LOG_WARN("Invalid return value for dag_yield", K(ret));
-            }
+            LOG_WARN("fail to yield dag", KR(ret));
           }
         } else {
           LOG_WARN("fail to check modify time elapsed", K(ret));

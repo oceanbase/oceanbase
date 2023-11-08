@@ -1201,12 +1201,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       ObColumnChecksumCalculator *checksum_calculator = nullptr;
       t1 = ObTimeUtility::current_time();
       if (OB_FAIL(dag_yield())) {
-        if (OB_CANCELED == ret) {
-          LOG_INFO("Cancel this task since the whole dag is canceled", K(ret));
-          break;
-        } else {
-          LOG_WARN("Invalid return value for dag_yield", K(ret));
-        }
+        LOG_WARN("fail to yield dag", KR(ret));
       } else if (OB_FAIL(scan->get_next_row(tmp_row, reshape_row_only_for_remote_scan))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next row", K(ret));
