@@ -177,24 +177,6 @@ public:
     const bool start_;
   };
 
-  class ObOfflineServerTask : public share::ObAsyncTask {
-  public:
-    ObOfflineServerTask(ObRootService& root_service, const common::ObAddr& server)
-        : root_service_(root_service), server_(server)
-    {
-      set_retry_times(0); /*not repeat*/
-    }
-    virtual ~ObOfflineServerTask()
-    {}
-    virtual int process();
-    virtual int64_t get_deep_copy_size() const;
-    share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
-
-  private:
-    ObRootService& root_service_;
-    const common::ObAddr server_;
-  };
-
   class ObMergeErrorTask : public share::ObAsyncTask {
   public:
     explicit ObMergeErrorTask(ObRootService& root_service) : root_service_(root_service)
@@ -265,7 +247,6 @@ public:
     virtual int on_server_status_change(const common::ObAddr& server) override;
     virtual int on_start_server(const common::ObAddr& server) override;
     virtual int on_stop_server(const common::ObAddr& server) override;
-    virtual int on_offline_server(const common::ObAddr& server) override;
 
   private:
     ObRootService& root_service_;
@@ -1093,7 +1074,6 @@ public:
   int submit_update_all_server_task(const common::ObAddr& server);
   int submit_start_server_task(const common::ObAddr& server);
   int submit_stop_server_task(const common::ObAddr& server);
-  int submit_offline_server_task(const common::ObAddr& server);
   int submit_report_core_table_replica_task();
   int submit_reload_unit_manager_task();
   int report_replica();
@@ -1240,6 +1220,8 @@ public:
   int ttl_response(const obrpc::ObTTLResponseArg& arg);
 
   ////////////////////////////////////////////////////
+  int get_root_partition_table(common::ObArray<common::ObAddr> &rs_list);
+
 private:
   int check_parallel_ddl_conflict(share::schema::ObSchemaGetterGuard& schema_guard, const obrpc::ObDDLArg& arg);
   int check_can_start_as_primary();
@@ -1266,7 +1248,6 @@ private:
   int check_is_log_sync_twice(bool& is_log_sync, const common::ObIArray<common::ObAddr>& stop_server);
   int init_sys_admin_ctx(ObSystemAdminCtx& ctx);
   int set_cluster_version();
-  int get_root_partition_table(common::ObArray<common::ObAddr>& rs_list);
   bool is_replica_count_reach_rs_limit(int64_t replica_count)
   {
     return replica_count > OB_MAX_CLUSTER_REPLICA_COUNT;

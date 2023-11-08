@@ -1450,30 +1450,6 @@ int ObServerManager::get_servers_of_zone(const common::ObZone& zone, ObServerArr
   return ret;
 }
 
-int ObServerManager::try_renew_rs_list()
-{
-  int ret = OB_SUCCESS;
-  ObZone empty_zone;
-  ObServerStatusArray statuses;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else if (OB_FAIL(get_server_statuses(empty_zone, statuses))) {
-    LOG_WARN("fail to get server statuses", KR(ret));
-  } else {
-    for (int64_t i = 0; i < statuses.count(); i++) {
-      if (statuses.at(i).is_alive()) {
-        // nothing todo
-      } else if (OB_FAIL(status_change_callback_->on_offline_server(statuses.at(i).server_))) {
-        LOG_WARN("fail to on offline server", KR(ret), "server", statuses.at(i).server_);
-      }
-      // ignore ret
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
 int ObServerManager::construct_not_empty_server_set(common::hash::ObHashSet<common::ObAddr>& not_empty_server_set)
 {
   int ret = OB_SUCCESS;
@@ -2611,23 +2587,12 @@ void ObHeartbeatChecker::run3()
     LOG_WARN("heart beat checker has not inited", K(ret));
   } else {
     LOG_INFO("heartbeat checker start");
-    int64_t now = ObTimeUtility::current_time();
-    int64_t last_renew_rs_time = 0;
-    int64_t RENEW_INTERVAL = 3 * 1000 * 1000;  // 3s
     while (!stop_) {
       update_last_run_timestamp();
       LOG_TRACE("begin check all server heartbeat");
       ret = server_manager_->check_servers();
       if (OB_FAIL(ret)) {
         LOG_WARN("server managers check servers failed", K(ret));
-      }
-      // ignore ret
-      now = ObTimeUtility::current_time();
-      if (now - last_renew_rs_time > RENEW_INTERVAL) {
-        last_renew_rs_time = now;
-        if (OB_FAIL(server_manager_->try_renew_rs_list())) {
-          LOG_WARN("fail to try renew rs list", KR(ret));
-        }
       }
       DEBUG_SYNC(HUNG_HEARTBEAT_CHECK);
       usleep(CHECK_INTERVAL_US);
