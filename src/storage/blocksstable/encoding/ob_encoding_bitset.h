@@ -670,9 +670,16 @@ OB_INLINE int ObBitMapMetaReader<ObNumberSC>::read_exc_cell(const char *buf,
       }
     }
   }
-  datum.ptr_ = buf + meta->data_offset_ + offset;
+  MEMCPY(const_cast<char *>(datum.ptr_), buf + meta->data_offset_ + offset, sizeof(ObNumberDesc));
   const uint8_t num_len = datum.num_->desc_.len_;
   datum.pack_ = sizeof(ObNumberDesc) + num_len * sizeof(uint32_t);
+  if (OB_LIKELY(1 == num_len)) {
+    MEMCPY(const_cast<char *>(datum.ptr_) + sizeof(ObNumberDesc),
+        buf + meta->data_offset_ + offset + sizeof(ObNumberDesc), sizeof(uint32_t));
+  } else {
+    MEMCPY(const_cast<char *>(datum.ptr_) + sizeof(ObNumberDesc),
+        buf + meta->data_offset_ + offset + sizeof(ObNumberDesc), num_len * sizeof(uint32_t));
+  }
   return ret;
 }
 
