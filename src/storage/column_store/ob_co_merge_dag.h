@@ -164,6 +164,7 @@ private:
   uint32_t start_cg_idx_;
   uint32_t end_cg_idx_;
   bool retry_create_task_;
+  bool progress_inited_; // inited = true & merge_progress_ = nullptr means init failed
   compaction::ObPartitionMergeProgress *merge_progress_;
 };
 
