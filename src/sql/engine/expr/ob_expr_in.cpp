@@ -608,6 +608,26 @@ init_right_datums(int64_t param_num,
   return ret;
 }
 
+int ObExprInOrNotIn::ObExprInCtx::
+init_cmp_funcs(int64_t func_cnt,
+               ObExecContext *exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  cmp_functions_ = NULL;
+  if (func_cnt > 0) {
+    cmp_functions_ = (void**)exec_ctx->get_allocator().alloc(func_cnt * sizeof(void*));
+    if (OB_ISNULL(cmp_functions_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for cmp_func **", K(ret));
+    } else {
+      for (int64_t i = 0; i < func_cnt; i++) {
+        cmp_functions_[i] = NULL;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprInOrNotIn::ObExprInCtx::set_right_obj(int64_t row_num,
                                                 int64_t col_num,
                                                 const int right_param_num,
@@ -1228,6 +1248,8 @@ int ObExprInOrNotIn::eval_in_with_row(const ObExpr &expr,
       LOG_WARN("failed to init hashset_vecs_all_null", K(ret));
     } else if (OB_FAIL(in_ctx->init_right_datums(right_param_num, row_dimension, exec_ctx))) {
       LOG_WARN("failed to init right datums", K(ret));
+    } else if (OB_FAIL(in_ctx->init_cmp_funcs(expr.inner_func_cnt_, exec_ctx))) {
+      LOG_WARN("failed to init cmp funcs", K(ret));
     } else {
       for (int i = 0; OB_SUCC(ret) && i < right_param_num; ++i) {
         if (OB_ISNULL(RIGHT_ROW(i))) {
@@ -1270,7 +1292,7 @@ int ObExprInOrNotIn::eval_in_with_row(const ObExpr &expr,
                 if (OB_SUCC(ret)) {
                   in_ctx->hash_func_buff_[j] =
                            (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->murmur_hash_v2_);
-                  expr.inner_functions_[j] = (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->null_first_cmp_);
+                  in_ctx->cmp_functions_[j] = (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->null_first_cmp_);
                 }
               }
             } else {
@@ -1281,7 +1303,7 @@ int ObExprInOrNotIn::eval_in_with_row(const ObExpr &expr,
           if (OB_SUCC(ret) && !in_ctx->funcs_ptr_set) {
             for (int i = 0; i < (1 << row_dimension); ++i) {
               in_ctx->set_hash_funcs_ptr(i, in_ctx->hash_func_buff_);
-              in_ctx->set_cmp_funcs_ptr(i, expr.inner_functions_);
+              in_ctx->set_cmp_funcs_ptr(i, in_ctx->cmp_functions_);
             }
             in_ctx->funcs_ptr_set = true;
           }
@@ -1363,7 +1385,7 @@ int ObExprInOrNotIn::eval_in_with_row(const ObExpr &expr,
                                   LEFT_ROW_ELE(j)->datum_meta_.cs_type_,
                                   LEFT_ROW_ELE(j)->obj_meta_.has_lob_header() ||
                                   RIGHT_ROW_ELE(0, j)->obj_meta_.has_lob_header());
-          expr.inner_functions_[j] = (void *)(func_ptr);
+          in_ctx->cmp_functions_[j] = (void *)(func_ptr);
         }
       }
       if (OB_SUCC(ret)) {
@@ -1451,12 +1473,13 @@ int ObExprInOrNotIn::eval_in_without_row(const ObExpr &expr,
       if (OB_FAIL(build_right_hash_without_row(in_id, right_param_num,
                                                expr, ctx, exec_ctx, in_ctx, cnt_null))) {
         LOG_WARN("failed to build hash table for right params", K(ret));
-      } else if (!in_ctx->is_hash_calc_disabled()) {
+      } else {
         // refresh inctx hash fun to left hash func
-        if (OB_NOT_NULL(in_ctx->hash_func_buff_)) {
+        if (!in_ctx->is_hash_calc_disabled() && OB_NOT_NULL(in_ctx->hash_func_buff_)) {
           in_ctx->hash_func_buff_[0] = (void *)
               (expr.args_[0]->basic_funcs_->murmur_hash_v2_);
         }
+        // whatever fallback or not, need set cmp func to right and left
         // hash table use self as left, so here right param is left for cmp func
         DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                 expr.args_[1]->args_[0]->datum_meta_.type_,
@@ -1470,7 +1493,7 @@ int ObExprInOrNotIn::eval_in_without_row(const ObExpr &expr,
                                 expr.args_[0]->obj_meta_.has_lob_header() ||
                                 expr.args_[1]->args_[0]->obj_meta_.has_lob_header());
         for (int i = 0; i < expr.inner_func_cnt_; i++) {
-          expr.inner_functions_[i] = (void *)func_ptr;
+          in_ctx->cmp_functions_[i] = (void *)func_ptr;
         }
       }
       //second we search in hashset.
@@ -1554,27 +1577,25 @@ int ObExprInOrNotIn::eval_batch_in_without_row(const ObExpr &expr,
          LOG_WARN("failed to build hash table for right params", K(ret));
       } else {
         fallback = in_ctx->is_hash_calc_disabled();
-        if (!fallback) {
-          // refresh inctx hash fun to left hash func
-          if (OB_NOT_NULL(in_ctx->hash_func_buff_)) {
-            in_ctx->hash_func_buff_[0] = (void *)
-                (expr.args_[0]->basic_funcs_->murmur_hash_v2_);
-          }
-          // hash table use self as left, so here right param is left for cmp func
-          DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-                                  expr.args_[1]->args_[0]->datum_meta_.type_,
-                                  expr.args_[0]->datum_meta_.type_,
-                                  expr.args_[1]->args_[0]->datum_meta_.scale_,
-                                  expr.args_[0]->datum_meta_.scale_,
-                                  expr.args_[1]->args_[0]->datum_meta_.precision_,
-                                  expr.args_[0]->datum_meta_.precision_,
-                                  lib::is_oracle_mode(),
-                                  expr.args_[0]->datum_meta_.cs_type_,
-                                  expr.args_[0]->obj_meta_.has_lob_header() ||
-                                  expr.args_[1]->args_[0]->obj_meta_.has_lob_header());
-          for (int i = 0; i < expr.inner_func_cnt_; i++) {
-            expr.inner_functions_[i] = (void *)func_ptr;
-          }
+        // refresh inctx hash fun to left hash func
+        if (!fallback && OB_NOT_NULL(in_ctx->hash_func_buff_)) {
+          in_ctx->hash_func_buff_[0] = (void *)
+              (expr.args_[0]->basic_funcs_->murmur_hash_v2_);
+        }
+        // hash table use self as left, so here right param is left for cmp func
+        DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+                                expr.args_[1]->args_[0]->datum_meta_.type_,
+                                expr.args_[0]->datum_meta_.type_,
+                                expr.args_[1]->args_[0]->datum_meta_.scale_,
+                                expr.args_[0]->datum_meta_.scale_,
+                                expr.args_[1]->args_[0]->datum_meta_.precision_,
+                                expr.args_[0]->datum_meta_.precision_,
+                                lib::is_oracle_mode(),
+                                expr.args_[0]->datum_meta_.cs_type_,
+                                expr.args_[0]->obj_meta_.has_lob_header() ||
+                                expr.args_[1]->args_[0]->obj_meta_.has_lob_header());
+        for (int i = 0; i < expr.inner_func_cnt_; i++) {
+          in_ctx->cmp_functions_[i] = (void *)func_ptr;
         }
       }
       for (int64_t left_idx = 0; OB_SUCC(ret) && !fallback && left_idx < batch_size; ++left_idx) {
@@ -1831,6 +1852,8 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
       LOG_WARN("failed to init hashset", K(ret));
     } else if (OB_FAIL(in_ctx->init_right_datums(right_param_num, row_dimension, exec_ctx))) {
       LOG_WARN("failed to init right datums", K(ret));
+    } else if (OB_FAIL(in_ctx->init_cmp_funcs(expr.inner_func_cnt_, exec_ctx))) {
+      LOG_WARN("failed to init cmp funcs", K(ret));
     } else {
       for (int i = 0; OB_SUCC(ret) && i < right_param_num; ++i) {
         if (OB_ISNULL(expr.args_[1]->args_[i])) {
@@ -1843,6 +1866,7 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
         } else if (right->is_null()) {
           cnt_null = true;
           in_ctx->ctx_hash_null_ = true;
+          in_ctx->cmp_functions_[i] = (void *)(expr.args_[1]->args_[i]->basic_funcs_->null_first_cmp_);
         } else {
           if (OB_FAIL(in_ctx->set_right_datum(i, 0, right_param_num, *right))) {
             LOG_WARN("failed to load right", K(ret), K(i));
@@ -1858,7 +1882,7 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
             if (OB_SUCC(ret)) {
               in_ctx->hash_func_buff_[0] = (void *)
                               (expr.args_[1]->args_[i]->basic_funcs_->murmur_hash_v2_);
-              expr.inner_functions_[i] = (void *)(expr.args_[1]->args_[i]->basic_funcs_->null_first_cmp_);
+              in_ctx->cmp_functions_[i] = (void *)(expr.args_[1]->args_[i]->basic_funcs_->null_first_cmp_);
             }
           }
           Row<ObDatum> tmp_row;
@@ -1868,7 +1892,7 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
             LOG_WARN("failed to load datum", K(ret), K(i));
           } else {
             in_ctx->set_hash_funcs_ptr_for_set(in_ctx->hash_func_buff_);
-            in_ctx->set_cmp_funcs_ptr_for_set(expr.inner_functions_);
+            in_ctx->set_cmp_funcs_ptr_for_set(in_ctx->cmp_functions_);
           }
           if (OB_SUCC(ret) && OB_FAIL(in_ctx->add_to_static_engine_hashset(tmp_row))) {
             LOG_WARN("failed to add to hashset", K(ret));

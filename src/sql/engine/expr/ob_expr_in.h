@@ -146,6 +146,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator
         row_dimension_(-1),
         right_has_null(false),
         hash_func_buff_(NULL),
+        cmp_functions_(NULL),
         funcs_ptr_set(false),
         ctx_hash_null_(false),
         right_objs_(NULL),
@@ -224,6 +225,8 @@ class ObExprInOrNotIn : public ObVectorExprOperator
     int init_right_datums(int64_t param_num,
                           int64_t row_dimension,
                           ObExecContext *exec_ctx);
+    int init_cmp_funcs(int64_t func_cnt,
+                       ObExecContext *exec_ctx);
     int set_right_obj(int64_t row_num,
                       int64_t col_num,
                       const int right_param_num,
@@ -250,6 +253,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator
     int row_dimension_;
     bool right_has_null;
     void **hash_func_buff_;
+    void **cmp_functions_;
     bool funcs_ptr_set;
     bool ctx_hash_null_;
   private:

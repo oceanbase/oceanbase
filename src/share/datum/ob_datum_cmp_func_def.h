@@ -548,7 +548,7 @@ struct ObDatumStringTextCmp : public ObDefined<SupportedCollections::liner_searc
     int ret = OB_SUCCESS;
     cmp_ret = 0;
     const ObLobCommon& rlob = r.get_lob_data();
-    if (r.len_ != 0 && !rlob.is_mem_loc_ && rlob.in_row_) {
+    if (r.len_ != 0 && !rlob.is_mem_loc_ && rlob.in_row_ && rlob.reserve_ == 0) {
       cmp_ret = ObCharset::strcmpsp(CS_TYPE,
                 l.ptr_, l.len_,
                 rlob.get_inrow_data_ptr(), static_cast<int32_t>(rlob.get_byte_size(r.len_)), WITH_END_SPACE);
