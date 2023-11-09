@@ -2668,10 +2668,7 @@ int ObPLExecState::final(int ret)
       if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i) && is_called_from_sql_) {
         // do nothing
       } else if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i)) {
-        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
-            ctx_.exec_ctx_->get_my_session()))) {
-          LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
-        }
+        // do nothing
       } else if (OB_SUCCESS != ret) { // OUT参数在失败的情况下在这里释放
         if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
             ctx_.exec_ctx_->get_my_session()))) {
@@ -3014,6 +3011,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
                 collection->set_last(OB_INVALID_INDEX);
               }
             }
+            CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
+            OZ (ctx_.exec_ctx_->get_pl_ctx()->add(dst));
             OX (param = dst);
             OX (param.set_param_meta());
             OX (param.set_udt_id(pl_user_type->get_user_type_id()));
