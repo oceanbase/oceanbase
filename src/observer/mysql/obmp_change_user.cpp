@@ -143,13 +143,13 @@ int ObMPChangeUser::decode_string_kv(const char *attrs_end, const char *&pos, Ob
   } else {
     if (OB_FAIL(ObMySQLUtil::get_length(pos, key_len))) {
       OB_LOG(WARN, "fail t get key len", K(pos), K(ret));
+    } else if (pos + key_len >= attrs_end) {
+      // skip this value
+      pos = attrs_end;
     } else {
       kv.key_.assign_ptr(pos, static_cast<uint32_t>(key_len));
       pos += key_len;
-      if (pos >= attrs_end) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected key len", K(ret), K(key_len));
-      } else if (OB_FAIL(ObMySQLUtil::get_length(pos, value_len))) {
+      if (OB_FAIL(ObMySQLUtil::get_length(pos, value_len))) {
         OB_LOG(WARN, "fail t get value len", K(pos), K(ret));
       } else {
         kv.value_.assign_ptr(pos, static_cast<uint32_t>(value_len));
