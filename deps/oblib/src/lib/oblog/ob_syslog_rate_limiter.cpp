@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include "ob_syslog_rate_limiter.h"
 #include "lib/time/ob_time_utility.h"
 

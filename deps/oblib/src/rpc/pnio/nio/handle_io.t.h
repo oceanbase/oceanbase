@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 /* errors
 1. 0: yield, file is writable, and there is remain data to send.
 2. EAGAIN: wait wakeup, 3 cases:
@@ -6,6 +18,7 @@
    3. wait for memory or bandwidth...
 3. Exception: should destroy sock.
 */
+
 //int xxx_sk_do_flush(xxx_sk_t* s, int64_t* remain);
 
 /* errors

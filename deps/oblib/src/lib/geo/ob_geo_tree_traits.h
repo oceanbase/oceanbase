@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #ifndef OCEANBASE_LIB_GEO_OB_GEO_TREE_TRAITS_
 #define OCEANBASE_LIB_GEO_OB_GEO_TREE_TRAITS_
 

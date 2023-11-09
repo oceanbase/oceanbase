@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"

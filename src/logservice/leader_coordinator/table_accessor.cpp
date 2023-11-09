@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include "share/ob_errno.h"
 #include "share/ob_occam_time_guard.h"
 #include "share/rc/ob_tenant_base.h"

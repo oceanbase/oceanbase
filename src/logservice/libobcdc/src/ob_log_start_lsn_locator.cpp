@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_start_lsn_locator.h"

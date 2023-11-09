@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include "share/ob_ls_id.h"
 #define UNITTEST_DEBUG
 #include <gtest/gtest.h>

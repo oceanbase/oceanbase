@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #ifndef UNITTEST_BACKUP_OB_ARCHIVE_CHECKPOINT_MGR_CONFIG_H_
 #define UNITTEST_BACKUP_OB_ARCHIVE_CHECKPOINT_MGR_CONFIG_H_
 

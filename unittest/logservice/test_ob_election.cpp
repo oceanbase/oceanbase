@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include "lib/list/ob_dlist.h"
 #include "logservice/palf/election/interface/election_msg_handler.h"
 #include <algorithm>

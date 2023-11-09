@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include "share/detect/ob_detect_manager.h"
 #include "lib/ob_running_mode.h"
 #include "share/rc/ob_context.h"

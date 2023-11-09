@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #include "logservice/palf/election/message/election_message.h"
 #include "ob_role.h"
 #include "share/ob_occam_time_guard.h"
