@@ -199,6 +199,8 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       if (can_gc_retain_ctx) {
         do_retain_ctx_gc_(cur_ls_ptr);
       }
+      // ignore ret
+      (void)cur_ls_ptr->get_tx_svr()->check_all_readonly_tx_clean_up();
     }
   }
 
