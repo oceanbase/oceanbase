@@ -1241,7 +1241,7 @@ OB_INLINE static int binary_check_micro_infos(
       if (is_reverse) {
         // [check_border_idx - 1] is the last micro whose endkey greater than border_rowkey in reverse scan, need move forward
         check_border_idx--;
-        if (OB_UNLIKELY(check_border_idx == end && check_border_idx > 0)) {
+        if (OB_UNLIKELY(check_border_idx > 0)) {
           // move to left if the two rightmost endkeys is same(possible in multiple ranges)
           int cmp_ret = 0;
           for (; OB_SUCC(ret) && 0 == cmp_ret && check_border_idx > start; check_border_idx--) {
