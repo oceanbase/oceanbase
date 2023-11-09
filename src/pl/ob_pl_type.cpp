@@ -1798,6 +1798,13 @@ bool ObObjAccessIdx::is_type(
   return is_local_type(access_idxs) || is_pkg_type(access_idxs) || is_udt_type(access_idxs);
 }
 
+bool ObObjAccessIdx::is_expr_type(
+  const common::ObIArray<ObObjAccessIdx> &access_idxs)
+{
+  return access_idxs.count() > 0
+          && access_idxs.at(access_idxs.count() - 1).is_expr();
+}
+
 const ObPLDataType &ObObjAccessIdx::get_final_type(const common::ObIArray<ObObjAccessIdx> &access_idxs)
 {
   return access_idxs.at(access_idxs.count() - 1).elem_type_;
