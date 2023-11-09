@@ -177,7 +177,7 @@ int ObMergeParameter::init(
     if (is_major_merge_type(merge_type)) {
       // major merge should only read data between two major freeze points
       // but there will be some minor sstables which across major freeze points
-      merge_version_range_.base_version_ = MAX(merge_ctx.get_read_base_version(), static_param_.version_range_.base_version_);
+      merge_version_range_.base_version_ = merge_ctx.get_read_base_version();
     } else if (is_meta_major_merge(merge_type)) {
       // meta major merge does not keep multi-version
       merge_version_range_.multi_version_start_ = static_param_.version_range_.snapshot_version_;

@@ -525,7 +525,7 @@ TEST_F(TestCOMerge, test_merge_default_row_store_with_empty_major)
 
   int schema_rowkey_cnt = 2;
 
-  int64_t snapshot_version = 10;
+  int64_t snapshot_version = 7;
   ObScnRange scn_range;
   scn_range.start_scn_.set_min();
   scn_range.end_scn_.convert_for_tx(10);
@@ -740,7 +740,7 @@ TEST_F(TestCOMerge, test_column_store_merge_with_empty_co_table)
 
   int schema_rowkey_cnt = 2;
 
-  int64_t snapshot_version = 10;
+  int64_t snapshot_version = 7;
   ObScnRange scn_range;
   scn_range.start_scn_.set_min();
   scn_range.end_scn_.convert_for_tx(10);
@@ -835,10 +835,10 @@ TEST_F(TestCOMerge, test_co_merge_with_twice_major)
 
   int schema_rowkey_cnt = 2;
 
-  int64_t snapshot_version = 10;
+  int64_t snapshot_version = 7;
   ObScnRange scn_range;
   scn_range.start_scn_.set_min();
-  scn_range.end_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(7);
   //prepare table schema
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   ObArray<ObColDesc> col_ids;
@@ -862,7 +862,7 @@ TEST_F(TestCOMerge, test_co_merge_with_twice_major)
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObVersionRange trans_version_range;
-  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.snapshot_version_ = 9;
   trans_version_range.multi_version_start_ = 7;
   trans_version_range.base_version_ = 7;
 

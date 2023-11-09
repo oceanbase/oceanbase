@@ -213,9 +213,13 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", KR(ret), KPC(origin_table), K(query_range));
   } else {
+    blocksstable::ObSSTable *major_sstable = origin_table->get_major_sstable();
     origin_table_ = origin_table;
     allocator_.set_tenant_id(MTL_ID());
-    if (OB_FAIL((init_table_access_param()))) {
+    if (major_sstable != nullptr && major_sstable->is_co_sstable() && !major_sstable->is_empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported scan co sstable", K(ret), KPC(major_sstable));
+    } else if (OB_FAIL((init_table_access_param()))) {
       LOG_WARN("fail to init query range", KR(ret));
     } else if (OB_FAIL(init_table_access_ctx())) {
       LOG_WARN("fail to init table access param", KR(ret));

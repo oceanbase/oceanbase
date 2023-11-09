@@ -210,7 +210,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
                            false); /*query_stat*/
     query_flag.multi_version_minor_merge_ = is_multi_version_merge(static_param.get_merge_type());
     if (OB_FAIL(access_context_.init(query_flag, store_ctx_, allocator_, allocator_,
-                                     static_param.version_range_))) {
+                                     merge_param.merge_version_range_))) {
       LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
     } else {
       access_context_.trans_state_mgr_ = merge_param.trans_state_mgr_;

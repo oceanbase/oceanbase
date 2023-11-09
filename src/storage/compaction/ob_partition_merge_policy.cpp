@@ -149,7 +149,7 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null base table", K(ret), K(tablet));
   } else {
-    result.version_range_.base_version_ = base_table->get_upper_trans_version();
+    result.version_range_.base_version_ = 0;
     result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
     result.version_range_.snapshot_version_ = param.merge_version_;
     if (OB_FAIL(get_multi_version_start(param.merge_type_, ls, tablet, result.version_range_, result.snapshot_info_))) {
