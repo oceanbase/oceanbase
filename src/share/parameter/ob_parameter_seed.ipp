@@ -1738,3 +1738,7 @@ DEF_MODE_WITH_PARSER(_obkv_feature_mode, OB_CLUSTER_PARAMETER, "", common::ObKvF
 DEF_BOOL(_enable_range_extraction_for_not_in, OB_TENANT_PARAMETER, "True",
         "Enable extract query range for not in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// DEF_BOOL(_enable_new_query_range_extraction, OB_TENANT_PARAMETER, "True",
+//     "decide whether use new algorithm to extract query range.",
+//     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
