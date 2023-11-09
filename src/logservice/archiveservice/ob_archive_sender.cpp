@@ -523,8 +523,10 @@ int ObArchiveSender::check_piece_continuous_(const ObArchiveSendTask &task,
     if (persist_piece_id != piece.get_piece_id() && info.lsn_ != task.get_start_lsn().val_) {
       // more lsn need to persist, just wait
       operation = DestSendOperator::WAIT;
-      ARCHIVE_LOG(INFO, "persist lsn not equal with send task "
-          "and persist piece id not equal with send task, just wait", K(info), K(task));
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+        ARCHIVE_LOG(INFO, "persist lsn not equal with send task "
+            "and persist piece id not equal with send task, just wait", K(info), K(task));
+      }
     } else if (piece.get_piece_id() > persist_piece_id + 1
         && info.lsn_ == task.get_start_lsn().val_) {
       operation = DestSendOperator::COMPENSATE;
