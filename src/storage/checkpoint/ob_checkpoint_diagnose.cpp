@@ -29,7 +29,7 @@ void ObTraceInfo::init(const int64_t trace_id,
   reset_without_lock_();
   trace_id_ = trace_id;
   ls_id_ = ls_id;
-  thread_name_ = ob_get_tname();
+  strncpy(thread_name_, ob_get_tname(), oceanbase::OB_THREAD_NAME_BUF_LEN);
   checkpoint_start_time_ = checkpoint_start_time;
 }
 
@@ -41,7 +41,7 @@ void ObTraceInfo::reset_without_lock_()
   checkpoint_unit_diagnose_info_map_.reuse();
   memtable_diagnose_info_map_.reuse();
   checkpoint_start_time_ = 0;
-  thread_name_ = NULL;
+  memset(thread_name_, 0, oceanbase::OB_THREAD_NAME_BUF_LEN);
   allocator_.reset();
 }
 

@@ -19,6 +19,7 @@
 #include "lib/lock/ob_rwlock.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_errno.h"
+#include "share/ob_define.h"
 
 #define REPORT_CHECKPOINT_DIAGNOSE_INFO(func, trace_id, tablet_id, arg...)              \
   checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*); \
@@ -188,7 +189,6 @@ public:
     : trace_id_(INVALID_TRACE_ID),
       freeze_clock_(0),
       ls_id_(),
-      thread_name_(""),
       checkpoint_start_time_(0),
       allocator_("CkpDgn", MALLOC_BLOCK_SIZE
 #ifndef UNITTEST
@@ -198,7 +198,7 @@ public:
       checkpoint_unit_diagnose_info_map_(),
       memtable_diagnose_info_map_(),
       lock_()
-  {}
+  { memset(thread_name_, 0, oceanbase::OB_THREAD_NAME_BUF_LEN); }
   virtual ~ObTraceInfo() { reset(); }
   void init(const int64_t trace_id,
       const share::ObLSID &ls_id,
@@ -245,7 +245,7 @@ public:
   int64_t trace_id_;
   uint32_t freeze_clock_;
   share::ObLSID ls_id_;
-  const char *thread_name_;
+  char thread_name_[oceanbase::OB_THREAD_NAME_BUF_LEN];
   int64_t checkpoint_start_time_;
   ObArenaAllocator allocator_;
   ObCheckpointUnitDiagnoseInfoMap checkpoint_unit_diagnose_info_map_;
