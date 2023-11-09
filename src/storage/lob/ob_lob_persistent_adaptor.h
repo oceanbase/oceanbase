@@ -46,7 +46,20 @@ private:
 class ObPersistentLobApator : public ObILobApator
 {
 public:
-  ObPersistentLobApator() {}
+  explicit ObPersistentLobApator(const uint64_t tenant_id):
+    tenant_id_(tenant_id),
+    allocator_(lib::ObMemAttr(tenant_id, "LobPersist", ObCtxIds::LOB_CTX_ID)),
+    table_param_inited_(false),
+    meta_table_param_(nullptr),
+    meta_table_dml_param_(nullptr)
+  {}
+
+  virtual ~ObPersistentLobApator();
+
+  virtual void destroy();
+
+  int get_meta_table_param(const ObTableParam *&table_param);
+  int get_meta_table_dml_param(const ObTableDMLParam *&table_param);
   virtual int scan_lob_meta(ObLobAccessParam &param,
     ObTableScanParam &scan_param,
     common::ObNewRowIterator *&meta_iter) override;
@@ -139,6 +152,22 @@ private:
       ObNewRow& new_row,
       common::ObSingleRowIteratorWrapper* new_row_iter,
       ObLobPieceInfo& in_row);
+
+  int init_table_param();
+  int init_meta_column_ids(ObSEArray<uint64_t, 6> &meta_column_ids);
+  int prepare_piece_table_param(
+      const ObLobAccessParam &param,
+      ObTableScanParam &scan_param);
+
+private:
+
+  const uint64_t tenant_id_;
+  ObArenaAllocator allocator_;
+  mutable ObSpinLock lock_;
+  bool table_param_inited_;
+  ObTableParam *meta_table_param_;
+  ObTableDMLParam *meta_table_dml_param_;
+
 private:
   static const uint64_t LOB_EXPIRE_TIME_US = 3 * 1000 * 1000; // 3s
 };
