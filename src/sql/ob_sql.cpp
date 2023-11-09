@@ -1037,6 +1037,10 @@ int ObSql::do_real_prepare(const ObString &sql,
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
     ret = OB_ER_UNSUPPORTED_PS;
     LOG_WARN("This command is not supported in the prepared statement protocol yet", K(ret));
+  } else if (parse_result.question_mark_ctx_.count_ > common::OB_MAX_PS_PARAM_COUNT) {
+    ret = OB_ERR_PS_TOO_MANY_PARAM;
+    LOG_WARN("There are too many parameters in the prepared statement", K(ret));
+    LOG_USER_ERROR(OB_ERR_PS_TOO_MANY_PARAM);
   } else {
     ps_status_guard.is_varparams_sql_prepare(is_from_pl, parse_result.question_mark_ctx_.count_ > 0 ? true : false);
   }
