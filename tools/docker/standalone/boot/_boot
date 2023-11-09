@@ -50,8 +50,7 @@ function is_true() {
 function get_mode() {
   if test -z ${MODE}
   then
-    # default mode is "STANDALONE" now.
-    MODE="STANDALONE"
+    MODE="MINI"
   fi
   MODE=${MODE^^}
 }

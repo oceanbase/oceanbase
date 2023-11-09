@@ -92,6 +92,10 @@ function remote_rpm_build() {
 }
 
 source ./boot/_env
+if [ "x${MODE}" != "xSTANDALONE" ]; then
+    echo "please set MODE to STANDALONE for building fast boot docker"
+    exit -1
+fi
 OS=`uname`
 cp ${TMP_INIT_STORE_PY_SCRIPT} ${ACTUAL_INIT_STORE_PY_SCRIPT}
 if [ "$OS" == 'Darwin' ]; then
