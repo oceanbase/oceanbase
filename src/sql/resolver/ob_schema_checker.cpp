@@ -2795,10 +2795,16 @@ int ObSchemaChecker::check_ora_ddl_priv(
 }
 
 /**检查用户user_id是否能access到obj_id，会检查系统权限和对象权限*/
+/*
+ *系统权限又分了两类:
+ * 1. 全局有效：create any table, create any view ....
+ * 2. user’s shema有效：create table，create view，create synonym, create index, ....
+ */
 int ObSchemaChecker::check_access_to_obj(
     const uint64_t tenant_id,
     const uint64_t user_id,
     const uint64_t obj_id,
+    const ObString &database_name,
     const sql::stmt::StmtType stmt_type,
     const ObIArray<uint64_t> &role_id_array,
     bool &accessible,
@@ -2827,6 +2833,7 @@ int ObSchemaChecker::check_access_to_obj(
                                                     static_cast<uint64_t>
                                                     (share::schema::ObObjectType::TABLE),
                                                     obj_id,
+                                                    database_name,
                                                     role_id_array,
                                                     accessible),
               K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
@@ -2842,6 +2849,7 @@ int ObSchemaChecker::check_access_to_obj(
                                                     static_cast<uint64_t>
                                                     (share::schema::ObObjectType::TABLE),
                                                     obj_id,
+                                                    database_name,
                                                     role_id_array,
                                                     accessible),
               K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));

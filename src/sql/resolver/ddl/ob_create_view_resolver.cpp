@@ -677,17 +677,18 @@ int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
         const TableItem *table_item = select_stmt.get_table_item(i);
         CK (OB_NOT_NULL(table_item));
         OZ (schema_checker_->check_access_to_obj(session_info_->get_effective_tenant_id(),
-                                                  session_info_->get_priv_user_id(),
-                                                  table_item->ref_id_,
-                                                  stmt::T_CREATE_VIEW,
-                                                  session_info_->get_enable_role_array(),
-                                                  accessible),
+                                                 session_info_->get_priv_user_id(),
+                                                 table_item->ref_id_,
+                                                 table_item->database_name_,
+                                                 stmt::T_CREATE_VIEW,
+                                                 session_info_->get_enable_role_array(),
+                                                 accessible),
             session_info_->get_effective_tenant_id(), session_info_->get_user_id(),
             stmt.get_database_name());
-        if (!accessible) {
+        if (OB_SUCC(ret) && !accessible) {
           ret = OB_TABLE_NOT_EXIST;
-          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stmt.get_database_name()),
-              to_cstring(table_item->table_name_));
+          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(table_item->database_name_),
+                                             to_cstring(table_item->table_name_));
         }
       }
       if (OB_SUCC(ret)) {

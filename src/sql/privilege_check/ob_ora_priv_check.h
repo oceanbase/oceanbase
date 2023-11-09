@@ -496,6 +496,7 @@ public:
       const share::ObRawPriv p1,
       const uint64_t obj_type,
       const uint64_t obj_id,
+      const common::ObString &database_name,
       const ObIArray<uint64_t> &role_id_array,
       bool &exists);
 
@@ -505,6 +506,7 @@ public:
       const uint64_t user_id,
       const uint64_t obj_type,
       const uint64_t obj_id,
+      const common::ObString &database_name,
       const ObIArray<uint64_t> &role_id_array,
       bool &accessible);
 
