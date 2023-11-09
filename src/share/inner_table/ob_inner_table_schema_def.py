@@ -322,6 +322,7 @@ all_column_def = dict(
       ('srs_id', 'int', 'false', 'OB_DEFAULT_COLUMN_SRS_ID'),
       ('udt_set_id', 'int', 'false', '0'),
       ('sub_data_type', 'int', 'false', '0'),
+      ('skip_index_attr', 'int', 'false', '0'),
     ],
 )
 

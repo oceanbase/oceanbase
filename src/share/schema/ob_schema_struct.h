@@ -8212,6 +8212,38 @@ private:
   common::ObString attribute_;
 };
 
+struct ObSkipIndexColumnAttr
+{
+  OB_UNIS_VERSION(1);
+public:
+  static const uint64_t OB_DEFAULT_SKIP_INDEX_COLUMN_ATTR = 0;
+  ObSkipIndexColumnAttr() : pack_(OB_DEFAULT_SKIP_INDEX_COLUMN_ATTR) {}
+  ~ObSkipIndexColumnAttr() {};
+  inline void reset() { pack_ = OB_DEFAULT_SKIP_INDEX_COLUMN_ATTR; }
+  inline bool is_valid() const { return 0 == reserved_; }
+
+  inline uint64_t get_packed_value() const { return pack_; }
+  inline void set_column_attr(uint64_t column_attr) { pack_ = column_attr; }
+  inline void set_min_max() { min_max_ = 1; }
+  inline void set_sum() { sum_ = 1; }
+  inline bool has_skip_index() const { return OB_DEFAULT_SKIP_INDEX_COLUMN_ATTR != pack_; }
+  inline bool has_min_max() const { return 1 == min_max_; }
+  inline bool has_sum() const { return 1 == sum_; }
+  inline bool operator==(const ObSkipIndexColumnAttr &other) const { return pack_ == other.pack_; }
+  TO_STRING_KV(K_(pack), K_(min_max), K_(sum));
+
+  union
+  {
+    struct
+    {
+      uint64_t min_max_       :1;
+      uint64_t sum_           :1;
+      uint64_t reserved_      :62;
+    };
+    uint64_t pack_;
+  };
+};
+
 class ObTableLatestSchemaVersion
 {
 public:

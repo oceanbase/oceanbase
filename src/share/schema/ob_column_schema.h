@@ -369,6 +369,7 @@ private:
   };
   uint64_t udt_set_id_;
   uint64_t sub_type_;
+  ObSkipIndexColumnAttr skip_index_attr_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

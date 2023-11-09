@@ -13579,6 +13579,27 @@ OB_SERIALIZE_MEMBER(ObRlsContextSchema,
                     context_name_,
                     attribute_);
 
+OB_DEF_SERIALIZE(ObSkipIndexColumnAttr)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, pack_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObSkipIndexColumnAttr)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, pack_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSkipIndexColumnAttr)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, pack_);
+  return len;
+}
+
 ObTableLatestSchemaVersion::ObTableLatestSchemaVersion()
     : table_id_(OB_INVALID_ID),
       schema_version_(OB_INVALID_VERSION),
