@@ -811,8 +811,8 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check start status src ls info get invalid argument", K(ret), K(task_info));
-  } else if (OB_FAIL(get_ls_member_list_(task_info.dest_ls_id_, member_list))) {
-    LOG_WARN("failed to get dest ls member list", K(ret), KPC(ls_));
+  } else if (OB_FAIL(get_src_ls_member_list_(member_list))) {
+    LOG_WARN("failed to get src ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
   } else {
@@ -1211,7 +1211,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
   } else if (!task_info.is_valid() || !start_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("wait src ls replay to start scn get invalid argument", K(ret), K(task_info), K(start_scn));
-  } else if (OB_FAIL(get_ls_member_list_(task_info.src_ls_id_, member_list))) {
+  } else if (OB_FAIL(get_src_ls_member_list_(member_list))) {
     LOG_WARN("failed to get src ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
@@ -1256,7 +1256,7 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("wait src ls replay to start scn get invalid argument", K(ret), K(task_info));
-  } else if (OB_FAIL(get_ls_member_list_(task_info.src_ls_id_, member_list))) {
+  } else if (OB_FAIL(get_src_ls_member_list_(member_list))) {
     LOG_WARN("failed to get src ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
@@ -1264,6 +1264,13 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
     LOG_WARN("failed to get max decided scn", K(ret), K(task_info));
   } else if (OB_FAIL(wait_ls_replay_event_(task_info, member_addr_list, check_scn, timeout_ctx))) {
     LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(member_list), K(check_scn));
+    if (OB_TIMEOUT == ret) {
+      ret = OB_TRANSFER_CANNOT_START;
+      //TODO(zhixing) add error msg in diagnose
+    }
+  } else if (timeout_ctx.is_timeouted()) {
+    ret = OB_TRANSFER_CANNOT_START;
+    LOG_WARN("transfer precheck timeout, cannot start transfer in", K(ret), K(task_info));
   }
   return ret;
 }
@@ -2245,6 +2252,30 @@ int ObTransferHandler::check_task_exist_(
     task_exist = true;
   } else {
     task_exist = false;
+  }
+  return ret;
+}
+
+int ObTransferHandler::get_src_ls_member_list_(
+    common::ObMemberList &member_list)
+{
+  int ret = OB_SUCCESS;
+  member_list.reset();
+  logservice::ObLogHandler *log_handler = NULL;
+  int64_t paxos_replica_num = 0;
+  logservice::ObLogService *log_service = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls transfer handler do not init", K(ret));
+  } else if (OB_ISNULL(log_handler = ls_->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handler should not be NULL", K(ret));
+  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
+    LOG_WARN("failed to get paxos member list", K(ret));
+  } else if (member_list.get_member_number() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls member list number is unexpected", K(ret), K(member_list));
   }
   return ret;
 }

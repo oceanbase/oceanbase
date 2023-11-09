@@ -3155,7 +3155,10 @@ int ObStorageRpc::post_ls_member_list_request(
     obrpc::ObFetchLSMemberListArg arg;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).fetch_ls_member_list(arg, member_info))) {
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+        .by(tenant_id)
+        .group_id(share::OBCG_STORAGE_HA_LEVEL2)
+        .fetch_ls_member_list(arg, member_info))) {
       LOG_WARN("failed to fetch ls info", K(ret), K(arg), K(src_info));
     } else {
       FLOG_INFO("fetch ls member list successfully", K(member_info));

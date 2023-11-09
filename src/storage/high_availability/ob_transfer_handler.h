@@ -255,6 +255,8 @@ private:
       const ObTransferStatus &status,
       const bool find_by_src_ls,
       bool &task_exist) const;
+  int get_src_ls_member_list_(
+      common::ObMemberList &member_list);
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
