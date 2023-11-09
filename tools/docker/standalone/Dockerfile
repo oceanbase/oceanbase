@@ -2,7 +2,7 @@ FROM openanolis/anolisos
 
 # docker build --build-arg --build-arg LOCAL_RPM="oceanbase-ce-4.3.0.0-1.alios7.aarch64.rpm" --build-arg LOCAL_LIB_RPM="oceanbase-ce-libs-4.3.0.0-1.alios7.aarch64.rpm" -t observer .
 
-ARG VERSION
+ARG VERSION="4.3.0.0"
 ARG LOCAL_RPM
 ARG LOCAL_LIB_RPM
 
