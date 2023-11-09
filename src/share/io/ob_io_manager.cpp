@@ -920,8 +920,6 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   int ret = OB_SUCCESS;
   handle.reset();
   ObIORequest *req = nullptr;
-  bool data_hang = false;
-  bool slog_hang = false;
   logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -932,7 +930,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
-    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk or slog disk has fatal error", K(slog_hang), K(data_hang));
+    LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "disk has fatal error");
   } else if (OB_FAIL(alloc_req_and_result(info, handle, req))) {
     LOG_WARN("pre set io args failed", K(ret), K(info));
   } else if (OB_FAIL(io_scheduler_->schedule_request(*req))) {

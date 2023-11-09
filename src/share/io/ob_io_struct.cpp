@@ -2836,7 +2836,7 @@ int ObIORunner::handle(ObIORequest *req)
         }
         if (OB_UNLIKELY(time_guard.get_diff() > 100000)) {// 100ms
           //print req
-          LOG_INFO("callback process cost too much time", K(ret), K(time_guard), K(req), KPC(req->get_callback()));
+          LOG_INFO("callback process cost too much time", K(ret), K(time_guard), K(req));
         }
       }
       //recycle buffer after process
