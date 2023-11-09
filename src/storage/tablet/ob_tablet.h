@@ -795,7 +795,7 @@ private:
   int32_t version_;
   int32_t length_;
   volatile int64_t wash_score_;
-  ObTabletMdsData mds_data_;                                 // size: 440B, alignment: 8B
+  ObTabletMdsData mds_data_;                                 // size: 384B, alignment: 8B
   volatile int64_t ref_cnt_;
   ObTabletHandle next_tablet_guard_;                         // size: 56B, alignment: 8B
   ObTabletMeta tablet_meta_;                                 // size: 248, alignment: 8B
