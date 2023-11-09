@@ -386,6 +386,7 @@ private:
                                 const int64_t &log_proposal_id);
   int try_freeze_prev_log_(const int64_t next_log_id, const LSN &lsn, bool &is_need_handle);
   int feedback_freeze_last_log_();
+  int try_feedback_freeze_log_task_(const int64_t expected_log_id);
   int try_freeze_last_log_task_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
   int generate_new_group_log_(const LSN &lsn,
                               const int64_t log_id,
