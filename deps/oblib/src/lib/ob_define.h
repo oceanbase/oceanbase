@@ -815,6 +815,8 @@ const int64_t MAX_ORACLE_SA_LABEL_TYPE_LENGTH = 15;
 //             table id range definition                  //
 ////////////////////////////////////////////////////////////
 const uint64_t OB_MIN_GENERATED_COLUMN_ID = 2000;
+const uint64_t OB_MIN_MLOG_COLUMN_ID = 8000;
+const uint64_t OB_MAX_MLOG_COLUMN_ID = 9999;
 const uint64_t OB_MIN_MV_COLUMN_ID = 10000;
 const uint64_t OB_MIN_SHADOW_COLUMN_ID = 32767;
 const uint64_t OB_MAX_SYS_POOL_ID = 100;

@@ -2341,6 +2341,8 @@ DEFINE_ERROR_EXT(OB_ERR_WRONG_USAGE, -9751, ER_WRONG_USAGE, "HY000", "Incorrect 
 DEFINE_PLS_ERROR(OB_ERR_FORALL_ON_REMOTE_TABLE, -9752, -1, "HY000", "FORALL INSERT/UPDATE/DELETE not support on remote tables", 739, "FORALL INSERT/UPDATE/DELETE not support on remote tables");
 DEFINE_ORACLE_ERROR(OB_ERR_SEQUENCE_NOT_DEFINE, -9753, -1, "HY000", "sequence is not yet defined in this session", 8002, "sequence is not yet defined in this session");
 DEFINE_ERROR_EXT(OB_ERR_DEBUG_ID_NOT_EXIST, -9754, -1, "HY000", "debug_session_id does not exist", "debug_session_id = %u does not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_TABLE_NO_MLOG, -9755, -1, "HY000", "table does not have a materialized view log", "table `%s`.`%s` does not have a materialized view log", 23413, "table does not have a materialized view log", "table %s.%s does not have a materialized view log");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_MLOG_EXIST, -9756, -1, "HY000", "a materialized view log already exists on table", "a materialized view log already exists on table `%s`", 12000, "a materialized view log already exists on table", "a materialized view log already exists on table %s");
 
 ////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)

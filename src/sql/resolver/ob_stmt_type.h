@@ -291,6 +291,8 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CANCEL_RECOVER_TABLE, get_sys_tenant_alter_system_
 // OB_STMT_TYPE_DEF(T_ALTER_SYSTEM_RESET_PARAMETER, get_sys_tenant_alter_system_priv, 292, ACTION_TYPE_ALTER_SYSTEM)
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CLONE_TENANT, get_sys_tenant_alter_system_priv, 293)
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_RECYCLE_CLONE_JOB, get_sys_tenant_alter_system_priv, 294)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CREATE_MLOG, get_create_mlog_stmt_need_privs, 295)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_DROP_MLOG, get_drop_mlog_stmt_need_privs, 296)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 
