@@ -218,6 +218,10 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               cells[i].set_timestamp(loop_ts);
               break;
             }
+            case CGROUP_PATH: {
+              cells[i].set_varchar("");
+              break;
+            }
             default: {
               ret = OB_ERR_UNEXPECTED;
               SERVER_LOG(WARN, "unexpected column id", K(col_id), K(i), K(ret));
