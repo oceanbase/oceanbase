@@ -393,6 +393,7 @@ int ObBlockSampleRangeIterator::init_and_push_endkey_iterator(ObGetTableParam &g
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument", K(get_table_param));
   } else {
+    get_table_param.tablet_iter_.table_iter()->resume();
     while (OB_SUCC(ret)) {
       void *buf = nullptr;
       ObITable *table = nullptr;
@@ -660,7 +661,7 @@ int ObBlockSampleIterator::open(ObMultipleScanMerge &scan_merge,
     STORAGE_LOG(WARN, "Invalid argument", K(ret), K(access_ctx), K(get_table_param));
   }  else if (OB_FAIL(range_iterator_.open(get_table_param, range, *access_ctx.stmt_allocator_, sample_info_->percent_, is_reverse_scan))) {
     STORAGE_LOG(WARN, "Fail to init micro block iterator", K(ret));
-  }else {
+  } else {
     scan_merge_ = &scan_merge;
     has_opened_range_ = false;
     access_ctx_ = &access_ctx;
