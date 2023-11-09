@@ -33,7 +33,6 @@ using namespace table;
 
 ObDirectLoadTableStoreParam::ObDirectLoadTableStoreParam()
   : snapshot_version_(0),
-    thread_idx_(-1),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     file_mgr_(nullptr),
@@ -53,7 +52,7 @@ ObDirectLoadTableStoreParam::~ObDirectLoadTableStoreParam()
 
 bool ObDirectLoadTableStoreParam::is_valid() const
 {
-  return snapshot_version_ > 0 && thread_idx_ >= 0 && table_data_desc_.is_valid() &&
+  return snapshot_version_ > 0 && table_data_desc_.is_valid() &&
          nullptr != datum_utils_ && nullptr != col_descs_ && nullptr != file_mgr_ &&
          (!is_fast_heap_table_ ||
           (nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_)) &&
@@ -115,7 +114,6 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
       fast_heap_table_build_param.insert_table_ctx_ = param.insert_table_ctx_;
       fast_heap_table_build_param.fast_heap_table_ctx_ = param.fast_heap_table_ctx_;
       fast_heap_table_build_param.dml_row_handler_ = param.dml_row_handler_;
-      fast_heap_table_build_param.thread_idx_ = param.thread_idx_;
       ObDirectLoadFastHeapTableBuilder *fast_heap_table_builder = nullptr;
       if (OB_ISNULL(fast_heap_table_builder =
                       table_builder_allocator_->alloc<ObDirectLoadFastHeapTableBuilder>())) {

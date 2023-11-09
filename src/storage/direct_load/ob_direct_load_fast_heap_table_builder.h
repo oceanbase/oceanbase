@@ -39,13 +39,12 @@ public:
   ObDirectLoadFastHeapTableBuildParam();
   ~ObDirectLoadFastHeapTableBuildParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(snapshot_version), K_(thread_idx), K_(table_data_desc),
+  TO_STRING_KV(K_(tablet_id), K_(snapshot_version), K_(table_data_desc),
                KP_(datum_utils), KP_(col_descs), KP_(insert_table_ctx), KP_(fast_heap_table_ctx),
                KP_(dml_row_handler));
 public:
   common::ObTabletID tablet_id_;
   int64_t snapshot_version_;
-  int64_t thread_idx_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;

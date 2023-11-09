@@ -34,7 +34,6 @@ using namespace share;
 
 ObDirectLoadFastHeapTableBuildParam::ObDirectLoadFastHeapTableBuildParam()
   : snapshot_version_(0),
-    thread_idx_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     insert_table_ctx_(nullptr),
@@ -49,7 +48,7 @@ ObDirectLoadFastHeapTableBuildParam::~ObDirectLoadFastHeapTableBuildParam()
 
 bool ObDirectLoadFastHeapTableBuildParam::is_valid() const
 {
-  return tablet_id_.is_valid() && snapshot_version_ > 0 && thread_idx_ >= 0 &&
+  return tablet_id_.is_valid() && snapshot_version_ > 0 &&
          table_data_desc_.is_valid() && nullptr != col_descs_ && nullptr != insert_table_ctx_ &&
          nullptr != fast_heap_table_ctx_ && nullptr != dml_row_handler_ && nullptr != datum_utils_;
 }
@@ -181,7 +180,7 @@ int ObDirectLoadFastHeapTableBuilder::append_row(const ObTabletID &tablet_id,
       }
       if (OB_FAIL(slice_writer_->append_row(datum_row_))) {
         LOG_WARN("fail to append row", KR(ret));
-      } else if (param_.insert_table_ctx_->collect_obj(param_.thread_idx_ ,datum_row_)) {
+      } else if (param_.insert_table_ctx_->collect_obj(datum_row_)) {
         LOG_WARN("fail to collect", KR(ret));
       } else {
         ++row_count_;

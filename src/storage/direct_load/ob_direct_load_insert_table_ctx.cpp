@@ -83,7 +83,7 @@ int ObDirectLoadInsertTableParam::assign(const ObDirectLoadInsertTableParam &oth
  */
 
 ObDirectLoadInsertTableContext::ObDirectLoadInsertTableContext()
-  : allocator_("TLD_SqlStat"), tablet_finish_count_(0), table_row_count_(0), is_inited_(false)
+  : allocator_("TLD_SqlStat"), safe_allocator_(allocator_), tablet_finish_count_(0), table_row_count_(0), is_inited_(false)
 {
 }
 
@@ -102,12 +102,14 @@ void ObDirectLoadInsertTableContext::reset()
     }
     ddl_ctrl_.context_id_ = 0;
   }
-  for (int64_t i = 0; i < session_sql_ctx_array_.count(); ++i) {
-    ObTableLoadSqlStatistics *sql_statistics = session_sql_ctx_array_.at(i);
-    sql_statistics->~ObTableLoadSqlStatistics();
-    allocator_.free(sql_statistics);
+  for (decltype(sql_stat_map_)::const_iterator iter = sql_stat_map_.begin(); iter != sql_stat_map_.end(); ++ iter) {
+    ObTableLoadSqlStatistics *sql_statistics = iter->second;
+    if (sql_statistics != nullptr) {
+      sql_statistics->~ObTableLoadSqlStatistics();
+      safe_allocator_.free(sql_statistics);
+    }
   }
-  session_sql_ctx_array_.reset();
+  sql_stat_map_.clear();
   is_inited_ = false;
 }
 
@@ -156,20 +158,21 @@ int ObDirectLoadInsertTableContext::init(const ObDirectLoadInsertTableParam &par
   return ret;
 }
 
-int ObDirectLoadInsertTableContext::init_sql_statistics()
+
+int ObDirectLoadInsertTableContext::get_sql_stat(table::ObTableLoadSqlStatistics *&sql_statistics)
 {
   int ret = OB_SUCCESS;
-  ObOptTableStat *table_stat = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_.session_cnt_; ++i) {
-    ObTableLoadSqlStatistics *sql_statistics = nullptr;
+  int64_t tid = gettid();
+  sql_statistics = nullptr;
+  ret = sql_stat_map_.get_refactored(tid, sql_statistics);
+  if (ret == OB_HASH_NOT_EXIST) {
+    ret = OB_SUCCESS;
     ObOptTableStat *table_stat = nullptr;
-    if (OB_ISNULL(sql_statistics = OB_NEWx(ObTableLoadSqlStatistics, (&allocator_)))) {
+    if (OB_ISNULL(sql_statistics = OB_NEWx(ObTableLoadSqlStatistics, (&safe_allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadSqlStatistics", KR(ret));
     } else if (OB_FAIL(sql_statistics->allocate_table_stat(table_stat))) {
       LOG_WARN("fail to allocate table stat", KR(ret));
-    } else if (OB_FAIL(session_sql_ctx_array_.push_back(sql_statistics))) {
-      LOG_WARN("fail to push back", KR(ret));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < param_.column_count_; ++j) {
         ObOptOSGColumnStat *osg_col_stat = nullptr;
@@ -178,13 +181,31 @@ int ObDirectLoadInsertTableContext::init_sql_statistics()
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sql_stat_map_.set_refactored(tid, sql_statistics))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
     if (OB_FAIL(ret)) {
       if (nullptr != sql_statistics) {
         sql_statistics->~ObTableLoadSqlStatistics();
-        allocator_.free(sql_statistics);
+        safe_allocator_.free(sql_statistics);
         sql_statistics = nullptr;
       }
     }
+  } else if (ret != OB_SUCCESS) {
+    LOG_WARN("fail to get item from map", KR(ret), K(tid));
+  }
+  return ret;
+}
+
+
+int ObDirectLoadInsertTableContext::init_sql_statistics()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_FAIL(sql_stat_map_.create(1024, "TLD_SqlStatMap", "TLD_SqlStatMap", tenant_id))) {
+    LOG_WARN("fail to init map", KR(ret));
   }
   return ret;
 }
@@ -225,11 +246,16 @@ int ObDirectLoadInsertTableContext::collect_sql_statistics(ObTableLoadSqlStatist
           LOG_WARN("fail to allocate table stat", KR(ret));
         }
         // scan session_sql_ctx_array
-        for (int64_t j = 0; OB_SUCC(ret) && j < session_sql_ctx_array_.count(); ++j) {
-          ObOptOSGColumnStat *tmp_col_stat =
-            session_sql_ctx_array_.at(j)->get_col_stat_array().at(i);
-          if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
-            LOG_WARN("fail to merge column stat", KR(ret));
+        for (decltype(sql_stat_map_)::const_iterator iter = sql_stat_map_.begin(); iter != sql_stat_map_.end(); ++ iter) {
+          if (iter->second == nullptr) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sql_stat in map should not be null", KR(ret));
+          } else {
+            ObOptOSGColumnStat *tmp_col_stat =
+              iter->second->get_col_stat_array().at(i);
+            if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
+              LOG_WARN("fail to merge column stat", KR(ret));
+            }
           }
         }
 
@@ -259,16 +285,15 @@ int ObDirectLoadInsertTableContext::collect_sql_statistics(ObTableLoadSqlStatist
   return ret;
 }
 
-int ObDirectLoadInsertTableContext::collect_obj(int64_t thread_idx, const ObDatumRow &datum_row)
+int ObDirectLoadInsertTableContext::collect_obj(const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   if (param_.online_opt_stat_gather_) {
-    if (OB_UNLIKELY(thread_idx >= session_sql_ctx_array_.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected thread idx", KR(ret), K(thread_idx), K(session_sql_ctx_array_.count()));
+    ObTableLoadSqlStatistics *sql_stat = nullptr;
+    if (OB_FAIL(get_sql_stat(sql_stat))) {
+      LOG_WARN("fail to get sql stat", KR(ret));
     } else {
-      ObTableLoadSqlStatistics *sql_stat = session_sql_ctx_array_.at(thread_idx);
       if (param_.is_heap_table_ ) {
         for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; i++) {
           const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt + 1];
@@ -299,7 +324,7 @@ int ObDirectLoadInsertTableContext::collect_obj(int64_t thread_idx, const ObDatu
           const ObStorageDatum &datum = datum_row.storage_datums_[i + extra_rowkey_cnt];
           const ObColDesc &col_desc = param_.col_descs_->at(i);
           const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
-          ObOptOSGColumnStat *col_stat = session_sql_ctx_array_.at(thread_idx)->get_col_stat_array().at(i);
+          ObOptOSGColumnStat *col_stat = sql_stat->get_col_stat_array().at(i);
           bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
           if (col_stat != nullptr && is_valid) {
             if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {

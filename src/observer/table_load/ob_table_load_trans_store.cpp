@@ -218,7 +218,6 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.dml_row_handler_ = trans_ctx_->ctx_->store_ctx_->error_row_handler_;
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
-    param.thread_idx_ = i;
     if (param_.px_mode_) {
       session_ctx->extra_buf_size_ = table_data_desc_->extra_buf_size_;
       if (OB_ISNULL(session_ctx->extra_buf_ =

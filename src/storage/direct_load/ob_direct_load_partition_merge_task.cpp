@@ -50,7 +50,7 @@ ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
 {
 }
 
-int ObDirectLoadPartitionMergeTask::process(int64_t thread_idx)
+int ObDirectLoadPartitionMergeTask::process()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -85,7 +85,7 @@ int ObDirectLoadPartitionMergeTask::process(int64_t thread_idx)
           }
         } else if (OB_FAIL(writer->append_row(*const_cast<ObDatumRow *>(datum_row)))) {
           LOG_WARN("fail to append row", KR(ret), KPC(datum_row));
-        } else if (OB_FAIL(merge_param_->insert_table_ctx_->collect_obj(thread_idx, *datum_row))) {
+        } else if (OB_FAIL(merge_param_->insert_table_ctx_->collect_obj(*datum_row))) {
           LOG_WARN("fail to collect statistics", KR(ret));
         } else {
           ++affected_rows_;

@@ -40,8 +40,8 @@ using namespace table;
 class ObTableLoadMerger::MergeTaskProcessor : public ObITableLoadTaskProcessor
 {
 public:
-  MergeTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx, ObTableLoadMerger *merger, int64_t thread_idx)
-    : ObITableLoadTaskProcessor(task), ctx_(ctx), merger_(merger), thread_idx_(thread_idx)
+  MergeTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx, ObTableLoadMerger *merger)
+    : ObITableLoadTaskProcessor(task), ctx_(ctx), merger_(merger)
   {
     ctx_->inc_ref_count();
   }
@@ -63,7 +63,7 @@ public:
           ret = OB_SUCCESS;
           break;
         }
-      } else if (OB_FAIL(merge_task->process(thread_idx_))) {
+      } else if (OB_FAIL(merge_task->process())) {
         LOG_WARN("fail to process merge task", KR(ret));
       }
       if (nullptr != merge_task) {
@@ -75,7 +75,6 @@ public:
 private:
   ObTableLoadTableCtx *const ctx_;
   ObTableLoadMerger *const merger_;
-  int64_t thread_idx_;
 };
 
 class ObTableLoadMerger::MergeTaskCallback : public ObITableLoadTaskCallback
@@ -376,7 +375,7 @@ int ObTableLoadMerger::start_merge()
       LOG_WARN("fail to alloc task", KR(ret));
     }
     // 2. 设置processor
-    else if (OB_FAIL(task->set_processor<MergeTaskProcessor>(ctx, this, thread_idx))) {
+    else if (OB_FAIL(task->set_processor<MergeTaskProcessor>(ctx, this))) {
       LOG_WARN("fail to set merge task processor", KR(ret));
     }
     // 3. 设置callback

@@ -41,7 +41,7 @@ class ObDirectLoadPartitionMergeTask : public common::ObDLinkBase<ObDirectLoadPa
 public:
   ObDirectLoadPartitionMergeTask();
   virtual ~ObDirectLoadPartitionMergeTask();
-  int process(int64_t thread_idx);
+  int process();
   int64_t get_row_count() const { return affected_rows_; }
   void stop();
   TO_STRING_KV(KPC_(merge_param), KPC_(merge_ctx), K_(parallel_idx));

@@ -57,7 +57,7 @@ public:
   ~ObDirectLoadInsertTableContext();
   void reset();
   int init(const ObDirectLoadInsertTableParam &param);
-  int collect_obj(int64_t thread_idx, const blocksstable::ObDatumRow &datum_row);
+  int collect_obj(const blocksstable::ObDatumRow &datum_row);
   int add_sstable_slice(const common::ObTabletID &tablet_id,
                         const blocksstable::ObMacroDataSeq &start_seq,
                         common::ObNewRowIterator &iter,
@@ -72,15 +72,17 @@ public:
   int64_t get_row_count() const { return table_row_count_; }
   TO_STRING_KV(K_(param), K_(tablet_finish_count), K_(table_row_count), K_(ddl_ctrl));
 private:
+  int get_sql_stat(table::ObTableLoadSqlStatistics *&sql_statistics);
   int init_sql_statistics();
   int collect_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics);
 private:
   common::ObArenaAllocator allocator_;
+  common::ObSafeArenaAllocator safe_allocator_;
   ObDirectLoadInsertTableParam param_;
   sql::ObDDLCtrl ddl_ctrl_;
   int64_t tablet_finish_count_ CACHE_ALIGNED;
   int64_t table_row_count_ CACHE_ALIGNED;
-  common::ObArray<table::ObTableLoadSqlStatistics *> session_sql_ctx_array_;
+  common::hash::ObHashMap<int64_t, table::ObTableLoadSqlStatistics *> sql_stat_map_;
   bool is_inited_;
 };
 
