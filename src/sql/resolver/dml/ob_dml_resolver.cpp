@@ -4162,7 +4162,7 @@ int ObDMLResolver::resolve_table_column_expr(const ObQualifiedName &q_name, ObRa
   } else {
     const TableItem *table_item = NULL;
     if (lib::is_oracle_mode() && 0 == get_stmt()->get_table_size()
-        && q_name.tbl_name_.empty() && 0 == q_name.col_name_.case_compare("DUMMY")) {
+        && q_name.tbl_name_.empty() && 0 == q_name.col_name_.compare("DUMMY")) {
       ObConstRawExpr *c_expr = NULL;
       const char *ptr_value = "X";
       ObString string_value(ptr_value);

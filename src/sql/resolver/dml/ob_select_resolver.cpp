@@ -2096,7 +2096,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
             }
           }
         } else if (is_oracle_mode() && 0 == select_stmt->get_table_size()
-                   && 0 == select_item.expr_name_.case_compare("DUMMY")) {
+                   && (0 == select_item.expr_name_.case_compare("DUMMY")
+                       || 0 == select_item.expr_name_.case_compare("\"DUMMY\""))) {
           const char *ptr_name = "DUMMY";
           ObString string_name(ptr_name);
           select_item.alias_name_ = string_name;
