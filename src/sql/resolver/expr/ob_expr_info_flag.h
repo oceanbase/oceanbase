@@ -103,6 +103,7 @@ enum ObExprInfoFlag
   CNT_ORA_ROWSCN_EXPR,
   CNT_OP_PSEUDO_COLUMN,
   CNT_ASSIGN_EXPR,
+  CNT_OBJ_ACCESS_EXPR,
   CNT_ASSOCIATED_FLAG_END, //add CNT_xxx flag before me
 
   BE_USED, // expression has been applied

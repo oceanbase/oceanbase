@@ -11242,10 +11242,23 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
         //the flag will change to false;
         OX (expr->set_is_called_in_sql(true));
       }
+      OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
+                                              *params_.schema_checker_->get_schema_guard(),
+                                              *expr,
+                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
+      if (OB_SUCC(ret) &&
+          udf_expr->get_result_type().is_ext() &&
+          (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
+           pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
+           pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
+        OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
+      }
     }
   } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
     ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
     CK (OB_NOT_NULL(object_expr));
+    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
       uint64_t dep_obj_id = view_ref_id_;
       ObSchemaObjVersion coll_schema_version;
@@ -11256,6 +11269,7 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
   } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
     ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
     CK (OB_NOT_NULL(coll_expr));
+    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
       uint64_t dep_obj_id = view_ref_id_;
       ObSchemaObjVersion coll_schema_version;
@@ -11311,25 +11325,6 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
     } else if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid expr", K(expr), K(ret));
-    } else if (expr->is_udf_expr()) {
-      ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
-      CK (OB_NOT_NULL(udf_expr));
-      OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
-                                              *params_.schema_checker_->get_schema_guard(),
-                                              *expr,
-                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
-      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
-      if (OB_SUCC(ret) &&
-          udf_expr->get_result_type().is_ext() &&
-          (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
-           pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
-           pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
-        OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
-      }
-    } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
-      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
-    } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
-      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     }
     OZ (collect_schema_version(expr));
   }
