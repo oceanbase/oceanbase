@@ -46,8 +46,7 @@ public:
                K_(extra_medium_info),
                K_(medium_info_list_addr),
                K_(auto_inc_seq_addr),
-               K_(tablet_status_cache),
-               K_(aux_tablet_info_cache));
+               K_(tablet_status_cache));
 public:
   const share::ObTabletAutoincSeq *auto_inc_seq_ptr_;
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
@@ -62,7 +61,6 @@ public:
   ObMetaDiskAddr medium_info_list_addr_;
   ObMetaDiskAddr auto_inc_seq_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;
-  ObTabletBindingMdsUserData aux_tablet_info_cache_;
   ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;
   // memtable::ObIMemtable **memtables_;

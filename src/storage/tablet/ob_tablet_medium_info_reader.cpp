@@ -54,7 +54,7 @@ int ObTabletMediumInfoReader::init(common::ObArenaAllocator &allocator)
     LOG_WARN("init twice", K(ret), K(ls_id), K(tablet_id), K_(is_inited));
   } else {
     mds::MdsTableHandle mds_table;
-    const ObTabletDumpedMediumInfo *dumped_medium_info = nullptr;
+    ObTabletDumpedMediumInfo *dumped_medium_info = nullptr;
     if (OB_FAIL(tablet_.inner_get_mds_table(mds_table, false/*not_exist_create*/))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
@@ -76,7 +76,7 @@ int ObTabletMediumInfoReader::init(common::ObArenaAllocator &allocator)
       allocator_ = &allocator;
     }
 
-    ObTabletMdsData::free_medium_info_list(allocator, dumped_medium_info);
+    ObTabletObjLoadHelper::free(allocator, dumped_medium_info);
   }
 
   if (OB_SUCC(ret)) {

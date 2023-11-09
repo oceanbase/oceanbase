@@ -18,6 +18,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/scn.h"
 #include "common/ob_tablet_id.h"
+#include "storage/meta_mem/ob_storage_meta_cache.h"
 
 namespace oceanbase
 {
@@ -30,16 +31,20 @@ namespace storage
 {
 class ObTabletBindingInfo;
 
-class ObTabletBindingMdsUserData
+class ObTabletBindingMdsUserData : public ObIStorageMetaObj
 {
 public:
   OB_UNIS_VERSION(1);
 
 public:
   ObTabletBindingMdsUserData();
-  ~ObTabletBindingMdsUserData() = default;
+  virtual ~ObTabletBindingMdsUserData() = default;
   ObTabletBindingMdsUserData(const ObTabletBindingMdsUserData &) = delete;
   ObTabletBindingMdsUserData &operator=(const ObTabletBindingMdsUserData &) = delete;
+
+public:
+  virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
+  virtual int64_t get_deep_copy_size() const override;
 
 public:
   bool is_valid() const;

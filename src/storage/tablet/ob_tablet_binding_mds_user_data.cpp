@@ -122,6 +122,36 @@ void ObTabletBindingMdsUserData::on_commit(const share::SCN &commit_version, con
   return;
 }
 
+int ObTabletBindingMdsUserData::deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const
+{
+  int ret = OB_SUCCESS;
+  value = nullptr;
+  const int64_t deep_copy_size = get_deep_copy_size();
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < deep_copy_size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaild argument", K(ret), KP(buf), K(buf_len), K(deep_copy_size));
+  } else {
+    ObTabletBindingMdsUserData *aux_tablet_info = new (buf) ObTabletBindingMdsUserData();
+    if (OB_FAIL(aux_tablet_info->assign(*this))) {
+      LOG_WARN("failed to copy", K(ret), KPC(this));
+    } else {
+      value = aux_tablet_info;
+    }
+
+    if (OB_FAIL(ret)) {
+      aux_tablet_info->~ObTabletBindingMdsUserData();
+    }
+  }
+
+  return ret;
+}
+
+int64_t ObTabletBindingMdsUserData::get_deep_copy_size() const
+{
+  return sizeof(ObTabletBindingMdsUserData);
+}
+
 OB_SERIALIZE_MEMBER(
   ObTabletBindingMdsUserData,
   redefined_,

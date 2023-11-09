@@ -143,7 +143,7 @@ ObTablet::ObTablet()
     ddl_data_cache_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1632, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) <= 1632, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -830,7 +830,7 @@ int ObTablet::read_medium_info_list(
   const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr = mds_data_.medium_info_list_;
   int64_t finish_medium_scn = 0;
   ObTabletDumpedMediumInfo mds_table_medium_info_list;
-  const ObTabletDumpedMediumInfo *base_medium_info_list = nullptr;
+  ObTabletDumpedMediumInfo *base_medium_info_list = nullptr;
   ObTabletDumpedMediumInfo fused_medium_info_list;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -874,7 +874,7 @@ int ObTablet::read_medium_info_list(
     }
   }
 
-  ObTabletMdsData::free_medium_info_list(allocator, base_medium_info_list);
+  ObTabletObjLoadHelper::free(allocator, base_medium_info_list);
 
   return ret;
 }
@@ -4741,7 +4741,7 @@ int ObTablet::check_medium_list() const
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_NOT_NULL(last_major = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
       ObArenaAllocator arena_allocator("check_medium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      const ObTabletDumpedMediumInfo *dumped_list = nullptr;
+      ObTabletDumpedMediumInfo *dumped_list = nullptr;
       if (OB_FAIL(ObTabletMdsData::load_medium_info_list(arena_allocator, mds_data_.medium_info_list_, dumped_list))) {
         LOG_WARN("failed to load medium info list", K(ret), K(ls_id), K(tablet_id), K(mds_data_));
       } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(
@@ -4750,7 +4750,7 @@ int ObTablet::check_medium_list() const
           last_major->get_snapshot_version()))) {
         LOG_WARN("fail to validate medium info list", K(ret), K(ls_id), K(tablet_id), K(mds_data_), KPC(dumped_list), KPC(last_major));
       }
-      ObTabletMdsData::free_medium_info_list(arena_allocator, dumped_list);
+      ObTabletObjLoadHelper::free(arena_allocator, dumped_list);
     }
   } else {
     LOG_INFO("skip check medium list for non empty ha_status", KR(ret), K(ls_id), K(tablet_id), "ha_status", tablet_meta_.ha_status_);
@@ -5638,7 +5638,7 @@ int ObTablet::load_medium_info_list(
     compaction::ObMediumCompactionInfoList &medium_info_list)
 {
   int ret = OB_SUCCESS;
-  const ObTabletDumpedMediumInfo *list = nullptr;
+  ObTabletDumpedMediumInfo *list = nullptr;
 
   if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, complex_addr, list))) {
     LOG_WARN("failed to load medium info list", K(ret), K(complex_addr));
@@ -5646,7 +5646,7 @@ int ObTablet::load_medium_info_list(
     LOG_WARN("failed to init", K(ret));
   }
 
-  ObTabletMdsData::free_medium_info_list(allocator, list);
+  ObTabletObjLoadHelper::free(allocator, list);
 
   return ret;
 }
@@ -5768,7 +5768,7 @@ int ObTablet::convert_to_mds_dump_kv(
 
 int ObTablet::get_tablet_status_uncommitted_mds_dump_kv(
     common::ObIAllocator &allocator,
-    const mds::MdsDumpKV *&kv)
+    mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;
   const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr = mds_data_.tablet_status_.uncommitted_kv_;
@@ -5785,7 +5785,7 @@ int ObTablet::get_tablet_status_uncommitted_mds_dump_kv(
 
 int ObTablet::get_tablet_status_committed_mds_dump_kv(
     common::ObIAllocator &allocator,
-    const mds::MdsDumpKV *&kv)
+    mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;
   const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr = mds_data_.tablet_status_.committed_kv_;
@@ -5802,7 +5802,7 @@ int ObTablet::get_tablet_status_committed_mds_dump_kv(
 
 int ObTablet::get_aux_tablet_info_uncommitted_mds_dump_kv(
     common::ObIAllocator &allocator,
-    const mds::MdsDumpKV *&kv)
+    mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;
   const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr = mds_data_.aux_tablet_info_.uncommitted_kv_;
@@ -5819,7 +5819,7 @@ int ObTablet::get_aux_tablet_info_uncommitted_mds_dump_kv(
 
 int ObTablet::get_aux_tablet_info_committed_mds_dump_kv(
     common::ObIAllocator &allocator,
-    const mds::MdsDumpKV *&kv)
+    mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;
   const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr = mds_data_.aux_tablet_info_.committed_kv_;
@@ -5850,7 +5850,7 @@ int ObTablet::get_auto_inc_seq_mds_dump_kv(
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, kv))) {
     LOG_WARN("failed to alloc and new", K(ret));
   } else {
-    const share::ObTabletAutoincSeq *auto_inc_seq = nullptr;
+    share::ObTabletAutoincSeq *auto_inc_seq = nullptr;
     if (OB_FAIL(ObTabletMdsData::load_auto_inc_seq(allocator, complex_addr, auto_inc_seq))) {
       LOG_WARN("failed to load auto inc seq", K(ret), K(complex_addr));
     } else if (nullptr == auto_inc_seq) {
