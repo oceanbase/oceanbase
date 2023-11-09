@@ -648,7 +648,7 @@ int ObArchivePersistMgr::do_persist_(const ObLSID &id, const bool exist, ObLSArc
       ARCHIVE_LOG(WARN, "get ls archive progress failed", K(ret), K(id));
     } else if (! record_exist || ! persist_info.is_valid()
         || persist_info.key_.piece_id_ < info.key_.piece_id_
-        || (persist_info.key_.piece_id_ == info.key_.piece_id_ && persist_info.checkpoint_scn_ < info.checkpoint_scn_)
+        || (persist_info.key_.piece_id_ == info.key_.piece_id_ && persist_info.lsn_ < info.lsn_)
         || (info.state_.is_interrupted() && ! persist_info.state_.is_interrupted())) {
       // 需要更新归档进度场景
       // 1. 不存在已持久化归档进度
