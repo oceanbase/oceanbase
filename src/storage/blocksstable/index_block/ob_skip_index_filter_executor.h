@@ -35,6 +35,7 @@ public:
     agg_row_reader_.reset();
   }
   int falsifiable_pushdown_filter(const uint32_t col_idx,
+                                  const ObObjMeta &obj_meta,
                                   const ObSkipIndexType index_type,
                                   const ObMicroIndexInfo &index_info,
                                   sql::ObWhiteFilterExecutor &filter,
@@ -43,6 +44,7 @@ public:
 private:
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
+                        const ObObjMeta &obj_meta,
                         sql::ObWhiteFilterExecutor &filter,
                         common::ObIAllocator &allocator);
 

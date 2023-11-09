@@ -49,6 +49,7 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
 
 int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
     const uint32_t col_idx,
+    const ObObjMeta &obj_meta,
     const ObSkipIndexType index_type,
     const ObMicroIndexInfo &index_info,
     sql::ObWhiteFilterExecutor &filter,
@@ -64,7 +65,8 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
   } else {
     switch (index_type) {
       case ObSkipIndexType::MIN_MAX: {
-        if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(), filter, allocator))) {
+        if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
+            obj_meta, filter, allocator))) {
           LOG_WARN("Fail to filter on min_max", K(ret), K(col_idx));
         }
         break;
@@ -81,12 +83,12 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
 int ObSkipIndexFilterExecutor::filter_on_min_max(
     const uint32_t col_idx,
     const uint64_t row_count,
+    const ObObjMeta &obj_meta,
     sql::ObWhiteFilterExecutor &filter,
     common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   sql::ObBoolMask &fal_desc = filter.get_filter_bool_mask();
-  const ObObjMeta &obj_meta = filter.get_filter_node().expr_->args_[0]->obj_meta_;
   const share::schema::ObColumnParam *col_param = filter.get_col_params().at(0);
   ObStorageDatum null_count;
   ObStorageDatum min_datum;
