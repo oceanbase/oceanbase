@@ -1185,6 +1185,12 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
   } else if (OB_FAIL(idx_map.create(table_schema->get_all_part_num(), "TabletOrderIdx"))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
   } else if (is_virtual_table(table_schema->get_table_id())) {
+    // In observer 4.2, the table schema of a distributed virtual table will show all_part_num as 1,
+    // whereas in lower versions it would display as 65536.
+    // For a distrubuted virtual table, we may encounter a situation where part_id is 1 in sqc1,
+    // part_id is 2 in sqc2 and so on, but the idx_map only contains one item with key=1.
+    // Hence, if we seek with part_id=2, the idx_map will return -4201 (OB_HASH_NOT_EXIST)
+    // will return -4201(OB_HASH_NOT_EXIST). In such cases, we can directly obtain the value that equals part_id + 1.
     for (int i = 0; OB_SUCC(ret) && i < table_schema->get_all_part_num(); ++i) {
       if (OB_FAIL(idx_map.set_refactored(i + 1, tablet_idx++))) {
         LOG_WARN("fail set value to hashmap", K(ret));
