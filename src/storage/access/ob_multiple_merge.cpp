@@ -1257,6 +1257,8 @@ int ObMultipleMerge::refresh_tablet_iter()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet iter is invalid", K(ret), K(get_table_param_->tablet_iter_));
   } else {
+    // reset first, in case get_read_tables fail and rowkey_read_info_ become dangling
+    access_param_->iter_param_.rowkey_read_info_ = nullptr;
     const common::ObTabletID tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(access_ctx_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       LOG_WARN("failed to get ls", K(ret));
