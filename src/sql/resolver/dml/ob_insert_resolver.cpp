@@ -408,11 +408,6 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
                OB_ISNULL(ref_stmt = table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(table_item), K(ref_stmt), K(ret));
-    } else if (OB_UNLIKELY(ref_stmt->get_from_items().count() != 1)) {
-    //这里是为了兼容oracle的报错行为，对于直接向子查询插入数据时如果子查询中from项不为1项时，报错这种子查询是非法的，
-    //其他情形同update view类似判断，这里不再重复判断
-      ret = OB_ERR_ILLEGAL_VIEW_UPDATE;
-      LOG_WARN("not updatable", K(ret));
     } else if (OB_FAIL(set_base_table_for_view(*table_item))) {
       LOG_WARN("set base table for insert view failed", K(ret));
     } else {/*do nothing*/}
