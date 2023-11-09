@@ -277,7 +277,7 @@ int ObTableAccessParam::init(
                 false,
                 iter_param_.get_read_info(),
                 *iter_param_.pushdown_filter_,
-                scan_param.allocator_,
+                scan_param.scan_allocator_,
                 iter_param_.sstable_index_filter_))) {
       STORAGE_LOG(WARN, "Failed to build sstable index filter", K(ret), K(iter_param_));
     } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
