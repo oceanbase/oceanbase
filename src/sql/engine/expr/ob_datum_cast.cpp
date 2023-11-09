@@ -5294,7 +5294,7 @@ CAST_FUNC_NAME(bit, number)
 {
   EVAL_ARG()
   {
-    int64_t in_val = child_res->get_uint();
+    uint64_t in_val = child_res->get_uint();
     ObNumStackOnceAlloc tmp_alloc;
     number::ObNumber number;
     if (OB_FAIL(number.from(in_val, tmp_alloc))) {
