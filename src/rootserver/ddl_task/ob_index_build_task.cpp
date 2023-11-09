@@ -1238,7 +1238,8 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     }
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(), ddl_rpc_timeout))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, index_schema.get_data_table_id(), tmp_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));

@@ -17380,9 +17380,6 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           } else if (OB_FAIL(check_and_replace_dup_constraint_name_on_demand(is_oracle_mode,
               *dst_tenant_schema_guard, tmp_schema, allocator, ddl_operator, trans))) {
             LOG_WARN("check dup and replace cst name failed", K(ret));
-          } else if (OB_FAIL(rebuild_hidden_table_foreign_key(alter_table_arg,
-              *orig_table_schema, *hidden_table_schema, true/*rebuild_child_table_fk*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, trans, unused_cst_ids))) {
-            LOG_WARN("failed to rebuild hidden table fk", K(ret));
           } else if (OB_FAIL(rebuild_triggers_on_hidden_table(*orig_table_schema, *hidden_table_schema,
               *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, trans))) {
             LOG_WARN("rebuild triggers failed", K(ret));
