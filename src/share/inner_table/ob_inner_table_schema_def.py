@@ -13400,12 +13400,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
 
-#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15306', all_def_keywords['__all_virtual_tenant_snapshot'])))
-#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15307', all_def_keywords['__all_virtual_tenant_snapshot_ls'])))
-#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15308', all_def_keywords['__all_virtual_tenant_snapshot_ls_replica'])))
-#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15309', all_def_keywords['__all_virtual_clone_job'])))
-#def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15310', all_def_keywords['__all_virtual_clone_job_history'])))
-
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -13553,6 +13547,13 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15430: __all_transfer_partition_task
 # 15431: __all_transfer_partition_task_history
 # 15432: __all_virtual_wr_sqltext
+
+# 15433: __all_virtual_tenant_snapshot
+# 15434: __all_virtual_tenant_snapshot_ls
+# 15435: __all_virtual_tenant_snapshot_ls_replica
+# 15436: __all_virtual_clone_job
+# 15437: __all_virtual_clone_job_history
+# 15438: __all_virtual_tenant_snapshot_create_job
 # 余留位置
 
 ################################################################################

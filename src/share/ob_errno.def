@@ -16,6 +16,7 @@
 // OBKV错误码，值域：[-10500, -10700)
 // 富客户端错误码，值域：[-10700, -10900)
 // SQL扩展区段1：[-11000, -12000)
+// 租户快照和克隆：[-12000, -12100)
 
 ////////////////////////////////////////////////////////////////
 //error code -1~-999 are reserved
@@ -2351,6 +2352,15 @@ DEFINE_ERROR_EXT(OB_ERR_PLUGIN_IS_NOT_LOADED, -11003, ER_PLUGIN_IS_NOT_LOADED, "
 //11004 : OB_EST_DEVIA_TOO_LARGE
 DEFINE_ORACLE_ERROR(OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT, -11005, -1, "HY000", "cannot drop or replace a type with type or table dependents", 2303, "cannot drop or replace a type with type or table dependents");
 DEFINE_ORACLE_ERROR(OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT, -11006, -1, "HY000", "cannot replace a type with table dependents", 22866, "cannot replace a type with table dependents");
+
+////////////////////////////////////////////////////////////////
+// tenant snapshot and tenant clone error codes [-12000 ~ -12100)
+////////////////////////////////////////////////////////////////
+//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_NOT_EXIST, -12000, -1, "HY000", "Tenant snapshot does not exist", "Tenant snapshot \'%.*s\' does not exist");
+//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_EXIST, -12001, -1, "HY000", "Tenant snapshot already exist", "Tenant snapshot \'%.*s\' already exist");
+//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_TIMEOUT, -12002, -1, "HY000", "Tenant snapshot task timeout", "Tenant snapshot task timeout. %.*s");
+//DEFINE_ERROR_EXT_DEP(OB_CLONE_TENANT_TIMEOUT, -12003, -1, "HY000", "Clone tenant timeout", "Clone tenant timeout. %.*s");
+//DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -12004, -1, "HY000", "Tenant clone job failed", "Tenant clone job failed during the %.*s stage");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
