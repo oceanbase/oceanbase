@@ -148,7 +148,12 @@ public:
 private:
   int64_t get_data_file_size() const
   {
-    return GCONF.backup_data_file_size;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (!tenant_config.is_valid()) {
+      return share::DEFAULT_BACKUP_DATA_FILE_SIZE;
+    } else {
+      return tenant_config->backup_data_file_size;
+    }
   }
   int open_file_writer_(const share::ObBackupPath &backup_path);
   int prepare_file_write_ctx_(
