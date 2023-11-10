@@ -41,11 +41,12 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
                                        ObEvalCtx &eval_ctx,
                                        int64_t row_num,
                                        const ColContentIArray &column_infos,
-                                       bool is_ignore,
+                                       const ObDASDMLBaseCtDef &das_ctdef,
                                        bool is_single_value,
                                        ObTableModifyOp &dml_op)
 {
   int ret = OB_SUCCESS;
+  const bool is_ignore = das_ctdef.is_ignore_;
   ObSQLSessionInfo *session = NULL;
   CK(row.count() >= column_infos.count());
   if (OB_ISNULL(session = dml_op.get_exec_ctx().get_my_session())) {
@@ -73,8 +74,10 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
         } else if (OB_FAIL(ObObjCaster::get_zero_value(
             row.at(col_idx)->obj_meta_.get_type(),
             row.at(col_idx)->obj_meta_.get_collation_type(),
+            das_ctdef.column_accuracys_.at(col_idx).get_length(),
+            eval_ctx.exec_ctx_.get_allocator(),
             zero_obj))) {
-          LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)));
+          LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)), K(row.at(col_idx)->max_length_));
         } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(zero_obj, eval_ctx.exec_ctx_.get_allocator()))) {
           LOG_WARN("convert lob types zero obj failed", K(ret), K(zero_obj));
         } else if (OB_FAIL(row_datum.from_obj(zero_obj))) {
@@ -597,7 +600,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       dml_op.get_eval_ctx(),
                                       ins_rtdef.cur_row_num_,
                                       ins_ctdef.column_infos_,
-                                      ins_ctdef.das_ctdef_.is_ignore_,
+                                      ins_ctdef.das_ctdef_,
                                       ins_ctdef.is_single_value_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
@@ -813,7 +816,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
                                         dml_op.get_eval_ctx(),
                                         upd_rtdef.cur_row_num_,
                                         upd_ctdef.assign_columns_,
-                                        upd_ctdef.dupd_ctdef_.is_ignore_,
+                                        upd_ctdef.dupd_ctdef_,
                                         false,
                                         dml_op))) {
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
@@ -1016,7 +1019,11 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
     }
   } else if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
     //the updated row may be moved across partitions
-    if (OB_LIKELY(!upd_ctdef.multi_ctdef_->is_enable_row_movement_)) {
+    if (upd_ctdef.dupd_ctdef_.is_ignore_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-partition update ignore");
+      LOG_WARN("update ignore is not supported in across partition update, it will induce lost data error", K(ret));
+    } else if (OB_LIKELY(!upd_ctdef.multi_ctdef_->is_enable_row_movement_)) {
       ret = OB_ERR_UPD_CAUSE_PART_CHANGE;
       LOG_WARN("the updated row is moved across partitions", K(ret),
                KPC(old_tablet_loc), KPC(new_tablet_loc));
