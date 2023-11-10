@@ -5,11 +5,11 @@ This document describes some methods to debug OceanBase. We have many ways to de
 We suggest you build OceanBase with debug mode as it is easy to debug.
 
 # GDB
-GDB is a powerful debugging tool, but it is difficult to debug OceanBase by gdb and the scenarios is limited.
+GDB is a powerful debugging tool, but it is difficult to debug OceanBase by gdb and the scenarios are limited.
 
 If you want to debug a single oceanbase process and single thread, you can use gdb, otherwise it is more recommended to use logging.
 
-I suppose that you have already deploy the oceanbase built by source code.
+I suppose that you have already deployed the oceanbase built by source code.
 
 Debugging oceanbase is similar to debugging other C++ programs, you can use gdb as the following:
 
@@ -145,9 +145,9 @@ Reading symbols from clusters/local/bin/observer...
 Attaching to program: clusters/local/bin/observer, process 57296
 ```
 
-This means that there is no debugging symbols.
+This means that there are no debugging symbols.
 
-If we run some debug command in gdb, such as `bt`, we could got this.
+If we run some debug command in gdb, such as `bt`, we could get this.
 
 ```bash
 (gdb) bt
@@ -170,7 +170,7 @@ Reading symbols from usr/lib/debug/home/admin/oceanbase/bin/observer.debug...
 
 > It's better to use the full path of the debug info file.
 
-Let's run the debug command again and we can get detail information.
+Let's run the debug command again and we can get detailed information.
 
 ```bash
 (gdb) bt
@@ -226,7 +226,7 @@ set ob_log_level=debug;
 ```
 **Log Traffic Control**
 
-If you can not find your log, it may be limited because of the log traffic control, you can use the SQL command below to change the behavous of the log traffic control.
+If you can not find your log, it may be limited because of the log traffic control, you can use the SQL command below to change the behavior of the log traffic control.
 ```sql
 alter system set syslog_io_bandwidth_limit='1G';
 alter system set diag_syslog_per_error_limit=1000;
