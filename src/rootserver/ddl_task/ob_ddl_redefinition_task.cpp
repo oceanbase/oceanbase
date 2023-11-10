@@ -343,12 +343,12 @@ int ObDDLRedefinitionTask::hold_snapshot(const int64_t snapshot_version)
   } else if (data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob piece table snapshot", K(ret));
-  } else if (dest_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
-             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
-    LOG_WARN("failed to get dest lob meta table snapshot", K(ret));
-  } else if (dest_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
-             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
-    LOG_WARN("failed to get dest lob piece table snapshot", K(ret));
+  // } else if (data_format_version_ >= DATA_VERSION_4_3_0_0 && dest_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+  //            OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+  //   LOG_WARN("failed to get dest lob meta table snapshot", K(ret));
+  // } else if (data_format_version_ >= DATA_VERSION_4_3_0_0 && dest_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+  //            OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+  //   LOG_WARN("failed to get dest lob piece table snapshot", K(ret));
   } else {
     ObDDLService &ddl_service = root_service->get_ddl_service();
     if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
