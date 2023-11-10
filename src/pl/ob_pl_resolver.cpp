@@ -4326,26 +4326,10 @@ int ObPLResolver::resolve_for_loop(const ObStmtNodeTree *parse_tree, ObPLForLoop
     const ObStmtNodeTree *lower_node = parse_tree->children_[1];
     const ObStmtNodeTree *upper_node = parse_tree->children_[2];
     const ObStmtNodeTree *body_node  = parse_tree->children_[3];
-    const ObStmtNodeTree *label_node = parse_tree->children_[4];
     ObPLDataType data_type;
     ObPLStmtBlock *body_block = NULL;
     // 解析reverse
     stmt->set_reverse(reverse);
-    // 解析 label
-    if (OB_SUCC(ret)) {
-      if (OB_NOT_NULL(label_node)) {
-        ObString name;
-        int64_t label = OB_INVALID_ID;
-        if (OB_FAIL(resolve_ident(label_node, name))) {
-          LOG_WARN("failed to resolve ident", K(ret), K(label_node));
-        } else if (OB_FAIL(resolve_label(name, current_block_->get_namespace(), label, false))) {
-          LOG_WARN("failed to resolve label", K(ret), K(name));
-        } else if (OB_UNLIKELY(OB_INVALID_INDEX == label)) {
-          ret = OB_ERR_SP_LILABEL_MISMATCH;
-          LOG_WARN("no matching label", K(ret), K(name), K(label));
-        }
-      }
-    }
     // 解析index
     if (OB_SUCC(ret)) {
       ObString index_name;
@@ -4414,24 +4398,8 @@ int ObPLResolver::resolve_cursor_for_loop(
     const ObStmtNodeTree* index_node = parse_tree->children_[0];
     const ObStmtNodeTree* cursor_node = parse_tree->children_[1];
     const ObStmtNodeTree* body_node = parse_tree->children_[2];
-    const ObStmtNodeTree* label_node = parse_tree->children_[3];
     ObString index_name;
     ObPLStmtBlock *body_block = NULL;
-    // 解析label
-    if (OB_SUCC(ret)) {
-      if (OB_NOT_NULL(label_node)) {
-        ObString name;
-        int64_t label = OB_INVALID_ID;
-        if (OB_FAIL(resolve_ident(label_node, name))) {
-          LOG_WARN("failed to resolve ident", K(ret), K(label_node));
-        } else if (OB_FAIL(resolve_label(name, current_block_->get_namespace(), label, false))) {
-          LOG_WARN("failed to resolve label", K(ret), K(name));
-        } else if (OB_UNLIKELY(OB_INVALID_INDEX == label)) {
-          ret = OB_ERR_SP_LILABEL_MISMATCH;
-          LOG_WARN("no matching label", K(ret), K(name), K(label));
-        }
-      }
-    }
     // 创建body block
     if (OB_SUCC(ret)) {
       if (OB_FAIL(make_block(func, current_block_, body_block, true))) {
