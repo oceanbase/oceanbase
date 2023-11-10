@@ -741,7 +741,13 @@ int ObLSBackupDataDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) con
 int ObLSBackupDataDagNet::get_batch_size_(int64_t &batch_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t data_file_size = GCONF.backup_data_file_size;
+  int64_t data_file_size = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (!tenant_config.is_valid()) {
+    data_file_size = DEFAULT_BACKUP_DATA_FILE_SIZE;
+   } else {
+    data_file_size = tenant_config->backup_data_file_size;
+  }
   if (0 == data_file_size) {
     batch_size = OB_DEFAULT_BACKUP_BATCH_COUNT;
   } else {
