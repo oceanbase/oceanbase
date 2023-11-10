@@ -154,9 +154,6 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
     result.version_range_.snapshot_version_ = param.merge_version_;
     if (OB_FAIL(get_multi_version_start(param.merge_type_, ls, tablet, result.version_range_, result.snapshot_info_))) {
       LOG_WARN("failed to get multi version_start", K(ret));
-    } else {
-      result.read_base_version_ = base_table->get_snapshot_version();
-      result.create_snapshot_version_ = base_table->get_snapshot_version();
     }
   }
   return ret;
@@ -1532,7 +1529,6 @@ int ObAdaptiveMergePolicy::add_meta_merge_result(
     result.version_range_.base_version_ = 0;
     result.version_range_.multi_version_start_ = table->get_snapshot_version();
     result.version_range_.snapshot_version_ = table->get_snapshot_version();
-    result.create_snapshot_version_ = table->get_snapshot_version();
   } else if (update_snapshot_flag) {
     int64_t max_snapshot = MAX(result.version_range_.snapshot_version_, table->get_max_merged_trans_version());
     result.version_range_.multi_version_start_ = max_snapshot;

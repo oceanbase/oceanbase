@@ -303,15 +303,12 @@ struct ObGetMergeTablesResult
   common::ObVersionRange version_range_;
   ObTablesHandleArray handle_;
   int64_t merge_version_;
-  int64_t create_snapshot_version_;
   bool update_tablet_directly_;
   bool schedule_major_;
   bool is_simplified_;
   share::ObScnRange scn_range_;
-  int64_t read_base_version_;
   share::ObDiagnoseLocation *error_location_;
   ObStorageSnapshotInfo snapshot_info_;
-  static const int64_t INVALID_INT_VALUE = -1;
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
@@ -320,15 +317,13 @@ struct ObGetMergeTablesResult
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
-      K_(create_snapshot_version), K_(handle),
-      K_(update_tablet_directly), K_(schedule_major), K_(read_base_version));
+      K_(handle), K_(update_tablet_directly), K_(schedule_major));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
 {
   return status >= OB_MIGRATE_STATUS_NONE && status < OB_MIGRATE_STATUS_MAX;
 }
-
 
 struct ObDDLTableStoreParam final
 {

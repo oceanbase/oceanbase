@@ -306,7 +306,6 @@ void ObCompactionParam::estimate_concurrent_count(const compaction::ObMergeType 
  */
 ObTabletMergeDagParam::ObTabletMergeDagParam()
   :  skip_get_tablet_(false),
-     is_tenant_major_merge_(false),
      need_swap_tablet_flag_(false),
      is_reserve_mode_(false),
      merge_type_(INVALID_MERGE_TYPE),
@@ -323,7 +322,6 @@ ObTabletMergeDagParam::ObTabletMergeDagParam(
     const ObTabletID &tablet_id,
     const int64_t transfer_seq)
   :  skip_get_tablet_(false),
-     is_tenant_major_merge_(false),
      need_swap_tablet_flag_(false),
      is_reserve_mode_(false),
      merge_type_(merge_type),

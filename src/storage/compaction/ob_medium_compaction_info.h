@@ -16,6 +16,7 @@
 #include "storage/ob_storage_schema.h"
 #include "lib/container/ob_array_array.h"
 #include "observer/ob_server_struct.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 
 namespace oceanbase
 {
@@ -180,6 +181,15 @@ public:
   int assign(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
   int init(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
   int init_data_version();
+  void set_basic_info(
+    const ObCompactionType type,
+    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason,
+    const int64_t medium_snapshot)
+  {
+    compaction_type_ = type;
+    medium_merge_reason_ = merge_reason;
+    medium_snapshot_ = medium_snapshot;
+  }
   int gene_parallel_info(
       ObIAllocator &allocator,
       common::ObArrayArray<ObStoreRange> &paral_range);

@@ -112,7 +112,6 @@ int TestParallelMinorDag::prepare_merge_result(
   result.version_range_.snapshot_version_ = 100;
   result.version_range_.multi_version_start_ = 100;
   result.merge_version_ = 0;
-  result.create_snapshot_version_ = 0;
 
   int64_t log_ts = 1;
   for (int i = 0; OB_SUCC(ret) && i < sstable_cnt; ++i) {

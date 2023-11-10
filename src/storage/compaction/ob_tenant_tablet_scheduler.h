@@ -264,8 +264,7 @@ public:
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,
       const ObMergeType merge_type,
-      const int64_t &merge_snapshot_version,
-      const bool is_tenant_major_merge = false);
+      const int64_t &merge_snapshot_version);
   static int schedule_tablet_ddl_major_merge(
       ObTabletHandle &tablet_handle);
 
@@ -278,7 +277,6 @@ public:
   int schedule_next_round_for_leader(
     const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
     const ObIArray<compaction::ObTabletCheckInfo> &finish_tablet_ls_infos);
-
 private:
   friend struct ObTenantTabletSchedulerTaskMgr;
   int schedule_next_medium_for_leader(
@@ -367,6 +365,7 @@ private:
   ObCompactionScheduleIterator gc_sst_tablet_iter_;
   int64_t schedule_tablet_batch_size_;
   int64_t error_tablet_cnt_; // for diagnose
+  int64_t loop_cnt_;
   ObProhibitScheduleMediumMap prohibit_medium_map_;
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
 };

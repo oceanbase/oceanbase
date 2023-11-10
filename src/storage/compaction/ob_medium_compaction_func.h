@@ -97,10 +97,6 @@ protected:
       ObMediumCompactionInfo &medium_info);
   int init_schema_changed(
     ObMediumCompactionInfo &medium_info);
-  static int get_result_for_major(
-      ObTablet &tablet,
-      const ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
   int prepare_iter(
       const ObGetMergeTablesResult &result,
       ObTableStoreIterator &table_iter);
@@ -143,6 +139,12 @@ protected:
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result,
       int64_t &schema_version);
+  static int find_valid_freeze_info(
+      ObTablet &tablet,
+      ObArenaAllocator &allocator,
+      ObMediumCompactionInfo &medium_info,
+      share::ObFreezeInfo &freeze_info,
+      bool &force_schedule_medium_merge);
   static int switch_to_choose_medium_snapshot(
     const ObMediumCompactionScheduleFunc &func,
     ObArenaAllocator &allocator,
@@ -175,7 +177,9 @@ protected:
       const int64_t schema_version,
       uint64_t &table_id);
 
-  int check_medium_scn_valid_and_fix(ObMediumCompactionInfo &medium_info);
+  int check_frequency(
+    const int64_t max_reserved_snapshot,
+    ObMediumCompactionInfo &medium_info);
   int choose_medium_scn_for_user_request(
     ObMediumCompactionInfo &medium_info,
     ObGetMergeTablesResult &result,

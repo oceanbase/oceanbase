@@ -35,6 +35,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_rebuild_column_store_(false),
     is_schema_changed_(false),
     need_parallel_minor_merge_(true),
+    is_tenant_major_merge_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
     sstable_logic_seq_(0),
@@ -176,7 +177,7 @@ int ObStaticMergeParam::get_basic_info_from_result(
     scn_range_ = get_merge_table_result.scn_range_;
     merge_scn_ = scn_range_.end_scn_;
     snapshot_info_ = get_merge_table_result.snapshot_info_;
-    create_snapshot_version_ = get_merge_table_result.create_snapshot_version_;
+    create_snapshot_version_ = tables_handle_.get_table(0)->get_snapshot_version();
     if (is_major_merge_type(get_merge_type())) {
       report_ = GCTX.ob_service_;
     }
@@ -997,7 +998,7 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     static_param_.schema_version_ = medium_info.storage_schema_.schema_version_;
     static_param_.data_version_ = medium_info.data_version_;
     static_param_.is_rebuild_column_store_ = (medium_info.medium_merge_reason_ == ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP);
-    static_param_.dag_param_.is_tenant_major_merge_ = medium_info.is_major_compaction();
+    static_param_.is_tenant_major_merge_ = medium_info.is_major_compaction();
     static_param_.is_schema_changed_ = medium_info.is_schema_changed_;
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info.medium_merge_reason_;
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC_(static_param_.schema), K(medium_info));
@@ -1083,7 +1084,6 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
     static_param_.schema_version_ = storage_schema->schema_version_;
     static_param_.data_version_ = DATA_CURRENT_VERSION;
     static_param_.is_rebuild_column_store_ = false;
-    static_param_.dag_param_.is_tenant_major_merge_ = false;
     static_param_.is_schema_changed_ = true; // use MACRO_BLOCK_MERGE_LEVEL
     static_param_.merge_reason_ = ObAdaptiveMergePolicy::TOMBSTONE_SCENE;
     FLOG_INFO("get storage schema to meta merge", "param", get_dag_param(), KPC_(static_param_.schema));

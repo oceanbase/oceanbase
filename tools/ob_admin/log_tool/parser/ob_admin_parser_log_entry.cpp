@@ -554,8 +554,13 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
 
 int ObAdminParserLogEntry::parse_reserved_snapshot_log_()
 {
-  //not supported so far, just reserved
-  int ret = OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  int64_t update_version = 0;
+  if (OB_FAIL(serialization::decode_i64(buf_, buf_len_, pos_, &update_version))) {
+    LOG_WARN("fail to deserialize update_version", K(ret));
+  } else {
+    fprintf(stdout, " ###<LSReservedSnapshotLog>: snapshot: %ld\n", update_version);
+  }
   return ret;
 }
 

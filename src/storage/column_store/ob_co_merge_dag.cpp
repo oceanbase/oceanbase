@@ -230,7 +230,6 @@ int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
     ObCOMergeScheduleDag *schedule_dag = nullptr;
     ObTabletMergeExecuteDag *minor_exe_dag = nullptr;
     ObTablet *tablet = ctx.get_tablet();
-    result.create_snapshot_version_ = 0;
     result.version_range_.multi_version_start_ = ctx.get_tablet()->get_multi_version_start();
     result.version_range_.base_version_ = 0;
     result.version_range_.snapshot_version_ = ctx.get_tablet()->get_snapshot_version();
