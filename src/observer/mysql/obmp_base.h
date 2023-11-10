@@ -120,7 +120,8 @@ protected:
       sql::ObSQLSessionInfo *session);
   int response_row(sql::ObSQLSessionInfo &session,
                    common::ObNewRow &row,
-                   const ColumnsFieldIArray *fields);
+                   const ColumnsFieldIArray *fields,
+                   bool is_packed);
 protected:
   static const int64_t MAX_TRY_STEPS = 5;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];
