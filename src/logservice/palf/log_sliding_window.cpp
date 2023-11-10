@@ -2270,7 +2270,7 @@ int LogSlidingWindow::check_all_log_task_freezed_(bool &is_all_freezed)
   const int64_t start_log_id = get_start_id();
   const int64_t max_log_id = get_max_log_id();
   LogTask *log_task = NULL;
-  for (int64_t tmp_log_id = start_log_id; OB_SUCC(ret) && tmp_log_id <= max_log_id; ++tmp_log_id) {
+  for (int64_t tmp_log_id = start_log_id; OB_SUCC(ret) && is_all_freezed && tmp_log_id <= max_log_id; ++tmp_log_id) {
     LogTaskGuard guard(this);
     if (OB_FAIL(guard.get_log_task(tmp_log_id, log_task))) {
       PALF_LOG(ERROR, "get_log_task failed", K(ret), K(tmp_log_id), K_(palf_id), K_(self));
@@ -2285,7 +2285,6 @@ int LogSlidingWindow::check_all_log_task_freezed_(bool &is_all_freezed)
         is_all_freezed = false;
         PALF_LOG(WARN, "this log_task is not freezed", K(ret), K(tmp_log_id), K(start_log_id), K(max_log_id),
             K_(palf_id), K_(self), KPC(log_task));
-        break;
       } else {
         // do nothing
       }
