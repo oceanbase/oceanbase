@@ -203,7 +203,6 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "is_result_accurate",
   "last_insert_id",
   "lc_messages",
-  "lc_time_names",
   "license",
   "local_infile",
   "lock_wait_timeout",
@@ -443,7 +442,6 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_IS_RESULT_ACCURATE,
   SYS_VAR_LAST_INSERT_ID,
   SYS_VAR_LC_MESSAGES,
-  SYS_VAR_LC_TIME_NAMES,
   SYS_VAR_LICENSE,
   SYS_VAR_LOCAL_INFILE,
   SYS_VAR_LOCK_WAIT_TIMEOUT,
@@ -838,8 +836,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "optimizer_features_enable",
   "_ob_proxy_weakread_feedback",
   "ncharacter_set_connection",
-  "ob_enable_pl_cache",
-  "lc_time_names"
+  "ob_enable_pl_cache"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1244,7 +1241,6 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObProxyWeakreadFeedback)
         + sizeof(ObSysVarNcharacterSetConnection)
         + sizeof(ObSysVarObEnablePlCache)
-        + sizeof(ObSysVarLcTimeNames)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3375,15 +3371,6 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_CACHE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePlCache));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLcTimeNames())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarLcTimeNames", K(ret));
-      } else {
-        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarLcTimeNames));
       }
     }
 
@@ -5989,17 +5976,6 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlCache())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnablePlCache", K(ret));
-      }
-      break;
-    }
-    case SYS_VAR_LC_TIME_NAMES: {
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLcTimeNames)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLcTimeNames)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLcTimeNames())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarLcTimeNames", K(ret));
       }
       break;
     }
