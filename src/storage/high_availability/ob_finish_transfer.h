@@ -23,6 +23,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "share/transfer/ob_transfer_info.h"
 #include "share/ob_balance_define.h"
+#include "storage/ob_storage_async_rpc.h"
 
 namespace oceanbase {
 namespace storage {
@@ -210,16 +211,6 @@ private:
   /*rpc section*/
   int fetch_ls_replay_scn_(const share::ObTransferTaskID &task_id, const int64_t cluster_id,
       const common::ObAddr &server_addr, const uint64_t tenant_id, const share::ObLSID &ls_id, share::SCN &finish_scn);
-
-  // post check if logical sstable has been replaced
-  // @param[in]: cluster_id
-  // @param[in]: server_addr
-  // @param[in]: tenant_id
-  // @param[in]: ls_id
-  // @param[out] backfill completed
-  int post_check_logical_table_replaced_request_(const int64_t cluster_id, const common::ObAddr &server_addr,
-      const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
-      const common::ObIArray<share::ObTransferTabletInfo> &tablet_list, bool &backfill_completed);
 
   // check self is leader
   // @param[in]: ls_id

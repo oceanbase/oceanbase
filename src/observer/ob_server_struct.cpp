@@ -69,6 +69,7 @@ DEF_TO_STRING(ObGlobalContext)
        KP_(lst_operator),
        KP_(tablet_operator),
        KP_(srv_rpc_proxy),
+       KP_(storage_rpc_proxy),
        KP_(rs_rpc_proxy),
        KP_(load_data_proxy),
        KP_(executor_rpc),
@@ -110,6 +111,7 @@ ObGlobalContext &ObGlobalContext::operator=(const ObGlobalContext &other)
     lst_operator_ = other.lst_operator_;
     tablet_operator_ = other.tablet_operator_;
     srv_rpc_proxy_ = other.srv_rpc_proxy_;
+    storage_rpc_proxy_ = other.storage_rpc_proxy_;
     rs_rpc_proxy_ = other.rs_rpc_proxy_;
     load_data_proxy_ = other.load_data_proxy_;
     inner_sql_rpc_proxy_ = other.inner_sql_rpc_proxy_;
