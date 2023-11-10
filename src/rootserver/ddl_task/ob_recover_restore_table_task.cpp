@@ -55,7 +55,6 @@ int ObRecoverRestoreTableTask::init(const uint64_t src_tenant_id, const uint64_t
   } else {
     execution_id_ = 1L;
     task_version_ = OB_RECOVER_RESTORE_TABLE_TASK_VERSION;
-    set_is_copy_foreign_keys(false);
     set_is_ignore_errors(true);
   }
   LOG_INFO("init recover restore table ddl task finished", K(ret), KPC(this));
@@ -74,7 +73,6 @@ int ObRecoverRestoreTableTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_FAIL(ObTableRedefinitionTask::init(task_record))) {
     LOG_WARN("deserialize to init task failed", K(ret), K(task_record));
   } else {
-    set_is_copy_foreign_keys(false);
     set_is_ignore_errors(true);
   }
   LOG_INFO("init recover table restore ddl task finished", K(ret), KPC(this));
@@ -197,7 +195,7 @@ int ObRecoverRestoreTableTask::fail()
       LOG_WARN("get db schema failed", K(ret), K(dst_tenant_id_), KPC(table_schema));
     } else if (OB_ISNULL(db_schema)) {
       ret = OB_ERR_BAD_DATABASE;
-      LOG_WARN("database id is invalid", K(dst_tenant_id_), "db_id", table_schema->get_database_id(), K(ret));
+      LOG_WARN("database id is invalid", K(ret), K(dst_tenant_id_), "db_id", table_schema->get_database_id());
     } else if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oralce compat mode", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(max(all_orig_index_tablet_count, table_schema->get_all_part_num()), rpc_timeout))) {
