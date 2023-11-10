@@ -2406,13 +2406,7 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table(
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> all_preds;
   /// STEP 1. deduce new join conditions
-  bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(joined_table->left_table_) ||
+  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(joined_table->left_table_) ||
       OB_ISNULL(joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(stmt), K(joined_table));
@@ -2547,17 +2541,17 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table(
       //can pushdown nothing
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pushdown_into_table(stmt,
+    } else if (OB_FAIL(SMART_CALL(pushdown_into_table(stmt,
                                            joined_table->left_table_,
                                            pullup_preds,
                                            left_down,
-                                           left_conditions))) {
+                                           left_conditions)))) {
       LOG_WARN("failed to push down predicates", K(ret));
-    } else if (OB_FAIL(pushdown_into_table(stmt,
+    } else if (OB_FAIL(SMART_CALL(pushdown_into_table(stmt,
                                            joined_table->right_table_,
                                            pullup_preds,
                                            right_down,
-                                           right_conditions))) {
+                                           right_conditions)))) {
       LOG_WARN("failed to push down predicates", K(ret));
     } else {
       //删除下推的谓词
@@ -2876,19 +2870,13 @@ int ObTransformPredicateMoveAround::pushdown_into_table(ObDMLStmt *stmt,
                                                         ObIArray<ObRawExprCondition *> &pred_conditions)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 8> rename_preds;
-  ObSEArray<ObRawExpr*, 8> table_preds;
-  ObSEArray<ObRawExpr*, 8> candi_preds;
-  ObSEArray<ObRawExpr*, 8> table_pullup_preds;
-  ObSEArray<ObRawExprCondition*, 8> table_conditions;
-  bool is_stack_overflow = false;
+  ObSEArray<ObRawExpr*, 4> rename_preds;
+  ObSEArray<ObRawExpr*, 4> table_preds;
+  ObSEArray<ObRawExpr*, 4> candi_preds;
+  ObSEArray<ObRawExpr*, 4> table_pullup_preds;
+  ObSEArray<ObRawExprCondition*, 4> table_conditions;
   OPT_TRACE("try to pushdown preds into", table_item);
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(table_item));
   } else if (OB_FAIL(get_pushdown_predicates(
@@ -2932,12 +2920,12 @@ int ObTransformPredicateMoveAround::pushdown_into_table(ObDMLStmt *stmt,
   if (OB_SUCC(ret) && table_item->is_joined_table()) {
     if (OB_FAIL(candi_preds.assign(rename_preds))) {
       LOG_WARN("failed to assgin exprs", K(ret));
-    } else if (OB_FAIL(pushdown_into_joined_table(
+    } else if (OB_FAIL(SMART_CALL(pushdown_into_joined_table(
                          stmt,
                          static_cast<JoinedTable*>(table_item),
                          table_pullup_preds,
                          candi_preds,
-                         table_conditions))) {
+                         table_conditions)))) {
       LOG_WARN("failed to push down predicates", K(ret));
     }
   }
