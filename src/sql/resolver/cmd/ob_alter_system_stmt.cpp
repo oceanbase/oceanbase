@@ -32,14 +32,25 @@ ObBackupSetEncryptionStmt::ObBackupSetEncryptionStmt()
 int ObBackupSetEncryptionStmt::set_param(const int64_t mode, const common::ObString &passwd)
 {
   int ret = common::OB_SUCCESS;
+  int64_t pos = 0;
+  char encrypted_buffer[OB_MAX_PASSWORD_LENGTH] = {0};
+  ObString encrypted_str(sizeof(encrypted_buffer), encrypted_buffer);
   mode_ = static_cast<const share::ObBackupEncryptionMode::EncryptionMode>(mode);
-  encrypted_passwd_.assign_ptr(passwd_buf_, sizeof(passwd_buf_));
 
   if (!share::ObBackupEncryptionMode::is_valid(mode_)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid args", K(ret), K(mode), K(mode_));
-  } else if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(passwd, encrypted_passwd_))) {
+  } else if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(passwd, encrypted_str))) {
     COMMON_LOG(WARN, "failed to encrypted passwd", K(ret), K(passwd));
+  } else if (OB_FAIL(databuff_printf(passwd_buf_,
+                                     sizeof(passwd_buf_),
+                                     pos,
+                                     "%.*s",
+                                     encrypted_str.length(),
+                                     encrypted_str.ptr()))) {
+    COMMON_LOG(WARN, "failed to format passwd_buf", K(ret), K(encrypted_str));
+  } else {
+    encrypted_passwd_.assign_ptr(passwd_buf_, pos);
   }
 
   return ret;
