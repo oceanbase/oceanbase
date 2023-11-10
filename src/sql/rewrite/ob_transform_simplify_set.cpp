@@ -190,46 +190,57 @@ int ObTransformSimplifySet::add_order_by(ObSelectStmt *stmt, ObSelectStmt *upper
   return ret;
 }
 
-//
-// 判断upper_stmt能否下推distinct/order by/limit操作到stmt // 当上层有不带offset的limit且下层没有limit时可以下推limit，distinct(如果上层有的话)，
-// 如果上层还有order by，
-// 下推order by(下层order by肯定被消除了remove_order_by_for_set)
-// 如果上层有order by 且 order by 跟的一个子查询，则不能下压:select * from t1 union select * from t2 order by (select min(c1) from t3) limit 1;
-//
-int ObTransformSimplifySet::check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt, bool &can_push)
+// 判断 upper_stmt 能否下推 distinct/order by/limit 操作到 stmt
+// 如果 upper stmt 有 limit percent 或者仅有 offset，都不下推
+// 如果下层 stmt 有 limit，都不下推
+// 1. 下推 order by
+//    如果下层 stmt 有 order by, 不能下推 order by
+//    如果 upper stmt 的 order by 跟的一个子查询，不能下推 order by
+//    e.g. select * from t1 union select * from t2 order by (select min(c1) from t3) limit 1;
+// 2. 下推 distinct/limit
+//    如果 upper stmt 有 order by 且不能下推，不能下推 disdinct/limit
+int ObTransformSimplifySet::check_can_push(ObSelectStmt *stmt, ObSelectStmt *upper_stmt,
+                                           bool &need_push_distinct, bool &need_push_orderby,
+                                           bool &can_push)
 {
   int ret = OB_SUCCESS;
   can_push = true;
+  need_push_distinct = false;
+  need_push_orderby = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(upper_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null pointer passed to add_distinct", K(ret), K(stmt), K(upper_stmt));
   } else if (!upper_stmt->has_limit()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("upper_stmt should have limit ", K(ret), K(upper_stmt->has_limit()));
+  } else if (NULL == upper_stmt->get_limit_expr() ||
+             NULL != upper_stmt->get_limit_percent_expr() ||
+             upper_stmt->is_fetch_with_ties()) {
+    can_push = false;
   } else if (stmt->has_limit() || stmt->is_contains_assignment()) {
-    // 下层有limit
     can_push = false;
-  } else if ((0 < upper_stmt->get_order_item_size() && 0 < stmt->get_order_item_size())
-             || NULL == upper_stmt->get_limit_expr()
-             || NULL != upper_stmt->get_limit_percent_expr()
-             || upper_stmt->is_fetch_with_ties()) {
-    // 上层有order by且下层有也不能下推
-    // 仅有 offset 不进行下推
-    // limit percent不能下推, 因为可能生成topn导致结果错误
-    can_push = false;
-  } else {
-    //上层有order by subquery 不能下推
-    for (int64_t i = 0; OB_SUCC(ret) && can_push && i < upper_stmt->get_order_item_size(); ++i) {
-      ObRawExpr *order_expr = upper_stmt->get_order_item(i).expr_;
-      if (OB_ISNULL(order_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(order_expr));
-      } else if (order_expr->has_flag(CNT_SUB_QUERY)) {
-        can_push = false;
-      } else if (!order_expr->has_flag(CNT_SET_OP)) {
-        can_push = false;
-      } else {/*do nothing*/}
+  } else if (upper_stmt->has_order_by()) {
+    if (stmt->has_order_by()) {
+      // 下层有 order by 不能下推
+      can_push = false;
+    } else {
+      // 上层有 order by subquery 不能下推
+      for (int64_t i = 0; OB_SUCC(ret) && can_push && i < upper_stmt->get_order_item_size(); ++i) {
+        ObRawExpr *order_expr = upper_stmt->get_order_item(i).expr_;
+        if (OB_ISNULL(order_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(order_expr));
+        } else if (order_expr->has_flag(CNT_SUB_QUERY)) {
+          can_push = false;
+        } else if (!order_expr->has_flag(CNT_SET_OP)) {
+          can_push = false;
+        } else {/*do nothing*/}
+      }
+      need_push_orderby = can_push;
+      need_push_distinct = upper_stmt->is_set_distinct() && can_push;
     }
+  } else {
+    need_push_distinct = upper_stmt->is_set_distinct();
   }
   return ret;
 }
@@ -258,22 +269,25 @@ int ObTransformSimplifySet::add_limit_order_distinct_for_union(const common::ObI
         /*do nothing*/
     } else if(select_stmt->has_limit()){
       bool can_push = false;
+      bool need_push_distinct = false;
+      bool need_push_orderby = false;
       ObSelectStmt* child_stmt = NULL;
       ObIArray<ObSelectStmt*> &child_stmts = select_stmt->get_set_query();
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
         if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
-        } else if (OB_FAIL(check_can_push(child_stmt, select_stmt, can_push))) {
+        } else if (OB_FAIL(check_can_push(child_stmt, select_stmt, need_push_distinct,
+                                          need_push_orderby, can_push))) {
           LOG_WARN("Failed to check left stmt", K(ret));
         } else if (!can_push) {
           /*do nothing*/
-        } else if (OB_FAIL(add_distinct(child_stmt, select_stmt))) {
+        } else if (need_push_distinct && OB_FAIL(add_distinct(child_stmt, select_stmt))) {
           LOG_WARN("Failed to add distinct to left stmt", K(ret));
+        } else if (need_push_orderby && OB_FAIL(add_order_by(child_stmt, select_stmt))) {
+          LOG_WARN("Failed to add order by to left stmt", K(ret));
         } else if (OB_FAIL(add_limit(child_stmt, select_stmt))) {
           LOG_WARN("Failed to add limit to left stmt", K(ret));
-        } else if (OB_FAIL(add_order_by(child_stmt, select_stmt))) {
-          LOG_WARN("Failed to add order by to left stmt", K(ret));
         } else {
           trans_happened = true;
         }
