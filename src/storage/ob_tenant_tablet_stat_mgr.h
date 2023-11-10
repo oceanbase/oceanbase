@@ -344,6 +344,9 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       ObTabletStatAnalyzer &analyzer);
+  int clear_tablet_stat(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id);
   int get_sys_stat(ObTenantSysStat &sys_stat);
   void process_stats();
   void refresh_all(const int64_t step);

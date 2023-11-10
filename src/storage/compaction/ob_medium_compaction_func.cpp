@@ -73,7 +73,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   UNUSEDx(func, allocator, schema_version);
   int ret = OB_SUCCESS;
   ObGetMergeTablesParam param;
-  param.merge_type_ = META_MAJOR_MERGE;
+  param.merge_type_ = MEDIUM_MERGE;
   if (OB_FAIL(ObAdaptiveMergePolicy::get_meta_merge_tables(
           param,
           ls,
@@ -150,7 +150,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
                 K(ls_id), K(tablet_id), K(last_sstable_schema_version), K(freeze_info));
       break;
     } else if (OB_FAIL(get_table_schema_to_merge(
-        *schema_service, tablet, freeze_info.schema_version_, allocator, medium_info))) {
+        *schema_service, tablet, freeze_info.schema_version_, medium_info.medium_compat_version_, allocator, medium_info.storage_schema_))) {
       if (OB_TABLE_IS_DELETED == ret) {
         // do nothing, end loop
       } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
@@ -341,14 +341,11 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
   int64_t max_sync_medium_scn = 0;
   int64_t last_major_snapshot_version = 0;
   ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet_handle", K(ret), K(tablet_handle_));
   } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
-  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", K(ret));
   } else if (FALSE_IT(last_major_snapshot_version = tablet->get_last_major_snapshot_version())) {
   } else if (0 >= last_major_snapshot_version) {
     // no major, do nothing
@@ -499,11 +496,10 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   int ret = OB_SUCCESS;
   max_reserved_snapshot = INT64_MAX;
 
-  int64_t max_merged_snapshot = 0;
   ObStorageSnapshotInfo snapshot_info;
   int64_t last_major_snapshot_version = 0;
   ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet_handle", K(ret), K(tablet_handle_));
@@ -515,9 +511,8 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   } else if (0 == ls_.get_min_reserved_snapshot()) {
     ret = OB_NO_NEED_MERGE;
     // not sync reserved snapshot yet, should not schedule now
-  } else if (FALSE_IT(max_merged_snapshot = last_major_snapshot_version)) {
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
-      tablet->get_tablet_meta().tablet_id_, max_merged_snapshot, snapshot_info))) {
+      tablet->get_tablet_meta().tablet_id_, last_major_snapshot_version, snapshot_info))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else {
     max_reserved_snapshot = MAX(ls_.get_min_reserved_snapshot(), snapshot_info.snapshot_);
@@ -883,7 +878,8 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get schema service from MTL", K(ret));
     } else if (FALSE_IT(medium_info.storage_schema_.reset())) {
-    } else if (OB_FAIL(get_table_schema_to_merge(*schema_service, *tablet, schema_version, allocator_, medium_info))) {
+    } else if (OB_FAIL(get_table_schema_to_merge(*schema_service, *tablet, schema_version,
+          medium_info.medium_compat_version_, allocator_, medium_info.storage_schema_))) {
       // for major compaction, storage schema is inited in choose_major_snapshot
       if (OB_TABLE_IS_DELETED != ret) {
         LOG_WARN("failed to get table schema", KR(ret), KPC(this), K(medium_info));
@@ -935,8 +931,9 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
     ObMultiVersionSchemaService &schema_service,
     const ObTablet &tablet,
     const int64_t schema_version,
+    const int64_t medium_compat_version,
     ObIAllocator &allocator,
-    ObMediumCompactionInfo &medium_info)
+    ObStorageSchema &storage_schema)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -990,20 +987,20 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
 #endif
 
   int64_t storage_schema_version =  ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
-  if (medium_info.medium_compat_version_ < ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2) {
-    storage_schema_version =  ObStorageSchema::STORAGE_SCHEMA_VERSION;
-  } else if (medium_info.medium_compat_version_ < ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3) {
-    storage_schema_version =  ObStorageSchema::STORAGE_SCHEMA_VERSION_V2;
+
+  if (medium_compat_version < ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2) {
+    storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION;
+  } else if (medium_compat_version < ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3) {
+    storage_schema_version = ObStorageSchema::STORAGE_SCHEMA_VERSION_V2;
   }
   // for old version medium info, need generate old version schema
-  if (FAILEDx(medium_info.storage_schema_.init(
+  if (FAILEDx(storage_schema.init(
           allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/,
           storage_schema_version))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version));
   } else {
     LOG_INFO("get schema to merge", K(tablet_id), K(table_id), K(schema_version), K(save_schema_version),
-      K(medium_info.storage_schema_),
-      K(*reinterpret_cast<const ObPrintableTableSchema*>(table_schema)));
+              K(storage_schema), K(*reinterpret_cast<const ObPrintableTableSchema*>(table_schema)));
   }
   return ret;
 }
@@ -1306,7 +1303,6 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
 {
   int ret = OB_SUCCESS;
   create_dag_flag = false;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_MEDIUM_CREATE_DAG) ret;
   if (OB_FAIL(ret)) {
@@ -1314,46 +1310,44 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
     return ret;
   }
 #endif
-  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("failed to fetch table store", K(ret), K(tablet));
-  } else {
-    const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
-    if (MTL(ObTenantTabletScheduler *)->could_major_merge_start() && last_major_snapshot > 0) {
-      const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-      const ObLSID &ls_id = ls.get_ls_id();
-      ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
-      const ObMediumCompactionInfoList *medium_list = nullptr;
-      bool schedule_flag = false;
-      const int64_t inner_table_merged_version = MTL(ObTenantTabletScheduler *)->get_inner_table_merged_scn();
 
-      if (OB_FAIL(tablet.read_medium_info_list(temp_allocator, medium_list))) {
-        LOG_WARN("failed to load medium info list", K(ret), K(tablet));
-      } else if (ObMediumCompactionInfo::MAJOR_COMPACTION == medium_list->get_last_compaction_type()
-          && inner_table_merged_version < medium_list->get_last_compaction_scn()
-          && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) { // for STANDBY/RESTORE TENANT
-        ObTabletCompactionScnInfo ret_info;
-        // for standby/restore tenant, need select inner_table to check RS status before schedule new round
-        if (!scheduler_called) { // should not visit inner table, wait for scheduler loop
-        } else if (OB_FAIL(get_status_from_inner_table(ls_id, tablet_id, ret_info))) {
-          LOG_WARN("failed to get status from inner tablet", K(ret), K(ls_id), K(tablet_id));
-        } else if (ret_info.could_schedule_next_round(medium_list->get_last_compaction_scn())) {
-          LOG_INFO("success to check RS major checksum validation finished", K(ret), K(ls_id), K(tablet_id));
-          schedule_flag = true;
-        }
-      } else {
+  const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
+  if (MTL(ObTenantTabletScheduler *)->could_major_merge_start() && last_major_snapshot > 0) {
+    const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+    const ObLSID &ls_id = ls.get_ls_id();
+    ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
+    const ObMediumCompactionInfoList *medium_list = nullptr;
+    bool schedule_flag = false;
+    const int64_t inner_table_merged_version = MTL(ObTenantTabletScheduler *)->get_inner_table_merged_scn();
+    if (OB_FAIL(tablet.read_medium_info_list(temp_allocator, medium_list))) {
+      LOG_WARN("failed to load medium info list", K(ret), K(tablet));
+    } else if (ObMediumCompactionInfo::MAJOR_COMPACTION == medium_list->get_last_compaction_type()
+        && inner_table_merged_version < medium_list->get_last_compaction_scn()
+        && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) { // for STANDBY/RESTORE TENANT
+      ObTabletCompactionScnInfo ret_info;
+      // for standby/restore tenant, need select inner_table to check RS status before schedule new round
+      if (!scheduler_called) { // should not visit inner table, wait for scheduler loop
+      } else if (OB_FAIL(get_status_from_inner_table(ls_id, tablet_id, ret_info))) {
+        LOG_WARN("failed to get status from inner tablet", K(ret), K(ls_id), K(tablet_id));
+      } else if (ret_info.could_schedule_next_round(medium_list->get_last_compaction_scn())) {
+        LOG_INFO("success to check RS major checksum validation finished", K(ret), K(ls_id), K(tablet_id));
         schedule_flag = true;
       }
-      if (OB_FAIL(ret) || !schedule_flag) {
-      } else {
-        const int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
-        ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
-        int64_t schedule_scn = 0;
-        if (OB_FAIL(read_medium_info_from_list(*medium_list, last_major_snapshot,
-            major_frozen_snapshot, compaction_type, schedule_scn))) {
-        } else if (schedule_scn > 0
-            && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type, tablet_need_freeze_flag, create_dag_flag))) {
-          LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
-        }
+    } else {
+      schedule_flag = true;
+    }
+
+    if (OB_FAIL(ret) || !schedule_flag) {
+    } else {
+      const int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
+      ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
+      int64_t schedule_scn = 0;
+      if (OB_FAIL(read_medium_info_from_list(*medium_list, last_major_snapshot,
+          major_frozen_snapshot, compaction_type, schedule_scn))) {
+        LOG_WARN("failed to read medium info from list", K(ret), K(ls_id), K(tablet_id), KPC(medium_list), K(last_major_snapshot));
+      } else if (schedule_scn > 0
+              && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type, tablet_need_freeze_flag, create_dag_flag))) {
+        LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
       }
     }
   }

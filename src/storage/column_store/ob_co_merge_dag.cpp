@@ -122,7 +122,7 @@ int ObCOMergePrepareDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -313,7 +313,7 @@ int ObCOMergeScheduleDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -454,7 +454,7 @@ int ObCOMergeBatchExeDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -879,7 +879,7 @@ int ObCOMergeFinishDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -1019,7 +1019,7 @@ int ObCOMergeDagNet::init_by_param(const ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init dag net", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else {

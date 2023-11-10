@@ -66,8 +66,9 @@ public:
     ObMultiVersionSchemaService &schema_service,
     const ObTablet &tablet,
     const int64_t schema_version,
+    const int64_t medium_compat_version,
     ObIAllocator &allocator,
-    ObMediumCompactionInfo &medium_info);
+    storage::ObStorageSchema &storage_schema);
   static int batch_check_medium_finish(
     hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,

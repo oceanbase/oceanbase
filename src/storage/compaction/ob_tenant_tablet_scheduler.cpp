@@ -866,70 +866,83 @@ int ObTenantTabletScheduler::schedule_merge_dag(
   return ret;
 }
 
-int ObTenantTabletScheduler::schedule_tablet_meta_major_merge(
+int ObTenantTabletScheduler::schedule_tablet_meta_merge(
     ObLSHandle &ls_handle,
     ObTabletHandle &tablet_handle,
-    const compaction::ObMediumCompactionInfoList &medium_list)
+    bool &has_created_dag)
 {
   int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  has_created_dag = false;
+
   if (OB_UNLIKELY(!ls_handle.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_handle), K(tablet_handle));
+  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else {
     const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
-    const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
-    LOG_INFO("start try to schedule tablet meta major merge", K(ls_id), K(tablet_id), K(tablet_handle)); // tmp log, remove later
-
-    ObGetMergeTablesParam param;
-    ObGetMergeTablesResult result;
-
-    const int64_t last_major_snapshot_version = tablet_handle.get_obj()->get_last_major_snapshot_version();
-    ObAdaptiveMergePolicy::AdaptiveMergeReason adaptive_merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE;
+    const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+    const int64_t last_major_snapshot_version = tablet->get_last_major_snapshot_version();
     int64_t max_sync_medium_scn = 0;
     ObArenaAllocator allocator("GetMediumList", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const compaction::ObMediumCompactionInfoList *medium_list = nullptr;
-    if (OB_FAIL(tablet_handle.get_obj()->get_max_sync_medium_scn(max_sync_medium_scn))) {
-      LOG_WARN("failed to get max sync medium snapshot", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(tablet_handle.get_obj()->read_medium_info_list(allocator, medium_list))) {
-      LOG_WARN("failed to read medium info list", K(ret), K(tablet_id));
+
+    // check medium list
+    if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_list))) {
+      LOG_WARN("failed to read medium info list", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
-        *tablet_handle.get_obj(), *medium_list, max_sync_medium_scn))) {
+        *tablet, *medium_list, max_sync_medium_scn))) {
       LOG_WARN("failed to get max sync medium snapshot", K(ret), K(ls_id), K(tablet_id));
     } else if ((nullptr != medium_list && medium_list->size() > 0)
-        || max_sync_medium_scn > last_major_snapshot_version) {
-      // do nothing
-    } else if (OB_FAIL(ObAdaptiveMergePolicy::get_adaptive_merge_reason(*tablet_handle.get_obj(), adaptive_merge_reason))) {
-      if (OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("failed to get meta merge priority", K(ret), K(tablet_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else if (ObAdaptiveMergePolicy::is_valid_merge_reason(adaptive_merge_reason)) {
-      LOG_INFO("start schedule meta merge", KPC(tablet_handle.get_obj())); // tmp log, remove later
+             || max_sync_medium_scn > last_major_snapshot_version) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("tablet exists unfinished medium info, no need to do meta merge", K(ret), K(ls_id), K(tablet_id),
+          K(last_major_snapshot_version), K(max_sync_medium_scn), KPC(medium_list));
+    } else {
+      LOG_INFO("start schedule meta merge", K(ls_id), K(tablet_id), KPC(tablet)); // tmp log, remove later
+      ObGetMergeTablesParam param;
+      ObGetMergeTablesResult result;
       param.merge_type_ = META_MAJOR_MERGE;
       if (OB_FAIL(ObAdaptiveMergePolicy::get_meta_merge_tables(
               param,
               *ls_handle.get_ls(),
-              *tablet_handle.get_obj(),
+              *tablet,
               result))) {
-        if (OB_NO_NEED_MERGE == ret) {
-          ret = OB_SUCCESS;
-          LOG_DEBUG("tablet no need meta merge", K(ret), K(param), K(tablet_id));
-        } else {
+        if (OB_NO_NEED_MERGE != ret) {
           LOG_WARN("failed to get meta merge tables", K(ret), K(param), K(tablet_id));
         }
-      } else if (OB_UNLIKELY(tablet_handle.get_obj()->get_multi_version_start() > result.merge_version_)) {
+      } else if (FALSE_IT(result.merge_version_ = result.version_range_.snapshot_version_)) {
+      } else if (OB_UNLIKELY(tablet->get_multi_version_start() > result.merge_version_)) {
         ret = OB_SNAPSHOT_DISCARDED;
         LOG_WARN("multi version data is discarded, should not compaction now", K(ret), K(ls_id), K(tablet_id),
           K(result.merge_version_));
+      } else if (!tablet->is_row_store()) {
+        ObCOMergeDagParam dag_param;
+        dag_param.ls_id_ = ls_id;
+        dag_param.tablet_id_ = tablet->get_tablet_meta().tablet_id_;
+        dag_param.merge_type_ = META_MAJOR_MERGE;
+        dag_param.merge_version_ = result.merge_version_;
+        dag_param.is_tenant_major_merge_ = false;
+        dag_param.compat_mode_ = tablet->get_tablet_meta().compat_mode_;
+        if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(dag_param))) {
+          if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+            LOG_WARN("failed to schedule tablet merge dag", K(ret));
+          }
+        }
+        FLOG_INFO("chaser debug schedule co merge dag", K(ret), K(dag_param), K(tablet->is_row_store()));
       } else {
         ObTabletMergeDagParam dag_param(META_MAJOR_MERGE, ls_id, tablet_id);
+        dag_param.merge_version_ = result.merge_version_;
         ObTabletMergeExecuteDag *schedule_dag = nullptr;
         if (OB_FAIL(schedule_merge_execute_dag<ObTabletMergeExecuteDag>(dag_param, ls_handle, tablet_handle, result, schedule_dag))) {
           if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-            LOG_WARN("failed to schedule tablet meta merge dag", K(ret));
+            LOG_WARN("failed to schedule tablet meta merge dag", K(ret), K(dag_param));
           }
         }
+      }
+
+      if (OB_SUCC(ret)) {
+        has_created_dag = true;
       }
     }
   }
@@ -1328,17 +1341,6 @@ int ObTenantTabletScheduler::schedule_next_round_for_leader(
         LOG_WARN("failed to schedule_next_medium_for_leader", K(tmp_ret), K(ls_handle), K(tablet_handle), KPC(medium_list));
       }
       ++idx;
-    } else { // unfinish tablet
-      if (ObTimeUtility::current_time_ns() < tablet_ls_infos.at(i).get_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
-        // need wait 10 mins before schedule meta major
-      } else if (OB_TMP_FAIL(get_ls_tablet_medium_list(ls_id, tablet_id, tmp_allocator, ls_handle, tablet_handle, medium_list, weak_read_ts))) {
-        LOG_WARN("failed to get_ls_tablet_medium_list", K(tmp_ret), K(ls_handle), K(tablet_handle), KPC(medium_list));
-      } else if (enable_adaptive_compaction_ && OB_TMP_FAIL(
-          schedule_tablet_meta_major_merge(ls_handle, tablet_handle, *medium_list))) {
-        if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
-          LOG_WARN("failed to schedule tablet merge", K(tmp_ret), K(ls_id), K(tablet_id));
-        }
-      }
     }
     // clear flags set by ls_start_schedule_medium
     //#TODO @jingshui sort tablet_ls_info with ls id

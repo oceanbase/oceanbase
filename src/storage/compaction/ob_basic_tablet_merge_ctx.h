@@ -235,6 +235,7 @@ protected:
   int swap_tablet();
   int get_medium_compaction_info(); // for major
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
+  int get_meta_compaction_info(); // for meta major
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:

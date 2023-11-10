@@ -105,7 +105,7 @@ private:
       const int64_t memtable_create_timestamp,
       int64_t &adaptive_threshold);
 private:
-  static const int64_t FAST_FREEZE_INTERVAL_US = 300 * 1000 * 1000L;  //300s
+  static const int64_t FAST_FREEZE_INTERVAL_US = 120 * 1000 * 1000L;  //120s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t TOMBSTONE_DEFAULT_ROW_COUNT = 250000;
   static const int64_t TOMBSTONE_MAX_ROW_COUNT = 500000;
@@ -245,10 +245,10 @@ public:
   static int schedule_tablet_minor_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
-  static int schedule_tablet_meta_major_merge(
+  static int schedule_tablet_meta_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
-      const compaction::ObMediumCompactionInfoList &medium_list);
+      bool &has_created_dag);
   template <class T>
   static int schedule_merge_execute_dag(
       const compaction::ObTabletMergeDagParam &param,

@@ -173,7 +173,7 @@ int ObTabletTableStore::init(
     // skip
   } else if (OB_FAIL(build_memtable_array(tablet))) {
     LOG_WARN("failed to build memtable array", K(ret));
-  } else if (OB_UNLIKELY(!sstable->is_major_sstable())) {
+  } else if (OB_UNLIKELY(!sstable->is_major_sstable() || sstable->is_meta_major_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table", K(ret), KPC(sstable));
   } else if (OB_FAIL(major_tables_.init(allocator, sstable))) {
@@ -872,13 +872,13 @@ int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObITable 
     table = nullptr;
     const ObSSTableArray *sst_array = nullptr;
     if (table_key.is_major_sstable()) {
-      sst_array = &major_tables_;
+      sst_array = table_key.is_meta_major_sstable()
+                ? &meta_major_tables_
+                : &major_tables_;
     } else if (table_key.is_minor_sstable()) {
       sst_array = &minor_tables_;
     } else if (table_key.is_ddl_sstable()) {
       sst_array = &ddl_sstables_;
-    } else if (table_key.is_meta_major_sstable()) {
-      sst_array = &meta_major_tables_;
     }
 
     if (table_key.is_memtable()) {
@@ -1265,7 +1265,7 @@ int ObTabletTableStore::inner_build_major_tables_(
   for (int64_t i = 0; OB_SUCC(ret) && i < tables_array.count(); ++i) {
     ObITable *new_table = tables_array.at(i);
     need_add = true;
-    if (OB_NOT_NULL(new_table) && new_table->is_major_sstable()) {
+    if (OB_NOT_NULL(new_table) && (new_table->is_major_sstable() && !new_table->is_meta_major_sstable())) {
       for (int64_t j = 0; OB_SUCC(ret) && j < major_tables.count(); ++j) {
         ObITable *table = major_tables.at(j);
         if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_major_sstable())) {

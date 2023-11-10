@@ -187,7 +187,7 @@ int ObMergeParameter::init(
       merge_version_range_.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;
     }
 
-    if (is_major_merge_type(static_param_.get_merge_type()) && !get_schema()->is_row_store()) {
+    if (is_major_or_meta_merge_type(static_param_.get_merge_type()) && !get_schema()->is_row_store()) {
       if (OB_ISNULL(allocator)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null allocator", K(ret));
@@ -1121,7 +1121,7 @@ int ObTabletMergeTask::process()
   } else {
     ctx_->mem_ctx_.mem_click();
     if (OB_FAIL(merger_->merge_partition(*ctx_, idx_))) {
-      if (is_major_merge_type(ctx_->get_merge_type()) && OB_ENCODING_EST_SIZE_OVERFLOW == ret) {
+      if (is_major_or_meta_merge_type(ctx_->get_merge_type()) && OB_ENCODING_EST_SIZE_OVERFLOW == ret) {
         STORAGE_LOG(WARN, "failed to merge partition with possibly encoding error, "
             "retry with flat row store type", K(ret), KPC(ctx_), K_(idx));
         merger_->reset();
