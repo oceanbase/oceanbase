@@ -219,6 +219,7 @@ int ObTransService::stop_tx(ObTxDesc &tx)
     // either on txn temp node or xa temp node
     // depends on session cleanup to quit
     TRANS_LOG(INFO, "this is not txn start node.");
+    tx.lock_.unlock();
   } else {
     if (tx.state_ < ObTxDesc::State::IN_TERMINATE) {
       abort_tx_(tx, ObTxAbortCause::STOP, true);
