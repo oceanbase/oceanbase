@@ -458,12 +458,10 @@ public:
                                          ObAutoGatherStatsParams &auto_gather_params);
 
   static int do_gather_table_stats(sql::ObExecContext &ctx,
-                                   ObSchemaGetterGuard &schema_guard,
                                    const int64_t table_id,
                                    const uint64_t tenant_id,
                                    ObAutoGatherStatsParams &auto_gather_params);
   static int do_gather_tables_stats(sql::ObExecContext &ctx,
-                                    ObSchemaGetterGuard &schema_guard,
                                     const uint64_t tenant_id,
                                     const ObIArray<int64_t> &table_ids,
                                     ObAutoGatherStatsParams &auto_gather_params);
@@ -570,6 +568,8 @@ private:
                                  ObTableStatParam &param);
 
   static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
+
+  static int refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id);
 
 };
 
