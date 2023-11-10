@@ -856,7 +856,7 @@ int ObLobManager::compare(ObLobAccessParam& param_left,
     char *charset_convert_buff_ptr = nullptr;
     bool need_convert_charset = (collation_left != CS_TYPE_BINARY);
     uint64_t charset_convert_buff_size = need_convert_charset ?
-                                         0 : read_buff_size * ObCharset::CharConvertFactorNum;
+                                         read_buff_size * ObCharset::CharConvertFactorNum : 0;
 
     if (OB_ISNULL((read_buff = static_cast<char*>(tmp_allocator->alloc(read_buff_size * 2))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
