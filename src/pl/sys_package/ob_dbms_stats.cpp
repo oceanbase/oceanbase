@@ -197,7 +197,9 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
       ObOptStatGatherStat gather_stat(task_info);
       ObOptStatGatherStatList::instance().push(gather_stat);
       ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, stat_param.allocator_->used(), gather_stat);
-      if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+      if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+        LOG_WARN("refresh tenant schema guard failed", K(ret));
+      } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
         LOG_WARN("failed to parse table part info", K(ret));
       } else if (OB_FAIL(parse_gather_stat_options(ctx,
                                                   params.at(1),
@@ -919,7 +921,9 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
         stat_table.table_id_ = table_ids.at(i);
         ObTableStatParam stat_param = global_param;
         stat_param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after delete stats.
-        if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+        if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+          LOG_WARN("refresh tenant schema guard failed", K(ret));
+        } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
           LOG_WARN("failed to parse table part info", K(ret));
         } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_bool(stat_param.no_invalidate_))) {
           LOG_WARN("failed to get no invalidate", K(ret));
@@ -1389,7 +1393,9 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           stat_param.stat_id_ = stat_table_param.stat_id_;
           stat_param.cascade_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after export stats.
-          if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+          if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+            LOG_WARN("refresh tenant schema guard failed", K(ret));
+          } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
             LOG_WARN("failed to parse table part info", K(ret));
           } else if (OB_FAIL(ObDbmsStatsExportImport::export_table_stats(ctx, stat_param, tmp_str))) {
             LOG_WARN("failed to export table stats", K(ret));
@@ -1737,7 +1743,9 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           stat_param.part_stat_param_.need_modify_ = true;
           stat_param.subpart_stat_param_.need_modify_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after stat import
-          if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+          if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+            LOG_WARN("refresh tenant schema guard failed", K(ret));
+          } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
             LOG_WARN("failed to parse table part info", K(ret));
           } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_bool(stat_param.no_invalidate_))) {
             LOG_WARN("failed to get stat no_invalidate ", K(ret));
@@ -2029,7 +2037,9 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
         stat_table.database_id_ = global_param.db_id_;
         stat_table.table_id_ = table_ids.at(i);
         ObTableStatParam stat_param = global_param;
-        if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+        if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+          LOG_WARN("refresh tenant schema guard failed", K(ret));
+        } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
           LOG_WARN("failed to parse table part info", K(ret));
         } else {
           stat_param.global_stat_param_.need_modify_ = true;
@@ -2218,7 +2228,9 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
         stat_table.database_id_ = global_param.db_id_;
         stat_table.table_id_ = table_ids.at(i);
         ObTableStatParam stat_param = global_param;
-        if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+        if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+          LOG_WARN("refresh tenant schema guard failed", K(ret));
+        } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
           LOG_WARN("failed to parse table part info", K(ret));
         } else {
           stat_param.global_stat_param_.need_modify_ = true;
@@ -2405,7 +2417,9 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       stat_table.table_id_ = table_ids.at(i);
       ObTableStatParam stat_param = global_param;
       stat_param.allocator_ = &tmp_alloc;////use the temp allocator to free memory after stat restore
-      if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
+      if (OB_FAIL(refresh_tenant_schema_guard(ctx, global_param.tenant_id_))) {
+        LOG_WARN("refresh tenant schema guard failed", K(ret));
+      } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
         LOG_WARN("failed to parse table part info", K(ret));
       } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_bool(stat_param.force_))) {
         LOG_WARN("failed to get force", K(ret));
@@ -5222,12 +5236,11 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 128> table_ids;
-  ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
   uint64_t tenant_id = OB_INVALID_ID;
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
+  if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(session));
+    LOG_WARN("get unexpected null", K(ret), K(session));
   } else if (OB_FALSE_IT(tenant_id = session->get_effective_tenant_id())) {
   } else if (is_virtual_tenant_id(tenant_id)) {
     // do nothing
@@ -5242,7 +5255,7 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
       tmp_succeed = succeed_cnt;
       if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, table_ids, slice_cnt))) {
         LOG_WARN("failed to get tables that need gather stats", K(ret));
-      } else if (OB_FAIL(do_gather_tables_stats(ctx, *schema_guard, tenant_id, table_ids,
+      } else if (OB_FAIL(do_gather_tables_stats(ctx, tenant_id, table_ids,
                                                 duration_time, succeed_cnt, task_info))) {
         LOG_WARN("failed to gather table stats", K(ret));
       }
@@ -5256,14 +5269,19 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
     // gather virtual table stats
     ObSEArray<uint64_t, 256> all_table_ids;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(schema_guard->get_table_ids_in_tenant(tenant_id, all_table_ids))){
+    } else if (OB_ISNULL(ctx.get_virtual_table_ctx().schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(ctx.get_virtual_table_ctx().schema_guard_));
+    } else if (OB_FAIL(ctx.get_virtual_table_ctx().schema_guard_->get_table_ids_in_tenant(tenant_id, all_table_ids))) {
       LOG_WARN("failed to get virtual table ids in tenant", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < all_table_ids.count(); ++i) {
         int64_t table_id = static_cast<int64_t>(all_table_ids.at(i));
         if (is_virtual_table(table_id) && !ObDbmsStatsUtils::is_no_stat_virtual_table(table_id)) {
-          if (OB_FAIL(do_gather_table_stats(ctx, *schema_guard, table_id, tenant_id,
-                                            duration_time, succeed_cnt, task_info))) {
+          if (OB_FAIL(refresh_tenant_schema_guard(ctx, tenant_id))) {
+            LOG_WARN("refresh tenant schema guard failed", K(ret));
+          } else if (OB_FAIL(do_gather_table_stats(ctx, table_id, tenant_id,
+                                                   duration_time, succeed_cnt, task_info))) {
             LOG_WARN("failed to gather virtual table stats", K(ret));
           } else {
             ++task_info.task_table_count_;
@@ -5276,7 +5294,6 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
 }
 
 int ObDbmsStats::do_gather_tables_stats(sql::ObExecContext &ctx,
-                                        ObSchemaGetterGuard &schema_guard,
                                         const uint64_t tenant_id,
                                         const ObIArray<int64_t> &table_ids,
                                         const int64_t duration_time,
@@ -5285,8 +5302,10 @@ int ObDbmsStats::do_gather_tables_stats(sql::ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
-    if (OB_FAIL(do_gather_table_stats(ctx, schema_guard, table_ids.at(i), tenant_id,
-                                      duration_time, succeed_cnt, task_info))) {
+    if (OB_FAIL(refresh_tenant_schema_guard(ctx, tenant_id))) {
+      LOG_WARN("refresh tenant schema guard failed", K(ret));
+    } else if (OB_FAIL(do_gather_table_stats(ctx, table_ids.at(i), tenant_id,
+                                             duration_time, succeed_cnt, task_info))) {
       LOG_WARN("failed to gather table stats", K(ret));
     }
   }
@@ -5294,7 +5313,6 @@ int ObDbmsStats::do_gather_tables_stats(sql::ObExecContext &ctx,
 }
 
 int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
-                                       ObSchemaGetterGuard &schema_guard,
                                        const int64_t table_id,
                                        const uint64_t tenant_id,
                                        const int64_t duration_time,
@@ -5304,14 +5322,18 @@ int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   bool is_valid = false;
   const ObTableSchema *table_schema = NULL;
-  if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard, tenant_id, table_id, is_valid))) {
+  share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(schema_guard));
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard, tenant_id, table_id, is_valid))) {
     LOG_WARN("failed to check sy table validity", K(ret));
   } else if (!is_valid) {
     // only gather statistics for following tables:
     // 1. user table
     // 2. valid sys table
     // 3. virtual table
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -6193,6 +6215,24 @@ int ObDbmsStats::init_gather_task_info(ObExecContext &ctx,
       LOG_WARN("failed to init", K(ret));
     } else {
       LOG_TRACE("Succeed to init gather task info", K(task_info));
+    }
+  }
+  return ret;
+}
+
+//Avoid holding schema guard for a long time to caused dynamic leakage of schema memory, we need refresh tenant schema guard
+int ObDbmsStats::refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()), K(ctx.get_sql_ctx()));
+  } else {
+    ObTenantCachedSchemaGuardInfo &cached_schema_info = ctx.get_my_session()->get_cached_schema_guard_info();
+    if (OB_FAIL(cached_schema_info.refresh_tenant_schema_guard(tenant_id))) {
+      LOG_WARN("refresh tenant schema guard failed", K(ret), K(tenant_id));
+    } else {
+      ctx.get_sql_ctx()->schema_guard_ = &(cached_schema_info.get_schema_guard());
     }
   }
   return ret;
