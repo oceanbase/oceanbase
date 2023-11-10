@@ -370,6 +370,10 @@ int ObBasicTabletMergeCtx::build_ctx(bool &finish_flag)
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_PRINT_WRAPPER("failed to get ls_handle/tablet_handle/rebuild_seq");
     }
+  } else if (ObTablet::check_transfer_seq_equal(*get_tablet(), get_transfer_seq())) {
+    LOG_WARN("new tablet transfer seq not eq with old transfer seq", K(ret),
+        "new_tablet_meta", get_tablet()->get_tablet_meta(),
+        "old_transfer_seq", get_transfer_seq());
   } else if (OB_FAIL(get_merge_tables(get_merge_table_result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_PRINT_WRAPPER("failed to get merge tables");
@@ -1025,6 +1029,10 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
       tables_handle.reset(); // clear tables array
       if (OB_FAIL(swap_tablet())) {
         LOG_WARN("failed to get alloc tablet handle", KR(ret));
+      } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*get_tablet(), get_transfer_seq()))) {
+        LOG_WARN("new tablet transfer seq not eq with old transfer seq", K(ret),
+            "new_tablet_meta", get_tablet()->get_tablet_meta(),
+            "old_transfer_seq", get_transfer_seq());
       } else if (OB_FAIL(get_merge_tables(get_merge_table_result))) {
         if (OB_NO_NEED_MERGE != ret) {
           LOG_WARN("failed to get merge tables", KR(ret), KPC(this));

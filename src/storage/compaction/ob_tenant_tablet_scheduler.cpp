@@ -844,6 +844,7 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     param.merge_version_ = merge_snapshot_version;
     param.is_tenant_major_merge_ = is_tenant_major_merge;
     param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
+    param.transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
         LOG_WARN("failed to schedule tablet merge dag", K(ret));
@@ -857,6 +858,7 @@ int ObTenantTabletScheduler::schedule_merge_dag(
     param.merge_type_ = merge_type;
     param.merge_version_ = merge_snapshot_version;
     param.is_tenant_major_merge_ = is_tenant_major_merge;
+    param.transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
         LOG_WARN("failed to schedule tablet merge dag", K(ret));
@@ -924,6 +926,7 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
         dag_param.merge_version_ = result.merge_version_;
         dag_param.is_tenant_major_merge_ = false;
         dag_param.compat_mode_ = tablet->get_tablet_meta().compat_mode_;
+        dag_param.transfer_seq_ = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
         if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_co_merge_dag_net(dag_param))) {
           if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
             LOG_WARN("failed to schedule tablet merge dag", K(ret));
@@ -931,7 +934,8 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
         }
         FLOG_INFO("chaser debug schedule co merge dag", K(ret), K(dag_param), K(tablet->is_row_store()));
       } else {
-        ObTabletMergeDagParam dag_param(META_MAJOR_MERGE, ls_id, tablet_id);
+        ObTabletMergeDagParam dag_param(META_MAJOR_MERGE, ls_id, tablet_id,
+            tablet->get_tablet_meta().transfer_info_.transfer_seq_);
         dag_param.merge_version_ = result.merge_version_;
         ObTabletMergeExecuteDag *schedule_dag = nullptr;
         if (OB_FAIL(schedule_merge_execute_dag<ObTabletMergeExecuteDag>(dag_param, ls_handle, tablet_handle, result, schedule_dag))) {
@@ -1040,7 +1044,8 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
         const int64_t parallel_dag_cnt = minor_range_mgr.exe_range_array_.count() + parallel_results.count();
         const int64_t total_sstable_cnt = result.handle_.get_count();
         const int64_t create_time = common::ObTimeUtility::fast_current_time();
-        ObTabletMergeDagParam dag_param(MERGE_TYPES[i], ls_id, tablet_id);
+        ObTabletMergeDagParam dag_param(MERGE_TYPES[i], ls_id, tablet_id,
+            tablet_handle.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_);
         T *schedule_dag = nullptr;
         for (int64_t k = 0; OB_SUCC(ret) && k < parallel_results.count(); ++k) {
           if (OB_UNLIKELY(parallel_results.at(k).handle_.get_count() <= 1)) {
