@@ -100,7 +100,14 @@ public:
 private:
   int write_meta_data_(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id);
   int prepare_backup_file_(const int64_t file_id);
-  int64_t get_data_file_size() const { return GCONF.backup_data_file_size; }
+  int64_t get_data_file_size() const {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (!tenant_config.is_valid()) {
+      return DEFAULT_BACKUP_DATA_FILE_SIZE;
+    } else {
+      return tenant_config->backup_data_file_size;
+    }
+  }
   bool need_switch_file_(const blocksstable::ObBufferReader &buffer);
   int switch_file_();
   int flush_trailer_();

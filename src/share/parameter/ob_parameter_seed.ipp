@@ -1104,17 +1104,17 @@ DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // backup 备份恢复相关的配置
-DEF_CAP(backup_data_file_size, OB_CLUSTER_PARAMETER, "4G", "[512M,4G]",
+DEF_CAP(backup_data_file_size, OB_TENANT_PARAMETER, "4G", "[512M,4G]",
         "backup data file size. "
         "Range: [512M, 4G] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_backup_task_keep_alive_interval, OB_CLUSTER_PARAMETER, "10s", "[1s,)",
+DEF_TIME(_backup_task_keep_alive_interval, OB_TENANT_PARAMETER, "10s", "[1s,)",
          "control backup task keep alive interval"
          "Range: [1s, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_backup_task_keep_alive_timeout, OB_CLUSTER_PARAMETER, "10m", "[1s,)",
+DEF_TIME(_backup_task_keep_alive_timeout, OB_TENANT_PARAMETER, "10m", "[1s,)",
          "control backup task keep alive timeout"
          "Range: [1s, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
