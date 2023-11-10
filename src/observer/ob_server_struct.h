@@ -34,6 +34,7 @@ class ObMysqlRandom;
 namespace obrpc
 {
 class ObSrvRpcProxy;
+class ObStorageRpcProxy;
 class ObCommonRpcProxy;
 class ObLoadDataRpcProxy;
 class ObDBMSJobRpcProxy;
@@ -234,6 +235,7 @@ struct ObGlobalContext
   share::ObLSTableOperator *lst_operator_;
   share::ObTabletTableOperator *tablet_operator_;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
+  obrpc::ObStorageRpcProxy *storage_rpc_proxy_;
   obrpc::ObDBMSJobRpcProxy *dbms_job_rpc_proxy_;
   obrpc::ObInnerSQLRpcProxy *inner_sql_rpc_proxy_;
   obrpc::ObDBMSSchedJobRpcProxy *dbms_sched_job_rpc_proxy_;

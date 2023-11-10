@@ -511,9 +511,9 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
     const common::ObArray<ObTransferTabletInfo> &tablet_list, const int64_t quorum, bool &all_backfilled)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  int64_t cur_quorum = 0;
-  const int64_t cluster_id = GCONF.cluster_id;
+  all_backfilled = true;
+  storage::ObCheckTransferTabletBackfillProxy batch_proxy(
+      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_transfer_tablet_backfill_completed);
   FOREACH_X(location, member_addr_list, OB_SUCC(ret))
   {
     if (OB_ISNULL(location)) {
@@ -521,20 +521,55 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
       LOG_WARN("location should not be null", K(ret));
     } else {
       const common::ObAddr &server = *location;
-      bool backfill_completed = false;
-      if (OB_FAIL(post_check_logical_table_replaced_request_(
-              cluster_id, server, tenant_id, dest_ls_id, tablet_list, backfill_completed))) {
-        LOG_WARN("failed to check criteria", K(ret), K(cluster_id), K(tenant_id), K(dest_ls_id), K(server));
-      } else if (!backfill_completed) {
-        LOG_INFO("server has not finish backfill", K(tenant_id), K(dest_ls_id), K(quorum), K(member_addr_list), K(server));
+      const int64_t timeout = GCONF.rpc_timeout;
+      const int64_t cluster_id = GCONF.cluster_id;
+      const uint64_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
+      ObCheckTransferTabletBackfillArg arg;
+      arg.tenant_id_ = tenant_id;
+      arg.ls_id_ = dest_ls_id;
+      if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
+        LOG_WARN("failed to assign tablet array", K(ret), K(tablet_list));
+      } else if (OB_FAIL(batch_proxy.call(server,
+                                          timeout,
+                                          cluster_id,
+                                          tenant_id,
+                                          group_id,
+                                          arg))) {
+        LOG_WARN("failed to send check transfer tablet backfill request", K(ret), K(server), K(tenant_id));
       } else {
-        cur_quorum++;
-        LOG_INFO("server has replayed passed finish scn", K(ret), K(server));
+        LOG_INFO("check_transfer_tablet_backfill_completed", K(arg), K(server));
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    all_backfilled = cur_quorum == quorum;
+  ObArray<int> return_code_array;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(batch_proxy.wait_all(return_code_array))) {
+    LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (return_code_array.count() != member_addr_list.count()
+      || return_code_array.count() != batch_proxy.get_results().count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cnt not match", K(ret),
+             "return_cnt", return_code_array.count(),
+             "result_cnt", batch_proxy.get_results().count(),
+             "server_cnt", member_addr_list.count());
+  } else {
+    ARRAY_FOREACH_X(batch_proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+      const ObCheckTransferTabletBackfillRes *response = batch_proxy.get_results().at(idx);
+      const int res_ret = return_code_array.at(idx);
+      if (OB_SUCCESS != res_ret) {
+        ret = res_ret;
+        LOG_WARN("rpc execute failed", KR(ret), K(idx));
+      } else if (OB_ISNULL(response)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("response is null", K(ret));
+      } else if (!response->backfill_finished_) {
+        all_backfilled = false;
+        break;
+      }
+    }
   }
   return ret;
 }
@@ -971,36 +1006,6 @@ int ObTxFinishTransfer::fetch_ls_replay_scn_(const ObTransferTaskID &task_id, co
     LOG_WARN("failed to fetch ls replay scn", K(ret), K(tenant_id), K(src_info), K(ls_id));
   } else {
     LOG_INFO("fetch ls replay scn", K(tenant_id), K(src_info), K(ls_id));
-  }
-  return ret;
-}
-
-int ObTxFinishTransfer::post_check_logical_table_replaced_request_(const int64_t cluster_id,
-    const common::ObAddr &server_addr, const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
-    const common::ObIArray<share::ObTransferTabletInfo> &tablet_list, bool &replace_finished)
-{
-  int ret = OB_SUCCESS;
-  replace_finished = false;
-  ObLSService *ls_service = NULL;
-  storage::ObStorageRpc *storage_rpc = NULL;
-  storage::ObStorageHASrcInfo src_info;
-  src_info.src_addr_ = server_addr;
-  src_info.cluster_id_ = GCONF.cluster_id;
-  if (!src_info.is_valid() || !dest_ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(src_info), K(dest_ls_id));
-  } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_ISNULL(storage_rpc = ls_service->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc proxy is NULL", K(ret));
-  } else if (OB_FAIL(storage_rpc->check_tablets_logical_table_replaced(
-                 tenant_id, src_info, dest_ls_id, tablet_list, replace_finished))) {
-    LOG_WARN(
-        "failed to post transfer backfill finished", K(ret), K(tenant_id), K(src_info), K(dest_ls_id), K(tablet_list));
-  } else {
-    LOG_INFO("check logical table replaced completed", K(tenant_id), K(src_info), K(dest_ls_id), K(replace_finished));
   }
   return ret;
 }

@@ -816,14 +816,46 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
   } else {
+    storage::ObCheckStartTransferTabletsProxy batch_proxy(
+        *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_start_transfer_tablets);
     for (int64_t i = 0; OB_SUCC(ret) && i < member_addr_list.count(); ++i) {
       const ObAddr &addr = member_addr_list.at(i);
-      ObStorageHASrcInfo src_info;
-      src_info.src_addr_ = addr;
-      src_info.cluster_id_ = cluster_id;
-      if (OB_FAIL(storage_rpc_->check_start_transfer_tablets(task_info.tenant_id_,
-          src_info, task_info.src_ls_id_, task_info.dest_ls_id_, task_info.tablet_list_))) {
-        LOG_WARN("failed to check src transfer tablets", K(ret), K(task_info), K(src_info));
+      ObTransferTabletInfoArg arg;
+      arg.tenant_id_ = task_info.tenant_id_;
+      arg.src_ls_id_ = task_info.src_ls_id_;
+      arg.dest_ls_id_ = task_info.dest_ls_id_;
+      const int64_t timeout = GCONF.rpc_timeout;
+      const int64_t cluster_id = GCONF.cluster_id;
+      const uint64_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
+      if (OB_FAIL(arg.tablet_list_.assign(task_info.tablet_list_))) {
+        LOG_WARN("failed to assign tablet list", K(ret), K(task_info));
+      } else if (OB_FAIL(batch_proxy.call(addr,
+                                          timeout,
+                                          cluster_id,
+                                          task_info.tenant_id_,
+                                          group_id,
+                                          arg))) {
+        STORAGE_LOG(WARN, "failed to call check start transfer tablets", K(ret), K(addr), K(task_info), K(arg));
+      }
+    }
+    ObArray<int> return_code_array;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(batch_proxy.wait_all(return_code_array))) {
+      STORAGE_LOG(WARN, "fail to wait all batch result", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (return_code_array.count() != member_addr_list.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cnt not match", KR(ret),
+               "return_cnt", return_code_array.count(),
+               "server_cnt", member_addr_list.count());
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
+      const int res_ret = return_code_array.at(i);
+      if (OB_SUCCESS != res_ret) {
+        ret = res_ret;
+        LOG_WARN("rpc execute failed", KR(ret), K(i));
       }
     }
   }

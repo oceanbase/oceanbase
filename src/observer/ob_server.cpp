@@ -162,7 +162,7 @@ ObServer::ObServer()
     prepare_stop_(true), stop_(true), has_stopped_(true), has_destroy_(false),
     net_frame_(gctx_), sql_conn_pool_(), ddl_conn_pool_(), dblink_conn_pool_(),
     res_inner_conn_pool_(), restore_ctx_(), srv_rpc_proxy_(),
-    rs_rpc_proxy_(), sql_proxy_(),
+    storage_rpc_proxy_(), rs_rpc_proxy_(), sql_proxy_(),
     dblink_proxy_(),
     executor_proxy_(), executor_rpc_(), dbms_job_rpc_proxy_(), dbms_sched_job_rpc_proxy_(), interrupt_proxy_(),
     config_(ObServerConfig::get_instance()),
@@ -2248,6 +2248,8 @@ int ObServer::init_network()
     LOG_ERROR("init server network fail");
   } else if (OB_FAIL(net_frame_.get_proxy(srv_rpc_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));
+  } else if (OB_FAIL(net_frame_.get_proxy(storage_rpc_proxy_))) {
+    LOG_ERROR("get rpc proxy fail", KR(ret));
   } else if (OB_FAIL(net_frame_.get_proxy(rs_rpc_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));
   } else if (OB_FAIL(net_frame_.get_proxy(executor_proxy_))) {
@@ -2497,6 +2499,7 @@ int ObServer::init_global_context()
   gctx_.lst_operator_ = &lst_operator_;
   gctx_.tablet_operator_ = &tablet_operator_;
   gctx_.srv_rpc_proxy_ = &srv_rpc_proxy_;
+  gctx_.storage_rpc_proxy_ = &storage_rpc_proxy_;
   gctx_.dbms_job_rpc_proxy_ = &dbms_job_rpc_proxy_;
   gctx_.inner_sql_rpc_proxy_ = &inner_sql_rpc_proxy_;
   gctx_.dbms_sched_job_rpc_proxy_ = &dbms_sched_job_rpc_proxy_;
