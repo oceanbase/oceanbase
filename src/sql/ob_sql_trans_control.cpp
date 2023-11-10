@@ -252,6 +252,7 @@ int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   bool sync = false;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
 #ifndef NDEBUG
@@ -510,6 +511,7 @@ int ObSqlTransControl::decide_trans_read_interface_specs(
 int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
   const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
@@ -1019,6 +1021,7 @@ int ObSqlTransControl::xa_rollback_all_changes(ObExecContext &exec_ctx)
 int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   auto *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
   const ObPhysicalPlan *plan = NULL;

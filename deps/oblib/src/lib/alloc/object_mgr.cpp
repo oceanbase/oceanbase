@@ -233,6 +233,7 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   auto *obj = root_mgr.alloc_object(sizeof(SubObjectMgr), attr);
   root_mgr.unlock();
   if (OB_NOT_NULL(obj)) {
+    obj->ignore_version_ = true;
     SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
     sub_mgr = new (obj->data_) SubObjectMgr(CTX_ATTR(ctx_id_).enable_no_log_, tenant_id_, ctx_id_,
                                             ablock_size_, enable_dirty_list_, blk_mgr_);

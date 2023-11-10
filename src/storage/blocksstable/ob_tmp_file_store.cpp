@@ -1594,6 +1594,7 @@ int ObTmpFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, const 
     ObTmpFileExtent &extent)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObTmpTenantFileStoreHandle store_handle;
   if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));

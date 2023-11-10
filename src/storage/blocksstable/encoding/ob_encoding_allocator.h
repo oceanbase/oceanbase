@@ -105,6 +105,7 @@ public:
   {
     int ret = OB_SUCCESS;
     lib::ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderAlloc");
+    SET_IGNORE_MEM_VERSION(attr);
     if (nullptr == (allocator_ = OB_NEW(ObDecoderAllocator, attr,
         decoder_sizes, attr))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;

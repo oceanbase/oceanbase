@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_MYSQL_PROXY_H_
 #define OCEANBASE_MYSQL_PROXY_H_
 
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"

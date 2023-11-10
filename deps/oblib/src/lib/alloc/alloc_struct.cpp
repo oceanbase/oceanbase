@@ -24,12 +24,15 @@ using namespace common;
 
 namespace lib
 {
-
 thread_local ObMemAttr ObMallocHookAttrGuard::tl_mem_attr(OB_SERVER_TENANT_ID,
                                                           "glibc_malloc",
                                                           ObCtxIds::GLIBC);
 static int64_t g_divisive_mem_size[OB_MAX_CPU_NUM];
 static thread_local bool g_is_ob_mem_mgr_path = false;
+
+uint32_t ObMemVersionNode::global_version = 0;
+__thread bool ObMemVersionNode::tl_ignore_node = true;
+__thread ObMemVersionNode* ObMemVersionNode::tl_node = NULL;
 
 ObMallocHookAttrGuard::ObMallocHookAttrGuard(const ObMemAttr& attr)
   : old_attr_(tl_mem_attr)

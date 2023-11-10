@@ -332,7 +332,7 @@ int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
   if (NULL == impl_) {
     if (DblinkDriverProto::DBLINK_DRV_OB == dblink_type_) {
       void *ptr = NULL;
-      if (NULL == (ptr = mtl_malloc(sizeof(ObXAQueryObImpl), "ObXAQuery"))) {
+      if (NULL == (ptr = mtl_malloc(sizeof(ObXAQueryObImpl), SET_IGNORE_MEM_VERSION("ObXAQuery")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "fail to allocate memory", K(ret), K(*this));
       } else {
@@ -367,7 +367,7 @@ int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
       }
     } else if (DblinkDriverProto::DBLINK_DRV_OCI == dblink_type_) {
       void *ptr = NULL;
-      if (NULL == (ptr = mtl_malloc(sizeof(ObXAQueryOraImpl), "ObXAQuery"))) {
+      if (NULL == (ptr = mtl_malloc(sizeof(ObXAQueryOraImpl), SET_IGNORE_MEM_VERSION("ObXAQuery")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "fail to allocate memory", K(ret), K(*this));
       } else {

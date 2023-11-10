@@ -624,6 +624,7 @@ template <typename Key, typename Value, typename MemMgrTag>
 ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::HashMapMemMgrCore()
   : map_array_lock_(common::ObLatchIds::HASH_MAP_LOCK)
 {
+  map_array_.set_attr(SET_USE_500("HashMapArray"));
   // Init node alloc.
   int ret = node_alloc_.init(static_cast<int64_t>(sizeof(Node)), SET_USE_500("LinearHashMapNo"));
   if (OB_FAIL(ret)) {
