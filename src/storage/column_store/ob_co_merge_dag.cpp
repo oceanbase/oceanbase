@@ -409,7 +409,7 @@ int ObCOMergeScheduleTask::process()
  */
 ObCOMergeBatchExeDag::ObCOMergeBatchExeDag()
  : ObCOMergeDag(ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE),
-   alloc_merge_info_lock_(),
+   exe_lock_(),
    start_cg_idx_(0),
    end_cg_idx_(0),
    retry_create_task_(false),
@@ -713,7 +713,7 @@ int ObCOMergeBatchExeTask::process()
     LOG_WARN("get unexpected exe task", K(ret), K(ctx_), K(dag_net_), KPC(merger_));
   } else if (FALSE_IT(SET_MEM_CTX(ctx_->mem_ctx_))) {
   } else {
-    ObSpinLockGuard lock_guard(exe_dag->alloc_merge_info_lock_);
+    ObSpinLockGuard lock_guard(exe_dag->exe_lock_);
     if (ctx_->is_cg_merge_infos_valid(exe_dag->get_start_cg_idx(), exe_dag->get_end_cg_idx(), true/*check info ready*/)) {
       // do nothing
     } else if (OB_FAIL(ctx_->prepare_index_builder(exe_dag->get_start_cg_idx(),
@@ -754,19 +754,21 @@ int ObCOMergeBatchExeTask::process()
 void ObCOMergeBatchExeTask::merge_start()
 {
   int tmp_ret = OB_SUCCESS;
-  ObIDag::ObDagGuard guard(*dag_);
   ObCOMergeBatchExeDag *execute_dag = static_cast<ObCOMergeBatchExeDag*>(dag_);
-  // execute init_progress only once
-  if (OB_TMP_FAIL(execute_dag->init_merge_progress())) {
-    LOG_WARN_RET(tmp_ret, "failed to init merge progress");
-  }
-  // each task has one merger, and all mergers share the progress
-  ObCOMerger *co_merger = static_cast<ObCOMerger*>(merger_);
-  co_merger->set_merge_progress(execute_dag->get_merge_progress());
-  // execute time click init only once
-  if (execute_dag->get_time_guard().is_empty()) {
-    ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info().update_start_time();
-    execute_dag->dag_time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
+  {
+    ObSpinLockGuard lock_guard(execute_dag->exe_lock_);
+    // execute init_progress only once
+    if (OB_TMP_FAIL(execute_dag->init_merge_progress())) {
+      LOG_WARN_RET(tmp_ret, "failed to init merge progress");
+    }
+    // each task has one merger, and all mergers share the progress
+    ObCOMerger *co_merger = static_cast<ObCOMerger*>(merger_);
+    co_merger->set_merge_progress(execute_dag->get_merge_progress());
+    // execute time click init only once
+    if (execute_dag->get_time_guard().is_empty()) {
+      ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info().update_start_time();
+      execute_dag->dag_time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
+    }
   }
 }
 
