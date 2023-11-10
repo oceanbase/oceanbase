@@ -511,6 +511,10 @@ int LogSlidingWindow::submit_log(const char *buf,
         } else {
           PALF_LOG(TRACE, "generate_new_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(scn),
               K(valid_log_size), K(is_need_handle), K(is_need_handle_next));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = try_feedback_freeze_log_task_(log_id))) {
+            PALF_LOG(ERROR, "try_feedback_freeze_log_task failed", KR(tmp_ret), K(log_id));
+          }
         }
       } else {
         // this log need to be appended to last log
@@ -526,14 +530,6 @@ int LogSlidingWindow::submit_log(const char *buf,
       const int64_t array_idx = get_itid() & APPEND_CNT_ARRAY_MASK;
       OB_ASSERT(0 <= array_idx && array_idx < APPEND_CNT_ARRAY_SIZE);
       ATOMIC_INC(&append_cnt_array_[array_idx]);
-
-      LSN last_submit_end_lsn, max_flushed_end_lsn;
-      get_last_submit_end_lsn_(last_submit_end_lsn);
-      get_max_flushed_end_lsn(max_flushed_end_lsn);
-      if (max_flushed_end_lsn >= last_submit_end_lsn) {
-        // all logs have been flushed, freeze last log in feedback mode
-        (void) feedback_freeze_last_log_();
-      }
     }
     if (OB_SUCC(ret) && is_need_handle_next) {
       // 这里无法使用log_id作为精确的调用条件，因为上一条日志和本条日志的处理可能并发
@@ -1228,6 +1224,35 @@ int LogSlidingWindow::feedback_freeze_last_log_()
   return ret;
 }
 
+int LogSlidingWindow::try_feedback_freeze_log_task_(const int64_t expected_log_id)
+{
+  int ret = OB_SUCCESS;
+  LSN log_task_begin_lsn, max_flushed_end_lsn;
+  LogTask *log_task = NULL;
+  LogTaskGuard guard(this);
+  if (OB_FAIL(guard.get_log_task(expected_log_id, log_task))) {
+    if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      // this log has slide out, ignore
+      ret = OB_SUCCESS;
+    } else {
+      PALF_LOG(ERROR, "get_log_task failed", KR(ret), K_(palf_id), K(expected_log_id));
+    }
+  } else if (OB_ISNULL(log_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "log_task is NULL", KR(ret), K_(palf_id), K(expected_log_id));
+  } else if (log_task->is_freezed()) {
+    PALF_LOG(TRACE, "log_task has been freezed", KR(ret), K_(palf_id), K(expected_log_id));
+  } else {
+    log_task_begin_lsn = log_task->get_begin_lsn();
+    get_max_flushed_end_lsn(max_flushed_end_lsn);
+    if (log_task_begin_lsn.is_valid() && max_flushed_end_lsn >= log_task_begin_lsn) {
+      // all logs have been flushed, freeze last log in feedback mode
+      (void) feedback_freeze_last_log_();
+    }
+  }
+  return ret;
+}
+
 bool LogSlidingWindow::is_in_period_freeze_mode() const
 {
   return (PERIOD_FREEZE_MODE == freeze_mode_);
@@ -1419,10 +1444,13 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
 
     if (OB_SUCC(ret)) {
       const int64_t last_submit_log_id = get_last_submit_log_id_();
+      const int64_t next_log_id = log_id + 1;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = try_feedback_freeze_log_task_(next_log_id))) {
+        PALF_LOG(ERROR, "try_feedback_freeze_log_task failed", KR(tmp_ret), K(next_log_id));
+      }
+
       if (log_id == last_submit_log_id) {
-        // 基于log_id连续性条件触发后续日志处理
-        // feedback mode下尝试冻结后面的log
-        (void) feedback_freeze_last_log_();
         // 非feedback mode需触发handle next log
         bool is_committed_lsn_updated = false;
         (void) handle_next_submit_log_(is_committed_lsn_updated);
