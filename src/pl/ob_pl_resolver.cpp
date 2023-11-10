@@ -11664,6 +11664,14 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                                  &resolve_ctx_.schema_guard_,
                                  current_block_->get_namespace(),
                                  self_argument));
+        if (OB_SUCC(ret) && !ObObjAccessIdx::is_expr_type(access_idxs)) {
+          bool for_write = false;
+          ObIRoutineParam *param = nullptr;
+          OZ (routine_info->get_routine_param(0, param));
+          CK (OB_NOT_NULL(param));
+          OX (for_write = !param->is_in_param());
+          OZ (check_variable_accessible(self_argument, for_write));
+        }
         OX (access_idxs.reset()); // Erase Pre Access. Start New Begin with UDF.
       }
     } else { // Member Self Argument Without Prefix.

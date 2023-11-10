@@ -744,6 +744,7 @@ public:
   static int64_t get_local_variable_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static int64_t get_subprogram_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_contain_object_type(const common::ObIArray<ObObjAccessIdx> &access_idxs);
+  static bool is_expr_type(const common::ObIArray<ObObjAccessIdx> &access_idxs);
 
 public:
   ObPLDataType elem_type_; //通过本变量访问得到的struct结构类型
