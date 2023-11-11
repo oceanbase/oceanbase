@@ -1,9 +1,31 @@
 #!/bin/bash -x
 SOURCE_DIR=$(readlink -f "$(dirname ${BASH_SOURCE[0]})/../..")
+BUILD_TYPE_ORDER="debug debug_asan debug_no_unity release release_asan release_coverage release_no_unity
+                  errsim errsim_asan errsim_debug errsim_sanity dissearray rpm perf sanity coverage
+                  enable_latch_diagnose enable_memory_diagnosis enable_obj_leak_check enable_smart_var_check
+                  trans_module_test"
+
 if [ $# -lt 1 ]
 then
-  echo "Usage ./copy.sh [oceanbase_dev_dir]"
-  BUILD_DIR=$(find $SOURCE_DIR -maxdepth 1 -name 'build_*' -type d | grep -v 'build_ccls' | head -1)
+  ALL_BUILD_DIRS=$(find $SOURCE_DIR -maxdepth 1 -name 'build_*' -type d | grep -v 'build_ccls'  | sort)
+  for TYPE in ${BUILD_TYPE_ORDER[@]}
+  do
+      for BUILD_DIR in ${ALL_BUILD_DIRS[@]}
+      do
+        if [[ "build_$TYPE" == "$(basename $BUILD_DIR)" ]]
+        then
+          break 2
+        fi
+      done
+  done
+  [[ "$BUILD_DIR" == "" ]] && BUILD_DIR=${ALL_BUILD_DIRS[0]}
+  if [[ "$BUILD_DIR" == "" ]]
+  then
+    echo "Please specify the build directory of oceanbase."
+    exit 1
+  else
+    echo "Choose $BUILD_DIR as build directory of oceanbase."
+  fi
 else
   BUILD_DIR=$1
 fi
