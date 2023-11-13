@@ -630,7 +630,11 @@ void ObIOResult::finish(const ObIORetCode &ret_code, ObIORequest *req)
       ret_code_ = ret_code;
       is_finished_ = true;
       if (OB_NOT_NULL(tenant_io_mgr_.get_ptr()) && OB_NOT_NULL(req)) {
-        tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this, *req);
+        if (is_sys_group(get_group_id())) {
+          tenant_io_mgr_.get_ptr()->io_backup_usage_.accumulate(*this, *req);
+        } else {
+          tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this, *req);
+        }
         tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
         end_ts_ = ObTimeUtility::fast_current_time();
         // record io error

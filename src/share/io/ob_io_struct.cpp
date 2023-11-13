@@ -2202,7 +2202,7 @@ int ObAsyncIOChannel::on_full_return(ObIORequest &req, const int64_t complete_si
       if (OB_FAIL(req.recycle_buffer())) {
         LOG_WARN("recycle io raw buffer failed", K(ret), K(req));
       }
-      req.io_result_->finish(OB_SUCCESS);
+      req.io_result_->finish(ret, &req);
     }
   }
   return ret;
@@ -2226,7 +2226,7 @@ int ObAsyncIOChannel::on_partial_return(ObIORequest &req, const int64_t complete
         if (OB_FAIL(req.recycle_buffer())) {
           LOG_WARN("recycle io raw buffer failed", K(ret), K(req));
         }
-        req.io_result_->finish(OB_SUCCESS);
+        req.io_result_->finish(ret, &req);
       }
     } else {
       if (OB_FAIL(req.recycle_buffer())) {
@@ -2470,7 +2470,7 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
         req.io_result_->finish(ret, &req);
       }
     } else {
-      req.io_result_->finish(OB_SUCCESS);
+      req.io_result_->finish(ret, &req);
     }
   }
   return ret;
