@@ -1047,6 +1047,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIs::decimal_int_is_false,                                     /* 612 */
   ObExprIsNot::decimal_int_is_not_true,                               /* 613 */
   ObExprIsNot::decimal_int_is_not_false,                              /* 614 */
+  NULL, //ObExprInnerIsTrue::int_is_true_start,                       /* 615 */
+  NULL, //ObExprInnerIsTrue::int_is_true_end,                         /* 616 */
+  NULL, //ObExprInnerIsTrue::float_is_true_start,                     /* 617 */
+  NULL, //ObExprInnerIsTrue::float_is_true_end,                       /* 618 */
+  NULL, //ObExprInnerIsTrue::double_is_true_start,                    /* 619 */
+  NULL, //ObExprInnerIsTrue::double_is_true_end,                      /* 620 */
+  NULL, //ObExprInnerIsTrue::number_is_true_start,                    /* 621 */
+  NULL, //ObExprInnerIsTrue::number_is_true_end,                      /* 622 */
+  NULL, //ObExprInnerDecodeLike::eval_inner_decode_like               /* 623 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

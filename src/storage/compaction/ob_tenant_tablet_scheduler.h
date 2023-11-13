@@ -105,7 +105,7 @@ private:
       const int64_t memtable_create_timestamp,
       int64_t &adaptive_threshold);
 private:
-  static const int64_t FAST_FREEZE_INTERVAL_US = 300 * 1000 * 1000L;  //300s
+  static const int64_t FAST_FREEZE_INTERVAL_US = 120 * 1000 * 1000L;  //120s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t TOMBSTONE_DEFAULT_ROW_COUNT = 250000;
   static const int64_t TOMBSTONE_MAX_ROW_COUNT = 500000;
@@ -245,10 +245,10 @@ public:
   static int schedule_tablet_minor_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
-  static int schedule_tablet_meta_major_merge(
+  static int schedule_tablet_meta_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
-      const compaction::ObMediumCompactionInfoList &medium_list);
+      bool &has_created_dag);
   template <class T>
   static int schedule_merge_execute_dag(
       const compaction::ObTabletMergeDagParam &param,
@@ -264,8 +264,7 @@ public:
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,
       const ObMergeType merge_type,
-      const int64_t &merge_snapshot_version,
-      const bool is_tenant_major_merge = false);
+      const int64_t &merge_snapshot_version);
   static int schedule_tablet_ddl_major_merge(
       ObTabletHandle &tablet_handle);
 
@@ -278,7 +277,6 @@ public:
   int schedule_next_round_for_leader(
     const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
     const ObIArray<compaction::ObTabletCheckInfo> &finish_tablet_ls_infos);
-
 private:
   friend struct ObTenantTabletSchedulerTaskMgr;
   int schedule_next_medium_for_leader(
@@ -367,6 +365,7 @@ private:
   ObCompactionScheduleIterator gc_sst_tablet_iter_;
   int64_t schedule_tablet_batch_size_;
   int64_t error_tablet_cnt_; // for diagnose
+  int64_t loop_cnt_;
   ObProhibitScheduleMediumMap prohibit_medium_map_;
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
 };

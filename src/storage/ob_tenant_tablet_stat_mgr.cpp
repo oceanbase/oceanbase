@@ -663,6 +663,32 @@ int ObTenantTabletStatMgr::get_latest_tablet_stat(
   return ret;
 }
 
+int ObTenantTabletStatMgr::clear_tablet_stat(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletStatKey key(ls_id, tablet_id);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
+    if (OB_FAIL(stream_map_.erase_refactored(key))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to erase tablet stat", K(ret), K(key));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantTabletStatMgr::get_all_tablet_stats(
     common::ObIArray<ObTabletStat> &tablet_stats)
 {

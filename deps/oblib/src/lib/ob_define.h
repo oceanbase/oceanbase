@@ -815,6 +815,8 @@ const int64_t MAX_ORACLE_SA_LABEL_TYPE_LENGTH = 15;
 //             table id range definition                  //
 ////////////////////////////////////////////////////////////
 const uint64_t OB_MIN_GENERATED_COLUMN_ID = 2000;
+const uint64_t OB_MIN_MLOG_COLUMN_ID = 8000;
+const uint64_t OB_MAX_MLOG_COLUMN_ID = 9999;
 const uint64_t OB_MIN_MV_COLUMN_ID = 10000;
 const uint64_t OB_MIN_SHADOW_COLUMN_ID = 32767;
 const uint64_t OB_MAX_SYS_POOL_ID = 100;
@@ -1272,7 +1274,7 @@ OB_INLINE bool is_inner_keystore_id(const uint64_t keystore_id)
 
 /*
  * ################################################################################
- * OBJECT_ID FOR KEYSTORE/MASTER KEY (202100, 202200)
+ * OBJECT_ID FOR PROFILE (202200, 202300)
  * ################################################################################
  */
 const uint64_t OB_MIN_INNER_PROFILE_ID           = 202200;
@@ -1725,6 +1727,10 @@ const int64_t OB_MAX_MEDIUMTEXT_LENGTH = 16 *  1024 * 1024L;  // mysql (1LL << 2
 const int64_t OB_MAX_LONGTEXT_LENGTH = 512 * 1024 * 1024L - 1; // 2^29-1,for datum.len_ only has 29 bit // mysql (1LL << 32)
 const int64_t OB_MAX_MEDIUMTEXT_LENGTH_OLD = 256 * 1024L;  // for compatibility
 const int64_t OB_MAX_LONGTEXT_LENGTH_OLD = 512 * 1024L;  // for compatibility
+
+const int64_t OB_MIN_LOB_CHUNK_SIZE = 1024; // 1K
+const int64_t OB_MAX_LOB_CHUNK_SIZE = 256 * 1024; // 256K
+const int64_t OB_DEFAULT_LOB_CHUNK_SIZE = OB_MAX_LOB_CHUNK_SIZE;
 
 const int64_t OB_MIN_LOB_INROW_THRESHOLD = 0; // 0 means disable inrow lob
 const int64_t OB_MAX_LOB_INROW_THRESHOLD = OB_MAX_USER_ROW_LENGTH; // 1.5M

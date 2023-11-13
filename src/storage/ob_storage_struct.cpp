@@ -246,12 +246,10 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
   : version_range_(),
     handle_(),
     merge_version_(),
-    create_snapshot_version_(INVALID_INT_VALUE),
     update_tablet_directly_(false),
     schedule_major_(false),
     is_simplified_(false),
     scn_range_(),
-    read_base_version_(0),
     error_location_(nullptr),
     snapshot_info_()
 {
@@ -261,8 +259,7 @@ bool ObGetMergeTablesResult::is_valid() const
 {
   return scn_range_.is_valid()
       && (is_simplified_ || handle_.get_count() >= 1)
-      && merge_version_ >= 0
-      && create_snapshot_version_ >= 0;
+      && merge_version_ >= 0;
 }
 
 void ObGetMergeTablesResult::reset_handle_and_range()
@@ -283,10 +280,8 @@ void ObGetMergeTablesResult::reset()
   version_range_.reset();
   handle_.reset();
   merge_version_ = ObVersionRange::MIN_VERSION;
-  create_snapshot_version_ = 0;
   schedule_major_ = false;
   scn_range_.reset();
-  read_base_version_ = 0;
   error_location_ = nullptr;
   is_simplified_ = false;
   snapshot_info_.reset();
@@ -301,7 +296,6 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
   } else {
     version_range_ = src.version_range_;
     merge_version_ = src.merge_version_;
-    create_snapshot_version_ = src.create_snapshot_version_;
     schedule_major_ = src.schedule_major_;
     scn_range_ = src.scn_range_;
     error_location_ = src.error_location_;

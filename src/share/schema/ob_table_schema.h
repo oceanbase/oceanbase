@@ -1873,10 +1873,12 @@ inline bool ObSimpleTableSchemaV2::should_not_validate_data_index_ckm() const
 
 inline bool ObSimpleTableSchemaV2::should_check_major_merge_progress() const
 {
-  // only include primary table
+  // only include primary table except aux lob tables
+  // aux lob tables only need to perform replicas verification, but don't need to be verified with primary table
   return is_sys_table()
           || is_user_table()
-          || is_tmp_table();
+          || is_tmp_table()
+          || is_aux_lob_table();
 }
 
 inline int64_t ObTableSchema::get_id_hash_array_mem_size(const int64_t column_cnt) const

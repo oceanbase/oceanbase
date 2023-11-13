@@ -1536,7 +1536,7 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock &micro_block)
   } else if (!micro_block.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro_block", K(micro_block), K(ret));
-  } else if (OB_UNLIKELY(!data_store_desc_->is_major_merge_type())) {
+  } else if (OB_UNLIKELY(!data_store_desc_->is_major_or_meta_merge_type())) {
     // forbid micro block level merge for minor merge now
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "minor merge does not allow micro block level merge", K(ret));

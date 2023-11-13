@@ -41,7 +41,14 @@ public:
     const int64_t start_cg_idx = 0, const int64_t end_cg_idx = 0);
   virtual int update_merge_progress(const int64_t idx, const int64_t scanned_row_count);
   virtual int finish_merge_progress() { return OB_SUCCESS; }
-  virtual int update_tenant_merge_progress(const int64_t scan_data_size_delta) { UNUSED(scan_data_size_delta); return OB_SUCCESS; }
+  virtual int update_tenant_merge_progress(
+      const int64_t total_data_size_delta,
+      const int64_t scan_data_size_delta)
+  {
+    UNUSED(total_data_size_delta);
+    UNUSED(scan_data_size_delta);
+    return OB_SUCCESS;
+  }
   int update_merge_info(storage::ObSSTableMergeInfo &merge_info);
   int get_progress_info(ObCompactionProgress &input_progress);
   int diagnose_progress(ObDiagnoseTabletCompProgress &input_progress);
@@ -70,6 +77,7 @@ protected:
   int64_t concurrent_cnt_;
   int64_t estimate_row_cnt_;
   int64_t estimate_occupy_size_;
+  int64_t estimate_occupy_size_delta_;
   float avg_row_length_;
   int64_t latest_update_ts_;
   int64_t estimated_finish_time_;
@@ -88,7 +96,9 @@ public:
   {
   }
   ~ObPartitionMajorMergeProgress() {}
-  virtual int update_tenant_merge_progress(const int64_t scan_data_size_delta) override;
+  virtual int update_tenant_merge_progress(
+      const int64_t total_data_size_delta,
+      const int64_t scan_data_size_delta) override;
   virtual int finish_merge_progress() override;
   int finish_progress(
     const int64_t merge_version,

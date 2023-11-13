@@ -112,7 +112,7 @@ public:
   }
   OB_INLINE const MediumInfoList &get_list() const { return medium_info_list_; }
   OB_INLINE int64_t get_wait_check_medium_scn() const { return extra_info_.wait_check_flag_ ? extra_info_.last_medium_scn_ : 0; }
-  OB_INLINE bool need_check_finish() const { return get_wait_check_medium_scn() > 0; }
+  bool need_check_finish() const;
   // check status on serialized medium list
   OB_INLINE bool could_schedule_next_round(const int64_t last_major_snapshot) const
   {

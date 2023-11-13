@@ -152,7 +152,8 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObBasicTabletMergeCtx &c
     }
     param.table_key_ = table_key;
 
-    if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_key.table_type_) {
+    if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_key.table_type_ ||
+        ObITable::TableType::COLUMN_ORIENTED_META_SSTABLE == table_key.table_type_) {
       param.co_base_type_ = cg_schema->is_all_column_group()
                           ? ObCOSSTableBaseType::ALL_CG_TYPE
                           : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
@@ -216,7 +217,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObBasicTabletMergeCtx &c
     param.other_block_ids_ = res.other_block_ids_;
     param.ddl_scn_.set_min();
     MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    if (is_major_merge_type(static_param.get_merge_type())) {
+    if (is_major_or_meta_merge_type(static_param.get_merge_type())) {
       if (OB_FAIL(param.column_checksums_.assign(res.data_column_checksums_))) {
         LOG_WARN("fail to fill column checksum", K(ret), K(res));
       }

@@ -41,6 +41,7 @@ ObPartitionMergeProgress::ObPartitionMergeProgress(common::ObIAllocator &allocat
     concurrent_cnt_(0),
     estimate_row_cnt_(0),
     estimate_occupy_size_(0),
+    estimate_occupy_size_delta_(0),
     avg_row_length_(0),
     latest_update_ts_(ObTimeUtility::fast_current_time()),
     estimated_finish_time_(0),
@@ -68,6 +69,7 @@ void ObPartitionMergeProgress::reset()
   }
   estimate_row_cnt_ = 0;
   estimate_occupy_size_ = 0;
+  estimate_occupy_size_delta_ = 0;
   avg_row_length_ = 0;
   latest_update_ts_ = 0;
   estimated_finish_time_ = 0;
@@ -213,24 +215,15 @@ int ObPartitionMergeProgress::estimate()
       }
       update_estimated_finish_time_();
       if (ctx_->get_is_tenant_major_merge()) {
-        int64_t estimate_occupy_size_delta = estimate_occupy_size_ - old_major_data_size;
+        estimate_occupy_size_delta_ = estimate_occupy_size_ - old_major_data_size;
         if (start_cg_idx_ != 0) {
+          // when add tenant compaction progress, the major sstable size has been calculated once
           // total data_size = (minor/mini + co_row_store_cg major) * batch execute dag number
-          estimate_occupy_size_delta = estimate_occupy_size_;
+          estimate_occupy_size_delta_ = estimate_occupy_size_;
         }
-        // old_major_data_size has been calculated when TenantCompactionProgress inited
-        if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-                  ctx_->get_merge_version(),
-                  estimate_occupy_size_delta,
-                  0, // scanned_data_size_delta
-                  estimated_finish_time_,
-                  false/*finish_flag*/))) {
-          LOG_WARN("failed to update progress", K(ret), K(old_major_data_size));
-        } else {
-          LOG_DEBUG("init() success to update progress", K(ret),
-              "param", ctx_->static_param_, K_(estimate_row_cnt), K_(estimate_occupy_size),
-              K(old_major_data_size));
-        }
+        LOG_DEBUG("init() success to update progress", K(ret),
+            "param", ctx_->static_param_, K_(estimate_row_cnt), K_(estimate_occupy_size),
+            K(old_major_data_size), K_(estimate_occupy_size_delta));
       }
     }
   }
@@ -255,10 +248,13 @@ int ObPartitionMergeProgress::update_merge_progress(
       if (!ATOMIC_CAS(&is_updating_, false, true)) {
         latest_update_ts_ = ObTimeUtility::fast_current_time();
 
+        int64_t total_data_size_delta = 0;
         int64_t total_scanned_row_cnt = 0;
         int64_t output_block_cnt = 0;
-
         int64_t scan_data_size_delta = 0;
+        if (0 == pre_scanned_row_cnt_) {
+          total_data_size_delta = estimate_occupy_size_delta_;
+        }
         for (int64_t i = 0; i < concurrent_cnt_; ++i) {
           total_scanned_row_cnt += scanned_row_cnt_arr_[i];
         }
@@ -268,12 +264,11 @@ int ObPartitionMergeProgress::update_merge_progress(
           avg_row_length_ = estimate_occupy_size_ * 1.0 / estimate_row_cnt_;
         }
         scan_data_size_delta = (total_scanned_row_cnt - pre_scanned_row_cnt_) * avg_row_length_;
-
         // record old value
         pre_scanned_row_cnt_ = total_scanned_row_cnt;
         update_estimated_finish_time_();
 
-        if (OB_FAIL(update_tenant_merge_progress(scan_data_size_delta))) {
+        if (OB_FAIL(update_tenant_merge_progress(total_data_size_delta, scan_data_size_delta))) {
           LOG_WARN("failed to update progress", K(ret), K(idx), K(scan_data_size_delta));
         } else {
           LOG_DEBUG("update() success to update progress", K(ret), KPC(this),
@@ -358,12 +353,14 @@ int ObPartitionMergeProgress::diagnose_progress(ObDiagnoseTabletCompProgress &in
  * ObPartitionMajorMergeProgress implement
  * */
 
-int ObPartitionMajorMergeProgress::update_tenant_merge_progress(const int64_t scan_data_size_delta)
+int ObPartitionMajorMergeProgress::update_tenant_merge_progress(
+    const int64_t total_data_size_delta,
+    const int64_t scan_data_size_delta)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
           ctx_->get_merge_version(),
-          0, // estimate_occupy_size_delta
+          total_data_size_delta,
           scan_data_size_delta,
           estimated_finish_time_,
           false/*finish_flag*/))) {
@@ -378,9 +375,10 @@ int ObPartitionMajorMergeProgress::finish_progress(
   const bool is_co_merge)
 {
   int ret = OB_SUCCESS;
+  estimated_finish_time_ = ObTimeUtility::fast_current_time();
   if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
       merge_version,
-      0, // estimate_occupy_size_delta
+      0 == pre_scanned_row_cnt_ ? estimate_occupy_size_delta_ : 0, // estimate_occupy_size_delta
       estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_,// scanned_data_size_delta
       estimated_finish_time_,
       true/*finish_flag*/,

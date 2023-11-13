@@ -692,7 +692,7 @@ int ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist(
         int64_t cnt = 0;
         EXTRACT_INT_FIELD_MYSQL(*result, "cnt", cnt, int64_t);
         if (OB_SUCC(ret)) {
-          if (1 == cnt) {
+          if (cnt >= 1) {
             is_exist = true;
           } else if (0 == cnt) {
             is_exist = false;

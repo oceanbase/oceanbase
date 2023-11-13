@@ -15,6 +15,7 @@
 
 #include "logservice/ob_log_handler.h"
 #include "common/ob_member.h"
+#include "storage/ob_storage_async_rpc.h"
 
 namespace oceanbase
 {
@@ -53,15 +54,27 @@ private:
       palf::LogConfigVersion &leader_config_version,
       share::SCN &leader_transfer_scn);
   int get_config_version_and_transfer_scn_(
-      const bool need_get_config_version,
+      ObHAChangeMemberProxy &proxy,
       const common::ObAddr &addr,
-      palf::LogConfigVersion &config_version,
-      share::SCN &transfer_scn);
+      const bool need_get_config_version,
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id);
   int check_ls_transfer_scn_(const share::SCN &transfer_scn, bool &is_match);
   int get_ls_member_list_(common::ObIArray<common::ObAddr> &addr_list);
   int check_ls_transfer_scn_validity_(palf::LogConfigVersion &leader_config_version);
   int check_ls_transfer_scn_validity_for_primary_(palf::LogConfigVersion &leader_config_version);
   int check_ls_transfer_scn_validity_for_standby_(palf::LogConfigVersion &leader_config_version);
+
+private:
+  int process_result_from_async_rpc_(
+      ObHAChangeMemberProxy &proxy,
+      const common::ObAddr &leader_addr,
+      const common::ObIArray<int> &return_code_array,
+      const bool for_standby,
+      int64_t &pass_count,
+      palf::LogConfigVersion &leader_config_version,
+      share::SCN &leader_transfer_scn);
+
 private:
   bool is_inited_;
   storage::ObLS *ls_;

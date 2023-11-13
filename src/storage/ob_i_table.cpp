@@ -69,7 +69,8 @@ const char* ObITable::table_type_name_[] =
   "DDL_MEM",
   "COL_ORIENTED",
   "NORMAL_COL_GROUP",
-  "ROWKEY_COL_GROUP"
+  "ROWKEY_COL_GROUP",
+  "COL_ORIENTED_META"
 };
 
 uint64_t ObITable::TableKey::hash() const
@@ -782,8 +783,7 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
     if (OB_ISNULL(table = handles_array_.at(i).get_table())) {
       ret = OB_ERR_SYS;
       LOG_WARN("table is NULL", KPC(table));
-    } else if (table->is_major_sstable() || table->is_meta_major_sstable()) {
-      base_end_scn = table->is_meta_major_sstable() ? table->get_end_scn() : SCN::min_scn();
+    } else if (table->is_major_sstable()) {
       i++;
     }
     // 2:check minor sstable
@@ -792,7 +792,7 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
       if (OB_ISNULL(table)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table is NULL", KPC(table));
-      } else if (table->is_major_sstable() || table->is_meta_major_sstable()) {
+      } else if (table->is_major_sstable()) {
         ret = OB_ERR_SYS;
         LOG_WARN("major sstable or meta merge should be first", K(ret), K(i), K(table));
       } else if (OB_ISNULL(last_table)) { // first table

@@ -2795,10 +2795,16 @@ int ObSchemaChecker::check_ora_ddl_priv(
 }
 
 /**检查用户user_id是否能access到obj_id，会检查系统权限和对象权限*/
+/*
+ *系统权限又分了两类:
+ * 1. 全局有效：create any table, create any view ....
+ * 2. user’s shema有效：create table，create view，create synonym, create index, ....
+ */
 int ObSchemaChecker::check_access_to_obj(
     const uint64_t tenant_id,
     const uint64_t user_id,
     const uint64_t obj_id,
+    const ObString &database_name,
     const sql::stmt::StmtType stmt_type,
     const ObIArray<uint64_t> &role_id_array,
     bool &accessible,
@@ -2827,6 +2833,7 @@ int ObSchemaChecker::check_access_to_obj(
                                                     static_cast<uint64_t>
                                                     (share::schema::ObObjectType::TABLE),
                                                     obj_id,
+                                                    database_name,
                                                     role_id_array,
                                                     accessible),
               K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
@@ -2842,6 +2849,7 @@ int ObSchemaChecker::check_access_to_obj(
                                                     static_cast<uint64_t>
                                                     (share::schema::ObObjectType::TABLE),
                                                     obj_id,
+                                                    database_name,
                                                     role_id_array,
                                                     accessible),
               K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
@@ -2963,6 +2971,21 @@ bool ObSchemaChecker::is_ora_priv_check()
     return true;
   else
     return false;
+}
+
+int ObSchemaChecker::remove_tmp_cte_schemas(const ObString& cte_table_name)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_cte_schemas_.count(); i++) {
+    if (cte_table_name == tmp_cte_schemas_.at(i)->get_table_name()) {
+      if(OB_FAIL(tmp_cte_schemas_.remove(i))) {
+        LOG_WARN("remove from tmp_cte_schemas_ failed.", K(ret));
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
 }
 
 }//end of namespace sql

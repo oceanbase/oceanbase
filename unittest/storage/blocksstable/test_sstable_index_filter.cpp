@@ -97,6 +97,10 @@ void TestSSTableIndexFilter::init()
   ObColExtend col_extend;
   col_extend.skip_index_attr_.set_min_max();
   read_info_.cols_extend_.push_back(col_extend);
+  read_info_.cols_desc_.init(1,allocator_);
+  ObColDesc col_desc;
+  col_desc.col_type_.set_uint64();
+  read_info_.cols_desc_.push_back(col_desc);
 }
 
 void TestSSTableIndexFilter::test_skipping_filter_nodes_builder_1()

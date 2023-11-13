@@ -388,7 +388,7 @@ int ObTenantCompactionProgressMgr::update_progress(
         LOG_WARN("unfinished data size is invalid", K(ret), K(array_[pos].unfinished_data_size_));
         array_[pos].unfinished_data_size_ = 0;
       }
-
+      array_[pos].estimated_finish_time_ = MAX(array_[pos].estimated_finish_time_, estimate_finish_time);
       if (REACH_TIME_INTERVAL(FINISH_TIME_UPDATE_FROM_SCHEDULER_INTERVAL)) {
         const int64_t current_time = ObTimeUtility::fast_current_time();
         int64_t rest_time = 0;
@@ -399,15 +399,7 @@ int ObTenantCompactionProgressMgr::update_progress(
             rest_time = (int64_t)(array_[pos].unfinished_data_size_ / work_ratio);
           }
         }
-
-        int64_t finish_time = 0;
-        if (OB_FAIL(MTL(ObTenantDagScheduler *)->get_max_major_finish_time(major_snapshot_version, finish_time))) {
-          LOG_WARN("failed to get max finish_time from dag scheduler", K(ret), K(major_snapshot_version));
-        } else if (0 != finish_time) {
-          array_[pos].estimated_finish_time_ = MAX(finish_time, current_time + rest_time) + FINISH_TIME_UPDATE_FROM_SCHEDULER_INTERVAL;
-        }
-      } else if (array_[pos].estimated_finish_time_ < estimate_finish_time) {
-        array_[pos].estimated_finish_time_  = estimate_finish_time;
+        array_[pos].estimated_finish_time_ = MAX(array_[pos].estimated_finish_time_, current_time + rest_time);
       }
       if (ObPartitionMergeProgress::MAX_ESTIMATE_SPEND_TIME < array_[pos].estimated_finish_time_ - array_[pos].start_time_) {
         array_[pos].estimated_finish_time_ = array_[pos].start_time_ + ObPartitionMergeProgress::MAX_ESTIMATE_SPEND_TIME;

@@ -984,8 +984,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case SNAPSHOT_SOURCE: {
           ObString src_name = record.data_.get_snapshot_source();
           cells[cell_idx].set_varchar(src_name);
-          cells[cell_idx].set_default_collation_type();
-          break;
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                             ObCharset::get_default_charset()));
+             break;
         }
         case REQUEST_TYPE: {
           cells[cell_idx].set_int(record.data_.request_type_);

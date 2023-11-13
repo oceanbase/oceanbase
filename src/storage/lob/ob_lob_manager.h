@@ -147,8 +147,8 @@ private:
       allocator_(tenant_id),
       lob_ctxs_(),
       lob_ctx_(),
-      meta_manager_(),
-      piece_manager_()
+      meta_manager_(tenant_id),
+      piece_manager_(tenant_id)
   {}
 public:
   ~ObLobManager() { destroy(); }

@@ -122,7 +122,7 @@ int ObCOMergePrepareDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -230,11 +230,11 @@ int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
     ObCOMergeScheduleDag *schedule_dag = nullptr;
     ObTabletMergeExecuteDag *minor_exe_dag = nullptr;
     ObTablet *tablet = ctx.get_tablet();
-    result.create_snapshot_version_ = 0;
     result.version_range_.multi_version_start_ = ctx.get_tablet()->get_multi_version_start();
     result.version_range_.base_version_ = 0;
     result.version_range_.snapshot_version_ = ctx.get_tablet()->get_snapshot_version();
-    ObTabletMergeDagParam dag_param(MINOR_MERGE, ctx.get_ls_id(), ctx.get_tablet_id());
+    ObTabletMergeDagParam dag_param(MINOR_MERGE, ctx.get_ls_id(), ctx.get_tablet_id(),
+        ctx.get_transfer_seq());
     if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->alloc_dag(minor_exe_dag))) {
       LOG_WARN("failed to alloc dag", K(ret));
     } else if (OB_FAIL(minor_exe_dag->prepare_init(
@@ -313,7 +313,7 @@ int ObCOMergeScheduleDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -409,7 +409,7 @@ int ObCOMergeScheduleTask::process()
  */
 ObCOMergeBatchExeDag::ObCOMergeBatchExeDag()
  : ObCOMergeDag(ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE),
-   alloc_merge_info_lock_(),
+   exe_lock_(),
    start_cg_idx_(0),
    end_cg_idx_(0),
    retry_create_task_(false),
@@ -454,7 +454,7 @@ int ObCOMergeBatchExeDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -713,7 +713,7 @@ int ObCOMergeBatchExeTask::process()
     LOG_WARN("get unexpected exe task", K(ret), K(ctx_), K(dag_net_), KPC(merger_));
   } else if (FALSE_IT(SET_MEM_CTX(ctx_->mem_ctx_))) {
   } else {
-    ObSpinLockGuard lock_guard(exe_dag->alloc_merge_info_lock_);
+    ObSpinLockGuard lock_guard(exe_dag->exe_lock_);
     if (ctx_->is_cg_merge_infos_valid(exe_dag->get_start_cg_idx(), exe_dag->get_end_cg_idx(), true/*check info ready*/)) {
       // do nothing
     } else if (OB_FAIL(ctx_->prepare_index_builder(exe_dag->get_start_cg_idx(),
@@ -754,19 +754,21 @@ int ObCOMergeBatchExeTask::process()
 void ObCOMergeBatchExeTask::merge_start()
 {
   int tmp_ret = OB_SUCCESS;
-  ObIDag::ObDagGuard guard(*dag_);
   ObCOMergeBatchExeDag *execute_dag = static_cast<ObCOMergeBatchExeDag*>(dag_);
-  // execute init_progress only once
-  if (OB_TMP_FAIL(execute_dag->init_merge_progress())) {
-    LOG_WARN_RET(tmp_ret, "failed to init merge progress");
-  }
-  // each task has one merger, and all mergers share the progress
-  ObCOMerger *co_merger = static_cast<ObCOMerger*>(merger_);
-  co_merger->set_merge_progress(execute_dag->get_merge_progress());
-  // execute time click init only once
-  if (execute_dag->get_time_guard().is_empty()) {
-    ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info().update_start_time();
-    execute_dag->dag_time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
+  {
+    ObSpinLockGuard lock_guard(execute_dag->exe_lock_);
+    // execute init_progress only once
+    if (OB_TMP_FAIL(execute_dag->init_merge_progress())) {
+      LOG_WARN_RET(tmp_ret, "failed to init merge progress");
+    }
+    // each task has one merger, and all mergers share the progress
+    ObCOMerger *co_merger = static_cast<ObCOMerger*>(merger_);
+    co_merger->set_merge_progress(execute_dag->get_merge_progress());
+    // execute time click init only once
+    if (execute_dag->get_time_guard().is_empty()) {
+      ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info().update_start_time();
+      execute_dag->dag_time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
+    }
   }
 }
 
@@ -877,7 +879,7 @@ int ObCOMergeFinishDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else if (OB_FAIL(ObTabletMergeDag::inner_init(merge_param))) {
@@ -1017,7 +1019,7 @@ int ObCOMergeDagNet::init_by_param(const ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init dag net", K(ret), K(param));
   } else if (FALSE_IT(merge_param = static_cast<const ObCOMergeDagParam*>(param))) {
-  } else if (OB_UNLIKELY(!is_major_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_param->merge_type_) || !merge_param->is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Unexpected merge type to init major merge dag", K(ret), KPC(merge_param));
   } else {
@@ -1269,6 +1271,10 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
           ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret));
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), co_merge_ctx_->get_transfer_seq()))) {
+    LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
+        "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
+        "old_transfer_seq", co_merge_ctx_->get_transfer_seq());
   } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(
     *tmp_tablet_handle.get_obj(),
     co_merge_ctx_->get_merge_version(),
@@ -1432,6 +1438,10 @@ int ObCOMergeDagNet::get_compat_mode()
           0/*timeout_us*/,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), basic_param_.transfer_seq_))) {
+    LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
+        "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
+        "old_transfer_seq", basic_param_.transfer_seq_);
   } else {
     basic_param_.dag_net_id_ = get_dag_id();
     basic_param_.skip_get_tablet_ = true;

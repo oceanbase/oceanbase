@@ -85,8 +85,8 @@ public:
       const storage::ObTablet &tablet,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
-      const bool check_table_cnt,
-      const bool is_multi_version_merge);
+      const bool check_table_cnt = false,
+      const bool is_multi_version_merge = false);
 
   static int diagnose_table_count_unsafe(
       const compaction::ObMergeType merge_type,
@@ -246,12 +246,10 @@ public:
       AdaptiveMergeReason &reason);
 
 private:
-  static int find_meta_major_tables(const storage::ObTablet &tablet,
-                                    storage::ObGetMergeTablesResult &result);
-  static int find_base_table_and_inc_version(storage::ObITable *last_major_table,
-                                             storage::ObITable *last_minor_table,
-                                             storage::ObITable *&meta_base_table,
-                                             int64_t &merge_inc_version);
+  static int find_adaptive_merge_tables(
+        const ObMergeType &merge_type,
+        const storage::ObTablet &tablet,
+        storage::ObGetMergeTablesResult &result);
   static int add_meta_merge_result(storage::ObITable *table,
       const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
@@ -273,11 +271,11 @@ private:
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
 
-private:
+public:
   static constexpr int64_t SCHEDULE_META_MERGE_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t INC_ROW_COUNT_THRESHOLD = 100L * 1000L; // 10w
   static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 30L * 1000L; // 3w
-  static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 5w
+  static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 1w
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;

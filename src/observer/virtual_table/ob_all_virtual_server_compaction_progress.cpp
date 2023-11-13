@@ -67,9 +67,11 @@ int ObAllVirtualServerCompactionProgress::inner_get_next_row(common::ObNewRow *&
 int ObAllVirtualServerCompactionProgress::fill_cells()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();
   ObObj *cells = cur_row_.cells_;
   int64_t compression_ratio = 0;
+  int64_t estimate_finish_time = 0;
   compaction::ObServerCompactionEvent tmp_event;
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     uint64_t col_id = output_column_ids_.at(i);
@@ -129,6 +131,13 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
       break;
     case ESTIMATED_FINISH_TIME:
       if (share::ObIDag::DAG_STATUS_FINISH != progress_.status_) {
+        estimate_finish_time = 0;
+        MTL_SWITCH(progress_.tenant_id_) {
+          if (OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_max_major_finish_time(progress_.merge_version_, estimate_finish_time))) {
+            SERVER_LOG(WARN, "failed to get max major_finish_time", K(tmp_ret));
+          }
+        }
+        progress_.estimated_finish_time_ = MAX(progress_.estimated_finish_time_, estimate_finish_time);
         int64_t current_time = ObTimeUtility::fast_current_time();
         // update before select, update estimated_finish_time
         if (progress_.estimated_finish_time_ < current_time) {
@@ -143,8 +152,10 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
       if (share::ObIDag::DAG_STATUS_FINISH != progress_.status_) {
         MTL_SWITCH(progress_.tenant_id_) {
           MTL(compaction::ObServerCompactionEventHistory *)->get_last_event(tmp_event);
-          if (OB_FAIL(tmp_event.generate_event_str(event_buf_, sizeof(event_buf_)))) {
-            SERVER_LOG(WARN, "failed to generate event str", K(ret), K(tmp_event));
+          if (tmp_event.compaction_scn_ == progress_.merge_version_) {
+            if (OB_FAIL(tmp_event.generate_event_str(event_buf_, sizeof(event_buf_)))) {
+              SERVER_LOG(WARN, "failed to generate event str", K(ret), K(tmp_event));
+            }
           }
         }
         if (OB_SUCC(ret)) {

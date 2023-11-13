@@ -21,6 +21,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_tablet_service_clog_replay_executor.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -678,5 +679,17 @@ int ObMediumCompactionInfoList::get_max_sync_medium_scn(int64_t &max_sync_medium
   return ret;
 }
 
-} //namespace compaction
+bool ObMediumCompactionInfoList::need_check_finish() const
+{
+  const int64_t wait_check_scn = get_wait_check_medium_scn();
+  bool need_check = (wait_check_scn > 0);
+#ifndef ERRSIM
+  if (need_check && ObMediumCompactionInfo::MAJOR_COMPACTION == get_last_compaction_type()) {
+    need_check = wait_check_scn > MTL(ObTenantTabletScheduler*)->get_inner_table_merged_scn();
+  }
+#endif
+  return need_check;
+}
+
+} // namespace compaction
 } // namespace oceanbase

@@ -148,18 +148,18 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
   ObTabletMergeDagParam(
     const compaction::ObMergeType merge_type,
     const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id);
+    const ObTabletID &tablet_id,
+    const int64_t transfer_seq);
   virtual bool is_valid() const override;
-
   VIRTUAL_TO_STRING_KV(K_(skip_get_tablet), "merge_type", merge_type_to_str(merge_type_), K_(merge_version),
-     K_(ls_id), K_(tablet_id), K_(is_tenant_major_merge), K_(need_swap_tablet_flag), K_(is_reserve_mode));
+     K_(ls_id), K_(tablet_id), K_(need_swap_tablet_flag), K_(is_reserve_mode), K_(transfer_seq));
 
   bool skip_get_tablet_;
-  bool is_tenant_major_merge_;
   bool need_swap_tablet_flag_;
   bool is_reserve_mode_;
   compaction::ObMergeType merge_type_;
   int64_t merge_version_;
+  int64_t transfer_seq_; // only affect minor and major now
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   ObCompactionParam compaction_param_; // used for adaptive compaction dag scheduling

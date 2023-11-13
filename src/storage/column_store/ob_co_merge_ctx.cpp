@@ -144,7 +144,12 @@ int ObCOTabletMergeCtx::init_tablet_merge_info(const bool need_check)
 int ObCOTabletMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_medium_compaction_info())) {
+
+  if (is_meta_major_merge(static_param_.get_merge_type())) {
+    if (OB_FAIL(get_meta_compaction_info())) {
+      LOG_WARN("failed to get meta compaction info", K(ret), KPC(this));
+    }
+  } else if (OB_FAIL(get_medium_compaction_info())) {
     // have checked medium info inside
     LOG_WARN("failed to get medium compaction info", K(ret), KPC(this));
   }

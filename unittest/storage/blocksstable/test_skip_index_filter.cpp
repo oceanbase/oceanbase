@@ -272,7 +272,8 @@ int TestSkipIndexFilter::test_skip_index_filter_pushdown (
   index_info.agg_buf_size_ = buf_size;
   index_info.row_header_ = &row_header;
 
-  ret = skip_index_filter.falsifiable_pushdown_filter(col_idx, ObSkipIndexType::MIN_MAX, index_info, filter, allocator_);
+  ret = skip_index_filter.falsifiable_pushdown_filter(col_idx, filter.filter_.expr_->args_[0]->obj_meta_,
+      ObSkipIndexType::MIN_MAX, index_info, filter, allocator_);
   fal_desc = filter.get_filter_bool_mask();
 
 

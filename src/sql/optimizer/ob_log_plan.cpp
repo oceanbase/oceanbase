@@ -11981,6 +11981,8 @@ int ObLogPlan::choose_duplicate_table_replica(ObLogicalOperator *op,
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
+  } else if (log_op_def::LOG_TEMP_TABLE_INSERT == op->get_type()) {
+    // do nothing
   } else if (log_op_def::LOG_TABLE_SCAN == op->get_type() &&
              NULL != op->get_strong_sharding() &&
              op->get_strong_sharding()->get_can_reselect_replica() &&

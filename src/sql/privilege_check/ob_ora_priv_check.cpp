@@ -1028,7 +1028,7 @@ int ObOraSysChecker::check_owner_or_p1_or_access(
           ret = OB_SUCCESS;
           bool accessible = false;
           OZ (check_access_to_obj(guard, tenant_id, user_id,
-                  p1, obj_type, obj_id, role_id_array, accessible));
+                  p1, obj_type, obj_id, database_name, role_id_array, accessible));
           if (OB_SUCC(ret)) {
             if (accessible) {
               ret = OB_ERR_NO_PRIVILEGE;
@@ -1055,6 +1055,7 @@ int ObOraSysChecker::check_access_to_obj(
     const ObRawPriv p1,
     const uint64_t obj_type,
     const uint64_t obj_id,
+    const ObString &database_name,
     const ObIArray<uint64_t> &role_id_array,
     bool &accessible)
 {
@@ -1062,13 +1063,29 @@ int ObOraSysChecker::check_access_to_obj(
   accessible = false;
   ObRawPrivArray sys_priv_array;
   ObRawObjPrivArray obj_priv_array;
+  bool is_owner = false;
   // 1. 建立和p1相关的权限列表
   OZ (build_related_sys_priv_array(p1, sys_priv_array), p1);
   // 2. 检查user_id是否具有sys_priv_array中的系统权限一种
   if (OB_SUCC(ret)) {
+    const ObUserInfo *user_info = NULL;
+    if (database_name.empty()) {
+      is_owner = true;
+    } else if (OB_FAIL(guard.get_user_info(tenant_id, user_id, user_info))) {
+      LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_USER_NOT_EXIST;
+      LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+    } else {
+      is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(), database_name);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_owner) {
+    accessible = true;
+  } else {
     if (sys_priv_array.count() > 0) {
-      OZ (check_p1_or_plist(guard, tenant_id, user_id, 
-            p1, NO_OPTION, sys_priv_array, role_id_array));
+      OZ (check_p1_or_plist(guard, tenant_id, user_id, p1, NO_OPTION, sys_priv_array, role_id_array));
     } else {
       OZ (check_p1(guard, tenant_id, user_id, p1, role_id_array));
     }
@@ -1077,18 +1094,18 @@ int ObOraSysChecker::check_access_to_obj(
     } else {
       ret = OB_SUCCESS;
     }
-  }
-  if (OB_SUCC(ret) && !accessible) {
-    // 3. 建立和p1，obj_type相关的对象权限列表
-    OZ (build_related_obj_priv_array(p1, obj_type, obj_priv_array), p1, obj_type);
-    // 4. 检查user_id对于obj_id是否具有obj_priv_array权限中的一种
-    if (OB_SUCC(ret) && obj_priv_array.count() > 0) {
-      OZ (check_obj_plist_or(guard, tenant_id, user_id, obj_type, obj_id,
-              OBJ_LEVEL_FOR_TAB_PRIV, obj_priv_array, role_id_array));
-      if (OB_SUCC(ret)) {
-        accessible = true;
-      } else {
-        ret = OB_SUCCESS;
+    if (OB_SUCC(ret) && !accessible) {
+      // 3. 建立和p1，obj_type相关的对象权限列表
+      OZ (build_related_obj_priv_array(p1, obj_type, obj_priv_array), p1, obj_type);
+      // 4. 检查user_id对于obj_id是否具有obj_priv_array权限中的一种
+      if (OB_SUCC(ret) && obj_priv_array.count() > 0) {
+        OZ (check_obj_plist_or(guard, tenant_id, user_id, obj_type, obj_id,
+                OBJ_LEVEL_FOR_TAB_PRIV, obj_priv_array, role_id_array));
+        if (OB_SUCC(ret)) {
+          accessible = true;
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
@@ -1102,6 +1119,7 @@ int ObOraSysChecker::check_access_to_obj(
     const uint64_t user_id,
     const uint64_t obj_type,
     const uint64_t obj_id,
+    const ObString &database_name,
     const ObIArray<uint64_t> &role_id_array,
     bool &accessible)
 {
@@ -1109,33 +1127,53 @@ int ObOraSysChecker::check_access_to_obj(
   accessible = false;
   ObRawPrivArray sys_priv_array;
   ObRawObjPrivArray obj_priv_array;
+  bool is_owner = false;
   // 1. 建立相关的sys权限列表
   OZ (build_related_sys_priv_array(obj_type, sys_priv_array));
   // 2. 检查user_id是否具有 sys_priv 中的任意一个
-  if (OB_SUCC(ret) && sys_priv_array.count() > 0) {
-    OZ (check_plist_or(guard, tenant_id, user_id, sys_priv_array, role_id_array));
-    if (OB_SUCC(ret)) {
-      accessible = true;
-    } else if (OB_ERR_NO_PRIVILEGE == ret || OB_ERR_EMPTY_QUERY == ret) {
-      accessible = false;
-      ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    const ObUserInfo *user_info = NULL;
+    if (database_name.empty()) {
+      is_owner = true;
+    } else if (OB_FAIL(guard.get_user_info(tenant_id, user_id, user_info))) {
+      LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_USER_NOT_EXIST;
+      LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
     } else {
-      accessible = false;
+      is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(), database_name);
     }
-  } 
-  // 3. 建立相关的对象权限
-  OZ (build_related_obj_priv_array(obj_type, obj_priv_array));
-  // 4. 检查user_id 是否具有 obj_priv_array中的一种
-  if (OB_SUCC(ret) && obj_priv_array.count() > 0 && !accessible) {
-    OZ (check_obj_plist_or(guard, tenant_id, user_id, obj_type, obj_id,
-                          OBJ_LEVEL_FOR_TAB_PRIV, obj_priv_array, role_id_array));
-    if (OB_SUCC(ret)) {
-      accessible = true;
-    } else if (OB_ERR_NO_PRIVILEGE == ret || OB_ERR_EMPTY_QUERY == ret) {
-      accessible = false;
-      ret = OB_SUCCESS;
-    } else {
-      accessible = false;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_owner) {
+    accessible = true;
+    /* is_owner = true, means user can access obj */
+  } else {
+    if (sys_priv_array.count() > 0) {
+      OZ (check_plist_or(guard, tenant_id, user_id, sys_priv_array, role_id_array));
+      if (OB_SUCC(ret)) {
+        accessible = true;
+      } else if (OB_ERR_NO_PRIVILEGE == ret || OB_ERR_EMPTY_QUERY == ret) {
+        accessible = false;
+        ret = OB_SUCCESS;
+      } else {
+        accessible = false;
+      }
+    }
+    // 3. 建立相关的对象权限
+    OZ (build_related_obj_priv_array(obj_type, obj_priv_array));
+    // 4. 检查user_id 是否具有 obj_priv_array中的一种
+    if (OB_SUCC(ret) && obj_priv_array.count() > 0 && !accessible) {
+      OZ (check_obj_plist_or(guard, tenant_id, user_id, obj_type, obj_id,
+                            OBJ_LEVEL_FOR_TAB_PRIV, obj_priv_array, role_id_array));
+      if (OB_SUCC(ret)) {
+        accessible = true;
+      } else if (OB_ERR_NO_PRIVILEGE == ret || OB_ERR_EMPTY_QUERY == ret) {
+        accessible = false;
+        ret = OB_SUCCESS;
+      } else {
+        accessible = false;
+      }
     }
   }
   return ret;
@@ -1235,6 +1273,8 @@ int ObOraSysChecker::build_related_sys_priv_array(
       OZ (sys_priv_array.push_back(PRIV_ID_CREATE_ANY_VIEW));
       break;
     case static_cast<uint64_t>(PRIV_ID_CREATE_ANY_VIEW):
+      OZ (sys_priv_array.push_back(PRIV_ID_CREATE_ANY_TABLE));
+      OZ (sys_priv_array.push_back(PRIV_ID_DROP_ANY_TABLE));
       OZ (sys_priv_array.push_back(PRIV_ID_ALTER_ANY_TABLE));
       OZ (sys_priv_array.push_back(PRIV_ID_LOCK_ANY_TABLE));
       OZ (sys_priv_array.push_back(PRIV_ID_COMMENT_ANY_TABLE));
@@ -1264,6 +1304,8 @@ int ObOraSysChecker::build_related_sys_priv_array(
   sys_priv_array.reset();
   switch (obj_type) {
     case static_cast<uint64_t>(ObObjectType::TABLE): {
+      OZ (sys_priv_array.push_back(PRIV_ID_CREATE_ANY_TABLE));
+      OZ (sys_priv_array.push_back(PRIV_ID_DROP_ANY_TABLE));
       OZ (sys_priv_array.push_back(PRIV_ID_ALTER_ANY_TABLE));
       OZ (sys_priv_array.push_back(PRIV_ID_LOCK_ANY_TABLE));
       OZ (sys_priv_array.push_back(PRIV_ID_COMMENT_ANY_TABLE));
@@ -1291,6 +1333,7 @@ int ObOraSysChecker::build_related_obj_priv_array(
   obj_priv_array.reset();
   switch (obj_type) {
     case static_cast<uint64_t>(ObObjectType::TABLE): {
+      OZ (obj_priv_array.push_back(OBJ_PRIV_ID_CREATE));
       OZ (obj_priv_array.push_back(OBJ_PRIV_ID_ALTER));
       OZ (obj_priv_array.push_back(OBJ_PRIV_ID_DEBUG));
       OZ (obj_priv_array.push_back(OBJ_PRIV_ID_DELETE));
@@ -1720,6 +1763,12 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
           OZ (priv_list.push_back(PRIV_ID_INSERT_ANY_TABLE));
           OZ (priv_list.push_back(PRIV_ID_UPDATE_ANY_TABLE));
           OZ (priv_list.push_back(PRIV_ID_DELETE_ANY_TABLE));
+          OZ (priv_list.push_back(PRIV_ID_CREATE_ANY_TABLE));
+          OZ (priv_list.push_back(PRIV_ID_DROP_ANY_TABLE));
+          OZ (priv_list.push_back(PRIV_ID_ALTER_ANY_TABLE));
+          OZ (priv_list.push_back(PRIV_ID_LOCK_ANY_TABLE));
+          OZ (priv_list.push_back(PRIV_ID_COMMENT_ANY_TABLE));
+          OZ (priv_list.push_back(PRIV_ID_FLASHBACK_ANY_TABLE));
         } else {
           OZ (priv_list.push_back(PRIV_ID_SELECT_ANY_DICTIONARY));
         }
@@ -1733,7 +1782,12 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
           OZ (obj_p_list.push_back(OBJ_PRIV_ID_INSERT));
           OZ (obj_p_list.push_back(OBJ_PRIV_ID_UPDATE));
           OZ (obj_p_list.push_back(OBJ_PRIV_ID_DELETE));
-        
+          OZ (obj_p_list.push_back(OBJ_PRIV_ID_CREATE));
+          OZ (obj_p_list.push_back(OBJ_PRIV_ID_ALTER));
+          OZ (obj_p_list.push_back(OBJ_PRIV_ID_DEBUG));
+          OZ (obj_p_list.push_back(OBJ_PRIV_ID_INDEX));
+          OZ (obj_p_list.push_back(OBJ_PRIV_ID_READ));
+          OZ (obj_p_list.push_back(OBJ_PRIV_ID_REFERENCES));
           OZ (check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type, 
                                            obj_id, col_id, obj_p_list),
                 tenant_id, user_id, obj_type, obj_id, col_id, obj_p_list);  
@@ -2571,7 +2625,7 @@ int ObOraSysChecker::check_ora_ddl_ref_priv(
   if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
     ret = OB_SUCCESS;
     bool accessible = false;
-    OZ (check_access_to_obj(guard, tenant_id, user_id, obj_type, obj_id,
+    OZ (check_access_to_obj(guard, tenant_id, user_id, obj_type, obj_id, database_name,
                             role_id_array, accessible));
     OX (ret = accessible ? OB_ERR_NO_SYS_PRIVILEGE : OB_TABLE_NOT_EXIST);
   }

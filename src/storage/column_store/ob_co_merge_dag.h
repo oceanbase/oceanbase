@@ -158,7 +158,7 @@ public:
 private:
   int prepare_merge_progress();
 public:
-  common::ObSpinLock alloc_merge_info_lock_; // alloc && check cg_merge_infos
+  common::ObSpinLock exe_lock_; // alloc && check cg_merge_infos && init something
 private:
   share::ObDagId dag_net_id_;
   uint32_t start_cg_idx_;

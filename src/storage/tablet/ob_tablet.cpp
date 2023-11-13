@@ -233,7 +233,7 @@ ObTablet::ObTablet()
     table_store_cache_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) <= 1672, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1616, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -6496,13 +6496,15 @@ int ObTablet::check_snapshot_readable(int64_t snapshot_version)
   return ret;
 }
 
-int ObTablet::check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq)
+int ObTablet::check_transfer_seq_equal(const ObTablet &tablet, const int64_t transfer_seq)
 {
   int ret = OB_SUCCESS;
-  if (old_tablet.get_tablet_meta().transfer_info_.transfer_seq_ != transfer_seq) {
-    ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
-    LOG_WARN("old tablet transfer seq not eq with new transfer seq",
-        "old_tablet_meta", old_tablet.get_tablet_meta(), K(transfer_seq));
+  if (0 <= transfer_seq) {
+    if (tablet.get_tablet_meta().transfer_info_.transfer_seq_ != transfer_seq) {
+      ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
+      LOG_WARN("tablet transfer seq not eq with transfer seq",
+          "tablet_meta", tablet.get_tablet_meta(), K(transfer_seq));
+    }
   }
   return ret;
 }

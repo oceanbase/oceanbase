@@ -114,7 +114,9 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
     auto *white_filter = static_cast<sql::ObWhiteFilterExecutor *>(node.filter_);
     const uint32_t col_offset = white_filter->get_col_offsets(is_cg_).at(0);
     const uint32_t col_idx = static_cast<uint32_t>(read_info->get_columns_index().at(col_offset));
+    const ObObjMeta obj_meta = read_info->get_columns_desc().at(col_offset).col_type_;
     if (OB_FAIL(skip_filter_executor_.falsifiable_pushdown_filter(col_idx,
+                                                                  obj_meta,
                                                                   node.skip_index_type_,
                                                                   index_info,
                                                                   *white_filter,

@@ -54,7 +54,7 @@ public:
   TO_STRING_KV(K_(dag_param), K_(scn_range), K_(version_range),
       K_(is_full_merge), K_(concurrent_cnt), K_(merge_level),
       "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
-      K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed),
+      K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       K_(progressive_merge_round), K_(progressive_merge_step), K_(progressive_merge_num),
       K_(schema_version), KP_(schema), K_(multi_version_column_descs), K_(ls_handle), K_(snapshot_info), KP_(report));
@@ -64,6 +64,7 @@ public:
   bool is_rebuild_column_store_;
   bool is_schema_changed_;
   bool need_parallel_minor_merge_;
+  bool is_tenant_major_merge_;
   ObMergeLevel merge_level_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   int16_t sstable_logic_seq_;
@@ -177,11 +178,12 @@ public:
     CTX_DEFINE_FUNC(var_type, get_dag_param(), var_name)
   #define STATIC_PARAM_FUNC(var_type, var_name) \
     CTX_DEFINE_FUNC(var_type, static_param_, var_name)
-  DAG_PARAM_FUNC(bool, is_tenant_major_merge);
   DAG_PARAM_FUNC(ObMergeType, merge_type);
   DAG_PARAM_FUNC(const ObLSID &, ls_id);
   DAG_PARAM_FUNC(const ObTabletID &, tablet_id);
   DAG_PARAM_FUNC(int64_t, merge_version);
+  DAG_PARAM_FUNC(int64_t, transfer_seq);
+  STATIC_PARAM_FUNC(bool, is_tenant_major_merge);
   STATIC_PARAM_FUNC(bool, is_full_merge);
   STATIC_PARAM_FUNC(bool, need_parallel_minor_merge);
   STATIC_PARAM_FUNC(int64_t, read_base_version);
@@ -235,6 +237,7 @@ protected:
   int swap_tablet();
   int get_medium_compaction_info(); // for major
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
+  int get_meta_compaction_info(); // for meta major
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:

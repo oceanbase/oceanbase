@@ -4953,7 +4953,8 @@ OB_SERIALIZE_MEMBER((ObUpdateIndexStatusArg, ObDDLArg),
                     index_table_id_,
                     status_,
                     convert_status_,
-                    in_offline_ddl_white_list_);
+                    in_offline_ddl_white_list_,
+		    data_table_id_);
 
 OB_SERIALIZE_MEMBER(ObMergeFinishArg, server_, frozen_version_);
 
@@ -5624,10 +5625,17 @@ DEF_TO_STRING(ObUpdateStatCacheArg)
        K_(tenant_id),
        K_(partition_ids),
        K_(column_ids),
-       K_(no_invalidate));
+       K_(no_invalidate),
+       K_(update_system_stats_only));
   return pos;
 }
-OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg, tenant_id_, table_id_, partition_ids_, column_ids_, no_invalidate_);
+OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg,
+                    tenant_id_,
+                    table_id_,
+                    partition_ids_,
+                    column_ids_,
+                    no_invalidate_,
+                    update_system_stats_only_);
 OB_SERIALIZE_MEMBER(ObSplitPartitionBatchArg, split_info_);
 OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg),
                     stmt_type_,

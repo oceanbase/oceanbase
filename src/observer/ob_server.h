@@ -338,6 +338,7 @@ private:
   // The two proxies by which local OceanBase server has ability to
   // communicate with other server.
   obrpc::ObSrvRpcProxy srv_rpc_proxy_;
+  obrpc::ObStorageRpcProxy storage_rpc_proxy_;
   obrpc::ObCommonRpcProxy rs_rpc_proxy_;
   common::ObMySQLProxy sql_proxy_;
   common::ObMySQLProxy ddl_sql_proxy_;

@@ -202,7 +202,7 @@ C++ allows the use of using, which can be divided into two categories:
 
 2. Using declaration: For example, using `common::ObSchemaManager`, which makes `ObSchemaManager` equivalent to `common::ObSchemaManager` from now on.
 
-Because using directive is likely to pollute the scope, **it is prohibited to use it in header files**, but using declaration is allowed. In .cpp files, using directive is allowed, for example, when implementing `ObChunkServer`, it may need to use classes from the common namespace. However, it is important to note that only other namespaces can be introduced using using directives in .cpp files. The code in the .cpp file itself still needs to be put in its own namespace. For example: 
+Because using directive is likely to pollute the scope, **it is prohibited to use it in header files**, but using declaration is allowed. In .cpp files, using directive is allowed, for example, when implementing `ObChunkServer`, it may need to use classes from the common namespace. However, it is important to note that only other namespaces can be introduced using directives in .cpp files. The code in the .cpp file itself still needs to be put in its own namespace. For example: 
 
 ```cpp
 // incorrect ways of using
@@ -406,18 +406,18 @@ class ObBar
 const int ObBar::CONST_V = 1;
 ```
 
-Before C\+\+11, the C\+\+98 standard only allowed static const variables of intergral type to be initialized with definitions included in the class declaration. In C++11, constexpr is introduced, and static constexpr member variables (including types such as double) can also be initialized in the declaration. This kind of variable will not generate static area storage after compilation.
+Before C\+\+11, the C\+\+98 standard only allowed static const variables of integral type to be initialized with definitions included in the class declaration. In C++11, constexpr is introduced, and static constexpr member variables (including types such as double) can also be initialized in the declaration. This kind of variable will not generate static area storage after compilation.
 
 > Before C++11, the values of variables could be used in constant expressions only if the variables are declared const, have an initializer which is a constant expression, and are of integral or enumeration type. C++11 removes the restriction that the variables must be of integral or enumeration type if they  are defined with the constexpr keyword:
 >
 > constexpr double earth_gravitational_acceleration = 9.8;
 > constexpr double moon_gravitational_acceleration = earth_gravitational_acceleration / 6.0;
 
-> Such data variables are implicitly const, and must have an initializer whichmust be a constant expression.
+> Such data variables are implicitly const, and must have an initializer which must be a constant expression.
 
 **Case 1**
 
-According to the current code style of OceanBase, we will define static variables (such as `ob_define.h`) in the header file, so that each cpp file will generate a declaration and definition of this variable when including this header file. In particular, some large objects (latch, wait event, etc.) generate a static definition in the header file, resulting in the generation of binany and memory expansion.
+According to the current code style of OceanBase, we will define static variables (such as `ob_define.h`) in the header file, so that each cpp file will generate a declaration and definition of this variable when including this header file. In particular, some large objects (latch, wait event, etc.) generate a static definition in the header file, resulting in the generation of binary and memory expansion.
 
 Simply move the definition of several static variables from the header file to the cpp file, and change the header file to extern definition, the effect is quite obvious:
 binary size: 2.6G->2.4G, reduce 200M.

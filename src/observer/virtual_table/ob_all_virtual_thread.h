@@ -33,7 +33,8 @@ class ObAllVirtualThread : public common::ObVirtualTableScannerIterator
     LATCH_WAIT,
     LATCH_HOLD,
     TRACE_ID,
-    LOOP_TS
+    LOOP_TS,
+    CGROUP_PATH
   };
 
 public:

@@ -445,7 +445,6 @@ public:
                                          ObOptStatTaskInfo &task_info);
 
   static int do_gather_table_stats(sql::ObExecContext &ctx,
-                                   ObSchemaGetterGuard &schema_guard,
                                    const int64_t table_id,
                                    const uint64_t tenant_id,
                                    const int64_t duration_time,
@@ -453,7 +452,6 @@ public:
                                    ObOptStatTaskInfo &task_info);
 
   static int do_gather_tables_stats(sql::ObExecContext &ctx,
-                                    ObSchemaGetterGuard &schema_guard,
                                     const uint64_t tenant_id,
                                     const ObIArray<int64_t> &table_ids,
                                     const int64_t duration_time,
@@ -577,6 +575,8 @@ private:
                                  ObTableStatParam &param);
 
   static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
+
+  static int refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id);
 
 };
 

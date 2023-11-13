@@ -1855,7 +1855,7 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
     } else if (OB_FAIL(in_ctx->init_cmp_funcs(expr.inner_func_cnt_, exec_ctx))) {
       LOG_WARN("failed to init cmp funcs", K(ret));
     } else {
-      for (int i = 0; OB_SUCC(ret) && i < right_param_num; ++i) {
+      for (int i = 0; OB_SUCC(ret) && !in_ctx->is_hash_calc_disabled() && i < right_param_num; ++i) {
         if (OB_ISNULL(expr.args_[1]->args_[i])) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid null arg", K(ret), K(expr.args_[1]->args_[i]), K(i));

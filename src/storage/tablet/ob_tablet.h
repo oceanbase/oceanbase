@@ -393,6 +393,7 @@ public:
   static int64_t get_lock_wait_timeout(
       const int64_t abs_lock_timeout,
       const int64_t stmt_timeout);
+  static int check_transfer_seq_equal(const ObTablet &tablet, const int64_t transfer_seq);
   int rowkey_exists(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -595,7 +596,6 @@ private:
   int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
   int check_schema_version(const int64_t schema_version);
   int check_snapshot_readable(const int64_t snapshot_version);
-  int check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq);
   int get_column_store_sstable_checksum(common::ObIArray<int64_t> &column_checksums, ObCOSSTableV2 &co_sstable);
 
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle
@@ -795,7 +795,7 @@ private:
   int32_t version_;
   int32_t length_;
   volatile int64_t wash_score_;
-  ObTabletMdsData mds_data_;                                 // size: 440B, alignment: 8B
+  ObTabletMdsData mds_data_;                                 // size: 384B, alignment: 8B
   volatile int64_t ref_cnt_;
   ObTabletHandle next_tablet_guard_;                         // size: 56B, alignment: 8B
   ObTabletMeta tablet_meta_;                                 // size: 248, alignment: 8B

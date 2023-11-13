@@ -1265,7 +1265,8 @@ public:
       table_id_(common::OB_INVALID_ID),
       partition_ids_(),
       column_ids_(),
-      no_invalidate_(false)
+      no_invalidate_(false),
+      update_system_stats_only_(false)
   {}
   virtual ~ObUpdateStatCacheArg() {}
   void rest()
@@ -1275,6 +1276,7 @@ public:
     partition_ids_.reset();
     column_ids_.reset();
     no_invalidate_ = false;
+    update_system_stats_only_ = false;
   }
   bool is_valid() const;
   int assign(const ObUpdateStatCacheArg &other) {
@@ -1282,6 +1284,7 @@ public:
     tenant_id_ = other.tenant_id_;
     table_id_ = other.table_id_;
     no_invalidate_ = other.no_invalidate_;
+    update_system_stats_only_ = other.update_system_stats_only_;
     if (OB_FAIL(ObDDLArg::assign(other))) {
       SHARE_LOG(WARN, "fail to assign ddl arg", KR(ret));
     } else if (OB_FAIL(partition_ids_.assign(other.partition_ids_))) {
@@ -1297,6 +1300,7 @@ public:
   common::ObSArray<int64_t> partition_ids_;
   common::ObSArray<uint64_t> column_ids_;
   bool no_invalidate_;
+  bool update_system_stats_only_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -5694,18 +5698,20 @@ public:
     index_table_id_(common::OB_INVALID_ID),
     status_(share::schema::INDEX_STATUS_MAX),
     convert_status_(true),
-    in_offline_ddl_white_list_(false)
+    in_offline_ddl_white_list_(false),
+    data_table_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const;
   virtual bool is_allow_when_disable_ddl() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   virtual bool is_in_offline_ddl_white_list() const { return in_offline_ddl_white_list_; }
-  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list));
+  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(data_table_id));
 
   uint64_t index_table_id_;
   share::schema::ObIndexStatus status_;
   bool convert_status_;
   bool in_offline_ddl_white_list_;
+  uint64_t data_table_id_;
 };
 
 struct ObMergeFinishArg

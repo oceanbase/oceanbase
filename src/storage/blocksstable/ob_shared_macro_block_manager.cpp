@@ -812,7 +812,9 @@ int ObSharedMacroBlockMgr::parse_merge_type(const ObSSTable &sstable, ObMergeTyp
   merge_type = ObMergeType::INVALID_MERGE_TYPE;
 
   if (sstable.is_major_sstable()) {
-    merge_type = ObMergeType::MAJOR_MERGE;
+    merge_type = sstable.is_meta_major_sstable()
+               ? ObMergeType::META_MAJOR_MERGE
+               : ObMergeType::MAJOR_MERGE;
   } else if (sstable.is_minor_sstable()) {
     merge_type = ObMergeType::MINOR_MERGE;
   } else {
