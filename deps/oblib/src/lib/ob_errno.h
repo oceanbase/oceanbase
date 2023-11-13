@@ -360,6 +360,7 @@ constexpr int OB_ERR_SRS_EMPTY = -7285;
 constexpr int OB_ERR_INVALID_OPTION_KEY = -7286;
 constexpr int OB_ERR_INVALID_OPTION_VALUE = -7287;
 constexpr int OB_ERR_INVALID_GEOMETRY_TYPE = -7288;
+constexpr int OB_ERR_FTS_MUST_HAVE_TEXT_COL = -7289;
 constexpr int OB_PACKET_CLUSTER_ID_NOT_MATCH = -8004;
 constexpr int OB_TENANT_ID_NOT_MATCH = -8005;
 constexpr int OB_URI_ERROR = -9001;

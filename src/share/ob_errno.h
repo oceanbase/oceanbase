@@ -3556,6 +3556,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_OPTION_KEY__USER_ERROR_MSG "Invalid option key \'%.192s\' in function %.192s."
 #define OB_ERR_INVALID_OPTION_VALUE__USER_ERROR_MSG "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
 #define OB_ERR_INVALID_GEOMETRY_TYPE__USER_ERROR_MSG "Unknown WKB type(%d)! Full WKB type number was (%d)."
+#define OB_ERR_FTS_MUST_HAVE_TEXT_COL__USER_ERROR_MSG "A FTS index may only contain a text type column."
 #define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "invalid xpath expression"
@@ -5703,6 +5704,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_OPTION_KEY__ORA_USER_ERROR_MSG "ORA-00600: Invalid option key \'%.192s\' in function %.192s."
 #define OB_ERR_INVALID_OPTION_VALUE__ORA_USER_ERROR_MSG "ORA-00600: Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
 #define OB_ERR_INVALID_GEOMETRY_TYPE__ORA_USER_ERROR_MSG "ORA-00600: Unknown WKB type(%d)! Full WKB type number was (%d)."
+#define OB_ERR_FTS_MUST_HAVE_TEXT_COL__ORA_USER_ERROR_MSG "ORA-00600: A FTS index may only contain a text type column."
 #define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
@@ -6101,7 +6103,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2143];
+extern int g_all_ob_errnos[2144];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
