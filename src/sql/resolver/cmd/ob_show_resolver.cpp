@@ -1590,6 +1590,7 @@ int ObShowResolver::check_desc_priv_if_ness(
           OZ (schema_checker_->check_access_to_obj(real_tenant_id,
                                                    session_info_->get_priv_user_id(),
                                                    table_schema->get_table_id(),
+                                                   database_name,
                                                    stmt::T_SHOW_COLUMNS,
                                                    session_info_->get_enable_role_array(),
                                                    accessible,

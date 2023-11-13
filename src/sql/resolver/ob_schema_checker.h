@@ -447,6 +447,7 @@ public:
   int check_access_to_obj(const uint64_t tenant_id,
                           const uint64_t user_id,
                           const uint64_t obj_id,
+                          const common::ObString &database_name,
                           const sql::stmt::StmtType stmt_type,
                           const ObIArray<uint64_t> &role_id_array,
                           bool &accessible,
