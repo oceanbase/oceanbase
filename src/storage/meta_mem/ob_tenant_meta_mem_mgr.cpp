@@ -522,30 +522,43 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
     memtable::ObMemtableSet *memtable_set = iter->second;
     if (OB_NOT_NULL(memtable_set)
         && 0 != memtable_set->size()) {
-      if (OB_TMP_FAIL(ObMemtable::batch_remove_unused_callback_for_uncommited_txn(ls_id,
-                                                                                  memtable_set))) {
-        if (OB_NOT_RUNNING != tmp_ret) {
-          LOG_ERROR("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+      if (ls_id.id() != 0) {
+        if (OB_TMP_FAIL(ObMemtable::batch_remove_unused_callback_for_uncommited_txn(ls_id,
+                                                                                    memtable_set))) {
+          if (OB_NOT_RUNNING != tmp_ret) {
+            LOG_ERROR("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+          } else {
+            LOG_WARN("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+          }
+          for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
+               set_iter != memtable_set->end();
+               ++set_iter) {
+            if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first),
+                                                     ObITable::TableType::DATA_MEMTABLE))) {
+              LOG_ERROR("push table into gc queue failed, maybe there will be leak",
+                        K(tmp_ret), KPC(memtable_set));
+            }
+          }
+
+          LOG_INFO("batch gc memtable failed and push into gc queue again", K(memtable_set->size()));
+          while (OB_TMP_FAIL(memtable_set->clear())) {
+            LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
+          }
         } else {
-          LOG_WARN("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
-        }
-        for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
-             set_iter != memtable_set->end();
-             ++set_iter) {
-          if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first),
-                                                   ObITable::TableType::DATA_MEMTABLE))) {
-            LOG_ERROR("push table into gc queue failed, maybe there will be leak",
-                      K(tmp_ret), KPC(memtable_set));
+          (void)batch_destroy_memtable_(memtable_set);
+
+          for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
+               set_iter != memtable_set->end();
+               ++set_iter) {
+            pool_arr_[static_cast<int>(ObITable::TableType::DATA_MEMTABLE)]->free_obj((void *)(set_iter->first));
+          }
+
+          LOG_INFO("batch gc memtable successfully", K(memtable_set->size()));
+          while (OB_TMP_FAIL(memtable_set->clear())) {
+            LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
           }
         }
-
-        LOG_INFO("batch gc memtable failed and push into gc queue again", K(memtable_set->size()));
-        while (OB_TMP_FAIL(memtable_set->clear())) {
-          LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
-        }
       } else {
-        (void)batch_destroy_memtable_(memtable_set);
-
         for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
              set_iter != memtable_set->end();
              ++set_iter) {
@@ -590,6 +603,14 @@ int ObTenantMetaMemMgr::push_memtable_into_gc_map_(memtable::ObMemtable *memtabl
 
   if (OB_FAIL(memtable->get_ls_id(ls_id))) {
     LOG_WARN("get memtable ls id failed", K(ret), KPC(memtable));
+    if (OB_NOT_INIT == ret) {
+      // special ls id for memtable which fail to init
+      ls_id = 0;
+      ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(gc_memtable_map_.get_refactored(ls_id, memtable_set))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
