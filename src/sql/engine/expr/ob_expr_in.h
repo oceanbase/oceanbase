@@ -93,7 +93,11 @@ const static int HASH_CMP_UNKNOWN = 1;
       (void)map_.destroy();
     }
   }
-  int create(int param_num) {return map_.create(param_num * 2, common::ObModIds::OB_HASH_BUCKET);}
+  int create(int param_num)
+  {
+    ObMemAttr attr(MTL_ID(), common::ObModIds::OB_HASH_BUCKET);
+    return map_.create(param_num * 2, attr);
+  }
   int set_refactored(const Row<T> &row);
   int exist_refactored(const Row<T> &row, int &exist_ret);
   void set_meta_idx(int idx) { meta_.idx_ = idx; }
@@ -120,7 +124,11 @@ public:
     }
   }
   int64_t size() const { return set_.size(); }
-  int create(int param_num) { return set_.create(param_num); }
+  int create(int param_num)
+  {
+    ObMemAttr attr(MTL_ID(), common::ObModIds::OB_HASH_BUCKET);
+    return set_.create(param_num, attr);
+  }
   int set_refactored(const Row<T> &row);
   int exist_refactored(const Row<T> &row, bool &is_exist);
   void set_meta_idx(int idx) { meta_.idx_ = idx; }
@@ -149,10 +157,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator
         cmp_functions_(NULL),
         funcs_ptr_set(false),
         ctx_hash_null_(false),
-        right_objs_(NULL),
         right_datums_(NULL),
-        hashset_(),
-        hashset_vecs_(NULL),
         static_engine_hashset_(),
         static_engine_hashset_vecs_(NULL),
         cmp_type_(),
@@ -163,16 +168,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator
     }
     virtual ~ObExprInCtx()
     {
-      if (hashset_.created()) {
-        (void)hashset_.destroy();
-      }
       static_engine_hashset_.destroy();
-      if (OB_NOT_NULL(hashset_vecs_)) {
-        for (int i = 0; i < (1 << row_dimension_); ++i) {
-          hashset_vecs_[i].destroy();
-        }
-        hashset_vecs_ = NULL;
-      }
       if (OB_NOT_NULL(static_engine_hashset_vecs_)) {
         for (int i = 0; i < (1 << row_dimension_); ++i) {
           static_engine_hashset_vecs_[i].destroy();
@@ -181,34 +177,21 @@ class ObExprInOrNotIn : public ObVectorExprOperator
       }
     }
   public:
-    int init_hashset(int64_t param_num);
-    int init_hashset_vecs(int64_t param_num,
-                          int64_t row_dimension,
-                          ObExecContext *exec_ctx);
     int init_static_engine_hashset(int64_t param_num);
     int init_static_engine_hashset_vecs(int64_t param_num,
                                         int64_t row_dimension,
                                         ObExecContext *exec_ctx);
-    int add_to_hashset(const common::ObObj &obj);
-    int add_to_hashset_vecs(const Row<common::ObObj> &row, const int idx);
     int add_to_static_engine_hashset(const Row<common::ObDatum> &row);
     int add_to_static_engine_hashset_vecs(const Row<common::ObDatum> &row,
                                           const int idx);
-    int exist_in_hashset(const common::ObObj &obj, bool &is_exist) const;
-    int exist_in_hashset_vecs(const Row<common::ObObj> &objs,
-                                       const int idx,
-                                       int &exist_ret) const;
     int exist_in_static_engine_hashset(const Row<common::ObDatum> &row,
                                        bool &is_exist);
     int exist_in_static_engine_hashset_vecs(const Row<common::ObDatum> &row,
                                              const int idx,
                                              int &exist_ret);
-    int init_cmp_types(const int64_t row_dimension, ObExecContext *exec_ctx);
     int init_hashset_vecs_all_null(const int64_t row_dimension,
                                    ObExecContext *exec_ctx);
-    inline void set_cmp_type(const ObExprCalcType &cmp_type);
     inline int set_hashset_vecs_all_null_true(const int64_t idx);
-    inline const ObExprCalcType &get_cmp_type() const;
     int get_hashset_vecs_all_null(const int64_t idx,  bool &is_all_null) const;
     inline void set_param_exist_null(bool exist_null);
     inline bool is_param_exist_null() const;
@@ -219,23 +202,15 @@ class ObExprInOrNotIn : public ObVectorExprOperator
 
     bool is_hash_calc_disabled() const { return hash_calc_disabled_; }
     void disable_hash_calc(void) { hash_calc_disabled_ = true; }
-    int init_right_objs(int64_t param_num,
-                          int64_t row_dimension,
-                          ObExecContext *exec_ctx);
     int init_right_datums(int64_t param_num,
                           int64_t row_dimension,
                           ObExecContext *exec_ctx);
     int init_cmp_funcs(int64_t func_cnt,
                        ObExecContext *exec_ctx);
-    int set_right_obj(int64_t row_num,
-                      int64_t col_num,
-                      const int right_param_num,
-                      const common::ObObj &obj);
     int set_right_datum(int64_t row_num,
                         int64_t col_num,
                         const int right_param_num,
                         const common::ObDatum &datum);
-    common::ObObj *get_obj_row(int64_t row_num) { return right_objs_[row_num]; }
     common::ObDatum *get_datum_row(int64_t row_num) { return right_datums_[row_num]; }
     void set_hash_funcs_ptr(int64_t idx, void **hash_funcs_ptr)
     {
@@ -257,11 +232,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator
     bool funcs_ptr_set;
     bool ctx_hash_null_;
   private:
-    common::ObObj **right_objs_;//IN 右边的常量储存于此
     common::ObDatum **right_datums_;//IN 右边的常量储存于此
-    common::hash::ObHashSet<common::ObObj,
-                  common::hash::NoPthreadDefendMode> hashset_;
-    ObExprInHashMap<common::ObObj> *hashset_vecs_;
     ObExprInHashSet<common::ObDatum> static_engine_hashset_;
     ObExprInHashMap<common::ObDatum> *static_engine_hashset_vecs_;
     common::ObFixedArray<bool, common::ObIAllocator> hashset_vecs_all_null_; //下标代表的列全为null
@@ -349,10 +320,6 @@ public:
   inline void set_param_can_vectorized();
   static inline bool is_all_space(const char *ptr, const int64_t remain_len);
 protected:
-  int to_type(const common::ObObjType expect_type, const common::ObCollationType expect_cs_type,
-              common::ObCastCtx &cast_ctx, const common::ObObj &in_obj, common::ObObj &out_obj) const;
-
-  virtual void set_result(common::ObObj &result, bool is_exist, bool param_exist_null) const = 0;
   inline bool is_param_all_const() const;
   inline bool is_param_all_same_type() const;
   inline bool is_param_all_same_cs_type() const;
@@ -395,7 +362,6 @@ public:
   explicit ObExprIn(common::ObIAllocator &alloc);
   virtual ~ObExprIn() {};
 protected:
-  virtual void set_result(common::ObObj &result, bool is_exist, bool param_exist_null) const;
 };
 
 class ObExprNotIn : public ObExprInOrNotIn
@@ -404,20 +370,7 @@ public:
   explicit ObExprNotIn(common::ObIAllocator &alloc);
   virtual ~ObExprNotIn() {};
 protected:
-  virtual void set_result(common::ObObj &result, bool is_exist, bool param_exist_null) const;
 };
-
-inline void ObExprInOrNotIn::ObExprInCtx::set_cmp_type(const ObExprCalcType &cmp_type)
-{
-  if (cmp_type_.is_null()) {
-    cmp_type_ = cmp_type;
-  }
-}
-
-inline const ObExprCalcType &ObExprInOrNotIn::ObExprInCtx::get_cmp_type() const
-{
-  return cmp_type_;
-}
 
 inline void ObExprInOrNotIn::ObExprInCtx::set_param_exist_null(bool exist_null)
 {
