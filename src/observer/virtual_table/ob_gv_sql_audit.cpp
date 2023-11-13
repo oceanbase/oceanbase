@@ -1046,6 +1046,12 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
                                               ObCharset::get_default_charset()));
 
         } break;
+        case PL_TRACE_ID: {
+          cells[cell_idx].set_null();
+        } break;
+        case PLSQL_EXEC_TIME: {
+          cells[cell_idx].set_null();
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

@@ -6955,7 +6955,8 @@ def_table_schema(
       ('object_status', 'int'),
       ('rule_name', 'varchar:256'),
       ('is_in_pc', 'bool'),
-      ('erase_time', 'timestamp')
+      ('erase_time', 'timestamp'),
+      ('compile_time', 'uint'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -7633,7 +7634,9 @@ def_table_schema(
 
     ('partition_hit', 'bool'),
     ('tx_internal_route_version', 'uint'),
-    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH')
+    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
+    ('plsql_exec_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

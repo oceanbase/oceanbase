@@ -100,7 +100,8 @@ struct ALL_VIRTUAL_PLAN_STAT_CDE {
     OBJECT_STATUS,
     RULE_NAME,
     IS_IN_PC,
-    ERASE_TIME
+    ERASE_TIME,
+    COMPILE_TIME
   };
 };
 
@@ -228,7 +229,8 @@ struct ALL_VIRTUAL_PLAN_STAT_ORA_CDE {
     OBJECT_STATUS,
     RULE_NAME,
     IS_IN_PC,
-    ERASE_TIME
+    ERASE_TIME,
+    COMPILE_TIME
   };
 };
 
