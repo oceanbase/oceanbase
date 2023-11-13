@@ -121,6 +121,9 @@ const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
     case ObIOModule::TMP_TENANT_MEM_BLOCK_IO:
       ret_name = "TMP_TENANT_MEM_BLOCK_IO";
       break;
+    case ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO:
+      ret_name = "SSTABLE_MACRO_BLOCK_WRITE_IO";
+      break;
     default:
       break;
   }
