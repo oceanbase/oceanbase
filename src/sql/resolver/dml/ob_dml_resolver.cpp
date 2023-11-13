@@ -4478,7 +4478,7 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
     LOG_WARN("get unexpected error", K(alias_node->type_), K(ret));
   }
 
-  bool enable_var_assign_use_das = true;
+  bool enable_var_assign_use_das = false;
   if (OB_SUCC(ret)) {
     if (OB_NOT_NULL(session_info_)) {
       enable_var_assign_use_das = session_info_->is_var_assign_use_das_enabled();

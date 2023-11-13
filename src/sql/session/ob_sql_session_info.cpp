@@ -526,7 +526,7 @@ int ObSQLSessionInfo::is_enable_range_extraction_for_not_in(bool &enabled) const
 
 bool ObSQLSessionInfo::is_var_assign_use_das_enabled() const
 {
-  bool bret = true;
+  bool bret = false;
   int64_t tenant_id = get_effective_tenant_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {

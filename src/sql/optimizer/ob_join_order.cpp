@@ -1486,7 +1486,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
       is_sample_stmt = true;
     }
   }
-  bool enable_var_assign_use_das = true;
+  bool enable_var_assign_use_das = false;
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo *session_info = NULL;
     if (OB_NOT_NULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
@@ -1500,12 +1500,14 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     bool hint_force_das = false;
     bool hint_force_no_das = false;
     int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
+    // TODO: access virtual table by remote das task is not supported, it will report 4016 error in execute server
+    // Ensure that the following scenarios will not combined with virtual table
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
                     get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     get_plan()->get_optimizer_context().has_cursor_expression() ||
-                    (get_plan()->get_optimizer_context().has_var_assign() && enable_var_assign_use_das) ||
+                    (get_plan()->get_optimizer_context().has_var_assign() && enable_var_assign_use_das && !is_virtual_table(ref_id)) ||
                     is_batch_update_table;
     if (EXTERNAL_TABLE == table_item->table_type_) {
       create_das_path = false;
