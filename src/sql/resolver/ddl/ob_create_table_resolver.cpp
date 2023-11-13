@@ -721,6 +721,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
+          } else if (OB_FAIL(add_inner_index_for_heap_gtt())) {
+            SQL_RESV_LOG(WARN, "failed to add_inner_index_for_heap_gtt", K(ret));
           }
         }
 
@@ -3322,6 +3324,59 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
     if (OB_SUCC(ret)) {
       table_schema.get_part_option() = *partition_option;
       table_schema.set_part_level(share::schema::PARTITION_LEVEL_ONE);
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
+  int ret = OB_SUCCESS;
+  if (is_oracle_temp_table_) {
+    if (OB_ISNULL(stmt_) || OB_ISNULL(allocator_)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), K(ret));
+    } else {
+      ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      ObSqlString temp_str;
+
+      reset();
+      index_attributes_set_ = OB_DEFAULT_INDEX_ATTRIBUTES_SET;
+      index_arg_.reset();
+
+      OZ (temp_str.append_fmt("IDX_FOR_HEAP_GTT_%.*s", table_name_.length(), table_name_.ptr()));
+      OZ (ob_write_string(*allocator_, temp_str.string(), index_name_));
+
+      OZ (add_new_indexkey_for_oracle_temp_table(0));
+
+      for (int i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+        const ObColumnSchemaV2 *column = table_schema.get_column_schema_by_idx(i);
+        if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column schema", K(ret));
+        } else {
+          if (!column->is_rowkey_column()
+              && column->get_column_id() != OB_HIDDEN_SESSION_ID_COLUMN_ID) {
+            ObString column_name = column->get_column_name_str();
+            bool has_invalid_types = false;
+            if (OB_FAIL(add_storing_column(column_name,
+                                           true, /*check_column_exist*/
+                                           false, /*is_hidden*/
+                                           &has_invalid_types))) {
+              if (has_invalid_types) {
+                ret = OB_SUCCESS;
+                //ignore invalid columns
+              } else {
+                LOG_WARN("fail to add storing column", K(ret));
+              }
+            }
+          }
+        }
+      }
+
+      OZ (generate_index_arg());
+      OZ (create_table_stmt->get_index_arg_list().push_back(index_arg_));
+      OZ (create_table_stmt->get_index_partition_resolve_results().push_back(ObPartitionResolveResult()));
     }
   }
   return ret;

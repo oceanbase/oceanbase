@@ -83,6 +83,8 @@ public:
 
   int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
 
+  int add_new_indexkey_for_oracle_temp_table(obrpc::ObCreateIndexArg &index_arg);
+
 private:
   int check_dup_foreign_keys_exist(
       share::schema::ObSchemaGetterGuard *schema_guard,
