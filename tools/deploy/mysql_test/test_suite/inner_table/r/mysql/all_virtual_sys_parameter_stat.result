@@ -285,6 +285,7 @@ _enable_px_fast_reclaim
 _enable_px_ordered_coord
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
+_enable_spf_batch_rescan
 _enable_system_tenant_memory_limit
 _enable_tenant_sql_net_thread
 _enable_trace_session_leak
