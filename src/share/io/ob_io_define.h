@@ -64,7 +64,8 @@ enum ObIOModule {
   LINKED_MACRO_BLOCK_IO = 20017,
   HA_MACRO_BLOCK_WRITER_IO = 20018,
   TMP_TENANT_MEM_BLOCK_IO = 20019,
-  MAX_IO = 20020
+  SSTABLE_MACRO_BLOCK_WRITE_IO = 20020,
+  MAX_IO = 20021
 };
 
 const char *get_io_sys_group_name(ObIOModule module);
