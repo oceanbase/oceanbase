@@ -1082,3 +1082,6 @@ PCODE_DEF(OB_DIRECT_LOAD_CONTROL, 0x1604)
 
 // update materialized view table status
 // PCODE_DEF(OB_UPDATE_MVIEW_TABLE_STATUS, 0x1612)
+
+// for direct load resource
+// PCODE_DEF(OB_DIRECT_LOAD_RESOURCE, 0x1613)
