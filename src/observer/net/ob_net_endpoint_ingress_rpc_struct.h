@@ -26,7 +26,6 @@
 
 namespace oceanbase
 {
-using namespace common;
 namespace obrpc
 {
 
@@ -35,9 +34,9 @@ class ObNetEndpointKey
   OB_UNIS_VERSION(1);
 
 public:
-  ObNetEndpointKey() : addr_(), group_id_(0)
+  ObNetEndpointKey() : addr_(), group_id_(OB_INVALID_ID)
   {}
-  ObNetEndpointKey(const ObAddr &addr) : addr_(addr), group_id_(0)
+  ObNetEndpointKey(const ObAddr &addr) : addr_(addr), group_id_(OB_INVALID_ID)
   {}
   ObNetEndpointKey(const ObNetEndpointKey &other)
   {
@@ -59,7 +58,7 @@ public:
   void reset()
   {
     addr_.reset();
-    group_id_ = 0;
+    group_id_ = OB_INVALID_ID;
   }
   uint64_t hash() const
   {
@@ -75,9 +74,15 @@ public:
     int compare_ret = 0;
     if (&other == this) {
       compare_ret = 0;
-    } else if ((compare_ret = addr_.compare(other.addr_))) {
     } else {
-      compare_ret = group_id_ - other.group_id_;
+      compare_ret = addr_.compare(other.addr_);
+      if (0 == compare_ret) {
+        if (group_id_ < other.group_id_) {
+          compare_ret = -1;
+        } else if (group_id_ > other.group_id_) {
+          compare_ret = 1;
+        }
+      }
     }
     return compare_ret;
   }
@@ -99,7 +104,7 @@ public:
   TO_STRING_KV(K_(addr), K_(group_id));
 
   ObAddr addr_;
-  int32_t group_id_;
+  int64_t group_id_;
 };
 
 class ObNetEndpointValue
