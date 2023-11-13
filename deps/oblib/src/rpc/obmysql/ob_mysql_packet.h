@@ -194,7 +194,11 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_PROXY_FULL_LINK_TRACING_EXT:       1;
     // duplicate session_info sync of transaction type
     uint64_t OB_CAP_SERVER_DUP_SESS_INFO_SYNC:         1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 44;
+
+    uint64_t OB_CAP_LOCAL_FILES:                       1;
+    uint64_t OB_CAP_PROXY_CLIENT_SESSION_ID:           1;
+    uint64_t OB_CAP_OB_PROTOCOL_V2_COMPRESS:           1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 41;
   } cap_flags_;
 };
 
