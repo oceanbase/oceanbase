@@ -34,13 +34,13 @@ namespace oceanbase
 namespace unittest
 {
 
-const char *ORACLE_TENANT_NAME = "tt";
-const char *MYSQL_TENANT_NAME = "tt";
-const char *USER_NAME = "mytest";
-const char *ORACLE_USER = "mytest@tt";
-const char *MYSQL_USER = "mytest@tt";
-const char *PASSWD = "test";
-const char *PASSWD_NEW = "test_new";
+const char *ORACLE_TENANT_NAME = "";
+const char *MYSQL_TENANT_NAME = "";
+const char *USER_NAME = "";
+const char *ORACLE_USER = "";
+const char *MYSQL_USER = "";
+const char *PASSWD = "";
+const char *PASSWD_NEW = "";
 const char *ORACLE_DB = "SYS";
 const char *MYSQL_DB = "OCEANBASE";
 const char *QUERY_SQL = "SELECT TENANT_ID, LS_ID from GV$OB_LOG_STAT";
