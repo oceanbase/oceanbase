@@ -10174,7 +10174,6 @@ public:
   int64_t lock_id_;
 };
 
-
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

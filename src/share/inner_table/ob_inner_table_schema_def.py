@@ -6590,7 +6590,8 @@ def_table_schema(
   ('lb_vip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
   ('lb_vport', 'int', 'true'),
   ('in_bytes', 'bigint'),
-  ('out_bytes', 'bigint')
+  ('out_bytes', 'bigint'),
+  ('user_client_port', 'int', 'false', '0')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8885,6 +8886,7 @@ def_table_schema(
   ('ref_count', 'int'),
   ('backtrace', 'varchar:16384', 'true', ''),
   ('trans_state', 'varchar:OB_MAX_TRANS_STATE_LENGTH', 'true'),
+  ('user_client_port', 'int', 'false', '0')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -21814,7 +21816,8 @@ SELECT
   LB_VIP,
   LB_VPORT,
   IN_BYTES,
-  OUT_BYTES
+  OUT_BYTES,
+  USER_CLIENT_PORT
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )

@@ -305,4 +305,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObWrSyncUserSubmitSnapshotTaskP, gctx_);
   RPC_PROCESSOR(ObWrSyncUserModifySettingsTaskP, gctx_);
 
+  // kill client session
+  // RPC_PROCESSOR(ObKillClientSessionP, gctx_);
+  // client session create time
+  // RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
 }

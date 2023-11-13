@@ -256,6 +256,8 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LS_REPLAYED_SCN, ObRpcGetLSReplayedScnP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_TABLE_TTL, ObTenantTTLP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_HA_UNLOCK_MEMBER_LIST, ObAdminUnlockMemberListP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_TABLET_MAJOR_FREEZE, ObRpcTabletMajorFreezeP);
+// OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_CLIENT_SESSION, ObKillClientSessionP);
+// OB_DEFINE_PROCESSOR_S(Srv, OB_CLIENT_SESSION_CONNECT_TIME, ObClientSessionConnectTimeP);
 
 } // end of namespace observer
 } // end of namespace oceanbase

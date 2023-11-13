@@ -77,7 +77,8 @@ private:
     VIP,
     VPORT,
     IN_BYTES,
-    OUT_BYTES
+    OUT_BYTES,
+    USER_CLIENT_PORT
   };
   class FillScanner
   {

@@ -296,6 +296,10 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
             }
             break;
           }
+          case USER_CLIENT_PORT: {
+            cur_row_->cells_[cell_idx].set_int(0);
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),

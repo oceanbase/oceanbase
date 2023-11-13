@@ -61,7 +61,8 @@ private:
     TRACE_ID,
     REF_COUNT,
     BACKTRACE,
-    TRANS_STATE
+    TRANS_STATE,
+    USER_CLIENT_PORT
   };
   class FillScanner
   {
