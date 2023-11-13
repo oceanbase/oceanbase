@@ -74,9 +74,15 @@ public:
     int compare_ret = 0;
     if (&other == this) {
       compare_ret = 0;
-    } else if ((compare_ret = addr_.compare(other.addr_))) {
     } else {
-      compare_ret = group_id_ - other.group_id_;
+      compare_ret = addr_.compare(other.addr_);
+      if (0 == compare_ret) {
+        if (group_id_ < other.group_id_) {
+          compare_ret = -1;
+        } else if (group_id_ > other.group_id_) {
+          compare_ret = 1;
+        }
+      }
     }
     return compare_ret;
   }
