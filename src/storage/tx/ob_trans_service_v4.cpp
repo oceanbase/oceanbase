@@ -353,32 +353,34 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
 {
   int ret = OB_SUCCESS;
   int32_t ref_cnt = 0;
-  // remember tx_id because tx maybe cleanout and reused
-  // in this function's following steps.
-  tx.lock_.lock();
-  ObTransID tx_id = tx.tx_id_;
-  int64_t now = ObClockGenerator::getClock();
+  ObTransID tx_id;
   bool cb_executed = false;
-  if (!tx.commit_task_.is_registered()){
-    TRANS_LOG(INFO, "task canceled", K(tx));
-  } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
-  } else if (tx.flags_.RELEASED_) {
-    TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
-  } else if (tx.state_ != ObTxDesc::State::IN_TERMINATE) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpect tx state", K(ret), K_(tx.state), K(tx));
-  } else if (tx.expire_ts_ <= now) {
-    TRANS_LOG(WARN, "tx has timeout", K_(tx.expire_ts), K(tx));
-    handle_tx_commit_result_(tx, OB_TRANS_TIMEOUT);
-  } else if (tx.commit_expire_ts_ <= now) {
-    TRANS_LOG(WARN, "tx commit timeout", K_(tx.commit_expire_ts), K(tx));
-    handle_tx_commit_result_(tx, OB_TRANS_STMT_TIMEOUT);
-  } else if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
-    TRANS_LOG(WARN, "retry do commit tx failed", K(ret), K(tx));
-    handle_tx_commit_result_(tx, ret);
+  {
+    // remember tx_id because tx maybe cleanout and reused
+    // in this function's following steps.
+    ObSpinLockGuard guard(tx.lock_);
+    tx_id = tx.tx_id_;
+    int64_t now = ObClockGenerator::getClock();
+    if (!tx.commit_task_.is_registered()){
+      TRANS_LOG(INFO, "task canceled", K(tx));
+    } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
+    } else if (tx.flags_.RELEASED_) {
+      TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
+    } else if (tx.state_ != ObTxDesc::State::IN_TERMINATE) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpect tx state", K(ret), K_(tx.state), K(tx));
+    } else if (tx.expire_ts_ <= now) {
+      TRANS_LOG(WARN, "tx has timeout", K_(tx.expire_ts), K(tx));
+      handle_tx_commit_result_(tx, OB_TRANS_TIMEOUT);
+    } else if (tx.commit_expire_ts_ <= now) {
+      TRANS_LOG(WARN, "tx commit timeout", K_(tx.commit_expire_ts), K(tx));
+      handle_tx_commit_result_(tx, OB_TRANS_STMT_TIMEOUT);
+    } else if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
+      TRANS_LOG(WARN, "retry do commit tx failed", K(ret), K(tx));
+      handle_tx_commit_result_(tx, ret);
+    }
+    ref_cnt = tx.get_ref();
   }
-  ref_cnt = tx.get_ref();
-  tx.lock_.unlock();
   cb_executed = tx.execute_commit_cb();
   // NOTE:
   // it not safe and meaningless to access tx after commit_cb
@@ -673,7 +675,7 @@ int ObTransService::decide_tx_commit_info_(ObTxDesc &tx, ObTxPart *&coord)
 int ObTransService::prepare_tx_coord(ObTxDesc &tx, share::ObLSID &coord_id)
 {
   int ret = OB_SUCCESS;
-  tx.lock_.lock();
+  ObSpinLockGuard guard(tx.lock_);
   ObTxPart *coord = NULL;
   if (OB_FAIL(decide_tx_commit_info_(tx, coord))) {
     TRANS_LOG(WARN, "fail to decide tx coordinator, tx will abort", K(ret), K(tx));
@@ -686,7 +688,6 @@ int ObTransService::prepare_tx_coord(ObTxDesc &tx, share::ObLSID &coord_id)
     coord_id = coord->id_;
   }
   TRANS_LOG(INFO, "generate tx coord", K(ret), K(tx), K(coord_id));
-  tx.lock_.unlock();
   return ret;
 }
 
@@ -702,7 +703,7 @@ int ObTransService::prepare_tx(ObTxDesc &tx,
 {
   int ret = OB_SUCCESS;
   int64_t now = ObClockGenerator::getClock();
-  tx.lock_.lock();
+  ObSpinLockGuard guard(tx.lock_);
   tx.set_commit_cb(&cb);
   tx.commit_expire_ts_ = now + timeout_us;
   tx.state_ = ObTxDesc::State::SUB_PREPARING;
@@ -719,7 +720,6 @@ int ObTransService::prepare_tx(ObTxDesc &tx,
     ret = OB_SUCCESS;
   }
   TRANS_LOG(INFO, "prepare tx", K(ret), K(tx), KP(&cb));
-  tx.lock_.unlock();
   return ret;
 }
 
@@ -2655,7 +2655,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
 int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
 {
   int ret = OB_SUCCESS;
-  tx.lock_.lock();
+  ObSpinLockGuard guard(tx.lock_);
   if (OB_FAIL(tx_info.parts_.assign(tx.parts_))) {
     TRANS_LOG(WARN, "assgin parts fail", K(ret), K(tx));
   } else if (OB_FAIL(assign_user_savepoint_(tx, tx_info.savepoints_))) {
@@ -2679,7 +2679,6 @@ int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
     tx_info.active_scn_ = tx.active_scn_;
     tx_info.session_id_ = tx.sess_id_;
   }
-  tx.lock_.unlock();
   return ret;
 }
 
@@ -2733,7 +2732,7 @@ int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList 
 int ObTransService::get_tx_stmt_info(ObTxDesc &tx, ObTxStmtInfo &stmt_info)
 {
   int ret = OB_SUCCESS;
-  tx.lock_.lock();
+  ObSpinLockGuard guard(tx.lock_);
   if (OB_FAIL(stmt_info.parts_.assign(tx.parts_))) {
     TRANS_LOG(WARN, "assgin parts fail", K(ret), K(tx));
   } else if (OB_FAIL(assign_user_savepoint_(tx, stmt_info.savepoints_))) {
@@ -2743,7 +2742,6 @@ int ObTransService::get_tx_stmt_info(ObTxDesc &tx, ObTxStmtInfo &stmt_info)
     stmt_info.op_sn_ = tx.op_sn_;
     stmt_info.state_ = tx.state_;
   }
-  tx.lock_.unlock();
   return ret;
 }
 
@@ -2789,28 +2787,36 @@ int ObTransService::handle_timeout_for_xa(ObTxDesc &tx, const int64_t delay)
   int ret = OB_SUCCESS;
   int64_t now = ObClockGenerator::getClock();
   bool cb_executed = false;
-  ObTransID tx_id = tx.tx_id_;
-  if (OB_FAIL(tx.lock_.lock(5000000))) {
-    TRANS_LOG(WARN, "failed to acquire lock in specified time", K(tx));
-    // FIXME: how to handle it without lock protection
-    // according to handle_tx_commit_timeout
-  } else {
-    if (!tx.commit_task_.is_registered()){
-      TRANS_LOG(INFO, "task canceled", K(tx));
-    } else if (tx.flags_.RELEASED_) {
-      TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
-    } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
+  ObTransID tx_id;
+  bool need_cb = false;
+  {
+    ObSpinLockGuardWithTimeout guard(tx.lock_, 5000000);
+    if (OB_FAIL(guard.get_ret())) {
+      TRANS_LOG(WARN, "failed to acquire lock in specified time", K(tx));
+      // FIXME: how to handle it without lock protection
+      // according to handle_tx_commit_timeout
+      need_cb = false;
     } else {
-      if (ObTxDesc::State::SUB_PREPARING == tx.state_) {
-        ret = handle_sub_prepare_timeout_(tx, delay);
-      } else if (ObTxDesc::State::SUB_COMMITTING == tx.state_) {
-        ret = handle_sub_commit_timeout_(tx, delay);
-      } else if (ObTxDesc::State::SUB_ROLLBACKING == tx.state_) {
-        ret = handle_sub_rollback_timeout_(tx, delay);
+      tx_id = tx.tx_id_;
+      if (!tx.commit_task_.is_registered()){
+        TRANS_LOG(INFO, "task canceled", K(tx));
+      } else if (tx.flags_.RELEASED_) {
+        TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
+      } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
       } else {
+        if (ObTxDesc::State::SUB_PREPARING == tx.state_) {
+          ret = handle_sub_prepare_timeout_(tx, delay);
+        } else if (ObTxDesc::State::SUB_COMMITTING == tx.state_) {
+          ret = handle_sub_commit_timeout_(tx, delay);
+        } else if (ObTxDesc::State::SUB_ROLLBACKING == tx.state_) {
+          ret = handle_sub_rollback_timeout_(tx, delay);
+        } else {
+        }
       }
+      need_cb = true;
     }
-    tx.lock_.unlock();
+  }
+  if (need_cb) {
     cb_executed = tx.execute_commit_cb();
   }
   TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(cb_executed));
