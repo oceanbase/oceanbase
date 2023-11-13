@@ -475,7 +475,10 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
     SSL_CTX_set_options(ctx, SSL_OP_TLS_BLOCK_PADDING_BUG);
     SSL_CTX_set_options(ctx, SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS);
     SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
-    SSL_CTX_set_read_ahead(ctx, 1);
+    /*set_read_ahead may cause the first application data that been sent after
+    * SSL handshake being unprocessed, forbid it.
+    */
+    SSL_CTX_set_read_ahead(ctx, 0);
   }
   if (0 != ret) {
     SSL_CTX_free(ctx);
