@@ -56,31 +56,9 @@ const char *const compress_funcs[] =
   "lz4_1.0",
   "none",
   "snappy_1.0",
-  "zlib_1.0",
   "zstd_1.0",
   "zstd_1.3.8",
   "lz4_1.9.1",
-};
-
-const char *const perf_compress_funcs[] =
-{
-  "none",
-  "lz4_1.0",
-  "zstd_1.0",
-  "zstd_1.3.8",
-};
-
-const char *const batch_rpc_compress_funcs[] =
-{
-  "lz4_1.0",
-  "none",
-  "snappy_1.0",
-  "zlib_1.0",
-  "zstd_1.0",
-  "stream_lz4_1.0",
-  "stream_zstd_1.0",
-  "zstd_1.3.8",
-  "stream_zstd_1.3.8",
 };
 
 } /* namespace common */
