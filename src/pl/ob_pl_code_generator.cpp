@@ -7907,9 +7907,6 @@ int ObPLCodeGenerator::generate_get_attr_func(const ObIArray<ObObjAccessIdx> &id
     OZ (generate_get_attr(params_ptr, idents, for_write,
                           result_value_ptr, ret_value_ptr, exit_), idents);
 
-#ifndef NDEBUG
-    OZ (generate_debug(ObString("function name"), helper_.get_function_address(func_name)));
-#endif
     OZ (helper_.create_br(exit_));
     OZ (helper_.set_insert_point(exit_));
     OZ (helper_.create_load(ObString("load_ret_value"), ret_value_ptr, ret_value));
