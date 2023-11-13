@@ -27,6 +27,7 @@ namespace sql
 int ObPsSqlKey::deep_copy(const ObPsSqlKey &other, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  flag_ = other.flag_;
   db_id_ = other.db_id_;
   inc_id_ = other.inc_id_;
   if (OB_FAIL(ObPsSqlUtils::deep_copy_str(allocator, other.ps_sql_, ps_sql_))) {
@@ -38,6 +39,7 @@ int ObPsSqlKey::deep_copy(const ObPsSqlKey &other, common::ObIAllocator &allocat
 ObPsSqlKey &ObPsSqlKey::operator=(const ObPsSqlKey &other)
 {
   if (this != &other) {
+    flag_ = other.flag_;
     db_id_ = other.db_id_;
     inc_id_ = other.inc_id_;
     ps_sql_ = other.ps_sql_;
@@ -47,7 +49,8 @@ ObPsSqlKey &ObPsSqlKey::operator=(const ObPsSqlKey &other)
 
 bool ObPsSqlKey::operator==(const ObPsSqlKey &other) const
 {
-  return db_id_ == other.db_id_ &&
+  return flag_ == other.flag_ &&
+         db_id_ == other.db_id_ &&
          inc_id_ == other.inc_id_ &&
          ps_sql_.compare(other.ps_sql_) == 0;
 }
@@ -55,6 +58,7 @@ bool ObPsSqlKey::operator==(const ObPsSqlKey &other) const
 int64_t ObPsSqlKey::hash() const
 {
   uint64_t hash_val = 0;
+  hash_val = murmurhash(&flag_, sizeof(uint32_t), hash_val);
   hash_val = murmurhash(&db_id_, sizeof(uint64_t), hash_val);
   hash_val = murmurhash(&inc_id_, sizeof(uint64_t), hash_val);
   ps_sql_.hash(hash_val, hash_val);
