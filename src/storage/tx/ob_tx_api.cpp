@@ -213,24 +213,30 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
 int ObTransService::stop_tx(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
-  tx.lock_.lock();
-  TRANS_LOG(INFO, "stop_tx, print its trace as following", K(tx));
-  tx.print_trace_();
-  if (tx.addr_ != self_) {
-    // either on txn temp node or xa temp node
-    // depends on session cleanup to quit
-    TRANS_LOG(INFO, "this is not txn start node.");
-  } else {
-    if (tx.state_ < ObTxDesc::State::IN_TERMINATE) {
-      abort_tx_(tx, ObTxAbortCause::STOP, true);
-    } else if (!tx.is_terminated()) {
-      unregister_commit_retry_task_(tx);
-      // arm callback arguments
-      tx.commit_out_ = OB_TRANS_UNKNOWN;
-      tx.state_ = ObTxDesc::State::COMMIT_UNKNOWN;
+  bool need_cb = false;
+  {
+    ObSpinLockGuard guard(tx.lock_);
+    TRANS_LOG(INFO, "stop_tx, print its trace as following", K(tx));
+    tx.print_trace_();
+    if (tx.addr_ != self_) {
+      // either on txn temp node or xa temp node
+      // depends on session cleanup to quit
+      TRANS_LOG(INFO, "this is not txn start node.");
+      need_cb = false;
+    } else {
+      if (tx.state_ < ObTxDesc::State::IN_TERMINATE) {
+        abort_tx_(tx, ObTxAbortCause::STOP, true);
+      } else if (!tx.is_terminated()) {
+        unregister_commit_retry_task_(tx);
+        // arm callback arguments
+        tx.commit_out_ = OB_TRANS_UNKNOWN;
+        tx.state_ = ObTxDesc::State::COMMIT_UNKNOWN;
+      }
+      need_cb = true;
     }
-    tx.lock_.unlock();
-    // run callback after unlock
+  }
+  // run callback after unlock
+  if (need_cb) {
     tx.execute_commit_cb();
   }
   return ret;
@@ -427,134 +433,138 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
 {
   TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE(true)
   int ret = OB_SUCCESS;
-  tx.lock_.lock();
-  if (tx.commit_ts_ <= 0) {
-    tx.commit_ts_ = ObClockGenerator::getClock();
-  }
-  tx.inc_op_sn();
-  switch(tx.state_) {
-  case ObTxDesc::State::IDLE:
-    TRANS_LOG(TRACE, "commit a dummy tx", K(tx), KP(&cb));
-    tx.set_commit_cb(&cb);
-    handle_tx_commit_result_(tx, OB_SUCCESS);
-    ret = OB_SUCCESS;
-    break;
-  case ObTxDesc::State::ABORTED:
-    handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
-    ret = OB_TRANS_ROLLBACKED;
-    break;
-  case ObTxDesc::State::ROLLED_BACK:
-    ret = OB_TRANS_ROLLBACKED;
-    TRANS_LOG(WARN, "insane tx action", K(ret), K(tx));
-    break;
-  case ObTxDesc::State::COMMITTED:
-    ret = OB_TRANS_COMMITED;
-    TRANS_LOG(WARN, "insane tx action", K(ret), K(tx));
-    break;
-  case ObTxDesc::State::IN_TERMINATE:
-  case ObTxDesc::State::COMMIT_TIMEOUT:
-  case ObTxDesc::State::COMMIT_UNKNOWN:
-    ret = OB_TRANS_HAS_DECIDED;
-    TRANS_LOG(WARN, "insane tx action", K(ret), K(tx));
-    break;
-  case ObTxDesc::State::ACTIVE:
-  case ObTxDesc::State::IMPLICIT_ACTIVE:
-    if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
-      TX_STAT_TIMEOUT_INC
-      TRANS_LOG(WARN, "tx has timeout, it has rollbacked internally", K_(tx.expire_ts), K(tx));
-      ret = OB_TRANS_ROLLBACKED;
-      handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
-    } else if (tx.flags_.PARTS_INCOMPLETE_) {
-      TRANS_LOG(WARN, "txn participants set incomplete, can not commit", K(ret), K(tx));
-      abort_tx_(tx, ObTxAbortCause::PARTICIPANTS_SET_INCOMPLETE);
+  bool need_cb = false;
+  {
+    ObSpinLockGuard guard(tx.lock_);
+    if (tx.commit_ts_ <= 0) {
+      tx.commit_ts_ = ObClockGenerator::getClock();
+    }
+    tx.inc_op_sn();
+    switch(tx.state_) {
+    case ObTxDesc::State::IDLE:
+      TRANS_LOG(TRACE, "commit a dummy tx", K(tx), KP(&cb));
+      tx.set_commit_cb(&cb);
+      handle_tx_commit_result_(tx, OB_SUCCESS);
+      ret = OB_SUCCESS;
+      break;
+    case ObTxDesc::State::ABORTED:
       handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
       ret = OB_TRANS_ROLLBACKED;
-    } else if (tx.flags_.PART_EPOCH_MISMATCH_) {
-      TRANS_LOG(WARN, "txn participant state incomplete, can not commit", K(ret), K(tx));
-      abort_tx_(tx, ObTxAbortCause::PARTICIPANT_STATE_INCOMPLETE);
-      handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
+      break;
+    case ObTxDesc::State::ROLLED_BACK:
       ret = OB_TRANS_ROLLBACKED;
-    } else {
-      int clean = true;
-      ARRAY_FOREACH_X(tx.parts_, i, cnt, clean) {
-        clean = tx.parts_[i].is_without_ctx() || tx.parts_[i].is_clean();
+      TRANS_LOG(WARN, "insane tx action", K(ret), K(tx));
+      break;
+    case ObTxDesc::State::COMMITTED:
+      ret = OB_TRANS_COMMITED;
+      TRANS_LOG(WARN, "insane tx action", K(ret), K(tx));
+      break;
+    case ObTxDesc::State::IN_TERMINATE:
+    case ObTxDesc::State::COMMIT_TIMEOUT:
+    case ObTxDesc::State::COMMIT_UNKNOWN:
+      ret = OB_TRANS_HAS_DECIDED;
+      TRANS_LOG(WARN, "insane tx action", K(ret), K(tx));
+      break;
+    case ObTxDesc::State::ACTIVE:
+    case ObTxDesc::State::IMPLICIT_ACTIVE:
+      if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
+        TX_STAT_TIMEOUT_INC
+        TRANS_LOG(WARN, "tx has timeout, it has rollbacked internally", K_(tx.expire_ts), K(tx));
+        ret = OB_TRANS_ROLLBACKED;
+        handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
+      } else if (tx.flags_.PARTS_INCOMPLETE_) {
+        TRANS_LOG(WARN, "txn participants set incomplete, can not commit", K(ret), K(tx));
+        abort_tx_(tx, ObTxAbortCause::PARTICIPANTS_SET_INCOMPLETE);
+        handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
+        ret = OB_TRANS_ROLLBACKED;
+      } else if (tx.flags_.PART_EPOCH_MISMATCH_) {
+        TRANS_LOG(WARN, "txn participant state incomplete, can not commit", K(ret), K(tx));
+        abort_tx_(tx, ObTxAbortCause::PARTICIPANT_STATE_INCOMPLETE);
+        handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
+        ret = OB_TRANS_ROLLBACKED;
+      } else {
+        int clean = true;
+        ARRAY_FOREACH_X(tx.parts_, i, cnt, clean) {
+          clean = tx.parts_[i].is_without_ctx() || tx.parts_[i].is_clean();
+        }
+        if (clean) {
+          // explicit savepoint rollback cause empty valid-part-set
+          tx.set_commit_cb(&cb);
+          abort_participants_(tx);                  // let part ctx quit
+          handle_tx_commit_result_(tx, OB_SUCCESS); // commit success
+          ret = OB_SUCCESS;
+        }
       }
-      if (clean) {
-        // explicit savepoint rollback cause empty valid-part-set
-        tx.set_commit_cb(&cb);
-        abort_participants_(tx);                  // let part ctx quit
-        handle_tx_commit_result_(tx, OB_SUCCESS); // commit success
-        ret = OB_SUCCESS;
-      }
-    }
-    break;
-  default:
-    TRANS_LOG(WARN, "anormaly tx state", K(tx));
-    abort_tx_(tx, ObTxAbortCause::IN_CONSIST_STATE);
-    handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
-    ret = OB_TRANS_ROLLBACKED;
-  }
-  // normal path, commit cont.
-  if (OB_SUCC(ret) && (
-      tx.state_ == ObTxDesc::State::ACTIVE ||
-      tx.state_ == ObTxDesc::State::IMPLICIT_ACTIVE)) {
-    ObTxDesc::State state0 = tx.state_;
-    tx.state_ = ObTxDesc::State::IN_TERMINATE;
-    // record trace_info
-    if (OB_NOT_NULL(trace_info) &&
-        OB_FAIL(tx.trace_info_.set_app_trace_info(*trace_info))) {
-      TRANS_LOG(WARN, "set trace_info failed", K(ret), KPC(trace_info));
-    }
-    SCN commit_version;
-    if (OB_SUCC(ret) &&
-        OB_FAIL(do_commit_tx_(tx, expire_ts, cb, commit_version))) {
-      TRANS_LOG(WARN, "try to commit tx fail, tx will be aborted",
-                K(ret), K(expire_ts), K(tx), KP(&cb));
-      // the error may caused by txn has terminated
-      handle_tx_commit_result_(tx, ret, commit_version);
-    }
-    // if txn not terminated, it can be choice to abort
-    if (OB_FAIL(ret) && tx.state_ == ObTxDesc::State::IN_TERMINATE) {
-      tx.state_ = state0;
-      abort_tx_(tx, ret);
+      break;
+    default:
+      TRANS_LOG(WARN, "anormaly tx state", K(tx));
+      abort_tx_(tx, ObTxAbortCause::IN_CONSIST_STATE);
       handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
       ret = OB_TRANS_ROLLBACKED;
     }
+    // normal path, commit cont.
+    if (OB_SUCC(ret) && (
+        tx.state_ == ObTxDesc::State::ACTIVE ||
+        tx.state_ == ObTxDesc::State::IMPLICIT_ACTIVE)) {
+      ObTxDesc::State state0 = tx.state_;
+      tx.state_ = ObTxDesc::State::IN_TERMINATE;
+      // record trace_info
+      if (OB_NOT_NULL(trace_info) &&
+          OB_FAIL(tx.trace_info_.set_app_trace_info(*trace_info))) {
+        TRANS_LOG(WARN, "set trace_info failed", K(ret), KPC(trace_info));
+      }
+      SCN commit_version;
+      if (OB_SUCC(ret) &&
+          OB_FAIL(do_commit_tx_(tx, expire_ts, cb, commit_version))) {
+        TRANS_LOG(WARN, "try to commit tx fail, tx will be aborted",
+                  K(ret), K(expire_ts), K(tx), KP(&cb));
+        // the error may caused by txn has terminated
+        handle_tx_commit_result_(tx, ret, commit_version);
+      }
+      // if txn not terminated, it can be choice to abort
+      if (OB_FAIL(ret) && tx.state_ == ObTxDesc::State::IN_TERMINATE) {
+        tx.state_ = state0;
+        abort_tx_(tx, ret);
+        handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
+        ret = OB_TRANS_ROLLBACKED;
+      }
+    }
+
+    /* NOTE:
+    * to prevent potential deadlock, distinguish the commit
+    * completed by current thread from other cases
+    */
+    bool committed = tx.state_ == ObTxDesc::State::COMMITTED;
+    // if tx committed, we should callback immediately
+    //
+    // NOTE: this must defer to final current function
+    // in order to assure there is no access to tx, because
+    // after calling the commit_cb, the tx object may be
+    // released or reused
+    if (OB_SUCC(ret) && committed) {
+      need_cb = true;
+    }
+  #ifndef NDEBUG
+    TRANS_LOG(INFO, "submit commit tx", K(ret),
+              K(committed), KPC(this), K(tx), K(expire_ts), KP(&cb));
+  #else
+    if (OB_FAIL(ret)) {
+      TRANS_LOG(INFO, "submit commit tx fail", K(ret),
+                K(committed), KPC(this), K(tx), K(expire_ts), KP(&cb));
+    }
+  #endif
+    ObTransTraceLog &tlog = tx.get_tlog();
+    const char *trace_info_str = (trace_info == NULL ? NULL : trace_info->ptr());
+    REC_TRANS_TRACE_EXT(&tlog, submit_commit_tx, OB_Y(ret), OB_Y(expire_ts),
+                        OB_ID(tag1), committed,
+                        OB_ID(tag2), trace_info_str,
+                        OB_ID(ref), tx.get_ref(),
+                        OB_ID(thread_id), GETTID());
   }
 
-  /* NOTE:
-   * to prevent potential deadlock, distinguish the commit
-   * completed by current thread from other cases
-   */
-  bool committed = tx.state_ == ObTxDesc::State::COMMITTED;
-  // if tx committed, we should callback immediately
-  //
-  // NOTE: this must defer to final current function
-  // in order to assure there is no access to tx, because
-  // after calling the commit_cb, the tx object may be
-  // released or reused
-  DEFER({
-      tx.lock_.unlock();
-      if (OB_SUCC(ret) && committed) {
-        direct_execute_commit_cb_(tx);
-      }
-    });
-#ifndef NDEBUG
-  TRANS_LOG(INFO, "submit commit tx", K(ret),
-            K(committed), KPC(this), K(tx), K(expire_ts), KP(&cb));
-#else
-  if (OB_FAIL(ret)) {
-    TRANS_LOG(INFO, "submit commit tx fail", K(ret),
-              K(committed), KPC(this), K(tx), K(expire_ts), KP(&cb));
+  if (need_cb){
+    direct_execute_commit_cb_(tx);
   }
-#endif
-  ObTransTraceLog &tlog = tx.get_tlog();
-  const char *trace_info_str = (trace_info == NULL ? NULL : trace_info->ptr());
-  REC_TRANS_TRACE_EXT(&tlog, submit_commit_tx, OB_Y(ret), OB_Y(expire_ts),
-                      OB_ID(tag1), committed,
-                      OB_ID(tag2), trace_info_str,
-                      OB_ID(ref), tx.get_ref(),
-                      OB_ID(thread_id), GETTID());
   return ret;
 }
 
