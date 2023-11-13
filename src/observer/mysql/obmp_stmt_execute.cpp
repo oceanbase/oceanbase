@@ -2744,10 +2744,16 @@ int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param)
         LOG_WARN("invalid date format", K(ret));
       } else {
         ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+        ob_time.parts_[DT_HOUR] += ob_time.parts_[DT_MDAY] * 24;
+        ob_time.parts_[DT_MDAY] = 0;
         value = ObTimeConverter::ob_time_to_time(ob_time);
+        if(is_negative) {
+          value = -value;
+        }
       }
     }
   }
+
   if (OB_SUCC(ret)) {
     param.set_time(value);
   }
