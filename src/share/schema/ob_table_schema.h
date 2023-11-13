@@ -226,6 +226,18 @@ enum ObViewColumnFilledFlag
   FILLED = 1,
 };
 
+enum ObMVContainerTableFlag
+{
+  IS_NOT_MV_CONTAINER_TABLE = 0,
+  IS_MV_CONTAINER_TABLE = 1,
+};
+
+enum ObMVAvailableFlag
+{
+  IS_MV_UNAVAILABLE = 0,
+  IS_MV_AVAILABLE = 1,
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -245,7 +257,11 @@ private:
   static const int32_t TM_TABLE_ROWID_MODE_BITS = 1;
   static const int32_t TM_VIEW_COLUMN_FILLED_OFFSET = 23;
   static const int32_t TM_VIEW_COLUMN_FILLED_BITS = 1;
-  static const int32_t TM_RESERVED = 8;
+  static const int32_t TM_MV_CONTAINER_TABLE_OFFSET = 24;
+  static const int32_t TM_MV_CONTAINER_TABLE_BITS = 1;
+  static const int32_t TM_MV_AVAILABLE_OFFSET = 25;
+  static const int32_t TM_MV_AVAILABLE_BITS = 1;
+  static const int32_t TM_RESERVED = 6;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -255,6 +271,8 @@ private:
   static const uint32_t AUTO_INCREMENT_MODE_MASK = (1U << TM_TABLE_AUTO_INCREMENT_MODE_BITS) - 1;
   static const uint32_t ROWID_MODE_MASK = (1U << TM_TABLE_ROWID_MODE_BITS) - 1;
   static const uint32_t VIEW_COLUMN_FILLED_MASK = (1U << TM_VIEW_COLUMN_FILLED_BITS) - 1;
+  static const uint32_t MV_CONTAINER_TABLE_MASK = (1U << TM_MV_CONTAINER_TABLE_BITS) - 1;
+  static const uint32_t MV_AVAILABLE_MASK = (1U << TM_MV_AVAILABLE_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -299,6 +317,14 @@ public:
   {
     return (ObViewColumnFilledFlag)((table_mode >> TM_VIEW_COLUMN_FILLED_OFFSET) & VIEW_COLUMN_FILLED_MASK);
   }
+  static ObMVContainerTableFlag get_mv_container_table_flag(int32_t table_mode)
+  {
+    return (ObMVContainerTableFlag)((table_mode >> TM_MV_CONTAINER_TABLE_OFFSET) & MV_CONTAINER_TABLE_MASK);
+  }
+  static ObMVAvailableFlag get_mv_available_flag(int32_t table_mode)
+  {
+    return (ObMVAvailableFlag)((table_mode >> TM_MV_AVAILABLE_OFFSET) & MV_AVAILABLE_MASK);
+  }
   inline bool is_user_hidden_table() const
   { return TABLE_STATE_IS_HIDDEN_MASK & state_flag_; }
   TO_STRING_KV("table_mode_flag", mode_flag_,
@@ -308,7 +334,9 @@ public:
                "table_organization_mode", organization_mode_,
                "auto_increment_mode", auto_increment_mode_,
                "rowid_mode", rowid_mode_,
-               "view_column_filled_flag", view_column_filled_flag_);
+               "view_column_filled_flag", view_column_filled_flag_,
+               "mv_container_table_flag", mv_container_table_flag_,
+               "mv_available_flag", mv_available_flag_);
   union {
     int32_t mode_;
     struct {
@@ -320,6 +348,8 @@ public:
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
       uint32_t rowid_mode_: TM_TABLE_ROWID_MODE_BITS;
       uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
+      uint32_t mv_container_table_flag_ : TM_MV_CONTAINER_TABLE_BITS;
+      uint32_t mv_available_flag_ : TM_MV_AVAILABLE_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
   };
@@ -625,6 +655,14 @@ public:
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
   { table_mode_.view_column_filled_flag_ = flag; }
+  inline bool mv_container_table() const
+  { return IS_MV_CONTAINER_TABLE == (enum ObMVContainerTableFlag)table_mode_.mv_container_table_flag_; }
+  inline void set_mv_container_table(const ObMVContainerTableFlag flag)
+  { table_mode_.mv_container_table_flag_ = flag; }
+  inline bool mv_available() const
+  { return IS_MV_AVAILABLE == (enum ObMVAvailableFlag)table_mode_.mv_available_flag_; }
+  inline void set_mv_available(const ObMVAvailableFlag flag)
+  { table_mode_.mv_available_flag_ = flag; }
 
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }
