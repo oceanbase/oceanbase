@@ -68,8 +68,12 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
   first_level_part_id_ = first_level_part_id;
   tablet_id_ = tablet_id;
   ls_id_ = ls_location.get_ls_id();
+  int64_t leader_replica_idx = OB_INVALID_INDEX;
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_location.get_replica_locations().count(); ++i) {
     const ObLSReplicaLocation &replica_loc = ls_location.get_replica_locations().at(i);
+    if (replica_loc.is_strong_leader()) {
+      leader_replica_idx = i;
+    }
     if (ObReplicaTypeCheck::is_readable_replica(replica_loc.get_replica_type())) {
       transaction::ObBLKey bl_key;
       bool in_black_list = false;
@@ -77,7 +81,7 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
         LOG_WARN("init black list key failed", K(ret));
       } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
         LOG_WARN("check in black list failed", K(ret));
-      } else if (!in_black_list || replica_loc.is_strong_leader()) {
+      } else if (!in_black_list) {
         if (OB_FAIL(replica_locations_.push_back(replica_loc))) {
           LOG_WARN("Failed to push back replica locations",
                    K(ret), K(i), K(replica_loc), K(replica_locations_));
@@ -87,6 +91,17 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
       }
     }
   }
+
+  // all replicas are in blacklist, add leader replica forcibly.
+  if (OB_SUCC(ret) && 0 == replica_locations_.count()) {
+    if (OB_INVALID_INDEX == leader_replica_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid index", K(ret));
+    } else if (OB_FAIL(replica_locations_.push_back(ls_location.get_replica_locations().at(leader_replica_idx)))) {
+      LOG_WARN("failed to push back leader replica", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(0 == replica_locations_.count())) {
       ret = OB_NO_READABLE_REPLICA;
