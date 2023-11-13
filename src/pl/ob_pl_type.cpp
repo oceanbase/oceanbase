@@ -333,7 +333,10 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    obj_version));
         if (OB_SUCC(ret) && iparam->is_in_param() && ob_is_numeric_type(pl_type.get_obj_type())) {
           const ObAccuracy &default_accuracy =  ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][pl_type.get_obj_type()];
-          pl_type.get_data_type()->set_accuracy(default_accuracy);
+          // precision of decimal int must be equal to precision defined in schema.
+          if (!pl_type.get_data_type()->get_meta_type().is_decimal_int()) {
+            pl_type.get_data_type()->set_accuracy(default_accuracy);
+          }
         }
         break;
       }
