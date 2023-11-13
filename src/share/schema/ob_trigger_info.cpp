@@ -1137,9 +1137,6 @@ int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
     }
     if (has_delimiter_already) {
       // base object database
-      if (NULL == base_schema_node->children_[0] && !is_oracle_mode) {
-        trg_header_len = trg_header_len - 1;
-      }
       trg_tail_str = trg_tail_str + 2;
     }
     OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
