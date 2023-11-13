@@ -986,7 +986,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_meta_table(
         const ObTabletInfo &tablet_info = tablet_infos.at(i);
         const ObLSID &ls_id = tablet_info.get_ls_id();
         const ObTabletID &tablet_id = tablet_info.get_tablet_id();
-        const int64_t check_medium_scn = tablet_ls_infos.at(i).get_medium_scn();
+        const int64_t check_medium_scn = tablet_ls_info.get_medium_scn();
         if (tablet_ls_info.get_ls_id() != ls_id
             || tablet_ls_info.get_tablet_id() != tablet_id) {
           LOG_INFO("tablet_ls_info has been deleted", K(tablet_ls_info), K(tablet_info));

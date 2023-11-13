@@ -196,12 +196,8 @@ int ObTenantMediumChecker::add_tablet_ls(const ObTabletID &tablet_id, const shar
     LOG_WARN("fail to check ls status", K(ret), K(ls_id));
   } else if (is_leader) {
     lib::ObMutexGuard guard(lock_);
-    if (OB_HASH_EXIST == (tmp_ret = tablet_ls_set_.exist_refactored(ObTabletCheckInfo(tablet_id, ls_id, medium_scn)))) {
-      ret = OB_SUCCESS; // tablet exist
-    } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to check exist in tablet set", K(ret), K(tmp_ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(tablet_ls_set_.set_refactored(ObTabletCheckInfo(tablet_id, ls_id, medium_scn)))) {
+    // just cover the old info
+    if (OB_FAIL(tablet_ls_set_.set_refactored(ObTabletCheckInfo(tablet_id, ls_id, medium_scn)))) {
       LOG_WARN("failed to set tablet_ls_info", K(ret), K(ls_id), K(tablet_id));
     }
   }
