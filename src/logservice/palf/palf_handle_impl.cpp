@@ -2110,10 +2110,13 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
   } else if (OB_FAIL(log_engine_.append_log(lsn_array, write_buf_array, scn_array))) {
     PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn_array), K(scn_array));
   } else {
-    int64_t count = lsn_array.count();
-    int64_t accum_size = 0, curr_size = 0;
-    for (int64_t i = 0; i < count; i++) {
-      curr_size += write_buf_array[i]->get_total_size();
+    int64_t accum_size = 0;
+    int64_t curr_size = 0;
+    int64_t lsn_array_count = lsn_array.count();
+    int64_t write_buf_array_count = write_buf_array.count();
+    if (0 < lsn_array_count && 0 < write_buf_array_count) {
+      int64_t last_log_buf_len = write_buf_array[write_buf_array_count - 1]->get_total_size();
+      curr_size = lsn_array[lsn_array_count - 1].val_ - lsn_array[0].val_ + last_log_buf_len;
     }
     accum_size = ATOMIC_AAF(&accum_write_log_size_, curr_size);
     const int64_t now = ObTimeUtility::current_time();
