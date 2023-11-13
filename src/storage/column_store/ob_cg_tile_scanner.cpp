@@ -156,7 +156,7 @@ int ObCGTileScanner::locate(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null cg scanner", K(ret));
       } else if (OB_FAIL(cg_scanner->locate(range, bitmap))) {
-        LOG_WARN("Fail to locate cg scanner", K(ret), K(range));
+        LOG_WARN("Fail to locate cg scanner", K(ret), K(i), K(range));
       }
     }
   }
@@ -244,7 +244,7 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
       LOG_WARN("Unexpected null cg scanner", K(ret));
     } else if (OB_FAIL(cg_scanner->get_next_rows(count, capacity))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Fail to get next rows from first cg scanner", K(ret), KPC(cg_scanner));
+        LOG_WARN("Fail to get next rows from first cg scanner", K(ret), KP(cg_scanner));
       } else if (count > 0) {
         first_scanner_end = true;
         ret = OB_SUCCESS;
@@ -253,7 +253,7 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
     for (int64_t i = 1; OB_SUCC(ret) && i < cg_scanners_.count(); ++i) {
       if (OB_ISNULL(cg_scanner = cg_scanners_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected null cg scanner", K(ret));
+        LOG_WARN("Unexpected null cg scanner", K(ret), K(i));
       } else if (OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
         ret = get_next_aligned_rows(static_cast<ObCGRowScanner*>(cg_scanner), count);
       } else {
@@ -261,7 +261,7 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
       }
       if (OB_FAIL(ret)) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Fail to aligned get rows", K(ret), K(i), KPC(cg_scanner));
+          LOG_WARN("Fail to aligned get rows", K(ret), K(i), KP(cg_scanner));
         } else {
           ret = OB_SUCCESS;
         }
@@ -282,7 +282,7 @@ int ObCGTileScanner::get_next_row(const blocksstable::ObDatumRow *&datum_row)
     const ObDatumRow *tmp_datum_row = nullptr;
     if (OB_FAIL(cg_scanners_[i]->get_next_row(tmp_datum_row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Failed to get next row", K(ret), K(i), KPC(cg_scanners_[i]));
+        LOG_WARN("Failed to get next row", K(ret), K(i), KP(cg_scanners_[i]));
       }
     } else {
       datum_row_.storage_datums_[i] = tmp_datum_row->storage_datums_[0];
@@ -305,7 +305,7 @@ int ObCGTileScanner::get_next_aligned_rows(ObCGRowScanner *cg_scanner, const uin
     if (OB_FAIL(cg_scanner->get_next_rows(read_row_count, remain_row_count, datum_offset))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail get next rows from cg scanner", K(ret), K(read_row_count), K(remain_row_count),
-                 K(datum_offset), KPC(cg_scanner));
+                 K(datum_offset), KP(cg_scanner));
       } else {
         remain_row_count -= read_row_count;
       }
@@ -318,7 +318,7 @@ int ObCGTileScanner::get_next_aligned_rows(ObCGRowScanner *cg_scanner, const uin
         // do not need deep copy the last rows
       } else {
         if (OB_FAIL(cg_scanner->deep_copy_projected_rows(datum_offset, read_row_count))) {
-          LOG_WARN("Fail to deep copy projected rows", K(ret), K(datum_offset), K(read_row_count), KPC(cg_scanner));
+          LOG_WARN("Fail to deep copy projected rows", K(ret), K(datum_offset), K(read_row_count), KP(cg_scanner));
         } else {
           datum_offset += read_row_count;
         }
@@ -328,7 +328,7 @@ int ObCGTileScanner::get_next_aligned_rows(ObCGRowScanner *cg_scanner, const uin
   if (OB_UNLIKELY((OB_SUCCESS == ret || OB_ITER_END == ret) && 0 != remain_row_count)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected target row count, should be 0", K(ret),
-             K(read_row_count), K(remain_row_count), K(target_row_count), KPC(cg_scanner));
+             K(read_row_count), K(remain_row_count), K(target_row_count), KP(cg_scanner));
   }
   LOG_DEBUG("[COLUMNSTORE] ObCGTileScanner::get_next_aligned_rows", K(ret), K(target_row_count));
   return ret;
