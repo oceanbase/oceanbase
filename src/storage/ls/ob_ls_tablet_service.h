@@ -469,6 +469,28 @@ private:
       const ObMetaDiskAddr &old_addr,
       const ObMetaDiskAddr &cur_addr,
       ObTabletHandle &new_tablet_handle);
+  static int safe_update_cas_tablet(
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &addr,
+      const ObTabletHandle &old_handle,
+      ObTabletHandle &new_handle,
+      ObTimeGuard &time_guard);
+  static int safe_update_cas_empty_shell(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_handle,
+      ObTabletHandle &new_handle,
+      ObTimeGuard &time_guard);
+  int safe_create_cas_tablet(
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const ObMetaDiskAddr &addr,
+      ObTabletHandle &tablet_handle,
+      ObTimeGuard &time_guard);
+  int safe_create_cas_empty_shell(
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      ObTabletHandle &tablet_handle,
+      ObTimeGuard &time_guard);
   void report_tablet_to_rs(const common::ObTabletID &tablet_id);
   void report_tablet_to_rs(const common::ObIArray<common::ObTabletID> &tablet_id_array);
 

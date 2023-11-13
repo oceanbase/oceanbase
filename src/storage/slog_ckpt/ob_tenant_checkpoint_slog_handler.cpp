@@ -234,7 +234,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     finished_replay_tablet_cnt_(0),
     replay_create_tablet_errcode_(OB_SUCCESS),
     lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
-    slog_check_lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
+    slog_ckpt_lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     tablet_key_set_(),
     is_copying_tablets_(false),
     ckpt_cursor_(),
@@ -874,7 +874,6 @@ int ObTenantCheckpointSlogHandler::report_slog(
     int64_t file_id;
     int64_t offset;
     int64_t size;
-    TCRLockGuard guard(slog_check_lock_);
     if (is_copying_tablets_) {
       if (OB_UNLIKELY(!ckpt_cursor_.is_valid())) {
         LOG_WARN("checkpoint cursor is invalid", K(ret), K(ckpt_cursor_));
@@ -1024,7 +1023,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
 int ObTenantCheckpointSlogHandler::get_cur_cursor()
 {
   int ret = OB_SUCCESS;
-  TCWLockGuard guard(slog_check_lock_);
+  TCWLockGuard guard(slog_ckpt_lock_);
   tablet_key_set_.destroy();
   if (OB_FAIL(MTL(ObStorageLogger *)->get_active_cursor(ckpt_cursor_))) {
     LOG_WARN("fail to get current cursor", K(ret));
@@ -1038,7 +1037,7 @@ int ObTenantCheckpointSlogHandler::get_cur_cursor()
 
 void ObTenantCheckpointSlogHandler::clean_copy_status()
 {
-  TCWLockGuard guard(slog_check_lock_);
+  TCWLockGuard guard(slog_ckpt_lock_);
   is_copying_tablets_ = false;
   tablet_key_set_.destroy();
 }

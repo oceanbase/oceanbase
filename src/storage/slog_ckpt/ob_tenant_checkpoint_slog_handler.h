@@ -70,6 +70,7 @@ public:
 class ObTenantCheckpointSlogHandler : public ObIRedoModule
 {
 public:
+  #define SLOG_CKPT_READ_GUARD TCRLockGuard guard(MTL(ObTenantCheckpointSlogHandler*)->get_slog_ckpt_lock());
   class ObWriteCheckpointTask : public common::ObTimerTask
   {
   public:
@@ -138,6 +139,8 @@ public:
 
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
   ObSharedBlockReaderWriter &get_shared_block_reader_writer() { return shared_block_rwriter_; }
+  // only used by MACRO
+  common::TCRWLock &get_slog_ckpt_lock() { return slog_ckpt_lock_; }
   virtual int replay(const ObRedoModuleReplayParam &param) override;
   virtual int replay_over() override;
   int write_checkpoint(bool is_force);
@@ -225,7 +228,7 @@ private:
   int64_t finished_replay_tablet_cnt_;
   int replay_create_tablet_errcode_;
   common::TCRWLock lock_;  // protect block_handle
-  common::TCRWLock slog_check_lock_; // protect is_copying_tablets_
+  common::TCRWLock slog_ckpt_lock_; // protect is_copying_tablets_
   common::hash::ObHashSet<ObTabletMapKey> tablet_key_set_;
   bool is_copying_tablets_;
   ObLogCursor ckpt_cursor_;
