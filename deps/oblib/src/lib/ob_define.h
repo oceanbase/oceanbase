@@ -1522,6 +1522,11 @@ OB_INLINE bool is_sys_tenant(const uint64_t tenant_id)
   return OB_SYS_TENANT_ID == tenant_id;
 }
 
+OB_INLINE bool is_server_tenant(const uint64_t tenant_id)
+{
+  return OB_SERVER_TENANT_ID == tenant_id;
+}
+
 //check whether an tenant_id is virtual
 OB_INLINE bool is_virtual_tenant_id(const uint64_t tenant_id)
 {

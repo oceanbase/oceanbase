@@ -283,6 +283,9 @@ int ObCgroupCtrl::get_group_path(
   if (INT64_MAX == group_id) {
     snprintf(group_path, path_bufsize, "%s/%s",
               root_cgroup_, tenant_path);
+  } else if (is_server_tenant(tenant_id)) {
+    snprintf(group_path, path_bufsize, "%s",
+              other_cgroup_);
   } else if (group_id < OBCG_MAXNUM) {
     ObCgSet &set = ObCgSet::instance();
     group_name = const_cast<char*>(set.name_of_id(group_id));
