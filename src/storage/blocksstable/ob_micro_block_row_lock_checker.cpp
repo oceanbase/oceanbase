@@ -182,6 +182,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
 
 ObMicroBlockRowLockMultiChecker::ObMicroBlockRowLockMultiChecker(common::ObIAllocator &allocator)
     : ObMicroBlockRowLockChecker(allocator),
+      reach_end_(false),
       rowkey_current_idx_(0),
       rowkey_begin_idx_(0),
       rowkey_end_idx_(0),
@@ -211,6 +212,7 @@ int ObMicroBlockRowLockMultiChecker::open(
     rowkey_end_idx_ = rowkey_end_idx;
     empty_read_cnt_ = 0;
     rows_info_ = &rows_info;
+    reach_end_ = false;
   }
   return ret;
 }
@@ -233,7 +235,7 @@ int ObMicroBlockRowLockMultiChecker::inner_get_next_row(
     ObStoreRowLockState *&lock_state)
 {
   int ret = OB_SUCCESS;
-  if (rowkey_current_idx_ == rowkey_end_idx_) {
+  if (reach_end_) {
     ret = OB_ITER_END;
   } else if (OB_ITER_END == end_of_block() || rows_info_->is_row_skipped(rowkey_current_idx_ - 1)) {
     if (OB_FAIL(seek_forward())) {
@@ -349,6 +351,7 @@ int ObMicroBlockRowLockMultiChecker::seek_forward()
   const int64_t row_count = micro_block_reader->row_count();
   while (OB_SUCC(ret)) {
     if (rowkey_current_idx_ == rowkey_end_idx_) {
+      reach_end_ = true;
       ret = OB_ITER_END;
     } else if (rows_info_->is_row_skipped(rowkey_current_idx_)) {
       ++rowkey_current_idx_;

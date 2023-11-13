@@ -85,6 +85,7 @@ protected:
   virtual void check_row_in_major_sstable(bool &need_stop);
   int seek_forward();
 private:
+  bool reach_end_;
   int64_t rowkey_current_idx_;
   int64_t rowkey_begin_idx_;
   int64_t rowkey_end_idx_;
