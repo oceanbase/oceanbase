@@ -487,15 +487,23 @@ static int common_json_bin(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
   return ret;
 }
 
-static int common_gis_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum, ObString &wkb)
+static int common_gis_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum, ObString &wkb, bool skip_ver = false)
 {
   int ret = OB_SUCCESS;
   ObTextStringDatumResult text_result(ObGeometryType, &expr, &ctx, &res_datum);
-  if (OB_FAIL(text_result.init(wkb.length()))) {
+  uint32_t len = skip_ver ? wkb.length() - WKB_VERSION_SIZE : wkb.length();
+  if (OB_FAIL(text_result.init(len))) {
     LOG_WARN("Lob: init lob result failed");
+  } else if (skip_ver) {
+    if (OB_FAIL(text_result.append(wkb.ptr(), WKB_GEO_SRID_SIZE))) {
+      LOG_WARN("failed to append realdata", K(ret), K(wkb), K(text_result));
+    } else if (OB_FAIL(text_result.append(wkb.ptr() + WKB_OFFSET, len - WKB_GEO_SRID_SIZE))) {
+      LOG_WARN("failed to append realdata", K(ret), K(wkb), K(text_result));
+    }
   } else if (OB_FAIL(text_result.append(wkb.ptr(), wkb.length()))) {
     LOG_WARN("failed to append realdata", K(ret), K(wkb), K(text_result));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
     text_result.set_result();
   }
   return ret;
@@ -3416,7 +3424,10 @@ CAST_FUNC_NAME(string, geometry)
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
       LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
     } else if (ObGeoType::GEOMETRY == dst_geo_type || ObGeoType::GEOTYPEMAX == dst_geo_type) {
-      if (OB_FAIL(common_gis_wkb(expr, ctx, res_datum, in_str))){
+      ObString res_wkb;
+      if (OB_FAIL(ObGeoTypeUtil::add_geo_version(temp_allocator, in_str, res_wkb))) {
+        LOG_WARN("fail to add version", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(common_gis_wkb(expr, ctx, res_datum, res_wkb))) {
         LOG_WARN("fail to copy string", K(ret), K(dst_geo_type));
       }
     } else if (OB_FAIL(geometry_geometry(expr, ctx, res_datum))) {
@@ -7575,26 +7586,38 @@ static int geom_copy_string(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   char *out_ptr = NULL;
-  int64_t len = src.length() - WKB_VERSION_SIZE;
-  if (expr.obj_meta_.is_lob_storage()) {
-    if (OB_FAIL(common_gis_wkb(expr, ctx, res_datum, src))) {
-      LOG_WARN("fail to pack gis lob res", K(ret));
+  int64_t len = src.length();
+  if (OB_LIKELY(len > WKB_OFFSET)) {
+    uint8_t offset = WKB_GEO_SRID_SIZE;
+    uint8_t version = (*(src.ptr() + WKB_GEO_SRID_SIZE));
+    if (IS_GEO_VERSION(version)) {
+      // version exist
+      len -= WKB_VERSION_SIZE;
+      offset += WKB_VERSION_SIZE;
     }
-  } else {
-    if (expr.res_buf_len_ < len) {
-      if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
+    if (expr.obj_meta_.is_lob_storage()) {
+      if (OB_FAIL(common_gis_wkb(expr, ctx, res_datum, src, IS_GEO_VERSION(version)))) {
+        LOG_WARN("fail to pack gis lob res", K(ret));
       }
     } else {
-      out_ptr = const_cast<char*>(res_datum.ptr_);
-    }
+      if (expr.res_buf_len_ < len) {
+        if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        }
+      } else {
+        out_ptr = const_cast<char*>(res_datum.ptr_);
+      }
 
-    if (OB_SUCC(ret)) {
-      MEMMOVE(out_ptr, src.ptr(), WKB_GEO_SRID_SIZE);
-      MEMMOVE(out_ptr + WKB_GEO_SRID_SIZE, src.ptr() + WKB_OFFSET, len - WKB_GEO_SRID_SIZE);
-      res_datum.set_string(out_ptr, len);
+      if (OB_SUCC(ret)) {
+        MEMMOVE(out_ptr, src.ptr(), WKB_GEO_SRID_SIZE);
+        MEMMOVE(out_ptr + WKB_GEO_SRID_SIZE, src.ptr() + offset, len - WKB_GEO_SRID_SIZE);
+        res_datum.set_string(out_ptr, len);
+      }
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid obj len", K(ret), K(len));
   }
   return ret;
 }
