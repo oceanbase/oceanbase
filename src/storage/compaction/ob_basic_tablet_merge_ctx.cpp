@@ -177,7 +177,12 @@ int ObStaticMergeParam::get_basic_info_from_result(
     scn_range_ = get_merge_table_result.scn_range_;
     merge_scn_ = scn_range_.end_scn_;
     snapshot_info_ = get_merge_table_result.snapshot_info_;
-    create_snapshot_version_ = tables_handle_.get_table(0)->get_snapshot_version();
+    if (is_major_or_meta_merge_type(get_merge_type())) {
+      // for major or meta, need set create_snapshot as last major/meta sstable
+      create_snapshot_version_ = tables_handle_.get_table(0)->get_snapshot_version();
+    } else {
+      create_snapshot_version_ = 0;
+    }
     if (is_major_merge_type(get_merge_type())) {
       report_ = GCTX.ob_service_;
     }
