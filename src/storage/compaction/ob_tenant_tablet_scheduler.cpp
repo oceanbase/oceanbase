@@ -1413,12 +1413,12 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       }
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (is_leader && could_major_merge && OB_TMP_FAIL(ls_start_schedule_medium(ls_id, ls_could_schedule_medium))) {
+    if (OB_FAIL(ret) || !is_leader) {
+    } else if (could_major_merge && OB_TMP_FAIL(ls_start_schedule_medium(ls_id, ls_could_schedule_medium))) {
       LOG_WARN("failed to set start schedule medium", K(ret), K(tmp_ret), K(ls_id));
     } else if (!ls_could_schedule_medium) { // not allow schedule medium
       if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
-        LOG_INFO("tenant is blocking schedule medium", KR(ret), K(MTL_ID()), K(ls_id));
+        LOG_INFO("tenant is blocking schedule medium", KR(ret), K(MTL_ID()), K(ls_id), K(is_leader), K(could_major_merge));
       }
     }
     bool enable_adaptive_compaction = get_enable_adaptive_compaction();

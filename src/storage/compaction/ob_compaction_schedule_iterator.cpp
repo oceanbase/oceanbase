@@ -27,6 +27,7 @@ ObCompactionScheduleIterator::ObCompactionScheduleIterator(
       is_major_(is_major),
       scan_finish_(false),
       merge_finish_(false),
+      report_scn_flag_(false),
       ls_idx_(-1),
       tablet_idx_(0),
       schedule_tablet_cnt_(0),
@@ -150,7 +151,7 @@ int ObCompactionScheduleIterator::get_next_tablet(ObTabletHandle &tablet_handle)
           if (OB_TABLET_NOT_EXIST == ret) {
             tablet_idx_++;
           } else {
-            LOG_WARN("fail to get tablet", K(ret), K(tablet_idx_), K(tablet_id), K_(timeout_us));
+            LOG_WARN("fail to get tablet", K(ret), K(tablet_idx_), K(tablet_id));
           }
         } else {
           tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
@@ -220,7 +221,7 @@ int ObCompactionScheduleIterator::get_tablet_ids()
 int ObCompactionScheduleIterator::get_tablet_handle(
   const ObTabletID &tablet_id, ObTabletHandle &tablet_handle)
 {
-  int ret = ls_tablet_svr_->get_tablet(tablet_id, tablet_handle, timeout_us_);
+  int ret = ls_tablet_svr_->get_tablet(tablet_id, tablet_handle,  0/*timeout*/);
 #ifdef ERRSIM
   if (OB_SUCC(ret) && tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID) {
     ret = OB_E(EventTable::EN_COMPACTION_ITER_TABLET_NOT_EXIST) ret;

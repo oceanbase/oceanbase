@@ -75,7 +75,7 @@ int ObMajorMergeProgressChecker::init(
     LOG_WARN("fail to create table compaction info map", KR(ret), K_(tenant_id), K(TABLE_MAP_BUCKET_CNT));
   } else if (OB_FAIL(ckm_validator_.init(is_primary_service, sql_proxy))) {
     LOG_WARN("fail to init checksum validator", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(ls_locality_cache_.init(tenant_id_))) {
+  } else if (OB_FAIL(ls_locality_cache_.init(tenant_id_, &merge_info_mgr))) {
     LOG_WARN("failed to init ls locality cache", K(ret));
   } else {
     idx_ckm_validate_array_.set_attr(ObMemAttr(tenant_id_, "RSCompCkmPair"));
@@ -401,6 +401,8 @@ int ObMajorMergeProgressChecker::check_index_and_rest_table()
     LOG_WARN("failed to validate index checksum", KR(ret), K_(compaction_scn));
   } else if (OB_FAIL(deal_with_rest_data_table())) {
     LOG_WARN("deal with rest data table", KR(ret), K_(compaction_scn));
+  } else if (progress_.is_merge_finished()) {
+    LOG_INFO("progress is check finished", KR(ret), K_(progress));
   } else if (progress_.only_remain_special_table_to_verified()) {
     bool finish_validate = false;
 #ifdef ERRSIM

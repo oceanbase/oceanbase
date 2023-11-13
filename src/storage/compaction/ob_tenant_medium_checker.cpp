@@ -223,7 +223,7 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
     LOG_WARN("ObTenantMediumChecker is not inited", K(ret));
   } else {
     // refresh ls locality cache
-    if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality())) {
+    if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality(false /*force_refresh*/))) {
       LOG_WARN("failed to refresh ls locality", K(tmp_ret));
       ADD_COMMON_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
         SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, tmp_ret);

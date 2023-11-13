@@ -78,7 +78,6 @@ private:
   bool scan_finish_;
   bool merge_finish_;
   bool report_scn_flag_;
-  int64_t timeout_us_;
   int64_t ls_idx_;
   int64_t tablet_idx_;
   int64_t schedule_tablet_cnt_;
