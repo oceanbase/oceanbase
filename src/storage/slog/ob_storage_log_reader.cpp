@@ -66,7 +66,7 @@ int ObStorageLogReader::init(
       STORAGE_REDO_LOG(WARN, "Log buffer's data has been set",
           K(ret), KP(log_buffer_.get_data()));
     } else {
-      const ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_LOG_READER);
+      const ObMemAttr attr(tenant_id, ObModIds::OB_LOG_READER);
       char *buf = static_cast<char *>(ob_malloc_align(OB_DIRECT_IO_ALIGN,
           ObLogConstants::LOG_ITEM_MAX_LENGTH, attr));
       if (nullptr == buf) {
