@@ -270,7 +270,7 @@ int ObAllVirtualPGLogArchiveStat::get_iter_()
   if (OB_ISNULL(ps_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "ps_ is NULL", K(ret), K(ps_));
-  } else if (NULL == (buf = ob_malloc(sizeof(archive::PGArchiveMap::Iterator)))) {
+  } else if (NULL == (buf = ob_malloc(sizeof(archive::PGArchiveMap::Iterator), "ArcIter"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SERVER_LOG(WARN, "ob_malloc fail", K(ret));
   } else if (OB_FAIL(ps_->get_archive_pg_map(pg_map))) {
