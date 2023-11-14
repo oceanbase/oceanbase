@@ -171,7 +171,11 @@ int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id,
     int tmp_ret = OB_SUCCESS;
     ObArray<int> return_code_array;
     if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
-      LOG_WARN("wait result failed", KR(tmp_ret));
+      LOG_WARN("wait result failed", KR(tmp_ret), K(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else if (OB_FAIL(ret)) {
+    } else {
+      // don't use arg/dest here beacause call() may has failure.
     }
   }
   LOG_INFO("broadcast consensus version finished", KR(ret), K(schema_version), K(arg), K(server_list));

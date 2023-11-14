@@ -424,7 +424,7 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
 
     //get result
     ObArray<int> return_code_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     } else if (OB_FAIL(ret)) {
@@ -433,10 +433,9 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
             majority_cnt,
             return_code_array,
             proxy,
-            rpc_count,
             majority_min_readable_scn))) {
       LOG_WARN("failed to calc_majority_min_readable_scn", KR(ret), K(leader_readable_scn),
-          K(ob_member_list), K(return_code_array), K(rpc_count));
+          K(ob_member_list), K(return_code_array));
     }
   }
 
@@ -448,7 +447,6 @@ int ObLSRecoveryStatHandler::calc_majority_min_readable_scn_(
     const int64_t majority_cnt,
     const ObIArray<int> &return_code_array,
     const ObGetLSReplayedScnProxy &proxy,
-    const int64_t rpc_count,
     SCN &majority_min_readable_scn)
 {
   int ret = OB_SUCCESS;
@@ -456,22 +454,19 @@ int ObLSRecoveryStatHandler::calc_majority_min_readable_scn_(
   majority_min_readable_scn = SCN::max_scn();
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (!leader_readable_scn.is_valid_and_not_min() || 0 >= majority_cnt || 0 >= rpc_count) {
+  } else if (!leader_readable_scn.is_valid_and_not_min() || 0 >= majority_cnt) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(leader_readable_scn), K(majority_cnt), K(rpc_count));
-  } else if (rpc_count != return_code_array.count() ||
-      rpc_count != proxy.get_results().count()) {
+    LOG_WARN("invalid argument", KR(ret), K(leader_readable_scn), K(majority_cnt));
+  } else if (return_code_array.count() != proxy.get_results().count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rpc count not equal to result count", KR(ret),
-        K(rpc_count), K(return_code_array), "arg count",
-        proxy.get_args().count(), K(proxy.get_results().count()));
+             K(return_code_array), K(proxy.get_results().count()));
   } else if (OB_FAIL(readable_scn_list.push_back(leader_readable_scn))) {
     LOG_WARN("failed to push back", KR(ret), K(leader_readable_scn), K(readable_scn_list));
-  } else if (OB_FAIL(ret)) {
   } else {
     ObGetLSReplayedScnRes res;
     int tmp_ret = OB_SUCCESS;
-
+    // don't use arg/dest here because call() may has failure.
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
       tmp_ret = return_code_array.at(i);
       // skip error server

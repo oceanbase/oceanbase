@@ -22474,7 +22474,6 @@ int ObDDLService::notify_init_tenant_config(
     LOG_WARN("fail to set default timeout", KR(ret));
   } else {
     ObArenaAllocator allocator("InitTenantConf");
-    int64_t server_cnt = addrs.count();
     // 1. construct arg
     obrpc::ObInitTenantConfigArg arg;
     for (int64_t i = 0; OB_SUCC(ret) && i < init_configs.count(); i++) {
@@ -22515,34 +22514,33 @@ int ObDDLService::notify_init_tenant_config(
     if (OB_FAIL(ret) || call_rs) {
     } else if (OB_FAIL(proxy.call(rs_addr, timeout, arg))) {
       LOG_WARN("fail to call rs", KR(ret), K(rs_addr), K(timeout), K(arg));
-    } else {
-      server_cnt++;
     }
     // 3. check result
     ObArray<int> return_ret_array;
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) { // ignore ret
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-    } else if (return_ret_array.count() != server_cnt) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result cnt not match", KR(ret), K(server_cnt), "res_cnt", return_ret_array.count());
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_ret_array.count()))) {
+      LOG_WARN("return cnt not match", KR(ret), "return_cnt", return_ret_array.count());
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
+        int return_ret = return_ret_array.at(i);
+        const ObAddr &addr = proxy.get_dests().at(i);
+        const ObInitTenantConfigRes *result = proxy.get_results().at(i);
+        if (OB_SUCCESS != return_ret) {
+          ret = return_ret;
+          LOG_WARN("rpc return error", KR(ret), K(addr), K(timeout));
+        } else if (OB_ISNULL(result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get empty result", KR(ret), K(addr), K(timeout));
+        } else if (OB_SUCCESS != result->get_ret()) {
+          ret = result->get_ret();
+          LOG_WARN("persist tenant config failed", KR(ret), K(addr), K(timeout));
+        }
+      } // end for
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
-      int return_ret = return_ret_array.at(i);
-      const ObAddr &addr = proxy.get_dests().at(i);
-      const ObInitTenantConfigRes *result = proxy.get_results().at(i);
-      if (OB_SUCCESS != return_ret) {
-        ret = return_ret;
-        LOG_WARN("rpc return error", KR(ret), K(addr), K(timeout));
-      } else if (OB_ISNULL(result)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get empty result", KR(ret), K(addr), K(timeout));
-      } else if (OB_SUCCESS != result->get_ret()) {
-        ret = result->get_ret();
-        LOG_WARN("persist tenant config failed", KR(ret), K(addr), K(timeout));
-      }
-    } // end for
   }
   return ret;
 }
@@ -22708,23 +22706,29 @@ int ObDDLService::notify_root_key(
     }
     // 2. check result
     ObArray<int> return_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) { // ignore ret
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count() && !has_failed; ++i) {
-      if (OB_TMP_FAIL(return_ret_array.at(i))) {
-        has_failed = true;
-        return_ret= tmp_ret;
-        LOG_WARN("rpc return error", KR(tmp_ret), K(i));
+    } else if (OB_FAIL(ret) || has_failed) {
+    } else {
+      // don't use arg/dest here because call() may has failure.
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count() && !has_failed; ++i) {
+        if (OB_TMP_FAIL(return_ret_array.at(i))) {
+          has_failed = true;
+          return_ret = tmp_ret;
+          LOG_WARN("rpc return error", KR(tmp_ret), K(i));
+        }
       }
     }
-    if (OB_SUCC(ret) && arg.is_set_) {
+    if (OB_FAIL(ret)) {
+    } else if (arg.is_set_) {
       if (OB_UNLIKELY(has_failed)) {
         ret = return_ret;
         LOG_WARN("failed to set root key", KR(ret));
       }
     } else {
+      // 1. don't use arg/dest here because call() may has failure.
+      // 2. result may be meanless when related return ret is not OB_SUCCESS
       obrpc::RootKeyType key_type = obrpc::RootKeyType::INVALID;
       ObString root_key;
       for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); ++i) {
@@ -23054,20 +23058,24 @@ int ObDDLService::broadcast_sys_table_schemas(
 
       ObArray<int> return_code_array;
       int tmp_ret = OB_SUCCESS; // always wait all
-      if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+      if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
         LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
         ret = OB_SUCC(ret) ? tmp_ret : ret;
+      } else if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("return cnt not match", KR(ret), "return_cnt", return_code_array.count());
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+          int res_ret = return_code_array.at(i);
+          const ObAddr &addr = proxy.get_dests().at(i);
+          if (OB_SUCCESS != res_ret
+              && (addr == leader->get_server()
+              || addr == GCONF.self_addr_)) { // leader and rs must succeed
+            ret = res_ret;
+            LOG_WARN("broadcast schema failed", KR(ret), K(addr), K(tenant_id));
+          }
+        } // end for
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
-        int res_ret = return_code_array.at(i);
-        const ObAddr &addr = proxy.get_dests().at(i);
-        if (OB_SUCCESS != res_ret
-            && (addr == leader->get_server()
-            || addr == GCONF.self_addr_)) { // leader and rs must succeed
-          ret = res_ret;
-          LOG_WARN("broadcast schema failed", KR(ret), K(addr), K(tenant_id));
-        }
-      } // end for
     }
   }
   LOG_INFO("[CREATE_TENANT] STEP 2.2. finish broadcast sys table schemas", KR(ret), K(tenant_id),
@@ -26640,6 +26648,7 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
     LOG_INFO("try to notify refresh schema", K(is_async), K(schema_version), K(local_schema_info), K(schema_info));
     const int64_t rpc_timeout = GCONF.rpc_timeout;
     int64_t timeout = 0;
+    bool report_failure = false;
     FOREACH_X(s, server_list, OB_SUCC(ret)) {
       if (OB_ISNULL(s)) {
         ret = OB_ERR_UNEXPECTED;
@@ -26647,30 +26656,26 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
       } else if (rs_addr == *s) {
         continue;
       } else {
-        bool found = false;
-        for (int64_t i = 0; !found && i < addrs.count(); i++) {
-          if (addrs.at(i) == *s) {
-            found = true;
-          }
-        }
-        if (found) {
+        arg.force_refresh_ = has_exist_in_array(addrs, *s);
+        if (arg.force_refresh_) {
           // refresh schema sync and report error
+          if (!report_failure) {
+            report_failure = true;
+          }
           if (OB_FAIL(ObShareUtil::get_ctx_timeout(rpc_timeout, timeout))) {
             LOG_WARN("fail to get timeout", KR(ret));
           }
+          arg.is_async_ = false;
         } else {
           // refresh schema async and ignore error
           timeout = std::min(THIS_WORKER.get_timeout_remain(), rpc_timeout);
-        }
-        arg.force_refresh_ = found;
-        if (!arg.force_refresh_) {
           arg.is_async_ = is_async;
         }
         // overwrite ret
         if (FAILEDx(proxy.call(*s, timeout, arg))) {
           LOG_WARN("send switch schema rpc failed", KR(ret),
               K(timeout), K(schema_version), K(schema_info), K(arg), "server", *s);
-          if (!found) { // ignore servers that are not in addrs
+          if (!arg.force_refresh_) { // ignore servers that are not in addrs
             ret = OB_SUCCESS;
           }
         }
@@ -26678,19 +26683,27 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
     }
     ObArray<int> return_code_array;
     int tmp_ret = OB_SUCCESS; // always wait all
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       LOG_WARN("wait result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    ARRAY_FOREACH_N(return_code_array, i, cnt) {
-      int res_ret = return_code_array.at(i);
-      const ObAddr &addr = proxy.get_dests().at(i);
-      const obrpc::ObSwitchSchemaArg &tmp_arg = proxy.get_args().at(i);
-      if (OB_SUCCESS != res_ret && tmp_arg.force_refresh_) {
-        ret = res_ret;
-        LOG_WARN("switch schema failed", KR(ret), K(addr));
+    } else if (OB_FAIL(ret)) {
+    } else if (report_failure) {
+      // check result only when report_failure = true
+      if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("fail to check return count",
+                  KR(ret), "return_cnt", return_code_array.count());
+      } else {
+        ARRAY_FOREACH_N(return_code_array, i, cnt) {
+          int res_ret = return_code_array.at(i);
+          const ObAddr &addr = proxy.get_dests().at(i);
+          const obrpc::ObSwitchSchemaArg &tmp_arg = proxy.get_args().at(i);
+          if (OB_SUCCESS != res_ret && tmp_arg.force_refresh_) {
+            ret = res_ret;
+            LOG_WARN("switch schema failed", KR(ret), K(addr));
+          }
+        } // end for
       }
-    } // end for
+    }
   }
   LOG_INFO("notify switch schema finished", KR(ret),
       K(schema_version), K(schema_info), K(arg), K(addrs));

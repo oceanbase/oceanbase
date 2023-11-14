@@ -131,40 +131,40 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
   }
 
   ObArray<int> return_code_array;
-  if (OB_FAIL(proxy_batch.wait_all(return_code_array))) {
-    LOG_WARN("wait batch result failed", KR(ret));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (return_code_array.count() != update_kvs.count() ||
-             return_code_array.count() != proxy_batch.get_results().count()) {
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(proxy_batch.wait_all(return_code_array))) {
+    LOG_WARN("wait batch result failed", KR(tmp_ret), K(ret));
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+  } else if (OB_FAIL(ret)) {
+  } else if (return_code_array.count() != update_kvs.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cnt not match",
-        KR(ret),
-        "return_cnt",
-        return_code_array.count(),
-        "result_cnt",
-        proxy_batch.get_results().count(),
-        "server_cnt",
-        ingress_plan_map_.size());
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < update_kvs.count(); i++) {
-    if (OB_FAIL(return_code_array.at(i))) {
-      const ObAddr &addr = proxy_batch.get_dests().at(i);
-      LOG_WARN("rpc execute failed", KR(ret), K(addr), K(update_kvs[i]));
-      ret = OB_SUCCESS;  // ignore error
-    } else {
-      const obrpc::ObNetEndpointPredictIngressRes *result = proxy_batch.get_results().at(i);
-      if (OB_ISNULL(result)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret));
+    LOG_WARN("cnt not match", KR(ret),
+             "return_cnt", return_code_array.count(),
+             "kv_cnt", update_kvs.count());
+  } else if (OB_FAIL(proxy_batch.check_return_cnt(return_code_array.count()))) {
+    LOG_WARN("cnt not match", KR(ret),
+             "return_cnt", return_code_array.count(),
+             "server_cnt", ingress_plan_map_.size());
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < update_kvs.count(); i++) {
+      if (OB_FAIL(return_code_array.at(i))) {
+        const ObAddr &addr = proxy_batch.get_dests().at(i);
+        LOG_WARN("rpc execute failed", KR(ret), K(addr), K(update_kvs[i]));
         ret = OB_SUCCESS;  // ignore error
       } else {
-        ObNetEndpointValue *endpoint_value = update_kvs[i].value_;
-        endpoint_value->predicted_bw_ = result->predicted_bw_;
+        const obrpc::ObNetEndpointPredictIngressRes *result = proxy_batch.get_results().at(i);
+        if (OB_ISNULL(result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret));
+          ret = OB_SUCCESS;  // ignore error
+        } else {
+          ObNetEndpointValue *endpoint_value = update_kvs[i].value_;
+          endpoint_value->predicted_bw_ = result->predicted_bw_;
+        }
       }
     }
   }
+
   return ret;
 }
 
@@ -258,29 +258,27 @@ int ObNetEndpointIngressManager::commit_bw_limit_plan(ObNetEndpointKVArray &upda
   }
 
   ObArray<int> return_code_array;
-  if (OB_FAIL(proxy_batch.wait_all(return_code_array))) {
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(proxy_batch.wait_all(return_code_array))) {
     LOG_WARN("wait batch result failed", KR(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (return_code_array.count() != update_kvs.count() ||
-             return_code_array.count() != proxy_batch.get_results().count()) {
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+  } else if (OB_FAIL(ret)) {
+  } else if (return_code_array.count() != update_kvs.count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cnt not match",
-        KR(ret),
-        "return_cnt",
-        return_code_array.count(),
-        "result_cnt",
-        proxy_batch.get_results().count(),
-        "server_cnt",
-        ingress_plan_map_.size());
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
-    if (OB_FAIL(return_code_array.at(i))) {
-      const ObAddr &addr = proxy_batch.get_dests().at(i);
-      LOG_WARN("rpc execute failed", KR(ret), K(addr));
-      ret = OB_SUCCESS;  // ignore error
+    LOG_WARN("cnt not match", KR(ret),
+             "return_cnt", return_code_array.count(),
+             "kv_cnt", update_kvs.count());
+  } else if (OB_FAIL(proxy_batch.check_return_cnt(return_code_array.count()))) {
+    LOG_WARN("cnt not match", KR(ret),
+             "return_cnt", return_code_array.count(),
+             "server_cnt", ingress_plan_map_.size());
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+      if (OB_FAIL(return_code_array.at(i))) {
+        const ObAddr &addr = proxy_batch.get_dests().at(i);
+        LOG_WARN("rpc execute failed", KR(ret), K(addr));
+        ret = OB_SUCCESS;  // ignore error
+      }
     }
   }
   return ret;

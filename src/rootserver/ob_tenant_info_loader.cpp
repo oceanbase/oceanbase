@@ -322,12 +322,11 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
   } else {
     ObUpdateTenantInfoCacheProxy proxy(
       *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::update_tenant_info_cache);
-    int64_t rpc_count = 0;
 
     if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn))) {
       LOG_WARN("failed to get tenant info", KR(ret));
     } else if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_info(
-                  [&rpc_count, &tenant_info, &proxy, ora_rowscn](const share::ObServerInfoInTable &server_info) -> int {
+                  [&tenant_info, &proxy, ora_rowscn](const share::ObServerInfoInTable &server_info) -> int {
                     int ret = OB_SUCCESS;
                     obrpc::ObUpdateTenantInfoCacheArg arg;
                     if (!server_info.is_valid()) {
@@ -339,8 +338,6 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
                     // use meta rpc process thread
                     } else if (OB_FAIL(proxy.call(server_info.get_server(), DEFAULT_TIMEOUT_US, gen_meta_tenant_id(tenant_info.get_tenant_id()), arg))) {
                       LOG_WARN("failed to send rpc", KR(ret), K(server_info), K(tenant_info), K(arg));
-                    } else {
-                      rpc_count++;
                     }
 
                     return ret;
@@ -349,15 +346,12 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
     }
 
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    } else if (proxy.get_results().count() != return_code_array.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result count not match", KR(ret),
-                K(rpc_count), K(return_code_array), "arg count",
-                proxy.get_args().count(), K(proxy.get_results().count()));
     } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
     } else {
       (void)ATOMIC_AAF(&broadcast_times_, 1);
       ObUpdateTenantInfoCacheRes res;

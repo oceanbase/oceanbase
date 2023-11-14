@@ -215,7 +215,6 @@ int ObRootServiceMonitor::try_start_root_service()
     FLOG_WARN("rs_list should not has no member", KR(ret), K(rs_list), "count", rs_list.count());
   } else {
     int64_t timeout = GCONF.rpc_timeout;
-    int64_t count = 0;
     rootserver::ObGetRootserverRoleProxy proxy(
         *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_root_server_status);
     ObDetectMasterRsArg arg;
@@ -223,35 +222,41 @@ int ObRootServiceMonitor::try_start_root_service()
       ObAddr &addr = rs_list.at(i);
       if (!addr.is_valid() || GCTX.self_addr() == addr) {
         // do nothing, no need to check self
-      } else if (OB_SUCCESS != (tmp_ret = arg.init(addr, cluster_id))) {
+      } else if (OB_TMP_FAIL(arg.init(addr, cluster_id))) {
         // cluster_id is useless, but we want to reuse ObDetectMasterRsArg here
         need_to_wait = true;
         FLOG_WARN("need to wait because fail to init arg", KR(tmp_ret), K(addr), K(cluster_id));
-      } else if (FALSE_IT(count++)) {
-        // shall never be here
-      } else if (OB_SUCCESS != (tmp_ret = proxy.call(addr, timeout, OB_SYS_TENANT_ID, arg))) {
+      } else if (OB_TMP_FAIL(proxy.call(addr, timeout, OB_SYS_TENANT_ID, arg))) {
         need_to_wait = true;
         FLOG_WARN("need to wait because fail to send rpc", KR(tmp_ret), K(addr), K(timeout), K(arg));
       }
     }
 
     ObArray<int> return_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) {
       // ignore ret
       need_to_wait = true;
       FLOG_WARN("need to wait because wait batch result failed", KR(tmp_ret));
-    } else if (return_ret_array.count() != count) {
-      //ignore ret
-      need_to_wait = true;
-      FLOG_WARN("need to wait because send rpc count should match return rpc count", K(count),
-               "return_ret_array count", return_ret_array.count());
+    } else if (OB_FAIL(ret) || need_to_wait) {
+      // skip
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
-        int return_ret = return_ret_array.at(i);
-        const ObAddr &addr = proxy.get_dests().at(i);
-        if (OB_SUCCESS == return_ret) {
+      // don't use arg/dest here because call() may has failure.
+      // !use_invalid_addr means count of args_/dest_/results_/return_rets are matched.
+      const bool use_invalid_addr = (OB_SUCCESS != proxy.check_return_cnt(return_ret_array.count()));
+      if (use_invalid_addr) {
+        need_to_wait = true;
+        FLOG_WARN("need to wait because rpc cnt maybe not match");
+      }
+      ObAddr invalid_addr;
+      // try best effort to detect if leader exist by results although need_to_wait is true.
+      for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); i++) {
+        const ObGetRootserverRoleResult *result = proxy.get_results().at(i);
+        const ObAddr &addr = use_invalid_addr ? invalid_addr : proxy.get_dests().at(i);
+        if (!use_invalid_addr && OB_SUCCESS != return_ret_array.at(i)) {
+          need_to_wait = true;
+          FLOG_WARN("need to wait because rpc fail", "tmp_ret",  return_ret_array.at(i), K(addr));
+        } else {
           // need to check that server is leader or !status::init
-          const ObGetRootserverRoleResult *result = proxy.get_results().at(i);
           if (OB_ISNULL(result)) {
             //ignore ret
             need_to_wait = true;
@@ -266,11 +271,8 @@ int ObRootServiceMonitor::try_start_root_service()
             FLOG_WARN("need to wait because another root server already exist", K(addr),
                      "status", result->get_status(), "role", result->get_role());
           }
-        } else {
-          need_to_wait = true;
-          FLOG_WARN("need to wait because failed to get result", KR(ret), K(addr));
         }
-      }
+      } // end for
     }
 
     if (OB_FAIL(ret)) {

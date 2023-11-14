@@ -8905,6 +8905,7 @@ public:
   int assign(const ObDetectMasterRsLSResult &other);
   void reset();
 
+  bool is_valid() const;
   void set_role(const common::ObRole &role);
   void set_master_rs(const common::ObAddr &master_rs);
   int set_replica(const share::ObLSReplica &replica);

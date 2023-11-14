@@ -274,6 +274,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
     LOG_WARN("start_idx/end_idx is invalid", KR(ret),
              K(start_idx), K(end_idx), "list_cnt", server_list.count());
   } else {
+    ObArray<ObAddr> tmp_addrs;
     ObTimeoutCtx ctx;
     int64_t timeout = GCONF.rpc_timeout;  // default value is 2s
     int tmp_ret = share::ObShareUtil::set_default_timeout_ctx(ctx, timeout);
@@ -286,6 +287,8 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
       ObAddr &addr = server_list.at(i);
       if (!addr.is_valid()) {
         // TODO: @wanhong.wwh: need check when addr is not valid
+      } else if (OB_FAIL(tmp_addrs.push_back(addr))) {
+        LOG_WARN("fail to push back addr", KR(ret), K(addr));
       } else if (OB_FAIL(arg.init(addr, cluster_id))) {
         LOG_WARN("fail to init arg", KR(ret), K(addr), K(cluster_id));
       } else if (OB_TMP_FAIL(proxy.call(addr, timeout, cluster_id,
@@ -298,30 +301,29 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
     if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-    } else if (proxy.get_dests().count() != proxy.get_args().count()
-               || return_ret_array.count() != proxy.get_args().count()
-               || return_ret_array.count() != proxy.get_results().count()) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("args/dest/return_ret_array/results count not match, need retry",
-               KR(ret), "args_cnt", proxy.get_args().count(),
-               "dests_cnt", proxy.get_dests().count(),
-               "return_cnt", return_ret_array.count(),
-               "result_cnt", proxy.get_results().count());
-    }
-    bool leader_exist = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
-      int return_ret = return_ret_array.at(i);
-      if (OB_SUCCESS == return_ret) {
-        const ObAddr &addr = proxy.get_dests().at(i);
+    } else if (OB_FAIL(ret)) {
+    } else {
+      // don't use arg/dest here because call() may has failure.
+      // !use_invalid_addr means count of args_/dest_/results_/return_rets are matched.
+      bool leader_exist = false;
+      const bool use_invalid_addr = (OB_SUCCESS != proxy.check_return_cnt(return_ret_array.count()));
+      ObAddr invalid_addr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); i++) {
+        const ObAddr &addr = use_invalid_addr ? invalid_addr : proxy.get_dests().at(i);
         const ObDetectMasterRsLSResult *result = proxy.get_results().at(i);
-        if (OB_ISNULL(result)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is null", KR(ret));
+        if (!use_invalid_addr && OB_SUCCESS != return_ret_array.at(i)) {
+          LOG_WARN("fail to get result by rpc, just ignore", "tmp_ret", return_ret_array.at(i), K(addr));
+        } else if (OB_ISNULL(result) || !result->is_valid()) {
+          // return fail
         } else if (OB_FAIL(deal_with_result_ls_(*result, leader_exist, server_list, ls_info))) {
           LOG_WARN("fail to deal with result", KR(ret), K(addr), KPC(result));
         } else {
           LOG_TRACE("detect master rs", KR(ret), K(addr), KPC(result));
         }
+      } // end for
+
+      if (use_invalid_addr || proxy.get_results().count() <= 0) {
+        LOG_WARN("Detect master rs may be failed", KR(ret), K(tmp_addrs));
       }
     }
   }
