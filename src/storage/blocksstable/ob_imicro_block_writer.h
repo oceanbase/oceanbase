@@ -91,7 +91,7 @@ class ObMicroBufferWriter final
 {
 public:
   ObMicroBufferWriter(const int64_t page_size = DEFAULT_MIDDLE_BLOCK_SIZE)
-    : allocator_("MicroBuffer"),
+    : allocator_(MTL_ID(), "MicroBuffer"),
       is_inited_(false),
       capacity_(0),
       buffer_size_(0),
@@ -167,7 +167,7 @@ public:
 private:
   int expand(const int64_t size);
 private:
-  compaction::ObLocalArena allocator_;
+  compaction::ObLocalAllocator<common::DefaultPageAllocator> allocator_;
   bool is_inited_;
   int64_t capacity_;
   int64_t buffer_size_; //curr buffer size
@@ -219,7 +219,7 @@ public:
   virtual int64_t get_column_count() const = 0;
   virtual void reset()
   {
-    reuse();
+    ObIMicroBlockWriter::reuse();
     checksum_helper_.reset();
   }
   virtual void dump_diagnose_info() const { STORAGE_LOG(INFO, "IMicroBlockWriter", K(checksum_helper_)); }

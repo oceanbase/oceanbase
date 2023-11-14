@@ -90,14 +90,20 @@ int ObMicroBufferWriter::init(const int64_t capacity, const int64_t reserve_size
 
 void ObMicroBufferWriter::reset()
 {
-  old_buf_ = nullptr;
+  if (old_buf_ != nullptr) {
+    allocator_.free(old_buf_);
+    old_buf_ = nullptr;
+  }
+  if (data_ != nullptr) {
+    allocator_.free(data_);
+    data_ = nullptr;
+  }
   old_size_ = 0;
   lazy_move_ = false;
   has_expand_ = false;
   memory_reclaim_cnt_ = 0;
   reset_memory_threshold_ = 0;
   default_reserve_ = 0;
-  data_ = nullptr;
   len_ = 0;
   buffer_size_ = 0;
   capacity_ = 0;
@@ -120,7 +126,7 @@ void ObMicroBufferWriter::reuse()
       void *buf = nullptr;
       if (OB_ISNULL(buf = allocator_.alloc(default_reserve_))) {
         int ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to reclaim memory", K(ret), K(default_reserve_), K(allocator_));
+        STORAGE_LOG(WARN, "failed to reclaim memory", K(ret), K(default_reserve_));
       } else {
         allocator_.free(data_);
         buffer_size_ = default_reserve_;

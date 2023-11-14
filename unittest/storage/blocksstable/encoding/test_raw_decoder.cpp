@@ -60,6 +60,8 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
   } else if (datum_rows_.empty()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("empty micro block", K(ret));
+  } else if (OB_FAIL(set_datum_rows_ptr())) {
+    STORAGE_LOG(WARN, "fail to set datum rows ptr", K(ret));
   } else if (OB_FAIL(pivot())) {
     LOG_WARN("pivot rows to columns failed", K(ret));
   } else if (OB_FAIL(row_indexs_.reserve(datum_rows_.count()))) {
