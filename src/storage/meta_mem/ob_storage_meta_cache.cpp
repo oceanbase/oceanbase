@@ -396,8 +396,14 @@ int ObStorageMetaValue::process_aux_tablet_info(
     pos = 0; // reset pos
     char *tmp_buf = nullptr;
     const common::ObString &str = dump_kv.v_.user_data_;
-    if (OB_FAIL(aux_tablet_info.deserialize(str.ptr(), str.length(), pos))) {
+    if (str.empty()) {
+      // keep aux tablet info empty
+      aux_tablet_info.set_default_value();
+    } else if (OB_FAIL(aux_tablet_info.deserialize(str.ptr(), str.length(), pos))) {
       LOG_WARN("fail to deserialize aux tablet info", K(ret), K(str));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(tmp_buf = static_cast<char *>(allocator.alloc(aux_tablet_info.get_deep_copy_size())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", K(ret), "deep_copy_size", aux_tablet_info.get_deep_copy_size());
