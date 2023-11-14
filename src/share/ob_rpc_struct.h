@@ -1177,7 +1177,10 @@ public:
     ALTER_PRIMARY_KEY,
     ADD_PRIMARY_KEY,
     DROP_PRIMARY_KEY,
-    ALTER_INDEX_TABLESPACE
+    ALTER_INDEX_TABLESPACE,
+    ADD_MLOG,
+    DROP_MLOG,
+    RENAME_MLOG
   };
 
   static const char *to_type_str(const IndexActionType type)

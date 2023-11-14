@@ -57,6 +57,8 @@ enum ObDDLType
   DDL_CREATE_INDEX = 5,
   DDL_DROP_INDEX = 6,
   DDL_CREATE_FTS_INDEX = 7,
+  DDL_CREATE_MLOG = 8,
+  DDL_DROP_MLOG = 9,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
