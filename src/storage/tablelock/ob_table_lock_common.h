@@ -242,6 +242,7 @@ enum class ObLockOBJType : char
   OBJ_TYPE_DATABASE_NAME = 9,   // for database related ddl
   OBJ_TYPE_OBJECT_NAME = 10,     // for obj related ddl
   OBJ_TYPE_DBMS_LOCK = 11,  // for dbms lock
+  OBJ_TYPE_MATERIALIZED_VIEW = 12, // for materialized view operations
   OBJ_TYPE_MAX
 };
 
