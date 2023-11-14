@@ -2424,6 +2424,7 @@ OB_INLINE const char*& ob_get_origin_thread_name()
 }
 
 static const char* PARALLEL_DDL_THREAD_NAME = "DDLPQueueTh";
+static const char* REPLAY_SERVICE_THREAD_NAME = "ReplaySrv";
 
 // There are many clusters in arbitration server, we need a field identify the different clusters.
 OB_INLINE int64_t &ob_get_cluster_id()

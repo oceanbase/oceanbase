@@ -5855,19 +5855,7 @@ int ObSimpleTableSchemaV2::check_if_oracle_compat_mode(bool &is_oracle_mode) con
   const uint64_t tenant_id = get_tenant_id();
   const int64_t table_id = get_table_id();
   is_oracle_mode = false;
-  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
-
-  if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(tenant_id, table_id, compat_mode))) {
-    LOG_WARN("fail to get tenant mode", KR(ret), K(tenant_id), K(table_id));
-  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
-    is_oracle_mode = true;
-  } else if (lib::Worker::CompatMode::MYSQL == compat_mode) {
-    is_oracle_mode = false;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("compat_mode should not be INVALID.", KR(ret), K(tenant_id), K(table_id));
-  }
-  return ret;
+  return ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id, table_id, is_oracle_mode);
 }
 
 int ObSimpleTableSchemaV2::check_is_duplicated(

@@ -100,6 +100,7 @@ int ObCompatModeGetter::get_tablet_compat_mode(
 int ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(const uint64_t tenant_id, bool &is_oracle_mode)
 {
   int ret = OB_SUCCESS;
+  is_oracle_mode = false;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
 
   if (OB_FAIL(instance().get_tenant_compat_mode(tenant_id, compat_mode))) {
@@ -122,6 +123,7 @@ int ObCompatModeGetter::check_is_oracle_mode_with_table_id(
     bool &is_oracle_mode)
 {
   int ret = OB_SUCCESS;
+  is_oracle_mode = false;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   if (OB_FAIL(instance().get_table_compat_mode(tenant_id, table_id, compat_mode))) {
     LOG_WARN("fail to get tenant mode", KR(ret), K(tenant_id), K(table_id));
