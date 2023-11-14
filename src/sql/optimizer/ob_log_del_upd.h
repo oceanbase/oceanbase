@@ -385,10 +385,11 @@ protected:
 
   // The pseudo partition_id for PDML may be produced by repart exchange or TSC.
   // set %producer to NULL if not found
-  static int find_pdml_part_id_producer(ObLogicalOperator &op,
+  static int find_pdml_part_id_producer(ObLogicalOperator *op,
                                         const uint64_t loc_tid,
                                         const uint64_t ref_tid,
-                                        ObLogicalOperator *&producer);
+                                        ObLogExchange *&producer,
+                                        ObLogTableScan *&src_tsc);
 
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
