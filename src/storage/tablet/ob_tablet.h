@@ -686,22 +686,6 @@ private:
       mds::MdsTableHandle &mds_table,
       bool not_exist_create = false) const;
 
-  int build_mds_data(
-      common::ObArenaAllocator &allocator,
-      const share::ObTabletAutoincSeq &auto_inc_seq,
-      const ObTabletTxMultiSourceDataUnit &tx_data,
-      const ObTabletBindingInfo &ddl_data,
-      const compaction::ObMediumCompactionInfoList &info_list);
-  int build_tablet_status(
-      common::ObArenaAllocator &allocator,
-      const ObTabletTxMultiSourceDataUnit &tx_data);
-  int build_aux_tablet_info(
-      common::ObArenaAllocator &allocator,
-      const ObTabletTxMultiSourceDataUnit &tx_data,
-      const ObTabletBindingInfo &ddl_data);
-  int build_auto_inc_seq(
-      common::ObArenaAllocator &allocator,
-      const share::ObTabletAutoincSeq &auto_inc_seq);
   static int load_medium_info_list(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
