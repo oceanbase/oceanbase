@@ -593,7 +593,7 @@ Options:
 -n DEPLOY_NAME, --deploy-name DEPLOY_NAME
                                          The name of the deployment.
 -v VERBOSE                               Activate verbose output.
--b BUILD_PATH, --build-path BUILD_PATH   The build path of oceanbase.
+-b BUILD_PATH, --build-path BUILD_PATH   The build path of oceanbase. If not specified, it will be chosen in alphabetical order.
 -p DATA_PATH, --data-path DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
 --ip IPADDRESS                           The ipaddress for server deployment, it can be changed in the yaml file.
 --port PORT_BEGIN                        The port starting point. All the ports can be changed in the yaml file.
