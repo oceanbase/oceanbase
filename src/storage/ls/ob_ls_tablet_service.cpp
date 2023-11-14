@@ -2580,11 +2580,11 @@ int ObLSTabletService::insert_rows(
               row_count, rows_info, tbl_rows, afct_num, dup_num))) {
             LOG_WARN("insert to each tablets fail", K(ret));
           }
+          lob_allocator.reuse();
         }
       } else {
         LOG_WARN("Failed to allocate ObRowsInfo", K(ret));
       }
-      lob_allocator.reuse();
     }
 
     if (OB_ITER_END == ret) {
