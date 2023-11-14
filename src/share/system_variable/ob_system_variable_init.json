@@ -1841,7 +1841,7 @@
     "base_value": "1",
     "data_type": "bool",
     "info": "set to 1 (the default by MySQL), foreign key constraints are checked. If set to 0, foreign key constraints are ignored",
-    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE | MYSQL_ONLY",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
