@@ -139,7 +139,7 @@ static const int32_t DAYS_PER_YEAR[2]=
 #define EPOCH_YEAR2   70
 #define EPOCH_WDAY    4       // 1970-1-1 is thursday.
 #define LEAP_YEAR_COUNT(y)  ((y) / 4 - (y) / 100 + (y) / 400)
-#define IS_LEAP_YEAR(y) ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)
+#define IS_LEAP_YEAR(y) (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0))
 #define YEAR_MAX_YEAR 2155
 #define YEAR_MIN_YEAR 1901
 #define YEAR_BASE_YEAR 1900

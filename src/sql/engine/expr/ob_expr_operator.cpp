@@ -51,7 +51,7 @@ static const int8_t DAYS_PER_MON[2][12 + 1] = {
   {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 };
 
-#define IS_LEAP_YEAR(y) ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)
+#define IS_LEAP_YEAR(y) (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0))
 
 
 const char *ObExprTRDateFormat::FORMATS_TEXT[FORMAT_MAX_TYPE] =
