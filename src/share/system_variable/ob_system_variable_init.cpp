@@ -1852,7 +1852,7 @@ static struct VarsInit{
       ObSysVars[127].info_ = "set to 1 (the default by MySQL), foreign key constraints are checked. If set to 0, foreign key constraints are ignored" ;
       ObSysVars[127].name_ = "foreign_key_checks" ;
       ObSysVars[127].data_type_ = ObIntType ;
-      ObSysVars[127].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[127].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::MYSQL_ONLY ;
       ObSysVars[127].id_ = SYS_VAR_FOREIGN_KEY_CHECKS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_FOREIGN_KEY_CHECKS)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_FOREIGN_KEY_CHECKS] = 127 ;
