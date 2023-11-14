@@ -809,6 +809,13 @@ typedef enum ObItemType
   T_FUN_SYS_XML_ATTRIBUTES_VALUES = 1701,
   T_FUN_SYS_UPDATE_XML = 1702,
   T_FUN_SYS_PRIV_MAKE_XML_BINARY = 1703,  // add only for xml dml rewrite
+  T_FUN_SYS_JSON_OBJECT_WILD_STAR = 1704, // wild star in json object
+  T_FUN_SYS_JSON_SCHEMA_VALID = 1705,         // mysql json schema func
+  T_FUN_SYS_JSON_SCHEMA_VALIDATION_REPORT = 1706,
+  T_FUN_SYS_JSON_APPEND = 1707,
+  T_FUN_SYS_INSERTCHILDXML = 1708,
+  T_FUN_SYS_DELETEXML = 1709,
+  T_FUN_SYS_XMLSEQUENCE = 1710,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -1071,6 +1078,7 @@ typedef enum ObItemType
   T_DIAGNOSTICS,
   T_JSON_TABLE_EXPRESSION,
   T_JSON_TABLE_COLUMN,
+  T_XML_TABLE_EXPRESSION,
 
   //pseudo_column
   T_PSEUDO_COLUMN,

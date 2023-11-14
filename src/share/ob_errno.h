@@ -872,6 +872,7 @@ constexpr int OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN = -5513;
 constexpr int OB_JSON_PROCESSING_ERROR = -5514;
 constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
 constexpr int OB_ERR_DEPRECATED_SYNTAX = -5516;
+constexpr int OB_ERR_NON_STRING_NOT_SUPPORT = -5517;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1451,6 +1452,13 @@ constexpr int OB_ERR_NULL_FOR_XML_CONSTRUCTOR = -7416;
 constexpr int OB_ERR_XML_INDEX = -7417;
 constexpr int OB_ERR_UPDATE_XML_WITH_INVALID_NODE = -7418;
 constexpr int OB_LOB_VALUE_NOT_EXIST = -7419;
+constexpr int OB_ERR_XQUERY_MULTI_VALUE = -7421;
+constexpr int OB_ERR_LACK_XQUERY_LITERAL = -7423;
+constexpr int OB_ERR_XQUERY_TYPE_MISMATCH = -7425;
+constexpr int OB_ERR_XQUERY_UNSUPPORTED = -7428;
+constexpr int OB_ERR_INVALID_XML_CHILD_NAME = -7429;
+constexpr int OB_ERR_XML_NOT_SUPPORT_OPERATION = -7430;
+constexpr int OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = -7431;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -2850,6 +2858,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_JSON_PROCESSING_ERROR__USER_ERROR_MSG " JSON processing error"
 #define OB_ERR_TABLE_WITHOUT_ALIAS__USER_ERROR_MSG "Every table function must have an alias"
 #define OB_ERR_DEPRECATED_SYNTAX__USER_ERROR_MSG "%s is deprecated and will be removed in a future release. Please use \'%s\' instead"
+#define OB_ERR_NON_STRING_NOT_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -3387,6 +3396,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction commit cost too much"
 #define OB_TRANS_TOO_MANY_PARTICIPANTS__USER_ERROR_MSG "too many transaction participants"
 #define OB_LOG_ALREADY_SPLIT__USER_ERROR_MSG "The big log entry has been split into multiple part"
+#define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__USER_ERROR_MSG "This version doesn't yet support 'references in JSON Schema."
+#define OB_ERR_TYPE_OF_JSON_SCHEMA__USER_ERROR_MSG "Invalid JSON type in argument, should be object."
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -3575,6 +3586,18 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_INDEX__USER_ERROR_MSG "cannot create index on expression with datatype ADT '%.*s'"
 #define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__USER_ERROR_MSG "XML nodes must be updated with valid nodes and of the same type'"
 #define OB_LOB_VALUE_NOT_EXIST__USER_ERROR_MSG "LOB value does not exist"
+#define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
+#define OB_ERR_XQUERY_MULTI_VALUE__USER_ERROR_MSG "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence"
+#define OB_ERR_PARSE_XQUERY_EXPR__USER_ERROR_MSG "XPST0003 - error during parsing the XQuery expression : %.*s"
+#define OB_ERR_LACK_XQUERY_LITERAL__USER_ERROR_MSG "XQuery string literal expected"
+#define OB_ERR_TOO_MANY_PREFIX_DECLARE__USER_ERROR_MSG "XPST0033 - too many declarations for namespace prefix %.*s"
+#define OB_ERR_XQUERY_TYPE_MISMATCH__USER_ERROR_MSG "XPTY0004 - XQuery static type mismatch: expected - node()* got -"
+#define OB_ERR_XPATH_INVALID_NODE__USER_ERROR_MSG "XPST0005 - XPath step specifies an invalid element/attribute name: %.*s"
+#define OB_ERR_XPATH_NO_NODE__USER_ERROR_MSG "XPST0005 - XPath step specifies an item type matching no node: %.*s"
+#define OB_ERR_XQUERY_UNSUPPORTED__USER_ERROR_MSG "unsupported XQuery expression"
+#define OB_ERR_INVALID_XML_CHILD_NAME__USER_ERROR_MSG "The document being inserted does not conform to specified child name"
+#define OB_ERR_XML_NOT_SUPPORT_OPERATION__USER_ERROR_MSG "XML node '' (type=%s) does not support this operation"
+#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__USER_ERROR_MSG "Input to JSON generation function has unsupported data type"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -4998,6 +5021,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_JSON_PROCESSING_ERROR__ORA_USER_ERROR_MSG "ORA-40444:  JSON processing error"
 #define OB_ERR_TABLE_WITHOUT_ALIAS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5515, Every table function must have an alias"
 #define OB_ERR_DEPRECATED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5516, %s is deprecated and will be removed in a future release. Please use \'%s\' instead"
+#define OB_ERR_NON_STRING_NOT_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5517, This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5535,6 +5559,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6281, Transaction commit cost too much"
 #define OB_TRANS_TOO_MANY_PARTICIPANTS__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: too many transaction participants"
 #define OB_LOG_ALREADY_SPLIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6283, The big log entry has been split into multiple part"
+#define OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA__ORA_USER_ERROR_MSG "ORA-40441: This version doesn't yet support 'references in JSON Schema."
+#define OB_ERR_TYPE_OF_JSON_SCHEMA__ORA_USER_ERROR_MSG "ORA-40876: invalid JSON schema document"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
 #define OB_NO_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6303, no log ever scanned"
@@ -5723,6 +5749,18 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_INDEX__ORA_USER_ERROR_MSG "ORA-02327: cannot create index on expression with datatype ADT '%.*s'"
 #define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__ORA_USER_ERROR_MSG "ORA-31067: XML nodes must be updated with valid nodes and of the same type"
 #define OB_LOB_VALUE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-22922: LOB value does not exist"
+#define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
+#define OB_ERR_XQUERY_MULTI_VALUE__ORA_USER_ERROR_MSG "ORA-19279: XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence"
+#define OB_ERR_PARSE_XQUERY_EXPR__ORA_USER_ERROR_MSG "ORA-19114: XPST0003 - error during parsing the XQuery expression : %.*s"
+#define OB_ERR_LACK_XQUERY_LITERAL__ORA_USER_ERROR_MSG "ORA-19102: XQuery string literal expected"
+#define OB_ERR_TOO_MANY_PREFIX_DECLARE__ORA_USER_ERROR_MSG "ORA-19253: XPST0033 - too many declarations for namespace prefix %.*s"
+#define OB_ERR_XQUERY_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-19224: XPTY0004 - XQuery static type mismatch: expected - node()* got -"
+#define OB_ERR_XPATH_INVALID_NODE__ORA_USER_ERROR_MSG "ORA-19276: XPST0005 - XPath step specifies an invalid element/attribute name: %.*s"
+#define OB_ERR_XPATH_NO_NODE__ORA_USER_ERROR_MSG "ORA-19277: XPST0005 - XPath step specifies an item type matching no node: %.*s"
+#define OB_ERR_XQUERY_UNSUPPORTED__ORA_USER_ERROR_MSG "ORA-19110: unsupported XQuery expression"
+#define OB_ERR_INVALID_XML_CHILD_NAME__ORA_USER_ERROR_MSG "ORA-31056: The document being inserted does not conform to specified child name"
+#define OB_ERR_XML_NOT_SUPPORT_OPERATION__ORA_USER_ERROR_MSG "ORA-31195: XML node '' (type=%s) does not support this operation"
+#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__ORA_USER_ERROR_MSG "ORA-40654: Input to JSON generation function has unsupported data type"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
@@ -6103,7 +6141,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2144];
+extern int g_all_ob_errnos[2159];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

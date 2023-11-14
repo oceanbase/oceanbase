@@ -1056,6 +1056,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprInnerIsTrue::number_is_true_start,                    /* 621 */
   NULL, //ObExprInnerIsTrue::number_is_true_end,                      /* 622 */
   NULL, //ObExprInnerDecodeLike::eval_inner_decode_like               /* 623 */
+  NULL, //ObExprJsonSchemaValid::eval_json_schema_valid               /* 624 */
+  NULL, //ObExprJsonSchemaValidationReport::eval_json_schema_validation_report /* 625 */
+  NULL, //ObExprInsertChildXml::eval_insert_child_xml                 /* 626 */
+  NULL, //ObExprDeleteXml::eval_delete_xml                            /* 627 */
+  NULL, //ObExprExtractValue::eval_mysql_extract_value                /* 628 */
+  NULL, //ObExprUpdateXml::eval_mysql_update_xml                      /* 629 */
+  NULL, //ObExprXmlSequence::eval_xml_sequence                        /* 630 */
+  NULL, //ObExprJsonAppend::eval_json_array_append                    /* 631 */
+  NULL, //ObExprJsonObjectStar::eval_ora_json_object_star             /* 632 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
