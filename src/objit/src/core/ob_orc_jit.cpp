@@ -76,9 +76,7 @@ ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
                       std::make_shared<ObJitMemoryManager>(JITAllocator), ObResolver}; },
                   NotifyLoaded),
     ObCompileLayer(AcknowledgeORCv1Deprecation, ObObjectLayer, SimpleCompiler(*ObTM))
-{
-  llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
-}
+{ }
 
 ObVModuleKey ObOrcJit::addModule(std::unique_ptr<Module> M)
 {
