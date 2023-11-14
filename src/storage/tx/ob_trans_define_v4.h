@@ -917,6 +917,8 @@ private:
   bool is_switching_;
 };
 
+typedef lib::ObLockGuardWithTimeout<ObSpinLock> ObSpinLockGuardWithTimeout;
+
 #define REC_TRANS_TRACE(recorder_ptr, trace_event) do {   \
   if (NULL != recorder_ptr) {                             \
     REC_TRACE(*recorder_ptr, trace_event);                \
