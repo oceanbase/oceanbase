@@ -174,6 +174,8 @@ const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
 const int64_t USER_RESOURCE_GROUP_END_ID = 19999;
 const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
 const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
+// The timeout provided to the storage layer will be reduced by 100ms
+const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
 OB_INLINE bool is_user_group(const int64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;

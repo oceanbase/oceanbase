@@ -23,7 +23,7 @@
 #include "sql/executor/ob_task_info.h"
 #include "sql/executor/ob_slice_id.h"
 #include "sql/executor/ob_executor_rpc_proxy.h"
-
+#include "lib/ob_define.h"
 
 namespace oceanbase
 {
@@ -248,6 +248,9 @@ public:
 
   uint64_t get_rpc_tenant_id() const { return rpc_tenant_id_; }
   inline int64_t get_timeout_timestamp() const { return timeout_timestamp_; }
+  // The timeout provided to the storage layer will be reduced by 100ms
+  // The timeout here needs to be aligned.
+  inline int64_t get_ps_timeout_timestamp() const { return timeout_timestamp_ - ESTIMATE_PS_RESERVE_TIME; }
   // 等于INVALID_CLUSTER_VERSION说明是从远端的旧observer上序列化过来的
   inline bool min_cluster_version_is_valid() const
   {

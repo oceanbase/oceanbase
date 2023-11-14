@@ -19,7 +19,6 @@
 #include "sql/ob_sql_context.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/executor/ob_remote_executor_processor.h"
-
 using namespace oceanbase::common;
 namespace oceanbase
 {
@@ -207,7 +206,7 @@ void ObExecutorRpcImpl::deal_with_rpc_timeout_err(ObExecutorRpcCtx &rpc_ctx,
                                                   const ObAddr &dist_server) const
 {
   if (OB_TIMEOUT == err) {
-    int64_t timeout_timestamp = rpc_ctx.get_timeout_timestamp();
+    int64_t timeout_timestamp = rpc_ctx.get_ps_timeout_timestamp();
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
     if (timeout_timestamp - cur_timestamp > 0) {
       LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
