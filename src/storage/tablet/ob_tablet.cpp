@@ -143,7 +143,7 @@ ObTablet::ObTablet()
     ddl_data_cache_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) <= 1632, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1576, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
