@@ -1234,6 +1234,9 @@ int LogSlidingWindow::try_feedback_freeze_log_task_(const int64_t expected_log_i
     if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
       // this log has slide out, ignore
       ret = OB_SUCCESS;
+    } else if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
+      // sliding window is full
+      ret = OB_SUCCESS;
     } else {
       PALF_LOG(ERROR, "get_log_task failed", KR(ret), K_(palf_id), K(expected_log_id));
     }
