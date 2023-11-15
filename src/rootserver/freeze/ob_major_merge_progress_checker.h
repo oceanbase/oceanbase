@@ -73,7 +73,7 @@ private:
     const common::ObFunction<void(compaction::ObTableCompactionInfo&)> &info_op,
     const bool need_update_progress = true);
 
-  void reuse_batch_table(ObIArray<uint64_t> &unfinish_table_id_array);
+  void reuse_batch_table(ObIArray<uint64_t> &unfinish_table_id_array, const bool reuse_rest_table);
   bool can_not_ignore_warning(int ret)
   {
     return OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret || OB_CHECKSUM_ERROR == ret;

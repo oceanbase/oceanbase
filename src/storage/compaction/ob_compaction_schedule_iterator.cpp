@@ -221,7 +221,7 @@ int ObCompactionScheduleIterator::get_tablet_ids()
 int ObCompactionScheduleIterator::get_tablet_handle(
   const ObTabletID &tablet_id, ObTabletHandle &tablet_handle)
 {
-  int ret = ls_tablet_svr_->get_tablet(tablet_id, tablet_handle,  0/*timeout*/);
+  int ret = ls_tablet_svr_->get_tablet(tablet_id, tablet_handle,  0/*timeout*/, storage::ObMDSGetTabletMode::READ_ALL_COMMITED);
 #ifdef ERRSIM
   if (OB_SUCC(ret) && tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID) {
     ret = OB_E(EventTable::EN_COMPACTION_ITER_TABLET_NOT_EXIST) ret;

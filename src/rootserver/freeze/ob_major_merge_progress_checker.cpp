@@ -172,7 +172,7 @@ int ObMajorMergeProgressChecker::check_verification(
       }
     }
     // ignore errno, need update progress & unfinish table id array
-    LOG_TRACE("check verification", KR(tmp_ret), KPC(table_compaction_info_ptr));
+    LOG_TRACE("check verification", KR(tmp_ret), KPC(table_compaction_info_ptr), K_(progress));
     (void) progress_.update_table_cnt(table_compaction_info_ptr->status_);
     if (!table_compaction_info_ptr->finish_verified()) {
       if (OB_TMP_FAIL(unfinish_table_id_array.push_back(table_id))) {
@@ -344,10 +344,21 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
   return ret;
 }
 
-void ObMajorMergeProgressChecker::reuse_batch_table(ObIArray<uint64_t> &unfinish_table_id_array)
+void ObMajorMergeProgressChecker::reuse_batch_table(
+  ObIArray<uint64_t> &unfinish_table_id_array,
+  const bool reuse_rest_table)
 {
   int tmp_ret = OB_SUCCESS;
-  for (int64_t idx = table_ids_.batch_start_idx_; idx < table_ids_.batch_end_idx_; ++idx) {
+  int64_t start_idx = 0;
+  int64_t end_idx = 0;
+  if (reuse_rest_table) {
+    start_idx = table_ids_.batch_end_idx_;
+    end_idx = table_ids_.count();
+  } else {
+    start_idx = table_ids_.batch_start_idx_;
+    end_idx = table_ids_.batch_end_idx_;
+  }
+  for (int64_t idx = start_idx; idx < end_idx; ++idx) {
     const uint64_t table_id = table_ids_.at(idx);
     if (OB_TMP_FAIL(unfinish_table_id_array.push_back(table_id))) {
       LOG_WARN_RET(tmp_ret, "failed to push table_id into finish_array", KR(tmp_ret));
@@ -491,7 +502,7 @@ int ObMajorMergeProgressChecker::check_progress(
 #endif
         if (OB_FAIL(ret)) {
           // for any failure, should reuse cur table id array
-          reuse_batch_table(unfinish_table_id_array);
+          reuse_batch_table(unfinish_table_id_array, false/*reuse_rest_table*/);
         } else if (OB_FAIL(check_verification(schema_guard, unfinish_table_id_array))) {
           // check tablet_replica_checksum & table_index_checksum & cross_cluter_checksum
           LOG_WARN("failed to check verification", KR(ret), K_(compaction_scn), K_(expected_epoch));
@@ -517,6 +528,8 @@ int ObMajorMergeProgressChecker::check_progress(
         if (!can_not_ignore_warning(ret)) {
           // do not ignore ret, therefore not continue to check next table_schema
           ret = OB_SUCCESS;
+        } else {
+          reuse_batch_table(unfinish_table_id_array, true/*reuse_rest_table*/);
         }
         table_ids_.finish_cur_batch(); // finish cur batch
         total_time_guard_.add_time_guard(tmp_time_guard);
