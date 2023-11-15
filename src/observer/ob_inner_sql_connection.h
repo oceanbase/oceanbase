@@ -163,7 +163,8 @@ public:
                           ObString &sql,
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                          const ObTimeZoneInfo *tz_info) override;
+                          const ObTimeZoneInfo *tz_info,
+                          ObObj *result) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
                                          const share::ObLSID ls_id,

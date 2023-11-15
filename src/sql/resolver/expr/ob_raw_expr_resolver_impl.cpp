@@ -1158,6 +1158,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_DBLINK_UDF: {
+        if (OB_FAIL(process_dblink_udf_node(node, expr))) {
+          LOG_WARN("failed to process dblink udf node", K(ret), K(node));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -1390,6 +1396,80 @@ int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, O
       } else {
         expr = b_expr;
       }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_dblink_udf_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObQualifiedName column_ref;
+  CK (OB_NOT_NULL(node));
+  CK (OB_NOT_NULL(ctx_.columns_));
+  CK (OB_NOT_NULL(ctx_.session_info_));
+  CK (OB_NOT_NULL(ctx_.schema_checker_));
+  OV (T_DBLINK_UDF == node->type_, OB_ERR_UNEXPECTED, K(node->type_));
+  CK (5 == node->num_child_);
+  CK (OB_NOT_NULL(node->children_[2]));
+  CK (OB_NOT_NULL(node->children_[3]));
+  // resolve a.b.c
+  for (int64_t i = 0; OB_SUCC(ret) && i < 3; i++) {
+    if (OB_NOT_NULL(node->children_[i])) {
+      if (T_IDENT != node->children_[i]->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child type error", K(ret), K(i), K(node->children_[i]->type_));
+      } else {
+        ObString ident_name(static_cast<int32_t>(node->children_[i]->str_len_), node->children_[i]->str_value_);
+        OZ (column_ref.access_idents_.push_back(ObObjAccessIdent(ident_name, OB_INVALID_INDEX)), K(column_ref));
+      }
+    }
+  }
+  OV (column_ref.access_idents_.count() >= 1);
+  OX (column_ref.dblink_name_.assign_ptr(const_cast<char *>(node->children_[3]->str_value_),
+                                         static_cast<int32_t>(node->children_[3]->str_len_)));
+  if (OB_SUCC(ret)) {
+    ObObjAccessIdent &access_ident = column_ref.access_idents_.at(column_ref.access_idents_.count() - 1);
+    ObUDFInfo &udf_info = access_ident.udf_info_;
+    ObUDFRawExpr *func_expr = NULL;
+    access_ident.type_ = PL_UDF;
+    // resolve param list
+    if (NULL != node->children_[4]) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[4]->num_child_; i++) {
+        ObRawExpr *param_expr = NULL;
+        CK (OB_NOT_NULL(node->children_[4]->children_[i]));
+        OZ (recursive_resolve(node->children_[4]->children_[i], param_expr));
+        OZ (access_ident.params_.push_back(std::make_pair(param_expr, 0)), KPC(param_expr), K(i));
+      }
+    }
+    OX (udf_info.udf_name_.assign_ptr(access_ident.access_name_.ptr(), access_ident.access_name_.length()));
+    OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
+    CK (OB_NOT_NULL(func_expr));
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_ident.params_.count(); i++) {
+      udf_info.udf_param_num_++;
+      OZ (func_expr->add_param_expr(access_ident.params_.at(i).first));
+    }
+    if (OB_SUCC(ret) && NULL != ctx_.query_ctx_) {
+      ctx_.query_ctx_->has_udf_ = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.query_ctx_->all_user_variable_.count(); i++) {
+        OV (OB_NOT_NULL(ctx_.query_ctx_->all_user_variable_.at(i)), OB_ERR_UNEXPECTED, i);
+        OX (ctx_.query_ctx_->all_user_variable_.at(i)->set_query_has_udf(true));
+      }
+    }
+    if (OB_SUCC(ret) && NULL != func_expr) {
+      func_expr->set_func_name(udf_info.udf_name_);
+      udf_info.ref_expr_ = func_expr;
+      OZ (func_expr->extract_info(), KPC(func_expr));
+    }
+    if (OB_SUCC(ret)) {
+      column_ref.format_qualified_name(ctx_.case_mode_);
+      column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
+      ObColumnRefRawExpr *b_expr = NULL;
+      OZ (ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr));
+      OV (OB_NOT_NULL(b_expr));
+      OX (column_ref.ref_expr_ = b_expr);
+      OZ (ctx_.columns_->push_back(column_ref));
+      OX (expr = b_expr);
     }
   }
   return ret;
@@ -1846,6 +1926,7 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
                                                            fake_columns,
                                                            fake_exprs,
                                                            var,
+                                                           &ctx_.secondary_namespace_->get_external_ns()->get_resolve_ctx().package_guard_,
                                                            false,/*is_prepare_protocol*/
                                                            true,/*is_check_mode*/
                                                            ctx_.current_scope_ != T_PL_SCOPE /*is_sql_scope*/))) {

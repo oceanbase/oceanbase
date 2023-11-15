@@ -517,7 +517,8 @@ int ObMySQLConnection::execute_proc(const uint64_t tenant_id,
                                     ObString &sql,
                                     const share::schema::ObRoutineInfo &routine_info,
                                     const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                                    const ObTimeZoneInfo *tz_info)
+                                    const ObTimeZoneInfo *tz_info,
+                                    ObObj *result)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(closed_)) {

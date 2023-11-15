@@ -716,7 +716,9 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
                                             bool is_pkg_body_udf,
                                             bool is_pl_agg,
                                             int64_t type_id,
-                                            ObUDFInfo &udf_info)
+                                            ObUDFInfo &udf_info,
+                                            uint64_t dblink_id,
+                                            const ObString &dblink_name)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_raw_expr = udf_info.ref_expr_;
@@ -733,6 +735,8 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OX (udf_raw_expr->set_pkg_body_udf(is_pkg_body_udf));
   OX (udf_raw_expr->set_type_id(type_id));
   OX (udf_raw_expr->set_is_aggregate_udf(is_pl_agg));
+  OX (udf_raw_expr->set_dblink_id(dblink_id));
+  OX (udf_raw_expr->set_dblink_name(dblink_name));
   return ret;
 }
 
@@ -741,7 +745,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                             sql::ObSQLSessionInfo &session_info,
                                             common::ObIAllocator &allocator,
                                             common::ObMySQLProxy &sql_proxy,
-                                            ObUDFInfo &udf_info)
+                                            ObUDFInfo &udf_info,
+                                            pl::ObPLDbLinkGuard &dblink_guard)
 {
   int ret = OB_SUCCESS;
 
@@ -782,7 +787,9 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   session_info,
                                                   allocator,
                                                   sql_proxy,
-                                                  ret_pl_type));
+                                                  ret_pl_type,
+                                                  NULL,
+                                                  &dblink_guard));
     } else {
       OX (ret_pl_type = ret_param->get_pl_data_type());
     }
@@ -828,7 +835,9 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   session_info,
                                                   allocator,
                                                   sql_proxy,
-                                                  param_pl_type));
+                                                  param_pl_type,
+                                                  NULL,
+                                                  &dblink_guard));
     } else {
       OX (param_pl_type = iparam->get_pl_data_type());
     }

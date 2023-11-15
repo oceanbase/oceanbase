@@ -277,21 +277,6 @@ int ObPLDbLinkGuard::get_dblink_routine_infos(common::ObDbLinkProxy *dblink_prox
                                                                      routine_name,
                                                                      routine_infos,
                                                                      next_link_object_id_));
-  if (OB_SUCC(ret)) {
-    bool is_all_func = true;
-    for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); i++) {
-      const ObRoutineInfo *r = static_cast<const ObRoutineInfo *>(routine_infos.at(i));
-      CK (OB_NOT_NULL(r));
-      if (OB_SUCC(ret) && ObRoutineType::ROUTINE_PROCEDURE_TYPE == r->get_routine_type()) {
-        is_all_func = false;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && is_all_func) {
-      ret = OB_ERR_NOT_VALID_ROUTINE_NAME;
-      LOG_WARN("ORA-06576: not a valid function or procedure name", K(ret), K(pkg_name), K(routine_name));
-    }
-  }
 #endif
   return ret;
 }
@@ -404,6 +389,10 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
         case OracleObjectType::ORA_PROCEUDRE:
           // procedure
           object_type = static_cast<int64_t>(ObObjectType::PROCEDURE);
+        break;
+        case OracleObjectType::ORA_FUNCTION:
+          // function
+          object_type = static_cast<int64_t>(ObObjectType::FUNCTION);
         break;
         case OracleObjectType::ORA_PACKAGE:
           // package

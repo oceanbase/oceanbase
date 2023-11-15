@@ -11133,6 +11133,8 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
                                             stmt->get_query_ctx()->udf_has_select_stmt_,
                                             return_value_version));
     OX (stmt->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
+    OX (stmt->get_query_ctx()->disable_udf_parallel_ |= is_valid_id(udf_expr->get_dblink_id()));
+    OX (stmt->get_query_ctx()->has_dblink_udf_ |= is_valid_id(udf_expr->get_dblink_id()));
     if (OB_SUCC(ret) &&
         udf_expr->get_result_type().is_ext() &&
         (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
@@ -11195,6 +11197,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          columns,
                                                          real_exprs,
                                                          expr,
+                                                         params_.package_guard_,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          true /*is_sql_scope*/))) {

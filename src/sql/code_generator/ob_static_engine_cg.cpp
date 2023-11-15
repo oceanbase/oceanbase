@@ -7024,6 +7024,9 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       phy_plan_->set_contain_pl_udf_or_trigger(true);
       phy_plan_->set_has_nested_sql(true);
     } else {/*do nothing*/}
+    if (OB_SUCC(ret)) {
+      phy_plan_->set_has_link_udf(log_plan.get_stmt()->get_query_ctx()->has_dblink_udf_);
+    }
   }
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();

@@ -1482,7 +1482,6 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
     resolve_ctx.params_.secondary_namespace_ = params.secondary_namespace_;
     resolve_ctx.params_.param_list_ = params.param_list_;
     resolve_ctx.params_.is_execute_call_stmt_ = params.is_execute_call_stmt_;
-    OZ (package_guard.init());
     if (dblink_name.empty()) {
       OZ (get_routine(resolve_ctx,
                       tenant_id,
@@ -3140,6 +3139,7 @@ int ObResolverUtils::resolve_columns_for_const_expr(ObRawExpr *&expr, ObArray<Ob
                                                            columns,
                                                            real_exprs,
                                                            real_ref_expr,
+                                                           resolve_params.package_guard_,
                                                            resolve_params.is_prepare_protocol_,
                                                            false, /*is_check_mode*/
                                                            true /*is_sql_scope*/))) {
@@ -7031,16 +7031,19 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              ObIArray<ObQualifiedName> &columns,
                                              ObIArray<ObRawExpr*> &real_exprs,
                                              ObRawExpr *&expr,
+                                             pl::ObPLPackageGuard *package_guard,
                                              bool is_prepare_protocol,
                                              bool is_check_mode,
                                              bool is_sql_scope)
 {
   int ret = OB_SUCCESS;
   pl::ObPLPackageGuard dummy_pkg_guard(session_info.get_effective_tenant_id());
+  pl::ObPLPackageGuard *pkg_guard =
+      (NULL == ns ? package_guard : &ns->get_external_ns()->get_resolve_ctx().package_guard_);
   pl::ObPLResolver pl_resolver(allocator,
                                session_info,
                                schema_guard,
-                               NULL == ns ? dummy_pkg_guard : ns->get_external_ns()->get_resolve_ctx().package_guard_,
+                               NULL == pkg_guard ? dummy_pkg_guard : *pkg_guard,
                                NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
                                expr_factory,
                                NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),

@@ -218,7 +218,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                                                           ctx.get_allocator(),
                                                           NULL,
                                                           stmt.get_dblink_routine_info(),
-                                                          params))) {
+                                                          params,
+                                                          NULL))) {
         LOG_WARN("failed to execute dblink pl", K(ret), KP(stmt.get_dblink_routine_info()));
 #endif
       }

@@ -206,6 +206,7 @@ private:
   int process_xmlparse_node(const ParseNode *node, ObRawExpr *&expr);
   void get_special_func_ident_name(ObString &ident_name, const ObItemType func_type);
   int process_remote_sequence_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_dblink_udf_node(const ParseNode *node, ObRawExpr *&expr);
 
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);

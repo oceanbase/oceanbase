@@ -9325,7 +9325,7 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
         static_cast<pl::ObPLINS *>(session->get_pl_context()->get_current_ctx())))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(object_type->get_size(*ns, pl::PL_TYPE_ROW_SIZE, rowsize))) {
+    } else if (OB_FAIL(object_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize))) {
       LOG_WARN("failed to get size", K(ret));
     } else if (OB_FAIL(object_expr->add_access_name(object_type->get_name()))) {
       LOG_WARN("failed to add access name", K(ret));

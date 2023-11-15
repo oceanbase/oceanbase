@@ -39,7 +39,8 @@ struct ObExprUDFInfo : public ObIExprExtraInfo
 public:
   ObExprUDFInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
-      subprogram_path_(alloc), params_type_(alloc), params_desc_(alloc), nocopy_params_(alloc)
+      subprogram_path_(alloc), params_type_(alloc), params_desc_(alloc), nocopy_params_(alloc),
+      dblink_id_(OB_INVALID_ID)
   {
   }
 
@@ -61,6 +62,7 @@ public:
   uint64_t loc_;
   bool is_udt_cons_;
   bool is_called_in_sql_;
+  uint64_t dblink_id_;
 };
 class ObSqlCtx;
 class ObUDFParamDesc;

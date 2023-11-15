@@ -93,6 +93,8 @@
 #include "sql/optimizer/ob_explain_log_plan.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/plan_cache/ob_values_table_compression.h"
+#include "pl/ob_pl_stmt.h"
+#include "pl/ob_pl_resolver.h"
 
 namespace oceanbase
 {
@@ -2800,6 +2802,20 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     }
   }
   if (OB_SUCC(ret)) {
+    if (NULL != resolver_ctx.secondary_namespace_
+        && NULL !=  resolver_ctx.secondary_namespace_->get_external_ns()) {
+      resolver_ctx.package_guard_ =
+        &resolver_ctx.secondary_namespace_->get_external_ns()->get_resolve_ctx().package_guard_;
+    } else {
+      resolver_ctx.package_guard_ = result.get_exec_context().get_package_guard();
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(resolver_ctx.package_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package guard is NULL", K(ret), K(resolver_ctx.secondary_namespace_),
+               K(resolver_ctx.secondary_namespace_->get_external_ns()));
+    }
+  }
+  if (OB_SUCC(ret)) {
     resolver_ctx.is_prepare_protocol_ = context.is_prepare_protocol_;
     resolver_ctx.is_prepare_stage_ = context.is_prepare_stage_;
     resolver_ctx.is_pre_execute_ = context.is_pre_execute_;
@@ -3682,7 +3698,7 @@ int ObSql::code_generate(
       LOG_DEBUG("phy plan", K(*phy_plan));
       phy_plan->stat_.is_use_jit_ = use_jit;
       phy_plan->set_returning(stmt->is_returning());
-      phy_plan->set_has_link_table(has_dblink);
+      phy_plan->set_has_link_table(has_dblink || phy_plan->has_link_udf());
       // set plan insert flag : insert into values(..); // value num is n (n >= 1);
       if (stmt->is_insert_stmt()) {
         ObInsertStmt *insert_stmt = static_cast<ObInsertStmt *>(stmt);
