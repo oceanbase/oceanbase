@@ -818,8 +818,9 @@ void ObTmpTenantMemBlockManager::ObIOWaitInfoHandle::reset()
   }
 }
 
-ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager()
-  : wait_info_queue_(),
+ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager(ObTmpTenantFileStore &tenant_store)
+  : tenant_store_(tenant_store),
+    wait_info_queue_(),
     wait_handles_map_(),
     t_mblk_map_(),
     dir_to_blk_map_(),
@@ -1528,8 +1529,8 @@ int ObTmpTenantMemBlockManager::exec_wait()
       const int64_t washing_count = ATOMIC_LOAD(&washing_count_);
       int64_t block_cache_num = -1;
       int64_t page_cache_num = -1;
-      OB_TMP_FILE_STORE.get_block_cache_num(tenant_id_, block_cache_num);
-      OB_TMP_FILE_STORE.get_page_cache_num(tenant_id_, page_cache_num);
+      block_cache_num = tenant_store_.get_block_cache_num();
+      page_cache_num = tenant_store_.get_page_cache_num();
       ObTaskController::get().allow_next_syslog();
       STORAGE_LOG(INFO, "succeed to do one round of tmp block io", K(ret), K(loop_nums),
           K(wait_io_cnt), K(washing_count), K(block_cache_num), K(page_cache_num));
