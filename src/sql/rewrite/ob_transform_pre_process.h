@@ -590,6 +590,8 @@ struct DistinctObjMeta
                              ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
                              ObIArray<ObRawExpr*> &column_ref_exprs,
                              ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                             ObIArray<ObRawExpr*> &query_ref_exprs,
+                             ObIArray<ObRawExpr*> &query_ref_remove_const_exprs,
                              bool &trans_happened);
   int replace_remove_const_exprs(ObSelectStmt *stmt,
                                 ObIArray<ObRawExpr*> &const_exprs,
@@ -597,7 +599,9 @@ struct DistinctObjMeta
                                 ObIArray<ObRawExpr*> &exec_params,
                                 ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
                                 ObIArray<ObRawExpr*> &column_ref_exprs,
-                                ObIArray<ObRawExpr*> &column_ref_remove_const_exprs);
+                                ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                                ObIArray<ObRawExpr*> &query_ref_exprs,
+                                ObIArray<ObRawExpr*> &query_ref_remove_const_exprs);
 
   int transform_cast_multiset_for_stmt(ObDMLStmt *&stmt, bool &is_happened);
   int transform_cast_multiset_for_expr(ObDMLStmt &stmt, ObRawExpr *&expr, bool &trans_happened);
