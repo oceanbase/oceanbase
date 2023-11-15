@@ -2370,6 +2370,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_EXIST, -9758, -1, "HY000", "materialized vi
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MLOG_IS_YOUNGER, -9759, -1, "HY000", "materialized view log younger than last refresh", "materialized view log on `%s`.`%s` younger than last refresh", 12034, "materialized view log younger than last refresh", "materialized view log on %s.%s younger than last refresh");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, -9760, -1, "HY000", "cannot fast refresh materialized view", "cannot fast refresh materialized view `%s`.`%s`", 12052, "cannot fast refresh materialized view", "cannot fast refresh materialized view %s.%s");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_NEVER_REFRESH, -9761, -1, "HY000", "cannot explicitly refresh a NEVER REFRESH materialized view", "cannot explicitly refresh a NEVER REFRESH materialized view (`%s`)", 23538, "cannot explicitly refresh a NEVER REFRESH materialized view", "cannot explicitly refresh a NEVER REFRESH materialized view (%s)");
+DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DISABLED, "42000", "Loading local data is disabled; this must be enabled on both the client and server sides");
 
 ////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)
