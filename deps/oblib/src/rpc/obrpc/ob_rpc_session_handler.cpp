@@ -147,6 +147,11 @@ int ObRpcSessionHandler::destroy_session(int64_t sessid)
     LOG_WARN("Can not find session id in next_wait_map", K(ret), K(sessid));
   } else {
     get_next_cond_(wait_object.thid_).lock();
+    hash_ret = next_wait_map_.get_refactored(sessid, wait_object);
+    if (OB_SUCCESS != hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Can not find session id in next_wait_map", K(ret), K(sessid));
+    }
     if (OB_FAIL(next_wait_map_.erase_refactored(sessid))) {
       if (OB_HASH_NOT_EXIST == ret) {
         LOG_WARN("sessid not exist, destroy do nothing.", K(ret), K(sessid));
