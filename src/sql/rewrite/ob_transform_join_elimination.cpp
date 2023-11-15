@@ -1899,8 +1899,6 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> pullup_conds;
-  ObSEArray<ObRawExpr*, 4> column_exprs;
-  ObSEArray<ObRawExpr*, 4> upper_column_exprs;
   ObSEArray<ObRawExpr*, 4> pullup_column_exprs;
   ObSEArray<ObRawExpr*, 4> pullup_select_exprs;
   TableItem *semi_right_table = NULL;
@@ -1987,50 +1985,20 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
     }
   }
 
-  // 3. add new select expr & column expr, repalce column exprs in semi_info->semi_conditions_
+  // 3. remove right_tables and replace exprs
   if (OB_SUCC(ret)) {
-    ObSqlBitSet<> table_set;
-    ObSEArray<ObRawExpr *, 4> tmp;
-    ObSEArray<ObRawExpr*, 4> pullup_exprs;
-    ObSEArray<ObQueryRefRawExpr*, 2> pullup_subqueries;
-    if (OB_FAIL(child_stmt->get_table_rel_ids(child_stmt->get_table_items(), table_set))) {
-      LOG_WARN("failed to get rel ids", K(ret));
-    } else if (OB_FAIL(table_set.del_members(right_rel_ids))) {
-      LOG_WARN("failed to del members", K(ret));
-    } else if (OB_FAIL(append(pullup_exprs, pullup_select_exprs)) ||
-               OB_FAIL(append(pullup_exprs, pullup_conds))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(pullup_exprs, tmp))) {
-      LOG_WARN("extract column exprs failed", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*child_stmt,
-                                                             tmp,
-                                                             table_set,
-                                                             column_exprs))) {
-      LOG_WARN("failed to extract table exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *semi_right_table, stmt,
-                                                                 column_exprs,
-                                                                 upper_column_exprs))) {
-      LOG_WARN("failed to create columns for view", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(pullup_exprs, pullup_subqueries))) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(append_array_no_dup(stmt->get_subquery_exprs(), pullup_subqueries))) {
-      LOG_WARN("failed to append array no dup", K(ret));
-    } else if (OB_FAIL(child_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    }
-  }
-
-  // 4. remove right_tables
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(append(column_exprs, target_col_exprs)) ||
-        OB_FAIL(append(upper_column_exprs, source_col_exprs))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else if (OB_FAIL(stmt->remove_table_item(semi_right_table))) {
+    ObSEArray<ObRawExpr*, 4> select_exprs;
+    if (OB_FAIL(stmt->remove_table_item(semi_right_table))) {
       LOG_WARN("failed to remove table item", K(ret));
-    } else if (OB_FAIL(stmt->replace_relation_exprs(column_exprs, upper_column_exprs))) {
+    } else if (OB_FAIL(stmt->replace_relation_exprs(target_col_exprs, source_col_exprs))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(stmt->get_table_items().push_back(semi_right_table))) {
       LOG_WARN("failed to push back table item", K(ret));
+    } else if (OB_FAIL(child_stmt->get_select_exprs(select_exprs))) {
+      LOG_WARN("failed to get child stmt select exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt,
+                                                              semi_right_table, &select_exprs))) {
+      LOG_WARN("failed to generate select list for shared exprs", K(ret));
     } else if (OB_FAIL(child_stmt->rebuild_tables_hash())) {
       LOG_WARN("rebuild table hash failed", K(ret));
     } else if (OB_FAIL(child_stmt->update_column_item_rel_id())) {
@@ -4010,4 +3978,3 @@ int ObTransformJoinElimination::construct_eliminated_table(const ObDMLStmt *stmt
 
 } //namespace sql
 } //namespace oceanbase
-

@@ -146,7 +146,8 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
-  } else if (!expr->is_aggr_expr() && !expr->is_win_func_expr()) {
+  } else if (!expr->is_aggr_expr() && !expr->is_win_func_expr() &&
+             T_OP_CASE != expr->get_expr_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *old_param_expr = expr->get_param_expr(i);
       ObRawExpr *new_param_expr = NULL;
