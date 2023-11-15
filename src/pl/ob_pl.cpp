@@ -49,6 +49,7 @@
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "pl/ob_pl_allocator.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1638,12 +1639,12 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
                               ObCacheObjGuard &cacheobj_guard)
 {
   int ret = OB_SUCCESS;
+  ObString pc_key;
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(block));
   if (OB_SUCC(ret)) {
-    ObArenaAllocator paramerter_alloc;
+    ObArenaAllocator paramerter_alloc("AnonyParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString sql(static_cast<int64_t>(block->str_len_), block->str_value_);
-    ObString pc_key;
     ParseResult parse_result;
     ObPLParser pl_parser(paramerter_alloc,
                       ctx.get_my_session()->get_charsets4parser(),
@@ -1682,11 +1683,12 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
             trans_ctx.buf_len_ += trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_;
           }
         }
-        pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
-        OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
+        //pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
+        OZ (ob_write_string(ctx.get_allocator(), ObString(trans_ctx.buf_len_, trans_ctx.buf_), pc_key));
       }
     }
   }
+  OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
   return ret;
 }
 
