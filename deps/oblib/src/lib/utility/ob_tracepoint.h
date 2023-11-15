@@ -646,6 +646,9 @@ class EventTable
       EN_PX_P2P_MSG_REG_DM_FAILED= 611,
       EN_PX_JOIN_FILTER_HOLD_MSG = 612,
       EN_PX_DTL_TRACE_LOG_ENABLE = 613,
+      EN_PX_DISABLE_RUNTIME_FILTER_EXTRACT_QUERY_RANGE = 614,
+      EN_PX_MAX_IN_FILTER_QR_COUNT = 615,
+      EN_PX_DISABLE_WHITE_RUNTIME_FILTER = 616,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
