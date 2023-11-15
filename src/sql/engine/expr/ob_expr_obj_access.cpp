@@ -335,42 +335,44 @@ int ObExprObjAccess::ExtraInfo::get_attr_func(int64_t param_cnt,
                                               ObEvalCtx &ctx) const
 {
   int ret = OB_SUCCESS;
-  pl::ObPLComposite *composite_addr
-    = reinterpret_cast<pl::ObPLComposite*>(params[access_idxs_.at(0).var_index_]);
   void *current_value = NULL;
   CK (OB_NOT_NULL(element_val));
   CK (access_idxs_.count() > 0);
-  for (int64_t i = 1; OB_SUCC(ret) && i < access_idxs_.count(); ++i) {
-    const pl::ObPLDataType &parent_type = access_idxs_.at(i - 1).var_type_;
-    const pl::ObObjAccessIdx &parent_access = access_idxs_.at(i - 1);
-    const pl::ObObjAccessIdx &current_access = access_idxs_.at(i);
-    current_value = composite_addr;
-    if (parent_type.is_collection_type()) {
-      OZ (get_collection_attr(params,
-                              current_access,
-                              for_write_,
-                              current_value));
-    } else {
-      OZ (get_record_attr(current_access,
-                          parent_type.get_user_type_id(),
-                          for_write_,
-                          current_value,
-                          ctx));;
+  if (OB_SUCC(ret)) {
+    pl::ObPLComposite *composite_addr
+    = reinterpret_cast<pl::ObPLComposite*>(params[access_idxs_.at(0).var_index_]);
+    for (int64_t i = 1; OB_SUCC(ret) && i < access_idxs_.count(); ++i) {
+      const pl::ObPLDataType &parent_type = access_idxs_.at(i - 1).var_type_;
+      const pl::ObObjAccessIdx &parent_access = access_idxs_.at(i - 1);
+      const pl::ObObjAccessIdx &current_access = access_idxs_.at(i);
+      current_value = composite_addr;
+      if (parent_type.is_collection_type()) {
+        OZ (get_collection_attr(params,
+                                current_access,
+                                for_write_,
+                                current_value));
+      } else {
+        OZ (get_record_attr(current_access,
+                            parent_type.get_user_type_id(),
+                            for_write_,
+                            current_value,
+                            ctx));;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (current_access.var_type_.is_composite_type()) {
+        ObObj* value = reinterpret_cast<ObObj*>(current_value);
+        CK (OB_NOT_NULL(value));
+        CK (value->is_ext());
+        OX (composite_addr = reinterpret_cast<pl::ObPLComposite*>(value->get_ext()));
+        CK (OB_NOT_NULL(composite_addr));
+      }
     }
     if (OB_FAIL(ret)) {
-    } else if (current_access.var_type_.is_composite_type()) {
-      ObObj* value = reinterpret_cast<ObObj*>(current_value);
-      CK (OB_NOT_NULL(value));
-      CK (value->is_ext());
-      OX (composite_addr = reinterpret_cast<pl::ObPLComposite*>(value->get_ext()));
-      CK (OB_NOT_NULL(composite_addr));
+    } else if (pl::ObObjAccessIdx::get_final_type(access_idxs_).is_obj_type()) {
+      *element_val = reinterpret_cast<int64_t>(current_value);
+    } else {
+      *element_val = reinterpret_cast<int64_t>(composite_addr);
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (pl::ObObjAccessIdx::get_final_type(access_idxs_).is_obj_type()) {
-    *element_val = reinterpret_cast<int64_t>(current_value);
-  } else {
-    *element_val = reinterpret_cast<int64_t>(composite_addr);
   }
   return ret;
 }

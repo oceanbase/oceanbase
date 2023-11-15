@@ -611,6 +611,7 @@ protected:
   int resolve_generated_column_expr_temp(TableItem *table_item);
   int find_generated_column_expr(ObRawExpr *&expr, bool &is_found);
   int deduce_generated_exprs(common::ObIArray<ObRawExpr*> &exprs);
+  int collect_schema_version(ObRawExpr *expr);
   int resolve_external_name(ObQualifiedName &q_name,
                             ObIArray<ObQualifiedName> &columns,
                             ObIArray<ObRawExpr*> &real_exprs,
