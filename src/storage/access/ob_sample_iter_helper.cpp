@@ -25,7 +25,8 @@ int ObGetSampleIterHelper::check_scan_range_count(bool &res, ObIArray<ObDatumRan
   need_scan_multiple_range_ = false;
   if (scan_param_.sample_info_.is_block_sample()) {
     bool retire_to_memtable_row_sample = false;
-    if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
+    if (!get_table_param_.tablet_iter_.table_iter()->is_valid() &&
+        OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
             main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
             false /*allow_not_ready*/))) {
       STORAGE_LOG(WARN, "Fail to read tables", K(ret));
