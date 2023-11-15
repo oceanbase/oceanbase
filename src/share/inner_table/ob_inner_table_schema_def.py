@@ -6884,7 +6884,8 @@ def_table_schema(
       ('object_status', 'int'),
       ('rule_name', 'varchar:256'),
       ('is_in_pc', 'bool'),
-      ('erase_time', 'timestamp')
+      ('erase_time', 'timestamp'),
+      ('compile_time', 'uint'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
@@ -7562,7 +7563,10 @@ def_table_schema(
 
     ('partition_hit', 'bool'),
     ('tx_internal_route_version', 'uint'),
-    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH')
+    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+
+    ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
+    ('plsql_exec_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13156,6 +13160,7 @@ def_table_schema(
 # 余留位置
 #
 
+
 ################################################################################
 # Oracle Virtual Table(15000,20000]
 ################################################################################
@@ -13558,6 +13563,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
 # 余留位置
+
 
 ################################################################################
 # System View (20000,30000]
@@ -14768,7 +14774,9 @@ def_table_schema(
                          case when tx_internal_route_flag & 96 = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                        flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         pl_trace_id as PL_TRACE_ID,
+                         plsql_exec_time as PLSQL_EXEC_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -29505,8 +29513,57 @@ def_table_schema(
 # 21459：GV$OB_SESSION
 # 21460：V$OB_SESSION
 
-# 21461: GV$OB_PL_CACHE_OBJECT
-# 21462: V$OB_PL_CACHE_OBJECT
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'GV$OB_PL_CACHE_OBJECT',
+    table_id       = '21461',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID,
+           SVR_IP,
+           SVR_PORT,
+           PLAN_ID AS CACHE_OBJECT_ID,
+           STATEMENT AS PARAMETERIZE_TEXT,
+           QUERY_SQL AS OBJECT_TEXT,
+           FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME,
+           AVG_EXE_USEC,
+           SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC,
+           HIT_COUNT,
+           PLAN_SIZE AS CACHE_OBJ_SIZE,
+           EXECUTIONS,
+           ELAPSED_TIME,
+           OBJECT_TYPE,
+           PL_SCHEMA_ID AS OBJECT_ID,
+           COMPILE_TIME,
+           SCHEMA_VERSION,
+           PS_STMT_ID
+    FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'V$OB_PL_CACHE_OBJECT',
+    table_id       = '21462',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT * FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+
+
+    normal_columns = [
+    ],
+)
 
 def_table_schema(
   owner = 'chongrong.th',
@@ -30106,6 +30163,7 @@ def_table_schema(
 #21499 DBA_OB_INDEX_USAGE
 
 # 余留位置
+
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -48690,7 +48748,9 @@ def_table_schema(
                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                         flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         pl_trace_id as PL_TRACE_ID,
+                         plsql_exec_time as PLSQL_EXEC_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -54661,8 +54721,63 @@ def_table_schema(
 )
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
-# 28198: GV$OB_PL_CACHE_OBJECT
-# 28199: V$OB_PL_CACHE_OBJECT
+
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'GV$OB_PL_CACHE_OBJECT',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28198',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID,
+           SVR_IP,
+           SVR_PORT,
+           PLAN_ID AS CACHE_OBJECT_ID,
+           STATEMENT AS PARAMETERIZE_TEXT,
+           QUERY_SQL AS OBJECT_TEXT,
+           FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME,
+           AVG_EXE_USEC,
+           SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC,
+           HIT_COUNT,
+           PLAN_SIZE AS CACHE_OBJ_SIZE,
+           EXECUTIONS,
+           ELAPSED_TIME,
+           OBJECT_TYPE,
+           PL_SCHEMA_ID AS OBJECT_ID,
+           COMPILE_TIME,
+           SCHEMA_VERSION,
+           PS_STMT_ID
+    FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'V$OB_PL_CACHE_OBJECT',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28199',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT * FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+
+
+    normal_columns = [
+    ],
+)
+
 # 28200: GV$OB_CGROUP_CONFIG
 # 28201: V$OB_CGROUP_CONFIG
 

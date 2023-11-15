@@ -90,17 +90,10 @@ int ObPLCacheMgr::get_pl_cache(ObPlanCache *lib_cache, ObCacheObjGuard& guard, O
     // update pl func/package stat
     pl::PLCacheObjStat *stat = NULL;
     int64_t current_time = ObTimeUtility::current_time();
-    if (ObLibCacheNameSpace::NS_PKG != guard.get_cache_obj()->get_ns() &&
-        ObLibCacheNameSpace::NS_CALLSTMT != guard.get_cache_obj()->get_ns()) {
-      pl::ObPLFunction* pl_func = static_cast<pl::ObPLFunction*>(guard.get_cache_obj());
-      stat = &pl_func->get_stat_for_update();
-      ATOMIC_INC(&(stat->hit_count_));
-      ATOMIC_STORE(&(stat->last_active_time_), current_time);
-    } else {
-      //todo:support package
-      //pl::ObPLPackage* pl_pkg = static_cast<pl::ObPLPackage*>(guard.get_cache_obj());
-      //stat = &pl_pkg->get_stat_for_update();
-    }
+    pl::ObPLCacheObject* pl_object = static_cast<pl::ObPLFunction*>(guard.get_cache_obj());
+    stat = &pl_object->get_stat_for_update();
+    ATOMIC_INC(&(stat->hit_count_));
+    ATOMIC_STORE(&(stat->last_active_time_), current_time);
   }
   return ret;
 }

@@ -18,6 +18,9 @@
 #include "observer/ob_server_struct.h"
 #include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
 #include "sql/resolver/ob_schema_checker.h"
+#include "observer/mysql/ob_sync_cmd_driver.h"
+#include "sql/engine/cmd/ob_variable_set_executor.h"
+#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 
 namespace oceanbase
 {
@@ -31,6 +34,9 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
   if (OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql ctx or session is NULL", K(ctx.get_sql_ctx()), K(ctx.get_my_session()), K(ret));
+  } else if (stmt::T_CALL_PROCEDURE != stmt.get_prepare_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("it must be call procedure stmt", K(ret), K(stmt));
   } else {
     ObObjParam result;
     ParamStore params_array( (ObWrapperAllocator(ctx.get_allocator())) );
@@ -98,20 +104,58 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
               LOG_WARN("result set open failed", K(result_set.get_statement_id()), K(ret));
             }
             if (OB_SUCC(ret)) {
-              if (result_set.is_with_rows()) {
-                while (OB_SUCC(ret)) {
-                  const common::ObNewRow *row = NULL;
-                  if (OB_FAIL(result_set.get_next_row(row))) {
-                    if (OB_ITER_END == ret) {
-                      ret = OB_SUCCESS;
-                    } else {
-                      LOG_WARN("get next row error", K(ret));
+              ObCallProcedureInfo *call_proc_info = NULL;
+              ObCallProcedureStmt *call_stmt = static_cast<ObCallProcedureStmt*>(result_set.get_cmd());
+              if (OB_ISNULL(call_proc_info = call_stmt->get_call_proc_info())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("call procedure info is null", K(ret));
+              } else {
+                for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_expressions().count(); ++i) {
+                  if (call_proc_info->is_out_param(i)) {
+                    const ObSqlExpression *call_param_expr = call_proc_info->get_expressions().at(i);
+                    ObItemType expr_type = call_param_expr->get_expr_items().at(0).get_item_type();
+                    if (OB_LIKELY(IS_CONST_TYPE(expr_type))) {
+                      if (T_QUESTIONMARK == expr_type) {
+                        const ObObj &value = call_param_expr->get_expr_items().at(0).get_obj();
+                        int64_t idx = value.get_unknown();
+                        CK (idx < params_array.count());
+                        if (OB_SUCC(ret)) {
+                          const ObRawExpr *expr = stmt.get_params().at(idx);
+                          if (OB_ISNULL(expr)) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_WARN("expr is null", K(ret), K(stmt));
+                          } else if (T_OP_GET_USER_VAR != expr->get_expr_type()) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_WARN("it must be user var", K(ret), K(stmt));
+                          } else {
+                            ObExprCtx expr_ctx;
+                            if (OB_ISNULL(expr->get_param_expr(0))) {
+                              ret = OB_ERR_UNEXPECTED;
+                              LOG_WARN("sys var is NULL", K(*expr), K(ret));
+                            } else if (OB_UNLIKELY(!expr->get_param_expr(0)->is_const_raw_expr()
+                              || !static_cast<const ObConstRawExpr*>(expr->get_param_expr(0))->get_value().is_varchar())) {
+                              ret = OB_ERR_UNEXPECTED;
+                              LOG_WARN("invalid user var", K(*expr->get_param_expr(0)), K(ret));
+                            } else if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt::T_CALL_PROCEDURE, ctx, ctx.get_allocator(), expr_ctx))) {
+                              LOG_WARN("Failed to wrap expr ctx", K(ret));
+                            } else {
+                              const ObString var_name = static_cast<const ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_varchar();
+                              if (OB_FAIL(ObVariableSetExecutor::set_user_variable(result_set.get_exec_context().get_physical_plan_ctx()->get_param_store_for_update().at(idx),
+                                                                                    var_name, expr_ctx))) {
+                                LOG_WARN("set user variable failed", K(ret));
+                              }
+                            }
+                          }
+                        }
+                      } else {
+                        /* do nothing */
+                      }
                     }
-                    break;
                   }
-                }
+                } // for end
               }
             }
+
             int tmp_ret = OB_SUCCESS;
             if ((tmp_ret = result_set.close()) != OB_SUCCESS) {
               LOG_WARN("result set open failed", K(result_set.get_statement_id()), K(ret));

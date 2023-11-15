@@ -1516,6 +1516,49 @@ public:
 
 };
 
+struct ObPLSPITraceIdGuard {
+  ObPLSPITraceIdGuard(const ObString &sql, const ObString &ps_sql, ObCurTraceId::TraceId *reused_trace_id = nullptr)
+      : sql_(sql), ps_sql_(ps_sql) {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+      origin_trace_id_.set(*ObCurTraceId::get_trace_id());
+
+      if (reused_trace_id != nullptr && reused_trace_id->is_valid()) {
+        // do not log when fetching from cursor
+        ObCurTraceId::get_trace_id()->set(*reused_trace_id);
+      } else {
+        ObCurTraceId::TraceId new_trace_id;
+        new_trace_id.init(origin_trace_id_.get_addr());
+
+        // log with PL trace_id
+        LOG_TRACE("executing sql, trace id changed",
+                K(sql_), K(ps_sql_),
+                "from", origin_trace_id_,
+                "to", new_trace_id);
+
+        ObCurTraceId::get_trace_id()->set(new_trace_id);
+      }
+    }
+  }
+
+  ~ObPLSPITraceIdGuard() {
+    int ret = OB_SUCCESS;
+    ObCurTraceId::TraceId curr_trace_id;
+    if (OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+      curr_trace_id.set(*ObCurTraceId::get_trace_id());
+      ObCurTraceId::get_trace_id()->set(origin_trace_id_);
+
+      LOG_TRACE("sql execution finished, trace id restored",
+              K(sql_), K(ps_sql_),
+              "from", curr_trace_id,
+              "to", origin_trace_id_);
+    }
+  }
+  ObCurTraceId::TraceId origin_trace_id_;
+  const ObString &sql_;
+  const ObString &ps_sql_;
+};
+
 //todo:@hr351303 确认sql 和 ps sql是否可以合一
 int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     const char *sql,
@@ -1538,6 +1581,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
   ObWarningBuffer* wb = NULL;
   FLTSpanGuard(pl_spi_query);
   CK (OB_NOT_NULL(ctx));
+  ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql);
   CK (OB_NOT_NULL(ctx->allocator_));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
@@ -1551,6 +1595,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
   exec_timestamp.exec_type_ = sql::PLSql;
 
   ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
+  ObPLSubPLSqlTimeGuard guard(ctx);
   if (OB_SUCC(ret) && is_forall && !session->is_enable_batched_multi_statement()) {
     /* forall need rollback to for loop */
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
@@ -1687,6 +1732,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
               int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
               ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
               session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+              session_info->get_raw_audit_record().pl_trace_id_.set(trace_id_guard.origin_trace_id_);
               ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     *session_info,
@@ -1703,6 +1749,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                                     true);
               session_info->get_raw_audit_record().exec_record_ = record_bk;
               session_info->get_raw_audit_record().try_cnt_ = try_cnt;
+              session_info->get_raw_audit_record().pl_trace_id_.reset();
             } else {
               LOG_DEBUG("result set is not inited, do not process record",
                         K(ret), K(ps_sql), K(sql), K(type));
@@ -2609,6 +2656,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
     ObMySQLProxy *sql_proxy = NULL;
     ObSqlString sql_str;
     ObArenaAllocator allocator;
+    ObPLSubPLSqlTimeGuard guard(ctx);
     HEAP_VAR(ObSPIResultSet, spi_result) {
       stmt::StmtType stmt_type = stmt::T_NONE;
       ObString ps_sql;
@@ -2733,6 +2781,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
       OZ (spi_result.start_nested_stmt_if_need(ctx, sql_str.string(), stmt_type, for_update));
 
       // Step2: execute dynamic SQL now!
+      ObPLSPITraceIdGuard trace_id_guard(sql_str.string(), ps_sql);
       if (OB_FAIL(ret)) {
       } else if (need_execute_sql) {
         ObExecRecord exec_record;
@@ -2881,6 +2930,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
               int64_t try_cnt = session->get_raw_audit_record().try_cnt_;
               ObExecRecord record_bk = session->get_raw_audit_record().exec_record_;
               session->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+              session->get_raw_audit_record().pl_trace_id_ = trace_id_guard.origin_trace_id_;
               ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     *session,
@@ -2897,6 +2947,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                                                     true);
               session->get_raw_audit_record().exec_record_ = record_bk;
               session->get_raw_audit_record().try_cnt_ = try_cnt;
+              session->get_raw_audit_record().pl_trace_id_.reset();
             } else {
               LOG_DEBUG("result set is not inited, do not process record",
                         K(ret), K(ps_sql), K(sql_str), K(stmt_type));
@@ -3474,6 +3525,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
   } else {
     ParamStore current_params(ObWrapperAllocator(ctx->allocator_));
     ObIAllocator *allocator = cursor->get_allocator();
+    ObPLSubPLSqlTimeGuard guard(ctx);
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Argument in pl context is NULL", K(allocator), K(ret));
@@ -3614,6 +3666,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
         }
         cursor->set_last_execute_time(ObTimeUtility::current_time());
       } else { //MySQL Cursor/Updated Cursor/Server Cursor(REF_CURSOR, PACKAGE CURSOR)
+        ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql);
         HEAP_VAR(ObSPIResultSet, spi_result) {
           ObString sqlstr(sql);
           OZ (spi_result.init(*session_info));
@@ -3622,71 +3675,119 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           // query_start_time_ set to 0 in begin_nested_session, here we reset it.
           session_info->set_query_start_time(ObTimeUtility::current_time());
           if (OB_SUCC(ret)) {
+            ObExecRecord exec_record;
+            ObExecTimestamp exec_timestamp;
+            ObSPITimeRecord time_record;
+            exec_timestamp.exec_type_ = sql::PLSql;
             ObQueryRetryCtrl retry_ctrl;
             int64_t tenant_version = 0;
             int64_t sys_version = 0;
             bool is_retry = false;
             do {
-              ret = OB_SUCCESS;
-              if (is_retry) {
-                spi_result.get_out_params().reset();
-                spi_result.reset_member_for_retry(*session_info);
-              }
-              retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update());
-              OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result.get_scheme_guard())));
-              OX (spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard());
-              OZ (spi_result.get_scheme_guard().get_schema_version(session_info->get_effective_tenant_id(), tenant_version));
-              OZ (spi_result.get_scheme_guard().get_schema_version(OB_SYS_TENANT_ID, sys_version));
-              OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
-              OX (retry_ctrl.set_sys_local_schema_version(sys_version));
+              // SQL_AUDIT_START
+              ObWaitEventDesc max_wait_desc;
+              ObWaitEventStat total_wait_desc;
+              const bool enable_perf_event = lib::is_diagnose_info_enabled();
+              const bool enable_sql_audit =
+                GCONF.enable_sql_audit && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
+              {
+                ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
+                ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
+                if (enable_perf_event) {
+                  exec_record.record_start();
+                }
+                //监控项统计开始
+                time_record.set_send_timestamp(ObTimeUtility::current_time());
+                ret = OB_SUCCESS;
+                if (is_retry) {
+                  spi_result.get_out_params().reset();
+                  spi_result.reset_member_for_retry(*session_info);
+                }
+                OX (retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update()));
+                OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result.get_scheme_guard())));
+                OX (spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard());
+                OZ (spi_result.get_scheme_guard().get_schema_version(session_info->get_effective_tenant_id(), tenant_version));
+                OZ (spi_result.get_scheme_guard().get_schema_version(OB_SYS_TENANT_ID, sys_version));
+                OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
+                OX (retry_ctrl.set_sys_local_schema_version(sys_version));
 
-              OZ (inner_open(ctx,
-                            spi_result.get_allocaor(),
-                            sql,
-                            ps_sql,
-                            type,
-                            sql_param_exprs,
-                            sql_param_count,
-                            NULL,
-                            0,
-                            spi_result,
-                            spi_result.get_out_params(),
-                            &retry_ctrl));
-              if (OB_SUCC(ret)) {
-                ObSPICursor* spi_cursor = cursor->get_spi_cursor();
-                uint64_t size = 0;
-                OZ (session_info->get_tmp_table_size(size));
-                OZ (cursor->prepare_spi_cursor(spi_cursor,
-                                              session_info->get_effective_tenant_id(),
-                                              size,
-                                              for_update && !is_server_cursor), K(size));
-                //if (is_server_cursor) {
-                  // not only server cursor need field set
-                  // normal cursor maybe convert to session cursor by to_cursor_number
-                  // so all kind of cursor need do the copy
-                  CK (OB_NOT_NULL(cursor->get_allocator()));
-                  CK (OB_NOT_NULL(spi_result.get_result_set()));
-                  OZ (ObDbmsInfo::deep_copy_field_columns(
-                    *cursor->get_allocator(),
-                    spi_result.get_result_set()->get_field_columns(),
-                    spi_cursor->fields_));
-                //}
-                OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
-                OX (spi_cursor->row_store_.finish_add_row())
-                OX (cursor->open(spi_cursor));
-                if (OB_FAIL(ret)) {
-                  spi_cursor->~ObSPICursor();
+                OZ (inner_open(ctx,
+                              spi_result.get_allocaor(),
+                              sql,
+                              ps_sql,
+                              type,
+                              sql_param_exprs,
+                              sql_param_count,
+                              NULL,
+                              0,
+                              spi_result,
+                              spi_result.get_out_params(),
+                              &retry_ctrl));
+                if (OB_SUCC(ret)) {
+                  ObSPICursor* spi_cursor = cursor->get_spi_cursor();
+                  uint64_t size = 0;
+                  OZ (session_info->get_tmp_table_size(size));
+                  OZ (cursor->prepare_spi_cursor(spi_cursor,
+                                                session_info->get_effective_tenant_id(),
+                                                size,
+                                                for_update && !is_server_cursor), K(size));
+                  //if (is_server_cursor) {
+                    // not only server cursor need field set
+                    // normal cursor maybe convert to session cursor by to_cursor_number
+                    // so all kind of cursor need do the copy
+                    CK (OB_NOT_NULL(cursor->get_allocator()));
+                    CK (OB_NOT_NULL(spi_result.get_result_set()));
+                    OZ (ObDbmsInfo::deep_copy_field_columns(
+                      *cursor->get_allocator(),
+                      spi_result.get_result_set()->get_field_columns(),
+                      spi_cursor->fields_));
+                  //}
+                  OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
+                  OX (spi_cursor->row_store_.finish_add_row())
+                  OX (cursor->open(spi_cursor));
+                  if (OB_FAIL(ret)) {
+                    spi_cursor->~ObSPICursor();
+                  }
+                }
+                OX (for_update ? cursor->set_for_update() : (void)NULL);
+                OX (for_update ? cursor->set_trans_id(session_info->get_tx_id()) : (void)NULL);
+                OX (has_hidden_rowid ? cursor->set_hidden_rowid() : (void)NULL);
+
+                CK (OB_NOT_NULL(spi_result.get_result_set()));
+                if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+                  transaction::ObTxReadSnapshot &snapshot =
+                    spi_result.get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
+                  OZ (cursor->set_and_register_snapshot(snapshot));
                 }
               }
-              OX (for_update ? cursor->set_for_update() : (void)NULL);
-              OX (for_update ? cursor->set_trans_id(session_info->get_tx_id()) : (void)NULL);
-              OX (has_hidden_rowid ? cursor->set_hidden_rowid() : (void)NULL);
-
-              CK (OB_NOT_NULL(spi_result.get_result_set()));
-              if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-                transaction::ObTxReadSnapshot &snapshot =
-                  spi_result.get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
-                OZ (cursor->set_and_register_snapshot(snapshot));
+              //监控项统计结束
+              time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+              if (OB_SUCC(ret)) {
+                LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql), K(type), K(enable_sql_audit));
+                if (spi_result.get_result_set()->is_inited()) {
+                  ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+                  int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+                  ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+                  session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+                  session_info->get_raw_audit_record().pl_trace_id_.set(trace_id_guard.origin_trace_id_);
+                  ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
+                                                        spi_result.get_sql_ctx(),
+                                                        *session_info,
+                                                        time_record,
+                                                        ret,
+                                                        session_info->get_current_execution_id(), // sql execute id
+                                                        OB_INVALID_ID,
+                                                        max_wait_desc,
+                                                        total_wait_desc,
+                                                        exec_record,
+                                                        exec_timestamp,
+                                                        true,
+                                                        sql != NULL ? sql : ps_sql,
+                                                        true);
+                  session_info->get_raw_audit_record().exec_record_ = record_bk;
+                  session_info->get_raw_audit_record().try_cnt_ = try_cnt;
+                  session_info->get_raw_audit_record().pl_trace_id_.reset();
+                }
               }
 
               int close_ret = spi_result.close_result_set();
@@ -3741,6 +3842,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                               && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
+  ObPLSubPLSqlTimeGuard guard(ctx);
   OV (OB_NOT_NULL(ctx) &&
       OB_NOT_NULL(ctx->exec_ctx_) &&
       OB_NOT_NULL(ctx->allocator_) &&
@@ -3898,6 +4000,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         int64_t tenant_version = 0;
         int64_t sys_version = 0;
         int64_t retry_cnt = 0;
+        ObPLSPITraceIdGuard trace_id_guard(sql_stmt,ps_sql);
         int64_t old_query_start_time = session->get_query_start_time();
         session->set_query_start_time(ObTimeUtility::current_time());
         do {
@@ -3967,6 +4070,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
             int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
             ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
             session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+             session_info->get_raw_audit_record().pl_trace_id_.set(trace_id_guard.origin_trace_id_);
             // 会在inner_open的时候被改成了 inner ，所以这个地方需要重新设置一下
             exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
             ObInnerSQLConnection::process_record(*result_set,
@@ -3985,6 +4089,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   true);
             session_info->get_raw_audit_record().exec_record_ = record_bk;
             session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
+            session_info->get_raw_audit_record().pl_trace_id_.reset();
           }
           if (OB_SUCCESS != ret && OB_NOT_NULL(spi_cursor)) {
             spi_cursor->~ObSPICursor();
@@ -4048,6 +4153,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(cursor));
+  ObPLSubPLSqlTimeGuard guard(ctx);
 
   if (OB_FAIL(ret)) {
   } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
@@ -4116,6 +4222,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
     }
   }
   if (OB_SUCC(ret)) {
+    ObCurTraceId::TraceId pl_trace_id;
     int64_t row_count = 0;
 
 #define GET_RESULT                                                                    \
@@ -4146,6 +4253,19 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
                    return_type_count,   \
                    is_type_record);                                                \
     } else {                                                                          \
+      ObString sql;                                                                   \
+      ObString ps_sql;                                                                \
+      if (spi_result->get_sql_ctx().is_prepare_protocol_) {                           \
+        ps_sql = spi_result->get_sql_ctx().cur_sql_;                                  \
+      } else {                                                                        \
+        sql = spi_result->get_sql_ctx().cur_sql_;                                     \
+      }                                                                               \
+      ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, cursor->get_sql_trace_id());    \
+      if (cursor->get_sql_trace_id()->is_invalid()                                    \
+            && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {                           \
+        cursor->get_sql_trace_id()->set(*ObCurTraceId::get_trace_id());               \
+      }                                                                               \
+      pl_trace_id = trace_id_guard.origin_trace_id_;                                  \
       ret = inner_fetch_with_retry(ctx,                                               \
                    *cursor->get_cursor_handler(),     \
                    into_exprs,                                                        \
@@ -4180,9 +4300,13 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
 #undef GET_RESULT
 
     if (cursor->is_streaming()) {
+      ObPLSPITraceIdGuard trace_id_guard(nullptr, nullptr, cursor->get_sql_trace_id());
       if (OB_ISNULL(spi_result)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("spi result must be not null in oracle mode", K(ret), K(spi_result));
+      } else if (pl_trace_id.is_invalid() || OB_ISNULL(cursor->get_sql_trace_id()) || cursor->get_sql_trace_id()->is_invalid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid trace_id", K(ret), K(pl_trace_id), K(trace_id_guard.origin_trace_id_));
       } else {
         LOG_DEBUG("start process record", K(ret), K(cursor->get_id()), K(enable_sql_audit));
         //监控项统计结束
@@ -4195,6 +4319,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
           ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
           int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
           ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+          session_info->get_raw_audit_record().pl_trace_id_.set(pl_trace_id);
           ObInnerSQLConnection::process_record(*(result_set),
                                                 spi_result->get_sql_ctx(),
                                                 *session_info,
@@ -4211,6 +4336,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
                                                 true);
           session_info->get_raw_audit_record().exec_record_ = record_bk;
           session_info->get_raw_audit_record().try_cnt_ = try_cnt;
+          session_info->get_raw_audit_record().pl_trace_id_.reset();
         }
         spi_result->end_cursor_stmt(ctx, ret);
         cursor->set_last_execute_time(ObTimeUtility::current_time());
@@ -8662,6 +8788,45 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
 }
 
 #endif
+
+ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
+  old_sub_plsql_exec_time_(-1),
+  execute_start_(ObTimeUtility::current_time()),
+  state_(NULL)
+{
+  if (OB_NOT_NULL(ctx)
+      && OB_NOT_NULL(ctx->pl_ctx_)
+      && ctx->pl_ctx_->get_exec_stack().count() > 0) {
+    // hold old time and reset sub time
+    ObIArray<ObPLExecState *> &stack = ctx->pl_ctx_->get_exec_stack();
+    state_ = stack.at(stack.count()-1);
+    old_sub_plsql_exec_time_ = state_->get_sub_plsql_exec_time();
+    old_pure_sql_exec_time_ = state_->get_pure_sql_exec_time();
+    state_->reset_sub_plsql_exec_time();
+    state_->reset_pure_sql_exec_time();
+  }
+}
+
+ObPLSubPLSqlTimeGuard::~ObPLSubPLSqlTimeGuard()
+{
+  int ret = OB_SUCCESS;
+  int64_t sql_exec_time = ObTimeUtility::current_time() - execute_start_;
+  if (OB_NOT_NULL(state_)) {
+    if (state_->get_sub_plsql_exec_time() > 0) {
+      //此时纯SQL时间已经在 add_pl_exec_time 被加到了上层
+      LOG_DEBUG("<<< sql exec time ", K(sql_exec_time), K(state_->get_sub_plsql_exec_time()),
+        K(sql_exec_time-state_->get_sub_plsql_exec_time()), K(state_->get_pure_sql_exec_time()),
+        K(old_sub_plsql_exec_time_), K(old_pure_sql_exec_time_));
+    }
+    // update sub plsql exec time
+    if (-1 != old_sub_plsql_exec_time_) {
+      state_->add_sub_plsql_exec_time(old_sub_plsql_exec_time_);
+    }
+    if (-1 != old_pure_sql_exec_time_) {
+      state_->add_pure_sql_exec_time(old_pure_sql_exec_time_);
+    }
+  }
+}
 
 }
 }

@@ -167,6 +167,9 @@ private:
     PARTITION_HIT,
     TX_INTERNAL_ROUTE_VERSION,
     FLT_TRACE_ID,
+
+    PL_TRACE_ID,
+    PLSQL_EXEC_TIME,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;
@@ -193,6 +196,7 @@ private:
   char client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char user_client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[128];
+  char pl_trace_id_[128];
 
   //max wait event columns
   bool is_first_get_;

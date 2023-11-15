@@ -57,6 +57,7 @@ struct ObPackageStateVersion;
 class ObPLPackageState;
 class ObPLCondition;
 class ObPLCursor;
+class ObPLCacheCtx;
 
 struct ObSysPackageFile {
   const char *package_name;

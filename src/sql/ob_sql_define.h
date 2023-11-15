@@ -280,6 +280,8 @@ enum ObRepartitionScope
   OB_REPARTITION_BOTH_SIDE,
 };
 
+// enum ObPLCacheObjectType start wich OB_PHY_PLAN_UNCERTAIN value.
+// if it need add enum value to ObPhyPlanType, need skip ObPLCacheObjectType max value.
 enum ObPhyPlanType
 {
   OB_PHY_PLAN_UNINITIALIZED = 0,
