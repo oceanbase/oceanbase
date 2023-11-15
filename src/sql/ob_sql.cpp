@@ -1404,7 +1404,8 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             LOG_WARN("failed to write string", K(ret));
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
-          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode, false, false, true))) {
+          } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode,
+                             false, false, true, pl_prepare_ctx.is_dbms_sql_))) {
             LOG_WARN("generate syntax tree failed", K(sql), K(ret));
           } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
             ret = OB_ER_UNSUPPORTED_PS;
