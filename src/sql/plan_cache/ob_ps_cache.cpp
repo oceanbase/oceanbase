@@ -233,17 +233,16 @@ int ObPsCache::get_stmt_info_guard(const ObPsStmtId ps_stmt_id,
 //2.set stmt_id_map_返回OB_HASH_EXIST时，尝试从stmt_id_map_中获取stmt_item
 //  1）获取成功，返回stmt_item
 //  2) 报OB_HASH_NOT_EXIST, 则递归调get_or_add_stmt_item，尝试重新创建
-int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
-                                    const ObString &ps_sql,
+int ObPsCache::get_or_add_stmt_item(const ObPsSqlKey &ps_key,
                                     const bool is_contain_tmp_tbl,
                                     ObPsStmtItem *&ps_item_value)
 {
   int ret = OB_SUCCESS;
   ObPsStmtId new_stmt_id = gen_new_ps_stmt_id();
   ObPsStmtItem tmp_item_value(new_stmt_id);
-  tmp_item_value.assign_sql_key(ObPsSqlKey(db_id,
-                                           is_contain_tmp_tbl ? new_stmt_id : OB_INVALID_ID,
-                                           ps_sql));
+  ObPsSqlKey tmp_ps_key = ps_key;
+  tmp_ps_key.inc_id_ = is_contain_tmp_tbl ? new_stmt_id : OB_INVALID_ID;
+  tmp_item_value.assign_sql_key(tmp_ps_key);
   //will deep copy
   ObPsStmtItem *new_item_value = NULL;
   //由于stmt_id_map_中的value是ObPsStmtItem的指针，因此这里需要copy整个内存
@@ -261,26 +260,26 @@ int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
     }
   }
   if (OB_SUCC(ret)) {
-    const ObPsSqlKey ps_sql_key = new_item_value->get_sql_key();
+    const ObPsSqlKey inner_ps_key = new_item_value->get_sql_key();
     new_item_value->check_erase_inc_ref_count(); //inc ref count for ps cache, ignore ret;
-    ret = stmt_id_map_.set_refactored(ps_sql_key, new_item_value);
+    ret = stmt_id_map_.set_refactored(inner_ps_key, new_item_value);
     if (OB_SUCC(ret)) {
       //do nothing
-      LOG_INFO("add stmt item", K(ps_sql_key), K(*new_item_value));
+      LOG_INFO("add stmt item", K(inner_ps_key), K(*new_item_value));
       ps_item_value = new_item_value;
     } else if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
       //may be other session has set
       //inc ref count
       ObPsStmtItem *tmp_item_value = NULL;
-      if (OB_FAIL(ref_stmt_item(ps_sql_key, tmp_item_value))) {
+      if (OB_FAIL(inner_ref_stmt_item(inner_ps_key, tmp_item_value))) {
         LOG_WARN("get stmt item failed", K(ret));
         if (OB_HASH_NOT_EXIST == ret) {//stmt item被删除，需要重新创建
-          if (OB_FAIL(get_or_add_stmt_item(db_id, ps_sql, is_contain_tmp_tbl, ps_item_value))) {
+          if (OB_FAIL(get_or_add_stmt_item(ps_key, is_contain_tmp_tbl, ps_item_value))) {
             LOG_WARN("fail to get or add stmt item", K(ret));
           }
         } else {
-          LOG_WARN("unexpected error", K(ret), K(ps_sql_key));
+          LOG_WARN("unexpected error", K(ret), K(inner_ps_key));
         }
       } else {
         if (OB_ISNULL(tmp_item_value)) {
@@ -322,8 +321,8 @@ int ObPsCache::get_or_add_stmt_item(uint64_t db_id,
 //   1) OB_SUCCESS: 成功获取ps_stmt_item
 //   2) OB_HASH_NOT_EXIST: a.stmt_id_map_中本身就不存在当前key b.开始key对应的引用计数为0，重试若干次后变为该错误码
 //   3) OB_EGAIN: 尝试了MAX_RETRY_CNT，ps_stmt_item的ref_count仍旧为0
-int ObPsCache::ref_stmt_item(const ObPsSqlKey &ps_sql_key,
-                             ObPsStmtItem *&ps_stmt_item)
+int ObPsCache::inner_ref_stmt_item(const ObPsSqlKey &ps_sql_key,
+                                   ObPsStmtItem *&ps_stmt_item)
 {
   int ret = OB_SUCCESS;
   int callback_ret = OB_SUCCESS;
@@ -377,23 +376,18 @@ int ObPsCache::deref_stmt_item(const ObPsSqlKey &ps_sql_key)
   return ret;
 }
 
-int ObPsCache::ref_stmt_item(const uint64_t db_id,
-                             const ObString &ps_sql,
-                             ObPsStmtItem *&stmt_item)
+int ObPsCache::ref_stmt_item(const ObPsSqlKey &ps_sql_key, ObPsStmtItem *&stmt_item)
 {
   int ret = OB_SUCCESS;
-  stmt_item = NULL;
-  if (ps_sql.empty()) {
+  stmt_item = nullptr;
+  if (ps_sql_key.ps_sql_.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("empty sql", K(ret), K(ps_sql));
-  } else {
-    ObPsSqlKey ps_sql_key(db_id, ps_sql);
-    if (OB_FAIL(ref_stmt_item(ps_sql_key, stmt_item))) {
-      LOG_WARN_IGNORE_PS_NOTFOUND(ret, "ps item value not exist", K(ret), K(ps_sql_key));
-    } else if (OB_ISNULL(stmt_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get stmt id failed", K(ret));
-    }
+    LOG_WARN("empty sql", K(ret), K(ps_sql_key));
+  } else if (OB_FAIL(inner_ref_stmt_item(ps_sql_key, stmt_item))) {
+    LOG_WARN_IGNORE_PS_NOTFOUND(ret, "ps item value not exist", K(ret), K(ps_sql_key));
+  } else if (OB_ISNULL(stmt_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get stmt id failed", K(ret));
   }
   return ret;
 }
