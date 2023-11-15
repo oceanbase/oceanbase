@@ -109,9 +109,9 @@ int ObTxDataTable::init_tx_data_read_schema_()
 {
   int ret = OB_SUCCESS;
 
-  auto &iter_param = read_schema_.iter_param_;
-  auto &read_info = read_schema_.read_info_;
-  auto &full_read_info = read_schema_.full_read_info_;
+  ObTableIterParam &iter_param = read_schema_.iter_param_;
+  ObTableReadInfo &read_info = read_schema_.read_info_;
+  ObRowkeyReadInfo &full_read_info = read_schema_.full_read_info_;
   common::ObSEArray<share::schema::ObColDesc, 5> columns;
 
   share::schema::ObColDesc key;
@@ -1206,7 +1206,7 @@ int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_t
 {
   int ret = OB_SUCCESS;
 
-  const auto &array = calc_upper_trans_version_cache_.commit_versions_.array_;
+  const ObIArray<ObCommitVersionsArray::Node> &array = calc_upper_trans_version_cache_.commit_versions_.array_;
   int l = 0;
   int r = array.count() - 1;
 
