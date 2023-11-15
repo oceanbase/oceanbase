@@ -44,19 +44,26 @@ namespace rootserver
 {
 class ObZoneMergeManager;
 
+// ensure access in single thread, thus use hash::NoPthreadDefendMode to decrease memory usage of buckets
+typedef common::hash::ObHashMap<uint64_t, share::ObTableCompactionInfo, common::hash::NoPthreadDefendMode> TableCompactionMap;
+typedef common::hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus, common::hash::NoPthreadDefendMode> TabletCompactionMap;
+
 struct ObUpdateMergeStatusTime
 {
 public:
   ObUpdateMergeStatusTime()
-    : check_merge_progress_us_(0), tablet_validator_us_(0), index_validator_us_(0),
-      cross_cluster_validator_us_(0), update_report_scn_us_(0), write_tablet_checksum_us_(0)
+    : check_merge_progress_us_(0), tablet_validator_us_(0), tablet_validator_sql_us_(),
+      index_validator_us_(0), index_checksum_us_(0), cross_cluster_validator_us_(0),
+      update_report_scn_us_(0), write_tablet_checksum_us_(0)
   {}
 
   void reset()
   {
     check_merge_progress_us_ = 0;
     tablet_validator_us_ = 0;
+    tablet_validator_sql_us_ = 0;
     index_validator_us_ = 0;
+    index_checksum_us_ = 0;
     cross_cluster_validator_us_ = 0;
     update_report_scn_us_ = 0;
     write_tablet_checksum_us_ = 0;
@@ -65,7 +72,8 @@ public:
   int64_t get_total_time_us() const
   {
     // Note: update_report_scn_us_ and write_tablet_checksum_us_ are included in
-    // cross_cluster_validator_us_ now (may be excluded later).
+    // index_validator_us_ (when without cross_cluster_checksum verification) or
+    // cross_cluster_validator_us_ (when with cross_cluster_checksum verification)
     return (check_merge_progress_us_ + tablet_validator_us_ +
             index_validator_us_ + cross_cluster_validator_us_);
   }
@@ -74,7 +82,9 @@ public:
   {
     check_merge_progress_us_ += o.check_merge_progress_us_;
     tablet_validator_us_ += o.tablet_validator_us_;
+    tablet_validator_sql_us_ += o.tablet_validator_sql_us_;
     index_validator_us_ += o.index_validator_us_;
+    index_checksum_us_ += o.index_checksum_us_;
     cross_cluster_validator_us_ += o.cross_cluster_validator_us_;
     update_report_scn_us_ += o.update_report_scn_us_;
     write_tablet_checksum_us_ += o.write_tablet_checksum_us_;
@@ -82,12 +92,15 @@ public:
   }
 
   TO_STRING_KV("total_us", get_total_time_us(), K_(check_merge_progress_us),
-               K_(tablet_validator_us), K_(index_validator_us), K_(cross_cluster_validator_us),
-               K_(update_report_scn_us), K_(write_tablet_checksum_us));
+               K_(tablet_validator_us), K_(tablet_validator_sql_us), K_(index_validator_us),
+               K_(index_checksum_us), K_(cross_cluster_validator_us), K_(update_report_scn_us),
+               K_(write_tablet_checksum_us));
 
   int64_t check_merge_progress_us_;
   int64_t tablet_validator_us_;
+  int64_t tablet_validator_sql_us_;
   int64_t index_validator_us_;
+  int64_t index_checksum_us_;
   int64_t cross_cluster_validator_us_;
   int64_t update_report_scn_us_;
   int64_t write_tablet_checksum_us_;
@@ -184,12 +197,12 @@ private:
   share::ObLSTableOperator *lst_operator_;
   share::ObIServerTrace *server_trace_;
   // record each tablet compaction status: INITIAL/COMPACTED/FINISHED
-  common::hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> tablet_compaction_map_;
+  TabletCompactionMap tablet_compaction_map_;
   int64_t table_count_;
   // record the table_ids in the schema_guard obtained in check_merge_progress
   common::ObArray<uint64_t> table_ids_;
   // record each table compaction/verify status
-  common::hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> table_compaction_map_; // <table_id, conpaction_info>
+  TableCompactionMap table_compaction_map_; // <table_id, conpaction_info>
   ObTabletChecksumValidator tablet_validator_;
   ObIndexChecksumValidator index_validator_;
   ObCrossClusterTabletChecksumValidator cross_cluster_validator_;

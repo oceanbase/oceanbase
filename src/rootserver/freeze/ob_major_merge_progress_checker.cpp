@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
+#include "lib/ob_running_mode.h"
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "rootserver/freeze/ob_major_freeze_util.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
@@ -53,7 +54,8 @@ int ObMajorMergeProgressChecker::init(
     ObIServerTrace &server_trace)
 {
   int ret = OB_SUCCESS;
-  const int64_t DEFAULT_MAP_BUCKET_CNT = 10000;
+  // create 10w buckets (actually 196613 buckets), which costs 1,572,904 Bytes in NoPthreadDefendMode
+  const int64_t DEFAULT_MAP_BUCKET_CNT = 100000;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
@@ -92,6 +94,15 @@ int ObMajorMergeProgressChecker::prepare_handle()
     LOG_WARN("fail to reuse table_compaction_map", KR(ret));
   } else {
     table_count_ = 0;
+    tablet_validator_.reuse_tablet_checksum_items();
+    tablet_validator_.reuse_tablet_ls_pairs();
+    tablet_validator_.reuse_table_ids();
+    index_validator_.reuse_tablet_checksum_items();
+    index_validator_.reuse_tablet_ls_pairs();
+    index_validator_.reuse_table_ids();
+    cross_cluster_validator_.reuse_tablet_checksum_items();
+    cross_cluster_validator_.reuse_tablet_ls_pairs();
+    cross_cluster_validator_.reuse_table_ids();
   }
   return ret;
 }
@@ -101,7 +112,7 @@ int ObMajorMergeProgressChecker::check_table_status(bool &exist_unverified)
   int ret = OB_SUCCESS;
   SMART_VARS_2((ObArray<ObTableCompactionInfo>, uncompacted_tables),
                (ObArray<ObTableCompactionInfo>, unverified_tables)) {
-    hash::ObHashMap<uint64_t, ObTableCompactionInfo>::iterator iter = table_compaction_map_.begin();
+    TableCompactionMap::iterator iter = table_compaction_map_.begin();
     int64_t ele_count = 0;
     for (;OB_SUCC(ret) && (iter != table_compaction_map_.end()); ++iter) {
       const ObTableCompactionInfo &compaction_info = iter->second;
@@ -182,7 +193,7 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
                  K(major_merge_special_table_id));
       } else if (OB_FAIL(table_compaction_map_.get_refactored(major_merge_special_table_id, cur_compaction_info))) {
         LOG_WARN("fail to get refactored", KR(ret), K(major_merge_special_table_id));
-      } else if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_at_table_level(stop, pairs,
+      } else if (OB_FAIL(tablet_validator_.write_tablet_checksum_at_table_level(stop, pairs,
                    global_broadcast_scn, cur_compaction_info, major_merge_special_table_id, expected_epoch))) {
         if (OB_ITEM_NOT_MATCH == ret) {
           bool is_exist = false;
@@ -207,10 +218,13 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
         } else {
           LOG_WARN("fail to write tablet checksum at table level", KR(ret), K_(tenant_id), K(pairs));
         }
-      } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
-                   tenant_id_, global_broadcast_scn.get_val_for_tx(),
-                   pairs, ObTabletReplica::ScnStatus::SCN_STATUS_ERROR, expected_epoch))) {
-        LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(pairs));
+      } else if (OB_FAIL(tablet_validator_.add_tablet_ls_pairs(pairs))) {
+        LOG_WARN("fail to add tablet ls pairs", KR(ret), K_(tenant_id), K(pairs));
+      } else if (OB_FAIL(tablet_validator_.add_table_id(major_merge_special_table_id))) {
+        LOG_WARN("fail to add table id", KR(ret), K_(tenant_id), K(major_merge_special_table_id));
+      } else if (OB_FAIL(tablet_validator_.batch_write_ckm_and_update_report_scn(stop, global_broadcast_scn,
+                 expected_epoch, merge_time_statistics_, table_compaction_map_))) {
+        LOG_WARN("fail to batch write ckm and update report scn", KR(ret), K(global_broadcast_scn), K(expected_epoch));
       }
     }
   }
