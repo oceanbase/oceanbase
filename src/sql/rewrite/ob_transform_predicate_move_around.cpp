@@ -3064,6 +3064,7 @@ int ObTransformPredicateMoveAround::transform_predicates(
   ObSEArray<ObRawExpr *, 4> simple_preds;
   ObSEArray<ObRawExpr *, 4> general_preds;
   ObSEArray<ObRawExpr *, 4> aggr_bound_preds;
+  ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 4> lossless_cast_preds;
   ObSqlBitSet<> visited;
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3074,8 +3075,18 @@ int ObTransformPredicateMoveAround::transform_predicates(
     if (OB_FAIL(ObPredicateDeduce::check_deduce_validity(input_preds.at(i), is_valid))) {
       LOG_WARN("failed to check condition validity", K(ret));
     } else if (is_valid) {
+      ObRawExpr *cast_expr = NULL;
       if (OB_FAIL(valid_preds.push_back(input_preds.at(i)))) {
         LOG_WARN("failed to push back predicates for deduce", K(ret));
+      } else if (OB_FAIL(ObPredicateDeduce::check_lossless_cast_table_filter(input_preds.at(i),
+                                                                             cast_expr,
+                                                                             is_valid))) {
+        LOG_WARN("failed to check lossless cast table filter", K(ret));
+      } else if (!is_valid) {
+        // do nothing
+      } else if (OB_FAIL(lossless_cast_preds.push_back(std::pair<ObRawExpr*, ObRawExpr*>(
+                                                  cast_expr, input_preds.at(i))))) {
+        LOG_WARN("failed to push back preds", K(ret));
       }
     } else if (OB_FAIL(other_preds.push_back(input_preds.at(i)))) {
       LOG_WARN("failed to push back complex predicates", K(ret));
@@ -3098,7 +3109,8 @@ int ObTransformPredicateMoveAround::transform_predicates(
       if (OB_FAIL(deducer.deduce_simple_predicates(*ctx_, simple_preds))) {
         LOG_WARN("failed to deduce predicates for target", K(ret));
       } else if (OB_FAIL(deducer.deduce_general_predicates(
-                           *ctx_, target_exprs, other_preds, general_preds))) {
+                           *ctx_, target_exprs, other_preds,
+                           lossless_cast_preds, general_preds))) {
         LOG_WARN("failed to deduce special predicates", K(ret));
       } else if (!is_pullup) {
         // do nothing
