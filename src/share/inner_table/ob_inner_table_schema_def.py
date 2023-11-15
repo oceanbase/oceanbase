@@ -48687,8 +48687,6 @@ def_table_schema(
 # 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 25277: DBA_WR_SQLTEXT
 # 25278: USER_USERS
-# 25279: GV$OB_ACTIVE_SESSION_HISTORY
-# 25280: V$OB_ACTIVE_SESSION_HISTORY
 # 余留位置
 
 #### End Data Dictionary View
@@ -54795,7 +54793,8 @@ def_table_schema(
 # 28209: V$STATNAME
 # 28210: DBA_OB_AUX_STATISTICS
 # 28211: DBA_OB_SYS_VARIABLES
-
+# 28212: GV$OB_ACTIVE_SESSION_HISTORY
+# 28213: V$OB_ACTIVE_SESSION_HISTORY
 
 ################################################################################
 # Lob Table (50000, 70000)
