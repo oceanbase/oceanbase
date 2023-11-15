@@ -2811,6 +2811,8 @@ int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper &helper,
         LOG_WARN("failed to estimate cost", K(ret));
       } else if (OB_FAIL(ap->compute_pipeline_info())) {
         LOG_WARN("failed to compute pipelined path", K(ret));
+      } else if (OB_FAIL(ap->compute_valid_inner_path())) {
+        LOG_WARN("failed to compute inner path with pushdown filters", K(ret));
       } else if (!ap->is_inner_path()) {
         if (OB_FAIL(add_path(ap))) {
           LOG_WARN("failed to add the interesting order");
@@ -4611,16 +4613,14 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
              static_cast<const JoinPath&>(second_path).contain_normal_nl()) {
     relation = DominateRelation::OBJ_LEFT_DOMINATE;
     OPT_TRACE("left path dominate right path because of normal nl");
-  } else if (first_path.is_access_path() &&
-             second_path.is_access_path() &&
-             static_cast<const AccessPath&>(first_path).est_cost_info_.pushdown_prefix_filters_.empty() &&
-             !static_cast<const AccessPath&>(second_path).est_cost_info_.pushdown_prefix_filters_.empty()) {
+  } else if (first_path.is_access_path() && second_path.is_access_path() &&
+             !static_cast<const AccessPath&>(first_path).is_valid_inner_path_
+             && static_cast<const AccessPath&>(second_path).is_valid_inner_path_) {
     relation = DominateRelation::OBJ_RIGHT_DOMINATE;
     OPT_TRACE("right path dominate left path because of pushdown prefix filters");
-  } else if (first_path.is_access_path() &&
-             second_path.is_access_path() &&
-             !static_cast<const AccessPath&>(first_path).est_cost_info_.pushdown_prefix_filters_.empty() &&
-             static_cast<const AccessPath&>(second_path).est_cost_info_.pushdown_prefix_filters_.empty()) {
+  } else if (first_path.is_access_path() && second_path.is_access_path() &&
+             static_cast<const AccessPath&>(first_path).is_valid_inner_path_
+             && !static_cast<const AccessPath&>(second_path).is_valid_inner_path_) {
     relation = DominateRelation::OBJ_LEFT_DOMINATE;
     OPT_TRACE("left path dominate right path because of pushdown prefix filters");
   } else {
@@ -5056,6 +5056,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   for_update_ = other.for_update_;
   use_skip_scan_ = other.use_skip_scan_;
   use_column_store_ = other.use_column_store_;
+  is_valid_inner_path_ = other.is_valid_inner_path_;
 
   if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
@@ -5411,6 +5412,31 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
 const ObIArray<ObNewRange>& AccessPath::get_query_ranges() const
 {
   return est_cost_info_.ranges_;
+}
+
+int AccessPath::compute_valid_inner_path()
+{
+  int ret = OB_SUCCESS;
+  is_valid_inner_path_ = false;
+  if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(parent_), K(ret));
+  } else {
+    const ObIArray<ObRawExpr*> &filters = est_cost_info_.pushdown_prefix_filters_;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_valid_inner_path_ && i < filters.count(); i ++) {
+      const ObRawExpr *expr = filters.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!expr->has_flag(CNT_DYNAMIC_PARAM) ||
+                  expr->has_flag(CNT_ONETIME)) {
+        // do nothing
+      } else if (ObOptimizerUtil::find_item(parent_->get_plan()->get_pushdown_filters(), expr)) {
+        is_valid_inner_path_ = true;
+      }
+    }
+  }
+  return ret;
 }
 
 int FunctionTablePath::assign(const FunctionTablePath &other, common::ObIAllocator *allocator)
